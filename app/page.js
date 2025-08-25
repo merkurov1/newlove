@@ -70,7 +70,7 @@ export default async function Home() {
       </main>
 
       <footer className="text-center mt-16 text-gray-500">
-        <p>© 2025 Headless. Made with ❤️</p>
+        <p>© 2025 Headless. Made with ❤️ & AI</p>
       </footer>
     </div>
   );
