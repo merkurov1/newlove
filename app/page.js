@@ -1,6 +1,9 @@
-import header from './header.js'; // Путь изменён
+// app/page.js
+
+import Header from './Header'; // Убедитесь, что импорт правильный
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
+import Image from 'next/image'; // Импортируем компонент Image
 
 async function getArticles() {
   const { data: articles, error } = await supabase
@@ -21,7 +24,7 @@ export default async function Home() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <Header />
+      <Header /> {/* Используем компонент с большой буквы */}
       
       <main>
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
