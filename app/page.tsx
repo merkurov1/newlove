@@ -38,11 +38,10 @@ export default async function Home() {
                 className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
               >
                 <h2 className="text-xl font-semibold text-gray-900 mb-3">
-                  <Link href={`/articles/${article.slug}`} className="hover:underline">
-                    {article.title}
-                  </Link>
-                </h2>
-                
+  <Link href={`/articles/${article.slug}`} className="hover:text-blue-600">
+    {article.title}
+  </Link>
+</h2>                
                 <p className="text-gray-700 mb-4 line-clamp-3">
                   {article.content?.substring(0, 150)}...
                 </p>
