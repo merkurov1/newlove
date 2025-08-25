@@ -16,7 +16,6 @@ async function getArticle(slug) {
 }
 
 export default async function ArticlePage({ params }) {
-  // В Next.js 15 params теперь Promise
   const resolvedParams = await params
   const { slug } = resolvedParams
   
