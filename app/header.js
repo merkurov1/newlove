@@ -1,39 +1,10 @@
-'use client'; // Добавляем директиву для использования в качестве Client Component
+'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '../lib/supabase';
 import Image from 'next/image';
 
-async function getSettingsAndMenu() {
-  const { data: settingsData, error: settingsError } = await supabase
-    .from('settings')
-    .select('key, value');
-
-  if (settingsError) {
-    console.error('Ошибка загрузки настроек:', settingsError);
-    return { settings: {}, articles: [] };
-  }
-
-  const settings = {};
-  settingsData.forEach(item => {
-    settings[item.key] = item.value;
-  });
-
-  const { data: articlesData, error: articlesError } = await supabase
-    .from('articles')
-    .select('slug, title')
-    .contains('tags', ['page']);
-
-  if (articlesError) {
-    console.error('Ошибка загрузки статей:', articlesError);
-    return { settings, articles: [] };
-  }
-
-  return { settings, articles: articlesData || [] };
-}
-
-export default function Header({ articles }) {
+export default function Header({ articles, siteName, slogan }) {
   const [theme, setTheme] = useState('light');
 
   useEffect(() => {
@@ -55,8 +26,6 @@ export default function Header({ articles }) {
     document.documentElement.classList.add(newTheme);
   };
   
-  const siteName = 'Название сайта'; // Теперь получаем из props
-  const slogan = 'Слоган сайта';
   const logoUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png';
   
   const headerBg = theme === 'light' ? 'bg-white' : 'bg-gray-800';
@@ -92,14 +61,3 @@ export default function Header({ articles }) {
     </>
   );
 }
-
-// Новый Server Component для получения данных
-export async function getHeaderData() {
-  const { settings, articles } = await getSettingsAndMenu();
-  return { settings, articles };
-}
-
-// Пример использования в вашем макете (layout.js или page.js)
-// import Header, { getHeaderData } from './header';
-// const { articles } = await getHeaderData();
-// <Header articles={articles} />
