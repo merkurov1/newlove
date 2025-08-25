@@ -1,58 +1,57 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { useState } from 'react';
+import Link from 'next/link'; // Импортируем Link
+import { supabase } from '../../lib/supabase';
 
 export default function Admin() {
-  const [title, setTitle] = useState('')
-  const [content, setContent] = useState('')
-  const [slug, setSlug] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [slug, setSlug] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
   const generateSlug = (title) => {
     return title
       .toLowerCase()
       .replace(/[^\w\s-]/g, '')
       .replace(/\s+/g, '-')
-      .trim()
-  }
+      .trim();
+  };
 
   const handleTitleChange = (e) => {
-    const newTitle = e.target.value
-    setTitle(newTitle)
-    setSlug(generateSlug(newTitle))
-  }
+    const newTitle = e.target.value;
+    setTitle(newTitle);
+    setSlug(generateSlug(newTitle));
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setMessage('')
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
 
     try {
-      const { data, error } = await supabase
-        .from('articles')
-        .insert([
-          {
-            title,
-            content,
-            slug,
-            published_at: new Date().toISOString()
-          }
-        ])
+      const { error } = await supabase.from('articles').insert([
+        {
+          title,
+          content,
+          slug,
+          published_at: new Date().toISOString(),
+        },
+      ]);
 
-      if (error) throw error
+      if (error) throw error;
 
-      setMessage('✅ Статья успешно добавлена!')
-      setTitle('')
-      setContent('')
-      setSlug('')
+      setMessage('✅ Статья успешно добавлена!');
+      setTitle('');
+      setContent('');
+      setSlug('');
     } catch (error) {
-      setMessage(`❌ Ошибка: ${error.message}`)
+      setMessage(`❌ Ошибка: ${error.message}`);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -62,11 +61,13 @@ export default function Admin() {
         </h1>
 
         {message && (
-          <div className={`p-4 rounded-md mb-6 ${
-            message.includes('✅') 
-              ? 'bg-green-100 text-green-700' 
-              : 'bg-red-100 text-red-700'
-          }`}>
+          <div
+            className={`p-4 rounded-md mb-6 ${
+              message.includes('✅')
+                ? 'bg-green-100 text-green-700'
+                : 'bg-red-100 text-red-700'
+            }`}
+          >
             {message}
           </div>
         )}
@@ -124,14 +125,11 @@ export default function Admin() {
         </form>
 
         <div className="mt-8 text-center">
-          <a 
-            href="/" 
-            className="text-blue-600 hover:text-blue-800"
-          >
+          <Link href="/" className="text-blue-600 hover:text-blue-800">
             ← Вернуться на главную
-          </a>
+          </Link>
         </div>
       </div>
     </div>
-  )
+  );
 }
