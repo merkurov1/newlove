@@ -3,15 +3,13 @@
 import { fetchArticleBySlug } from '@/lib/api';
 import { notFound } from 'next/navigation';
 
-// Типизируем props компонента с учетом params,
-// который содержит slug
-interface ArticlePageProps {
+export default async function ArticlePage({
+  params,
+}: {
   params: {
     slug: string;
   };
-}
-
-export default async function ArticlePage({ params }: ArticlePageProps) {
+}) {
   const { slug } = params;
 
   const article = await fetchArticleBySlug(slug);
