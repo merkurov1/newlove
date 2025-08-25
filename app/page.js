@@ -1,4 +1,4 @@
-import Header from './Header'; // Путь изменён
+import header from './header.js'; // Путь изменён
 import Link from 'next/link';
 import { supabase } from './lib/supabase';
 
