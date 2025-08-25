@@ -1,21 +1,22 @@
-import { supabase } from '../lib/supabase'
+import Link from 'next/link';
+import { supabase } from '../lib/supabase';
 
 async function getArticles() {
   const { data: articles, error } = await supabase
     .from('articles')
     .select('*')
-    .order('published_at', { ascending: false })
+    .order('published_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching articles:', error)
-    return []
+    console.error('Error fetching articles:', error);
+    return [];
   }
 
-  return articles || []
+  return articles || [];
 }
 
 export default async function Home() {
-  const articles = await getArticles()
+  const articles = await getArticles();
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -32,12 +33,14 @@ export default async function Home() {
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {articles.length > 0 ? (
             articles.map((article) => (
-              <article 
+              <article
                 key={article.id}
                 className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
               >
                 <h2 className="text-xl font-semibold text-gray-900 mb-3">
-                  {article.title}
+                  <Link href={`/articles/${article.slug}`} className="hover:underline">
+                    {article.title}
+                  </Link>
                 </h2>
                 
                 <p className="text-gray-700 mb-4 line-clamp-3">
@@ -48,9 +51,12 @@ export default async function Home() {
                   <time>
                     {new Date(article.published_at).toLocaleDateString('ru-RU')}
                   </time>
-                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                  <Link
+                    href={`/articles/${article.slug}`}
+                    className="bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
+                  >
                     /{article.slug}
-                  </span>
+                  </Link>
                 </div>
               </article>
             ))
@@ -68,5 +74,5 @@ export default async function Home() {
         <p>© 2024 Headless Blog. Made with ❤️</p>
       </footer>
     </div>
-  )
+  );
 }
