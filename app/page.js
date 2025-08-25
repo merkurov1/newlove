@@ -1,7 +1,26 @@
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
-import Image from 'next/image'; // Импортируем компонент Image
-import Header from './header.js'; // Импортируем клиентский компонент Header
+import Image from 'next/image';
+import Header from './header.js';
+
+// Асинхронная функция для получения настроек сайта
+async function getSettings() {
+  const { data: settingsData, error: settingsError } = await supabase
+    .from('settings')
+    .select('key, value');
+
+  if (settingsError) {
+    console.error('Ошибка загрузки настроек:', settingsError);
+    return {};
+  }
+
+  const settings = {};
+  settingsData.forEach(item => {
+    settings[item.key] = item.value;
+  });
+
+  return settings;
+}
 
 // Асинхронная функция для получения всех статей
 async function getArticles() {
@@ -12,7 +31,7 @@ async function getArticles() {
 
   if (error) {
     console.error('Error fetching articles:', error);
-    return []; // Всегда возвращаем массив, чтобы избежать ошибок
+    return [];
   }
 
   return articles || [];
@@ -40,10 +59,16 @@ export default async function Home() {
   // Получаем данные для меню (статьи с тегом 'page')
   const menuArticles = await getMenuArticles();
 
+  // Получаем настройки сайта
+  const settings = await getSettings();
+
+  const siteName = settings.site_name || 'Название сайта';
+  const slogan = settings.slogan || 'Слоган сайта';
+
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Передаем статьи для меню в компонент Header */}
-      <Header articles={menuArticles} />
+      {/* Передаем статьи для меню и настройки в компонент Header */}
+      <Header articles={menuArticles} siteName={siteName} slogan={slogan} />
       
       <main>
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
