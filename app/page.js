@@ -1,6 +1,6 @@
 import header from './header.js'; // Путь изменён
 import Link from 'next/link';
-import { supabase } from './lib/supabase';
+import { supabase } from '../lib/supabase';
 
 async function getArticles() {
   const { data: articles, error } = await supabase
