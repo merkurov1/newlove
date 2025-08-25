@@ -1,5 +1,6 @@
+import Header from './Header'; // Путь изменён
 import Link from 'next/link';
-import { supabase } from '../lib/supabase';
+import { supabase } from './lib/supabase';
 
 async function getArticles() {
   const { data: articles, error } = await supabase
@@ -20,15 +21,8 @@ export default async function Home() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <header className="text-center mb-12">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">
-          Anton Merkurov
-        </h1>
-        <p className="text-xl text-gray-600">
-          Art x Love x Money
-        </p>
-      </header>
-
+      <Header />
+      
       <main>
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {articles.length > 0 ? (
@@ -38,10 +32,10 @@ export default async function Home() {
                 className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
               >
                 <h2 className="text-xl font-semibold text-gray-900 mb-3">
-  <Link href={`/articles/${article.slug}`} className="hover:text-blue-600">
-    {article.title}
-  </Link>
-</h2>                
+                  <Link href={`/articles/${article.slug}`} className="hover:text-blue-600">
+                    {article.title}
+                  </Link>
+                </h2>                
                 <p className="text-gray-700 mb-4 line-clamp-3">
                   {article.content?.substring(0, 150)}...
                 </p>
