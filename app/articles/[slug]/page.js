@@ -55,12 +55,12 @@ export default async function ArticlePage({ params }) {
         </div>
 
         <footer className="mt-12 pt-8 border-t border-gray-200">
-          <a 
+          <Link 
             href="/" 
             className="text-blue-600 hover:text-blue-800 font-medium"
           >
             ← Вернуться на главную
-          </a>
+          </Link>
         </footer>
       </article>
     </div>
