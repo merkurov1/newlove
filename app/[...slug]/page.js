@@ -1,11 +1,9 @@
 import { notFound } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import Image from 'next/image'; // Импортируем компонент Image
+import Image from 'next/image';
 
 export default async function Page({ params }) {
   const { slug } = params;
-
-  // Next.js передает slug как массив для catch-all маршрута
   const articleSlug = Array.isArray(slug) ? slug[0] : slug;
 
   const { data: article, error } = await supabase
@@ -19,8 +17,6 @@ export default async function Page({ params }) {
     notFound();
   }
 
-  // Осторожно: dangerouslySetInnerHTML - небезопасный метод.
-  // Если контент содержит теги <img>, они не будут оптимизированы.
   return (
     <main>
       <h1>{article.title}</h1>
@@ -29,13 +25,6 @@ export default async function Page({ params }) {
   );
 }
 
----
-
-## Исправленная функция `generateStaticParams`
-
-Основная проблема была здесь. Мы должны возвращать `slug` как массив для каждого элемента.
-
-```javascript
 export async function generateStaticParams() {
   const { data: articles, error } = await supabase
     .from('articles')
@@ -48,7 +37,6 @@ export async function generateStaticParams() {
   }
 
   return articles.map((article) => ({
-    // Главное исправление: `slug` теперь является массивом.
     slug: [article.slug],
   }));
 }
