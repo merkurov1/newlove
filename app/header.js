@@ -1,4 +1,4 @@
-'use client'; // <-- Добавьте эту строку
+'use client'; 
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -54,7 +54,7 @@ export default function Header({ articles, siteName, slogan }) {
           {articles.map((article) => (
             <Link key={article.slug} href={`/${article.slug}`} className={`block mt-4 lg:inline-block lg:mt-0 ${menuText} hover:text-blue-600 mr-4`}>
               {article.title}
-            </Link>dom
+            </Link>
           ))}
         </div>
       </nav>
