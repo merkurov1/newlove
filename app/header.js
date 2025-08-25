@@ -6,7 +6,6 @@ async function getSettingsAndMenu() {
     .from('settings')
     .select('key, value');
 
-  // Обработка ошибок и формирование данных
   if (settingsError) {
     console.error('Ошибка загрузки настроек:', settingsError);
     return { settings: {}, articles: [] };
@@ -17,10 +16,12 @@ async function getSettingsAndMenu() {
     settings[item.key] = item.value;
   });
 
+  // ИЗМЕНЕННЫЙ ЗАПРОС:
+  // Проверяем наличие тега 'page' в массиве 'tags'
   const { data: articlesData, error: articlesError } = await supabase
     .from('articles')
     .select('slug, title')
-    .eq('page', true);
+    .contains('tags', ['page']);
 
   if (articlesError) {
     console.error('Ошибка загрузки статей:', articlesError);
