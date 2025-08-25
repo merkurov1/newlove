@@ -48,6 +48,15 @@ export default async function ArticlePage({ params }) {
           </time>
         </header>
 
+        {/* 🔥 вот картинка */}
+        {article.image_url && (
+          <img
+            src={article.image_url}
+            alt={article.title}
+            className="w-full h-64 object-cover rounded-lg mb-6"
+          />
+        )}
+
         <div className="prose prose-lg max-w-none">
           <div className="whitespace-pre-wrap text-gray-800">
             {article.content}
