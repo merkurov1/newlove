@@ -3,13 +3,13 @@
 import { fetchArticleBySlug } from '@/lib/api';
 import { notFound } from 'next/navigation';
 
-// Define the type for the component's props
-// This tells TypeScript that the `params` object will have a `slug` property
-type ArticlePageProps = {
+// Типизируем props компонента с учетом params,
+// который содержит slug
+interface ArticlePageProps {
   params: {
     slug: string;
   };
-};
+}
 
 export default async function ArticlePage({ params }: ArticlePageProps) {
   const { slug } = params;
