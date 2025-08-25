@@ -1,6 +1,6 @@
 // app/page.js
 
-import Header from './Header'; // Убедитесь, что импорт правильный
+import Header from './header.js'; // Убедитесь, что импорт правильный
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import Image from 'next/image'; // Импортируем компонент Image
