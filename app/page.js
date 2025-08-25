@@ -1,10 +1,9 @@
-// app/page.js
-
-import Header from './header.js'; // Убедитесь, что импорт правильный
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import Image from 'next/image'; // Импортируем компонент Image
+import Header from './header.js'; // Импортируем клиентский компонент Header
 
+// Асинхронная функция для получения всех статей
 async function getArticles() {
   const { data: articles, error } = await supabase
     .from('articles')
@@ -13,6 +12,21 @@ async function getArticles() {
 
   if (error) {
     console.error('Error fetching articles:', error);
+    return []; // Всегда возвращаем массив, чтобы избежать ошибок
+  }
+
+  return articles || [];
+}
+
+// Асинхронная функция для получения статей для меню
+async function getMenuArticles() {
+  const { data: articles, error } = await supabase
+    .from('articles')
+    .select('slug, title')
+    .contains('tags', ['page']);
+
+  if (error) {
+    console.error('Error fetching menu articles:', error);
     return [];
   }
 
@@ -20,11 +34,16 @@ async function getArticles() {
 }
 
 export default async function Home() {
+  // Получаем данные для статей на главной странице
   const articles = await getArticles();
+  
+  // Получаем данные для меню (статьи с тегом 'page')
+  const menuArticles = await getMenuArticles();
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <Header /> {/* Используем компонент с большой буквы */}
+      {/* Передаем статьи для меню в компонент Header */}
+      <Header articles={menuArticles} />
       
       <main>
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
