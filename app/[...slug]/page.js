@@ -1,25 +1,26 @@
 import { notFound } from 'next/navigation';
-import { supabase } from '@/lib/supabase'; // Убедитесь, что путь верный
+import { supabase } from '@/lib/supabase';
+import Image from 'next/image'; // Импортируем компонент Image
 
 export default async function Page({ params }) {
   const { slug } = params;
 
-  // Если slug - это массив, берем первый элемент
+  // Next.js передает slug как массив для catch-all маршрута
   const articleSlug = Array.isArray(slug) ? slug[0] : slug;
 
-  // Запрос к Supabase для получения статьи по slug и наличию тега 'page'
   const { data: article, error } = await supabase
     .from('articles')
     .select('title, content')
     .eq('slug', articleSlug)
-    .contains('tags', ['page']) // Проверяем наличие тега 'page'
+    .contains('tags', ['page'])
     .single();
 
   if (error || !article) {
-    // Если статья не найдена или не имеет тега 'page', показываем 404
     notFound();
   }
 
+  // Осторожно: dangerouslySetInnerHTML - небезопасный метод.
+  // Если контент содержит теги <img>, они не будут оптимизированы.
   return (
     <main>
       <h1>{article.title}</h1>
@@ -28,7 +29,13 @@ export default async function Page({ params }) {
   );
 }
 
-// Генерируем статические страницы для Next.js (SSG)
+---
+
+## Исправленная функция `generateStaticParams`
+
+Основная проблема была здесь. Мы должны возвращать `slug` как массив для каждого элемента.
+
+```javascript
 export async function generateStaticParams() {
   const { data: articles, error } = await supabase
     .from('articles')
@@ -41,6 +48,7 @@ export async function generateStaticParams() {
   }
 
   return articles.map((article) => ({
-    slug: article.slug,
+    // Главное исправление: `slug` теперь является массивом.
+    slug: [article.slug],
   }));
 }
