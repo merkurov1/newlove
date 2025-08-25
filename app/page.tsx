@@ -22,10 +22,10 @@ export default async function Home() {
     <div className="container mx-auto px-4 py-8">
       <header className="text-center mb-12">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">
-          Мой Headless Блог
+          Anton Merkurov
         </h1>
         <p className="text-xl text-gray-600">
-          Powered by Next.js & Supabase
+          Art x Love x Money
         </p>
       </header>
 
@@ -71,7 +71,7 @@ export default async function Home() {
       </main>
 
       <footer className="text-center mt-16 text-gray-500">
-        <p>© 2024 Headless Blog. Made with ❤️</p>
+        <p>© 2025 Headless. Made with ❤️</p>
       </footer>
     </div>
   );
