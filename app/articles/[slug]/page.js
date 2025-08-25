@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabase'
+import Link from 'next/link'
 
 async function getArticle(slug) {
   const { data: article, error } = await supabase
@@ -16,6 +17,7 @@ async function getArticle(slug) {
 }
 
 export default async function ArticlePage({ params }) {
+  // В Next.js 15 params теперь Promise
   const resolvedParams = await params
   const { slug } = resolvedParams
   
@@ -27,9 +29,9 @@ export default async function ArticlePage({ params }) {
         <h1 className="text-2xl font-bold text-gray-900">
           Статья не найдена
         </h1>
-        <a href="/" className="text-blue-600 hover:text-blue-800">
+        <Link href="/" className="text-blue-600 hover:text-blue-800">
           ← Вернуться на главную
-        </a>
+        </Link>
       </div>
     )
   }
