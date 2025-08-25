@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { supabase } from './lib/supabase'; // Обратите внимание на путь
+import { supabase } from '../lib/supabase'; // Обратите внимание на путь
 
 async function getSettingsAndMenu() {
   const { data: settingsData, error: settingsError } = await supabase
