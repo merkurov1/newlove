@@ -1,7 +1,7 @@
 // app/[...slug]/page.js
 import { notFound } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import Header from '@/app/header';
+import Header from '@/app/header.js';
 
 export default async function Page({ params }) {
   const { slug } = params;
