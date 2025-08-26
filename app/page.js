@@ -1,19 +1,19 @@
 // app/page.js
 import Link from 'next/link';
-import Image from 'next/image'; // Импортируем компонент Image
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase'; // Импорт серверного клиента
+import Image from 'next/image';
 
 async function getRecentContent() {
   const supabase = createClient();
   const { data: articles } = await supabase
     .from('articles')
-    .select('id, title, slug, published_at, image_url') // Запрашиваем image_url
+    .select('id, title, slug, published_at, image_url')
     .order('published_at', { ascending: false })
     .limit(3);
 
   const { data: projects } = await supabase
     .from('projects')
-    .select('id, title, slug, published_at')
+    .select('id, title, slug, published_at, image_url')
     .order('published_at', { ascending: false })
     .limit(3);
 
@@ -35,6 +35,9 @@ export default async function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {projects?.map(project => (
             <Link key={project.id} href={`/projects/${project.slug}`} className="p-4 border rounded shadow">
+              {project.image_url && (
+                <Image src={project.image_url} alt={project.title} width={300} height={200} className="rounded" />
+              )}
               <h3 className="text-lg font-medium">{project.title}</h3>
               <p className="text-sm text-gray-500">{new Date(project.published_at).toLocaleDateString()}</p>
             </Link>
@@ -50,15 +53,8 @@ export default async function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {articles?.map(article => (
             <Link key={article.id} href={`/articles/${article.slug}`} className="p-4 border rounded shadow">
-              {/* Используем Image, если есть image_url */}
               {article.image_url && (
-                <Image
-                  src={article.image_url}
-                  alt={article.title}
-                  width={300}
-                  height={200}
-                  className="rounded"
-                />
+                <Image src={article.image_url} alt={article.title} width={300} height={200} className="rounded" />
               )}
               <h3 className="text-lg font-medium">{article.title}</h3>
               <p className="text-sm text-gray-500">{new Date(article.published_at).toLocaleDateString()}</p>
