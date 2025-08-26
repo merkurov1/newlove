@@ -1,6 +1,8 @@
+// app/[...slug]/page.js
 import { notFound } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
+import Header from '@/components/header'; // Импортируем компонент Header
 
 export default async function Page({ params }) {
   const { slug } = params;
@@ -18,10 +20,15 @@ export default async function Page({ params }) {
   }
 
   return (
-    <main>
-      <h1>{article.title}</h1>
-      <div dangerouslySetInnerHTML={{ __html: article.content }} />
-    </main>
+    <>
+      <Header />
+      <main className="article-main">
+        <article className="article-container">
+          <h1 className="article-title">{article.title}</h1>
+          <div className="article-content" dangerouslySetInnerHTML={{ __html: article.content }} />
+        </article>
+      </main>
+    </>
   );
 }
 
