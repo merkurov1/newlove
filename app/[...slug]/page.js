@@ -2,7 +2,7 @@
 import { notFound } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
-import Header from '@/app/header.js'; 
+import Header from '@/app/header'; 
 
 export default async function Page({ params }) {
   const { slug } = params;
@@ -32,15 +32,21 @@ export default async function Page({ params }) {
   );
 }
 
+---
+
+## **Функция `generateStaticParams`**
+
+```javascript
 export async function generateStaticParams() {
   const { data: articles, error } = await supabase
     .from('articles')
     .select('slug')
     .contains('tags', ['page']);
 
-  if (error || !articles) { // Добавляем проверку на ошибку или отсутствие данных
+  // Проверяем, что нет ошибки И что articles является массивом
+  if (error || !Array.isArray(articles)) { 
     console.error('Ошибка генерации статических параметров:', error);
-    return []; // Возвращаем пустой массив, чтобы предотвратить ошибку .map()
+    return []; 
   }
 
   return articles.map((article) => ({
