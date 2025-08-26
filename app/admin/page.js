@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabase-client';
 
 import { useState } from 'react';
 import Link from 'next/link'; // Импортируем Link
-import { supabase } from '../../lib/supabase';
 
 export default function Admin() {
   const [title, setTitle] = useState('');
