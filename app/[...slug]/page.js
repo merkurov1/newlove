@@ -3,18 +3,7 @@ import { supabase } from "@/lib/supabase";
 import Header from "@/app/header";
 import styles from "./article.module.css"; // CSS module for styling
 
-// Define types for params and article data (if using TypeScript)
-interface PageParams {
-  slug: string | string[];
-}
-
-interface Article {
-  title: string;
-  content: string;
-  slug: string;
-}
-
-export default async function Page({ params }: { params: PageParams }) {
+export default async function Page({ params }) {
   // Extract slug from params
   const articleSlug = Array.isArray(params.slug) ? params.slug[0] : params.slug;
 
@@ -23,7 +12,7 @@ export default async function Page({ params }: { params: PageParams }) {
     .from("articles")
     .select("title, content")
     .eq("slug", articleSlug)
-    .contains("tags", ["page"]) // Ensure this matches your Supabase schema
+    .contains("tags", ["page"])
     .single();
 
   // Handle errors or missing article
