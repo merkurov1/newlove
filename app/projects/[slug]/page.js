@@ -1,36 +1,26 @@
-// app/projects/[slug]/page.js
-import { createClient } from '@/lib/supabase'; // Клиент для runtime
-import { supabaseBuildClient } from '@/lib/supabase-build'; // Клиент для build-time
-import { notFound } from 'next/navigation';
-import Image from 'next/image';
+import { useRouter } from 'next/router';
+import { useEffect, useState } from 'react';
+import supabase from '../_utils/supabaseClient';
 
-export async function generateStaticParams() {
-  const { data: projects } = await supabaseBuildClient.from('projects').select('slug');
-  
-  if (!projects) {
-    return [];
-  }
+export default function ProjectPage() {
+  const router = useRouter();
+  const { id } = router.query;
+  const [page, setPage] = useState(null);
 
-  return projects.map((project) => ({ slug: project.slug }));
-}
+  useEffect(() => {
+    if (!id) return;
+    (async () => {
+      const { data } = await supabase.from('project_pages').select('*').eq('id', id).single();
+      setPage(data);
+    })();
+  }, [id]);
 
-export default async function ProjectPage({ params }) {
-  const supabase = createClient();
-  const { data: project } = await supabase
-    .from('projects')
-    .select('*')
-    .eq('slug', params.slug)
-    .single();
-
-  if (!project) notFound();
+  if (!page) return <div>Загрузка...</div>;
 
   return (
-    <article className="prose lg:prose-xl mx-auto">
-      <h1 className="text-center">{project.title}</h1>
-      {project.image_url && (
-        <Image src={project.image_url} alt={project.title} width={1200} height={800} className="rounded-lg shadow-md" />
-      )}
-      <div className="mt-8" dangerouslySetInnerHTML={{ __html: project.body }}></div>
-    </article>
+    <div>
+      <h1>{page.title}</h1>
+      <div>{page.content}</div>
+    </div>
   );
 }
