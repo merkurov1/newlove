@@ -2,7 +2,7 @@
 import { notFound } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
-import Header from '@/app/header.js'; // Импортируем компонент Header
+import Header from '@/app/header.js'; 
 
 export default async function Page({ params }) {
   const { slug } = params;
@@ -38,9 +38,9 @@ export async function generateStaticParams() {
     .select('slug')
     .contains('tags', ['page']);
 
-  if (error) {
+  if (error || !articles) { // Добавляем проверку на ошибку или отсутствие данных
     console.error('Ошибка генерации статических параметров:', error);
-    return [];
+    return []; // Возвращаем пустой массив, чтобы предотвратить ошибку .map()
   }
 
   return articles.map((article) => ({
