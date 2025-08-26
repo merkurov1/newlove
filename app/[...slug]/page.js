@@ -20,7 +20,7 @@ export default async function Page({ params }) {
   // Log for debugging
   console.log("Article fetch result:", { article, error, slug: articleSlug });
 
-  // Handle errors or missing article
+  // Handle errors or missing/incomplete article
   if (error || !article || !article.title || !article.content) {
     console.error("Error fetching article:", {
       slug: articleSlug,
@@ -76,4 +76,18 @@ export async function generateStaticParams() {
   return articles.map((article) => ({
     slug: [article.slug],
   }));
+}
+
+// Optional: Generate metadata for SEO
+export async function generateMetadata({ params }) {
+  const articleSlug = Array.isArray(params.slug) ? params.slug[0] : params.slug;
+  const { data: article } = await supabase
+    .from("articles")
+    .select("title")
+    .eq("slug", articleSlug)
+    .single();
+
+  return {
+    title: article?.title || "Article Not Found",
+  };
 }
