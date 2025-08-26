@@ -1,9 +1,9 @@
 // app/[...slug]/page.js
 import { notFound } from 'next/navigation';
-import { createClient } from '@/lib/supabase'; // Импорт серверного клиента для runtime
-import { supabaseBuildClient } from '@/lib/supabase-build'; // Импорт клиента для build-time
+import { createClient } from '@/lib/supabase';
+import { supabaseBuildClient } from '@/lib/supabase-build';
+import Image from 'next/image';
 
-// Эта функция работает во время сборки, поэтому она не может использовать `cookies`
 export async function generateStaticParams() {
   const { data: articles } = await supabaseBuildClient
     .from('articles')
@@ -14,7 +14,6 @@ export async function generateStaticParams() {
     .from('projects')
     .select('slug');
 
-  // Объединяем slugs из разных таблиц
   const allSlugs = [
     ...(articles || []).map(item => ({ slug: item.slug })),
     ...(projects || []).map(item => ({ slug: item.slug })),
@@ -23,12 +22,10 @@ export async function generateStaticParams() {
   return allSlugs;
 }
 
-// Эта функция работает во время запроса и использует клиент с `cookies`
 export default async function GenericPage({ params }) {
   const supabase = createClient();
   const slug = params.slug[0];
 
-  // Попробуем найти статью по slug
   const { data: article } = await supabase
     .from('articles')
     .select('*')
@@ -36,16 +33,27 @@ export default async function GenericPage({ params }) {
     .single();
 
   if (article) {
-    // Если найдена статья, рендерим её
     return (
-      <article>
-        <h1>{article.title}</h1>
-        <div dangerouslySetInnerHTML={{ __html: article.body }} />
+      <article className="max-w-4xl mx-auto px-4 py-8">
+        <h1 className="text-4xl font-bold text-center mb-6">{article.title}</h1>
+        {article.image_url && (
+          <div className="relative w-full h-96 mb-8 rounded-lg overflow-hidden shadow-lg">
+            <Image
+              src={article.image_url}
+              alt={article.title}
+              layout="fill"
+              objectFit="cover"
+              className="rounded-lg"
+            />
+          </div>
+        )}
+        <div className="prose lg:prose-lg mx-auto">
+          <div dangerouslySetInnerHTML={{ __html: article.body }} />
+        </div>
       </article>
     );
   }
 
-  // Попробуем найти проект по slug
   const { data: project } = await supabase
     .from('projects')
     .select('*')
@@ -53,15 +61,16 @@ export default async function GenericPage({ params }) {
     .single();
 
   if (project) {
-    // Если найден проект, рендерим его
     return (
-      <article>
-        <h1>{project.title}</h1>
-        <div dangerouslySetInnerHTML={{ __html: project.body }} />
+      <article className="prose lg:prose-xl mx-auto">
+        <h1 className="text-center">{project.title}</h1>
+        {project.image_url && (
+          <Image src={project.image_url} alt={project.title} width={1200} height={800} className="rounded-lg shadow-md" />
+        )}
+        <div className="mt-8" dangerouslySetInnerHTML={{ __html: project.body }}></div>
       </article>
     );
   }
 
-  // Если ничего не найдено, возвращаем 404
   notFound();
 }
