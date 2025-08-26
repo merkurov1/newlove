@@ -1,19 +1,24 @@
 // app/articles/[slug]/page.js
-import { createClient } from '@/lib/supabase'; // Исправленный импорт
+import { createClient } from '@/lib/supabase'; // Клиент для runtime
+import { supabaseBuildClient } from '@/lib/supabase-build'; // Клиент для build-time
 import { notFound } from 'next/navigation';
-import Image from 'next/image'; // Импортируем компонент
+import Image from 'next/image';
 
-// Эта функция генерирует статические страницы для каждого slug
+// Эта функция генерирует статические страницы во время сборки
 export async function generateStaticParams() {
-  const supabase = createClient();
-  const { data: articles } = await supabase
+  const { data: articles } = await supabaseBuildClient
     .from('articles')
     .select('slug')
-    .eq('is_draft', false); // Генерируем только для опубликованных статей
+    .eq('is_draft', false);
+
+  if (!articles) {
+    return [];
+  }
 
   return articles.map((article) => ({ slug: article.slug }));
 }
 
+// Эта функция работает во время запроса и может использовать куки
 export default async function ArticlePage({ params }) {
   const supabase = createClient();
   const { data: article } = await supabase
