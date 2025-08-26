@@ -32,18 +32,12 @@ export default async function Page({ params }) {
   );
 }
 
----
-
-## **Функция `generateStaticParams`**
-
-```javascript
 export async function generateStaticParams() {
   const { data: articles, error } = await supabase
     .from('articles')
     .select('slug')
     .contains('tags', ['page']);
 
-  // Проверяем, что нет ошибки И что articles является массивом
   if (error || !Array.isArray(articles)) { 
     console.error('Ошибка генерации статических параметров:', error);
     return []; 
