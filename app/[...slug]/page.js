@@ -2,7 +2,7 @@
 import { notFound } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
-import Header from '@/components/header'; // Импортируем компонент Header
+import Header from '@/app/header.js'; // Импортируем компонент Header
 
 export default async function Page({ params }) {
   const { slug } = params;
