@@ -1,17 +1,16 @@
-// app/[…slug]/page.js
-import { notFound } from ‘next/navigation’;
-import { supabase } from ‘@/lib/supabase’;
-import Header from ‘@/app/header’;
+import { notFound } from “next/navigation”;
+import { supabase } from “@/lib/supabase”;
+import Header from “@/app/header”;
 
 export default async function Page({ params }) {
 const { slug } = params;
 const articleSlug = Array.isArray(slug) ? slug[0] : slug;
 
 const { data: article, error } = await supabase
-.from(‘articles’)
-.select(‘title, content’)
-.eq(‘slug’, articleSlug)
-.contains(‘tags’, [‘page’])
+.from(“articles”)
+.select(“title, content”)
+.eq(“slug”, articleSlug)
+.contains(“tags”, [“page”])
 .single();
 
 if (error || !article) {
@@ -19,21 +18,51 @@ notFound();
 }
 
 return (
-<>
+<div>
 <Header />
-<main style={mainStyles}>
-<article style={containerStyles}>
-<h1 style={titleStyles}>{article.title}</h1>
+<main className="article-main">
+<article className="article-container">
+<h1 className="article-title">{article.title}</h1>
 <div
 className=“article-content”
-style={contentStyles}
 dangerouslySetInnerHTML={{ __html: article.content }}
 />
 </article>
 </main>
 
 ```
-  <style jsx global>{`
+  <style jsx>{`
+    .article-main {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    
+    .article-container {
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      padding: 40px;
+      margin: 20px 0;
+    }
+    
+    .article-title {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #2c3e50;
+      margin-bottom: 30px;
+      line-height: 1.2;
+      border-bottom: 3px solid #3498db;
+      padding-bottom: 15px;
+    }
+    
+    .article-content {
+      line-height: 1.6;
+      color: #444444;
+      font-size: 1.1rem;
+    }
+    
     .article-content h1,
     .article-content h2,
     .article-content h3,
@@ -77,7 +106,7 @@ dangerouslySetInnerHTML={{ __html: article.content }}
       padding: 15px 20px;
       background: #f8f9fa;
       font-style: italic;
-      color: #555;
+      color: #555555;
     }
     
     .article-content code {
@@ -90,7 +119,7 @@ dangerouslySetInnerHTML={{ __html: article.content }}
     
     .article-content pre {
       background: #2c3e50;
-      color: #fff;
+      color: #ffffff;
       padding: 20px;
       border-radius: 5px;
       overflow-x: auto;
@@ -133,7 +162,7 @@ dangerouslySetInnerHTML={{ __html: article.content }}
     .article-content td {
       padding: 12px;
       text-align: left;
-      border-bottom: 1px solid #ddd;
+      border-bottom: 1px solid #dddddd;
     }
     
     .article-content th {
@@ -147,56 +176,37 @@ dangerouslySetInnerHTML={{ __html: article.content }}
     }
     
     @media (max-width: 768px) {
+      .article-main {
+        padding: 10px;
+      }
+      
+      .article-container {
+        padding: 20px;
+      }
+      
+      .article-title {
+        font-size: 2rem;
+      }
+      
       .article-content {
         font-size: 1rem;
       }
     }
   `}</style>
-</>
+</div>
 ```
 
 );
 }
 
-const mainStyles = {
-maxWidth: ‘800px’,
-margin: ‘0 auto’,
-padding: ‘20px’,
-fontFamily: ‘-apple-system, BlinkMacSystemFont, “Segoe UI”, Roboto, sans-serif’
-};
-
-const containerStyles = {
-background: ‘#fff’,
-borderRadius: ‘8px’,
-boxShadow: ‘0 2px 10px rgba(0, 0, 0, 0.1)’,
-padding: ‘40px’,
-margin: ‘20px 0’
-};
-
-const titleStyles = {
-fontSize: ‘2.5rem’,
-fontWeight: ‘700’,
-color: ‘#2c3e50’,
-marginBottom: ‘30px’,
-lineHeight: ‘1.2’,
-borderBottom: ‘3px solid #3498db’,
-paddingBottom: ‘15px’
-};
-
-const contentStyles = {
-lineHeight: ‘1.6’,
-color: ‘#444’,
-fontSize: ‘1.1rem’
-};
-
 export async function generateStaticParams() {
 const { data: articles, error } = await supabase
-.from(‘articles’)
-.select(‘slug’)
-.eq(‘tags’, ‘page’); // Исправил синтаксис для тега
+.from(“articles”)
+.select(“slug”)
+.contains(“tags”, [“page”]);
 
 if (error || !articles || !Array.isArray(articles)) {
-console.error(‘Ошибка генерации статических параметров:’, error);
+console.error(“Ошибка генерации статических параметров:”, error);
 return [];
 }
 
