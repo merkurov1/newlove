@@ -1,8 +1,7 @@
 // app/[...slug]/page.js
 import { notFound } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import Image from 'next/image';
-import Header from '@/app/header'; 
+import Header from '@/app/header';
 
 export default async function Page({ params }) {
   const { slug } = params;
@@ -38,9 +37,10 @@ export async function generateStaticParams() {
     .select('slug')
     .contains('tags', ['page']);
 
-  if (error || !Array.isArray(articles)) { 
+  // Если есть ошибка или данные не являются массивом, возвращаем пустой массив
+  if (error || !Array.isArray(articles)) {
     console.error('Ошибка генерации статических параметров:', error);
-    return []; 
+    return [];
   }
 
   return articles.map((article) => ({
