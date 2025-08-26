@@ -1,4 +1,5 @@
 'use client';
+import { supabase } from '@/lib/supabase-client';
 
 import { useState } from 'react';
 import Link from 'next/link'; // Импортируем Link
