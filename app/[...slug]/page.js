@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import { notFound } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Header from "@/app/header";
@@ -17,7 +18,10 @@ export default async function Page({ params }) {
 
   // Handle errors or missing article
   if (error || !article) {
-    console.error("Error fetching article:", error?.message || "Article not found");
+    console.error("Error fetching article:", {
+      slug: articleSlug,
+      error: error?.message || "Article not found",
+    });
     notFound();
   }
 
@@ -44,8 +48,14 @@ export async function generateStaticParams() {
     .select("slug")
     .contains("tags", ["page"]);
 
+  // Log for debugging
+  console.log("generateStaticParams result:", { articles, error });
+
   if (error || !articles || !Array.isArray(articles)) {
-    console.error("Error generating static params:", error?.message);
+    console.error("Error generating static params:", {
+      error: error?.message || "No articles found",
+      articles,
+    });
     return [];
   }
 
