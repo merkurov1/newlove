@@ -38,7 +38,7 @@ export async function generateStaticParams() {
     .contains('tags', ['page']);
 
   // Если есть ошибка или данные не являются массивом, возвращаем пустой массив
-  if (error || !Array.isArray(articles)) {
+  if (error || !articles || !Array.isArray(articles)) {
     console.error('Ошибка генерации статических параметров:', error);
     return [];
   }
