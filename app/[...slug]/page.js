@@ -2,7 +2,8 @@
 import { notFound } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Header from "@/app/header";
-import styles from "./article.module.css"; // CSS module for styling
+import styles from "./article.module.css";
+import sanitizeHtml from "sanitize-html";
 
 export default async function Page({ params }) {
   // Extract slug from params
@@ -16,14 +17,27 @@ export default async function Page({ params }) {
     .contains("tags", ["page"])
     .single();
 
+  // Log for debugging
+  console.log("Article fetch result:", { article, error, slug: articleSlug });
+
   // Handle errors or missing article
-  if (error || !article) {
+  if (error || !article || !article.title || !article.content) {
     console.error("Error fetching article:", {
       slug: articleSlug,
-      error: error?.message || "Article not found",
+      error: error?.message || "Article not found or incomplete",
+      article,
     });
     notFound();
   }
+
+  // Sanitize HTML content
+  const sanitizedContent = sanitizeHtml(article.content, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(["img"]),
+    allowedAttributes: {
+      ...sanitizeHtml.defaults.allowedAttributes,
+      img: ["src", "alt", "width", "height"],
+    },
+  });
 
   return (
     <div>
@@ -33,7 +47,7 @@ export default async function Page({ params }) {
           <h1 className={styles.articleTitle}>{article.title}</h1>
           <div
             className={styles.articleContent}
-            dangerouslySetInnerHTML={{ __html: article.content }}
+            dangerouslySetInnerHTML={{ __html: sanitizedContent }}
           />
         </article>
       </main>
@@ -60,6 +74,6 @@ export async function generateStaticParams() {
   }
 
   return articles.map((article) => ({
-    slug: [article.slug], // Return slug as an array for catch-all route
+    slug: [article.slug],
   }));
 }
