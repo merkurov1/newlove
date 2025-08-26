@@ -1,118 +1,74 @@
+// app/page.js
 import Link from 'next/link';
-import { supabase } from '../lib/supabase';
-import Image from 'next/image';
-import Header from './header.js';
+import Image from 'next/image'; // Импортируем компонент Image
+import { createClient } from '@/lib/supabase';
 
-// Асинхронная функция для получения настроек сайта
-async function getSettings() {
-  const { data: settingsData, error: settingsError } = await supabase
-    .from('settings')
-    .select('key, value');
-
-  if (settingsError) {
-    console.error('Ошибка загрузки настроек:', settingsError);
-    return {};
-  }
-
-  const settings = {};
-  settingsData.forEach(item => {
-    settings[item.key] = item.value;
-  });
-
-  return settings;
-}
-
-// Асинхронная функция для получения всех статей
-async function getArticles() {
-  const { data: articles, error } = await supabase
+async function getRecentContent() {
+  const supabase = createClient();
+  const { data: articles } = await supabase
     .from('articles')
-    .select('*')
-    .order('published_at', { ascending: false });
+    .select('id, title, slug, published_at, image_url') // Запрашиваем image_url
+    .order('published_at', { ascending: false })
+    .limit(3);
 
-  if (error) {
-    console.error('Error fetching articles:', error);
-    return [];
-  }
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('id, title, slug, published_at')
+    .order('published_at', { ascending: false })
+    .limit(3);
 
-  return articles || [];
+  return { articles, projects };
 }
 
-// Асинхронная функция для получения статей для меню
-async function getMenuArticles() {
-  const { data: articles, error } = await supabase
-    .from('articles')
-    .select('slug, title')
-    .contains('tags', ['page']);
-
-  if (error) {
-    console.error('Error fetching menu articles:', error);
-    return [];
-  }
-
-  return articles || [];
-}
-
-export default async function Home() {
-  // Получаем данные для статей на главной странице
-  const articles = await getArticles();
-  
-  // Получаем данные для меню (статьи с тегом 'page')
-  const menuArticles = await getMenuArticles();
-
-  // Получаем настройки сайта
-  const settings = await getSettings();
-
-  const siteName = settings.site_name || 'Название сайта';
-  const slogan = settings.slogan || 'Слоган сайта';
+export default async function HomePage() {
+  const { articles, projects } = await getRecentContent();
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Передаем статьи для меню и настройки в компонент Header */}
-      <Header articles={menuArticles} siteName={siteName} slogan={slogan} />
-      
-      <main>
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {articles.length > 0 ? (
-            articles.map((article) => (
-              <article
-                key={article.id}
-                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-              >
-                <h2 className="text-xl font-semibold text-gray-900 mb-3">
-                  <Link href={`/articles/${article.slug}`} className="hover:text-blue-600">
-                    {article.title}
-                  </Link>
-                </h2>                
-                <p className="text-gray-700 mb-4 line-clamp-3">
-                  {article.content?.substring(0, 150)}...
-                </p>
-                
-                <div className="flex justify-between items-center text-sm text-gray-500">
-                  <time>
-                    {new Date(article.published_at).toLocaleDateString('ru-RU')}
-                  </time>
-                  <Link
-                    href={`/articles/${article.slug}`}
-                    className="bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
-                  >
-                    /{article.slug}
-                  </Link>
-                </div>
-              </article>
-            ))
-          ) : (
-            <div className="col-span-full text-center py-12">
-              <p className="text-gray-500 text-lg">
-                Статьи не найдены. Проверьте подключение к Supabase.
-              </p>
-            </div>
-          )}
-        </div>
-      </main>
+    <div>
+      <section className="my-10">
+        <h1 className="text-4xl font-bold mb-4">Здравствуйте, меня зовут Антон Меркуров.</h1>
+        <p className="text-xl">Я медиаэксперт, работающий на пересечении современных медиа, технологий и искусства.</p>
+      </section>
 
-      <footer className="text-center mt-16 text-gray-500">
-        <p>© 2025 Headless. Made with ❤️ & AI</p>
-      </footer>
+      <section className="my-10">
+        <h2 className="text-2xl font-semibold mb-4">Последние проекты</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {projects?.map(project => (
+            <Link key={project.id} href={`/projects/${project.slug}`} className="p-4 border rounded shadow">
+              <h3 className="text-lg font-medium">{project.title}</h3>
+              <p className="text-sm text-gray-500">{new Date(project.published_at).toLocaleDateString()}</p>
+            </Link>
+          ))}
+        </div>
+        <Link href="/projects" className="mt-4 inline-block text-blue-600 hover:underline">
+          Смотреть все проекты
+        </Link>
+      </section>
+
+      <section className="my-10">
+        <h2 className="text-2xl font-semibold mb-4">Свежие статьи</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {articles?.map(article => (
+            <Link key={article.id} href={`/articles/${article.slug}`} className="p-4 border rounded shadow">
+              {/* Используем Image, если есть image_url */}
+              {article.image_url && (
+                <Image
+                  src={article.image_url}
+                  alt={article.title}
+                  width={300}
+                  height={200}
+                  className="rounded"
+                />
+              )}
+              <h3 className="text-lg font-medium">{article.title}</h3>
+              <p className="text-sm text-gray-500">{new Date(article.published_at).toLocaleDateString()}</p>
+            </Link>
+          ))}
+        </div>
+        <Link href="/articles" className="mt-4 inline-block text-blue-600 hover:underline">
+          Читать все статьи
+        </Link>
+      </section>
     </div>
   );
 }

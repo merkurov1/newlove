@@ -1,77 +1,49 @@
-import { supabase } from '../../../lib/supabase'
-import Link from 'next/link'
+// app/articles/[slug]/page.js
+import { createClient } from '@/lib/supabase'; // Исправленный импорт
+import { notFound } from 'next/navigation';
+import Image from 'next/image'; // Импортируем компонент
 
-async function getArticle(slug) {
-  const { data: article, error } = await supabase
+// Эта функция генерирует статические страницы для каждого slug
+export async function generateStaticParams() {
+  const supabase = createClient();
+  const { data: articles } = await supabase
     .from('articles')
-    .select('*')
-    .eq('slug', slug)
-    .single()
+    .select('slug')
+    .eq('is_draft', false); // Генерируем только для опубликованных статей
 
-  if (error) {
-    console.error('Error fetching article:', error)
-    return null
-  }
-
-  return article
+  return articles.map((article) => ({ slug: article.slug }));
 }
 
 export default async function ArticlePage({ params }) {
-  // В Next.js 15 params теперь Promise
-  const resolvedParams = await params
-  const { slug } = resolvedParams
-  
-  const article = await getArticle(slug)
+  const supabase = createClient();
+  const { data: article } = await supabase
+    .from('articles')
+    .select('*')
+    .eq('slug', params.slug)
+    .eq('is_draft', false)
+    .single();
 
   if (!article) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Статья не найдена
-        </h1>
-        <Link href="/" className="text-blue-600 hover:text-blue-800">
-          ← Вернуться на главную
-        </Link>
-      </div>
-    )
+    notFound();
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <article className="max-w-4xl mx-auto">
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            {article.title}
-          </h1>
-          <time className="text-gray-600">
-            {new Date(article.published_at).toLocaleDateString('ru-RU')}
-          </time>
-        </header>
-
-        {/* 🔥 вот картинка */}
-        {article.image_url && (
-          <img
+    <article className="max-w-4xl mx-auto px-4 py-8">
+      <h1 className="text-4xl font-bold text-center mb-6">{article.title}</h1>
+      {article.image_url && (
+        <div className="relative w-full h-96 mb-8 rounded-lg overflow-hidden shadow-lg">
+          <Image
             src={article.image_url}
             alt={article.title}
-            className="w-full h-64 object-cover rounded-lg mb-6"
+            layout="fill"
+            objectFit="cover"
+            className="rounded-lg"
           />
-        )}
-
-        <div className="prose prose-lg max-w-none">
-          <div className="whitespace-pre-wrap text-gray-800">
-            {article.content}
-          </div>
         </div>
-
-        <footer className="mt-12 pt-8 border-t border-gray-200">
-          <Link 
-            href="/" 
-            className="text-blue-600 hover:text-blue-800 font-medium"
-          >
-            ← Вернуться на главную
-          </Link>
-        </footer>
-      </article>
-    </div>
-  )
+      )}
+      <div className="prose lg:prose-lg mx-auto">
+        <div dangerouslySetInnerHTML={{ __html: article.body }} />
+      </div>
+    </article>
+  );
 }
