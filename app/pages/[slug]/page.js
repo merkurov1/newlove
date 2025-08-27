@@ -1,5 +1,5 @@
 // app/pages/[slug]/page.js
-import { supabase } from '@/utils/supabase';
+import { supabase } from '@/lib/supabase';
 
 async function getProjectBySlug(slug) {
   const { data, error } = await supabase
