@@ -1,6 +1,6 @@
 import './globals.css';
 import { supabase } from '@/lib/supabase-server';
-import Header from '@/app/header';
+import Header from './app/header';
 import Footer from '@/app/footer';
 
 export const metadata = {
