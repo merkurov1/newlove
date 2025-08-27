@@ -1,8 +1,7 @@
-// app/layout.js
 import './globals.css';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { supabase } from '@/utils/supabase';
+import { supabase } from '@/lib/supabase-server'; // Correct import path
 
 export const metadata = {
   title: 'Антон Меркуров | Медиа, технологии, искусство',
@@ -10,7 +9,8 @@ export const metadata = {
 };
 
 async function getPages() {
-  const { data, error } = await supabase
+  const supabaseClient = supabase(); // Correctly initialize the client
+  const { data, error } = await supabaseClient
     .from('projects')
     .select('id, title, slug')
     .order('created_at', { ascending: false });
