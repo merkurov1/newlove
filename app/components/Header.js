@@ -50,7 +50,7 @@ export default async function Header({ pages }) {
           <ul className="flex flex-wrap justify-center sm:space-x-8 space-x-4 text-sm font-medium">
             <li>
               <Link href="/">
-                <span className="hover:text-gray-500 transition-colors duration-200">Главная</span>
+                <span className="hover:text-gray-500 transition-colors duration-200">🏠</span>
               </Link>
             </li>
             {pages.map((page) => (
