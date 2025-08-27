@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      // The `@/` alias now correctly points to the 'src' directory
+      "@/*": ["./src/*"] 
     }
   },
   "include": [
