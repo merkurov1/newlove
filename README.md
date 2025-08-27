@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Simple CMS Starter Templates
 
-## Getting Started
+Welcome to the **Simple CMS Starter Templates**! This repository contains front-end templates for building a simple CMS
+in different frameworks and libraries. Each subfolder represents a specific framework, offering reusable, scalable, and
+easy-to-implement CMS solutions.
 
-First, run the development server:
+## **Templates**
+
+| Framework/Library | Description                                   | Links |
+| ----------------- | --------------------------------------------- |-------------- |
+| **Next.js**       | A CMS built using Next.js and its App Router. |[→ Go to Next.js Starter](./next) |
+| **Nuxt.js**       | A CMS template leveraging Nuxt.js features.   | [→ Go to Nuxt.js Starter](./nuxt) |
+| **Svelte**        | A CMS template using the Svelte framework.    | [→ Go to Svelte Starter](./svelte) |
+| **Astro**         | A CMS optimized for performance with Astro.   |[→ Go to Astro Starter](./astro) |
+
+## **Folder Structure**
+
+Each subfolder contains:
+
+- **Source Code**: Framework-specific implementation of the CMS.
+- **Documentation**: Instructions on how to set up, customize, and use the template.
+
+## Local Setup (with CLI)
+
+Run this in your terminal:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npx directus-template-cli@latest init
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
