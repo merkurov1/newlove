@@ -1,0 +1,4 @@
+Log started at 2025-08-27T18-10-34-857Z
+2025-08-27T18:11:38.183Z - ERROR: Error: Command failed with exit code 1: git init
+
+/.git: Permission denied Context: {"function":"initGit","targetDir":"/"}
