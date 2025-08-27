@@ -14,7 +14,7 @@ export default function Header({ pages }) {
           <ul className="flex space-x-4">
             <li>
               <Link href="/">
-                <span className="hover:text-gray-400">Главная</span>
+                <span className="hover:text-gray-400">🏠</span>
               </Link>
             </li>
             {pages.map((page) => (
