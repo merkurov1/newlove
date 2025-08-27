@@ -1,24 +1,34 @@
+// app/pages/[slug]/page.js
 import { supabase } from '@/lib/supabase-server'; 
 
-export default function ProjectPage() {
-  const router = useRouter();
-  const { id } = router.query;
-  const [page, setPage] = useState(null);
+async function getProjectBySlug(slug) {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('slug', slug)
+    .single();
 
-  useEffect(() => {
-    if (!id) return;
-    (async () => {
-      const { data } = await supabase.from('project_pages').select('*').eq('id', id).single();
-      setPage(data);
-    })();
-  }, [id]);
+  if (error) {
+    console.error('Error fetching page:', error);
+    return null;
+  }
+  return data;
+}
 
-  if (!page) return <div>Загрузка...</div>;
+export default async function ProjectPage({ params }) {
+  const page = await getProjectBySlug(params.slug);
+
+  if (!page) {
+    return <div className="text-center text-gray-500 mt-8">Страница не найдена.</div>;
+  }
 
   return (
-    <div>
-      <h1>{page.title}</h1>
-      <div>{page.content}</div>
+    <div className="max-w-3xl mx-auto">
+      <h1 className="text-3xl md:text-4xl font-bold mb-4">{page.title}</h1>
+      <p className="text-gray-500 text-sm mb-6">Опубликовано: {new Date(page.created_at).toLocaleDateString()}</p>
+      <div className="prose lg:prose-xl">
+        <p>{page.content}</p>
+      </div>
     </div>
   );
 }
