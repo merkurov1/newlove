@@ -1,31 +1,37 @@
-// app/[...slug]/page.js
 import { notFound } from 'next/navigation';
-import { createClient } from '@/lib/supabase';
-import { supabaseBuildClient } from '@/lib/supabase-build';
+import { createClient } from '@/lib/supabase-server'; // Исправленный путь к серверному клиенту
 import Image from 'next/image';
 
+// generateStaticParams должен возвращать массив объектов, где каждая
+// запись имеет ключ, соответствующий названию папки динамического маршрута.
+// В вашем случае, это 'slug'.
 export async function generateStaticParams() {
-  const { data: articles } = await supabaseBuildClient
+  const supabase = createClient(); // Используем серверный клиент для генерации
+
+  const { data: articles } = await supabase
     .from('articles')
     .select('slug')
     .eq('is_draft', false);
 
-  const { data: projects } = await supabaseBuildClient
+  const { data: projects } = await supabase
     .from('projects')
     .select('slug');
 
+  // Убедимся, что slug — это не просто строка, а массив строк,
+  // так как маршрут [...slug] является catch-all.
   const allSlugs = [
-    ...(articles || []).map(item => ({ slug: item.slug })),
-    ...(projects || []).map(item => ({ slug: item.slug })),
+    ...(articles || []).map(item => ({ slug: [item.slug] })),
+    ...(projects || []).map(item => ({ slug: [item.slug] })),
   ];
-
+  
   return allSlugs;
 }
 
 export default async function GenericPage({ params }) {
   const supabase = createClient();
-  const slug = params.slug[0];
+  const slug = params.slug.join('/'); // Собираем массив 'slug' в одну строку
 
+  // Сначала пытаемся найти статью.
   const { data: article } = await supabase
     .from('articles')
     .select('*')
@@ -41,9 +47,8 @@ export default async function GenericPage({ params }) {
             <Image
               src={article.image_url}
               alt={article.title}
-              layout="fill"
-              objectFit="cover"
-              className="rounded-lg"
+              fill // Вместо layout="fill" используйте fill
+              className="rounded-lg object-cover" // objectFit="cover" заменяется на className="object-cover"
             />
           </div>
         )}
@@ -54,6 +59,7 @@ export default async function GenericPage({ params }) {
     );
   }
 
+  // Если статья не найдена, ищем проект.
   const { data: project } = await supabase
     .from('projects')
     .select('*')
@@ -72,5 +78,6 @@ export default async function GenericPage({ params }) {
     );
   }
 
+  // Если ни статья, ни проект не найдены, возвращаем 404.
   notFound();
 }
