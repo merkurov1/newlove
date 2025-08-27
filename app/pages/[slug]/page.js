@@ -1,4 +1,3 @@
-// app/pages/[slug]/page.js
 import { supabase } from '@/lib/supabase-server'; 
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
@@ -24,15 +23,6 @@ export default async function ProjectPage({ params }) {
     notFound();
   }
 
-  // Check if a valid created_at date exists
-  const formattedDate = page.created_at
-    ? new Date(page.created_at).toLocaleDateString('ru-RU', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : 'Дата не указана'; // Placeholder for missing date
-
   return (
     <div className="max-w-4xl mx-auto my-8 p-8 bg-white rounded-lg shadow-xl border border-gray-100">
       {page.image_url && (
@@ -52,14 +42,17 @@ export default async function ProjectPage({ params }) {
           {page.title}
         </h1>
         <p className="text-gray-500 text-sm">
-          Опубликовано: {formattedDate}
+          Опубликовано: {new Date(page.created_at).toLocaleDateString('ru-RU', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })}
         </p>
       </header>
 
-      <div 
-        className="prose prose-lg text-gray-800"
-        dangerouslySetInnerHTML={{ __html: page.content }} 
-      />
+      <div className="prose prose-lg text-gray-800">
+        <p>{page.content}</p>
+      </div>
     </div>
   );
 }
