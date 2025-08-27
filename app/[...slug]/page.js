@@ -1,9 +1,7 @@
 // app/[...slug]/page.js
 import { supabase } from '@/lib/supabase-server'; 
-
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase-server'; // For server rendering
-import { supabaseBuildClient } from '@/lib/supabase-build-client'; // For static builds
 import Image from 'next/image';
 
 export async function generateStaticParams() {
