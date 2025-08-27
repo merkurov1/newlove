@@ -1,0 +1,4 @@
+Log started at 2025-08-27T18-15-09-375Z
+2025-08-27T18:16:29.242Z - INFO: Applying template - CMS to http://localhost:8055
+2025-08-27T18:17:05.346Z - ERROR: Error: fetch failed Context: {}
+2025-08-27T18:17:08.353Z - ERROR: Error: fetch failed Context: {}
