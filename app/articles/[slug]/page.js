@@ -1,13 +1,11 @@
-// app/articles/[slug]/page.js
-import { supabase } from '@/lib/supabase-server'; // Импортируем функцию-клиент
+import { supabase } from '@/lib/supabase-server';
 import { notFound } from 'next/navigation';
 
 async function getArticleBySlug(slug) {
-  const supabaseClient = supabase(); // Вызываем функцию, чтобы получить клиент
-
+  const supabaseClient = supabase();
   const { data, error } = await supabaseClient
     .from('articles')
-    .select('*')
+    .select('id, title, created_at, content')
     .eq('slug', slug)
     .single();
 
@@ -26,12 +24,23 @@ export default async function ArticlePage({ params }) {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h1 className="text-3xl md:text-4xl font-bold mb-4">{article.title}</h1>
-      <p className="text-gray-500 text-sm mb-6">Опубликовано: {new Date(article.created_at).toLocaleDateString()}</p>
-      <div className="prose lg:prose-xl">
+    <article className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+      {/* Article Header */}
+      <header className="mb-12 text-center">
+        <h1 className="text-4xl md:text-5xl font-light leading-tight text-gray-900">{article.title}</h1>
+        <p className="mt-4 text-gray-500 text-sm">
+          Опубликовано: {new Date(article.created_at).toLocaleDateString('ru-RU', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })}
+        </p>
+      </header>
+
+      {/* Article Content */}
+      <div className="prose prose-lg mx-auto text-gray-800">
         <p>{article.content}</p>
       </div>
-    </div>
+    </article>
   );
 }

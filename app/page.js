@@ -21,7 +21,6 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-12">
-      <h1 className="text-4xl font-light text-center mb-8">Последние публикации</h1>
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         {articles.length > 0 ? (
           articles.map((article) => (
