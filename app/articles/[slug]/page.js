@@ -1,5 +1,5 @@
 // app/articles/[slug]/page.js
-import { supabase } from '@/utils/supabase';
+import { supabase } from '@/lib/supabase';
 
 async function getArticleBySlug(slug) {
   const { data, error } = await supabase
