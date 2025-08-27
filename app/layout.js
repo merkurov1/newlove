@@ -1,40 +1,48 @@
 import './globals.css';
-import Header from '../app/Header';
-import Footer from '../app/Footer';
-import { supabase } from '@/lib/supabase-server';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import { supabase as supabaseServer } from '@/lib/supabase-server'; // For runtime
+import { supabase as supabaseBuild } from '@/lib/supabase-build';   // For build time
 
-export const metadata = {
-  title: 'Anton Merkurov',
-  description: 'Art x Love x Money',
-};
+// ... (Your metadata)
+
+async function getSiteSettings() {
+  // Use the build-time client
+  const { data, error } = await supabaseBuild 
+    .from('site_settings')
+    .select('site_name, slogan, logo_url')
+    .single();
+
+  if (error) {
+    console.error('Error fetching site settings:', error);
+    return { site_name: 'Site Name', slogan: 'Slogan', logo_url: '' };
+  }
+  return data;
+}
 
 async function getPages() {
-  try {
-    const supabaseClient = supabase(); // Correctly initialize the client
-    const { data, error } = await supabaseClient
-      .from('projects')
-      .select('id, title, slug')
-      .order('created_at', { ascending: false });
+  // Use the build-time client
+  const { data, error } = await supabaseBuild
+    .from('projects')
+    .select('id, title, slug')
+    .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching pages:', error);
-      return [];
-    }
-    return data;
-  } catch (e) {
-    console.error('Supabase client error in getPages:', e);
+  if (error) {
+    console.error('Error fetching pages:', error);
     return [];
   }
+  return data;
 }
 
 export default async function RootLayout({ children }) {
   const pages = await getPages();
+  const siteSettings = await getSiteSettings();
 
   return (
     <html lang="ru">
       <body>
         <div className="flex flex-col min-h-screen">
-          <Header pages={pages} />
+          <Header pages={pages} siteSettings={siteSettings} />
           <main className="flex-grow container mx-auto p-4">{children}</main>
           <Footer />
         </div>
