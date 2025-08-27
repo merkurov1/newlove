@@ -1,3 +1,4 @@
+// app/pages/[slug]/page.js
 import { supabase } from '@/lib/supabase-server'; 
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
