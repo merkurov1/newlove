@@ -2,6 +2,13 @@
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
+export default async function HomePage() {
+  // Call the function to get the client instance
+  const supabaseClient = supabase(); 
+  
+  // Now you can use the client.
+  const { data, error } = await supabaseClient.from('articles').select('*');
+  
 async function getArticles() {
   const { data, error } = await supabase
     .from('articles')
