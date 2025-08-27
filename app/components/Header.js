@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase-server';
 async function getSiteSettings() {
   const supabaseClient = supabase();
   const { data, error } = await supabaseClient
-    .from('site_settings')
+    .from('settings')
     .select('site_name, slogan, logo_url')
     .single();
 
