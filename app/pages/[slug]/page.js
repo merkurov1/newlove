@@ -6,7 +6,7 @@ async function getPageBySlug(slug) {
   const supabaseClient = supabase();
   const { data, error } = await supabaseClient
     .from('projects') // Make sure this is the correct table
-    .select('*')
+    .select('id, title, created_at, content')
     .eq('slug', slug)
     .single();
 
@@ -23,13 +23,26 @@ export default async function Page({ params }) {
   if (!page) {
     notFound();
   }
+  
+  // Handle cases where the date is null or invalid
+  const formattedDate = page.created_at
+    ? new Date(page.created_at).toLocaleDateString('ru-RU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : 'Дата не указана';
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto my-8 p-8 bg-white rounded-lg shadow-xl border border-gray-100">
       <h1 className="text-3xl md:text-4xl font-bold mb-4">{page.title}</h1>
-      <div className="prose lg:prose-xl">
-        <p>{page.body}</p>
-      </div>
+      <p className="text-gray-500 text-sm mb-6">Опубликовано: {formattedDate}</p>
+      
+      {/* Updated: Use dangerouslySetInnerHTML to render HTML content */}
+      <div 
+        className="prose lg:prose-xl"
+        dangerouslySetInnerHTML={{ __html: page.content }} 
+      />
     </div>
   );
 }
