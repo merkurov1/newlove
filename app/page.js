@@ -1,7 +1,7 @@
 import './globals.css';
 import { supabase } from '@/lib/supabase-server';
 import Header from '../app/header';
-import Footer from '../footer';
+import Footer from '../app/footer';
 
 export const metadata = {
   title: 'Антон Меркуров | Медиа, технологии, искусство',
