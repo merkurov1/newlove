@@ -1,6 +1,6 @@
 import './globals.css';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
+import Header from './components/Header';
+import Footer from './components/Footer';
 import { supabase as supabaseServer } from '@/lib/supabase-server'; // For runtime
 import { supabase as supabaseBuild } from '@/lib/supabase-build';   // For build time
 
