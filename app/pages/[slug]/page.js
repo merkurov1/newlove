@@ -23,6 +23,15 @@ export default async function ProjectPage({ params }) {
     notFound();
   }
 
+  // Handle cases where the date is null or invalid
+  const formattedDate = page.created_at
+    ? new Date(page.created_at).toLocaleDateString('ru-RU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : 'Дата не указана';
+
   return (
     <div className="max-w-4xl mx-auto my-8 p-8 bg-white rounded-lg shadow-xl border border-gray-100">
       {page.image_url && (
@@ -42,11 +51,7 @@ export default async function ProjectPage({ params }) {
           {page.title}
         </h1>
         <p className="text-gray-500 text-sm">
-          Опубликовано: {new Date(page.created_at).toLocaleDateString('ru-RU', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })}
+          Опубликовано: {formattedDate}
         </p>
       </header>
 
