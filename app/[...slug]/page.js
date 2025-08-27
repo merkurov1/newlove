@@ -1,24 +1,20 @@
+// app/[...slug]/page.js
+
 import { notFound } from 'next/navigation';
-import { createClient } from '@/lib/supabase-server'; // Исправленный путь к серверному клиенту
+import { createClient } from '@/lib/supabase-server'; // For server rendering
+import { supabaseBuildClient } from '@/lib/supabase-build-client'; // For static builds
 import Image from 'next/image';
 
-// generateStaticParams должен возвращать массив объектов, где каждая
-// запись имеет ключ, соответствующий названию папки динамического маршрута.
-// В вашем случае, это 'slug'.
 export async function generateStaticParams() {
-  const supabase = createClient(); // Используем серверный клиент для генерации
-
-  const { data: articles } = await supabase
+  const { data: articles } = await supabaseBuildClient
     .from('articles')
     .select('slug')
     .eq('is_draft', false);
 
-  const { data: projects } = await supabase
+  const { data: projects } = await supabaseBuildClient
     .from('projects')
     .select('slug');
 
-  // Убедимся, что slug — это не просто строка, а массив строк,
-  // так как маршрут [...slug] является catch-all.
   const allSlugs = [
     ...(articles || []).map(item => ({ slug: [item.slug] })),
     ...(projects || []).map(item => ({ slug: [item.slug] })),
@@ -28,14 +24,13 @@ export async function generateStaticParams() {
 }
 
 export default async function GenericPage({ params }) {
-  const supabase = createClient();
-  const slug = params.slug.join('/'); // Собираем массив 'slug' в одну строку
+  const supabase = createClient(); // This runs on the server side after a request
+  const path = params.slug.join('/');
 
-  // Сначала пытаемся найти статью.
   const { data: article } = await supabase
     .from('articles')
     .select('*')
-    .eq('slug', slug)
+    .eq('slug', path)
     .single();
 
   if (article) {
@@ -47,23 +42,20 @@ export default async function GenericPage({ params }) {
             <Image
               src={article.image_url}
               alt={article.title}
-              fill // Вместо layout="fill" используйте fill
-              className="rounded-lg object-cover" // objectFit="cover" заменяется на className="object-cover"
+              fill
+              className="rounded-lg object-cover"
             />
           </div>
         )}
-        <div className="prose lg:prose-lg mx-auto">
-          <div dangerouslySetInnerHTML={{ __html: article.body }} />
-        </div>
+        <div className="prose lg:prose-lg mx-auto" dangerouslySetInnerHTML={{ __html: article.body }} />
       </article>
     );
   }
 
-  // Если статья не найдена, ищем проект.
   const { data: project } = await supabase
     .from('projects')
     .select('*')
-    .eq('slug', slug)
+    .eq('slug', path)
     .single();
 
   if (project) {
@@ -78,6 +70,5 @@ export default async function GenericPage({ params }) {
     );
   }
 
-  // Если ни статья, ни проект не найдены, возвращаем 404.
   notFound();
 }
