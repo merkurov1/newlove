@@ -2,7 +2,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase-server';
 
-// This function fetches site settings from the database
 async function getSiteSettings() {
   const supabaseClient = supabase();
   const { data, error } = await supabaseClient
@@ -12,7 +11,7 @@ async function getSiteSettings() {
 
   if (error) {
     console.error('Error fetching site settings:', error);
-    return null; // Return null to handle the error gracefully
+    return null;
   }
   return data;
 }
@@ -20,7 +19,6 @@ async function getSiteSettings() {
 export default async function Header({ pages }) {
   const siteSettings = await getSiteSettings();
 
-  // Fallback data if fetching from Supabase fails
   const site_name = siteSettings?.site_name || 'Anton Merkurov';
   const slogan = siteSettings?.slogan || 'Art x Love x Money';
   const logo_url = siteSettings?.logo_url || 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png';
@@ -31,7 +29,14 @@ export default async function Header({ pages }) {
         {/* Top Section with Logo, Name, and Slogan */}
         <div className="text-center">
           <Link href="/">
-            <Image src={logo_url} alt="Логотип" width={80} height={80} className="mb-4" />
+            {/* Исправлено: добавлено mx-auto block для надежного центрирования */}
+            <Image 
+              src={logo_url} 
+              alt="Логотип" 
+              width={80} 
+              height={80} 
+              className="mb-4 mx-auto block" 
+            />
           </Link>
           <h1 className="text-4xl font-light mb-1">{site_name}</h1>
           <p className="text-sm text-gray-500 tracking-widest uppercase">{slogan}</p>
