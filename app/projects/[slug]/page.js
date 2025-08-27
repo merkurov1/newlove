@@ -1,5 +1,3 @@
-import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
 import supabase from '@/lib/supabase-client';
 
 export default function ProjectPage() {
