@@ -4,8 +4,8 @@ import Footer from '../app/Footer';
 import { supabase } from '@/lib/supabase-server';
 
 export const metadata = {
-  title: 'Антон Меркуров | Медиа, технологии, искусство',
-  description: 'Блог и проекты Антона Меркурова',
+  title: 'Anton Merkurov',
+  description: 'Art x Love x Money',
 };
 
 async function getPages() {
