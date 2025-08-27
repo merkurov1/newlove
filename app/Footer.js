@@ -31,8 +31,7 @@ export default async function Footer() {
           ))}
         </div>
         <div className="text-gray-500 text-sm">
-          <p>© {currentYear} Антон Меркуров</p>
-          <p>Made with Next.js, Tailwind CSS & Supabase.</p>
+          <p>© {currentYear} made with ❤️ & AI</p>
         </div>
       </div>
     </footer>
