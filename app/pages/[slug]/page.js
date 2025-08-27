@@ -1,9 +1,11 @@
 // app/pages/[slug]/page.js
 import { supabase } from '@/lib/supabase-server'; 
+import { notFound } from 'next/navigation';
 
-async function getProjectBySlug(slug) {
-  const { data, error } = await supabase
-    .from('projects')
+async function getPageBySlug(slug) {
+  const supabaseClient = supabase();
+  const { data, error } = await supabaseClient
+    .from('projects') // Make sure this is the correct table
     .select('*')
     .eq('slug', slug)
     .single();
@@ -15,19 +17,18 @@ async function getProjectBySlug(slug) {
   return data;
 }
 
-export default async function ProjectPage({ params }) {
-  const page = await getProjectBySlug(params.slug);
+export default async function Page({ params }) {
+  const page = await getPageBySlug(params.slug);
 
   if (!page) {
-    return <div className="text-center text-gray-500 mt-8">Страница не найдена.</div>;
+    notFound();
   }
 
   return (
     <div className="max-w-3xl mx-auto">
       <h1 className="text-3xl md:text-4xl font-bold mb-4">{page.title}</h1>
-      <p className="text-gray-500 text-sm mb-6">Опубликовано: {new Date(page.created_at).toLocaleDateString()}</p>
       <div className="prose lg:prose-xl">
-        <p>{page.content}</p>
+        <p>{page.body}</p>
       </div>
     </div>
   );
