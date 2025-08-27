@@ -1,7 +1,7 @@
 // components/Footer.js
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-server';
-import { socialIcons } from './SocialIcons'; // Импортируем иконки
+import { socialIcons } from './components/Sociaicons'; // Импортируем иконки
 
 async function getSocialLinks() {
   const supabaseClient = supabase();
