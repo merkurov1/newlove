@@ -1,16 +1,15 @@
-// app/[...slug]/page.js
-import { supabase } from '@/lib/supabase-server'; 
 import { notFound } from 'next/navigation';
-import { createClient } from '@/lib/supabase-server'; // For server rendering
+import { supabase as supabaseServer } from '@/lib/supabase-server'; 
+import { supabase as supabaseBuild } from '@/lib/supabase-build';
 import Image from 'next/image';
 
 export async function generateStaticParams() {
-  const { data: articles } = await supabaseBuildClient
+  const { data: articles } = await supabaseBuild
     .from('articles')
     .select('slug')
     .eq('is_draft', false);
 
-  const { data: projects } = await supabaseBuildClient
+  const { data: projects } = await supabaseBuild
     .from('projects')
     .select('slug');
 
@@ -23,7 +22,7 @@ export async function generateStaticParams() {
 }
 
 export default async function GenericPage({ params }) {
-  const supabase = createClient(); // This runs on the server side after a request
+  const supabase = supabaseServer();
   const path = params.slug.join('/');
 
   const { data: article } = await supabase
