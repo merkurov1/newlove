@@ -1,16 +1,11 @@
 // app/page.js
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase-server'; // Make sure you're using the server-side client
 import Link from 'next/link';
 
-export default async function HomePage() {
-  // Call the function to get the client instance
-  const supabaseClient = supabase(); 
-  
-  // Now you can use the client.
-  const { data, error } = await supabaseClient.from('articles').select('*');
-  
 async function getArticles() {
-  const { data, error } = await supabase
+  const supabaseClient = supabase(); // Get the client instance
+  
+  const { data, error } = await supabaseClient
     .from('articles')
     .select('*')
     .order('created_at', { ascending: false });
