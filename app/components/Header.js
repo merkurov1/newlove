@@ -1,26 +1,57 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { supabase } from '@/lib/supabase-server';
 
-const logoUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png';
+// This function fetches site settings from the database
+async function getSiteSettings() {
+  const supabaseClient = supabase();
+  const { data, error } = await supabaseClient
+    .from('site_settings')
+    .select('site_name, slogan, logo_url')
+    .single();
 
-export default function Header({ pages }) {
+  if (error) {
+    console.error('Error fetching site settings:', error);
+    return null; // Return null to handle the error gracefully
+  }
+  return data;
+}
+
+export default async function Header({ pages }) {
+  const siteSettings = await getSiteSettings();
+
+  // Fallback data if fetching from Supabase fails
+  const site_name = siteSettings?.site_name || 'Anton Merkurov';
+  const slogan = siteSettings?.slogan || 'Art x Love x Money';
+  const logo_url = siteSettings?.logo_url || 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png';
+
   return (
-    <header className="bg-gray-800 text-white p-4 shadow-md">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link href="/">
-          <Image src={logoUrl} alt="Логотип" width={100} height={40} className="cursor-pointer" />
-        </Link>
+    <header className="bg-white text-gray-800 p-4 shadow-md">
+      <div className="container mx-auto flex flex-col items-center py-8">
+        {/* Top Section with Logo, Name, and Slogan */}
+        <div className="text-center">
+          <Link href="/">
+            <Image src={logo_url} alt="Логотип" width={80} height={80} className="mb-4" />
+          </Link>
+          <h1 className="text-4xl font-light mb-1">{site_name}</h1>
+          <p className="text-sm text-gray-500 tracking-widest uppercase">{slogan}</p>
+        </div>
+
+        {/* Separator Line */}
+        <div className="my-8 w-24 h-px bg-gray-300"></div>
+
+        {/* Bottom Navigation Section */}
         <nav>
-          <ul className="flex space-x-4">
+          <ul className="flex flex-wrap justify-center sm:space-x-8 space-x-4 text-sm font-medium">
             <li>
               <Link href="/">
-                <span className="hover:text-gray-400">Главная</span>
+                <span className="hover:text-gray-500 transition-colors duration-200">Главная</span>
               </Link>
             </li>
             {pages.map((page) => (
               <li key={page.id}>
                 <Link href={`/pages/${page.slug}`}>
-                  <span className="hover:text-gray-400">{page.title}</span>
+                  <span className="hover:text-gray-500 transition-colors duration-200">{page.title.toUpperCase()}</span>
                 </Link>
               </li>
             ))}
