@@ -1,8 +1,11 @@
 // app/articles/[slug]/page.js
-import { supabase } from '@/lib/supabase-server'; 
+import { supabase } from '@/lib/supabase-server'; // Импортируем функцию-клиент
+import { notFound } from 'next/navigation';
 
 async function getArticleBySlug(slug) {
-  const { data, error } = await supabase
+  const supabaseClient = supabase(); // Вызываем функцию, чтобы получить клиент
+
+  const { data, error } = await supabaseClient
     .from('articles')
     .select('*')
     .eq('slug', slug)
@@ -19,7 +22,7 @@ export default async function ArticlePage({ params }) {
   const article = await getArticleBySlug(params.slug);
 
   if (!article) {
-    return <div className="text-center text-gray-500 mt-8">Статья не найдена.</div>;
+    notFound();
   }
 
   return (
