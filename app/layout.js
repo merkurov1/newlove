@@ -1,7 +1,7 @@
 import './globals.css';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { supabase } from '@/lib/supabase-server'; // Correct import path
+import { supabase } from '@/lib/supabase-server';
 
 export const metadata = {
   title: 'Антон Меркуров | Медиа, технологии, искусство',
@@ -9,17 +9,22 @@ export const metadata = {
 };
 
 async function getPages() {
-  const supabaseClient = supabase(); // Correctly initialize the client
-  const { data, error } = await supabaseClient
-    .from('projects')
-    .select('id, title, slug')
-    .order('created_at', { ascending: false });
+  try {
+    const supabaseClient = supabase(); // Correctly initialize the client
+    const { data, error } = await supabaseClient
+      .from('projects')
+      .select('id, title, slug')
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching pages:', error);
+    if (error) {
+      console.error('Error fetching pages:', error);
+      return [];
+    }
+    return data;
+  } catch (e) {
+    console.error('Supabase client error in getPages:', e);
     return [];
   }
-  return data;
 }
 
 export default async function RootLayout({ children }) {
