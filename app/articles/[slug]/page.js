@@ -1,5 +1,5 @@
 // app/articles/[slug]/page.js
-import { createClient } from '../../lib/supabase-server'; // Исправленный относительный путь
+import { createClient } from '../../lib/supabase-server.js'; // Добавлено расширение .js
 import { notFound } from 'next/navigation';
 
 async function getArticleBySlug(slug) {
@@ -26,7 +26,6 @@ export default async function ArticlePage({ params }) {
 
   return (
     <article className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-      {/* Article Header */}
       <header className="mb-12 text-center">
         <h1 className="text-4xl md:text-5xl font-light leading-tight text-gray-900">{article.title}</h1>
         <p className="mt-4 text-gray-500 text-sm">
@@ -37,8 +36,6 @@ export default async function ArticlePage({ params }) {
           })}
         </p>
       </header>
-
-      {/* Article Content */}
       <div className="prose prose-lg mx-auto text-gray-800">
         <p>{article.content}</p>
       </div>
