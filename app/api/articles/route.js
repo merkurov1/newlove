@@ -1,7 +1,7 @@
 // app/api/articles/route.js
 import { createClient } from '@/lib/supabase-server';
 
-export async function GET(request) {
+export async function GET(_request) { // <-- Исправление здесь
   const supabaseClient = createClient();
   const { data, error } = await supabaseClient
     .from('articles')
