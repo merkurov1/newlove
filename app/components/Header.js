@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabase-server';
+import { createClient } from '@/lib/supabase-server';
 
 async function getSiteSettings() {
-  const supabaseClient = supabase();
+  const supabaseClient = createClient();
   const { data, error } = await supabaseClient
     .from('settings')
     .select('site_name, slogan, logo_url')
@@ -29,7 +29,6 @@ export default async function Header({ pages }) {
         {/* Top Section with Logo, Name, and Slogan */}
         <div className="text-center">
           <Link href="/">
-            {/* Исправлено: добавлено mx-auto block для надежного центрирования */}
             <Image 
               src={logo_url} 
               alt="Логотип" 

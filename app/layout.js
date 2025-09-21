@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase-build'; // Исправленный и�
 async function getSiteSettings() {
   // Use the build-time client
   const { data, error } = await supabase 
-    .from('site_settings')
+    .from('settings') // Изменено с 'site_settings' на 'settings' (как в Header.js)
     .select('site_name, slogan, logo_url')
     .single();
 

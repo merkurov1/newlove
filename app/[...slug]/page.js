@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { supabase as supabaseServer } from '@/lib/supabase-server'; 
+import { createClient } from '@/lib/supabase-server'; // Исправленный импорт
 import { supabase as supabaseBuild } from '@/lib/supabase-build';
 import Image from 'next/image';
 
@@ -22,7 +22,7 @@ export async function generateStaticParams() {
 }
 
 export default async function GenericPage({ params }) {
-  const supabase = supabaseServer();
+  const supabase = createClient(); // Создаем клиент с помощью функции
   const path = params.slug.join('/');
 
   const { data: article } = await supabase
