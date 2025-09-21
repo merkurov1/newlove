@@ -1,13 +1,13 @@
 import './globals.css';
 import Header from './components/Header';
 import Footer from './components/Footer';
-import { supabase as supabaseBuild } from '@/lib/supabase-build';   // For build time
+import { supabase } from '@/lib/supabase-build'; // Исправленный импорт
 
 // ... (Your metadata)
 
 async function getSiteSettings() {
   // Use the build-time client
-  const { data, error } = await supabaseBuild 
+  const { data, error } = await supabase 
     .from('site_settings')
     .select('site_name, slogan, logo_url')
     .single();
@@ -21,7 +21,7 @@ async function getSiteSettings() {
 
 async function getPages() {
   // Use the build-time client
-  const { data, error } = await supabaseBuild
+  const { data, error } = await supabase
     .from('projects')
     .select('id, title, slug')
     .order('created_at', { ascending: false });
