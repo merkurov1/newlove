@@ -1,5 +1,5 @@
-// app/articles/[slug]/page.js
-import { createClient } from '../../lib/supabase-server.js'; // Убедитесь, что путь и имя файла корректны
+// app/[...slug]/page.js
+import { createClient } from '../lib/supabase-server.js'; // Исправленный путь с .js
 import { notFound } from 'next/navigation';
 
 async function getArticleBySlug(slug) {
@@ -7,7 +7,7 @@ async function getArticleBySlug(slug) {
   const { data, error } = await supabaseClient
     .from('articles')
     .select('id, title, created_at, content')
-    .eq('slug', slug)
+    .eq('slug', slug.join('/'))
     .single();
 
   if (error) {
@@ -17,7 +17,7 @@ async function getArticleBySlug(slug) {
   return data;
 }
 
-export default async function ArticlePage({ params }) {
+export default async function CatchAllPage({ params }) {
   const article = await getArticleBySlug(params.slug);
 
   if (!article) {
