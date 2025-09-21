@@ -1,5 +1,5 @@
 // app/articles/[slug]/page.js
-import { createClient } from '../../lib/supabase-server.js'; // Добавлено расширение .js
+import { createClient } from '../../lib/supabase-server.js'; // Исправленный путь с .js
 import { notFound } from 'next/navigation';
 
 async function getArticleBySlug(slug) {

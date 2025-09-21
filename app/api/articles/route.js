@@ -1,30 +1,16 @@
 // app/api/articles/route.js
-import { createClient } from '@/lib/supabase-server';
+import { createClient } from '../../lib/supabase-server.js'; // Исправленный путь с .js
 
-export async function POST(request) {
-  const { title, content, slug } = await request.json();
-  const supabase = createClient();
+// Предполагаемый код (замените на ваш реальный код)
+export async function GET(request) {
+  const supabaseClient = createClient();
+  const { data, error } = await supabaseClient
+    .from('articles')
+    .select('id, title, created_at, content, slug')
+    .order('created_at', { ascending: false });
 
-  try {
-    const { error } = await supabase.from('articles').insert([
-      {
-        title,
-        content,
-        slug,
-        published_at: new Date().toISOString(),
-      },
-    ]);
-
-    if (error) throw error;
-
-    return new Response(JSON.stringify({ message: '✅ Статья успешно добавлена!' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({ message: `❌ Ошибка: ${error.message}` }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  if (error) {
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   }
+  return new Response(JSON.stringify(data), { status: 200 });
 }
