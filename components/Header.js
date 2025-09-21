@@ -1,50 +1,49 @@
 // app/components/Header.js
 
 import Link from 'next/link';
-import Image from 'next/image'; // Не забудьте импортировать Image
+import Image from 'next/image';
 
 export default function Header({ pages, settings }) {
-  // Забираем данные из settings или используем запасные варианты
-  const siteName = settings?.site_name || 'Anton Merkurov';
-  const slogan = settings?.slogan || 'Art x Love x Money';
+  // Если settings не пришли, используем пустой объект, чтобы избежать ошибок
+  const { site_name = 'Название сайта', slogan = 'Слоган' } = settings || {};
   
-  // URL вашего логотипа в Supabase
   const logoUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png';
 
   return (
-    <header className="bg-white text-gray-800 p-4 shadow-md border-b border-gray-200">
-      <div className="container mx-auto flex justify-between items-center">
+    // Добавляем w-full, чтобы шапка гарантированно занимала всю ширину
+    <header className="w-full bg-white shadow-md border-b border-gray-200">
+      {/* Контейнер теперь внутри, чтобы фон шапки был на всю ширину */}
+      <div className="container mx-auto flex justify-between items-center p-4">
         
-        {/* === СЕКЦИЯ С ЛОГОТИПОМ И НАЗВАНИЕМ - ОБНОВЛЕНО === */}
-        <Link href="/" className="flex items-center space-x-4">
-          {/* Логотип */}
+        {/* === ЛЕВЫЙ БЛОК: Лого + Название === */}
+        <Link href="/" className="flex items-center gap-4"> {/* gap-4 создает отступ */}
           <Image 
             src={logoUrl} 
-            alt="Логотип сайта" 
-            width={50} // Укажите ширину
-            height={50} // и высоту
-            className="rounded-full" // Делаем логотип круглым для эстетики
+            alt="Логотип" 
+            width={50}
+            height={50}
+            className="rounded-full"
+            priority // Говорит Next.js загрузить логотип в первую очередь
           />
-          {/* Название и слоган */}
           <div>
-            <h1 className="text-xl font-bold">{siteName}</h1>
-            <p className="text-sm text-gray-500 mt-1">{slogan}</p>
+            <h1 className="text-xl font-bold text-gray-900">{site_name}</h1>
+            <p className="text-sm text-gray-500">{slogan}</p>
           </div>
         </Link>
 
-        {/* === МЕНЮ НАВИГАЦИИ - ОБНОВЛЕНО === */}
+        {/* === ПРАВЫЙ БЛОК: Навигация === */}
         <nav>
-          <ul className="flex items-center space-x-6 text-sm font-medium"> 
+          <ul className="flex items-center gap-6 text-sm font-medium"> 
             <li>
               <Link href="/">
-                <span className="text-gray-600 hover:text-blue-600 transition-colors">Главная</span>
+                <span className="text-gray-600 hover:text-blue-500 transition-colors">Главная</span>
               </Link>
             </li>
             
             {Array.isArray(pages) && pages.map((page) => (
               <li key={page.id}>
                 <Link href={`/projects/${page.slug}`}>
-                  <span className="text-gray-600 hover:text-blue-600 transition-colors">{page.title}</span>
+                  <span className="text-gray-600 hover:text-blue-500 transition-colors">{page.title}</span>
                 </Link>
               </li>
             ))}
