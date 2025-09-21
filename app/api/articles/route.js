@@ -1,7 +1,6 @@
 // app/api/articles/route.js
-import { createClient } from '../../lib/supabase-server.js'; // Исправленный путь с .js
+import { createClient } from '@/lib/supabase-server';
 
-// Предполагаемый код (замените на ваш реальный код)
 export async function GET(request) {
   const supabaseClient = createClient();
   const { data, error } = await supabaseClient
@@ -10,7 +9,13 @@ export async function GET(request) {
     .order('created_at', { ascending: false });
 
   if (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-  return new Response(JSON.stringify(data), { status: 200 });
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
