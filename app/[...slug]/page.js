@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { supabase as supabaseServer } from '@/lib/supabase-server'; 
 import { supabase as supabaseBuild } from '@/lib/supabase-build';
+import { createClient } from '@/lib/supabase-server'; // Исправленный импорт
 import Image from 'next/image';
 
 export async function generateStaticParams() {
