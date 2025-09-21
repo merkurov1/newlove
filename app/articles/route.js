@@ -1,11 +1,12 @@
-// app/api/articles/route.js
-import { createClient } from '@/lib/supabase-server';
+// app/articles/route.js
+import { createClient } from '@/lib/supabase-server'; // Убедитесь, что импорт правильный
 
-export async function GET(request) {
+export async function GET(_request) { // <-- Исправление здесь
   const supabaseClient = createClient();
+  // Этот код может отличаться, но исправление для GET то же самое
   const { data, error } = await supabaseClient
     .from('articles')
-    .select('id, title, created_at, content, slug')
+    .select('id, title, slug')
     .order('created_at', { ascending: false });
 
   if (error) {
