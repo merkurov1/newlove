@@ -1,8 +1,7 @@
-'use client';
-import { supabase } from '@/lib/supabase-client';
-
+// app/admin/page.js
+"use client";
 import { useState } from 'react';
-import Link from 'next/link'; // Импортируем Link
+import Link from 'next/link';
 
 export default function Admin() {
   const [title, setTitle] = useState('');
@@ -31,18 +30,17 @@ export default function Admin() {
     setMessage('');
 
     try {
-      const { error } = await supabase.from('articles').insert([
-        {
-          title,
-          content,
-          slug,
-          published_at: new Date().toISOString(),
-        },
-      ]);
+      const response = await fetch('/api/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content, slug }),
+      });
 
-      if (error) throw error;
+      const { message } = await response.json();
 
-      setMessage('✅ Статья успешно добавлена!');
+      if (!response.ok) throw new Error(message);
+
+      setMessage(message);
       setTitle('');
       setContent('');
       setSlug('');

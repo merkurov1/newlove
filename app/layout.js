@@ -1,14 +1,13 @@
+// app/layout.js
 import './globals.css';
 import Header from './components/Header';
 import Footer from './components/Footer';
-import { supabase } from '@/lib/supabase-build'; // Исправленный импорт
-
-// ... (Your metadata)
+import { createClient } from '@/lib/supabase-server';
 
 async function getSiteSettings() {
-  // Use the build-time client
-  const { data, error } = await supabase 
-    .from('settings') // Изменено с 'site_settings' на 'settings' (как в Header.js)
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('settings')
     .select('site_name, slogan, logo_url')
     .single();
 
@@ -20,7 +19,7 @@ async function getSiteSettings() {
 }
 
 async function getPages() {
-  // Use the build-time client
+  const supabase = createClient();
   const { data, error } = await supabase
     .from('projects')
     .select('id, title, slug')
@@ -41,7 +40,7 @@ export default async function RootLayout({ children }) {
     <html lang="ru">
       <body>
         <div className="flex flex-col min-h-screen">
-          <Header pages={pages} siteSettings={siteSettings} />
+          <Header pages={pages} settings={siteSettings} />
           <main className="flex-grow container mx-auto p-4">{children}</main>
           <Footer />
         </div>
