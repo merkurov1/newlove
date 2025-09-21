@@ -1,9 +1,9 @@
 // app/page.js
-import { createClient } from '../../lib/supabase-server'; // Замена алиаса на относительный путь
+import { createClient } from '../lib/supabase-server'; // Исправленный путь
 import Link from 'next/link';
 
 async function getArticles() {
-  const supabaseClient = createClient(); // Используем createClient для создания клиента
+  const supabaseClient = createClient();
 
   const { data, error } = await supabaseClient
     .from('articles')
