@@ -1,3 +1,4 @@
+// app/talks/page.tsx
 import PasswordGuard from '@/components/talks/PasswordGuard';
 import LoungeInterface from '@/components/talks/LoungeInterface';
 

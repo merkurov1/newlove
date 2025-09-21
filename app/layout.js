@@ -1,7 +1,7 @@
 // app/layout.js
 import './globals.css';
-import Header from './components/Header';
-import Footer from './components/Footer';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 import { createClient } from '@/lib/supabase-server';
 
 async function getSiteSettings() {

@@ -1,5 +1,5 @@
 // app/api/articles/route.js
-import { createClient } from '../../lib/supabase-server.js'; // Путь с .js
+import { createClient } from '@/lib/supabase-server';
 
 export async function GET(request) {
   const supabaseClient = createClient();
