@@ -1,6 +1,10 @@
 import PasswordGuard from '@/components/talks/PasswordGuard';
 import LoungeInterface from '@/components/talks/LoungeInterface';
 
+// Отключаем статическую генерацию для этой страницы
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default function TalksPage() {
   return (
     <PasswordGuard>
@@ -8,5 +12,3 @@ export default function TalksPage() {
     </PasswordGuard>
   );
 }
-
-export const dynamic = 'force-dynamic'; // Отключаем SSG для реального времени
