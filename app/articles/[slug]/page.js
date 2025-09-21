@@ -1,8 +1,9 @@
-import { createClient } from '@/lib/supabase-server';
+// app/articles/[slug]/page.js
+import { createClient } from '../../lib/supabase-server'; // Исправленный относительный путь
 import { notFound } from 'next/navigation';
 
 async function getArticleBySlug(slug) {
-  const supabaseClient = createClient(); // Исправлено: используем функцию createClient
+  const supabaseClient = createClient();
   const { data, error } = await supabaseClient
     .from('articles')
     .select('id, title, created_at, content')
