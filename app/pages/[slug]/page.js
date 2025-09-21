@@ -1,49 +1,50 @@
-// app/pages/[slug]/page.js
+// app/projects/[slug]/page.js
 
-// Было: import { createClient } from '../../lib/supabase-server.js';
-// Стало:
 import { createClient } from '@/lib/supabase-server';
-
 import { notFound } from 'next/navigation';
 
-// Предполагаемый код, аналогичный /app/articles/[slug]/page.js
-async function getPageBySlug(slug) {
+// Эта функция теперь ищет страницу в таблице 'projects'
+async function getProjectBySlug(slug) {
   const supabaseClient = createClient();
   const { data, error } = await supabaseClient
-    .from('pages') // Предполагаемая таблица
+    .from('projects') // ИСПРАВЛЕНО: теперь ищем в таблице 'projects'
     .select('id, title, created_at, content')
     .eq('slug', slug)
     .single();
 
   if (error) {
-    console.error('Error fetching page:', error);
+    console.error('Error fetching project:', error);
+    // Эта ошибка может возникать, если страница с таким slug не найдена. Это нормально.
     return null;
   }
   return data;
 }
 
-export default async function Page({ params }) {
-  const page = await getPageBySlug(params.slug);
+export default async function ProjectPage({ params }) {
+  const project = await getProjectBySlug(params.slug);
 
-  if (!page) {
-    notFound();
+  if (!project) {
+    notFound(); // Если страница не найдена, показываем ошибку 404
   }
 
   return (
-    <article className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-      <header className="mb-12 text-center">
-        <h1 className="text-4xl md:text-5xl font-light leading-tight text-gray-900">{page.title}</h1>
-        <p className="mt-4 text-gray-500 text-sm">
-          Опубликовано: {new Date(page.created_at).toLocaleDateString('ru-RU', {
+    // Стили для отображения самой страницы, можете настроить под себя
+    <article className="bg-white p-8 rounded-lg shadow-md max-w-4xl mx-auto">
+      <header className="mb-8 text-center">
+        <h1 className="text-4xl md:text-5xl font-bold leading-tight text-gray-900">{project.title}</h1>
+        <p className="mt-3 text-gray-500 text-sm">
+          Опубликовано: {new Date(project.created_at).toLocaleDateString('ru-RU', {
             year: 'numeric',
             month: 'long',
             day: 'numeric',
           })}
         </p>
       </header>
-      <div className="prose prose-lg mx-auto text-gray-800">
-        <p>{page.content}</p>
-      </div>
+      {/* ИСПОЛЬЗУЕМ dangerouslySetInnerHTML для рендеринга HTML из базы данных */}
+      <div
+        className="prose prose-lg max-w-none"
+        dangerouslySetInnerHTML={{ __html: project.content }}
+      />
     </article>
   );
 }
