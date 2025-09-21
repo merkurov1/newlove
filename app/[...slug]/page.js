@@ -1,19 +1,16 @@
 // app/[...slug]/page.js
 import { createClient } from '@/lib/supabase-server';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-// Функция для получения статьи по slug
 async function getArticleBySlug(slug) {
-  const supabaseClient = createClient(); // Используем createClient
-
+  const supabaseClient = createClient();
   const { data, error } = await supabaseClient
     .from('articles')
-    .select('id, title, created_at, content, slug')
-    .eq('slug', slug.join('/')) // Объединяем slug для catch-all маршрута
+    .select('id, title, created_at, content')
+    .eq('slug', slug.join('/'))
     .single();
 
-  if (error || !data) {
+  if (error) {
     console.error('Error fetching article:', error);
     return null;
   }
@@ -21,27 +18,27 @@ async function getArticleBySlug(slug) {
 }
 
 export default async function CatchAllPage({ params }) {
-  const { slug } = params;
-  const article = await getArticleBySlug(slug);
+  const article = await getArticleBySlug(params.slug);
 
   if (!article) {
-    notFound(); // Возвращаем 404, если статья не найдена
+    notFound();
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-4">{article.title}</h1>
-      <p className="text-sm text-gray-500 mb-4">
-        {new Date(article.created_at).toLocaleDateString('ru-RU', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })}
-      </p>
-      <div className="prose max-w-none">{article.content}</div>
-      <Link href="/" className="text-blue-500 hover:text-blue-400">
-        Назад к статьям
-      </Link>
-    </div>
+    <article className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+      <header className="mb-12 text-center">
+        <h1 className="text-4xl md:text-5xl font-light leading-tight text-gray-900">{article.title}</h1>
+        <p className="mt-4 text-gray-500 text-sm">
+          Опубликовано: {new Date(article.created_at).toLocaleDateString('ru-RU', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })}
+        </p>
+      </header>
+      <div className="prose prose-lg mx-auto text-gray-800">
+        <p>{article.content}</p>
+      </div>
+    </article>
   );
 }
