@@ -1,5 +1,9 @@
 // app/pages/[slug]/page.js
-import { createClient } from '../../lib/supabase-server.js'; // Исправленный путь с .js
+
+// Было: import { createClient } from '../../lib/supabase-server.js';
+// Стало:
+import { createClient } from '@/lib/supabase-server';
+
 import { notFound } from 'next/navigation';
 
 // Предполагаемый код, аналогичный /app/articles/[slug]/page.js

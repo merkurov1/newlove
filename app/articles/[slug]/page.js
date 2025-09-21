@@ -1,5 +1,9 @@
 // app/articles/[slug]/page.js
-import { createClient } from '../../lib/supabase-server.js'; // Исправленный путь
+
+// Было: import { createClient } from '../../lib/supabase-server.js';
+// Стало:
+import { createClient } from '@/lib/supabase-server';
+
 import { notFound } from 'next/navigation';
 
 async function getArticleBySlug(slug) {
