@@ -1,72 +1,76 @@
-import { notFound } from 'next/navigation';
-import { createClient } from '@/lib/supabase-server'; // Исправленный импорт
-import { supabase as supabaseBuild } from '@/lib/supabase-build';
-import Image from 'next/image';
+// app/page.js
+import { createClient } from '@/lib/supabase-server';
+import Link from 'next/link';
 
-export async function generateStaticParams() {
-  const { data: articles } = await supabaseBuild
+async function getArticles() {
+  const supabaseClient = createClient(); // Используем createClient
+
+  const { data, error } = await supabaseClient
     .from('articles')
-    .select('slug')
-    .eq('is_draft', false);
+    .select('id, title, created_at, content, slug')
+    .order('created_at', { ascending: false });
 
-  const { data: projects } = await supabaseBuild
-    .from('projects')
-    .select('slug');
-
-  const allSlugs = [
-    ...(articles || []).map(item => ({ slug: [item.slug] })),
-    ...(projects || []).map(item => ({ slug: [item.slug] })),
-  ];
-  
-  return allSlugs;
+  if (error) {
+    console.error('Error fetching articles:', error);
+    return [];
+  }
+  return data;
 }
 
-export default async function GenericPage({ params }) {
-  const supabase = createClient(); // Создаем клиент с помощью функции
-  const path = params.slug.join('/');
+export default async function HomePage() {
+  const articles = await getArticles();
 
-  const { data: article } = await supabase
-    .from('articles')
-    .select('*')
-    .eq('slug', path)
-    .single();
+  return (
+    <div className="space-y-12">
+      <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        {articles.length > 0 ? (
+          articles.map((article) => (
+            <div
+              key={article.id}
+              className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 p-6 border border-gray-100"
+            >
+              <Link href={`/articles/${article.slug}`}>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2 hover:text-blue-600 transition-colors duration-200 cursor-pointer">
+                  {article.title}
+                </h2>
+              </Link>
 
-  if (article) {
-    return (
-      <article className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold text-center mb-6">{article.title}</h1>
-        {article.image_url && (
-          <div className="relative w-full h-96 mb-8 rounded-lg overflow-hidden shadow-lg">
-            <Image
-              src={article.image_url}
-              alt={article.title}
-              fill
-              className="rounded-lg object-cover"
-            />
-          </div>
+              <p className="text-sm text-gray-500 mb-4">
+                {new Date(article.created_at).toLocaleDateString('ru-RU', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </p>
+
+              <p className="text-gray-700 mb-4 line-clamp-3">{article.content}</p>
+
+              <Link
+                href={`/articles/${article.slug}`}
+                className="text-blue-500 font-medium hover:text-blue-400 transition-colors duration-300 inline-flex items-center"
+              >
+                Читать далее
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="ml-1 w-4 h-4 transform group-hover:translate-x-1 transition-transform"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </Link>
+            </div>
+          ))
+        ) : (
+          <p className="text-center text-gray-500 col-span-full">Пока нет статей.</p>
         )}
-        <div className="prose lg:prose-lg mx-auto" dangerouslySetInnerHTML={{ __html: article.body }} />
-      </article>
-    );
-  }
-
-  const { data: project } = await supabase
-    .from('projects')
-    .select('*')
-    .eq('slug', path)
-    .single();
-
-  if (project) {
-    return (
-      <article className="prose lg:prose-xl mx-auto">
-        <h1 className="text-center">{project.title}</h1>
-        {project.image_url && (
-          <Image src={project.image_url} alt={project.title} width={1200} height={800} className="rounded-lg shadow-md" />
-        )}
-        <div className="mt-8" dangerouslySetInnerHTML={{ __html: project.body }}></div>
-      </article>
-    );
-  }
-
-  notFound();
+      </div>
+    </div>
+  );
 }
