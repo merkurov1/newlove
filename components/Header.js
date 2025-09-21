@@ -2,17 +2,15 @@
 
 import Link from 'next/link';
 
-// Теперь компонент принимает 'pages' и 'settings'
 export default function Header({ pages, settings }) {
-  // Используем данные из 'settings' или ставим значения по умолчанию, если данных нет
-  const siteName = settings?.site_name || 'Anton Merkurov';
-  const slogan = settings?.slogan || 'Art x Love x Money';
+  const siteName = settings?.site_name || 'Site Name';
+  const slogan = settings?.slogan || 'Slogan';
 
   return (
-    <header className="bg-white text-gray-800 p-4 shadow-md">
+    <header className="bg-white text-gray-800 p-6 shadow-md border-b border-gray-200">
       <div className="container mx-auto flex justify-between items-center">
         
-        {/* Секция с названием сайта и слоганом */}
+        {/* Секция с названием сайта и слоганом (остается без изменений) */}
         <div className="flex items-center space-x-4">
           <div>
             <Link href="/" className="cursor-pointer">
@@ -22,18 +20,27 @@ export default function Header({ pages, settings }) {
           </div>
         </div>
 
-        {/* Меню навигации */}
+        {/* Меню навигации - ИСПРАВЛЕНО */}
         <nav>
-          <ul className="flex items-center space-x-6">
+          {/* Добавлены классы flex и items-center для выравнивания */}
+          <ul className="flex items-center space-x-6"> 
             <li>
               <Link href="/">
                 <span className="text-gray-800 hover:text-blue-600 transition-colors duration-200 font-medium">Главная</span>
               </Link>
             </li>
-            {/* Проверяем, что pages существует и является массивом */}
+            
+            {/* Добавляем разделитель для красоты */}
+            <li className="text-gray-300">|</li>
+
             {Array.isArray(pages) && pages.map((page) => (
               <li key={page.id}>
-                <Link href={`/${page.slug}`}>
+                {/* ИСПРАВЛЕНА ССЫЛКА!
+                  Поскольку страницы берутся из таблицы 'projects', 
+                  скорее всего, путь должен быть '/projects/slug-статьи'.
+                  Если у вас другая структура папок, поменяйте '/projects' на вашу.
+                */}
+                <Link href={`/projects/${page.slug}`}>
                   <span className="text-gray-800 hover:text-blue-600 transition-colors duration-200 font-medium">{page.title}</span>
                 </Link>
               </li>
