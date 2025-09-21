@@ -1,11 +1,12 @@
 // app/pages/[slug]/page.js
-import { supabase } from '@/lib/supabase-server'; 
+import { createClient } from '../../lib/supabase-server.js'; // Исправленный путь с .js
 import { notFound } from 'next/navigation';
 
+// Предполагаемый код, аналогичный /app/articles/[slug]/page.js
 async function getPageBySlug(slug) {
-  const supabaseClient = supabase();
+  const supabaseClient = createClient();
   const { data, error } = await supabaseClient
-    .from('projects') // Make sure this is the correct table
+    .from('pages') // Предполагаемая таблица
     .select('id, title, created_at, content')
     .eq('slug', slug)
     .single();
@@ -23,26 +24,22 @@ export default async function Page({ params }) {
   if (!page) {
     notFound();
   }
-  
-  // Handle cases where the date is null or invalid
-  const formattedDate = page.created_at
-    ? new Date(page.created_at).toLocaleDateString('ru-RU', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : 'Дата не указана';
 
   return (
-    <div className="max-w-3xl mx-auto my-8 p-8 bg-white rounded-lg shadow-xl border border-gray-100">
-      <h1 className="text-3xl md:text-4xl font-bold mb-4">{page.title}</h1>
-      <p className="text-gray-500 text-sm mb-6">Опубликовано: {formattedDate}</p>
-      
-      {/* Updated: Use dangerouslySetInnerHTML to render HTML content */}
-      <div 
-        className="prose lg:prose-xl"
-        dangerouslySetInnerHTML={{ __html: page.content }} 
-      />
-    </div>
+    <article className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+      <header className="mb-12 text-center">
+        <h1 className="text-4xl md:text-5xl font-light leading-tight text-gray-900">{page.title}</h1>
+        <p className="mt-4 text-gray-500 text-sm">
+          Опубликовано: {new Date(page.created_at).toLocaleDateString('ru-RU', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })}
+        </p>
+      </header>
+      <div className="prose prose-lg mx-auto text-gray-800">
+        <p>{page.content}</p>
+      </div>
+    </article>
   );
 }
