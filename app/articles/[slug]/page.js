@@ -1,8 +1,8 @@
-import { supabase } from '@/lib/supabase-server';
+import { createClient } from '@/lib/supabase-server';
 import { notFound } from 'next/navigation';
 
 async function getArticleBySlug(slug) {
-  const supabaseClient = supabase();
+  const supabaseClient = createClient(); // Исправлено: используем функцию createClient
   const { data, error } = await supabaseClient
     .from('articles')
     .select('id, title, created_at, content')
