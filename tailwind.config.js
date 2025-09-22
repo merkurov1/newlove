@@ -1,16 +1,8 @@
-/** @type {import('tailwindcss').Config} */
+/** @type {import('postcss-load-config').Config} */
 const config = {
-  content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
-  theme: {
-    extend: {
-      // Здесь вы можете добавить свои кастомные стили, если понадобится
-    },
+  plugins: {
+    '@tailwindcss/postcss': {},
+    autoprefixer: {},
   },
-  plugins: [],
 };
-
 export default config;
