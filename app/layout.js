@@ -1,6 +1,6 @@
 // app/layout.js
 
-import './globals.css';
+import './test_styles.css';
 import { Inter } from 'next/font/google'; // <-- 1. Импортируем шрифт
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
