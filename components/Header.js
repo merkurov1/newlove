@@ -1,5 +1,3 @@
-// app/components/Header.js
-
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -11,8 +9,6 @@ export default function Header({ pages, settings }) {
   return (
     <header className="w-full bg-white pt-16 pb-8 border-b border-gray-200">
       <div className="container mx-auto flex flex-col items-center justify-center space-y-6">
-        
-        {/* === Логотип, Имя и Слоган (без изменений) === */}
         <Link href="/">
           <Image 
             src={logoUrl} 
@@ -31,32 +27,24 @@ export default function Header({ pages, settings }) {
           <div className="flex-grow border-t border-gray-200"></div>
         </div>
       </div>
-
-      {/* === НАВИГАЦИОННОЕ МЕНЮ (ПОЛНОСТЬЮ ПЕРЕДЕЛАНО) === */}
       <nav className="w-full pt-8">
         <ul className="list-none flex items-center justify-center gap-4 md:gap-8 text-xs font-semibold tracking-[0.2em] uppercase"> 
-          
           {Array.isArray(pages) && pages.map((page) => (
             <li key={page.id}>
               <Link href={`/projects/${page.slug}`} className="group text-gray-400 hover:text-gray-900 transition-colors duration-300 py-2">
                 {page.title}
-                {/* Анимированная линия под текстом */}
                 <span className="block max-w-full h-px bg-gray-900 transition-all duration-300 scale-x-0 group-hover:scale-x-100"></span>
               </Link>
             </li>
           ))}
-
           <li>
             <Link href="/talks" className="group text-gray-400 hover:text-gray-900 transition-colors duration-300 py-2">
               Talks
-              {/* Анимированная линия под текстом */}
               <span className="block max-w-full h-px bg-gray-900 transition-all duration-300 scale-x-0 group-hover:scale-x-100"></span>
             </Link>
           </li>
-
         </ul>
       </nav>
     </header>
   );
 }
-
