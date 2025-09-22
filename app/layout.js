@@ -5,58 +5,63 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { createClient } from '@/lib/supabase-server';
 
-// Функция для получения настроек сайта (название, слоган)
-async function getSiteSettings() {
+// --- ИЗМЕНЕНИЕ 1: Обернем получение данных в try...catch для надежности ---
+async function getDataForLayout() {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from('settings')
-    .select('site_name, slogan, logo_url')
-    .single();
+  
+  // Создаем объект для хранения результатов
+  let layoutData = {
+    settings: { site_name: 'Merkurov.love', slogan: 'Art x Love x Money' }, // Значения по умолчанию
+    pages: []
+  };
 
-  if (error) {
-    console.error('Error fetching site settings:', error);
-    // Возвращаем значения по умолчанию, если произошла ошибка
-    return { site_name: 'Site Name', slogan: 'Slogan', logo_url: '' };
+  try {
+    // Параллельно запрашиваем настройки и страницы для меню
+    const [settingsResult, pagesResult] = await Promise.all([
+      supabase.from('settings').select('site_name, slogan').single(),
+      supabase.from('projects').select('id, title, slug').order('created_at', { ascending: false })
+    ]);
+
+    // Проверяем результат настроек
+    if (settingsResult.error) {
+      console.error('Ошибка загрузки настроек сайта:', settingsResult.error.message);
+    } else {
+      layoutData.settings = settingsResult.data;
+    }
+
+    // Проверяем результат страниц
+    if (pagesResult.error) {
+      console.error('Ошибка загрузки страниц для меню:', pagesResult.error.message);
+    } else {
+      layoutData.pages = pagesResult.data;
+    }
+
+  } catch (error) {
+    console.error('Критическая ошибка при загрузке данных для layout:', error);
   }
-  return data;
+
+  return layoutData;
 }
 
-// Функция для получения страниц для меню навигации
-async function getPages() {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from('projects') // Ваша таблица со страницами
-    .select('id, title, slug')
-    .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching pages:', error);
-    return [];
-  }
-  return data;
-}
-
-// Корневой макет вашего сайта
+// --- ИЗМЕНЕНИЕ 2: Упрощаем основную функцию ---
 export default async function RootLayout({ children }) {
-  // Асинхронно получаем все необходимые данные
-  const pages = await getPages();
-  const siteSettings = await getSiteSettings();
+  const { settings, pages } = await getDataForLayout();
 
   return (
     <html lang="ru">
-      <body>
-        {/* ОСНОВНЫЕ ИЗМЕНЕНИЯ ЗДЕСЬ:
-          - bg-gray-50: добавляет легкий фон для всего сайта.
-          - space-y-8: создает вертикальные отступы между header, main и footer.
-        */}
-        <div className="flex flex-col min-h-screen bg-gray-50 space-y-8">
-          <Header pages={pages} settings={siteSettings} />
-          <main className="flex-grow container mx-auto p-4">
+      <body className="bg-gray-50">
+        <div className="flex flex-col min-h-screen">
+          <Header pages={pages} settings={settings} />
+          
+          <main className="flex-grow w-full container mx-auto px-4 py-8">
             {children}
           </main>
+          
           <Footer />
         </div>
       </body>
     </html>
   );
 }
+
