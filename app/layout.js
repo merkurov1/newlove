@@ -1,14 +1,18 @@
+// app/layout.js
+
 import './globals.css';
 import { Inter } from 'next/font/google';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { createClient } from '@/lib/supabase-server';
+import AuthProvider from '@/components/AuthProvider'; // <-- 1. Импортировали AuthProvider
 
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],
   display: 'swap',
 });
 
+// ... ваша функция getDataForLayout остается без изменений
 async function getDataForLayout() {
   const supabase = createClient();
   let layoutData = {
@@ -28,19 +32,24 @@ async function getDataForLayout() {
   return layoutData;
 }
 
+
 export default async function RootLayout({ children }) {
   const { settings, pages } = await getDataForLayout();
 
   return (
     <html lang="ru" className={inter.className}>
       <body className="bg-white text-gray-800">
-        <div className="flex flex-col min-h-screen">
-          <Header pages={pages} settings={settings} />
-          <main className="flex-grow w-full container mx-auto px-4 py-8">
-            {children}
-          </main>
-          <Footer />
-        </div>
+        {/* ▼▼▼ 2. Обернули всё в AuthProvider ▼▼▼ */}
+        <AuthProvider>
+          <div className="flex flex-col min-h-screen">
+            <Header pages={pages} settings={settings} />
+            <main className="flex-grow w-full container mx-auto px-4 py-8">
+              {children}
+            </main>
+            <Footer />
+          </div>
+        </AuthProvider>
+        {/* ▲▲▲ Конец обёртки ▲▲▲ */}
       </body>
     </html>
   );
