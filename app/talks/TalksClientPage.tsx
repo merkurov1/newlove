@@ -1,40 +1,30 @@
 // app/talks/TalksClientPage.tsx
 'use client';
 
-import { useSession, signIn } from 'next-auth/react';
-import LoungeInterface from '@/components/LoungeInterface'; // Ваш компонент с контентом
+import LoungeInterface from "@/components/LoungeInterface";
+import type { Session } from 'next-auth';
 
-export default function TalksClientPage() {
-  // Получаем данные о сессии
-  const { data: session, status } = useSession();
+// Определяем тип для сообщений, который должен совпадать с типом в LoungeInterface
+type InitialMessage = {
+  id: number;
+  createdAt: Date;
+  content: string;
+  userId: string;
+  author: { name: string | null; image: string | null };
+};
 
-  // Статус 'loading' — идёт проверка
-  if (status === 'loading') {
-    return <p>Загрузка...</p>;
-  }
+// Определяем тип для props, которые приходят с сервера
+type Props = {
+  initialMessages: InitialMessage[];
+  session: Session | null;
+};
 
-  // Статус 'authenticated' — пользователь вошёл
-  if (status === 'authenticated') {
-    return (
-      <>
-        <h1>Добро пожаловать, {session.user?.name}!</h1>
-        <LoungeInterface />
-        {/* Здесь можно добавить кнопку выхода, если нужно */}
-      </>
-    );
-  }
-
-  // Если не загрузка и не авторизован — показываем кнопку входа
+export default function TalksClientPage({ initialMessages, session }: Props) {
+  // Просто "пробрасываем" полученные props дальше в компонент интерфейса
   return (
-    <div className="flex flex-col items-center justify-center h-full">
-      <h1 className="text-2xl mb-4">Доступ ограничен</h1>
-      <p className="mb-6">Войдите, чтобы продолжить.</p>
-      <button
-        onClick={() => signIn('google')} // <-- Вызываем вход через Google
-        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-      >
-        Войти через Google
-      </button>
-    </div>
+    <LoungeInterface 
+      initialMessages={initialMessages} 
+      session={session} 
+    />
   );
 }
