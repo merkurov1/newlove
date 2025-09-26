@@ -1,51 +1,6 @@
 // prisma/schema.prisma
 
-datasource db {
-  provider  = "postgresql"
-  // ИСПРАВЛЕНО: Правильно ссылаемся на переменные из .env
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
-}
-
-generator client {
-  provider = "prisma-client-js"
-}
-
-// Модели для NextAuth + модель Message для чата
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
+// Блоки datasource и generator должны быть вверху и только один раз
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
@@ -56,7 +11,9 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Модели для NextAuth + модель Message для чата
+// --- Далее идут все ваши модели ---
+
+// Модели для NextAuth
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -100,6 +57,7 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// Модель для сообщений чата
 model Message {
   id        Int      @id @default(autoincrement())
   content   String
@@ -109,12 +67,12 @@ model Message {
   @@index([userId])
 }
 
-// ДОБАВЛЕНО: Модель для новостных статей
+// Модель для новостных статей
 model NewsArticle {
   id          Int      @id @default(autoincrement())
   title       String
   description String?  @db.Text
-  url         String   @unique // Уникальное поле для предотвращения дубликатов
+  url         String   @unique
   imageUrl    String?
   publishedAt DateTime
   sourceName  String
