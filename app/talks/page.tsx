@@ -1,14 +1,12 @@
-// app/talks/page.tsx (ИСПРАВЛЕНО)
+// app/talks/page.tsx (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ)
 
 import TalksClientPage from "./TalksClientPage"; 
-// import { authOptions } from "@/lib/auth"; // Не нужно, если не используется явно
 import prisma from "@/lib/prisma";
-// V5 (beta) требует импорта 'auth' для получения сессии на стороне сервера
-import { auth } from "@auth/nextjs/server"; 
+// ИСПРАВЛЕНО: Вместо @auth/nextjs/server используем прямой импорт из next-auth
+import { auth } from "next-auth"; 
 
-// Функция для получения данных на сервере
 async function getData() {
-  // Используем auth() для получения сессии в Server Component
+  // Используем auth()
   const session = await auth(); 
   
   const initialMessages = await prisma.message.findMany({
@@ -22,11 +20,9 @@ async function getData() {
 export default async function TalksPage() {
   const { initialMessages, session } = await getData();
 
-  // Передаем полученные данные в клиентский компонент как props
   return (
     <TalksClientPage 
       initialMessages={initialMessages} 
-      // Сессия передаётся дальше
       session={session} 
     />
   );
