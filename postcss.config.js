@@ -1,6 +1,7 @@
 module.exports = {
   plugins: {
-    tailwindcss: {},
+    // Tailwind удален из PostCSS, чтобы избежать конфликтов при сборке
     autoprefixer: {},
   },
 };
+
