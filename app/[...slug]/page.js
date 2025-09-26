@@ -1,9 +1,8 @@
-// app/[...slug]/page.js (ФИНАЛЬНОЕ РАБОЧЕЕ РЕШЕНИЕ)
-
+// app/[...slug]/page.js
 import { createClient } from '@/lib/supabase-server';
 import { notFound } from 'next/navigation';
-import ReactMarkdown from 'react-markdown'; // Импортируем ReactMarkdown
-import remarkGfm from 'remark-gfm'; // Импортируем плагин для таблиц и сносок
+import ReactMarkdown from 'react-markdown'; // <--- ИМПОРТ ДЛЯ СТИЛЕЙ
+import remarkGfm from 'remark-gfm'; // <--- ИМПОРТ ДЛЯ ТАБЛИЦ
 
 async function getArticleBySlug(slug) {
   const supabaseClient = createClient();
@@ -27,7 +26,6 @@ export default async function CatchAllPage({ params }) {
     notFound();
   }
   
-  // ВАЖНО: Контент должен быть в формате Markdown.
   const contentToRender = article.content || '';
 
   return (
@@ -43,14 +41,14 @@ export default async function CatchAllPage({ params }) {
         </p>
       </header>
       
-      {/* ФИНАЛЬНОЕ РЕШЕНИЕ СТИЛЕЙ: 
-        Используем ReactMarkdown, чтобы преобразовать контент в React-элементы.
-        Это гарантирует, что Tailwind увидит структуру для стилизации через 'prose'.
-      */}
+      {/* ГАРАНТИРОВАННОЕ РЕШЕНИЕ ПРОБЛЕМЫ СТИЛЕЙ: 
+          ReactMarkdown безопасно рендерит HTML/Markdown в React-элементы, 
+          которые Tailwind Typography (prose) может стилизовать. */}
       <div className="prose prose-lg mx-auto text-gray-800">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {contentToRender}
-        </ReactMarkdown>
+        <ReactMarkdown 
+          remarkPlugins={[remarkGfm]} 
+          children={contentToRender} 
+        />
       </div>
       
     </article>

@@ -1,22 +1,16 @@
-// app/layout.js (ФИНАЛЬНЫЙ ФИКС)
+// app/layout.js
 
-import './globals.css';
+import './main.css'; // <--- ИСПРАВЛЕННЫЙ ПУТЬ
 import { Inter } from 'next/font/google';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { createClient } from '@/lib/supabase-server';
-import AuthProvider from '@/components/AuthProvider';
+import AuthProvider from '@/components/AuthProvider'; 
 
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],
   display: 'swap',
 });
-
-// КРИТИЧЕСКИ: Явно добавляем метаданные, чтобы Next.js корректно обрабатывал Root Layout
-export const metadata = {
-  title: 'Merkurov.love',
-  description: 'Art x Love x Money',
-};
 
 // ... ваша функция getDataForLayout остается без изменений
 async function getDataForLayout() {
@@ -45,7 +39,6 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="ru" className={inter.className}>
       <body className="bg-white text-gray-800">
-        {/* ▼▼▼ 2. Обернули всё в AuthProvider ▼▼▼ */}
         <AuthProvider>
           <div className="flex flex-col min-h-screen">
             <Header pages={pages} settings={settings} />
@@ -55,7 +48,6 @@ export default async function RootLayout({ children }) {
             <Footer />
           </div>
         </AuthProvider>
-        {/* ▲▲▲ Конец обёртки ▲▲▲ */}
       </body>
     </html>
   );
