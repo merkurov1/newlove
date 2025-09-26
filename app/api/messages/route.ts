@@ -1,14 +1,23 @@
-// app/api/messages/route.ts
-import { authOptions } from "@/lib/auth";
+// app/api/messages/route.ts (ИСПРАВЛЕНО)
+
+// Импортируем authOptions, если они нужны для других целей, но для сессии
+// в v5 нам нужна функция auth.
+// import { authOptions } from "@/lib/auth"; // Оставим пока на всякий случай
 import prisma from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+// V5 (beta) требует импорта 'auth' для получения сессии на стороне сервера
+import { auth } from "@auth/nextjs/server"; 
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  // Используем функцию auth() для получения сессии в Route Handler
+  const session = await auth(); 
+  
+  // Проверка сессии остаётся прежней, но используем данные, 
+  // возвращаемые функцией auth()
+  if (!session?.user?.id) { 
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  
   const { content } = await request.json();
   if (!content) {
     return NextResponse.json({ error: "Content is required" }, { status: 400 });
@@ -17,7 +26,9 @@ export async function POST(request: Request) {
     const newMessage = await prisma.message.create({
       data: {
         content: content,
-        userId: session.user.id,
+        // session.user.id может не существовать в типе, 
+        // поэтому нужно убедиться, что тип юзера соответствует
+        userId: session.user.id as string, 
       },
     });
     return NextResponse.json(newMessage, { status: 201 });
