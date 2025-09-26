@@ -1,4 +1,6 @@
-/** * КЛЮЧ: Чистые директивы Tailwind должны быть в самом начале.
+/**
+• Этот файл является вашим глобальным CSS.
+• Все директивы Tailwind должны быть в начале.
 */
 @tailwind base;
 @tailwind components;
@@ -8,13 +10,4 @@ margin: 0;
 padding: 0;
 box-sizing: border-box;
 font-family: 'Inter', sans-serif;
-}
-/* * Тестовый класс для проверки загрузки CSS
-• Если этот класс работает, значит, CSS загружается.
-• Если не работает, Vercel блокирует globals.css.
-*/
-.test-class {
-color: red !important;
-background-color: yellow !important;
-padding: 10px;
 }
