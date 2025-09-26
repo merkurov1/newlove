@@ -1,13 +1,14 @@
 // types/next-auth.d.ts
 
-import NextAuth, { DefaultSession } from "next-auth"
+import "next-auth";
 
-// Расширяем стандартный интерфейс Session
 declare module "next-auth" {
+  /**
+   * Расширяем стандартный тип Session, добавляя в него поле `id`.
+   */
   interface Session {
     user: {
-      /** ID пользователя из базы данных */
-      id: string;
-    } & DefaultSession["user"]; // Добавляем id к стандартным полям (name, email, image)
+      id: string; // ID пользователя теперь является частью типа User в сессии
+    } & DefaultSession["user"];
   }
 }

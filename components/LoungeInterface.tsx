@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase-browser';
 import { useSession, signIn } from 'next-auth/react';
 import Image from 'next/image';
 
-// Обновляем тип для сообщения
+// ... (тип Message остается без изменений)
 type Message = {
   id: number;
   created_at: string;
@@ -21,10 +21,19 @@ type Message = {
 export default function LoungeInterface() {
   const supabase = createClient();
   const { data: session } = useSession();
+  
+  // <-- ДОБАВЛЯЕМ ДИАГНОСТИКУ -->
+  useEffect(() => {
+    if (session) {
+      console.log('SESSION OBJECT:', JSON.stringify(session, null, 2));
+    }
+  }, [session]);
+  
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   
+  // ... (остальной код компонента без изменений)
   useEffect(() => {
     const fetchInitialMessages = async () => {
       const { data, error } = await supabase
