@@ -1,14 +1,10 @@
 // lib/auth.ts
-
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { PrismaClient } from "@prisma/client";
 import { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-
-const prisma = new PrismaClient();
+import prisma from "./prisma"; // Используем единый экземпляр Prisma
 
 export const authOptions: AuthOptions = {
-  // ИСПРАВЛЕНО: Используем PrismaAdapter
   adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({

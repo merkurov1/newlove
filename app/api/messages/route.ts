@@ -1,9 +1,8 @@
+// app/api/messages/route.ts
 import { authOptions } from "@/lib/auth";
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
-
-const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -15,10 +14,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Content is required" }, { status: 400 });
   }
   try {
-    await prisma.message.create({
-      data: { content: content, userId: session.user.id },
+    const newMessage = await prisma.message.create({
+      data: {
+        content: content,
+        userId: session.user.id,
+      },
     });
-    return NextResponse.json({ success: true }, { status: 201 });
+    return NextResponse.json(newMessage, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: "Failed to create message" }, { status: 500 });
   }

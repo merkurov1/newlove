@@ -1,9 +1,8 @@
+// app/talks/page.tsx
 import LoungeInterface from "@/components/LoungeInterface";
 import { authOptions } from "@/lib/auth";
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-
-const prisma = new PrismaClient();
 
 async function getMessages() {
   const messages = await prisma.message.findMany({
