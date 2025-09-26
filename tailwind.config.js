@@ -1,10 +1,14 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  // ФИНАЛЬНЫЙ ФИКС: Явно указываем пути и добавляем safelist для Prose
+  // ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ: Гарантируем, что Tailwind видит все файлы, 
+  // включая стили в app (например, app/globals.css).
   content: [
     "./app/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
-    // Добавьте сюда любые другие папки, где вы используете классы Tailwind
+    // Гарантируем, что Tailwind просканирует даже динамические пути
+    "./app/**/*.{js,ts,jsx,tsx,mdx}", 
+    // Явно добавляем главный CSS, чтобы Tailwind генерировал все необходимые утилиты
+    "./app/globals.css", 
   ],
   theme: {
     extend: {
@@ -14,8 +18,7 @@ module.exports = {
     },
   },
   darkMode: 'class',
-  // САМЫЙ КРИТИЧНЫЙ ШАГ: Принудительно сохраняем все классы Typography, 
-  // чтобы Vercel их не удалил.
+  // САФЕЛИСТ: Оставляем, чтобы предотвратить удаление стилей Typography
   safelist: [
     {
       pattern: /prose-?(.+)?/,
