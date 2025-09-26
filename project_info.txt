@@ -1,0 +1,247 @@
+.
+├── README33.md
+├── app
+│   ├── [...slug]
+│   │   ├── article.module.css
+│   │   └── page.js
+│   ├── admin
+│   │   └── page.js
+│   ├── api
+│   │   ├── articles
+│   │   │   └── route.js
+│   │   ├── auth
+│   │   │   └── [...nextauth]
+│   │   │       └── route.ts
+│   │   ├── cron
+│   │   │   └── route.ts
+│   │   └── generate-post
+│   │       └── route.ts
+│   ├── articles
+│   │   ├── [slug]
+│   │   │   └── page.js
+│   │   └── route.js
+│   ├── digest
+│   │   └── [slug]
+│   │       └── page.js
+│   ├── favicon.ico
+│   ├── globals.css
+│   ├── layout.js
+│   ├── page.js
+│   ├── projects
+│   │   └── [slug]
+│   │       └── page.js
+│   ├── style
+│   │   └── global.css
+│   └── talks
+│       ├── Layoit.tsx
+│       ├── TalksClientPage.tsx
+│       └── page.tsx
+├── components
+│   ├── AuthGuard.tsx
+│   ├── AuthProvider.tsx
+│   ├── DigestDisplay.js
+│   ├── Footer.js
+│   ├── Header.js
+│   ├── LoginButton.tsx
+│   ├── LoungeInterface.tsx
+│   ├── PasswordGuard.tsx
+│   └── Socialicons.js
+├── eslint.config.mjs
+├── jsconfig.json
+├── lib
+│   ├── api.ts
+│   ├── auth.ts
+│   ├── supabase-browser.js
+│   ├── supabase-build.js
+│   ├── supabase-client.js
+│   └── supabase-server.js
+├── next.config.js
+├── package-lock.json
+├── package.json
+├── postcss.config.js
+├── prisma
+│   └── schema.prisma
+├── project_info.txt
+├── public
+│   ├── file.svg
+│   ├── globe.svg
+│   ├── next.svg
+│   ├── vercel.svg
+│   └── window.svg
+├── tailwind.config.js
+├── tsconfig.json
+├── types
+│   └── next-auth.d.ts
+└── vercel.json
+
+23 directories, 52 files
+\n\n--- package.json ---\n
+{
+  "name": "newlove",
+  "version": "0.1.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^2.10.0",
+    "@auth/supabase-adapter": "^1.10.0",
+    "@google/generative-ai": "^0.24.1",
+    "@prisma/client": "^6.16.2",
+    "@supabase/ssr": "^0.4.0",
+    "@supabase/supabase-js": "^2.44.4",
+    "marked": "^16.3.0",
+    "next": "14.2.4",
+    "next-auth": "^4.24.11",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-markdown": "^10.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.18",
+    "@types/react": "19.1.13",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.4",
+    "postcss": "^8.4.38",
+    "prisma": "^6.16.2",
+    "tailwindcss": "^3.4.4"
+  }
+}
+\n\n--- next.config.js ---\n
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'txvkqcitalfbjytmnawq.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
+      },
+    ],
+  },
+};
+
+module.exports = nextConfig;
+\n\n--- tsconfig.json ---\n
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      // The `@/` alias now correctly points to the 'src' directory
+      "@/*": ["./*"] 
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.jsx",
+    ".next/types/**/*.ts"
+, "tailwind.config.js"  ],
+  "exclude": ["node_modules"]
+}
+\n\n--- prisma/schema.prisma ---\n
+// prisma/schema.prisma
+
+datasource db {
+  provider = "postgresql"
+  url      = env("https://txvkqcitalfbjytmnawq.supabase.co")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+\n\n--- lib/auth.ts ---\n
+import { AuthOptions } from "next-auth";
+import GoogleProvider from "next-auth/providers/google";
+import { SupabaseAdapter } from "@auth/supabase-adapter";
+
+export const authOptions: AuthOptions = {
+  providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+  ],
+  adapter: SupabaseAdapter({
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    secret: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  }),
+  callbacks: {
+    async session({ session, user }) {
+      if (session.user) {
+        session.user.id = user.id;
+      }
+      return session;
+    },
+  },
+};
+\n\n--- app/layout.tsx ---\n
