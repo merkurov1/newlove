@@ -1,17 +1,21 @@
-// app/api/auth/[...nextauth]/route.ts (ФИНАЛЬНО ИСПРАВЛЕННЫЙ РОУТ)
+// app/api/auth/[...nextauth]/route.ts (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ТИПОВ)
 
-// Важно: в v5 (beta) мы используем `Auth` как функцию, которая возвращает обработчик.
-import NextAuth from "next-auth"; // Это импорт функции, а не конструктора NextAuth
+import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth"; // Импортируем только объект конфигурации
+import { NextRequest } from "next/server"; // Добавляем импорт для типизации запроса
 
-// Создаем обработчик на основе конфигурации. 
-// Next.js автоматически вызывает его для GET и POST.
-const handler = NextAuth(authConfig);
+// 1. Создаем обработчик NextAuthHandler.
+// ВАЖНО: Приводим тип к 'any', чтобы избежать ошибки конфликта типов v5/v15.
+const NextAuthHandler = NextAuth(authConfig) as any; 
 
-// Экспортируем handler как GET и POST. Next.js и TypeScript должны 
-// принять этот паттерн для NextAuth v5.
-export { handler as GET, handler as POST };
+// 2. Явно экспортируем функции GET и POST, вызывая обработчик.
+// Это удовлетворяет типизации Next.js v15.
 
-// Обратите внимание: функция auth() в lib/auth.ts теперь используется
-// только для получения сессии на стороне сервера, а не для обработки роутов.
+export async function GET(req: NextRequest, ctx: any) {
+    return NextAuthHandler(req, ctx);
+}
+
+export async function POST(req: NextRequest, ctx: any) {
+    return NextAuthHandler(req, ctx);
+}
 
