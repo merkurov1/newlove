@@ -1,15 +1,15 @@
-// lib/auth.ts (ФИНАЛЬНО ИСПРАВЛЕННЫЙ ТИПИЗАЦИЯ)
+// lib/auth.ts (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ: ПРАВИЛЬНЫЙ ИМПОРТ ДЛЯ V5)
 
 import { PrismaAdapter } from "@auth/prisma-adapter";
-// ИСПРАВЛЕНО: В v5 импорт типа может быть изменен или удален.
-// Чтобы обойти это, мы импортируем только то, что нужно, и полагаемся на вывод.
-import NextAuth, { NextAuthConfig, Session, User } from "next-auth"; 
+// ИСПРАВЛЕНО: Импортируем типы из 'next-auth', но сам getServerSession будем импортировать отдельно.
+import { NextAuthConfig, Session, User } from "next-auth"; 
+// Дополнительный импорт для функций аутентификации на сервере
+import { getServerSession } from "next-auth/next"; 
+
 import GoogleProvider from "next-auth/providers/google";
 import prisma from "./prisma"; 
 
-// Используем NextAuthConfig, который более точно соответствует v5, 
-// или приводим к AuthOptions, если он все еще существует, но экспортируется иначе.
-// Я использую NextAuthConfig, который должен быть корректным типом для v5.
+// Используем NextAuthConfig для конфигурации
 export const authConfig: NextAuthConfig = {
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -19,11 +19,8 @@ export const authConfig: NextAuthConfig = {
     }),
   ],
   callbacks: {
-    // В v5 session и user могут иметь другие типы, но мы приводим их, 
-    // чтобы не ломать логику.
     async session({ session, user }: { session: Session, user: User }) {
       if (session.user) {
-        // Убедитесь, что user.id корректно передается в session.user.id
         (session.user as any).id = user.id; 
       }
       return session;
@@ -32,10 +29,9 @@ export const authConfig: NextAuthConfig = {
 };
 
 // Функция auth() для получения сессии в Server Components
-// Используем getServerSession с нашей конфигурацией.
 export async function auth() {
-    const { getServerSession } = await import("next-auth");
-    // Здесь мы используем authConfig, который теперь имеет корректный тип.
+    // ВАЖНО: Мы используем прямой импорт getServerSession выше.
+    // Теперь функция должна работать без динамического импорта.
     return getServerSession(authConfig as any); 
 }
 
