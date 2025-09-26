@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase-browser';
-import { useSession, signIn } from 'next-auth/react'; // <-- Импортируем хук для сессии
+import { useSession, signIn } from 'next-auth/react';
 import Image from 'next/image';
 
 // Обновляем тип для сообщения
@@ -11,26 +11,23 @@ type Message = {
   id: number;
   created_at: string;
   content: string;
-  user_id: string; // <-- ID пользователя из auth.users
-  // Мы будем получать author_name и author_avatar_url из связанной таблицы users
+  user_id: string;
+  // <-- ИЗМЕНЕНИЕ: users теперь массив объектов или null
   users: {
     name: string;
     image: string;
-  } | null;
+  }[] | null;
 };
 
 export default function LoungeInterface() {
   const supabase = createClient();
-  const { data: session } = useSession(); // <-- Получаем сессию пользователя
+  const { data: session } = useSession();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   
-  // Загружаем сообщения и подписываемся на обновления
   useEffect(() => {
-    // Функция для загрузки сообщений с информацией об авторе
     const fetchInitialMessages = async () => {
-      // Теперь мы делаем запрос с JOIN'ом, чтобы получить имя и аватар
       const { data, error } = await supabase
         .from('messages')
         .select(`
@@ -43,19 +40,18 @@ export default function LoungeInterface() {
         .order('created_at', { ascending: true });
 
       if (error) console.error('Error fetching messages:', error);
+      // Типы теперь совпадают, приведение типа сработает корректно
       else setMessages(data as Message[]);
     };
 
     fetchInitialMessages();
 
-    // Настраиваем realtime-подписку
     const channel = supabase
       .channel('realtime-messages')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
         async (payload) => {
-           // Когда приходит новое сообщение, нам нужно подтянуть данные пользователя
            const { data: userData, error } = await supabase
              .from('users')
              .select('name, image')
@@ -67,7 +63,8 @@ export default function LoungeInterface() {
            } else {
                const newMessageWithUser = {
                    ...payload.new,
-                   users: userData
+                   // <-- ИЗМЕНЕНИЕ: Оборачиваем полученный объект в массив, чтобы соответствовать типу
+                   users: [userData] 
                } as Message;
                setMessages((currentMessages) => [...currentMessages, newMessageWithUser]);
            }
@@ -80,28 +77,23 @@ export default function LoungeInterface() {
     };
   }, [supabase]);
 
-  // Автопрокрутка к последнему сообщению
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Функция отправки нового сообщения
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newMessage.trim() === '' || !session?.user) return;
     
-    // Теперь данные пользователя берем из сессии
     const { error } = await supabase.from('messages').insert({
       content: newMessage,
-      user_id: session.user.id, // <-- ID из сессии next-auth
-      // author_name и author_avatar_url больше не нужны, т.к. мы получаем их через JOIN
+      user_id: session.user.id,
     });
 
     if (error) console.error('Error sending message:', error);
     else setNewMessage('');
   };
 
-  // Если пользователь не авторизован, показываем заглушку
   if (!session) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-10rem)] text-center">
@@ -119,10 +111,12 @@ export default function LoungeInterface() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-10rem)] max-w-3xl mx-auto p-4 font-sans">
-      {/* Лента сообщений */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {messages.map((message) => {
           const isCurrentUser = message.user_id === session.user.id;
+          // <-- ИЗМЕНЕНИЕ: Обращаемся к первому элементу массива users[0]
+          const author = message.users ? message.users[0] : null;
+
           return (
             <div
               key={message.id}
@@ -130,8 +124,9 @@ export default function LoungeInterface() {
             >
               {!isCurrentUser && (
                 <Image
-                  src={message.users?.image || '/default-avatar.png'}
-                  alt={message.users?.name || 'Avatar'}
+                  // <-- ИЗМЕНЕНИЕ: Используем `author`
+                  src={author?.image || '/default-avatar.png'}
+                  alt={author?.name || 'Avatar'}
                   width={40}
                   height={40}
                   className="rounded-full"
@@ -145,7 +140,8 @@ export default function LoungeInterface() {
                 }`}
               >
                 {!isCurrentUser && (
-                  <p className="font-semibold text-sm mb-1">{message.users?.name}</p>
+                  // <-- ИЗМЕНЕНИЕ: Используем `author`
+                  <p className="font-semibold text-sm mb-1">{author?.name}</p>
                 )}
                 <p className="whitespace-pre-wrap">{message.content}</p>
                 <p className={`text-xs mt-2 opacity-70 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
@@ -167,7 +163,6 @@ export default function LoungeInterface() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Форма ввода */}
       <form onSubmit={handleSubmit} className="mt-4 p-4 bg-white border-t flex items-center gap-3">
         <Image
           src={session.user?.image || '/default-avatar.png'}
@@ -179,7 +174,7 @@ export default function LoungeInterface() {
         <textarea
           placeholder="Напишите сообщение..."
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={(e) => setNewMessage(e.e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -200,4 +195,3 @@ export default function LoungeInterface() {
     </div>
   );
 }
-
