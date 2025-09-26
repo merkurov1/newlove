@@ -2,8 +2,8 @@
 
 import TalksClientPage from "./TalksClientPage"; 
 import prisma from "@/lib/prisma";
-// ИСПРАВЛЕНО: Вместо @auth/nextjs/server используем прямой импорт из next-auth
-import { auth } from "next-auth"; 
+// ИСПРАВЛЕНО: Импортируем auth из нашего файла lib/auth.ts
+import { auth } from "@/lib/auth"; 
 
 async function getData() {
   // Используем auth()
@@ -27,3 +27,4 @@ export default async function TalksPage() {
     />
   );
 }
+
