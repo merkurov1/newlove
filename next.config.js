@@ -2,12 +2,10 @@
 const nextConfig = {
   reactStrictMode: true, // Оставляем, так как полезно для отладки
   
-  // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Включаем поддержку CSS, чтобы Next.js не игнорировал globals.css
-  // Этот флаг заставляет Next.js иначе обрабатывать рабочие скрипты,
-  // что часто решает проблемы с инжектированием CSS в App Router.
-  experimental: {
-    nextScriptWorkers: true,
-  },
+  // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Удаляем проблемный флаг, который вызвал ошибку Partytown.
+  // experimental: {
+  //   nextScriptWorkers: true,
+  // },
 
   images: {
     remotePatterns: [
