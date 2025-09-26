@@ -1,13 +1,5 @@
-* КРИТИЧЕСКИЙ ФИКС: Явно добавляем базовые стили Tailwind (Layer)
-чтобы гарантировать инициализацию.
+/** * КЛЮЧ: Чистые директивы Tailwind должны быть в самом начале.
 */
-@layer base {
-:root {
---foreground-rgb: 0, 0, 0;
---background-start-rgb: 214, 219, 220;
---background-end-rgb: 255, 255, 255;
-}
-}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -17,7 +9,10 @@ padding: 0;
 box-sizing: border-box;
 font-family: 'Inter', sans-serif;
 }
-/* Тестовый класс для проверки загрузки CSS */
+/* * Тестовый класс для проверки загрузки CSS
+• Если этот класс работает, значит, CSS загружается.
+• Если не работает, Vercel блокирует globals.css.
+*/
 .test-class {
 color: red !important;
 background-color: yellow !important;
