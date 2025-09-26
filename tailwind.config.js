@@ -1,9 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  // Используем чистые пути App Router
+  // Обновляем пути для сканирования, включая новый main.css
   content: [
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx}",
+    "./components/**/*.{js,ts,jsx,tsx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}", 
+    "./app/main.css", // <--- ДОБАВЛЕН НОВЫЙ ФАЙЛ
   ],
   theme: {
     extend: {
@@ -13,7 +15,7 @@ module.exports = {
     },
   },
   darkMode: 'class',
-  // САФЕЛИСТ: Оставляем, чтобы гарантировать генерацию стилей Typography
+  // САФЕЛИСТ: Оставляем, чтобы предотвратить удаление стилей Typography
   safelist: [
     {
       pattern: /prose-?(.+)?/,
