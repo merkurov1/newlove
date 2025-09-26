@@ -1,7 +1,8 @@
-// lib/auth.ts (ФИНАЛЬНО ИСПРАВЛЕННЫЙ СИНТАКСИС)
+// lib/auth.ts (ФИНАЛЬНО ИСПРАВЛЕННЫЙ КОНФИГ)
 
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import NextAuth, { AuthOptions } from "next-auth";
+// Обратите внимание: импортируем только AuthOptions, а getServerSession нужен для функции auth()
+import { AuthOptions } from "next-auth"; 
 import GoogleProvider from "next-auth/providers/google";
 import prisma from "./prisma"; 
 
@@ -17,7 +18,6 @@ export const authConfig: AuthOptions = {
   callbacks: {
     async session({ session, user }) {
       if (session.user) {
-        // Убедимся, что ID присваивается
         session.user.id = user.id; 
       }
       return session;
@@ -25,16 +25,14 @@ export const authConfig: AuthOptions = {
   },
 };
 
-// 2. Экспортируем handler для роут-хендлеров app/api/auth/[...nextauth]/route.ts
-export const handler = NextAuth(authConfig);
-
-// 3. Создаем и экспортируем функцию auth() для Server Components 
-// и Route Handlers (app/talks/page.tsx, app/api/messages/route.ts)
-// Мы используем getServerSession в качестве обходного пути, так как 
-// прямой импорт 'auth' из 'next-auth' не работает на Vercel.
+// 2. Функция auth() для Server Components и Route Handlers.
+// Использует динамический импорт, чтобы избежать конфликтов при сборке.
 export async function auth() {
-    // Импортируем getServerSession динамически, чтобы избежать ошибок Next.js
+    // Импортируем getServerSession динамически, чтобы пройти компиляцию
     const { getServerSession } = await import("next-auth");
     return getServerSession(authConfig);
 }
+
+// УДАЛЕНО: export const handler = NextAuth(authConfig);
+// Мы будем создавать NextAuth-обработчик локально в route.ts
 
