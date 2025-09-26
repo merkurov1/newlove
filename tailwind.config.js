@@ -1,9 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  // Оптимизированный массив content для App Router
   content: [
-    "./app/**/*.{js,ts,jsx,tsx,mdx}", // Все файлы в app
-    "./components/**/*.{js,ts,jsx,tsx,mdx}", // Компоненты
-    "./pages/**/*.{js,ts,jsx,tsx,mdx}", // Для совместимости, если есть pages
+    "./{app,components}/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
@@ -14,8 +13,7 @@ module.exports = {
   },
   darkMode: 'class',
   safelist: [
-    // Добавь сюда классы, которые генерируются динамически, если есть
-    // Например: { pattern: /bg-(red|blue|green)-(100|200|300|400|500|600|700|800|900)/ }
+    // Оставьте safelist пустым или добавьте классы, которые генерируются динамически
   ],
   plugins: [require('@tailwindcss/typography')],
 };

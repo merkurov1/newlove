@@ -1,4 +1,5 @@
 // app/[...slug]/page.js
+
 import { createClient } from '@/lib/supabase-server';
 import { notFound } from 'next/navigation';
 
@@ -36,6 +37,9 @@ export default async function CatchAllPage({ params }) {
           })}
         </p>
       </header>
+      {/* Используем Tailwind Typography (prose) для стилизации контента.
+          Если article.content - это строка HTML, замените <p>{article.content}</p> 
+          на dangerouslySetInnerHTML. */}
       <div className="prose prose-lg mx-auto text-gray-800">
         <p>{article.content}</p>
       </div>
