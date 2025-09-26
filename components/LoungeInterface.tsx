@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase-browser';
 import { useSession, signIn } from 'next-auth/react';
 import Image from 'next/image';
 
-// ... (тип Message остается без изменений)
 type Message = {
   id: number;
   created_at: string;
@@ -21,38 +20,27 @@ type Message = {
 export default function LoungeInterface() {
   const supabase = createClient();
   const { data: session } = useSession();
-  
-  // <-- ДОБАВЛЯЕМ ДИАГНОСТИКУ -->
-  useEffect(() => {
-    if (session) {
-      console.log('SESSION OBJECT:', JSON.stringify(session, null, 2));
-    }
-  }, [session]);
-  
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   
-  // ... (остальной код компонента без изменений)
   useEffect(() => {
     const fetchInitialMessages = async () => {
       const { data, error } = await supabase
         .from('messages')
-        .select(`
-          id,
-          created_at,
-          content,
-          user_id,
-          users ( name, image )
-        `)
+        .select(`id, created_at, content, user_id, users ( name, image )`)
         .order('created_at', { ascending: true });
 
-      if (error) console.error('Error fetching messages:', error);
-      else setMessages(data as Message[]);
+      if (error) {
+        console.error('Error fetching messages:', error);
+      } else {
+        setMessages(data as Message[]);
+      }
     };
-
     fetchInitialMessages();
+  }, [supabase]);
 
+  useEffect(() => {
     const channel = supabase
       .channel('realtime-messages')
       .on(
@@ -68,10 +56,7 @@ export default function LoungeInterface() {
            if (error) {
                console.error('Error fetching user for new message:', error);
            } else {
-               const newMessageWithUser = {
-                   ...payload.new,
-                   users: [userData] 
-               } as Message;
+               const newMessageWithUser = { ...payload.new, users: [userData] } as Message;
                setMessages((currentMessages) => [...currentMessages, newMessageWithUser]);
            }
         }
@@ -96,8 +81,11 @@ export default function LoungeInterface() {
       user_id: session.user.id,
     });
 
-    if (error) console.error('Error sending message:', error);
-    else setNewMessage('');
+    if (error) {
+      console.error('Error sending message:', error);
+    } else {
+      setNewMessage('');
+    }
   };
 
   if (!session) {
@@ -123,75 +111,32 @@ export default function LoungeInterface() {
           const author = message.users ? message.users[0] : null;
 
           return (
-            <div
-              key={message.id}
-              className={`flex items-start gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
-            >
-              {!isCurrentUser && (
-                <Image
-                  src={author?.image || '/default-avatar.png'}
-                  alt={author?.name || 'Avatar'}
-                  width={40}
-                  height={40}
-                  className="rounded-full"
-                />
-              )}
-              <div
-                className={`flex flex-col max-w-sm p-3 rounded-lg ${
-                  isCurrentUser
-                    ? 'bg-blue-600 text-white rounded-br-none'
-                    : 'bg-white text-gray-800 rounded-bl-none border'
-                }`}
-              >
-                {!isCurrentUser && (
-                  <p className="font-semibold text-sm mb-1">{author?.name}</p>
-                )}
+            <div key={message.id} className={`flex items-start gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+              {!isCurrentUser && ( <Image src={author?.image || '/default-avatar.png'} alt={author?.name || 'Avatar'} width={40} height={40} className="rounded-full" /> )}
+              <div className={`flex flex-col max-w-sm p-3 rounded-lg ${ isCurrentUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none border' }`}>
+                {!isCurrentUser && ( <p className="font-semibold text-sm mb-1">{author?.name}</p> )}
                 <p className="whitespace-pre-wrap">{message.content}</p>
                 <p className={`text-xs mt-2 opacity-70 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
                   {new Date(message.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>
-              {isCurrentUser && (
-                 <Image
-                    src={session.user?.image || '/default-avatar.png'}
-                    alt={session.user?.name || 'Avatar'}
-                    width={40}
-                    height={40}
-                    className="rounded-full"
-                  />
-              )}
+              {isCurrentUser && ( <Image src={session.user?.image || '/default-avatar.png'} alt={session.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" /> )}
             </div>
           );
         })}
         <div ref={messagesEndRef} />
       </div>
-
       <form onSubmit={handleSubmit} className="mt-4 p-4 bg-white border-t flex items-center gap-3">
-        <Image
-          src={session.user?.image || '/default-avatar.png'}
-          alt="Your avatar"
-          width={40}
-          height={40}
-          className="rounded-full"
-        />
+        <Image src={session.user?.image || '/default-avatar.png'} alt="Your avatar" width={40} height={40} className="rounded-full" />
         <textarea
           placeholder="Напишите сообщение..."
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmit(e);
-            }
-          }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
           className="w-full p-2 border rounded-md resize-none"
           rows={1}
         />
-        <button
-          type="submit"
-          className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300"
-          disabled={!newMessage.trim()}
-        >
+        <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300" disabled={!newMessage.trim()}>
           Отправить
         </button>
       </form>
