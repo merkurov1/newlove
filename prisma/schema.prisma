@@ -3,10 +3,9 @@
 // 1. Конфигурация подключения к базе данных
 datasource db {
   provider  = "postgresql"
-  // Prisma будет брать URL из файла .env, а не из этой схемы
+  // Prisma будет брать URL из файла .env
   url       = env("DATABASE_URL")
-  // Этот URL нужен для прямого подключения во время миграций
-  directUrl = env("DIRECT_URL")
+  // УДАЛИ ЭТУ СТРОКУ: directUrl = env("DIRECT_URL")
 }
 
 // 2. Конфигурация генератора Prisma Client
@@ -49,7 +48,6 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
-  // ИЗМЕНЕНИЕ: Добавлена связь с сообщениями чата
   messages      Message[]
 }
 
@@ -61,13 +59,12 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// 4. НОВАЯ МОДЕЛЬ: Модель для сообщений чата
+// 4. Модель для сообщений чата
 model Message {
   id        Int      @id @default(autoincrement())
   content   String
   createdAt DateTime @default(now())
   userId    String
-  // Связываем сообщение с конкретным автором (User)
   author    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
