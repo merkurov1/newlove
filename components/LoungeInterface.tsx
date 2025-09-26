@@ -12,7 +12,6 @@ type Message = {
   created_at: string;
   content: string;
   user_id: string;
-  // <-- ИЗМЕНЕНИЕ: users теперь массив объектов или null
   users: {
     name: string;
     image: string;
@@ -40,7 +39,6 @@ export default function LoungeInterface() {
         .order('created_at', { ascending: true });
 
       if (error) console.error('Error fetching messages:', error);
-      // Типы теперь совпадают, приведение типа сработает корректно
       else setMessages(data as Message[]);
     };
 
@@ -63,7 +61,6 @@ export default function LoungeInterface() {
            } else {
                const newMessageWithUser = {
                    ...payload.new,
-                   // <-- ИЗМЕНЕНИЕ: Оборачиваем полученный объект в массив, чтобы соответствовать типу
                    users: [userData] 
                } as Message;
                setMessages((currentMessages) => [...currentMessages, newMessageWithUser]);
@@ -114,7 +111,6 @@ export default function LoungeInterface() {
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {messages.map((message) => {
           const isCurrentUser = message.user_id === session.user.id;
-          // <-- ИЗМЕНЕНИЕ: Обращаемся к первому элементу массива users[0]
           const author = message.users ? message.users[0] : null;
 
           return (
@@ -124,7 +120,6 @@ export default function LoungeInterface() {
             >
               {!isCurrentUser && (
                 <Image
-                  // <-- ИЗМЕНЕНИЕ: Используем `author`
                   src={author?.image || '/default-avatar.png'}
                   alt={author?.name || 'Avatar'}
                   width={40}
@@ -140,7 +135,6 @@ export default function LoungeInterface() {
                 }`}
               >
                 {!isCurrentUser && (
-                  // <-- ИЗМЕНЕНИЕ: Используем `author`
                   <p className="font-semibold text-sm mb-1">{author?.name}</p>
                 )}
                 <p className="whitespace-pre-wrap">{message.content}</p>
@@ -174,7 +168,7 @@ export default function LoungeInterface() {
         <textarea
           placeholder="Напишите сообщение..."
           value={newMessage}
-          onChange={(e) => setNewMessage(e.e.target.value)}
+          onChange={(e) => setNewMessage(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
