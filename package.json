@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
+    "@auth/supabase-adapter": "^1.10.0",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.16.2",
     "@supabase/ssr": "^0.4.0",
