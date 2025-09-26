@@ -1,55 +1,36 @@
-// lib/auth.ts (ФИНАЛЬНЫЙ РАБОЧИЙ КОД: ИСПРАВЛЕННЫЙ ДИНАМИЧЕСКИЙ ИМПОРТ)
+// lib/auth.ts (NextAuth v5 совместимый код)
 
-import { PrismaAdapter } from "@auth/prisma-adapter";
-// Импорт типов
-import type { NextAuthConfig, Session, User } from "next-auth"; 
-import GoogleProvider from "next-auth/providers/google";
-import prisma from "./prisma"; 
+import { PrismaAdapter } from “@auth/prisma-adapter”;
+import type { NextAuthConfig, Session, User } from “next-auth”;
+import GoogleProvider from “next-auth/providers/google”;
+import prisma from “./prisma”;
+import NextAuth from “next-auth”;
 
 // 1. Объект конфигурации
 export const authConfig: NextAuthConfig = {
-  adapter: PrismaAdapter(prisma),
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-  ],
-  callbacks: {
-    async session({ session, user }: { session: Session, user: User }) {
-      if (session.user) {
-        // Приводим тип, чтобы добавить id
-        (session.user as any).id = user.id; 
-      }
-      return session;
-    },
-  },
+adapter: PrismaAdapter(prisma),
+providers: [
+GoogleProvider({
+clientId: process.env.GOOGLE_CLIENT_ID!,
+clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+}),
+],
+callbacks: {
+async session({ session, user }: { session: Session; user: User }) {
+if (session.user) {
+(session.user as any).id = user.id;
+}
+return session;
+},
+},
+pages: {
+signIn: ‘/auth/signin’,
+error: ‘/auth/error’,
+},
 };
 
-// 2. Функция auth() для получения сессии в Server Components
-export async function auth() {
-    // ВАЖНО: Получаем весь модуль динамически.
-    const NextAuthServer = await import("next-auth/next");
-    
-    // Используем индексную нотацию и приведение типов для доступа к функции.
-    // Это гарантирует, что TypeScript не будет выдавать ошибку, 
-    // даже если деструктуризация не работает.
-    const getServerSession = (NextAuthServer as any).getServerSession; 
-    
-    // Если getServerSession не найдена, она может быть в свойстве default.
-    // Используем безопасный обход.
-    if (!getServerSession && (NextAuthServer as any).default) {
-        // В некоторых бета-версиях getServerSession экспортируется как default
-        return (NextAuthServer as any).default(authConfig as any);
-    }
+// 2. Инициализируем NextAuth
+export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
 
-    if (!getServerSession) {
-        // Фолбэк: если даже после импорта функция не найдена, 
-        // это значит, что структура NextAuth v5 сильно изменилась.
-        console.error("Critical: getServerSession not found in next-auth/next module.");
-        return null; 
-    }
-
-    return getServerSession(authConfig as any); 
-}
-
+// 3. Экспортируем handlers для API routes
+export const { GET, POST } = handlers;
