@@ -1,4 +1,4 @@
-// app/[...slug]/page.js
+// app/[...slug]/page.js (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ)
 
 import { createClient } from '@/lib/supabase-server';
 import { notFound } from 'next/navigation';
@@ -24,6 +24,9 @@ export default async function CatchAllPage({ params }) {
   if (!article) {
     notFound();
   }
+  
+  // ВАЖНО: Проверка наличия контента перед рендерингом.
+  const contentToRender = article.content || '';
 
   return (
     <article className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
@@ -37,12 +40,17 @@ export default async function CatchAllPage({ params }) {
           })}
         </p>
       </header>
-      {/* Используем Tailwind Typography (prose) для стилизации контента.
-          Если article.content - это строка HTML, замените <p>{article.content}</p> 
-          на dangerouslySetInnerHTML. */}
-      <div className="prose prose-lg mx-auto text-gray-800">
-        <p>{article.content}</p>
-      </div>
+      
+      {/* ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ СТИЛЕЙ: 
+        Если contentToRender содержит HTML-теги, его нужно рендерить через dangerouslySetInnerHTML.
+        Это позволяет Tailwind Typography (prose) стилизовать внутренние теги (h1, p, ul и т.д.).
+      */}
+      <div 
+        className="prose prose-lg mx-auto text-gray-800" 
+        dangerouslySetInnerHTML={{ __html: contentToRender }} 
+      />
+      
     </article>
   );
 }
+
