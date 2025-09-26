@@ -1,8 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/generate-post",
-      "schedule": "0 9 * * *"
+      "path": "/api/cron?secret=3f9a8b1e-7c2d-4e5f-8a6b-9c1d2e3f4a5b",
+      "schedule": "0 * * * *"
     }
   ]
 }
