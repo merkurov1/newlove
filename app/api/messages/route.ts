@@ -1,8 +1,8 @@
 // app/api/messages/route.ts (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ)
 
 import prisma from "@/lib/prisma";
-// ИСПРАВЛЕНО: Вместо @auth/nextjs/server используем прямой импорт из next-auth
-import { auth } from "next-auth"; 
+// ИСПРАВЛЕНО: Импортируем auth из нашего файла lib/auth.ts
+import { auth } from "@/lib/auth"; 
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -29,3 +29,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to create message" }, { status: 500 });
   }
 }
+

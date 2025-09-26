@@ -1,8 +1,8 @@
-// app/api/articles/auth/[...nextauth]/route.ts
+// app/api/auth/[...nextauth]/route.ts (ИСПРАВЛЕНО)
 
-import NextAuth from "next-auth";
-import { authOptions } from "@/lib/auth"; // Импортируем нашу конфигурацию
+// Импортируем наш созданный handler из lib/auth.ts
+import { handler } from "@/lib/auth";
 
-const handler = NextAuth(authOptions);
-
+// Экспортируем handler для роутов GET и POST
 export { handler as GET, handler as POST };
+
