@@ -1,21 +1,18 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  // Обновляем пути для сканирования, включая новый main.css
   content: [
-    "./app/**/*.{js,ts,jsx,tsx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx}",
-    "./app/**/*.{js,ts,jsx,tsx,mdx}", 
-    "./app/main.css", // <--- ДОБАВЛЕН НОВЫЙ ФАЙЛ
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
       colors: {
-        primary: '#2563eb', // Твой кастомный цвет
+        primary: '#2563eb',
       },
     },
   },
   darkMode: 'class',
-  // САФЕЛИСТ: Оставляем, чтобы предотвратить удаление стилей Typography
   safelist: [
     {
       pattern: /prose-?(.+)?/,
@@ -26,4 +23,3 @@ module.exports = {
   ],
   plugins: [require('@tailwindcss/typography')],
 };
-
