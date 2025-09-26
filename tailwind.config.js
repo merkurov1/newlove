@@ -1,8 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  // Оптимизированный массив content для App Router
+  // ФИНАЛЬНЫЙ ФИКС: Явно указываем пути и добавляем safelist для Prose
   content: [
-    "./{app,components}/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx}",
+    "./components/**/*.{js,ts,jsx,tsx}",
+    // Добавьте сюда любые другие папки, где вы используете классы Tailwind
   ],
   theme: {
     extend: {
@@ -12,8 +14,16 @@ module.exports = {
     },
   },
   darkMode: 'class',
+  // САМЫЙ КРИТИЧНЫЙ ШАГ: Принудительно сохраняем все классы Typography, 
+  // чтобы Vercel их не удалил.
   safelist: [
-    // Оставьте safelist пустым или добавьте классы, которые генерируются динамически
+    {
+      pattern: /prose-?(.+)?/,
+      variants: ['sm', 'md', 'lg', 'xl', '2xl'],
+    },
+    'prose',
+    'prose-lg',
   ],
   plugins: [require('@tailwindcss/typography')],
 };
+
