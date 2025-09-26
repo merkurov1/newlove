@@ -1,7 +1,11 @@
-// app/[...slug]/page.js (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ)
+// app/[...slug]/page.js (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ СТИЛЕЙ)
 
 import { createClient } from '@/lib/supabase-server';
 import { notFound } from 'next/navigation';
+// КРИТИЧЕСКИ ВАЖНО: Импортируем ReactMarkdown для безопасного рендеринга и стилизации
+import ReactMarkdown from 'react-markdown';
+// Импортируем плагин для интеграции с Tailwind Typography
+import remarkGfm from 'remark-gfm'; 
 
 async function getArticleBySlug(slug) {
   const supabaseClient = createClient();
@@ -25,7 +29,7 @@ export default async function CatchAllPage({ params }) {
     notFound();
   }
   
-  // ВАЖНО: Проверка наличия контента перед рендерингом.
+  // Контент для рендеринга (предполагаем, что это Markdown)
   const contentToRender = article.content || '';
 
   return (
@@ -41,14 +45,17 @@ export default async function CatchAllPage({ params }) {
         </p>
       </header>
       
-      {/* ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ СТИЛЕЙ: 
-        Если contentToRender содержит HTML-теги, его нужно рендерить через dangerouslySetInnerHTML.
-        Это позволяет Tailwind Typography (prose) стилизовать внутренние теги (h1, p, ul и т.д.).
+      {/* ФИНАЛЬНОЕ РЕШЕНИЕ:
+          Используем ReactMarkdown. Tailwind (просе) теперь может стилизовать
+          элементы, созданные React-ом, а не просто HTML-строки.
       */}
-      <div 
-        className="prose prose-lg mx-auto text-gray-800" 
-        dangerouslySetInnerHTML={{ __html: contentToRender }} 
-      />
+      <div className="prose prose-lg mx-auto text-gray-800">
+        <ReactMarkdown 
+          remarkPlugins={[remarkGfm]} // Включаем поддержку таблиц и других элементов Markdown
+        >
+          {contentToRender}
+        </ReactMarkdown>
+      </div>
       
     </article>
   );
