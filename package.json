@@ -6,8 +6,8 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "next lint",
-    "install": "npm install --force"  
+    "lint": "next lint"
+    // Скрипт "install" УДАЛЕН.
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.0.0",
