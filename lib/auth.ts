@@ -1,4 +1,3 @@
-// lib/auth.ts
 import { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { SupabaseAdapter } from "@auth/supabase-adapter";
