@@ -1,3 +1,4 @@
+// components/LoungeInterface.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -30,7 +31,7 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   useEffect(() => {
     const channel = supabase
       .channel('realtime-messages')
-      .on( 'postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message' },
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message' },
         () => { window.location.reload(); }
       ).subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -39,6 +40,7 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newMessage.trim() === '' || !session?.user) return;
+    
     const optimisticMessage = {
       id: Date.now(),
       content: newMessage,
@@ -48,6 +50,7 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
     };
     setMessages([...messages, optimisticMessage]);
     setNewMessage('');
+    
     await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
