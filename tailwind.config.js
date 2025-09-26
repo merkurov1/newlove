@@ -1,13 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  // ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ: Гарантируем, что Tailwind видит все файлы, 
-  // включая стили в app (например, app/globals.css).
+  // Используем явные пути
   content: [
     "./app/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
-    // Гарантируем, что Tailwind просканирует даже динамические пути
     "./app/**/*.{js,ts,jsx,tsx,mdx}", 
-    // Явно добавляем главный CSS, чтобы Tailwind генерировал все необходимые утилиты
+    // Явно добавляем главный CSS
     "./app/globals.css", 
   ],
   theme: {
