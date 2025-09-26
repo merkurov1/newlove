@@ -1,12 +1,21 @@
-// app/talks/page.tsx
+import LoungeInterface from "@/components/LoungeInterface";
+import { authOptions } from "@/lib/auth";
+import { PrismaClient } from "@prisma/client";
+import { getServerSession } from "next-auth";
 
-// <-- 1. Убираем импорты PasswordGuard и LoungeInterface отсюда
-import TalksClientPage from './TalksClientPage'; // <-- 2. Импортируем новый компонент
+const prisma = new PrismaClient();
 
-// Эта настройка по-прежнему полезна, чтобы страница не кешировалась
-export const dynamic = 'force-dynamic';
+async function getMessages() {
+  const messages = await prisma.message.findMany({
+    orderBy: { createdAt: "asc" },
+    include: { author: { select: { name: true, image: true } } },
+    take: 100,
+  });
+  return messages;
+}
 
-export default function TalksPage() {
-  // 3. Просто возвращаем TalksClientPage, который сделает всю работу
-  return <TalksClientPage />;
+export default async function TalksPage() {
+  const initialMessages = await getMessages();
+  const session = await getServerSession(authOptions);
+  return <LoungeInterface initialMessages={initialMessages} session={session} />;
 }
