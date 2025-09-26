@@ -1,18 +1,27 @@
-// app/api/auth/[...nextauth]/route.ts (ФИНАЛЬНО ИСПРАВЛЕННЫЙ РОУТ)
+// app/api/auth/[...nextauth]/route.ts (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ВЫЗОВА)
 
 import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth"; // Импортируем только объект конфигурации
+import { NextRequest } from "next/server"; // Добавляем импорт для типизации запроса
 
-// Создаем обработчик NextAuth из нашей конфигурации
-const NextAuthHandler = NextAuth(authConfig);
+// Важно: NextAuth нужно вызывать с конфигурацией. 
+// Мы создадим функцию, которая будет создавать и вызывать обработчик для каждого роута.
 
-// Явно экспортируем функции GET и POST, как того требует Next.js v15
-// (используем Request и Response из 'next/server', которые совместимы с NextAuthHandler)
-export async function GET(req: Request, ctx: any) {
-    return NextAuthHandler(req, ctx);
+const handler = (req: NextRequest | Request, ctx: any) => {
+    // В отличие от v4, в v5 (beta) обработчик вызывается один раз.
+    // Если NextAuthHandler - это объект (что и произошло), то мы не можем его вызвать.
+    
+    // Временное решение: вызываем NextAuth прямо здесь, 
+    // чтобы создать "горячий" обработчик, который можно вызвать.
+    return NextAuth(authConfig)(req, ctx);
+};
+
+// Явно экспортируем функции GET и POST.
+export async function GET(req: NextRequest, ctx: any) {
+    return handler(req, ctx);
 }
 
-export async function POST(req: Request, ctx: any) {
-    return NextAuthHandler(req, ctx);
+export async function POST(req: NextRequest, ctx: any) {
+    return handler(req, ctx);
 }
 
