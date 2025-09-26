@@ -1,12 +1,12 @@
-// app/talks/page.tsx (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ)
+// app/talks/page.tsx (ФИНАЛЬНАЯ ВЕРСИЯ)
 
 import TalksClientPage from "./TalksClientPage"; 
 import prisma from "@/lib/prisma";
-// ИСПРАВЛЕНО: Импортируем auth из нашего файла lib/auth.ts
+// ИМПОРТ ИЗ НАШЕГО ФАЙЛА-ОБЕРТКИ:
 import { auth } from "@/lib/auth"; 
 
 async function getData() {
-  // Используем auth()
+  // Используем нашу функцию auth()
   const session = await auth(); 
   
   const initialMessages = await prisma.message.findMany({

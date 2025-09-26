@@ -1,15 +1,9 @@
-// lib/auth.ts (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ: ПРАВИЛЬНЫЙ ИМПОРТ ДЛЯ V5)
-
 import { PrismaAdapter } from "@auth/prisma-adapter";
-// ИСПРАВЛЕНО: Импортируем типы из 'next-auth', но сам getServerSession будем импортировать отдельно.
-import { NextAuthConfig, Session, User } from "next-auth"; 
-// Дополнительный импорт для функций аутентификации на сервере
-import { getServerSession } from "next-auth/next"; 
-
+import type { NextAuthConfig, Session, User } from "next-auth"; // Используем type import
 import GoogleProvider from "next-auth/providers/google";
 import prisma from "./prisma"; 
 
-// Используем NextAuthConfig для конфигурации
+// 1. Объект конфигурации
 export const authConfig: NextAuthConfig = {
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -21,6 +15,7 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     async session({ session, user }: { session: Session, user: User }) {
       if (session.user) {
+        // Приводим тип, чтобы добавить id
         (session.user as any).id = user.id; 
       }
       return session;
@@ -28,10 +23,12 @@ export const authConfig: NextAuthConfig = {
   },
 };
 
-// Функция auth() для получения сессии в Server Components
+// 2. Функция auth() для получения сессии в Server Components
+// Эта функция импортируется во всем приложении (@/lib/auth)
 export async function auth() {
-    // ВАЖНО: Мы используем прямой импорт getServerSession выше.
-    // Теперь функция должна работать без динамического импорта.
+    // ВАЖНО: NextAuth v5 требует динамического импорта getServerSession
+    // для корректной работы с App Router, иначе возникают ошибки компиляции.
+    const { getServerSession } = await import("next-auth/next");
     return getServerSession(authConfig as any); 
 }
 

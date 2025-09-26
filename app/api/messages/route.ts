@@ -1,12 +1,12 @@
-// app/api/messages/route.ts (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ)
+// app/api/messages/route.ts (ФИНАЛЬНАЯ ВЕРСИЯ)
 
 import prisma from "@/lib/prisma";
-// ИСПРАВЛЕНО: Импортируем auth из нашего файла lib/auth.ts
+// ИМПОРТ ИЗ НАШЕГО ФАЙЛА-ОБЕРТКИ:
 import { auth } from "@/lib/auth"; 
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
-  // Используем функцию auth()
+  // Используем нашу функцию auth()
   const session = await auth(); 
   
   if (!session?.user?.id) { 
