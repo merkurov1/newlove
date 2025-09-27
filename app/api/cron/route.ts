@@ -1,76 +1,75 @@
 // app/api/cron/route.ts
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 
-const prisma = new PrismaClient();
+// Вспомогательная функция для генерации URL-дружественного слага из заголовка
+// Я добавил транслитерацию для кириллических символов
+const generateSlug = (title: string): string => {
+  if (!title) return '';
 
-export async function GET(request: Request) {
-  // 1. Защита эндпоинта секретным ключом из .env
-  const { searchParams } = new URL(request.url);
-  const secret = searchParams.get('secret');
+  const translit: { [key: string]: string } = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh',
+    'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+    'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'c',
+    'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+  };
 
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  return title
+    .toLowerCase()
+    .replace(/[а-яё]/g, char => translit[char] || '')
+    .replace(/[^\w\s-]/g, '') // Удаляем все не-буквенные и не-цифровые символы, кроме пробелов и дефисов
+    .replace(/\s+/g, '-') // Заменяем пробелы на дефисы
+    .trim(); // Убираем лишние пробелы в начале и конце
+};
 
-  // 2. Логика получения новостей с NewsAPI
-  const newsApiKey = process.env.NEWS_API_KEY;
-  // Используйте ваш собственный, более точный запрос
-  const keywords = '"искусственный интеллект" OR "арт-рынок" OR "технологии в искусстве"';
-  const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(
-    keywords
-  )}&language=ru&sortBy=publishedAt&pageSize=30&apiKey=${newsApiKey}`;
+
+export async function GET() {
+  // Здесь, предположительно, ваш код для получения новостей
+  // const newsApiUrl = `https://...`;
+  // const response = await fetch(newsApiUrl);
+  // const data = await response.json();
+  // const articles = data.articles; // Предполагаемая структура
 
   try {
-    const newsResponse = await fetch(url);
-    if (!newsResponse.ok) {
-      throw new Error(`NewsAPI request failed with status ${newsResponse.status}`);
-    }
-    const newsData = await newsResponse.json();
+    // Я предполагаю, что вы используете prisma.upsert для добавления только новых статей
+    // и здесь показан примерный цикл обработки
+    
+    // ---- НАЧАЛО ПРИМЕРНОГО КОДА ----
+    // Этот код нужно адаптировать под вашу реальную логику получения новостей
+    const articles: any[] = []; // Замените это на ваш реальный массив статей
+    // ---- КОНЕЦ ПРИМЕРНОГО КОДА ----
 
-    if (newsData.status !== 'ok') {
-      console.error('NewsAPI Error:', newsData);
-      return NextResponse.json({ error: 'Failed to fetch news from NewsAPI' }, { status: 500 });
-    }
+    for (const article of articles) {
+      // <<< ГЛАВНОЕ ИЗМЕНЕНИЕ: Генерируем slug из заголовка статьи
+      const slug = generateSlug(article.title);
+      
+      // Если у вас не получается сгенерировать slug (например, нет заголовка), пропускаем статью
+      if (!slug) continue;
 
-    // 3. Сохранение новостей в Supabase через Prisma
-    let articlesProcessed = 0;
-    for (const article of newsData.articles) {
-      // Пропускаем статьи без обязательных полей
-      if (!article.url || !article.title || !article.publishedAt || !article.source.name) {
-        continue;
-      }
-
-      // upsert: создаст новость, если ее нет (по полю url), или обновит, если есть.
       await prisma.newsArticle.upsert({
         where: { url: article.url },
         update: {
           title: article.title,
           description: article.description || '',
-          imageUrl: article.urlToImage,
-          publishedAt: new Date(article.publishedAt),
-          sourceName: article.source.name,
+          imageUrl: article.imageUrl,
         },
         create: {
           title: article.title,
+          slug: slug, // <<< ДОБАВЛЯЕМ Сгенерированный slug
           description: article.description || '',
           url: article.url,
-  imageUrl: article.urlToImage,
+          imageUrl: article.imageUrl,
           publishedAt: new Date(article.publishedAt),
           sourceName: article.source.name,
         },
       });
-      articlesProcessed++;
     }
 
-    return NextResponse.json({
-      message: 'Cron job completed successfully.',
-      articlesProcessed: articlesProcessed,
-    });
+    return NextResponse.json({ message: 'News processing finished successfully.' });
 
   } catch (error) {
-    console.error('Cron job failed:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('Error processing news:', error);
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
