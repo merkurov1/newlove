@@ -11,18 +11,16 @@ export default async function TalksPage() {
 
   // Получаем сообщения из базы данных
   const messages = await prisma.message.findMany({
-    orderBy: {
-      createdAt: 'asc',
-    },
-    include: {
-      author: {
-        select: {
-          name: true,
-          image: true,
-        },
+  // ... другие параметры
+  include: {
+    user: {           // <-- Исправлено
+      select: {
+        name: true,
+        image: true,
       },
     },
-  });
+  },
+});
 
   // Передаем данные в клиентский компонент для интерактивности
   return <TalksClientPage initialMessages={messages} session={session} />;
