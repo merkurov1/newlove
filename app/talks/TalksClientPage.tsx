@@ -1,19 +1,21 @@
-// app/talks/TalksClientPage.tsx
 'use client';
 
 import LoungeInterface from "@/components/LoungeInterface";
 import type { Session } from 'next-auth';
 
-// Определяем тип для сообщений, который должен совпадать с типом в LoungeInterface
+// Определяем тип для сообщений, который теперь СОВПАДАЕТ с данными от Prisma
 type InitialMessage = {
-  id: number;
+  id: string; // 👈 ИСПРАВЛЕНО: ID теперь string, как в базе данных
   createdAt: Date;
   content: string;
   userId: string;
-  author: { name: string | null; image: string | null };
+  user: { // 👈 ИСПРАВЛЕНО: поле теперь называется "user", а не "author"
+    name: string | null; 
+    image: string | null 
+  };
 };
 
-// Определяем тип для props, которые приходят с сервера
+// Тип для props, которые приходят с сервера
 type Props = {
   initialMessages: InitialMessage[];
   session: Session | null;
