@@ -12,25 +12,22 @@ const inter = Inter({
   display: 'swap',
 });
 
-// Метаданные для Next.js 14/15
 export const metadata = {
   title: "Merkurov.love",
   description: "Art x Love x Money"
 };
 
-// Функция получения данных для layout
 async function getDataForLayout() {
   const supabase = createClient();
   let layoutData = {
-    // Эти данные будут использоваться, если из базы ничего не придет
     settings: { site_name: 'Merkurov.love', slogan: 'Art x Love x Money', logo_url: null },
     pages: []
   };
   
   try {
     const [settingsResult, pagesResult] = await Promise.all([
-      // <<< ИЗМЕНЕНИЕ ЗДЕСЬ: Добавили logo_url в select-запрос
-      supabase.from('settings').select('site_name, slogan, logo_url').single(),
+      // <<< ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ: Правильное имя таблицы
+      supabase.from('site_settings').select('site_name, slogan, logo_url').single(),
       supabase.from('projects').select('id, title, slug').order('created_at', { ascending: false })
     ]);
     
