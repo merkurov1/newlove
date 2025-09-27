@@ -1,41 +1,16 @@
 /**
  * Этот файл является вашим глобальным CSS.
- * Все директивы Tailwind должны быть в начале.
+ * Директивы Tailwind должны быть в начале.
  */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-html, body {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: 'Inter', sans-serif;
-}
-
-*, *::before, *::after {
-  box-sizing: inherit;
-}
-
-/* Дополнительные глобальные стили */
-body {
-  line-height: 1.6;
-  color: rgb(31, 41, 55);
-  background-color: white;
-}
-
-/* Улучшение читаемости текста */
-h1, h2, h3, h4, h5, h6 {
-  line-height: 1.2;
-  font-weight: 600;
-}
-
-/* Базовые стили для ссылок */
-a {
-  color: #2563eb;
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-}
+/**
+ * Здесь можно добавлять только самые необходимые глобальные стили,
+ * которые невозможно или неудобно применять через классы.
+ * Например, стили для какого-нибудь внешнего плагина.
+ *
+ * Ваши предыдущие стили для body, h1-h6 и ссылок лучше задавать
+ * через классы Tailwind напрямую в разметке для большей гибкости.
+ */
