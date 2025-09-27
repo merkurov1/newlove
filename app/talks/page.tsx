@@ -1,30 +1,29 @@
-// app/talks/page.tsx (ФИНАЛЬНАЯ ВЕРСИЯ)
+// app/talks/page.tsx
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import prisma from '@/lib/prisma';
+import TalksClientPage from './TalksClientPage'; // Я помню, у вас был клиентский компонент
 
-import TalksClientPage from "./TalksClientPage"; 
-import prisma from "@/lib/prisma";
-// ИМПОРТ ИЗ НАШЕГО ФАЙЛА-ОБЕРТКИ:
-import { auth } from "@/lib/auth"; 
-
-async function getData() {
-  // Используем нашу функцию auth()
-  const session = await auth(); 
-  
-  const initialMessages = await prisma.message.findMany({
-    orderBy: { createdAt: "asc" },
-    include: { author: { select: { name: true, image: true } } },
-    take: 100,
-  });
-  return { initialMessages, session };
-}
-
+// Эта страница остается серверным компонентом для загрузки данных
 export default async function TalksPage() {
-  const { initialMessages, session } = await getData();
+  // Получаем сессию новым методом
+  const session = await getServerSession(authOptions);
 
-  return (
-    <TalksClientPage 
-      initialMessages={initialMessages} 
-      session={session} 
-    />
-  );
+  // Получаем сообщения из базы данных
+  const messages = await prisma.message.findMany({
+    orderBy: {
+      createdAt: 'asc',
+    },
+    include: {
+      author: {
+        select: {
+          name: true,
+          image: true,
+        },
+      },
+    },
+  });
+
+  // Передаем данные в клиентский компонент для интерактивности
+  return <TalksClientPage initialMessages={messages} session={session} />;
 }
-

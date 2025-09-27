@@ -1,32 +1,29 @@
-// app/api/messages/route.ts (ФИНАЛЬНАЯ ВЕРСИЯ)
+// app/api/messages/route.ts
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
 
-import prisma from "@/lib/prisma";
-// ИМПОРТ ИЗ НАШЕГО ФАЙЛА-ОБЕРТКИ:
-import { auth } from "@/lib/auth"; 
-import { NextResponse } from "next/server";
+export async function POST(req: Request) {
+  // Используем новый метод для получения сессии
+  const session = await getServerSession(authOptions);
 
-export async function POST(request: Request) {
-  // Используем нашу функцию auth()
-  const session = await auth(); 
-  
-  if (!session?.user?.id) { 
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.id) {
+    return new NextResponse('Unauthorized', { status: 401 });
   }
-  
-  const { content } = await request.json();
+
+  const { content } = await req.json();
+
   if (!content) {
-    return NextResponse.json({ error: "Content is required" }, { status: 400 });
+    return new NextResponse('Missing content', { status: 400 });
   }
-  try {
-    const newMessage = await prisma.message.create({
-      data: {
-        content: content,
-        userId: session.user.id as string, 
-      },
-    });
-    return NextResponse.json(newMessage, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to create message" }, { status: 500 });
-  }
-}
 
+  const message = await prisma.message.create({
+    data: {
+      content,
+      userId: session.user.id,
+    },
+  });
+
+  return NextResponse.json(message);
+}
