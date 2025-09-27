@@ -1,8 +1,8 @@
 // This block specifies the database connection.
-// Replace "postgresql" with your database type if different (e.g., "mysql", "sqlite").
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // Используется приложением
+  directUrl = env("DIRECT_URL")   // Используется для миграций Prisma
 }
 
 // This block tells Prisma to generate the Prisma Client for JavaScript/TypeScript.
