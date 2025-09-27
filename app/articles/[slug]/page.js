@@ -1,48 +1,45 @@
-// app/articles/[slug]/page.js
-
-// Было: import { createClient } from '../../lib/supabase-server.js';
-// Стало:
-import { createClient } from '@/lib/supabase-server';
-
+import { createClient } from '@/lib/supabase-server'; // Убедитесь, что путь к вашему клиенту верный
 import { notFound } from 'next/navigation';
 
-async function getArticleBySlug(slug) {
-  const supabaseClient = createClient();
-  const { data, error } = await supabaseClient
-    .from('articles')
-    .select('id, title, created_at, content')
+// Эта функция будет загружать статью из Supabase
+async function getArticle(slug) {
+  const supabase = createClient();
+  
+  const { data, error } = await supabase
+    .from('NewsArticle') // Убедитесь, что название таблицы верное
+    .select('*')
     .eq('slug', slug)
-    .single();
+    .maybeSingle(); // <<< ГЛАВНОЕ ИЗМЕНЕНИЕ: Используем .maybeSingle()
+                   // Он возвращает null вместо ошибки, если ничего не найдено.
 
+  // Если произошла другая ошибка, выведем ее в лог
   if (error) {
-    console.error('Error fetching article:', error);
-    return null;
+    console.error("Supabase error fetching article:", error);
   }
+
   return data;
 }
 
+// Это компонент вашей страницы
 export default async function ArticlePage({ params }) {
-  const article = await getArticleBySlug(params.slug);
+  const article = await getArticle(params.slug);
 
+  // <<< ГЛАВНОЕ ИЗМЕНЕНИЕ: Проверяем, найдена ли статья
+  // Если getArticle вернула null, показываем страницу 404
   if (!article) {
     notFound();
   }
 
   return (
-    <article className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-      <header className="mb-12 text-center">
-        <h1 className="text-4xl md:text-5xl font-light leading-tight text-gray-900">{article.title}</h1>
-        <p className="mt-4 text-gray-500 text-sm">
-          Опубликовано: {new Date(article.created_at).toLocaleDateString('ru-RU', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })}
+    <div className="container mx-auto px-4 py-8">
+      <article className="prose lg:prose-xl mx-auto">
+        <h1>{article.title}</h1>
+        <p className="text-gray-500">
+          Опубликовано: {new Date(article.publishedAt).toLocaleDateString('ru-RU')}
         </p>
-      </header>
-      <div className="prose prose-lg mx-auto text-gray-800">
-        <p>{article.content}</p>
-      </div>
-    </article>
+        {/* Здесь вы можете использовать react-markdown для отображения article.description */}
+        <div dangerouslySetInnerHTML={{ __html: article.description.replace(/\n/g, '<br />') }} />
+      </article>
+    </div>
   );
 }
