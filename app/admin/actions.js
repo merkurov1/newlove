@@ -2,13 +2,15 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { getServerSession } from 'next-auth/next'; // <<< ИЗМЕНЕНИЕ
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // <<< ИЗМЕНЕНИЕ
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 // Вспомогательная функция для проверки прав администратора
 async function verifyAdmin() {
-  const session = await auth();
+  // <<< ИЗМЕНЕНИЕ: Используем новый метод getServerSession
+  const session = await getServerSession(authOptions);
   if (session?.user?.role !== 'ADMIN') {
     throw new Error('Unauthorized: Admin access required.');
   }
@@ -19,9 +21,8 @@ async function verifyAdmin() {
 export async function createArticle(formData) {
   const session = await verifyAdmin();
 
-  // Получаем данные из формы
   const title = formData.get('title');
-  const description = formData.get('content'); // Поле textarea у нас называется 'content'
+  const description = formData.get('content');
   const slug = formData.get('slug');
 
   if (!title || !description || !slug) {
@@ -29,29 +30,26 @@ export async function createArticle(formData) {
   }
 
   try {
-    // Создаем запись в таблице NewsArticle
     await prisma.newsArticle.create({
       data: {
         title,
         description,
         slug,
-        url: `/articles/${slug}`, // Генерируем URL на основе слага
-        publishedAt: new Date(), // Устанавливаем текущую дату публикации
-        sourceName: session.user.name || 'Admin', // Указываем автора из сессии
+        url: `/articles/${slug}`,
+        publishedAt: new Date(),
+        sourceName: session.user.name || 'Admin',
       },
     });
   } catch (error) {
-    // Обрабатываем возможную ошибку, если такой slug или url уже существует
     if (error.code === 'P2002') {
       throw new Error('Статья с таким URL (slug) уже существует.');
     }
     throw new Error('Не удалось создать статью.');
   }
 
-  // Обновляем кэш для страниц, чтобы изменения сразу отобразились
   revalidatePath('/admin');
-  revalidatePath('/articles'); // Если у вас есть общая страница со статьями
-  redirect('/admin'); // Перенаправляем на дашборд после успеха
+  revalidatePath('/articles');
+  redirect('/admin');
 }
 
 // Server Action для удаления статьи
@@ -65,11 +63,9 @@ export async function deleteArticle(formData) {
   }
 
   await prisma.newsArticle.delete({
-    // Ваша ID в схеме - это Int, поэтому преобразуем строку в число
     where: { id: parseInt(id, 10) },
   });
 
   revalidatePath('/admin');
   revalidatePath('/articles');
 }
-
