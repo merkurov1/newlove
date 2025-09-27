@@ -1,23 +1,22 @@
-// app/admin/page.js
+// app/admin/articles/page.tsx
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
-import { deleteArticle } from './actions';
+import { deleteArticle } from '../actions';
 
-export const dynamic = 'force-dynamic'; // <<< ДОБАВЛЕНО: Запрещаем статическую генерацию
+export const dynamic = 'force-dynamic';
 
-export default async function AdminDashboard() {
+export default async function AdminArticlesPage() {
   const articles = await prisma.newsArticle.findMany({
     orderBy: { createdAt: 'desc' },
   });
 
-  // ... остальной код вашего компонента без изменений ...
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div>
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Статьи</h1>
         <Link 
-          href="/admin/new"
-          className="bg-blue-600 text-white py-2 px-4 rounded-md hover-bg-blue-700"
+          href="/admin/new" // Ссылка на страницу создания статьи
+          className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
         >
           + Добавить статью
         </Link>
@@ -31,10 +30,10 @@ export default async function AdminDashboard() {
               <li key={article.id} className="p-4 flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-800">{article.title}</h3>
-                  <p className="text-sm text-gray-500">/{article.slug}</p>
+                  <p className="text-sm text-gray-500">/articles/{article.slug}</p>
                 </div>
                 <div className="flex items-center space-x-4">
-                  <Link href={`/admin/edit/${article.id}`} className="text-blue-500 hover:underline">
+                  <Link href={`/admin/articles/edit/${article.id}`} className="text-blue-500 hover:underline">
                     Редактировать
                   </Link>
                   <form action={deleteArticle}>
