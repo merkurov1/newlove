@@ -1,132 +1,48 @@
 // app/admin/page.js
-"use client";
-import { useState } from 'react';
 import Link from 'next/link';
+import prisma from '@/lib/prisma';
+import { deleteArticle } from './actions'; // Импортируем Server Action
 
-export default function Admin() {
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [slug, setSlug] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-
-  const generateSlug = (title) => {
-    return title
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .trim();
-  };
-
-  const handleTitleChange = (e) => {
-    const newTitle = e.target.value;
-    setTitle(newTitle);
-    setSlug(generateSlug(newTitle));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage('');
-
-    try {
-      const response = await fetch('/api/articles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content, slug }),
-      });
-
-      const { message } = await response.json();
-
-      if (!response.ok) throw new Error(message);
-
-      setMessage(message);
-      setTitle('');
-      setContent('');
-      setSlug('');
-    } catch (error) {
-      setMessage(`❌ Ошибка: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+export default async function AdminDashboard() {
+  const articles = await prisma.article.findMany({
+    orderBy: { createdAt: 'desc' },
+  });
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
-          Панель администратора
-        </h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Статьи</h1>
+        <Link 
+          href="/admin/new"
+          className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
+        >
+          + Добавить статью
+        </Link>
+      </div>
 
-        {message && (
-          <div
-            className={`p-4 rounded-md mb-6 ${
-              message.includes('✅')
-                ? 'bg-green-100 text-green-700'
-                : 'bg-red-100 text-red-700'
-            }`}
-          >
-            {message}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Заголовок статьи
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={handleTitleChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Введите заголовок..."
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              URL (slug)
-            </label>
-            <input
-              type="text"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="url-статьи"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Содержание
-            </label>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              required
-              rows={10}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Напишите содержание статьи..."
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Добавляем...' : 'Опубликовать статью'}
-          </button>
-        </form>
-
-        <div className="mt-8 text-center">
-          <Link href="/" className="text-blue-600 hover:text-blue-800">
-            ← Вернуться на главную
-          </Link>
-        </div>
+      <div className="bg-white shadow-md rounded-lg overflow-hidden">
+        <ul className="divide-y divide-gray-200">
+          {articles.map((article) => (
+            <li key={article.id} className="p-4 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">{article.title}</h3>
+                <p className="text-sm text-gray-500">/{article.slug}</p>
+              </div>
+              <div className="flex items-center space-x-4">
+                {/* TODO: Добавить страницу редактирования */}
+                <Link href={`/admin/edit/${article.id}`} className="text-blue-500 hover:underline">
+                  Редактировать
+                </Link>
+                <form action={deleteArticle}>
+                  <input type="hidden" name="id" value={article.id} />
+                  <button type="submit" className="text-red-500 hover:underline">
+                    Удалить
+                  </button>
+                </form>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

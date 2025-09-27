@@ -45,6 +45,10 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  
+  // <<< ДОБАВЛЕНО: Роль для разграничения прав доступа (админ/пользователь)
+  role          String    @default("USER")
+
   accounts      Account[]
   sessions      Session[]
   messages      Message[]
@@ -71,6 +75,8 @@ model Message {
 model NewsArticle {
   id          Int      @id @default(autoincrement())
   title       String
+  // <<< ДОБАВЛЕНО: Уникальный URL (slug) для красивых ссылок на статьи
+  slug        String   @unique
   description String?  @db.Text
   url         String   @unique
   imageUrl    String?
