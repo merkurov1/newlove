@@ -22,13 +22,15 @@ export const metadata = {
 async function getDataForLayout() {
   const supabase = createClient();
   let layoutData = {
-    settings: { site_name: 'Merkurov.love', slogan: 'Art x Love x Money' },
+    // Эти данные будут использоваться, если из базы ничего не придет
+    settings: { site_name: 'Merkurov.love', slogan: 'Art x Love x Money', logo_url: null },
     pages: []
   };
   
   try {
     const [settingsResult, pagesResult] = await Promise.all([
-      supabase.from('settings').select('site_name, slogan').single(),
+      // <<< ИЗМЕНЕНИЕ ЗДЕСЬ: Добавили logo_url в select-запрос
+      supabase.from('settings').select('site_name, slogan, logo_url').single(),
       supabase.from('projects').select('id, title, slug').order('created_at', { ascending: false })
     ]);
     
