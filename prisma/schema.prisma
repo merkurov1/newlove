@@ -84,3 +84,13 @@ model NewsArticle {
   sourceName  String
   createdAt   DateTime @default(now())
 }
+model Project {
+  id        String   @id @default(cuid())
+  title     String
+  slug      String   @unique
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("projects") // <<< ЭТА СТРОКА УКАЗЫВАЕТ НА ВАШУ ТАБЛИЦУ "projects"
+}
