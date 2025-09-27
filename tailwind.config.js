@@ -3,12 +3,11 @@ module.exports = {
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx}",
-    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
       colors: {
-        primary: '#2563eb',
+        primary: '#2563eb', // Ваш цвет 'primary' сохранен
       },
     },
   },
