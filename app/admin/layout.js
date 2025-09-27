@@ -1,6 +1,6 @@
 // app/admin/layout.js
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 import { redirect } from 'next/navigation';
 
 export default async function AdminLayout({ children }) {

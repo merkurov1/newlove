@@ -1,6 +1,6 @@
 // app/talks/page.tsx
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 import prisma from '@/lib/prisma';
 import TalksClientPage from './TalksClientPage'; // Я помню, у вас был клиентский компонент
 

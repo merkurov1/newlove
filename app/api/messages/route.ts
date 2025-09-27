@@ -1,6 +1,6 @@
 // app/api/messages/route.ts
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 

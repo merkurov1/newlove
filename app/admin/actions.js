@@ -3,7 +3,7 @@
 
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next'; // <<< ИЗМЕНЕНИЕ
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // <<< ИЗМЕНЕНИЕ
+import { authOptions } from '@/lib/authOptions';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
