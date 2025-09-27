@@ -46,7 +46,11 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
       content: newMessage,
       createdAt: new Date(),
       userId: session.user.id,
-      author: { name: session.user.name, image: session.user.image },
+      author: {
+        // <<< ИЗМЕНЕНИЯ ЗДЕСЬ: Добавляем `?? null`, чтобы избежать ошибки с `undefined`
+        name: session.user.name ?? null,
+        image: session.user.image ?? null,
+      },
     };
     setMessages([...messages, optimisticMessage]);
     setNewMessage('');
