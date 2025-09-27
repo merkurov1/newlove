@@ -1,25 +1,19 @@
-// Этот файл — основа вашей схемы данных для Prisma.
-
-// 1. Блок Datasource: Указывает, как Prisma подключается к вашей базе данных.
-// Обязательно замените "postgresql" на ваш тип БД, если он другой (например, "mysql" или "sqlite").
-// URL для подключения берется из переменной окружения DATABASE_URL.
+// This block specifies the database connection.
+// Replace "postgresql" with your database type if different (e.g., "mysql", "sqlite").
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// 2. Блок Generator: Указывает, какой клиент будет сгенерирован.
-// В данном случае — Prisma Client для JavaScript/TypeScript.
+// This block tells Prisma to generate the Prisma Client for JavaScript/TypeScript.
 generator client {
   provider = "prisma-client-js"
 }
 
-// --- МОДЕЛИ ДАННЫХ ---
+// --- DATA MODELS ---
 
-// Модели для NextAuth.js (оставлены как в вашем примере)
+// Models required for NextAuth.js Authentication
 model User {
-  // ... ваши поля для модели User ...
-  // Пример:
   id            String    @id @default(cuid())
   name          String?
   email         String?   @unique
@@ -27,34 +21,34 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
+  messages      Message[] // Back-relation to Message model
 }
 
 model Account {
-    id                String  @id @default(cuid())
-    userId            String
-    type              String
-    provider          String
-    providerAccountId String
-    refresh_token     String? @db.Text
-    access_token      String? @db.Text
-    expires_at        Int?
-    token_type        String?
-    scope             String?
-    id_token          String? @db.Text
-    session_state     String?
-    user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@unique([provider, providerAccountId])
+  @@unique([provider, providerAccountId])
 }
 
 model Session {
-    id           String   @id @default(cuid())
-    sessionToken String   @unique
-    userId       String
-    expires      DateTime
-    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
-
 
 model VerificationToken {
   identifier String
@@ -64,15 +58,18 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// Corrected model for messages
 model Message {
-  // ... ваши поля для модели Message ...
-  // Пример:
   id        String   @id @default(cuid())
-  text      String
+  content   String   @db.Text // Field for the message content
   createdAt DateTime @default(now())
+
+  // Relation to the User model
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// Модель для новостных статей (из внешних источников)
+// Model for news articles from external sources
 model NewsArticle {
   id          Int      @id @default(autoincrement())
   title       String
@@ -85,7 +82,7 @@ model NewsArticle {
   createdAt   DateTime @default(now())
 }
 
-// Модель для ваших регулярных публикаций
+// Model for your regular publications
 model Article {
   id        String   @id @default(cuid())
   title     String
@@ -94,10 +91,10 @@ model Article {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("articles") // Указываем на вашу таблицу "articles"
+  @@map("articles")
 }
 
-// Модель для проектов/статичных страниц
+// Model for projects/static pages
 model Project {
   id        String   @id @default(cuid())
   title     String
@@ -106,5 +103,5 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("projects") // Указываем на вашу таблицу "projects"
+  @@map("projects")
 }
