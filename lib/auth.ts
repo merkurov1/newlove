@@ -1,4 +1,4 @@
-// lib/auth.ts (NextAuth v5 совместимый код)
+// lib/auth.ts
 
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import type { NextAuthConfig } from "next-auth";
@@ -6,8 +6,10 @@ import GoogleProvider from "next-auth/providers/google";
 import prisma from "./prisma";
 import NextAuth from "next-auth";
 
-// 1. Объект конфигурации
 export const authConfig: NextAuthConfig = {
+  // <<< ИЗМЕНЕНИЕ ЗДЕСЬ: Явно передаем секрет
+  secret: process.env.AUTH_SECRET,
+
   adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({
@@ -16,12 +18,9 @@ export const authConfig: NextAuthConfig = {
     }),
   ],
   callbacks: {
-    // Этот колбэк вызывается каждый раз, когда запрашивается сессия (например, через auth())
     async session({ session, user }) {
-      // `user` здесь - это пользователь из вашей базы данных Prisma
       if (session.user) {
         session.user.id = user.id;
-        // <<< ГЛАВНОЕ ИЗМЕНЕНИЕ: Добавляем роль пользователя в объект сессии
         session.user.role = user.role;
       }
       return session;
@@ -33,8 +32,5 @@ export const authConfig: NextAuthConfig = {
   },
 };
 
-// 2. Инициализируем NextAuth
 export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
-
-// 3. Экспортируем handlers для API routes
 export const { GET, POST } = handlers;
