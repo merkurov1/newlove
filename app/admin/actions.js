@@ -201,14 +201,3 @@ export async function subscribeToNewsletter(prevState, formData) {
     return { status: 'error', message: 'Произошла непредвиденная ошибка. Попробуйте снова.' };
   }
 }
-
-Ваши финальные и обязательные шаги перед деплоем
- * Замените содержимое ваших файлов package.json и app/admin/actions.js на исправленные версии выше.
- * Запустите npm install. Это синхронизирует ваш package-lock.json с изменениями в package.json.
-   npm install
-
- * Самый важный шаг: Сохраните все изменения в Git. Эта команда отправит исправленные actions.js и, что более важно, обновленный package.json в ваш репозиторий.
-   git add .
-git commit -m "fix: Final build corrections and sync dependencies"
-git push
-
