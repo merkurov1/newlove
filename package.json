@@ -18,7 +18,7 @@
     "jsonwebtoken": "^9.0.2",
     "marked": "^16.3.0",
     "next": "14.2.5",
-    "next-auth": "^4.2.4.7",
+    "next-auth": "^4.24.7",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-markdown": "^10.1.0",
@@ -37,15 +37,3 @@
     "typescript": "5.4.5"
   }
 }
-
-Ваши финальные действия
- * Убедитесь, что ваш файл package.json выглядит именно так.
- * Убедитесь, что вы удалили файл app/api/generate-post/route.ts.
- * После этого выполните команды для сохранения всех изменений в Git:
-   git add .
-git commit -m "build: Remove AI generation feature to fix deployment"
-git push
-
-
-
-
