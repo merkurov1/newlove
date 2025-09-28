@@ -174,7 +174,7 @@ export async function subscribeToNewsletter(prevState, formData) {
 
   const email = formData.get('email')?.toString().toLowerCase();
 
-  if (!email || !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email)) {
+  if (!email || !/^[A-Z0.9._%+-]+@[A-Z0.9.-]+\.[A-Z]{2,}$/i.test(email)) {
     return { status: 'error', message: 'Пожалуйста, введите корректный email.' };
   }
 
@@ -202,21 +202,13 @@ export async function subscribeToNewsletter(prevState, formData) {
   }
 }
 
-Ошибка №2: Недостающий пакет @google/generative-ai
-Module not found: Can't resolve '@google/generative-ai'
-Причина: Лог снова показывает эту ошибку. Это означает, что, хотя вы и выполнили команду npm install, изменения в файлах package.json и package-lock.json не были сохранены в Git. Vercel при сборке смотрит на версию кода из вашего последнего коммита, и если в том коммите нет информации о новой библиотеке, он ее не установит.
-Решение: Нам нужно убедиться, что все изменения, включая установку пакета, сохранены и отправлены в GitHub.
 Ваши финальные и обязательные шаги перед деплоем
-Пожалуйста, выполните эту последовательность команд в вашем терминале. Она гарантирует, что все будет исправлено и сохранено.
- * Замените содержимое файла app/admin/actions.js на чистую версию, которую я предоставил выше.
- * Еще раз установите пакет (на всякий случай). Эта команда ничего не сломает, если пакет уже стоит, но гарантирует, что package.json будет обновлен.
-   npm install @google/generative-ai
+ * Замените содержимое ваших файлов package.json и app/admin/actions.js на исправленные версии выше.
+ * Запустите npm install. Это синхронизирует ваш package-lock.json с изменениями в package.json.
+   npm install
 
- * Самый важный шаг: Сохраните все изменения в Git. Эта команда добавит все измененные файлы (включая actions.js, package.json и package-lock.json) в коммит и отправит их в ваш репозиторий.
+ * Самый важный шаг: Сохраните все изменения в Git. Эта команда отправит исправленные actions.js и, что более важно, обновленный package.json в ваш репозиторий.
    git add .
-git commit -m "fix: Final build corrections and dependency sync"
+git commit -m "fix: Final build corrections and sync dependencies"
 git push
-
-
-
 
