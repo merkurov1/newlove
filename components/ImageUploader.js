@@ -2,15 +2,14 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase-client';
-import { useSession } from 'next-auth/react'; // <<< 1. Импортируем useSession
+import { useSession } from 'next-auth/react';
 
 export default function ImageUploader({ onUploadSuccess }) {
-  const { data: session } = useSession(); // <<< 2. Получаем сессию
+  const { data: session } = useSession();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
 
   async function handleFileUpload(event) {
-    // <<< 3. Проверяем, есть ли у нас сессия и токен
     if (!session || !session.supabaseAccessToken) {
       setError('Ошибка: вы не авторизованы для загрузки файлов.');
       return;
@@ -24,15 +23,20 @@ export default function ImageUploader({ onUploadSuccess }) {
         throw new Error('Вы не выбрали файл для загрузки.');
       }
 
-      // <<< 4. "Представляемся" Supabase перед запросом
-      // Мы говорим клиенту Supabase: "Используй вот этот токен для следующего запроса"
-      supabase.auth.setAuth(session.supabaseAccessToken);
+      // <<< 1. Удаляем устаревшую и неработающую строку >>>
+      // supabase.auth.setAuth(session.supabaseAccessToken); // ЭТОЙ КОМАНДЫ БОЛЬШЕ НЕТ
 
       const fileName = `${Date.now()}-${file.name}`;
       
+      // <<< 2. КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Передаем токен в заголовках запроса >>>
+      // Мы добавляем "пропуск" (токен) напрямую к нашему файлу
       const { data, error: uploadError } = await supabase.storage
         .from('media')
-        .upload(fileName, file);
+        .upload(fileName, file, {
+          headers: {
+            Authorization: `Bearer ${session.supabaseAccessToken}`,
+          },
+        });
 
       if (uploadError) {
         throw uploadError;
@@ -71,5 +75,4 @@ export default function ImageUploader({ onUploadSuccess }) {
     </div>
   );
 }
-
 
