@@ -6,9 +6,8 @@ import { authOptions } from '@/lib/authOptions';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { Resend } from 'resend';
-import { render } from '@react-email/render';
-import NewsletterEmail from '@/emails/NewsletterEmail';
-import { marked } from 'marked';
+// Импортируем нашу новую, самодостаточную функцию для рендеринга писем
+import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
 
 async function verifyAdmin() {
   const session = await getServerSession(authOptions);
@@ -176,11 +175,12 @@ export async function sendLetter(prevState, formData) {
     if (subscribers.length === 0) return { status: 'warning', message: 'Нет подписчиков для отправки.' };
 
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const contentHtml = marked.parse(letter.content);
-    const emailHtml = render(<NewsletterEmail title={letter.title} content={contentHtml} />);
+    
+    // Вызываем нашу специальную функцию для рендеринга, передавая Markdown
+    const emailHtml = renderNewsletterEmail({ title: letter.title, content: letter.content });
     
     await resend.emails.send({
-      from: 'Anton Merkurov <hello@merkurov.love>', // ВАЖНО: Замените на ваш верифицированный email в Resend
+      from: 'Anton Merkurov <hello@merkurov.love>', // Убедитесь, что этот email верифицирован в Resend
       to: subscribers.map(sub => sub.email),
       subject: letter.title,
       html: emailHtml,

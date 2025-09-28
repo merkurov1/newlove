@@ -1,7 +1,12 @@
-import { Html, Head, Preview, Body, Container, Section, Heading, Text, Hr } from '@react-email/components';
+import { Html, Head, Preview, Body, Container, Section, Heading, Text, Hr, render } from '@react-email/components';
 import * as React from 'react';
+import { marked } from 'marked';
 
-export default function NewsletterEmail({ title = 'Тема письма', content = '<p>Содержимое...</p>' }) {
+// Эта обертка нужна, чтобы наш компонент мог работать на сервере
+const NewsletterEmail = ({ title = 'Тема письма', content = '<p>Содержимое...</p>' }) => {
+  // Конвертируем Markdown в HTML прямо здесь
+  const contentHtml = marked.parse(content);
+
   return (
     <Html>
       <Head />
@@ -10,8 +15,7 @@ export default function NewsletterEmail({ title = 'Тема письма', conte
         <Container style={container}>
           <Section>
             <Heading style={heading}>{title}</Heading>
-            {/* Мы используем dangerouslySetInnerHTML, чтобы рендерить HTML из Markdown */}
-            <div dangerouslySetInnerHTML={{ __html: content }} />
+            <div dangerouslySetInnerHTML={{ __html: contentHtml }} />
             <Hr style={hr} />
             <Text style={footer}>
               Anton Merkurov | Вы получили это письмо, потому что подписались на рассылку на сайте merkurov.love
@@ -21,7 +25,13 @@ export default function NewsletterEmail({ title = 'Тема письма', conte
       </Body>
     </Html>
   );
-}
+};
+
+export default NewsletterEmail;
+
+// Функция для рендеринга, которую мы будем вызывать в Server Action
+export const renderNewsletterEmail = (props) => render(<NewsletterEmail {...props} />);
+
 
 // Стили для письма
 const main = { backgroundColor: '#ffffff', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif' };
