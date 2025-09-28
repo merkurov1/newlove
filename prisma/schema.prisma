@@ -1,4 +1,21 @@
-// datasource, generator, enums...
+// <<< ВОССТАНОВЛЕННЫЙ И КРИТИЧЕСКИ ВАЖНЫЙ БЛОК DATASOURCE >>>
+// This block specifies the database connection.
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+// This block tells Prisma to generate the Prisma Client.
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --- ENUMS ---
+enum Role {
+  USER
+  ADMIN
+}
 
 // --- DATA MODELS ---
 
@@ -17,12 +34,89 @@ model User {
   articles      Article[]
   projects      Project[]
   subscription  Subscriber?
-  
-  // <<< ДОБАВЛЕНО: Связь с письмами рассылки
-  letters       Letter[]
+  letters       Letter[] // Added for newsletter letters
 }
 
-// ... все остальные модели (Account, Article, Project, Subscriber и т.д.) остаются без изменений ...
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NewsArticle {
+  id          Int      @id @default(autoincrement())
+  title       String
+  slug        String   @unique
+  description String?  @db.Text
+  url         String   @unique
+  imageUrl    String?
+  publishedAt DateTime
+  sourceName  String
+  createdAt   DateTime @default(now())
+  @@index([publishedAt])
+}
+
+model Article {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  content     String    @db.Text
+  published   Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id])
+  @@map("articles")
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  content     String    @db.Text
+  published   Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id])
+  @@map("projects")
+}
 
 model Subscriber {
   id        String   @id @default(cuid())
@@ -30,11 +124,9 @@ model Subscriber {
   createdAt DateTime @default(now())
   userId    String?  @unique
   user      User?    @relation(fields: [userId], references: [id])
-
   @@map("subscribers")
 }
 
-// <<< ДОБАВЛЕНА НОВАЯ МОДЕЛЬ ДЛЯ ПИСЕМ РАССЫЛКИ >>>
 model Letter {
   id          String    @id @default(cuid())
   title       String
@@ -44,11 +136,8 @@ model Letter {
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  
-  // Связь с автором
   authorId    String
   author      User      @relation(fields: [authorId], references: [id])
-
   @@map("letters")
 }
 
