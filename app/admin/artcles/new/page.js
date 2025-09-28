@@ -1,10 +1,11 @@
-// app/admin/artcles/new/page.js
 import { createArticle } from '../../actions';
 
 export default function NewArticlePage() {
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Новая публикация</h1>
+      {/* Эта форма вызывает серверное действие createArticle, которое находится в app/admin/actions.js */}
+      {/* Путь '../../actions' из текущего файла абсолютно корректен */}
       <form action={createArticle} className="space-y-6 bg-white p-8 rounded-lg shadow-md">
         <div>
           <label htmlFor="title" className="block text-sm font-medium text-gray-700">Заголовок</label>
@@ -31,3 +32,5 @@ export default function NewArticlePage() {
     </div>
   );
 }
+
+
