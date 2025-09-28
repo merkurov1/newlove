@@ -1,4 +1,3 @@
-// app/admin/Sidebar.tsx
 'use client';
 
 import Link from 'next/link';
@@ -8,6 +7,8 @@ const navItems = [
   { href: '/admin', label: 'Главная' },
   { href: '/admin/articles', label: 'Статьи' },
   { href: '/admin/projects', label: 'Проекты' },
+  // <<< ДОБАВЛЕНО: Новый пункт меню для рассылок
+  { href: '/admin/letters', label: 'Рассылки' },
 ];
 
 export default function Sidebar() {
@@ -26,7 +27,9 @@ export default function Sidebar() {
               <Link
                 href={item.href}
                 className={`flex items-center px-6 py-3 text-gray-600 hover:bg-gray-100 transition-colors ${
-                  pathname === item.href ? 'bg-gray-200 text-gray-900 font-semibold' : ''
+                  pathname.startsWith(item.href) && item.href !== '/admin' || pathname === '/admin' && item.href === '/admin'
+                    ? 'bg-gray-200 text-gray-900 font-semibold'
+                    : ''
                 }`}
               >
                 {item.label}
@@ -38,3 +41,4 @@ export default function Sidebar() {
     </aside>
   );
 }
+
