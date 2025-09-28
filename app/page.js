@@ -18,12 +18,10 @@ async function getArticles() {
     });
     return articles;
   } catch (error) {
-    // <<< 1. Добавляем обработку ошибок >>>
-    // Если произойдет сбой (например, нет подключения к БД),
-    // мы запишем ошибку в лог Vercel и вернем пустой массив,
-    // чтобы страница не "упала".
-    console.error("Failed to fetch articles:", error);
-    return []; 
+    // В случае любой ошибки на сервере, выводим ее в лог Vercel
+    // и возвращаем пустой массив, чтобы страница не падала.
+    console.error("!!! Ошибка при загрузке статей для главной страницы:", error);
+    return [];
   }
 }
 
@@ -33,7 +31,6 @@ export default async function HomePage() {
   return (
     <div className="space-y-12">
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-        {/* <<< 2. Эта проверка теперь безопасна, так как articles - это всегда массив >>> */}
         {articles && articles.length > 0 ? (
           articles.map((article) => (
             <div
@@ -41,7 +38,6 @@ export default async function HomePage() {
               className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group"
             >
               <div className="p-6 flex-grow flex flex-col">
-                {/* Ссылка теперь "плоская" */}
                 <Link href={`/${article.slug}`}>
                   <h2 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
                     {article.title}
@@ -57,11 +53,9 @@ export default async function HomePage() {
                     })}
                     </p>
                 )}
-
                 <p className="text-gray-700 mb-4 line-clamp-3 overflow-hidden flex-grow">
                   {article.content.substring(0, 150)}...
                 </p>
-                
                 <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-100">
                   {article.author.image && (
                     <Image src={article.author.image} alt={article.author.name || ''} width={32} height={32} className="rounded-full" />
