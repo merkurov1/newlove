@@ -7,7 +7,7 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 export default function Header({ projects, settings }) {
   const { data: session, status } = useSession();
 
-  const site_name = settings?.site_name || 'Merkurov.love';
+  const site_name = settings?.site_name || 'Anton Merkurov';
   const slogan = settings?.slogan || 'Art x Love x Money';
   const logoUrl = settings?.logo_url || 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png';
 
