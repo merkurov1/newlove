@@ -1,12 +1,25 @@
-// lib/prisma.ts
 import { PrismaClient } from '@prisma/client';
 
-declare global {
-  var prisma: PrismaClient | undefined;
+// Эта конструкция помогает TypeScript работать с глобальными переменными
+const globalForPrisma = global as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+// Создаем или используем существующий экземпляр Prisma
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    // Включаем логирование запросов только в режиме разработки
+    log:
+      process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
+
+// В продакшене `globalForPrisma.prisma` не будет перезаписываться,
+// так как модуль инициализируется один раз. В разработке это
+// предотвращает создание новых подключений при каждом hot-reload.
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
 }
 
-const prisma = global.prisma || new PrismaClient();
-
-if (process.env.NODE_ENV !== 'production') global.prisma = prisma;
-
 export default prisma;
+
