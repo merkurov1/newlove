@@ -1,53 +1,63 @@
-// app/projects/[slug]/page.js
-
-import { createClient } from '@/lib/supabase-server';
+import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
-import { marked } from 'marked'; // <-- 1. Импортируем marked
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
-async function getProjectBySlug(slug) {
-  const supabaseClient = createClient();
-  const { data, error } = await supabaseClient
-    .from('projects')
-    .select('id, title, created_at, content')
-    .eq('slug', slug)
-    .single();
+// Эта функция находит проект в базе по slug из URL
+async function getProject(slug) {
+  const project = await prisma.project.findUnique({
+    where: {
+      slug: slug,
+      published: true, // Показываем только опубликованные
+    },
+    include: {
+      author: {
+        select: { name: true, image: true },
+      },
+    },
+  });
 
-  if (error) {
-    console.error('Error fetching project:', error);
-    return null;
+  if (!project) {
+    notFound(); // 404, если проект не найден или не опубликован
   }
-  return data;
+  return project;
 }
 
 export default async function ProjectPage({ params }) {
-  const project = await getProjectBySlug(params.slug);
-
-  if (!project) {
-    notFound();
-  }
-
-  // --- 2. Превращаем Markdown в HTML перед отображением ---
-  const htmlContent = await marked.parse(project.content || '');
+  const project = await getProject(params.slug);
 
   return (
-    <article className="bg-white p-6 sm:p-8 rounded-lg shadow-md max-w-4xl mx-auto">
-      <header className="mb-8 text-center">
-        {/* Немного увеличим заголовок для выразительности */}
-        <h1 className="text-4xl md:text-5xl font-bold leading-tight text-gray-900">{project.title}</h1>
-        <p className="mt-3 text-gray-500 text-sm">
-          Опубликовано: {new Date(project.created_at).toLocaleDateString('ru-RU', {
+    <article className="max-w-3xl mx-auto px-4 py-12">
+      <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">{project.title}</h1>
+      <div className="flex items-center space-x-4 mb-8 text-gray-500">
+        {project.author.image && (
+          <img src={project.author.image} alt={project.author.name} className="w-10 h-10 rounded-full" />
+        )}
+        <span>{project.author.name}</span>
+        <span>&middot;</span>
+        <time dateTime={project.publishedAt.toISOString()}>
+          {new Date(project.publishedAt).toLocaleDateString('ru-RU', {
             year: 'numeric',
             month: 'long',
             day: 'numeric',
           })}
-        </p>
-      </header>
-
-      {/* --- 3. Класс 'prose' теперь будет работать как надо --- */}
-      <div
-        className="prose prose-lg lg:prose-xl max-w-none"
-        dangerouslySetInnerHTML={{ __html: htmlContent }}
-      />
+        </time>
+      </div>
+      
+      <div className="prose lg:prose-xl max-w-none">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {project.content}
+        </ReactMarkdown>
+      </div>
     </article>
   );
 }
+
+// Генерируем метаданные для страницы (заголовок вкладки)
+export async function generateMetadata({ params }) {
+    const project = await getProject(params.slug);
+    return {
+      title: project.title,
+    };
+}
+
