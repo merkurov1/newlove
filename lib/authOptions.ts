@@ -3,6 +3,7 @@ import { type NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import prisma from '@/lib/prisma';
 import { sign } from 'jsonwebtoken';
+import { Role } from '@/types/next-auth.d'; // <<< 1. Импортируем наш enum
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -12,20 +13,16 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
-  // <<< КЛЮЧЕВЫЕ ИЗМЕНЕНИЯ ЗДЕСЬ, В КОЛБЭКАХ >>>
   callbacks: {
-    // Этот колбэк вызывается при создании JWT
     async jwt({ token, user }) {
       if (user) {
-        // Добавляем роль пользователя в токен
         token.role = user.role;
       }
       
-      // Создаем специальный токен для Supabase
       const supabaseJwt = sign(
         {
           aud: 'authenticated',
-          exp: Math.floor(new Date().getTime() / 1000) + 60 * 60, // Токен живет 1 час
+          exp: Math.floor(new Date().getTime() / 1000) + 60 * 60,
           sub: user.id,
           email: user.email,
           role: 'authenticated',
@@ -36,14 +33,16 @@ export const authOptions: NextAuthOptions = {
       token.supabaseAccessToken = supabaseJwt;
       return token;
     },
-    // Этот колбэк вызывается при создании сессии
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub!;
-        session.user.role = token.role;
+        // <<< 2. ЯВНО УКАЗЫВАЕМ ТИП >>>
+        // Мы говорим TypeScript: "Мы уверены, что token.role имеет тип Role"
+        session.user.role = token.role as Role;
       }
-      // Передаем токен Supabase в объект сессии, доступный на клиенте
-      session.supabaseAccessToken = token.supabaseAccessToken;
+      
+      // <<< 3. И ЗДЕСЬ ТОЖЕ УКАЗЫВАЕМ ТИП >>>
+      session.supabaseAccessToken = token.supabaseAccessToken as string;
       return session;
     },
   },
@@ -53,4 +52,5 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
+
 
