@@ -1,11 +1,171 @@
-// ... все ваши существующие импорты ...
-// ... все ваши существующие функции (verifyAdmin, createArticle и т.д.) ...
+'use server';
 
-export async function deleteProject(formData) {
-  // ...
-  revalidatePath('/projects');
+import prisma from '@/lib/prisma';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/authOptions';
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+
+async function verifyAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== 'ADMIN') {
+    throw new Error('Not authenticated or authorized!');
+  }
+  return session;
 }
 
+// --- СТАТЬИ (Article) ---
+
+export async function createArticle(formData) {
+  const session = await verifyAdmin();
+  const title = formData.get('title')?.toString();
+  const content = formData.get('content')?.toString();
+  const slug = formData.get('slug')?.toString();
+  const published = formData.get('published') === 'on';
+
+  if (!title || !content || !slug) {
+    throw new Error('Title, content, and slug are required.');
+  }
+
+  try {
+    await prisma.article.create({
+      data: {
+        title,
+        content,
+        slug,
+        published,
+        publishedAt: published ? new Date() : null,
+        authorId: session.user.id,
+      },
+    });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return { message: 'Публикация с таким URL (slug) уже существует.' };
+    }
+    return { message: 'Не удалось создать публикацию.' };
+  }
+
+  revalidatePath('/admin/articles');
+  redirect('/admin/articles');
+}
+
+export async function updateArticle(formData) {
+  await verifyAdmin();
+  const id = formData.get('id')?.toString();
+  const title = formData.get('title')?.toString();
+  const content = formData.get('content')?.toString();
+  const slug = formData.get('slug')?.toString();
+  const published = formData.get('published') === 'on';
+
+  if (!id || !title || !content || !slug) {
+    throw new Error('ID, Title, content, and slug are required.');
+  }
+
+  try {
+    await prisma.article.update({
+      where: { id: id },
+      data: {
+        title,
+        content,
+        slug,
+        published,
+        publishedAt: published ? new Date() : null,
+      },
+    });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return { message: 'Публикация с таким URL (slug) уже существует.' };
+    }
+    return { message: 'Не удалось обновить публикацию.' };
+  }
+
+  revalidatePath('/admin/articles');
+  revalidatePath(`/${slug}`);
+  redirect('/admin/articles');
+}
+
+export async function deleteArticle(formData) {
+  await verifyAdmin();
+  const id = formData.get('id')?.toString();
+  if (!id) { throw new Error('Article ID is required.'); }
+  const article = await prisma.article.findUnique({ where: { id } });
+  await prisma.article.delete({ where: { id: id } });
+  revalidatePath('/admin/articles');
+  if (article) revalidatePath(`/${article.slug}`);
+}
+
+// --- ПРОЕКТЫ (Project) ---
+
+export async function createProject(formData) {
+  const session = await verifyAdmin();
+  const title = formData.get('title')?.toString();
+  const content = formData.get('content')?.toString();
+  const slug = formData.get('slug')?.toString();
+  const published = formData.get('published') === 'on';
+
+  if (!title || !content || !slug) {
+    throw new Error('Title, content, and slug are required.');
+  }
+
+  try {
+    await prisma.project.create({
+      data: {
+        title,
+        content,
+        slug,
+        published,
+        publishedAt: published ? new Date() : null,
+        authorId: session.user.id,
+      },
+    });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return { message: 'Проект с таким URL (slug) уже существует.' };
+    }
+    return { message: 'Не удалось создать проект.' };
+  }
+
+  revalidatePath('/admin/projects');
+  redirect('/admin/projects');
+}
+
+export async function updateProject(formData) {
+  await verifyAdmin();
+  const id = formData.get('id')?.toString();
+  const title = formData.get('title')?.toString();
+  const content = formData.get('content')?.toString();
+  const slug = formData.get('slug')?.toString();
+  const published = formData.get('published') === 'on';
+
+  if (!id || !title || !content || !slug) {
+    throw new Error('ID, Title, content, and slug are required.');
+  }
+
+  await prisma.project.update({
+    where: { id: id },
+    data: {
+      title,
+      content,
+      slug,
+      published,
+      publishedAt: published ? new Date() : null,
+    },
+  });
+
+  revalidatePath('/admin/projects');
+  revalidatePath(`/${slug}`);
+  redirect('/admin/projects');
+}
+
+export async function deleteProject(formData) {
+  await verifyAdmin();
+  const id = formData.get('id')?.toString();
+  if (!id) { throw new Error('Project ID is required.'); }
+  const project = await prisma.project.findUnique({ where: { id } });
+  await prisma.project.delete({ where: { id: id } });
+  revalidatePath('/admin/projects');
+  if (project) revalidatePath(`/${project.slug}`);
+}
 
 // --- РАССЫЛКА (Newsletter) ---
 
@@ -14,22 +174,18 @@ export async function subscribeToNewsletter(prevState, formData) {
 
   const email = formData.get('email')?.toString().toLowerCase();
 
-  // Валидация email
   if (!email || !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email)) {
     return { status: 'error', message: 'Пожалуйста, введите корректный email.' };
   }
 
   try {
-    // Ищем пользователя в основной таблице User по этому email
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
 
-    // Создаем запись в таблице подписчиков
     await prisma.subscriber.create({
       data: {
         email: email,
-        // Если пользователь с таким email найден, привязываем подписку к его ID
         userId: existingUser?.id || null,
       },
     });
@@ -37,23 +193,30 @@ export async function subscribeToNewsletter(prevState, formData) {
     return { status: 'success', message: 'Спасибо за подписку! Мы добавили вас в список.' };
 
   } catch (error) {
-    // Prisma код P2002 означает нарушение unique constraint (т.е. email уже существует)
     if (error.code === 'P2002') {
       return { status: 'error', message: 'Этот email уже есть в нашей базе подписчиков.' };
     }
     
-    // Любая другая ошибка
     console.error('Ошибка подписки на рассылку:', error);
     return { status: 'error', message: 'Произошла непредвиденная ошибка. Попробуйте снова.' };
   }
 }
 
-Ваши следующие шаги:
- * Замените содержимое prisma/schema.prisma и components/Footer.js.
- * Добавьте новую функцию subscribeToNewsletter в конец вашего файла app/admin/actions.js.
- * Выполните миграцию. Это самый важный шаг. Откройте терминал и запустите:
-   npx prisma migrate dev --name add_subscribers_table
+Ошибка №2: Недостающий пакет @google/generative-ai
+Module not found: Can't resolve '@google/generative-ai'
+Причина: Это точно такая же проблема, как у нас была с jsonwebtoken. В вашем проекте есть файл (app/api/generate-post/route.ts), который пытается использовать библиотеку Google AI, но сама библиотека не установлена в проекте. Vercel не знает, откуда ее взять, и останавливает сборку.
+Решение: Просто установить недостающий пакет.
+Выполните в вашем терминале codespace эту команду:
+npm install @google/generative-ai
 
+Ваши следующие и финальные шаги:
+ * Выполните команду в терминале, чтобы установить недостающую библиотеку Google:
+   npm install @google/generative-ai
 
-
+   Это действие изменит ваши файлы package.json и package-lock.json.
+ * Замените все содержимое файла app/admin/actions.js на чистую версию, которую я предоставил выше.
+ * Закоммитьте все изменения в Git. Это очень важно, так как Vercel будет смотреть на обновленный package.json.
+   git add .
+git commit -m "fix: Correct build errors and add missing dependency"
+git push
 
