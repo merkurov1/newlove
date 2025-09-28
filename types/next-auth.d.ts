@@ -1,22 +1,31 @@
-// types/next-auth.d.ts
+import { DefaultSession, DefaultUser } from 'next-auth';
+import { JWT } from 'next-auth/jwt'; // <<< 1. Импортируем тип JWT
 
-import NextAuth, { type DefaultSession } from "next-auth";
+export enum Role {
+  USER = 'USER',
+  ADMIN = 'ADMIN',
+}
 
-declare module "next-auth" {
-  /**
-   * Расширяем стандартный тип Session, добавляя наши кастомные поля
-   */
+declare module 'next-auth' {
   interface Session {
     user: {
       id: string;
-      role: string; // Добавляем поле role
-    } & DefaultSession["user"]; // Сохраняем стандартные поля (name, email, image)
+      role: Role;
+    } & DefaultSession['user'];
+    supabaseAccessToken?: string; // Добавляем токен в тип сессии
   }
 
-  /**
-   * Расширяем стандартный тип User, чтобы он соответствовал нашей Prisma-модели
-   */
   interface User {
-    role: string; // Добавляем поле role
+    role: Role;
   }
 }
+
+// <<< 2. РАСШИРЯЕМ ТИП JWT >>>
+// Теперь TypeScript будет знать, что наш токен содержит эти поля
+declare module 'next-auth/jwt' {
+  interface JWT {
+    role: Role;
+    supabaseAccessToken?: string;
+  }
+}
+
