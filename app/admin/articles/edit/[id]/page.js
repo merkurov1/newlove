@@ -1,17 +1,41 @@
-import prisma from '@/lib/prisma';
+'use client'; // <<< 1. Превращаем в клиентский компонент
+
+import { useState, useEffect } from 'react';
+import prisma from '@/lib/prisma'; // Этот импорт будет проигнорирован на клиенте
 import { updateArticle } from '../../../actions';
-import { notFound } from 'next/navigation';
+import ImageUploader from '@/components/ImageUploader'; // <<< 2. Импортируем наш загрузчик
 
-export default async function EditArticlePage({ params }) {
-  const articleId = params.id;
-  const article = await prisma.article.findUnique({
-    where: { id: articleId },
-  });
+// Создаем "умную" страницу, которая сначала загружает данные на сервере...
+export default function EditArticleWrapper({ params }) {
+    // Эта часть выполняется один раз при запросе страницы
+    const [article, setArticle] = useState(null);
+    useEffect(() => {
+        async function fetchArticle() {
+            const response = await fetch(`/api/articles/${params.id}`); // Используем API для получения данных
+            const data = await response.json();
+            setArticle(data);
+        }
+        fetchArticle();
+    }, [params.id]);
 
-  if (!article) {
-    notFound();
-  }
+    if (!article) {
+        return <p>Загрузка...</p>;
+    }
 
+    return <EditArticlePage article={article} />;
+}
+
+
+// ...а затем передает их в интерактивную форму на клиенте
+function EditArticlePage({ article }) {
+  // <<< 3. Используем состояние для содержимого, чтобы его можно было менять
+  const [content, setContent] = useState(article.content);
+
+  // <<< 4. Функция для вставки ссылки на картинку в текст
+  const handleImageInsert = (markdownImage) => {
+    setContent((prevContent) => `${prevContent}\n${markdownImage}\n`);
+  };
+  
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Редактирование публикации</h1>
@@ -26,9 +50,22 @@ export default async function EditArticlePage({ params }) {
           <label htmlFor="slug" className="block text-sm font-medium text-gray-700">URL (slug)</label>
           <input type="text" name="slug" id="slug" required defaultValue={article.slug} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
         </div>
+
+        {/* <<< 5. Вставляем компонент загрузчика */}
+        <ImageUploader onUploadSuccess={handleImageInsert} />
+
         <div>
           <label htmlFor="content" className="block text-sm font-medium text-gray-700">Содержимое (Markdown)</label>
-          <textarea name="content" id="content" rows="10" required defaultValue={article.content} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></textarea>
+          {/* <<< 6. Текстовое поле теперь управляется состоянием */}
+          <textarea 
+            name="content" 
+            id="content" 
+            rows="15" 
+            required 
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+          ></textarea>
         </div>
         <div className="flex items-center">
           <input id="published" name="published" type="checkbox" defaultChecked={article.published} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
