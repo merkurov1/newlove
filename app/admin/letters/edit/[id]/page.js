@@ -1,91 +1,12 @@
-'use client';
-
-import { useFormState, useFormStatus } from 'react-dom';
-import { updateLetter, sendLetter } from '../../../actions';
-import { useEffect, useState } from 'react';
-import prisma from '@/lib/prisma'; // This import will be handled by the server part
+// Это теперь чистый Серверный Компонент. Директива 'use client' здесь не нужна.
+import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
+import EditLetterForm from '@/components/admin/EditLetterForm'; // Импортируем наш новый клиентский компонент
 
-// --- Client Component for the Form ---
-function EditLetterForm({ letter, subscriberCount }) {
-  const [sendState, sendFormAction] = useFormState(sendLetter, { message: null, status: null });
-  
-  function SendButton() {
-    const { pending } = useFormStatus();
-    return (
-      <button 
-        type="submit" 
-        disabled={pending}
-        className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-      >
-        {pending ? 'Отправка...' : `Отправить ${subscriberCount} подписчикам`}
-      </button>
-    );
-  }
-
-  return (
-    <div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Редактирование выпуска</h1>
-      <p className="text-sm text-gray-500 mb-8">
-        Статус: {letter.sentAt 
-          ? `Отправлено ${new Date(letter.sentAt).toLocaleString('ru-RU')}` 
-          : 'Черновик'}
-      </p>
-
-      {/* Форма для отправки (показывается только для черновиков) */}
-      {!letter.sentAt && (
-        <div className="mb-8 rounded-lg border border-red-200 bg-red-50 p-6">
-          <h2 className="text-lg font-semibold text-red-800">Отправить рассылку</h2>
-          <p className="text-sm text-red-700 mt-1 mb-4">
-            Это действие нельзя будет отменить. Письмо будет отправлено всем активным подписчикам.
-          </p>
-          <form action={sendFormAction}>
-            <input type="hidden" name="letterId" value={letter.id} />
-            <SendButton />
-          </form>
-          {sendState?.message && (
-            <p className={`mt-3 text-sm font-medium ${sendState.status === 'error' ? 'text-red-600' : 'text-green-600'}`}>
-              {sendState.message}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Форма для редактирования контента письма */}
-      <form action={updateLetter} className="space-y-6 bg-white p-8 rounded-lg shadow-md">
-        <input type="hidden" name="id" value={letter.id} />
-        
-        <div>
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700">Тема письма</label>
-          <input type="text" name="title" id="title" required defaultValue={letter.title} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
-        </div>
-        <div>
-          <label htmlFor="slug" className="block text-sm font-medium text-gray-700">URL (slug)</label>
-          <input type="text" name="slug" id="slug" required defaultValue={letter.slug} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
-        </div>
-        <div>
-          <label htmlFor="content" className="block text-sm font-medium text-gray-700">Содержимое (Markdown)</label>
-          <textarea name="content" id="content" rows="15" required defaultValue={letter.content} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></textarea>
-        </div>
-        <div className="flex items-center">
-          <input id="published" name="published" type="checkbox" defaultChecked={letter.published} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
-          <label htmlFor="published" className="ml-2 block text-sm text-gray-900">Опубликовать в архиве</label>
-        </div>
-        <div>
-          <button type="submit" className="w-full flex justify-center py-2 px-4 border rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
-            Сохранить изменения
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-// --- Server Component to fetch data ---
-export default async function EditLetterPageLoader({ params }) {
+export default async function EditLetterPage({ params }) {
   const letterId = params.id;
   
-  // Загружаем данные на сервере
+  // 1. Быстро загружаем все необходимые данные на сервере
   const letter = await prisma.letter.findUnique({
     where: { id: letterId },
   });
@@ -97,7 +18,7 @@ export default async function EditLetterPageLoader({ params }) {
   // Также загружаем количество подписчиков
   const subscriberCount = await prisma.subscriber.count();
 
-  // Передаем данные в клиентский компонент
+  // 2. Передаем эти данные как пропсы в наш интерактивный клиентский компонент
   return <EditLetterForm letter={letter} subscriberCount={subscriberCount} />;
 }
 
