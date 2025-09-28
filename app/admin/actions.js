@@ -1,4 +1,3 @@
-// app/admin/actions.js
 'use server';
 
 import prisma from '@/lib/prisma';
@@ -9,113 +8,68 @@ import { redirect } from 'next/navigation';
 
 async function verifyAdmin() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    // В реальном приложении здесь может быть проверка роли администратора
+  if (!session?.user?.id || session.user.role !== 'ADMIN') {
     throw new Error('Not authenticated or authorized!');
   }
   return session;
 }
 
-// --- ВАШИ ПУБЛИКАЦИИ (Article) ---
+// --- СТАТЬИ (Article) ---
 
 export async function createArticle(formData) {
-  const session = await verifyAdmin();
+  // ... этот код остается без изменений
+}
 
+// <<< НОВАЯ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ СТАТЬИ >>>
+export async function updateArticle(formData) {
+  await verifyAdmin();
+
+  const id = formData.get('id')?.toString();
   const title = formData.get('title')?.toString();
   const content = formData.get('content')?.toString();
   const slug = formData.get('slug')?.toString();
   const published = formData.get('published') === 'on';
 
-  if (!title || !content || !slug) {
-    throw new Error('Title, content, and slug are required.');
+  if (!id || !title || !content || !slug) {
+    throw new Error('ID, Title, content, and slug are required.');
   }
 
   try {
-    await prisma.article.create({
+    await prisma.article.update({
+      where: { id: id },
       data: {
         title,
         content,
         slug,
         published,
-        publishedAt: published ? new Date() : null,
-        authorId: session.user.id,
+        publishedAt: published ? new Date() : null, // Обновляем дату публикации
       },
     });
   } catch (error) {
     if (error.code === 'P2002') {
       return { message: 'Публикация с таким URL (slug) уже существует.' };
     }
-    return { message: 'Не удалось создать публикацию.' };
+    return { message: 'Не удалось обновить публикацию.' };
   }
 
-  revalidatePath('/admin/artcles');
-  redirect('/admin/artcles');
+  // Очищаем кэш для списка в админке и для публичной страницы
+  revalidatePath('/admin/articles');
+  revalidatePath(`/articles/${slug}`);
+  redirect('/admin/articles');
 }
 
 export async function deleteArticle(formData) {
-  await verifyAdmin();
-  const id = formData.get('id')?.toString();
-
-  if (!id) {
-    throw new Error('Article ID is required.');
-  }
-
-  await prisma.article.delete({
-    where: { id: id },
-  });
-
-  revalidatePath('/admin/artcles');
-  revalidatePath('/articles');
+  // ... этот код остается без изменений
 }
+
 
 // --- ПРОЕКТЫ (Project) ---
 
 export async function createProject(formData) {
-  const session = await verifyAdmin();
-
-  const title = formData.get('title')?.toString();
-  const content = formData.get('content')?.toString();
-  const slug = formData.get('slug')?.toString();
-  const published = formData.get('published') === 'on';
-
-  if (!title || !content || !slug) {
-    throw new Error('Title, content, and slug are required.');
-  }
-
-  try {
-    await prisma.project.create({
-      data: {
-        title,
-        content,
-        slug,
-        published,
-        publishedAt: published ? new Date() : null,
-        authorId: session.user.id,
-      },
-    });
-  } catch (error) {
-    if (error.code === 'P2002') {
-      return { message: 'Проект с таким URL (slug) уже существует.' };
-    }
-    return { message: 'Не удалось создать проект.' };
-  }
-
-  revalidatePath('/admin/projects');
-  redirect('/admin/projects');
+  // ... этот код остается без изменений
 }
 
 export async function deleteProject(formData) {
-  await verifyAdmin();
-  const id = formData.get('id')?.toString();
-
-  if (!id) {
-    throw new Error('Project ID is required.');
-  }
-  
-  await prisma.project.delete({
-    where: { id: id },
-  });
-
-  revalidatePath('/admin/projects');
-  revalidatePath('/projects');
+  // ... этот код остается без изменений
 }
+
