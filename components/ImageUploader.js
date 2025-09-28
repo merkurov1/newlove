@@ -1,29 +1,35 @@
-// components/ImageUploader.js
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase-client'; // Наш клиент Supabase для браузера
+import { supabase } from '@/lib/supabase-client';
+import { useSession } from 'next-auth/react'; // <<< 1. Импортируем useSession
 
-// Этот компонент принимает одну функцию в качестве "пропса"
-// Он вызовет ее, когда картинка успешно загрузится
 export default function ImageUploader({ onUploadSuccess }) {
+  const { data: session } = useSession(); // <<< 2. Получаем сессию
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
 
   async function handleFileUpload(event) {
+    // <<< 3. Проверяем, есть ли у нас сессия и токен
+    if (!session || !session.supabaseAccessToken) {
+      setError('Ошибка: вы не авторизованы для загрузки файлов.');
+      return;
+    }
+
     try {
       setUploading(true);
       setError(null);
       const file = event.target.files[0];
-
       if (!file) {
         throw new Error('Вы не выбрали файл для загрузки.');
       }
 
-      // Создаем уникальное имя файла, чтобы избежать перезаписи
+      // <<< 4. "Представляемся" Supabase перед запросом
+      // Мы говорим клиенту Supabase: "Используй вот этот токен для следующего запроса"
+      supabase.auth.setAuth(session.supabaseAccessToken);
+
       const fileName = `${Date.now()}-${file.name}`;
       
-      // Загружаем файл в бакет 'media'
       const { data, error: uploadError } = await supabase.storage
         .from('media')
         .upload(fileName, file);
@@ -32,12 +38,10 @@ export default function ImageUploader({ onUploadSuccess }) {
         throw uploadError;
       }
       
-      // Получаем публичную ссылку на загруженный файл
       const { data: { publicUrl } } = supabase.storage
         .from('media')
         .getPublicUrl(fileName);
 
-      // Создаем Markdown-строку и передаем ее "наверх"
       const markdownImage = `![_](${publicUrl})`;
       onUploadSuccess(markdownImage);
 
@@ -67,4 +71,5 @@ export default function ImageUploader({ onUploadSuccess }) {
     </div>
   );
 }
+
 
