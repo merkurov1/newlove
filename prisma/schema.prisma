@@ -134,10 +134,15 @@ model Letter {
   content     String    @db.Text
   published   Boolean   @default(false)
   publishedAt DateTime?
+
+  // <<< ДОБАВЛЕНО: Поле для отслеживания даты отправки >>>
+  sentAt      DateTime?
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   authorId    String
   author      User      @relation(fields: [authorId], references: [id])
+
   @@map("letters")
 }
 
