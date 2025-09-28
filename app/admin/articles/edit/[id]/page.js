@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { updateArticle } from '../../../actions'; // Импортируем новую функцию
+import { updateArticle } from '../../../actions';
 import { notFound } from 'next/navigation';
 
 export default async function EditArticlePage({ params }) {
@@ -9,14 +9,13 @@ export default async function EditArticlePage({ params }) {
   });
 
   if (!article) {
-    notFound(); // Если статья не найдена, показать 404
+    notFound();
   }
 
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Редактирование публикации</h1>
       <form action={updateArticle} className="space-y-6 bg-white p-8 rounded-lg shadow-md">
-        {/* ВАЖНО: Скрытое поле с ID для передачи в Server Action */}
         <input type="hidden" name="id" value={article.id} />
         
         <div>
@@ -45,39 +44,4 @@ export default async function EditArticlePage({ params }) {
   );
 }
 
-Редактирование проектов
-Абсолютно то же самое нужно проделать для проектов.
-Шаг 3: Добавляем updateProject в actions.js
-Вернитесь в app/admin/actions.js и добавьте функцию updateProject (можно прямо перед deleteProject).
-// ... добавьте этот код в app/admin/actions.js
-
-// <<< НОВАЯ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ ПРОЕКТА >>>
-export async function updateProject(formData) {
-  await verifyAdmin();
-
-  const id = formData.get('id')?.toString();
-  const title = formData.get('title')?.toString();
-  const content = formData.get('content')?.toString();
-  const slug = formData.get('slug')?.toString();
-  const published = formData.get('published') === 'on';
-
-  if (!id || !title || !content || !slug) {
-    throw new Error('ID, Title, content, and slug are required.');
-  }
-
-  await prisma.project.update({
-    where: { id: id },
-    data: {
-      title,
-      content,
-      slug,
-      published,
-      publishedAt: published ? new Date() : null,
-    },
-  });
-
-  revalidatePath('/admin/projects');
-  revalidatePath(`/projects/${slug}`);
-  redirect('/admin/projects');
-}
 
