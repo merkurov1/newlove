@@ -32,7 +32,8 @@ export default async function EditProjectPage({ params }) {
         </div>
         <div className="flex items-center">
           <input id="published" name="published" type="checkbox" defaultChecked={project.published} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
-          <label htmlFor="published" className="ml-2 block text-sm text-gray-900">Опубликовано</b
+          {/* <<< ИСПРАВЛЕННЫЙ ЗАКРЫВАЮЩИЙ ТЕГ ЗДЕСЬ >>> */}
+          <label htmlFor="published" className="ml-2 block text-sm text-gray-900">Опубликовано</label>
         </div>
         <div>
           <button type="submit" className="w-full flex justify-center py-2 px-4 border rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
@@ -43,4 +44,5 @@ export default async function EditProjectPage({ params }) {
     </div>
   );
 }
+
 

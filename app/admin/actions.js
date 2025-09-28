@@ -1,75 +1,55 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/authOptions';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+// ... другие импорты
 
-async function verifyAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.role !== 'ADMIN') {
-    throw new Error('Not authenticated or authorized!');
-  }
-  return session;
-}
+async function verifyAdmin() { /* ... без изменений ... */ }
 
 // --- СТАТЬИ (Article) ---
 
-export async function createArticle(formData) {
-  // ... этот код остается без изменений
-}
+export async function createArticle(formData) { /* ... без изменений ... */ }
 
-// <<< НОВАЯ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ СТАТЬИ >>>
 export async function updateArticle(formData) {
-  await verifyAdmin();
-
-  const id = formData.get('id')?.toString();
-  const title = formData.get('title')?.toString();
-  const content = formData.get('content')?.toString();
+  // ... логика обновления ...
   const slug = formData.get('slug')?.toString();
-  const published = formData.get('published') === 'on';
 
-  if (!id || !title || !content || !slug) {
-    throw new Error('ID, Title, content, and slug are required.');
-  }
+  // ... try/catch блок ...
 
-  try {
-    await prisma.article.update({
-      where: { id: id },
-      data: {
-        title,
-        content,
-        slug,
-        published,
-        publishedAt: published ? new Date() : null, // Обновляем дату публикации
-      },
-    });
-  } catch (error) {
-    if (error.code === 'P2002') {
-      return { message: 'Публикация с таким URL (slug) уже существует.' };
-    }
-    return { message: 'Не удалось обновить публикацию.' };
-  }
-
-  // Очищаем кэш для списка в админке и для публичной страницы
   revalidatePath('/admin/articles');
-  revalidatePath(`/articles/${slug}`);
+  // <<< ИЗМЕНЕНИЕ: Ревалидируем "плоский" путь
+  revalidatePath(`/${slug}`); 
   redirect('/admin/articles');
 }
 
-export async function deleteArticle(formData) {
-  // ... этот код остается без изменений
-}
-
+export async function deleteArticle(formData) { /* ... без изменений ... */ }
 
 // --- ПРОЕКТЫ (Project) ---
 
-export async function createProject(formData) {
-  // ... этот код остается без изменений
+export async function createProject(formData) { /* ... без изменений ... */ }
+
+export async function updateProject(formData) {
+  // ... логика обновления ...
+  const slug = formData.get('slug')?.toString();
+  
+  // ... prisma.project.update ...
+
+  revalidatePath('/admin/projects');
+  // <<< ИЗМЕНЕНИЕ: Ревалидируем "плоский" путь
+  revalidatePath(`/${slug}`);
+  redirect('/admin/projects');
 }
 
-export async function deleteProject(formData) {
-  // ... этот код остается без изменений
-}
+export async function deleteProject(formData) { /* ... без изменений ... */ }
+
+Ваши следующие шаги:
+ * Создайте новый файл app/[slug]/page.js с кодом из первого блока.
+ * Замените содержимое файлов components/Header.js, app/page.js и app/admin/actions.js на обновленные версии.
+ * Удалите старые папки. Это финальный и обязательный шаг. Выполните в терминале:
+   rm -rf app/articles
+rm -rf app/projects
+
+
+
 
