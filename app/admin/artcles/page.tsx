@@ -1,22 +1,26 @@
-// app/admin/articles/page.tsx
+// app/admin/artcles/page.tsx
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
-import { deleteArticle } from '../actions'; // Эта функция будет работать с моделью Article
+import { deleteArticle } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminArticlesPage() {
-  // <<< ИЗМЕНЕНИЕ: Запрашиваем данные из `article`, а не `newsArticle`
   const articles = await prisma.article.findMany({
     orderBy: { createdAt: 'desc' },
+    include: {
+      author: {
+        select: { name: true },
+      },
+    },
   });
 
   return (
     <div>
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Ваши публикации (Articles)</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Ваши публикации</h1>
         <Link 
-          href="/admin/articles/new" // Ссылка на страницу создания статьи
+          href="/admin/artcles/new" // Ссылка на НОВУЮ страницу создания
           className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
         >
           + Написать новую
@@ -29,12 +33,18 @@ export default async function AdminArticlesPage() {
           ) : (
             articles.map((article) => (
               <li key={article.id} className="p-4 flex justify-between items-center">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800">{article.title}</h3>
-                  <p className="text-sm text-gray-500">/{article.slug}</p>
+                <div className="flex-grow">
+                  <div className="flex items-center gap-3">
+                    <span className={`h-2.5 w-2.5 rounded-full ${article.published ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                    <h3 className="text-lg font-semibold text-gray-800">{article.title}</h3>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    /{article.slug} &middot; Автор: {article.author.name || 'Неизвестен'}
+                  </p>
                 </div>
                 <div className="flex items-center space-x-4">
-                  <Link href={`/admin/articles/edit/${article.id}`} className="text-blue-500 hover:underline">
+                  {/* TODO: Создать страницу редактирования */}
+                  <Link href={`/admin/artcles/edit/${article.id}`} className="text-blue-500 hover:underline">
                     Редактировать
                   </Link>
                   <form action={deleteArticle}>
