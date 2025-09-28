@@ -8,62 +8,114 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 async function verifyAdmin() {
-  // ... (код этой функции не меняется)
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    // В реальном приложении здесь может быть проверка роли администратора
+    throw new Error('Not authenticated or authorized!');
+  }
+  return session;
 }
 
 // --- ВАШИ ПУБЛИКАЦИИ (Article) ---
 
 export async function createArticle(formData) {
-  await verifyAdmin();
+  const session = await verifyAdmin();
 
-  const title = formData.get('title');
-  const content = formData.get('content');
-  const slug = formData.get('slug');
+  const title = formData.get('title')?.toString();
+  const content = formData.get('content')?.toString();
+  const slug = formData.get('slug')?.toString();
+  const published = formData.get('published') === 'on';
 
   if (!title || !content || !slug) {
     throw new Error('Title, content, and slug are required.');
   }
 
   try {
-    // <<< ИЗМЕНЕНИЕ: Создаем `article`, а не `newsArticle`
     await prisma.article.create({
-      data: { title, content, slug },
+      data: {
+        title,
+        content,
+        slug,
+        published,
+        publishedAt: published ? new Date() : null,
+        authorId: session.user.id,
+      },
     });
   } catch (error) {
     if (error.code === 'P2002') {
-      throw new Error('Публикация с таким URL (slug) уже существует.');
+      return { message: 'Публикация с таким URL (slug) уже существует.' };
     }
-    throw new Error('Не удалось создать публикацию.');
+    return { message: 'Не удалось создать публикацию.' };
   }
 
-  revalidatePath('/admin/articles');
-  redirect('/admin/articles');
+  revalidatePath('/admin/artcles');
+  redirect('/admin/artcles');
 }
 
 export async function deleteArticle(formData) {
   await verifyAdmin();
-  const id = formData.get('id');
+  const id = formData.get('id')?.toString();
 
   if (!id) {
     throw new Error('Article ID is required.');
   }
 
-  // <<< ИЗМЕНЕНИЕ: Удаляем `article`
   await prisma.article.delete({
-    where: { id: id }, // ID у этой модели - строка (cuid)
+    where: { id: id },
   });
 
-  revalidatePath('/admin/articles');
-  revalidatePath('/articles'); // Перепроверка публичной страницы
+  revalidatePath('/admin/artcles');
+  revalidatePath('/articles');
 }
-
 
 // --- ПРОЕКТЫ (Project) ---
 
 export async function createProject(formData) {
-  // ... (код этой функции не меняется)
+  const session = await verifyAdmin();
+
+  const title = formData.get('title')?.toString();
+  const content = formData.get('content')?.toString();
+  const slug = formData.get('slug')?.toString();
+  const published = formData.get('published') === 'on';
+
+  if (!title || !content || !slug) {
+    throw new Error('Title, content, and slug are required.');
+  }
+
+  try {
+    await prisma.project.create({
+      data: {
+        title,
+        content,
+        slug,
+        published,
+        publishedAt: published ? new Date() : null,
+        authorId: session.user.id,
+      },
+    });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return { message: 'Проект с таким URL (slug) уже существует.' };
+    }
+    return { message: 'Не удалось создать проект.' };
+  }
+
+  revalidatePath('/admin/projects');
+  redirect('/admin/projects');
 }
 
 export async function deleteProject(formData) {
-  // ... (код этой функции не меняется)
+  await verifyAdmin();
+  const id = formData.get('id')?.toString();
+
+  if (!id) {
+    throw new Error('Project ID is required.');
+  }
+  
+  await prisma.project.delete({
+    where: { id: id },
+  });
+
+  revalidatePath('/admin/projects');
+  revalidatePath('/projects');
 }
