@@ -13,39 +13,36 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
+  // <<< 1. УДАЛЯЕМ КОЛБЭК jwt >>>
+  // Он не используется в стратегии "Database", которую включает Prisma Adapter.
+  // Вся логика теперь находится в ОДНОМ колбэке - session().
+
   callbacks: {
-    async jwt({ token, user }) {
-      // <<< КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Вся эта логика выполняется ТОЛЬКО ПРИ ПЕРВОМ ВХОДЕ >>>
-      if (user) {
-        // 1. Добавляем роль в токен
-        token.role = user.role;
-        
-        // 2. Создаем специальный токен для Supabase
-        const supabaseJwt = sign(
-          {
-            aud: 'authenticated',
-            exp: Math.floor(new Date().getTime() / 1000) + 60 * 60 * 24 * 30, // Токен живет 30 дней
-            sub: user.id,
-            email: user.email,
-            role: 'authenticated',
-          },
-          process.env.SUPABASE_JWT_SECRET!
-        );
-        
-        // 3. Добавляем токен Supabase в JWT
-        token.supabaseAccessToken = supabaseJwt;
-      }
-      // На всех последующих вызовах мы просто возвращаем уже существующий токен
-      return token;
-    },
-    async session({ session, token }) {
-      // Эта часть остается почти без изменений
-      if (session.user) {
-        session.user.id = token.sub!;
-        session.user.role = token.role as Role;
-      }
+    // <<< 2. РАБОТАЕМ С ОБЪЕКТОМ user, А НЕ token >>>
+    // В стратегии "Database" этот колбэк получает { session, user }.
+    async session({ session, user }) {
       
-      session.supabaseAccessToken = token.supabaseAccessToken as string;
+      // <<< 3. ВСЯ ЛОГИКА ТЕПЕРЬ ВНУТРИ ОДНОГО КОЛБЭКА >>>
+
+      // а) Создаем специальный токен для Supabase, используя данные из объекта `user`
+      const supabaseJwt = sign(
+        {
+          aud: 'authenticated',
+          exp: Math.floor(new Date().getTime() / 1000) + 60 * 60 * 24 * 7, // Токен живет 7 дней
+          sub: user.id,
+          email: user.email,
+          role: 'authenticated',
+        },
+        process.env.SUPABASE_JWT_SECRET!
+      );
+      
+      // б) Добавляем токен Supabase в объект сессии
+      session.supabaseAccessToken = supabaseJwt;
+
+      // в) Добавляем наши кастомные поля в сессию из объекта `user`
+      session.user.id = user.id;
+      session.user.role = user.role as Role;
+
       return session;
     },
   },
@@ -55,5 +52,3 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
-
-
