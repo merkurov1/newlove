@@ -29,7 +29,7 @@ async function getContent(slug) {
 // <<< 1. КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ЗДЕСЬ >>>
 // Компонент теперь принимает `type`, чтобы знать, что отображать
 function ContentDisplay({ content, type }) {
-  const { title, publishedAt, content: markdownContent, author } = content;
+  const { title, publishedAt, content: htmlContent, author } = content;
 
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
@@ -70,23 +70,31 @@ function ContentDisplay({ content, type }) {
 export default async function SlugPage({ params }) {
   const result = await getContent(params.slug);
 
-  if (!result) {
-    notFound();
-  }
-
-  // <<< 3. ПЕРЕДАЕМ `type` В КОМПОНЕНТ >>>
-  return <ContentDisplay content={result.data} type={result.type} />;
-}
-
-// Эта функция не меняется
-export async function generateMetadata({ params }) {
-    const result = await getContent(params.slug);
-    if (!result) {
-        return { title: 'Страница не найдена' };
-    }
-    return {
-      title: result.data.title,
-    };
-}
+  return (
+    <article className="max-w-3xl mx-auto px-4 py-12">
+      <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-8">{title}</h1>
+      {type === 'article' && (
+        <div className="flex items-center space-x-4 mb-8 text-gray-500">
+          {author.image && (
+            <Image src={author.image} alt={author.name || ''} width={40} height={40} className="w-10 h-10 rounded-full" />
+          )}
+          <span>{author.name}</span>
+          {publishedAt && (
+              <>
+                  <span>&middot;</span>
+                  <time dateTime={publishedAt.toISOString()}>
+                  {new Date(publishedAt).toLocaleDateString('ru-RU', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                  })}
+                  </time>
+              </>
+          )}
+        </div>
+      )}
+      <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+    </article>
+  );
 
 

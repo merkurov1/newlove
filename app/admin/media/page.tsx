@@ -13,11 +13,17 @@ export default function MediaPage() {
     async function fetchFiles() {
       setLoading(true);
       const { data, error } = await supabase.storage.from('media').list('', { limit: 100, offset: 0 });
-      if (error) {
+      if (error || !data) {
         setFiles([]);
-      } else {
-        setFiles(data || []);
+        setLoading(false);
+        return;
       }
+      // Получаем публичные URL для каждого файла
+      const filesWithUrls = data.map((file) => {
+        const { data: urlData } = supabase.storage.from('media').getPublicUrl(file.name);
+        return { ...file, publicUrl: urlData.publicUrl };
+      });
+      setFiles(filesWithUrls);
       setLoading(false);
     }
     fetchFiles();
@@ -35,7 +41,7 @@ export default function MediaPage() {
           {files.map((file) => (
             <div key={file.name} className="bg-white rounded-lg shadow p-2 flex flex-col items-center">
               <img
-                src={`https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/${file.name}`}
+                src={file.publicUrl}
                 alt={file.name}
                 className="w-full h-32 object-contain mb-2 bg-gray-50 rounded"
                 loading="lazy"
@@ -43,7 +49,7 @@ export default function MediaPage() {
               <div className="text-xs text-gray-700 truncate w-full text-center mb-1">{file.name}</div>
               <button
                 className="text-blue-600 text-xs underline mb-1"
-                onClick={() => navigator.clipboard.writeText(`https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/${file.name}`)}
+                onClick={() => navigator.clipboard.writeText(file.publicUrl)}
               >
                 Копировать ссылку
               </button>
