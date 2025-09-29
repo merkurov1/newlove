@@ -3,6 +3,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
+import Highlight from '@tiptap/extension-highlight';
 
 export default function TiptapEditor({ value, onChange }) {
   const [html, setHtml] = useState(value || '');
@@ -12,6 +13,7 @@ export default function TiptapEditor({ value, onChange }) {
       StarterKit,
       Link,
       Image.configure({ inline: false }),
+      Highlight,
     ],
     content: value || '',
     autofocus: true,
