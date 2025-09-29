@@ -1,84 +1,34 @@
-'use client'; // <<< 1. Превращаем в клиентский компонент
+// app/admin/articles/edit/[id]/page.js
 
-import { useState, useEffect } from 'react';
-import prisma from '@/lib/prisma'; // Этот импорт будет проигнорирован на клиенте
+import prisma from '@/lib/prisma';
+import { notFound } from 'next/navigation';
+import ContentForm from '@/components/admin/ContentForm';
 import { updateArticle } from '../../../actions';
-import ImageUploader from '@/components/ImageUploader'; // <<< 2. Импортируем наш загрузчик
 
-// Создаем "умную" страницу, которая сначала загружает данные на сервере...
-export default function EditArticleWrapper({ params }) {
-    // Эта часть выполняется один раз при запросе страницы
-    const [article, setArticle] = useState(null);
-    useEffect(() => {
-        async function fetchArticle() {
-            const response = await fetch(`/api/articles/${params.id}`); // Используем API для получения данных
-            const data = await response.json();
-            setArticle(data);
-        }
-        fetchArticle();
-    }, [params.id]);
-
-    if (!article) {
-        return <p>Загрузка...</p>;
-    }
-
-    return <EditArticlePage article={article} />;
+// Эта функция загружает данные статьи на сервере
+async function getArticle(id) {
+  const article = await prisma.article.findUnique({
+    where: { id },
+  });
+  if (!article) {
+    notFound();
+  }
+  return article;
 }
 
+// Сама страница теперь тоже серверный компонент
+export default async function EditArticlePage({ params }) {
+  const article = await getArticle(params.id);
 
-// ...а затем передает их в интерактивную форму на клиенте
-function EditArticlePage({ article }) {
-  // <<< 3. Используем состояние для содержимого, чтобы его можно было менять
-  const [content, setContent] = useState(article.content);
-
-  // <<< 4. Функция для вставки ссылки на картинку в текст
-  const handleImageInsert = (markdownImage) => {
-    setContent((prevContent) => `${prevContent}\n${markdownImage}\n`);
-  };
-  
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Редактирование публикации</h1>
-      <form action={updateArticle} className="space-y-6 bg-white p-8 rounded-lg shadow-md">
-        <input type="hidden" name="id" value={article.id} />
-        
-        <div>
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700">Заголовок</label>
-          <input type="text" name="title" id="title" required defaultValue={article.title} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
-        </div>
-        <div>
-          <label htmlFor="slug" className="block text-sm font-medium text-gray-700">URL (slug)</label>
-          <input type="text" name="slug" id="slug" required defaultValue={article.slug} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
-        </div>
-
-        {/* <<< 5. Вставляем компонент загрузчика */}
-        <ImageUploader onUploadSuccess={handleImageInsert} />
-
-        <div>
-          <label htmlFor="content" className="block text-sm font-medium text-gray-700">Содержимое (Markdown)</label>
-          {/* <<< 6. Текстовое поле теперь управляется состоянием */}
-          <textarea 
-            name="content" 
-            id="content" 
-            rows="15" 
-            required 
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-          ></textarea>
-        </div>
-        <div className="flex items-center">
-          <input id="published" name="published" type="checkbox" defaultChecked={article.published} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
-          <label htmlFor="published" className="ml-2 block text-sm text-gray-900">Опубликовано</label>
-        </div>
-        <div>
-          <button type="submit" className="w-full flex justify-center py-2 px-4 border rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
-            Сохранить изменения
-          </button>
-        </div>
-      </form>
+      {/* Используем наш универсальный компонент для редактирования */}
+      <ContentForm 
+        initialData={article} 
+        saveAction={updateArticle} 
+        type="статью" 
+      />
     </div>
   );
 }
-
-
