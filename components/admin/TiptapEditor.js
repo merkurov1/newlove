@@ -5,6 +5,13 @@ import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import Highlight from '@tiptap/extension-highlight';
 import Blockquote from '@tiptap/extension-blockquote';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
+import { Lowlight } from 'lowlight/lib/core';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { useDropzone } from 'react-dropzone';
 
 export default function TiptapEditor({ value, onChange }) {
   const [html, setHtml] = useState(value || '');
@@ -16,6 +23,11 @@ export default function TiptapEditor({ value, onChange }) {
       Image.configure({ inline: false }),
       Highlight,
       Blockquote,
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableCell,
+      TableHeader,
+      CodeBlockLowlight.configure({ lowlight: Lowlight }),
     ],
     content: value || '',
     autofocus: true,
@@ -28,9 +40,14 @@ export default function TiptapEditor({ value, onChange }) {
     },
   });
 
-  // Обработчик загрузки изображений
-  const handleImageUpload = useCallback(async (event) => {
-    const file = event.target.files[0];
+  // Обработчик загрузки изображений (input)
+  const handleImageUpload = useCallback(async (eventOrFile) => {
+    let file;
+    if (eventOrFile.target) {
+      file = eventOrFile.target.files[0];
+    } else {
+      file = eventOrFile;
+    }
     if (!file) return;
     setIsUploading(true);
     const formData = new FormData();
@@ -48,6 +65,18 @@ export default function TiptapEditor({ value, onChange }) {
     }
   }, [editor]);
 
+  // Drag&Drop изображений
+  const onDrop = useCallback((acceptedFiles) => {
+    if (!acceptedFiles.length) return;
+    handleImageUpload(acceptedFiles[0]);
+  }, [handleImageUpload]);
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'image/*': [] },
+    multiple: false,
+    disabled: isUploading,
+  });
+
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">Содержимое (Tiptap)</label>
@@ -55,8 +84,15 @@ export default function TiptapEditor({ value, onChange }) {
         <input type="file" accept="image/*" onChange={handleImageUpload} disabled={isUploading} />
         {isUploading && <span className="text-xs text-gray-500">Загрузка...</span>}
       </div>
-      <div className="border rounded bg-white min-h-[300px] p-2">
+      <div {...getRootProps()} className={`border rounded bg-white min-h-[300px] p-2 transition-colors ${isDragActive ? 'ring-2 ring-blue-400' : ''}`}
+        style={{ cursor: isUploading ? 'not-allowed' : 'pointer' }}>
+        <input {...getInputProps()} />
         <EditorContent editor={editor} />
+        {isDragActive && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+            <span className="text-blue-600 font-semibold">Перетащите изображение сюда…</span>
+          </div>
+        )}
       </div>
       <input type="hidden" name="content" value={html} />
     </div>
