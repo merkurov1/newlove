@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { authOptions } from '@/lib/authOptions';
 
-export const runtime = 'edge';
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
