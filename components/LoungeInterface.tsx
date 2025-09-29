@@ -3,10 +3,13 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Picker from 'emoji-mart/react';
+import data from '@emoji-mart/data';
 import { createClient } from '@/lib/supabase-browser';
 import { signIn } from 'next-auth/react';
 import Image from 'next/image';
 import type { Session } from 'next-auth';
+import LinkPreview from './LinkPreview';
 
 // Типы не изменились
 type InitialMessage = {
@@ -34,6 +37,8 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   const [newMessage, setNewMessage] = useState('');
   // --- НОВОЕ СОСТОЯНИЕ ДЛЯ ИНДИКАТОРА ПЕЧАТИ ---
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  // --- СОСТОЯНИЕ ДЛЯ EMOJI PICKER ---
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -150,12 +155,16 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {messages.map((message) => {
           const isCurrentUser = message.userId === session.user.id;
+          // Найти первую ссылку в сообщении
+          const urlMatch = message.content.match(/https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+/);
           return (
             <div key={message.id} className={`group flex items-start gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
               {!isCurrentUser && <Image src={message.user?.image || '/default-avatar.png'} alt={message.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" />}
               <div className={`flex flex-col max-w-xs sm:max-w-sm p-3 rounded-lg ${isCurrentUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none border'}`}>
                 {!isCurrentUser && <p className="font-semibold text-sm mb-1">{message.user?.name}</p>}
                 <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                {/* --- ПРЕДПРОСМОТР ССЫЛКИ --- */}
+                {urlMatch && <LinkPreview url={urlMatch[0]} />}
                 <p className={`text-xs mt-2 opacity-70 ${isCurrentUser ? 'text-right' : 'text-left'}`}>{new Date(message.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
               </div>
               {/* --- КНОПКА УДАЛЕНИЯ --- */}
@@ -178,10 +187,27 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 bg-white border-t flex items-center gap-3">
+      <form onSubmit={handleSubmit} className="p-4 bg-white border-t flex items-center gap-3 relative">
         <Image src={session.user?.image || '/default-avatar.png'} alt="Your avatar" width={40} height={40} className="rounded-full" />
-        {/* Добавили onChange={handleTyping} */}
-        <textarea placeholder="Напишите сообщение..." value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }} className="w-full p-2 border rounded-md resize-none" rows={1} />
+        <div className="relative w-full">
+          <textarea placeholder="Напишите сообщение..." value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }} className="w-full p-2 border rounded-md resize-none" rows={1} />
+          <button type="button" onClick={() => setShowEmojiPicker(v => !v)} className="absolute right-2 top-2 text-xl" tabIndex={-1}>
+            😊
+          </button>
+          {showEmojiPicker && (
+            <div className="absolute bottom-12 right-0 z-50">
+              <Picker
+                data={data}
+                onEmojiSelect={(emoji: any) => {
+                  setNewMessage(newMessage + emoji.native);
+                  setShowEmojiPicker(false);
+                }}
+                theme="light"
+                previewPosition="none"
+              />
+            </div>
+          )}
+        </div>
         <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300" disabled={!newMessage.trim()}>Отправить</button>
       </form>
     </div>
