@@ -1,12 +1,11 @@
 // components/admin/ContentForm.js
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react'; // <-- 1. Импортируем useEffect
 import dynamic from 'next/dynamic';
 import ImageUploader from '@/components/ImageUploader';
 import TagInput from '@/components/admin/TagInput';
 
-// --- ИСПРАВЛЕНИЕ: Полная и правильная версия динамического импорта ---
 const ArticleEditor = dynamic(
   () => import('@/components/admin/ArticleEditor'),
   { ssr: false }
@@ -16,6 +15,15 @@ export default function ContentForm({ initialData, saveAction, type = 'project' 
   const isEditing = !!initialData;
   const [content, setContent] = useState(initialData?.content || '');
   const editorInstanceRef = useRef(null);
+
+  // --- 2. НОВЫЙ БЛОК: НАДЁЖНАЯ СИНХРОНИЗАЦИЯ ДАННЫХ ---
+  // Этот хук гарантирует, что если initialData изменится,
+  // состояние нашего контента тоже обновится.
+  useEffect(() => {
+    if (initialData?.content) {
+      setContent(initialData.content);
+    }
+  }, [initialData]); // Запускаем эффект при изменении initialData
 
   const handleImageInsert = (markdownImage) => {
     const editor = editorInstanceRef.current;

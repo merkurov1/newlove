@@ -6,25 +6,35 @@ import Image from 'next/image';
 
 export const dynamic = 'force-dynamic';
 
-async function getFirstImage(content) {
+// Эта функция остаётся без изменений
+function getFirstImage(content) {
   if (!content) return null;
   const regex = /!\[.*?\]\((.*?)\)/;
   const match = content.match(regex);
   return match ? match[1] : null;
 }
 
+// --- ИЗМЕНЁННАЯ ФУНКЦИЯ ---
 async function getArticles() {
   try {
     const articles = await prisma.article.findMany({
       where: { published: true },
       orderBy: { publishedAt: 'desc' },
       take: 9,
-      // --- 1. ДОБАВЛЯЕМ ЗАГРУЗКУ ТЕГОВ ---
-      include: {
+      // Используем select вместо include для явного указания всех нужных полей
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        content: true, // <-- ЯВНО ЗАПРАШИВАЕМ КОНТЕНТ
+        publishedAt: true,
         author: {
-          select: { name: true, image: true },
+          select: {
+            name: true,
+            image: true,
+          },
         },
-        tags: true, // Загружаем связанные теги
+        tags: true,
       },
     });
     return articles;
@@ -80,10 +90,10 @@ export default async function HomePage() {
                     </p>
                 )}
                 <p className="text-gray-700 mb-4 line-clamp-3 overflow-hidden flex-grow">
-                  {article.content.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 150)}...
+                  {/* Проверяем, что content существует, прежде чем его использовать */}
+                  {article.content ? article.content.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 150) : ''}...
                 </p>
 
-                {/* --- 2. НОВЫЙ БЛОК ДЛЯ ОТОБРАЖЕНИЯ ТЕГОВ --- */}
                 {article.tags && article.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-4">
                     {article.tags.map(tag => (

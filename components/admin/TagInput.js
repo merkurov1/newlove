@@ -4,14 +4,20 @@
 import { useState, useEffect } from 'react';
 
 export default function TagInput({ initialTags = [] }) {
-  const [tags, setTags] = useState(initialTags.map(t => t.name));
+  // --- 1. Более безопасная инициализация ---
+  const [tags, setTags] = useState((initialTags || []).map(t => t.name));
   const [inputValue, setInputValue] = useState('');
 
-  // Синхронизируем состояние с невидимым полем для отправки на сервер
   const [hiddenInputValue, setHiddenInputValue] = useState(JSON.stringify(tags));
   useEffect(() => {
     setHiddenInputValue(JSON.stringify(tags));
   }, [tags]);
+
+  // --- 2. Добавляем useEffect для синхронизации ---
+  useEffect(() => {
+    setTags((initialTags || []).map(t => t.name));
+  }, [initialTags]);
+
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ',') {
@@ -49,7 +55,6 @@ export default function TagInput({ initialTags = [] }) {
           className="flex-grow bg-transparent border-none focus:ring-0"
         />
       </div>
-      {/* Это поле будет отправлено на сервер */}
       <input type="hidden" name="tags" value={hiddenInputValue} />
     </div>
   );
