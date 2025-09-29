@@ -40,6 +40,8 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   // --- СОСТОЯНИЕ ДЛЯ EMOJI PICKER ---
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   // --- СОСТОЯНИЕ ДЛЯ РЕАКЦИЙ ---
+  // --- СОСТОЯНИЕ ДЛЯ REPLY ---
+  const [replyTo, setReplyTo] = useState<null | { id: string; author: string | null; content: string }> (null);
   // reactions: { [messageId: string]: Set<userId> }
   const [reactions, setReactions] = useState<{ [key: string]: Set<string> }>({});
 
@@ -134,16 +136,18 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
     e.preventDefault();
     if (newMessage.trim() === '' || !session?.user) return;
     
-    // Оптимистичное обновление работает как и раньше
+    // Оптимистичное обновление с reply
     const optimisticMessage = {
       id: Date.now().toString(), 
       content: newMessage,
       createdAt: new Date(),
       userId: session.user.id,
       user: { name: session.user.name ?? null, image: session.user.image ?? null },
+      replyTo: replyTo ? { id: replyTo.id, author: replyTo.author, content: replyTo.content } : undefined,
     };
     setMessages([...messages, optimisticMessage]);
     setNewMessage('');
+    setReplyTo(null);
     
     // Сообщаем, что мы закончили печатать
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -152,7 +156,7 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
     await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: newMessage }),
+      body: JSON.stringify({ content: newMessage, replyTo: replyTo ? replyTo.id : undefined }),
     });
   };
 
@@ -176,10 +180,18 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
           const urlMatch = message.content.match(/https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+/);
           const likes = reactions[message.id] ? reactions[message.id].size : 0;
           const likedByMe = reactions[message.id]?.has(session.user.id);
+          // --- reply ---
+          const replyData = (message as any).replyTo;
           return (
             <div key={message.id} className={`group flex items-start gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
               {!isCurrentUser && <Image src={message.user?.image || '/default-avatar.png'} alt={message.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" />}
               <div className={`flex flex-col max-w-xs sm:max-w-sm p-3 rounded-lg ${isCurrentUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none border'}`}>
+                {/* --- reply preview --- */}
+                {replyData && (
+                  <div className="mb-2 p-2 rounded bg-gray-100 text-xs text-gray-600 border-l-4 border-blue-400">
+                    <span className="font-semibold">{replyData.author || 'Пользователь'}:</span> {replyData.content.slice(0, 40)}{replyData.content.length > 40 ? '…' : ''}
+                  </div>
+                )}
                 {!isCurrentUser && <p className="font-semibold text-sm mb-1">{message.user?.name}</p>}
                 <p className="whitespace-pre-wrap break-words">{message.content}</p>
                 {/* --- ПРЕДПРОСМОТР ССЫЛКИ --- */}
@@ -194,6 +206,14 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
                     ❤️
                   </button>
                   {likes > 0 && <span className="text-xs text-gray-500">{likes}</span>}
+                  {/* --- reply button --- */}
+                  <button
+                    type="button"
+                    onClick={() => setReplyTo({ id: message.id, author: message.user?.name || null, content: message.content })}
+                    className="text-xs text-blue-500 hover:underline ml-2"
+                  >
+                    Ответить
+                  </button>
                 </div>
                 <p className={`text-xs mt-2 opacity-70 ${isCurrentUser ? 'text-right' : 'text-left'}`}>{new Date(message.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
               </div>
@@ -220,6 +240,15 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
       <form onSubmit={handleSubmit} className="p-4 bg-white border-t flex items-center gap-3 relative">
         <Image src={session.user?.image || '/default-avatar.png'} alt="Your avatar" width={40} height={40} className="rounded-full" />
         <div className="relative w-full">
+          {/* --- reply preview над textarea --- */}
+          {replyTo && (
+            <div className="mb-2 p-2 rounded bg-blue-50 text-xs text-blue-700 border-l-4 border-blue-400 flex items-center justify-between">
+              <span>
+                Ответ для <span className="font-semibold">{replyTo.author || 'Пользователь'}</span>: {replyTo.content.slice(0, 40)}{replyTo.content.length > 40 ? '…' : ''}
+              </span>
+              <button type="button" className="ml-2 text-blue-400 hover:text-blue-700" onClick={() => setReplyTo(null)} title="Отменить ответ">✕</button>
+            </div>
+          )}
           <textarea placeholder="Напишите сообщение..." value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }} className="w-full p-2 border rounded-md resize-none" rows={1} />
           <button type="button" onClick={() => setShowEmojiPicker(v => !v)} className="absolute right-2 top-2 text-xl" tabIndex={-1}>
             😊
