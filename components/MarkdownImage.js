@@ -1,4 +1,5 @@
 // components/MarkdownImage.js
+// КАНДИДАТ НА УДАЛЕНИЕ: не используется ни в одном компоненте или странице
 import Image from 'next/image';
 
 const MarkdownImage = (props) => {

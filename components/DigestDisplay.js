@@ -1,4 +1,5 @@
 // components/DigestDisplay.js
+// КАНДИДАТ НА УДАЛЕНИЕ: не используется ни в одном компоненте или странице
 import ReactMarkdown from 'react-markdown';
 
 // Пример CSS для базового оформления. Добавьте в ваш глобальный CSS файл.
