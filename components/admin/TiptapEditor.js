@@ -1,103 +1,80 @@
-import React, { useState, useCallback } from 'react';
-import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
-import Image from '@tiptap/extension-image';
-import Highlight from '@tiptap/extension-highlight';
-import Blockquote from '@tiptap/extension-blockquote';
-import Table from '@tiptap/extension-table';
-import TableRow from '@tiptap/extension-table-row';
-import TableCell from '@tiptap/extension-table-cell';
-import TableHeader from '@tiptap/extension-table-header';
-import { lowlight } from 'lowlight';
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import { useDropzone } from 'react-dropzone';
+import React, { useCallback, useRef } from 'react';
+import SimpleMdeReact from 'react-simplemde-editor';
+import 'easymde/dist/easymde.min.css';
 
 export default function TiptapEditor({ value, onChange }) {
-  const [html, setHtml] = useState(value || '');
-  const [isUploading, setIsUploading] = useState(false);
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Link,
-      Image.configure({ inline: false }),
-      Highlight,
-      Blockquote,
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableCell,
-      TableHeader,
-      CodeBlockLowlight.configure({ lowlight }),
-    ],
-    content: value || '',
-    autofocus: true,
-    onUpdate: ({ editor }) => {
-      if (!editor) return;
-      const htmlValue = editor.getHTML();
-      setHtml(htmlValue);
-      if (typeof onChange === 'function') {
-        onChange(htmlValue);
-      }
-    },
-  });
+  const mdeRef = useRef();
 
-  // Обработчик загрузки изображений (input)
-  const handleImageUpload = useCallback(async (eventOrFile) => {
-    let file;
-    if (eventOrFile.target) {
-      file = eventOrFile.target.files[0];
-    } else {
-      file = eventOrFile;
-    }
-    if (!file) return;
-    setIsUploading(true);
+  // Загрузка изображения через Supabase
+  const handleImageUpload = useCallback(async (file, onSuccess, onError) => {
     const formData = new FormData();
     formData.append('image', file);
-    const res = await fetch('/api/upload/editor-image', {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await res.json();
-    setIsUploading(false);
-    if (data.success && data.file?.url) {
-      if (editor) {
-        editor.chain().focus().setImage({ src: data.file.url }).run();
+    try {
+      const res = await fetch('/api/upload/editor-image', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success && data.file?.url) {
+        onSuccess(data.file.url);
+      } else {
+        onError(data.error || 'Ошибка загрузки');
       }
-    } else {
-      alert('Ошибка загрузки изображения: ' + (data.error || 'Unknown error'));
+    } catch (e) {
+      onError(e.message);
     }
-  }, [editor]);
+  }, []);
 
-  // Drag&Drop изображений
-  const onDrop = useCallback((acceptedFiles) => {
-    if (!acceptedFiles.length) return;
-    handleImageUpload(acceptedFiles[0]);
-  }, [handleImageUpload]);
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'image/*': [] },
-    multiple: false,
-    disabled: isUploading,
-  });
+  // Настройка SimpleMDE для вставки изображений
+  const getMdeOptions = useCallback(() => ({
+    spellChecker: false,
+    autosave: { enabled: false },
+    placeholder: 'Введите текст...',
+    previewRender: (plainText) => {
+      // Можно добавить markdown-it для расширенного рендера
+      return window.marked ? window.marked(plainText) : plainText;
+    },
+    toolbar: [
+      'bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|',
+      'link', {
+        name: 'image',
+        action: function customImageUpload(editor) {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*';
+          input.onchange = () => {
+            const file = input.files[0];
+            if (!file) return;
+            handleImageUpload(file, (url) => {
+              const cm = editor.codemirror;
+              const pos = cm.getCursor();
+              cm.replaceRange(`![](${url})`, pos);
+            }, (err) => {
+              alert('Ошибка загрузки: ' + err);
+            });
+          };
+          input.click();
+        },
+        className: 'fa fa-image',
+        title: 'Загрузить изображение',
+      }, '|', 'table', 'code', 'preview', 'side-by-side', 'fullscreen', 'guide'
+    ],
+    renderingConfig: {
+      codeSyntaxHighlighting: true,
+    },
+  }), [handleImageUpload]);
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Содержимое (Tiptap)</label>
-      <div className="mb-2 flex gap-2 items-center">
-        <input type="file" accept="image/*" onChange={handleImageUpload} disabled={isUploading} />
-        {isUploading && <span className="text-xs text-gray-500">Загрузка...</span>}
-      </div>
-      <div {...getRootProps()} className={`border rounded bg-white min-h-[300px] p-2 transition-colors ${isDragActive ? 'ring-2 ring-blue-400' : ''}`}
-        style={{ cursor: isUploading ? 'not-allowed' : 'pointer' }}>
-        <input {...getInputProps()} />
-        <EditorContent editor={editor} />
-        {isDragActive && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
-            <span className="text-blue-600 font-semibold">Перетащите изображение сюда…</span>
-          </div>
-        )}
-      </div>
-      <input type="hidden" name="content" value={html} />
+      <label className="block text-sm font-medium text-gray-700 mb-1">Содержимое (Markdown)</label>
+      <SimpleMdeReact
+        id="content-editor"
+        value={value || ''}
+        onChange={onChange}
+        options={getMdeOptions()}
+        getMdeInstance={(instance) => { mdeRef.current = instance; }}
+      />
+      <textarea name="content" value={value || ''} readOnly hidden />
     </div>
   );
 }

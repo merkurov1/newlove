@@ -18,11 +18,13 @@ export default function MediaPage() {
         setLoading(false);
         return;
       }
-      // Получаем публичные URL для каждого файла
-      const filesWithUrls = data.map((file) => {
-        const { data: urlData } = supabase.storage.from('media').getPublicUrl(file.name);
-        return { ...file, publicUrl: urlData.publicUrl };
-      });
+      // Получаем signedUrl для каждого файла (поддержка приватных bucket)
+      const filesWithUrls = await Promise.all(
+        data.map(async (file) => {
+          const { data: urlData } = await supabase.storage.from('media').createSignedUrl(file.name, 60 * 60);
+          return { ...file, publicUrl: urlData?.signedUrl };
+        })
+      );
       setFiles(filesWithUrls);
       setLoading(false);
     }
