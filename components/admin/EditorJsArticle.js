@@ -6,6 +6,8 @@ import Header from '@editorjs/header';
 import List from '@editorjs/list';
 import Embed from '@editorjs/embed';
 import ImageTool from '@editorjs/image';
+// Для загрузки изображений через Supabase
+import { supabase } from '@/lib/supabase-client';
 
 export default function EditorJsArticle({ value, onChange }) {
   const editorRef = useRef(null);
@@ -19,7 +21,28 @@ export default function EditorJsArticle({ value, onChange }) {
           header: Header,
           list: List,
           embed: Embed,
-          image: ImageTool,
+          image: {
+            class: ImageTool,
+            config: {
+              uploader: {
+                async uploadByFile(file) {
+                  // Загрузка файла в Supabase Storage
+                  const fileName = `${Date.now()}-${file.name}`;
+                  const { data, error } = await supabase.storage.from('media').upload(fileName, file);
+                  if (error) {
+                    return { success: 0, error: error.message };
+                  }
+                  const { data: urlData } = supabase.storage.from('media').getPublicUrl(fileName);
+                  return {
+                    success: 1,
+                    file: {
+                      url: urlData.publicUrl,
+                    },
+                  };
+                },
+              },
+            },
+          },
         },
         data: value ? JSON.parse(value) : {},
         onChange: async () => {
