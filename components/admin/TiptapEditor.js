@@ -27,11 +27,12 @@ export default function TiptapEditor({ value, onChange }) {
       TableRow,
       TableCell,
       TableHeader,
-  CodeBlockLowlight.configure({ lowlight }),
+      CodeBlockLowlight.configure({ lowlight }),
     ],
     content: value || '',
     autofocus: true,
     onUpdate: ({ editor }) => {
+      if (!editor) return;
       const htmlValue = editor.getHTML();
       setHtml(htmlValue);
       if (typeof onChange === 'function') {
@@ -59,7 +60,9 @@ export default function TiptapEditor({ value, onChange }) {
     const data = await res.json();
     setIsUploading(false);
     if (data.success && data.file?.url) {
-      editor.chain().focus().setImage({ src: data.file.url }).run();
+      if (editor) {
+        editor.chain().focus().setImage({ src: data.file.url }).run();
+      }
     } else {
       alert('Ошибка загрузки изображения: ' + (data.error || 'Unknown error'));
     }
