@@ -84,7 +84,9 @@ export default async function RootLayout({ children }) {
           <div className="flex flex-col min-h-screen">
             <Header projects={projects} settings={settings} />
             <div className="flex flex-1 w-full container mx-auto px-4 py-8 gap-8">
-              <UserSidebar />
+              <div className="hidden md:block">
+                <UserSidebar />
+              </div>
               <main className="flex-grow">
                 {children}
               </main>
