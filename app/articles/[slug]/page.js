@@ -1,8 +1,6 @@
 // app/articles/[slug]/page.js
 import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import Image from 'next/image';
 import Link from 'next/link';
 import MarkdownImage from '@/components/MarkdownImage';
@@ -74,7 +72,7 @@ export default async function ArticlePage({ params }) {
       )}
 
       <div className="prose lg:prose-xl max-w-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{contentWithoutHero}</ReactMarkdown>
+        <div dangerouslySetInnerHTML={{ __html: contentWithoutHero }} />
       </div>
     </article>
   );

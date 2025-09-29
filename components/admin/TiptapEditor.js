@@ -3,6 +3,12 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { lowlight } from 'lowlight';
 
 export default function TiptapEditor({ value, onChange }) {
   const [html, setHtml] = useState(value || '');
@@ -12,6 +18,11 @@ export default function TiptapEditor({ value, onChange }) {
       StarterKit,
       Link,
       Image.configure({ inline: false }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableCell,
+      TableHeader,
+      CodeBlockLowlight.configure({ lowlight }),
     ],
     content: value || '',
     autofocus: true,
