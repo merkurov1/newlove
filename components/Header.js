@@ -3,19 +3,16 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useSession, signIn, signOut } from 'next-auth/react';
-import { useState, useEffect } from 'react'; // <-- 1. Импортируем useState и useEffect
+import { useState, useEffect } from 'react';
 
 export default function Header({ projects, settings }) {
   const { data: session, status } = useSession();
-  
-  // --- 2. Добавляем состояние для открытия/закрытия мобильного меню ---
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const site_name = settings?.site_name || 'Anton Merkurov';
   const slogan = settings?.slogan || 'Art x Love x Money';
   const logoUrl = settings?.logo_url || 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png';
 
-  // Закрывать меню при изменении размера окна на десктопный
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 768) {
@@ -46,7 +43,6 @@ export default function Header({ projects, settings }) {
             </div>
           </Link>
 
-          {/* --- НАВИГАЦИЯ ДЛЯ ДЕСКТОПА --- */}
           <nav className="hidden items-center md:flex">
             <ul className="list-none flex items-center justify-center gap-6 text-xs font-semibold uppercase tracking-[0.2em]"> 
               {Array.isArray(projects) && projects.map((project) => (
@@ -66,7 +62,6 @@ export default function Header({ projects, settings }) {
             </ul>
           </nav>
 
-          {/* --- БЛОК АВТОРИЗАЦИИ ДЛЯ ДЕСКТОПА --- */}
           <div className="hidden md:flex items-center justify-end" style={{minWidth: '150px'}}>
             {status === 'loading' && <div className="h-8 w-24 animate-pulse rounded-md bg-gray-200" />}
             {status === 'unauthenticated' && (
@@ -74,6 +69,12 @@ export default function Header({ projects, settings }) {
             )}
             {status === 'authenticated' && (
               <div className="flex items-center gap-4">
+                
+                {/* <<< НОВАЯ ССЫЛКА НА ПРОФИЛЬ >>> */}
+                <Link href="/profile" title="Ваш профиль" className="text-xl hover:text-blue-600 transition-colors">
+                  👤
+                </Link>
+
                 {session.user?.image && <Image src={session.user.image} alt={session.user.name || 'Аватар'} width={32} height={32} className="rounded-full" />}
                 <span className="hidden text-sm font-medium text-gray-700 sm:block">{session.user.name}</span>
                 <button onClick={() => signOut()} className="text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900">Sign out</button>
@@ -81,7 +82,6 @@ export default function Header({ projects, settings }) {
             )}
           </div>
 
-          {/* --- 3. КНОПКА-"БУРГЕР" ДЛЯ МОБИЛЬНЫХ --- */}
           <div className="flex items-center md:hidden">
             <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="z-50 focus:outline-none">
               <svg className="h-6 w-6 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -96,7 +96,6 @@ export default function Header({ projects, settings }) {
         </div>
       </header>
       
-      {/* --- 4. ПАНЕЛЬ МОБИЛЬНОГО МЕНЮ --- */}
       <div className={`fixed inset-0 z-40 transform bg-white pt-24 transition-transform duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <nav className="container mx-auto px-4">
           <ul className="list-none flex flex-col items-center gap-6 text-sm font-semibold uppercase tracking-[0.2em]">
@@ -110,7 +109,6 @@ export default function Header({ projects, settings }) {
             </li>
           </ul>
         </nav>
-        {/* --- Мобильный блок авторизации --- */}
         <div className="mt-8 border-t border-gray-200 pt-6">
           <div className="flex items-center justify-center">
             {status === 'loading' && <div className="h-8 w-24 animate-pulse rounded-md bg-gray-200" />}
@@ -119,7 +117,11 @@ export default function Header({ projects, settings }) {
             )}
             {status === 'authenticated' && (
               <div className="flex flex-col items-center gap-4">
-                <div className="flex items-center gap-2">
+                {/* <<< НОВАЯ ССЫЛКА НА ПРОФИЛЬ В МОБИЛЬНОМ МЕНЮ >>> */}
+                <Link href="/profile" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-600 font-semibold hover:text-gray-900 flex items-center gap-2">
+                    👤 Ваш профиль
+                </Link>
+                <div className="flex items-center gap-2 mt-4">
                    {session.user?.image && <Image src={session.user.image} alt={session.user.name || 'Аватар'} width={32} height={32} className="rounded-full" />}
                    <span className="text-sm font-medium text-gray-700">{session.user.name}</span>
                 </div>
@@ -132,4 +134,3 @@ export default function Header({ projects, settings }) {
     </>
   );
 }
-
