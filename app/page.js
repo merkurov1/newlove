@@ -6,13 +6,13 @@ import Image from 'next/image';
 
 export const dynamic = 'force-dynamic';
 
-// НОВАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ
-// Ищет в HTML-строке первый тег <img> и возвращает его атрибут src.
-// Если изображение не найдено, возвращает null.
+// --- ИСПРАВЛЕННАЯ ФУНКЦИЯ ---
+// Теперь ищет изображения в формате Markdown: ![alt](url)
 function getFirstImage(content) {
   if (!content) return null;
-  const regex = /<img.*?src=["'](.*?)["']/;
+  const regex = /!\[.*?\]\((.*?)\)/; // Регулярное выражение для Markdown
   const match = content.match(regex);
+  // URL находится в первой захваченной группе (match[1])
   return match ? match[1] : null;
 }
 
@@ -38,8 +38,6 @@ async function getArticles() {
 export default async function HomePage() {
   const rawArticles = await getArticles();
 
-  // ОБНОВЛЕННАЯ ЛОГИКА
-  // Проходим по каждому посту и добавляем поле `previewImage`
   const articles = rawArticles.map(article => ({
     ...article,
     previewImage: getFirstImage(article.content)
@@ -52,15 +50,14 @@ export default async function HomePage() {
           articles.map((article) => (
             <div
               key={article.id}
-              className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden" // Добавлен overflow-hidden
+              className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden"
             >
-              {/* НОВЫЙ БЛОК ДЛЯ ИЗОБРАЖЕНИЯ */}
               {article.previewImage && (
                 <Link href={`/${article.slug}`} className="block relative w-full h-48">
                   <Image
                     src={article.previewImage}
                     alt={article.title}
-                    fill // Растягивает изображение на весь контейнер
+                    fill
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     className="object-cover group-hover:scale-105 transition-transform duration-300"
                   />
@@ -83,9 +80,9 @@ export default async function HomePage() {
                     })}
                     </p>
                 )}
-                {/* Убрали лишний текст из контента, т.к. есть картинка */}
+                {/* Улучшенное превью: убираем из текста Markdown-разметку картинок */}
                 <p className="text-gray-700 mb-4 line-clamp-3 overflow-hidden flex-grow">
-                  {article.content.replace(/<[^>]*>?/gm, '').substring(0, 150)}...
+                  {article.content.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 150)}...
                 </p>
                 <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-100">
                   {article.author.image && (
