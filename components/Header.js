@@ -102,6 +102,21 @@ export default function Header({ projects, settings }) {
             <li>
               <Link href="/talks" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Talks</Link>
             </li>
+            {/* Ссылки из UserSidebar перенесены сюда */}
+            {status === 'authenticated' && (
+              <>
+                <li>
+                  <Link href={`/you/${session.user?.name || 'me'}`} onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 py-2 text-gray-600 font-semibold hover:text-gray-900">
+                    👤 Профиль
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/users" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 py-2 text-gray-600 font-semibold hover:text-gray-900">
+                    👥 Пользователи
+                  </Link>
+                </li>
+              </>
+            )}
           </ul>
         </nav>
         <div className="mt-8 border-t border-gray-200 pt-6">
@@ -112,9 +127,8 @@ export default function Header({ projects, settings }) {
             )}
             {status === 'authenticated' && (
               <div className="flex flex-col items-center gap-4">
-                {/* <<< НОВАЯ ССЫЛКА НА ПРОФИЛЬ В МОБИЛЬНОМ МЕНЮ >>> */}
                 <Link href="/profile" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-600 font-semibold hover:text-gray-900 flex items-center gap-2">
-                    👤 Ваш профиль
+                    ⚙️ Настройки
                 </Link>
                 <div className="flex items-center gap-2 mt-4">
                    {session.user?.image && <Image src={session.user.image} alt={session.user.name || 'Аватар'} width={32} height={32} className="rounded-full" />}
