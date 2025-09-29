@@ -60,12 +60,12 @@ export default async function HomePage() {
   return (
     <div className="space-y-12">
       <FadeInSection>
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+  <div className="grid gap-4 sm:gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {articles && articles.length > 0 ? (
             articles.map((article) => (
               <div
                 key={article.id}
-                className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden"
+                className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden p-3 sm:p-6"
               >
                 {article.previewImage && (
                   <Link href={`/${article.slug}`} className="block relative w-full h-48">
@@ -78,9 +78,9 @@ export default async function HomePage() {
                     />
                   </Link>
                 )}
-                <div className="p-6 flex-grow flex flex-col">
+                <div className="flex-grow flex flex-col">
                   <Link href={`/${article.slug}`}>
-                    <h2 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
+                    <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
                       {article.title}
                     </h2>
                   </Link>
@@ -93,7 +93,7 @@ export default async function HomePage() {
                       })}
                       </p>
                   )}
-                  <p className="text-gray-700 mb-4 line-clamp-3 overflow-hidden flex-grow">
+                  <p className="text-gray-700 mb-4 line-clamp-3 overflow-hidden flex-grow text-base sm:text-base">
                     {article.content ? article.content.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 150) : ''}...
                   </p>
                   {article.tags && article.tags.length > 0 && (
@@ -102,7 +102,7 @@ export default async function HomePage() {
                         <Link 
                           key={tag.id}
                           href={`/tags/${tag.slug}`} 
-                          className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full hover:bg-gray-200"
+                          className="bg-gray-100 text-gray-600 text-xs sm:text-xs font-medium px-3 py-2 rounded-full hover:bg-gray-200 min-h-[36px] min-w-[44px] flex items-center justify-center"
                         >
                           {tag.name}
                         </Link>

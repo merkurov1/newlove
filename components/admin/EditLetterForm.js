@@ -54,24 +54,24 @@ export default function EditLetterForm({ letter, subscriberCount }) {
       )}
 
       {/* Форма для редактирования контента письма */}
-      <form action={updateLetter} className="space-y-6 bg-white p-8 rounded-lg shadow-md">
+  <form action={updateLetter} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md">
         <input type="hidden" name="id" value={letter.id} />
         
         <div>
           <label htmlFor="title" className="block text-sm font-medium text-gray-700">Тема письма</label>
-          <input type="text" name="title" id="title" required defaultValue={letter.title} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
+          <input type="text" name="title" id="title" required defaultValue={letter.title} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3" />
         </div>
         <div>
           <label htmlFor="slug" className="block text-sm font-medium text-gray-700">URL (slug)</label>
-          <input type="text" name="slug" id="slug" required defaultValue={letter.slug} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
+          <input type="text" name="slug" id="slug" required defaultValue={letter.slug} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3" />
         </div>
         <EditorJsArticle value={content} onChange={setContent} />
-        <div className="flex items-center">
-          <input id="published" name="published" type="checkbox" defaultChecked={letter.published} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
-          <label htmlFor="published" className="ml-2 block text-sm text-gray-900">Опубликовать в архиве</label>
+        <div className="flex items-center mt-2 mb-2">
+          <input id="published" name="published" type="checkbox" defaultChecked={letter.published} className="h-6 w-6 rounded border-gray-300 text-blue-600" />
+          <label htmlFor="published" className="ml-3 block text-base text-gray-900">Опубликовать в архиве</label>
         </div>
-        <div>
-          <button type="submit" className="w-full flex justify-center py-2 px-4 border rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+        <div className="mt-4">
+          <button type="submit" className="w-full flex justify-center py-3 px-4 border rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 min-h-[44px]">
             Сохранить изменения
           </button>
         </div>
