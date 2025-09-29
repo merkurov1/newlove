@@ -4,6 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import Highlight from '@tiptap/extension-highlight';
+import Blockquote from '@tiptap/extension-blockquote';
 
 export default function TiptapEditor({ value, onChange }) {
   const [html, setHtml] = useState(value || '');
@@ -14,6 +15,7 @@ export default function TiptapEditor({ value, onChange }) {
       Link,
       Image.configure({ inline: false }),
       Highlight,
+      Blockquote,
     ],
     content: value || '',
     autofocus: true,
