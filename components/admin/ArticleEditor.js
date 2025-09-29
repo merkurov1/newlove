@@ -1,4 +1,5 @@
 // components/admin/ArticleEditor.js
+// КАНДИДАТ НА УДАЛЕНИЕ: не используется ни в одном компоненте или странице
 "use client";
 
 import React, { useMemo } from 'react'; // Добавляем useMemo
