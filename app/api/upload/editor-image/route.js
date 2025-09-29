@@ -1,3 +1,4 @@
+
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -5,14 +6,23 @@ import { authOptions } from '@/lib/authOptions';
 
 
 export async function POST(req) {
+
   const session = await getServerSession(authOptions);
-  if (!session) {
+  if (!session || !session.supabaseAccessToken) {
     return NextResponse.json({ success: 0, error: 'Not authenticated' }, { status: 401 });
   }
 
+  // Создаём supabase client с авторизацией пользователя
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${session.supabaseAccessToken}`,
+        },
+      },
+    }
   );
 
   const formData = await req.formData();
