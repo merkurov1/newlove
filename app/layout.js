@@ -1,9 +1,12 @@
+// app/layout.js
+
 import './main.css';
 import { Inter } from 'next/font/google';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import AuthProvider from '@/components/AuthProvider';
-import prisma from '@/lib/prisma'; // <<< 1. Импортируем Prisma
+import prisma from '@/lib/prisma';
+import { Analytics } from '@vercel/analytics/react'; // <<< 1. ДОБАВЛЕН ИМПОРТ
 
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],
@@ -16,16 +19,13 @@ export const metadata = {
 };
 
 export default async function RootLayout({ children }) {
-  // 2. Запрашиваем проекты напрямую через Prisma
   const projects = await prisma.project.findMany({
-    where: { published: true }, // Загружаем только опубликованные проекты
-    orderBy: { createdAt: 'asc' }, // Сортируем для стабильного порядка в меню
+    where: { published: true },
+    orderBy: { createdAt: 'asc' },
   });
 
-  // Временно задаем настройки сайта здесь.
-  // В будущем их тоже можно будет перенести в базу данных.
   const settings = { 
-    site_name: 'Merkurov.love', 
+    site_name: 'Anton Merkurov', 
     slogan: 'Art x Love x Money', 
     logo_url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png' 
   };
@@ -35,7 +35,6 @@ export default async function RootLayout({ children }) {
       <body className="bg-white text-gray-800 min-h-screen">
         <AuthProvider>
           <div className="flex flex-col min-h-screen">
-            {/* 3. Передаем проекты в Header */}
             <Header projects={projects} settings={settings} />
             <main className="flex-grow w-full container mx-auto px-4 py-8">
               {children}
@@ -43,8 +42,8 @@ export default async function RootLayout({ children }) {
             <Footer />
           </div>
         </AuthProvider>
+        <Analytics /> {/* <<< 2. ДОБАВЛЕН КОМПОНЕНТ АНАЛИТИКИ */}
       </body>
     </html>
   );
 }
-
