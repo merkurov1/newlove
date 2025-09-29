@@ -10,6 +10,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { lowlight } from 'lowlight';
 
+
 export default function TiptapEditor({ value, onChange }) {
   const [isUploading, setIsUploading] = useState(false);
 
@@ -27,7 +28,9 @@ export default function TiptapEditor({ value, onChange }) {
     content: value || '',
     autofocus: true,
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      if (typeof onChange === 'function') {
+        onChange(editor.getHTML());
+      }
     },
   });
 
