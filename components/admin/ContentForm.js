@@ -5,17 +5,29 @@ import { useState, useRef, useEffect } from 'react';
 import ImageUploader from '@/components/ImageUploader';
 import TagInput from '@/components/admin/TagInput';
 import EditorJsArticle from '@/components/admin/EditorJsArticle';
+import dynamic from 'next/dynamic';
+const SimpleMdeReact = dynamic(() => import('react-simplemde-editor'), { ssr: false });
 
 export default function ContentForm({ initialData, saveAction, type }) {
   const isEditing = !!initialData;
   const [content, setContent] = useState(initialData?.content || '');
+  const [isJson, setIsJson] = useState(true);
   const editorInstanceRef = useRef(null);
 
   // Надёжная синхронизация состояния с данными, приходящими с сервера
   useEffect(() => {
-    // Для Editor.js данные должны быть в формате JSON-строки
     if (isEditing && initialData?.content) {
       setContent(initialData.content);
+      try {
+        const parsed = JSON.parse(initialData.content);
+        if (typeof parsed === 'object' && parsed.blocks) {
+          setIsJson(true);
+        } else {
+          setIsJson(false);
+        }
+      } catch {
+        setIsJson(false);
+      }
     }
   }, [initialData, isEditing]);
 
@@ -42,10 +54,23 @@ export default function ContentForm({ initialData, saveAction, type }) {
       
       <ImageUploader onUploadSuccess={handleImageInsert} />
 
-      <EditorJsArticle
-        value={content}
-        onChange={setContent}
-      />
+
+      {isJson ? (
+        <EditorJsArticle
+          value={content}
+          onChange={setContent}
+        />
+      ) : (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Содержимое (Markdown)</label>
+          <SimpleMdeReact
+            value={content}
+            onChange={setContent}
+            options={{ spellChecker: false, autofocus: true, placeholder: 'Введите текст...' }}
+          />
+          <input type="hidden" name="content" value={content} />
+        </div>
+      )}
 
       <div className="flex items-center mt-2 mb-2">
         <input id="published" name="published" type="checkbox" defaultChecked={initialData?.published || false} className="h-6 w-6 rounded border-gray-300 text-blue-600" />
