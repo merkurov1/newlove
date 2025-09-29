@@ -9,7 +9,7 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
-import { Lowlight } from 'lowlight/lib/core';
+import { lowlight } from 'lowlight';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { useDropzone } from 'react-dropzone';
 
@@ -27,7 +27,7 @@ export default function TiptapEditor({ value, onChange }) {
       TableRow,
       TableCell,
       TableHeader,
-      CodeBlockLowlight.configure({ lowlight: Lowlight }),
+  CodeBlockLowlight.configure({ lowlight }),
     ],
     content: value || '',
     autofocus: true,
