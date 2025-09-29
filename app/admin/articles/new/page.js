@@ -1,7 +1,13 @@
 // app/admin/articles/new/page.js
 
 import { createArticle } from '../../actions';
-import ArticleEditor from '@/components/admin/ArticleEditor'; // <-- 1. Импортируем наш новый редактор
+import dynamic from 'next/dynamic'; // <-- 1. Импортируем 'dynamic' из Next.js
+
+// 2. Используем динамический импорт с отключением SSR для редактора
+const ArticleEditor = dynamic(
+  () => import('@/components/admin/ArticleEditor'), 
+  { ssr: false }
+);
 
 export default function NewArticlePage() {
   return (
@@ -17,7 +23,7 @@ export default function NewArticlePage() {
           <input type="text" name="slug" id="slug" required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" />
         </div>
         
-        {/* 2. Заменяем старую textarea на наш новый компонент */}
+        {/* Компонент теперь загружается динамически */}
         <ArticleEditor />
         
         <div className="flex items-center">
