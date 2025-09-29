@@ -4,9 +4,13 @@ import prisma from '../lib/prisma';
 import Link from 'next/link';
 import Image from 'next/image';
 
+// --- БЛОК МЕТАДАННЫХ ---
+export const metadata = {
+  description: 'Главная страница персонального сайта и блога Антона Меркурова. Последние публикации о медиа, технологиях и искусстве.',
+};
+
 export const dynamic = 'force-dynamic';
 
-// Эта функция остаётся без изменений
 function getFirstImage(content) {
   if (!content) return null;
   const regex = /!\[.*?\]\((.*?)\)/;
@@ -14,19 +18,17 @@ function getFirstImage(content) {
   return match ? match[1] : null;
 }
 
-// --- ИЗМЕНЁННАЯ ФУНКЦИЯ ---
 async function getArticles() {
   try {
     const articles = await prisma.article.findMany({
       where: { published: true },
       orderBy: { publishedAt: 'desc' },
       take: 9,
-      // Используем select вместо include для явного указания всех нужных полей
       select: {
         id: true,
         title: true,
         slug: true,
-        content: true, // <-- ЯВНО ЗАПРАШИВАЕМ КОНТЕНТ
+        content: true,
         publishedAt: true,
         author: {
           select: {
@@ -90,7 +92,6 @@ export default async function HomePage() {
                     </p>
                 )}
                 <p className="text-gray-700 mb-4 line-clamp-3 overflow-hidden flex-grow">
-                  {/* Проверяем, что content существует, прежде чем его использовать */}
                   {article.content ? article.content.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 150) : ''}...
                 </p>
 

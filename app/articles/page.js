@@ -1,10 +1,17 @@
+// app/articles/page.js
+
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
+
+// --- БЛОК МЕТАДАННЫХ ---
+export const metadata = {
+  title: 'Все публикации',
+  description: 'Архив всех публикаций Антона Меркурова на темы медиа, технологий и искусства.',
+};
 
 export const dynamic = 'force-dynamic';
 
 export default async function ArticlesPage() {
-  // Находим только опубликованные статьи и сортируем по дате
   const articles = await prisma.article.findMany({
     where: { published: true },
     orderBy: { publishedAt: 'desc' },
@@ -16,7 +23,7 @@ export default async function ArticlesPage() {
       <div className="space-y-6">
         {articles.length > 0 ? (
           articles.map(article => (
-            <Link key={article.id} href={`/articles/${article.slug}`} className="block p-6 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
+            <Link key={article.id} href={`/${article.slug}`} className="block p-6 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
               <h2 className="text-2xl font-semibold text-gray-800">{article.title}</h2>
               <p className="text-gray-500 mt-2">
                 {new Date(article.publishedAt).toLocaleDateString('ru-RU', {
@@ -34,4 +41,3 @@ export default async function ArticlesPage() {
     </div>
   );
 }
-
