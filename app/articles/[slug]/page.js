@@ -90,7 +90,7 @@ export default async function ArticlePage({ params }) {
   const article = await getArticle(params.slug);
 
   return (
-    <article className= Меркурова"max-w-3xl mx-auto px-4 py-12">
+    <article className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">{article.title}</h1>
       <div className="flex items-center space-x-4 mb-8 text-gray-500">
         {article.author.image && (
