@@ -75,8 +75,6 @@ export default function Header({ projects, settings }) {
                   👤
                 </Link>
 
-                {session.user?.image && <Image src={session.user.image} alt={session.user.name || 'Аватар'} width={32} height={32} className="rounded-full" />}
-                <span className="hidden text-sm font-medium text-gray-700 sm:block">{session.user.name}</span>
                 <button onClick={() => signOut()} className="text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900">Sign out</button>
               </div>
             )}
