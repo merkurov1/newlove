@@ -57,46 +57,11 @@ function ContentDisplay({ content, type }) {
           )}
         </div>
       )}
-      
-      <div className="prose lg:prose-xl max-w-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {markdownContent}
-        </ReactMarkdown>
-      </div>
-    </article>
-  );
-}
-
-export default async function SlugPage({ params }) {
-  const result = await getContent(params.slug);
-
-  return (
-    <article className="max-w-3xl mx-auto px-4 py-12">
-      <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-8">{title}</h1>
-      {type === 'article' && (
-        <div className="flex items-center space-x-4 mb-8 text-gray-500">
-          {author.image && (
-            <Image src={author.image} alt={author.name || ''} width={40} height={40} className="w-10 h-10 rounded-full" />
-          )}
-          <span>{author.name}</span>
-          {publishedAt && (
-              <>
-                  <span>&middot;</span>
-                  <time dateTime={publishedAt.toISOString()}>
-                  {new Date(publishedAt).toLocaleDateString('ru-RU', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                  })}
-                  </time>
-              </>
-          )}
-        </div>
-      )}
       <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: htmlContent }} />
     </article>
   );
 }
+// ContentDisplay уже определён выше
 
 export default async function SlugPage({ params }) {
   const result = await getContent(params.slug);
