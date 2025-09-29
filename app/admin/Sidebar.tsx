@@ -1,3 +1,4 @@
+// app/admin/Sidebar.tsx
 'use client';
 
 import Link from 'next/link';
@@ -7,7 +8,6 @@ const navItems = [
   { href: '/admin', label: 'Главная' },
   { href: '/admin/articles', label: 'Статьи' },
   { href: '/admin/projects', label: 'Проекты' },
-  // <<< ДОБАВЛЕНО: Новый пункт меню для рассылок
   { href: '/admin/letters', label: 'Рассылки' },
 ];
 
@@ -22,23 +22,27 @@ export default function Sidebar() {
       </div>
       <nav className="mt-6">
         <ul>
-          {navItems.map((item) => (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                className={`flex items-center px-6 py-3 text-gray-600 hover:bg-gray-100 transition-colors ${
-                  pathname.startsWith(item.href) && item.href !== '/admin' || pathname === '/admin' && item.href === '/admin'
-                    ? 'bg-gray-200 text-gray-900 font-semibold'
-                    : ''
-                }`}
-              >
-                {item.label}
-              </Link>
-            </li>
-          ))}
+          {navItems.map((item) => {
+            // --- УПРОЩЕННАЯ И НАДЕЖНАЯ ЛОГИКА АКТИВНОЙ ССЫЛКИ ---
+            const isActive = item.href === '/admin' 
+              ? pathname === item.href 
+              : pathname.startsWith(item.href);
+
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className={`flex items-center px-6 py-3 text-gray-600 hover:bg-gray-100 transition-colors ${
+                    isActive ? 'bg-gray-200 text-gray-900 font-semibold' : ''
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       </nav>
     </aside>
   );
 }
-
