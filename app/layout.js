@@ -7,6 +7,7 @@ import Footer from '@/components/Footer';
 import AuthProvider from '@/components/AuthProvider';
 import prisma from '@/lib/prisma';
 import { Analytics } from '@vercel/analytics/react';
+import { UmamiScript } from '@/lib/umami';
 import dynamic from 'next/dynamic';
 
 const UserSidebar = dynamic(() => import('@/components/UserSidebar'), { ssr: false });
@@ -91,7 +92,9 @@ export default async function RootLayout({ children }) {
             <Footer />
           </div>
         </AuthProvider>
-        <Analytics />
+  <Analytics />
+  {/* Umami analytics */}
+  <UmamiScript websiteId="87795d47-f53d-4ef8-8e82-3ee195ea997b" />
       </body>
     </html>
   );
