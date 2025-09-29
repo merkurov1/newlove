@@ -2,40 +2,21 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import ImageUploader from '@/components/ImageUploader';
 import TagInput from '@/components/admin/TagInput';
-import EditorJsArticle from '@/components/admin/EditorJsArticle';
-import dynamic from 'next/dynamic';
-const SimpleMdeReact = dynamic(() => import('react-simplemde-editor'), { ssr: false });
+import TiptapEditor from '@/components/admin/TiptapEditor';
 
 export default function ContentForm({ initialData, saveAction, type }) {
   const isEditing = !!initialData;
   const [content, setContent] = useState(initialData?.content || '');
-  const [isJson, setIsJson] = useState(true);
-  const editorInstanceRef = useRef(null);
 
   // Надёжная синхронизация состояния с данными, приходящими с сервера
   useEffect(() => {
     if (isEditing && initialData?.content) {
       setContent(initialData.content);
-      try {
-        const parsed = JSON.parse(initialData.content);
-        if (typeof parsed === 'object' && parsed.blocks) {
-          setIsJson(true);
-        } else {
-          setIsJson(false);
-        }
-      } catch {
-        setIsJson(false);
-      }
     }
   }, [initialData, isEditing]);
 
-  // Для Editor.js интеграция изображений требует отдельной реализации (через tool image uploader)
-  const handleImageInsert = (imageUrl) => {
-    // Можно реализовать вставку изображения через Editor.js API, если потребуется
-    // Пока оставим как заглушку
-  };
+
 
   return (
   <form action={saveAction} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md">
@@ -52,25 +33,7 @@ export default function ContentForm({ initialData, saveAction, type }) {
       
       <TagInput initialTags={initialData?.tags} />
       
-      <ImageUploader onUploadSuccess={handleImageInsert} />
-
-
-      {isJson ? (
-        <EditorJsArticle
-          value={content}
-          onChange={setContent}
-        />
-      ) : (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Содержимое (Markdown)</label>
-          <SimpleMdeReact
-            value={content}
-            onChange={setContent}
-            options={{ spellChecker: false, autofocus: true, placeholder: 'Введите текст...' }}
-          />
-          <input type="hidden" name="content" value={content} />
-        </div>
-      )}
+      <TiptapEditor value={content} onChange={setContent} />
 
       <div className="flex items-center mt-2 mb-2">
         <input id="published" name="published" type="checkbox" defaultChecked={initialData?.published || false} className="h-6 w-6 rounded border-gray-300 text-blue-600" />

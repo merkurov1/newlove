@@ -68,8 +68,8 @@ export default function Footer({ subscriberCount }) {
           </div>
         </div>
         <div className="mt-10 border-t border-gray-200 pt-6 text-center text-xs text-gray-400">
-          <p>&copy; {new Date().getFullYear()} Антон Меркуров. Все права защищены.</p>
-          <p className="mt-2 text-xs text-gray-500">Подписчиков на рассылку: <span className="font-semibold">{subscriberCount}</span></p>
+          <p>&copy; {new Date().getFullYear()} Anton Merkurov. Все права защищены.</p>
+          <p className="mt-2 text-xs text-gray-500">Subscribers: <span className="font-semibold">{subscriberCount}</span></p>
         </div>
       </div>
     </footer>
