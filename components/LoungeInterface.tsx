@@ -175,7 +175,7 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   }
 
   return (
-  <div className="flex flex-col h-[calc(100vh-10rem)] max-w-3xl mx-auto p-2 sm:p-4 font-sans">
+  <div className="flex flex-col h-[calc(100vh-10rem)] w-full max-w-3xl mx-auto p-1 sm:p-4 font-sans">
       {/* --- ONLINE USERS BAR --- */}
       <div className="flex items-center gap-2 mb-2 min-h-[32px] overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
         {onlineUsers.length > 0 ? (
@@ -192,7 +192,7 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
           <span className="text-xs text-gray-400">Нет пользователей онлайн</span>
         )}
       </div>
-  <div className="flex-1 overflow-y-auto p-1 sm:p-4 space-y-4 sm:space-y-6">
+  <div className="flex-1 overflow-y-auto p-0 sm:p-4 space-y-3 sm:space-y-6">
         {/* --- PINNED MESSAGE --- */}
         {pinnedId && (() => {
           const pinned = messages.find(m => m.id === pinnedId);
@@ -290,8 +290,8 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
         )}
       </div>
 
-  <form onSubmit={handleSubmit} className="p-2 sm:p-4 bg-white border-t flex items-center gap-2 sm:gap-3 relative">
-  <Image src={session.user?.image || '/default-avatar.png'} alt="Your avatar" width={36} height={36} className="rounded-full" />
+  <form onSubmit={handleSubmit} className="p-1 sm:p-4 bg-white border-t flex items-center gap-1 sm:gap-3 relative">
+  <Image src={session.user?.image || '/default-avatar.png'} alt="Your avatar" width={32} height={32} className="rounded-full" />
   <div className="relative w-full min-w-0">
           {/* --- reply preview над textarea --- */}
           {replyTo && (
@@ -302,12 +302,12 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
               <button type="button" className="ml-2 text-blue-400 hover:text-blue-700" onClick={() => setReplyTo(null)} title="Отменить ответ">✕</button>
             </div>
           )}
-          <textarea placeholder="Напишите сообщение..." value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }} className="w-full p-2 border rounded-md resize-none text-sm" rows={1} style={{ minHeight: 40, maxHeight: 120 }} />
+          <textarea placeholder="Напишите сообщение..." value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }} className="w-full p-2 border rounded-md resize-none text-sm" rows={1} style={{ minHeight: 36, maxHeight: 100 }} />
           <button type="button" onClick={() => setShowEmojiPicker(v => !v)} className="absolute right-2 top-2 text-xl sm:text-2xl" tabIndex={-1}>
             😊
           </button>
           {showEmojiPicker && (
-            <div className="absolute bottom-12 right-0 z-50 max-w-[95vw] sm:max-w-xs">
+            <div className="absolute bottom-12 right-0 z-50 w-[95vw] max-w-xs sm:max-w-xs">
               <Picker
                 onSelect={(emoji: any) => {
                   setNewMessage(newMessage + (emoji.native || emoji.colons || ''));
@@ -318,7 +318,7 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
                 theme="light"
                 showPreview={false}
                 showSkinTones={false}
-                style={{ width: '100%', minWidth: 220, maxWidth: '100vw' }}
+                style={{ width: '100%', minWidth: 200, maxWidth: '95vw' }}
               />
             </div>
           )}
