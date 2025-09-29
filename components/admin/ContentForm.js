@@ -1,7 +1,7 @@
 // components/admin/ContentForm.js
 'use client';
 
-import { useState, useRef, useEffect } from 'react'; // <-- 1. Импортируем useEffect
+import { useState, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import ImageUploader from '@/components/ImageUploader';
 import TagInput from '@/components/admin/TagInput';
@@ -11,23 +11,23 @@ const ArticleEditor = dynamic(
   { ssr: false }
 );
 
-export default function ContentForm({ initialData, saveAction, type = 'project' }) {
+export default function ContentForm({ initialData, saveAction, type }) {
   const isEditing = !!initialData;
   const [content, setContent] = useState(initialData?.content || '');
   const editorInstanceRef = useRef(null);
 
-  // --- 2. НОВЫЙ БЛОК: НАДЁЖНАЯ СИНХРОНИЗАЦИЯ ДАННЫХ ---
-  // Этот хук гарантирует, что если initialData изменится,
-  // состояние нашего контента тоже обновится.
+  // Надёжная синхронизация состояния с данными, приходящими с сервера
   useEffect(() => {
-    if (initialData?.content) {
+    // Устанавливаем контент только если он есть в initialData
+    if (isEditing && initialData?.content) {
       setContent(initialData.content);
     }
-  }, [initialData]); // Запускаем эффект при изменении initialData
+    // Для новых страниц initialData будет undefined, и state останется '', что правильно
+  }, [initialData, isEditing]);
 
   const handleImageInsert = (markdownImage) => {
     const editor = editorInstanceRef.current;
-    if (editor) {
+    if (editor && editor.codemirror) {
       const doc = editor.codemirror.getDoc();
       const cursor = doc.getCursor();
       doc.replaceRange(markdownImage, cursor);
