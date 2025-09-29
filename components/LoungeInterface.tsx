@@ -1,8 +1,6 @@
+"use client";
 import { motion, AnimatePresence } from 'framer-motion';
 // components/LoungeInterface.js
-
-'use client';
-
 import { useState, useEffect, useRef } from 'react';
 import { Picker } from 'emoji-mart';
 import 'emoji-mart/css/emoji-mart.css';
@@ -45,6 +43,8 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   // --- СОСТОЯНИЕ ДЛЯ РЕАКЦИЙ ---
   // --- СОСТОЯНИЕ ДЛЯ REPLY ---
   const [replyTo, setReplyTo] = useState<null | { id: string; author: string | null; content: string }> (null);
+  // --- СОСТОЯНИЕ ДЛЯ PINNED ---
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
   // reactions: { [messageId: string]: Set<userId> }
   const [reactions, setReactions] = useState<{ [key: string]: Set<string> }>({});
 
@@ -193,8 +193,20 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
         )}
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-  <AnimatePresence initial={false}>
-  {messages.map((message) => {
+        {/* --- PINNED MESSAGE --- */}
+        {pinnedId && (() => {
+          const pinned = messages.find(m => m.id === pinnedId);
+          if (!pinned) return null;
+          return (
+            <div className="mb-4 p-3 rounded-lg border-l-4 border-yellow-400 bg-yellow-50 flex items-center gap-2">
+              <span className="text-yellow-700 font-semibold">Закреплено:</span>
+              <span className="flex-1">{pinned.content}</span>
+              <button onClick={() => setPinnedId(null)} className="text-xs text-yellow-500 hover:text-yellow-700">Открепить</button>
+            </div>
+          );
+        })()}
+        <AnimatePresence initial={false}>
+        {messages.map((message) => {
           const isCurrentUser = message.userId === session.user.id;
           // Найти первую ссылку в сообщении
           const urlMatch = message.content.match(/https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+/);
@@ -202,6 +214,8 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
           const likedByMe = reactions[message.id]?.has(session.user.id);
           // --- reply ---
           const replyData = (message as any).replyTo;
+          // Проверка роли админа (user.role === 'ADMIN')
+          const isAdmin = session?.user?.role === 'ADMIN';
           return (
             <motion.div
               key={message.id}
@@ -226,6 +240,16 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
                 {urlMatch && <LinkPreview url={urlMatch[0]} />}
                 {/* --- РЕАКЦИИ --- */}
                 <div className="flex items-center gap-2 mt-2">
+                  {/* --- PIN BUTTON (ADMIN) --- */}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setPinnedId(message.id)}
+                      className={`text-xs text-yellow-500 hover:underline ml-2 ${pinnedId === message.id ? 'font-bold' : ''}`}
+                    >
+                      {pinnedId === message.id ? 'Закреплено' : 'Закрепить'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleLike(message.id)}
