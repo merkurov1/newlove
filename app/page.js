@@ -93,9 +93,8 @@ export default async function HomePage() {
                       })}
                       </p>
                   )}
-                  <p className="text-gray-700 mb-4 line-clamp-3 overflow-hidden flex-grow text-base sm:text-base">
-                    {article.content ? article.content.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 150) : ''}...
-                  </p>
+                  <div className="text-gray-700 mb-4 line-clamp-3 overflow-hidden flex-grow text-base sm:text-base prose prose-sm prose-blue max-w-none" 
+                    dangerouslySetInnerHTML={{ __html: article.content ? article.content.substring(0, 300) + '...' : '' }} />
                   {article.tags && article.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
                       {article.tags.map(tag => (
