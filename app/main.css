@@ -1,3 +1,11 @@
+/* Анимация появления (fade-in) для emoji-picker и других элементов */
+.animate-fade-in {
+	animation: fadeIn 0.25s ease;
+}
+@keyframes fadeIn {
+	from { opacity: 0; transform: translateY(16px); }
+	to { opacity: 1; transform: translateY(0); }
+}
 /**
  * Этот файл является вашим глобальным CSS.
  * Директивы Tailwind должны быть в начале.

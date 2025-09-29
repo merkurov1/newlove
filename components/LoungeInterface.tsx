@@ -177,14 +177,14 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   return (
   <div className="flex flex-col h-[calc(100vh-10rem)] w-full max-w-3xl mx-auto p-1 sm:p-4 font-sans">
       {/* --- ONLINE USERS BAR --- */}
-      <div className="flex items-center gap-2 mb-2 min-h-[32px] overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
+  <div className="flex items-center gap-2 mb-2 min-h-[32px] overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
         {onlineUsers.length > 0 ? (
           <>
             <span className="text-xs text-gray-500 mr-2 whitespace-nowrap">Онлайн:</span>
             {onlineUsers.map((u, i) => (
-              <span key={u.name + i} className="flex items-center gap-1 mr-2 whitespace-nowrap">
+              <span key={u.name + i} className="flex items-center gap-1 mr-2 whitespace-nowrap max-w-[80px]">
                 <img src={u.image || '/default-avatar.png'} alt={u.name || 'user'} className="w-7 h-7 rounded-full border" />
-                <span className="text-xs text-gray-700 hidden xs:inline">{u.name}</span>
+                <span className="text-xs text-gray-700 hidden xs:inline truncate max-w-[48px]">{u.name}</span>
               </span>
             ))}
           </>
@@ -302,12 +302,12 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
               <button type="button" className="ml-2 text-blue-400 hover:text-blue-700" onClick={() => setReplyTo(null)} title="Отменить ответ">✕</button>
             </div>
           )}
-          <textarea placeholder="Напишите сообщение..." value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }} className="w-full p-2 border rounded-md resize-none text-sm" rows={1} style={{ minHeight: 36, maxHeight: 100 }} />
-          <button type="button" onClick={() => setShowEmojiPicker(v => !v)} className="absolute right-2 top-2 text-xl sm:text-2xl" tabIndex={-1}>
+          <textarea placeholder="Напишите сообщение..." value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }} className="w-full p-3 border rounded-md resize-none text-base focus:ring-2 focus:ring-blue-400" rows={1} style={{ minHeight: 44, maxHeight: 120 }} />
+          <button type="button" onClick={() => setShowEmojiPicker(v => !v)} className="absolute right-2 top-2 text-2xl sm:text-2xl p-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition" tabIndex={-1} aria-label="Открыть emoji">
             😊
           </button>
           {showEmojiPicker && (
-            <div className="absolute bottom-12 right-0 z-50 w-[95vw] max-w-xs sm:max-w-xs">
+            <div className="absolute bottom-14 right-0 z-50 w-[95vw] max-w-xs sm:max-w-xs animate-fade-in">
               <Picker
                 onSelect={(emoji: any) => {
                   setNewMessage(newMessage + (emoji.native || emoji.colons || ''));
@@ -323,7 +323,16 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
             </div>
           )}
         </div>
-        <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300" disabled={!newMessage.trim()}>Отправить</button>
+  <button type="submit" className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300 active:scale-95 transition min-w-[44px] min-h-[44px] text-base" disabled={!newMessage.trim()}>Отправить</button>
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.25s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
       </form>
     </div>
   );
