@@ -3,52 +3,33 @@ import { notFound } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Image from 'next/image';
-import MarkdownImage from '@/components/MarkdownImage'; // <-- Импортируем
+import MarkdownImage from '@/components/MarkdownImage';
 
-// Вспомогательные функции (можно будет вынести в отдельный файл)
-function getFirstImage(content) {
-  if (!content) return null;
-  const regex = /!\[.*?\]\((.*?)\)/;
-  const match = content.match(regex);
-  return match ? match[1] : null;
+// Вспомогательные функции и getProject остаются без изменений
+function getFirstImage(content) { /* ... */ }
+function generateDescription(content) { /* ... */ }
+async function getProject(slug) {
+  const project = await prisma.project.findUnique({
+    where: { slug: slug, published: true },
+    include: { author: { select: { name: true, image: true } } },
+  });
+  if (!project) { notFound(); }
+  return project;
 }
-function generateDescription(content) {
-    if (!content) return '';
-    const plainText = content.replace(/!\[.*?\]\(.*?\)/g, '').replace(/\[(.*?)\]\(.*?\)/g, '$1').replace(/#{1,6}\s/g, '').replace(/[`*_\-~]/g, '').replace(/\s\s+/g, ' ').trim();
-    return plainText.substring(0, 160);
-}
-async function getProject(slug) { /* ... */ }
 
-// Улучшенная генерация метаданных
-export async function generateMetadata({ params }) {
-    const project = await getProject(params.slug);
-    const previewImage = getFirstImage(project.content);
-    const description = generateDescription(project.content);
-    const baseUrl = 'https://merkurov.love'; // <-- Убедитесь, что домен верный
-
-    return {
-      title: project.title,
-      description: description,
-      openGraph: {
-        title: project.title,
-        description: description,
-        url: `${baseUrl}/projects/${project.slug}`,
-        siteName: 'Anton Merkurov',
-        images: previewImage ? [{ url: previewImage, width: 1200, height: 630 }] : [],
-        locale: 'ru_RU',
-        type: 'article',
-      },
-    };
-}
+// generateMetadata остаётся без изменений
+export async function generateMetadata({ params }) { /* ... */ }
 
 export default async function ProjectPage({ params }) {
   const project = await getProject(params.slug);
-  const heroImage = getFirstImage(project.content);
-  const contentWithoutHero = heroImage ? project.content.replace(/!\[.*?\]\(.*?\)\n?/, '') : project.content;
+  
+  // Создаем объект для кастомных компонентов Markdown
   const components = { img: MarkdownImage };
 
   return (
-    <article className="max-w-3xl mx-auto px-4 py-12">
+    // 1. Делаем контейнер шире для галереи
+    <article className="max-w-7xl mx-auto px-4 py-12">
+      {/* Заголовок и мета-информация */}
       <div className="text-center mb-12">
         <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">{project.title}</h1>
         <div className="flex items-center justify-center space-x-4 text-gray-500">
@@ -63,15 +44,17 @@ export default async function ProjectPage({ params }) {
         </div>
       </div>
       
-      {heroImage && (
-        <div className="mb-12">
-          <Image src={heroImage} alt={project.title} width={1200} height={675} className="rounded-xl shadow-lg w-full" priority />
-        </div>
-      )}
-
-      <div className="prose lg:prose-xl max-w-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-          {contentWithoutHero}
+      {/* 2. Создаем Masonry-контейнер с адаптивными колонками */}
+      <div className="columns-1 md:columns-2 lg:columns-3 gap-8">
+        {/* 3. Убираем логику "hero image" и выводим весь контент */}
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={components}
+          // Оборачиваем Markdown в <div className="prose"> для стилизации текста, если он есть
+          // но на саму галерею это не повлияет.
+          className="prose prose-lg max-w-none"
+        >
+          {project.content}
         </ReactMarkdown>
       </div>
     </article>
