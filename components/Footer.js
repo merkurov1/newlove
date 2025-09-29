@@ -5,6 +5,7 @@ import { useFormState } from 'react-dom';
 import { subscribeToNewsletter } from '@/app/admin/actions'; // Импортируем наше новое действие
 import { useEffect, useRef } from 'react';
 import DonateButton from './DonateButton';
+import Image from 'next/image';
 
 // Компонент для кнопки, который показывает статус отправки
 function SubmitButton() {
@@ -35,10 +36,10 @@ export default function Footer() {
 
   return (
     <footer className="border-t border-gray-200 bg-gray-50">
-      <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-          
-          <div className="md:col-span-1 flex flex-col gap-6">
+      <div className="container mx-auto px-4 py-10">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-10">
+          {/* Левая колонка: рассылка и донат */}
+          <div className="flex-1 max-w-md mx-auto md:mx-0 flex flex-col gap-6">
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Присоединяйтесь к рассылке</h3>
               <p className="text-sm text-gray-500 mb-4">
@@ -49,16 +50,14 @@ export default function Footer() {
                   <input 
                     type="email" 
                     name="email"
-                    // Если пользователь залогинен, показываем его email, иначе пустое поле
                     defaultValue={session?.user?.email ?? ''}
-                    readOnly={!!session} // Делаем поле только для чтения, если пользователь залогинен
+                    readOnly={!!session}
                     placeholder="your.email@example.com" 
                     required 
                     className={`w-full rounded-md border-gray-300 px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 ${session ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                   />
                   <SubmitButton />
                 </div>
-                {/* Сообщение об успехе или ошибке */}
                 {state?.message && (
                   <p className={`text-sm ${state.status === 'error' ? 'text-red-600' : 'text-green-600'}`}>
                     {state.message}
@@ -66,17 +65,36 @@ export default function Footer() {
                 )}
               </form>
             </div>
-            <div>
-              <DonateButton />
+            <DonateButton />
+          </div>
+          {/* Центр: соцсети и ссылки */}
+          <div className="flex-1 flex flex-col items-center justify-center gap-4">
+            <div className="flex gap-4 mt-2">
+              <a href="https://t.me/merkurov" target="_blank" rel="noopener noreferrer" title="Telegram" className="hover:scale-110 transition-transform">
+                <Image src="/globe.svg" alt="Telegram" width={28} height={28} />
+              </a>
+              <a href="https://github.com/merkurov1" target="_blank" rel="noopener noreferrer" title="GitHub" className="hover:scale-110 transition-transform">
+                <Image src="/window.svg" alt="GitHub" width={28} height={28} />
+              </a>
+              <a href="https://merkurov.love" target="_blank" rel="noopener noreferrer" title="Сайт" className="hover:scale-110 transition-transform">
+                <Image src="/next.svg" alt="Сайт" width={28} height={28} />
+              </a>
+            </div>
+            <div className="flex flex-wrap gap-4 justify-center text-xs text-gray-500 mt-2">
+              <a href="/articles" className="hover:text-gray-900 transition">Статьи</a>
+              <a href="/projects" className="hover:text-gray-900 transition">Проекты</a>
+              <a href="/talks" className="hover:text-gray-900 transition">Talks</a>
+              <a href="/profile" className="hover:text-gray-900 transition">Профиль</a>
             </div>
           </div>
-          
-          <div className="md:col-span-2">
-             {/* Здесь можно разместить другие ссылки, соцсети и т.д. */}
+          {/* Правая колонка: бренд/логотип */}
+          <div className="flex-1 flex flex-col items-center md:items-end justify-center gap-4">
+            <Image src="/globe.svg" alt="Логотип" width={48} height={48} className="mb-2" />
+            <span className="text-lg font-bold text-gray-800">Anton Merkurov</span>
+            <span className="text-xs text-gray-500">Art x Love x Money</span>
           </div>
-
         </div>
-        <div className="mt-12 border-t border-gray-200 pt-8 text-center text-sm text-gray-500">
+        <div className="mt-10 border-t border-gray-200 pt-6 text-center text-xs text-gray-400">
           <p>&copy; {new Date().getFullYear()} Антон Меркуров. Все права защищены.</p>
         </div>
       </div>
