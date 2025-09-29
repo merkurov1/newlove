@@ -1,3 +1,5 @@
+// components/LoungeInterface.js
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -6,13 +8,13 @@ import { signIn } from 'next-auth/react';
 import Image from 'next/image';
 import type { Session } from 'next-auth';
 
-// 1. ИСПРАВЛЕНИЕ ТИПА
+// Типы не изменились
 type InitialMessage = {
-  id: string; // 👈 ИСПРАВЛЕНО: ID теперь string
+  id: string;
   createdAt: Date;
   content: string;
   userId: string;
-  user: { name: string | null; image: string | null }; // 👈 ИСПРАВЛЕНО: author -> user
+  user: { name: string | null; image: string | null };
 };
 
 type Props = {
@@ -20,41 +22,110 @@ type Props = {
   session: Session | null;
 };
 
+// --- НОВЫЙ ТИП ДЛЯ ПЕЧАТАЮЩИХ ПОЛЬЗОВАТЕЛЕЙ ---
+type TypingUser = {
+  name: string;
+  image: string;
+};
+
 export default function LoungeInterface({ initialMessages, session }: Props) {
   const supabase = createClient();
   const [messages, setMessages] = useState(initialMessages);
   const [newMessage, setNewMessage] = useState('');
+  // --- НОВОЕ СОСТОЯНИЕ ДЛЯ ИНДИКАТОРА ПЕЧАТИ ---
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Плавный скролл к последнему сообщению
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   
+  // --- 1. УЛУЧШЕННЫЙ REAL-TIME КАНАЛ ---
   useEffect(() => {
-    const channel = supabase
-      .channel('realtime-messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message' },
-        () => { window.location.reload(); }
-      ).subscribe();
+    if (!session) return; // Не подписываемся, если нет сессии
+
+    const channel = supabase.channel('realtime-talks'); // Дадим каналу более уникальное имя
+
+    // --- ПОДПИСКА НА НОВЫЕ СООБЩЕНИЯ (INSERT) ---
+    channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message' },
+      (payload) => {
+        // Добавляем новое сообщение в конец списка без перезагрузки
+        setMessages((currentMessages) => [...currentMessages, payload.new as InitialMessage]);
+      }
+    );
+
+    // --- ПОДПИСКА НА УДАЛЕННЫЕ СООБЩЕНИЯ (DELETE) ---
+    channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'Message' },
+      (payload) => {
+        // Убираем удаленное сообщение из списка по ID
+        setMessages((currentMessages) => currentMessages.filter(msg => msg.id !== payload.old.id));
+      }
+    );
+
+    // --- ПОДПИСКА НА ИНДИКАТОР ПЕЧАТИ (PRESENCE) ---
+    channel.on('presence', { event: 'sync' }, () => {
+        const newState = channel.presenceState<TypingUser>();
+        const users = Object.values(newState).map(p => p[0]);
+        // Убираем себя из списка печатающих
+        setTypingUsers(users.filter(u => u.name !== session.user.name)); 
+      }
+    );
+
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        // Сообщаем всем, что мы в чате
+        await channel.track({ 
+            name: session.user.name, 
+            image: session.user.image 
+        });
+      }
+    });
+
     return () => { supabase.removeChannel(channel); };
-  }, [supabase]);
+  }, [supabase, session]); // Добавили session в зависимости
+
+  // --- 2. ФУНКЦИЯ УДАЛЕНИЯ СООБЩЕНИЯ ---
+  const handleDelete = async (messageId: string) => {
+    // Оптимистичное удаление из UI
+    setMessages((currentMessages) => currentMessages.filter(msg => msg.id !== messageId));
+    // Отправляем запрос на сервер
+    await fetch(`/api/messages/${messageId}`, { method: 'DELETE' });
+  };
+
+  // --- 3. ФУНКЦИЯ ИНДИКАТОРА ПЕЧАТИ ---
+  const handleTyping = () => {
+    const channel = supabase.channel('realtime-talks');
+    // Сообщаем, что мы начали печатать
+    channel.track({ name: session?.user?.name, image: session?.user?.image });
+    
+    // Сбрасываем таймер, если он уже был
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    // Устанавливаем таймер, который через 3 секунды сообщит, что мы закончили печатать
+    typingTimeoutRef.current = setTimeout(() => {
+        channel.untrack();
+    }, 3000);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newMessage.trim() === '' || !session?.user) return;
     
-    // 2. ИСПРАВЛЕНИЕ ОПТИМИСТИЧНОГО ОБНОВЛЕНИЯ
+    // Оптимистичное обновление работает как и раньше
     const optimisticMessage = {
-      // ID теперь должен быть строкой для консистентности
       id: Date.now().toString(), 
       content: newMessage,
       createdAt: new Date(),
       userId: session.user.id,
-      user: { // 👈 ИСПРАВЛЕНО: author -> user
-        name: session.user.name ?? null,
-        image: session.user.image ?? null,
-      },
+      user: { name: session.user.name ?? null, image: session.user.image ?? null },
     };
     setMessages([...messages, optimisticMessage]);
     setNewMessage('');
+    
+    // Сообщаем, что мы закончили печатать
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    supabase.channel('realtime-talks').untrack();
     
     await fetch('/api/messages', {
       method: 'POST',
@@ -80,27 +151,39 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
         {messages.map((message) => {
           const isCurrentUser = message.userId === session.user.id;
           return (
-            // 3. ИСПРАВЛЕНИЕ ОТОБРАЖЕНИЯ (JSX)
-            <div key={message.id} className={`flex items-start gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+            <div key={message.id} className={`group flex items-start gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
               {!isCurrentUser && <Image src={message.user?.image || '/default-avatar.png'} alt={message.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" />}
-              <div className={`flex flex-col max-w-sm p-3 rounded-lg ${isCurrentUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none border'}`}>
+              <div className={`flex flex-col max-w-xs sm:max-w-sm p-3 rounded-lg ${isCurrentUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none border'}`}>
                 {!isCurrentUser && <p className="font-semibold text-sm mb-1">{message.user?.name}</p>}
-                <p className="whitespace-pre-wrap">{message.content}</p>
+                <p className="whitespace-pre-wrap break-words">{message.content}</p>
                 <p className={`text-xs mt-2 opacity-70 ${isCurrentUser ? 'text-right' : 'text-left'}`}>{new Date(message.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
               </div>
+              {/* --- КНОПКА УДАЛЕНИЯ --- */}
+              {isCurrentUser && (
+                <button onClick={() => handleDelete(message.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg>
+                </button>
+              )}
               {isCurrentUser && <Image src={session.user?.image || '/default-avatar.png'} alt={session.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" />}
             </div>
           );
         })}
         <div ref={messagesEndRef} />
       </div>
-      <form onSubmit={handleSubmit} className="mt-4 p-4 bg-white border-t flex items-center gap-3">
-        {/* ... (эта часть без изменений) */}
+
+      {/* --- ИНДИКАТОР ПЕЧАТИ --- */}
+      <div className="h-6 px-4 text-sm text-gray-500 italic">
+        {typingUsers.length > 0 && (
+          `${typingUsers.map(u => u.name).join(', ')} печатает...`
+        )}
+      </div>
+
+      <form onSubmit={handleSubmit} className="p-4 bg-white border-t flex items-center gap-3">
         <Image src={session.user?.image || '/default-avatar.png'} alt="Your avatar" width={40} height={40} className="rounded-full" />
-        <textarea placeholder="Напишите сообщение..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }} className="w-full p-2 border rounded-md resize-none" rows={1} />
+        {/* Добавили onChange={handleTyping} */}
+        <textarea placeholder="Напишите сообщение..." value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }} className="w-full p-2 border rounded-md resize-none" rows={1} />
         <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300" disabled={!newMessage.trim()}>Отправить</button>
       </form>
     </div>
   );
 }
-
