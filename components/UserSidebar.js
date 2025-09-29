@@ -8,7 +8,7 @@ export default function UserSidebar() {
   const { data: session } = useSession();
   if (!session?.user) return null;
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 p-6 rounded-lg shadow-md flex flex-col gap-6">
+  <aside className="w-64 bg-white border-r border-gray-200 p-6 rounded-lg shadow-md hidden sm:flex sm:flex-col sm:gap-6">
       <div className="flex items-center gap-3">
         {session.user.image && (
           <Image src={session.user.image} alt={session.user.name || ''} width={48} height={48} className="rounded-full" />
