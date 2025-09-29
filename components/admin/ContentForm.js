@@ -1,39 +1,27 @@
 // components/admin/ContentForm.js
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
 import TagInput from '@/components/admin/TagInput';
 import TiptapEditor from '@/components/admin/TiptapEditor';
 
 export default function ContentForm({ initialData, saveAction, type }) {
   const isEditing = !!initialData;
-  const [content, setContent] = useState(initialData?.content || '');
-
-  // Надёжная синхронизация состояния с данными, приходящими с сервера
-  useEffect(() => {
-    if (isEditing && initialData?.content) {
-      setContent(initialData.content);
-    }
-  }, [initialData, isEditing]);
-
-
-
   return (
-  <form action={saveAction} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md">
+    <form action={saveAction} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md">
       {isEditing && <input type="hidden" name="id" value={initialData.id} />}
-      
+
       <div>
         <label htmlFor="title" className="block text-sm font-medium text-gray-700">Название</label>
-  <input type="text" name="title" id="title" required defaultValue={initialData?.title || ''} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3" />
+        <input type="text" name="title" id="title" required defaultValue={initialData?.title || ''} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3" />
       </div>
       <div>
         <label htmlFor="slug" className="block text-sm font-medium text-gray-700">URL (slug)</label>
-  <input type="text" name="slug" id="slug" required defaultValue={initialData?.slug || ''} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3" />
+        <input type="text" name="slug" id="slug" required defaultValue={initialData?.slug || ''} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3" />
       </div>
-      
+
       <TagInput initialTags={initialData?.tags} />
-      
-      <TiptapEditor value={content} onChange={setContent} />
+
+      <TiptapEditor value={initialData?.content || ''} />
 
       <div className="flex items-center mt-2 mb-2">
         <input id="published" name="published" type="checkbox" defaultChecked={initialData?.published || false} className="h-6 w-6 rounded border-gray-300 text-blue-600" />
