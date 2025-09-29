@@ -1,5 +1,7 @@
-import { DefaultSession, DefaultUser } from 'next-auth';
-import { JWT } from 'next-auth/jwt'; // <<< 1. Импортируем тип JWT
+// types/next-auth.d.ts
+
+import NextAuth, { DefaultSession, DefaultUser } from 'next-auth';
+import { JWT } from 'next-auth/jwt';
 
 export enum Role {
   USER = 'USER',
@@ -7,25 +9,29 @@ export enum Role {
 }
 
 declare module 'next-auth' {
+  interface User {
+    role?: Role;
+    username?: string | null;
+    bio?: string | null;
+    website?: string | null;
+  }
+
   interface Session {
     user: {
       id: string;
-      role: Role;
+      role?: Role;
+      username?: string | null;
+      bio?: string | null;
+      website?: string | null;
     } & DefaultSession['user'];
-    supabaseAccessToken?: string; // Добавляем токен в тип сессии
-  }
-
-  interface User {
-    role: Role;
-  }
-}
-
-// <<< 2. РАСШИРЯЕМ ТИП JWT >>>
-// Теперь TypeScript будет знать, что наш токен содержит эти поля
-declare module 'next-auth/jwt' {
-  interface JWT {
-    role: Role;
     supabaseAccessToken?: string;
   }
 }
 
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id: string;
+    role?: Role;
+    username?: string | null;
+  }
+}
