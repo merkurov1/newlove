@@ -3,8 +3,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Picker from 'emoji-mart/react';
-import data from '@emoji-mart/data';
+import Picker from 'emoji-mart';
+import 'emoji-mart/css/emoji-mart.css';
 import { createClient } from '@/lib/supabase-browser';
 import { signIn } from 'next-auth/react';
 import Image from 'next/image';
@@ -227,13 +227,15 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
           {showEmojiPicker && (
             <div className="absolute bottom-12 right-0 z-50">
               <Picker
-                data={data}
-                onEmojiSelect={(emoji: any) => {
-                  setNewMessage(newMessage + emoji.native);
+                onSelect={(emoji: any) => {
+                  setNewMessage(newMessage + (emoji.native || emoji.colons || ''));
                   setShowEmojiPicker(false);
                 }}
+                title="Выберите emoji"
+                emoji="point_up"
                 theme="light"
-                previewPosition="none"
+                showPreview={false}
+                showSkinTones={false}
               />
             </div>
           )}
