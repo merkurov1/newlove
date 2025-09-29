@@ -175,9 +175,9 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   }
 
   return (
-  <div className="flex flex-col h-[calc(100vh-10rem)] w-full max-w-3xl mx-auto p-1 sm:p-4 font-sans">
+    <div className="flex flex-col h-[calc(100vh-10rem)] w-full max-w-3xl mx-auto p-1 sm:p-4 font-sans">
       {/* --- ONLINE USERS BAR --- */}
-  <div className="flex items-center gap-2 mb-2 min-h-[32px] overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
+      <div className="flex items-center gap-2 mb-2 min-h-[32px] overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
         {onlineUsers.length > 0 ? (
           <>
             <span className="text-xs text-gray-500 mr-2 whitespace-nowrap">Онлайн:</span>
