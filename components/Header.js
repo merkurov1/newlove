@@ -104,18 +104,21 @@ export default function Header({ projects, settings }) {
             </li>
             {/* Ссылки из UserSidebar перенесены сюда */}
             {status === 'authenticated' && (
-              <>
-                <li>
-                  <Link href={`/you/${session.user?.name || 'me'}`} onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 py-2 text-gray-600 font-semibold hover:text-gray-900">
-                    👤 Профиль
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/users" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 py-2 text-gray-600 font-semibold hover:text-gray-900">
-                    👥 Пользователи
-                  </Link>
-                </li>
-              </>
+              (() => {
+                const username = session.user?.username || session.user?.name || 'me';
+                return <>
+                  <li>
+                    <Link href={`/you/${username}`} onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 py-2 text-gray-600 font-semibold hover:text-gray-900">
+                      👤 Профиль
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/users" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 py-2 text-gray-600 font-semibold hover:text-gray-900">
+                      👥 Пользователи
+                    </Link>
+                  </li>
+                </>;
+              })()
             )}
           </ul>
         </nav>
