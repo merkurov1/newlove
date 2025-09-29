@@ -37,6 +37,8 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   const [newMessage, setNewMessage] = useState('');
   // --- НОВОЕ СОСТОЯНИЕ ДЛЯ ИНДИКАТОРА ПЕЧАТИ ---
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  // --- СОСТОЯНИЕ ДЛЯ ОНЛАЙН-ПОЛЬЗОВАТЕЛЕЙ ---
+  const [onlineUsers, setOnlineUsers] = useState<TypingUser[]>([]);
   // --- СОСТОЯНИЕ ДЛЯ EMOJI PICKER ---
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   // --- СОСТОЯНИЕ ДЛЯ РЕАКЦИЙ ---
@@ -89,12 +91,12 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
 
     // --- ПОДПИСКА НА ИНДИКАТОР ПЕЧАТИ (PRESENCE) ---
     channel.on('presence', { event: 'sync' }, () => {
-        const newState = channel.presenceState<TypingUser>();
-        const users = Object.values(newState).map(p => p[0]);
-        // Убираем себя из списка печатающих
-        setTypingUsers(users.filter(u => u.name !== session.user.name)); 
-      }
-    );
+      const newState = channel.presenceState<TypingUser>();
+      const users = Object.values(newState).map((p: any) => p[0]).filter(Boolean);
+      setOnlineUsers(users);
+      // Убираем себя из списка печатающих
+      setTypingUsers(users.filter(u => u.name !== session.user.name));
+    });
 
     channel.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
@@ -173,6 +175,22 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
 
   return (
     <div className="flex flex-col h-[calc(100vh-10rem)] max-w-3xl mx-auto p-4 font-sans">
+      {/* --- ONLINE USERS BAR --- */}
+      <div className="flex items-center gap-2 mb-2 min-h-[32px]">
+        {onlineUsers.length > 0 ? (
+          <>
+            <span className="text-xs text-gray-500 mr-2">Онлайн:</span>
+            {onlineUsers.map((u, i) => (
+              <span key={u.name + i} className="flex items-center gap-1">
+                <img src={u.image || '/default-avatar.png'} alt={u.name || 'user'} className="w-6 h-6 rounded-full border" />
+                <span className="text-xs text-gray-700">{u.name}</span>
+              </span>
+            ))}
+          </>
+        ) : (
+          <span className="text-xs text-gray-400">Нет пользователей онлайн</span>
+        )}
+      </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {messages.map((message) => {
           const isCurrentUser = message.userId === session.user.id;
