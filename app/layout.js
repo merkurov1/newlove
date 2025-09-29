@@ -7,6 +7,9 @@ import Footer from '@/components/Footer';
 import AuthProvider from '@/components/AuthProvider';
 import prisma from '@/lib/prisma';
 import { Analytics } from '@vercel/analytics/react';
+import dynamic from 'next/dynamic';
+
+const UserSidebar = dynamic(() => import('@/components/UserSidebar'), { ssr: false });
 
 const inter = Inter({
   variable: '--font-inter', // Используем CSS переменную для большей гибкости
@@ -79,9 +82,12 @@ export default async function RootLayout({ children }) {
         <AuthProvider>
           <div className="flex flex-col min-h-screen">
             <Header projects={projects} settings={settings} />
-            <main className="flex-grow w-full container mx-auto px-4 py-8">
-              {children}
-            </main>
+            <div className="flex flex-1 w-full container mx-auto px-4 py-8 gap-8">
+              <UserSidebar />
+              <main className="flex-grow">
+                {children}
+              </main>
+            </div>
             <Footer />
           </div>
         </AuthProvider>
