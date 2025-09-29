@@ -39,6 +39,23 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   // --- СОСТОЯНИЕ ДЛЯ EMOJI PICKER ---
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  // --- СОСТОЯНИЕ ДЛЯ РЕАКЦИЙ ---
+  // reactions: { [messageId: string]: Set<userId> }
+  const [reactions, setReactions] = useState<{ [key: string]: Set<string> }>({});
+
+  // --- ФУНКЦИЯ ДЛЯ ЛАЙКА ---
+  const handleLike = (messageId: string) => {
+    if (!session?.user?.id) return;
+    setReactions(prev => {
+      const current = prev[messageId] ? new Set<string>(prev[messageId]) : new Set<string>();
+      if (current.has(session.user.id)) {
+        current.delete(session.user.id);
+      } else {
+        current.add(session.user.id);
+      }
+      return { ...prev, [messageId]: current };
+    });
+  };
   
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -157,6 +174,8 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
           const isCurrentUser = message.userId === session.user.id;
           // Найти первую ссылку в сообщении
           const urlMatch = message.content.match(/https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+/);
+          const likes = reactions[message.id] ? reactions[message.id].size : 0;
+          const likedByMe = reactions[message.id]?.has(session.user.id);
           return (
             <div key={message.id} className={`group flex items-start gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
               {!isCurrentUser && <Image src={message.user?.image || '/default-avatar.png'} alt={message.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" />}
@@ -165,6 +184,17 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
                 <p className="whitespace-pre-wrap break-words">{message.content}</p>
                 {/* --- ПРЕДПРОСМОТР ССЫЛКИ --- */}
                 {urlMatch && <LinkPreview url={urlMatch[0]} />}
+                {/* --- РЕАКЦИИ --- */}
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleLike(message.id)}
+                    className={`text-xl transition ${likedByMe ? 'text-pink-500 scale-110' : 'text-gray-400 hover:text-pink-400'}`}
+                  >
+                    ❤️
+                  </button>
+                  {likes > 0 && <span className="text-xs text-gray-500">{likes}</span>}
+                </div>
                 <p className={`text-xs mt-2 opacity-70 ${isCurrentUser ? 'text-right' : 'text-left'}`}>{new Date(message.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
               </div>
               {/* --- КНОПКА УДАЛЕНИЯ --- */}
