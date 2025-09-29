@@ -1,3 +1,4 @@
+import { motion, AnimatePresence } from 'framer-motion';
 // components/LoungeInterface.js
 
 'use client';
@@ -192,7 +193,8 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
         )}
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {messages.map((message) => {
+  <AnimatePresence initial={false}>
+  {messages.map((message) => {
           const isCurrentUser = message.userId === session.user.id;
           // Найти первую ссылку в сообщении
           const urlMatch = message.content.match(/https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+/);
@@ -201,7 +203,15 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
           // --- reply ---
           const replyData = (message as any).replyTo;
           return (
-            <div key={message.id} className={`group flex items-start gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+            <motion.div
+              key={message.id}
+              className={`group flex items-start gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.25 }}
+              layout
+            >
               {!isCurrentUser && <Image src={message.user?.image || '/default-avatar.png'} alt={message.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" />}
               <div className={`flex flex-col max-w-xs sm:max-w-sm p-3 rounded-lg ${isCurrentUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none border'}`}>
                 {/* --- reply preview --- */}
@@ -242,9 +252,10 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
                 </button>
               )}
               {isCurrentUser && <Image src={session.user?.image || '/default-avatar.png'} alt={session.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" />}
-            </div>
+            </motion.div>
           );
-        })}
+  })}
+  </AnimatePresence>
         <div ref={messagesEndRef} />
       </div>
 
