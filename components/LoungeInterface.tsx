@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Picker from 'emoji-mart';
+import { Picker } from 'emoji-mart';
 import 'emoji-mart/css/emoji-mart.css';
 import { createClient } from '@/lib/supabase-browser';
 import { signIn } from 'next-auth/react';
