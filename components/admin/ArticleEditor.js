@@ -1,23 +1,22 @@
 // components/admin/ArticleEditor.js
+"use client";
 
-"use client"; // <-- Очень важная директива!
-
-import React, { useState } from 'react';
+import React from 'react'; // Убираем useState, он больше не нужен
 import SimpleMdeReact from 'react-simplemde-editor';
-import "easymde/dist/easymde.min.css"; // <-- Импорт стилей для редактора
+import "easymde/dist/easymde.min.css";
 
-export default function ArticleEditor({ initialValue = '' }) {
-  const [content, setContent] = useState(initialValue);
-
-  // Эта невидимая textarea нужна, чтобы форма правильно отправляла данные
-  // на сервер, так как редактор - это сложный компонент.
+// --- 1. КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Компонент теперь "управляемый" ---
+// Он не хранит состояние сам, а получает его через props (value, onChange)
+export default function ArticleEditor({ value, onChange }) {
   return (
     <div>
-      <label htmlFor="content" className="block text-sm font-medium text-gray-700">Содержимое (Markdown)</label>
+      <label htmlFor="content-editor" className="block text-sm font-medium text-gray-700">Содержимое (Markdown)</label>
       <div className="mt-1">
-        <SimpleMdeReact id="content-editor" value={content} onChange={setContent} />
+        {/* 2. Передаем value и onChange напрямую в библиотеку редактора */}
+        <SimpleMdeReact id="content-editor" value={value} onChange={onChange} />
       </div>
-      <textarea name="content" defaultValue={content} readOnly hidden />
+      {/* 3. Это скрытое поле теперь тоже получает актуальное значение из props */}
+      <textarea name="content" value={value} readOnly hidden />
     </div>
   );
 }

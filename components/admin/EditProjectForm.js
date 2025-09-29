@@ -3,32 +3,22 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { updateProject } from '@/app/admin/actions'; // Путь к Server Action
+import { updateProject } from '@/app/admin/actions';
 import ImageUploader from '@/components/ImageUploader';
 
-// Динамически импортируем редактор, чтобы он работал только в браузере
 const ArticleEditor = dynamic(
   () => import('@/components/admin/ArticleEditor'),
   { ssr: false }
 );
 
 export default function EditProjectForm({ project }) {
-  // Локальное состояние для текста, чтобы редактор был отзывчивым
+  // --- 1. ЭТОТ useState - ЕДИНСТВЕННЫЙ ИСТОЧНИК ПРАВДЫ ---
   const [content, setContent] = useState(project.content);
 
-  // Функция для вставки Markdown-ссылки на картинку в текст
+  // --- 2. УПРОЩЕННАЯ И НАДЕЖНАЯ ВСТАВКА ИЗОБРАЖЕНИЯ ---
+  // Просто добавляем markdown в конец текущего текста.
   const handleImageInsert = (markdownImage) => {
-    // Вставляем в текущую позицию курсора или в конец
-    const textarea = document.querySelector('#content-editor'); // Находим наш редактор
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const newContent = content.substring(0, start) + markdownImage + content.substring(end);
-      setContent(newContent);
-    } else {
-      // Если что-то пошло не так, просто добавляем в конец
-      setContent((prevContent) => `${prevContent}\n${markdownImage}\n`);
-    }
+    setContent((prevContent) => `${prevContent}\n${markdownImage}\n`);
   };
 
   return (
@@ -44,12 +34,11 @@ export default function EditProjectForm({ project }) {
         <input type="text" name="slug" id="slug" required defaultValue={project.slug} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
       </div>
       
-      {/* Компонент загрузки изображений */}
       <ImageUploader onUploadSuccess={handleImageInsert} />
 
-      {/* Наш новый редактор! Передаем в него текущее содержимое и on-the-fly меняем его в textarea */}
-      <ArticleEditor initialValue={content} />
-      {/* В ArticleEditor уже есть скрытое поле <textarea name="content">, которое отправит данные */}
+      {/* --- 3. ТЕПЕРЬ СВЯЗКА РАБОТАЕТ ПРАВИЛЬНО --- */}
+      {/* Мы передаем в редактор актуальное состояние (value) и функцию для его изменения (onChange) */}
+      <ArticleEditor value={content} onChange={setContent} />
 
       <div className="flex items-center">
         <input id="published" name="published" type="checkbox" defaultChecked={project.published} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
