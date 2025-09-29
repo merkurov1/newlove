@@ -7,10 +7,23 @@ import { updateProject } from '../../../actions';
 async function getProject(id) {
   const project = await prisma.project.findUnique({
     where: { id },
-    include: { tags: true }, // <-- ДОБАВЛЯЕМ ЗАГРУЗКУ ТЕГОВ
+    include: { tags: true },
   });
   if (!project) notFound();
   return project;
 }
 
-export default async function EditProjectPage({ params }) { /* ... */ }
+export default async function EditProjectPage({ params }) {
+  const project = await getProject(params.id);
+
+  return (
+    <div>
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Редактирование проекта</h1>
+      <ContentForm 
+        initialData={project} 
+        saveAction={updateProject} 
+        type="проект" 
+      />
+    </div>
+  );
+}
