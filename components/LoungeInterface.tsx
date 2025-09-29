@@ -164,14 +164,13 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   };
 
   if (!session) {
-    // ... (эта часть без изменений)
     return (
-        <div className="flex flex-col items-center justify-center h-[calc(100vh-10rem)] text-center">
-          <h2 className="text-2xl font-semibold mb-4">Присоединяйтесь к обсуждению</h2>
-          <p className="mb-6 text-gray-600">Чтобы отправлять сообщения, пожалуйста, войдите.</p>
-          <button onClick={() => signIn('google')} className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-700">Войти через Google</button>
-        </div>
-      );
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-10rem)] text-center">
+        <h2 className="text-2xl font-semibold mb-4">Присоединяйтесь к обсуждению</h2>
+        <p className="mb-6 text-gray-600">Чтобы отправлять сообщения, пожалуйста, войдите.</p>
+        <button onClick={() => signIn('google')} className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-700">Войти через Google</button>
+      </div>
+    );
   }
 
   return (
@@ -324,15 +323,6 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
           )}
         </div>
   <button type="submit" className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300 active:scale-95 transition min-w-[44px] min-h-[44px] text-base" disabled={!newMessage.trim()}>Отправить</button>
-@layer utilities {
-  .animate-fade-in {
-    animation: fadeIn 0.25s ease;
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(16px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-}
       </form>
     </div>
   );
