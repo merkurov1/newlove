@@ -1,3 +1,5 @@
+// lib/authOptions.ts
+
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { type NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
@@ -13,22 +15,12 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
-  // <<< 1. УДАЛЯЕМ КОЛБЭК jwt >>>
-  // Он не используется в стратегии "Database", которую включает Prisma Adapter.
-  // Вся логика теперь находится в ОДНОМ колбэке - session().
-
   callbacks: {
-    // <<< 2. РАБОТАЕМ С ОБЪЕКТОМ user, А НЕ token >>>
-    // В стратегии "Database" этот колбэк получает { session, user }.
     async session({ session, user }) {
-      
-      // <<< 3. ВСЯ ЛОГИКА ТЕПЕРЬ ВНУТРИ ОДНОГО КОЛБЭКА >>>
-
-      // а) Создаем специальный токен для Supabase, используя данные из объекта `user`
       const supabaseJwt = sign(
         {
           aud: 'authenticated',
-          exp: Math.floor(new Date().getTime() / 1000) + 60 * 60 * 24 * 7, // Токен живет 7 дней
+          exp: Math.floor(new Date().getTime() / 1000) + 60 * 60 * 24 * 7,
           sub: user.id,
           email: user.email,
           role: 'authenticated',
@@ -36,12 +28,14 @@ export const authOptions: NextAuthOptions = {
         process.env.SUPABASE_JWT_SECRET!
       );
       
-      // б) Добавляем токен Supabase в объект сессии
       session.supabaseAccessToken = supabaseJwt;
 
-      // в) Добавляем наши кастомные поля в сессию из объекта `user`
+      // --- ДОБАВЛЯЕМ НОВЫЕ ПОЛЯ В СЕССИЮ ---
       session.user.id = user.id;
       session.user.role = user.role as Role;
+      session.user.username = user.username; // Добавляем username
+      session.user.bio = user.bio;           // Добавляем bio
+      session.user.website = user.website;   // Добавляем website
 
       return session;
     },
