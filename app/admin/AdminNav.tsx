@@ -8,6 +8,7 @@ const navItems = [
   { href: '/admin/articles', label: 'Статьи', icon: '/icons/article.svg' },
   { href: '/admin/projects', label: 'Проекты', icon: '/icons/project.svg' },
   { href: '/admin/letters', label: 'Рассылки', icon: '/icons/mail.svg' },
+  { href: '/admin/media', label: 'Медиа', icon: '/icons/image.svg' },
 ];
 
 export default function AdminNav() {
