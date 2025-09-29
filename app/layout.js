@@ -76,6 +76,8 @@ export default async function RootLayout({ children }) {
     logo_url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png' 
   };
 
+  const subscriberCount = await prisma.subscriber.count();
+
   return (
     // Применяем шрифт через CSS переменную
     <html lang="ru" className={`${inter.variable} font-sans`}>
@@ -91,7 +93,7 @@ export default async function RootLayout({ children }) {
                 {children}
               </main>
             </div>
-            <Footer />
+            <Footer subscriberCount={subscriberCount} />
           </div>
         </AuthProvider>
   <Analytics />
