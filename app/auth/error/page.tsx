@@ -7,7 +7,7 @@ import { Suspense } from 'react'; // <<< 1. Импортируем Suspense
 // <<< 2. Создаем внутренний компонент, который будет выполнять всю "клиентскую" работу
 function ErrorMessage() {
   const searchParams = useSearchParams();
-  const error = searchParams.get('error');
+  const error = searchParams ? searchParams.get('error') : null;
 
   const errorMessages: { [key: string]: string } = {
     Configuration: "Произошла ошибка на стороне сервера. Проверьте конфигурацию аутентификации.",
