@@ -1,10 +1,16 @@
 'use client';
 
 import { useFormState, useFormStatus } from 'react-dom';
-import { updateLetter, sendLetter } from '@/app/admin/actions'; // Путь из папки components
+import { updateLetter, sendLetter } from '@/app/admin/actions';
+import { useState, useEffect } from 'react';
+import EditorJsArticle from '@/components/admin/EditorJsArticle';
 
 export default function EditLetterForm({ letter, subscriberCount }) {
   const [sendState, sendFormAction] = useFormState(sendLetter, { message: null, status: null });
+  const [content, setContent] = useState(letter.content || '');
+  useEffect(() => {
+    setContent(letter.content || '');
+  }, [letter.content]);
   
   function SendButton() {
     const { pending } = useFormStatus();
@@ -59,10 +65,7 @@ export default function EditLetterForm({ letter, subscriberCount }) {
           <label htmlFor="slug" className="block text-sm font-medium text-gray-700">URL (slug)</label>
           <input type="text" name="slug" id="slug" required defaultValue={letter.slug} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
         </div>
-        <div>
-          <label htmlFor="content" className="block text-sm font-medium text-gray-700">Содержимое (Markdown)</label>
-          <textarea name="content" id="content" rows="15" required defaultValue={letter.content} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></textarea>
-        </div>
+        <EditorJsArticle value={content} onChange={setContent} />
         <div className="flex items-center">
           <input id="published" name="published" type="checkbox" defaultChecked={letter.published} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
           <label htmlFor="published" className="ml-2 block text-sm text-gray-900">Опубликовать в архиве</label>
