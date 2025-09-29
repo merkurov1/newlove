@@ -96,5 +96,12 @@ export default async function SlugPage({ params }) {
       <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: htmlContent }} />
     </article>
   );
+}
+
+export default async function SlugPage({ params }) {
+  const result = await getContent(params.slug);
+  if (!result) notFound();
+  return <ContentDisplay content={result.data} type={result.type} />;
+}
 
 
