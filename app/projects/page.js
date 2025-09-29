@@ -1,10 +1,17 @@
+// app/projects/page.js
+
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
+
+// --- БЛОК МЕТАДАННЫХ ---
+export const metadata = {
+  title: 'Все проекты',
+  description: 'Портфолио и архив всех творческих проектов Антона Меркурова.',
+};
 
 export const dynamic = 'force-dynamic';
 
 export default async function ProjectsPage() {
-  // Находим только опубликованные проекты
   const projects = await prisma.project.findMany({
     where: { published: true },
     orderBy: { publishedAt: 'desc' },
@@ -34,4 +41,3 @@ export default async function ProjectsPage() {
     </div>
   );
 }
-
