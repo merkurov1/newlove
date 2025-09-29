@@ -1,6 +1,7 @@
-// === ИСПРАВЛЕННЫЙ ПУТЬ ===
-// Из app/admin/articles/new/ нужно подняться на два уровня (../../) до app/admin/
+// app/admin/articles/new/page.js
+
 import { createArticle } from '../../actions';
+import ArticleEditor from '@/components/admin/ArticleEditor'; // <-- 1. Импортируем наш новый редактор
 
 export default function NewArticlePage() {
   return (
@@ -15,10 +16,10 @@ export default function NewArticlePage() {
           <label htmlFor="slug" className="block text-sm font-medium text-gray-700">URL (slug)</label>
           <input type="text" name="slug" id="slug" required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" />
         </div>
-        <div>
-          <label htmlFor="content" className="block text-sm font-medium text-gray-700">Содержимое (Markdown)</label>
-          <textarea name="content" id="content" rows="10" required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"></textarea>
-        </div>
+        
+        {/* 2. Заменяем старую textarea на наш новый компонент */}
+        <ArticleEditor />
+        
         <div className="flex items-center">
           <input id="published" name="published" type="checkbox" className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
           <label htmlFor="published" className="ml-2 block text-sm text-gray-900">Опубликовать сразу</label>
@@ -32,4 +33,3 @@ export default function NewArticlePage() {
     </div>
   );
 }
-
