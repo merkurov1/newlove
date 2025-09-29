@@ -1,23 +1,25 @@
+// app/projects/[slug]/page.js
 import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Image from 'next/image';
+import Link from 'next/link';
 import MarkdownImage from '@/components/MarkdownImage';
-// --- 1. Импортируем наши новые общие функции ---
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 
-// Эта функция находит проект в базе по slug из URL
 async function getProject(slug) {
   const project = await prisma.project.findUnique({
     where: { slug: slug, published: true },
-    include: { author: { select: { name: true, image: true } } },
+    include: { // <<< ИСПРАВЛЕНИЕ: ДОБАВЛЯЕМ ЗАГРУЗКУ ТЕГОВ
+      author: { select: { name: true, image: true } },
+      tags: true,
+    },
   });
   if (!project) notFound();
   return project;
 }
 
-// Функция генерации метаданных теперь использует импортированные функции
 export async function generateMetadata({ params }) {
     const project = await getProject(params.slug);
     const previewImage = getFirstImage(project.content);
@@ -27,6 +29,7 @@ export async function generateMetadata({ params }) {
     return {
       title: project.title,
       description: description,
+      keywords: project.tags.map(tag => tag.name).join(', '),
       openGraph: {
         title: project.title,
         description: description,
@@ -57,6 +60,13 @@ export default async function ProjectPage({ params }) {
           <span>&middot;</span>
           <time dateTime={project.publishedAt.toISOString()}>{new Date(project.publishedAt).toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' })}</time>
         </div>
+        {project.tags && project.tags.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2 mt-4">
+            {project.tags.map(tag => (
+              <Link key={tag.id} href={`/tags/${tag.slug}`} className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full hover:bg-gray-200">{tag.name}</Link>
+            ))}
+          </div>
+        )}
       </div>
       
       {descriptionContent.trim() && (

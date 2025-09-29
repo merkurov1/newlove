@@ -1,19 +1,19 @@
+// app/articles/[slug]/page.js
 import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Image from 'next/image';
-import Link from 'next/link'; // <-- Добавляем импорт Link
+import Link from 'next/link';
 import MarkdownImage from '@/components/MarkdownImage';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 
 async function getArticle(slug) {
   const article = await prisma.article.findUnique({
     where: { slug: slug, published: true },
-    // --- 1. ДОБАВЛЯЕМ ЗАГРУЗКУ ТЕГОВ ---
     include: {
       author: { select: { name: true, image: true } },
-      tags: true, // Загружаем связанные теги
+      tags: true,
     },
   });
   if (!article) notFound();
@@ -22,7 +22,24 @@ async function getArticle(slug) {
 
 export async function generateMetadata({ params }) {
     const article = await getArticle(params.slug);
-    // ... (остальная часть функции без изменений)
+    const previewImage = getFirstImage(article.content);
+    const description = generateDescription(article.content);
+    const baseUrl = 'https://merkurov.love';
+
+    return {
+      title: article.title,
+      description: description,
+      keywords: article.tags.map(tag => tag.name).join(', '),
+      openGraph: {
+        title: article.title,
+        description: description,
+        url: `${baseUrl}/${article.slug}`,
+        siteName: 'Anton Merkurov',
+        images: previewImage ? [{ url: previewImage, width: 1200, height: 630 }] : [],
+        locale: 'ru_RU', type: 'article',
+      },
+      twitter: { /* ... */ },
+    };
 }
 
 export default async function ArticlePage({ params }) {
@@ -41,18 +58,10 @@ export default async function ArticlePage({ params }) {
           <span>&middot;</span>
           <time dateTime={article.publishedAt.toISOString()}>{new Date(article.publishedAt).toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' })}</time>
         </div>
-        
-        {/* --- 2. НОВЫЙ БЛОК ДЛЯ ОТОБРАЖЕНИЯ ТЕГОВ --- */}
         {article.tags && article.tags.length > 0 && (
           <div className="flex flex-wrap justify-center gap-2 mt-4">
             {article.tags.map(tag => (
-              <Link 
-                key={tag.id}
-                href={`/tags/${tag.slug}`} 
-                className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full hover:bg-gray-200"
-              >
-                {tag.name}
-              </Link>
+              <Link key={tag.id} href={`/tags/${tag.slug}`} className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full hover:bg-gray-200">{tag.name}</Link>
             ))}
           </div>
         )}
