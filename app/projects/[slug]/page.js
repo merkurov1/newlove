@@ -5,29 +5,27 @@ import remarkGfm from 'remark-gfm';
 import Image from 'next/image';
 import MarkdownImage from '@/components/MarkdownImage';
 
-// Вспомогательные функции и getProject остаются без изменений
+// ... (вспомогательные функции и generateMetadata остаются без изменений)
 function getFirstImage(content) { /* ... */ }
 function generateDescription(content) { /* ... */ }
-async function getProject(slug) {
-  const project = await prisma.project.findUnique({
-    where: { slug: slug, published: true },
-    include: { author: { select: { name: true, image: true } } },
-  });
-  if (!project) { notFound(); }
-  return project;
-}
-
-// generateMetadata остаётся без изменений
+async function getProject(slug) { /* ... */ }
 export async function generateMetadata({ params }) { /* ... */ }
 
 export default async function ProjectPage({ params }) {
   const project = await getProject(params.slug);
-  
-  // Создаем объект для кастомных компонентов Markdown
   const components = { img: MarkdownImage };
 
+  // --- НОВАЯ ЛОГИКА РАЗДЕЛЕНИЯ КОНТЕНТА ---
+  const content = project.content;
+  const firstImageMatch = content.match(/!\[.*?\]\(.*?\)/);
+  const firstImageIndex = firstImageMatch ? content.indexOf(firstImageMatch[0]) : -1;
+
+  // Всё, что ДО первой картинки - это описание
+  const descriptionContent = firstImageIndex !== -1 ? content.substring(0, firstImageIndex) : content;
+  // Всё, что ПОСЛЕ (включая первую картинку) - это галерея
+  const galleryContent = firstImageIndex !== -1 ? content.substring(firstImageIndex) : '';
+
   return (
-    // 1. Делаем контейнер шире для галереи
     <article className="max-w-7xl mx-auto px-4 py-12">
       {/* Заголовок и мета-информация */}
       <div className="text-center mb-12">
@@ -44,19 +42,27 @@ export default async function ProjectPage({ params }) {
         </div>
       </div>
       
-      {/* 2. Создаем Masonry-контейнер с адаптивными колонками */}
-      <div className="columns-1 md:columns-2 lg:columns-3 gap-8">
-        {/* 3. Убираем логику "hero image" и выводим весь контент */}
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={components}
-          // Оборачиваем Markdown в <div className="prose"> для стилизации текста, если он есть
-          // но на саму галерею это не повлияет.
-          className="prose prose-lg max-w-none"
-        >
-          {project.content}
-        </ReactMarkdown>
-      </div>
+      {/* Отрисовываем описание, если оно есть */}
+      {descriptionContent.trim() && (
+        <div className="prose lg:prose-xl max-w-3xl mx-auto mb-12">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {descriptionContent}
+          </ReactMarkdown>
+        </div>
+      )}
+      
+      {/* Отрисовываем галерею, если она есть */}
+      {galleryContent.trim() && (
+        <div className="columns-1 md:columns-2 lg:columns-3 gap-8">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={components}
+            className="prose prose-lg max-w-none"
+          >
+            {galleryContent}
+          </ReactMarkdown>
+        </div>
+      )}
     </article>
   );
 }
