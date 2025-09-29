@@ -26,7 +26,7 @@ export default function Sidebar() {
             // --- УПРОЩЕННАЯ И НАДЕЖНАЯ ЛОГИКА АКТИВНОЙ ССЫЛКИ ---
             const isActive = item.href === '/admin' 
               ? pathname === item.href 
-              : pathname.startsWith(item.href);
+              : (pathname ? pathname.startsWith(item.href) : false);
 
             return (
               <li key={item.href}>
