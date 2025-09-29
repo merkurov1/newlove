@@ -6,13 +6,10 @@ import Image from 'next/image';
 
 export const dynamic = 'force-dynamic';
 
-// --- ИСПРАВЛЕННАЯ ФУНКЦИЯ ---
-// Теперь ищет изображения в формате Markdown: ![alt](url)
-function getFirstImage(content) {
+async function getFirstImage(content) {
   if (!content) return null;
-  const regex = /!\[.*?\]\((.*?)\)/; // Регулярное выражение для Markdown
+  const regex = /!\[.*?\]\((.*?)\)/;
   const match = content.match(regex);
-  // URL находится в первой захваченной группе (match[1])
   return match ? match[1] : null;
 }
 
@@ -22,10 +19,12 @@ async function getArticles() {
       where: { published: true },
       orderBy: { publishedAt: 'desc' },
       take: 9,
+      // --- 1. ДОБАВЛЯЕМ ЗАГРУЗКУ ТЕГОВ ---
       include: {
         author: {
           select: { name: true, image: true },
         },
+        tags: true, // Загружаем связанные теги
       },
     });
     return articles;
@@ -80,10 +79,25 @@ export default async function HomePage() {
                     })}
                     </p>
                 )}
-                {/* Улучшенное превью: убираем из текста Markdown-разметку картинок */}
                 <p className="text-gray-700 mb-4 line-clamp-3 overflow-hidden flex-grow">
                   {article.content.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 150)}...
                 </p>
+
+                {/* --- 2. НОВЫЙ БЛОК ДЛЯ ОТОБРАЖЕНИЯ ТЕГОВ --- */}
+                {article.tags && article.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {article.tags.map(tag => (
+                      <Link 
+                        key={tag.id}
+                        href={`/tags/${tag.slug}`} 
+                        className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full hover:bg-gray-200"
+                      >
+                        {tag.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-100">
                   {article.author.image && (
                     <Image src={article.author.image} alt={article.author.name || ''} width={32} height={32} className="rounded-full" />

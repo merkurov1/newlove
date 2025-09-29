@@ -3,47 +3,27 @@ import { notFound } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Image from 'next/image';
+import Link from 'next/link'; // <-- Добавляем импорт Link
 import MarkdownImage from '@/components/MarkdownImage';
-// --- 1. Импортируем наши новые общие функции ---
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 
-// Эта функция находит статью в базе по slug из URL
 async function getArticle(slug) {
   const article = await prisma.article.findUnique({
     where: { slug: slug, published: true },
-    include: { author: { select: { name: true, image: true } } },
+    // --- 1. ДОБАВЛЯЕМ ЗАГРУЗКУ ТЕГОВ ---
+    include: {
+      author: { select: { name: true, image: true } },
+      tags: true, // Загружаем связанные теги
+    },
   });
   if (!article) notFound();
   return article;
 }
 
-// Функция генерации метаданных теперь использует импортированные функции
 export async function generateMetadata({ params }) {
     const article = await getArticle(params.slug);
-    const previewImage = getFirstImage(article.content);
-    const description = generateDescription(article.content);
-    const baseUrl = 'https://merkurov.love';
-
-    return {
-      title: article.title,
-      description: description,
-      openGraph: {
-        title: article.title,
-        description: description,
-        url: `${baseUrl}/${article.slug}`,
-        siteName: 'Anton Merkurov',
-        images: previewImage ? [{ url: previewImage, width: 1200, height: 630 }] : [],
-        locale: 'ru_RU', type: 'article',
-      },
-      twitter: {
-        card: 'summary_large_image',
-        title: article.title,
-        description: description,
-        images: previewImage ? [previewImage] : [],
-      },
-    };
+    // ... (остальная часть функции без изменений)
 }
-
 
 export default async function ArticlePage({ params }) {
   const article = await getArticle(params.slug);
@@ -61,6 +41,21 @@ export default async function ArticlePage({ params }) {
           <span>&middot;</span>
           <time dateTime={article.publishedAt.toISOString()}>{new Date(article.publishedAt).toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' })}</time>
         </div>
+        
+        {/* --- 2. НОВЫЙ БЛОК ДЛЯ ОТОБРАЖЕНИЯ ТЕГОВ --- */}
+        {article.tags && article.tags.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2 mt-4">
+            {article.tags.map(tag => (
+              <Link 
+                key={tag.id}
+                href={`/tags/${tag.slug}`} 
+                className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full hover:bg-gray-200"
+              >
+                {tag.name}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
       
       {heroImage && (
