@@ -2,14 +2,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import dynamic from 'next/dynamic';
 import ImageUploader from '@/components/ImageUploader';
 import TagInput from '@/components/admin/TagInput';
-
-const ArticleEditor = dynamic(
-  () => import('@/components/admin/ArticleEditor'),
-  { ssr: false }
-);
+import EditorJsArticle from '@/components/admin/EditorJsArticle';
 
 export default function ContentForm({ initialData, saveAction, type }) {
   const isEditing = !!initialData;
@@ -18,22 +13,16 @@ export default function ContentForm({ initialData, saveAction, type }) {
 
   // Надёжная синхронизация состояния с данными, приходящими с сервера
   useEffect(() => {
-    // Устанавливаем контент только если он есть в initialData
+    // Для Editor.js данные должны быть в формате JSON-строки
     if (isEditing && initialData?.content) {
       setContent(initialData.content);
     }
-    // Для новых страниц initialData будет undefined, и state останется '', что правильно
   }, [initialData, isEditing]);
 
-  const handleImageInsert = (markdownImage) => {
-    const editor = editorInstanceRef.current;
-    if (editor && editor.codemirror) {
-      const doc = editor.codemirror.getDoc();
-      const cursor = doc.getCursor();
-      doc.replaceRange(markdownImage, cursor);
-    } else {
-      setContent((prev) => `${prev}\n${markdownImage}\n`);
-    }
+  // Для Editor.js интеграция изображений требует отдельной реализации (через tool image uploader)
+  const handleImageInsert = (imageUrl) => {
+    // Можно реализовать вставку изображения через Editor.js API, если потребуется
+    // Пока оставим как заглушку
   };
 
   return (
@@ -53,10 +42,9 @@ export default function ContentForm({ initialData, saveAction, type }) {
       
       <ImageUploader onUploadSuccess={handleImageInsert} />
 
-      <ArticleEditor 
-        value={content} 
+      <EditorJsArticle
+        value={content}
         onChange={setContent}
-        getMdeInstance={(instance) => { editorInstanceRef.current = instance; }}
       />
 
       <div className="flex items-center">
