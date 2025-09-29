@@ -3,9 +3,9 @@
 import prisma from '../lib/prisma';
 import Link from 'next/link';
 import Image from 'next/image';
-import dynamic from 'next/dynamic';
+import importDynamic from 'next/dynamic';
 
-const FadeInSection = dynamic(() => import('@/components/FadeInSection'), { ssr: false });
+const FadeInSection = importDynamic(() => import('@/components/FadeInSection'), { ssr: false });
 
 // --- БЛОК МЕТАДАННЫХ ---
 export const metadata = {
