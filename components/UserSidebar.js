@@ -17,6 +17,9 @@ export default function UserSidebar() {
       <nav className="flex flex-col items-center gap-6 mt-2 w-full">
         <Link href={`/you/${username}`} className="flex items-center justify-center w-12 h-12 rounded-full hover:bg-blue-50 text-2xl transition" title="Профиль">👤</Link>
         <Link href="/users" className="flex items-center justify-center w-12 h-12 rounded-full hover:bg-blue-50 text-2xl transition" title="Пользователи">👥</Link>
+        {session.user.role === 'ADMIN' && (
+          <Link href="/admin" className="flex items-center justify-center w-12 h-12 rounded-full hover:bg-blue-50 text-2xl transition" title="Админка">⚙️</Link>
+        )}
       </nav>
     </aside>
   );
