@@ -3,7 +3,6 @@ import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import MarkdownImage from '@/components/MarkdownImage';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 
 async function getArticle(slug) {
@@ -44,7 +43,6 @@ export default async function ArticlePage({ params }) {
   const article = await getArticle(params.slug);
   const heroImage = getFirstImage(article.content);
   const contentWithoutHero = heroImage ? article.content.replace(/!\[.*?\]\(.*?\)\n?/, '') : article.content;
-  const components = { img: MarkdownImage };
 
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
