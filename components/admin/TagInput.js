@@ -3,21 +3,21 @@
 
 import { useState, useEffect } from 'react';
 
-export default function TagInput({ initialTags = [] }) {
-  // --- 1. Более безопасная инициализация ---
-  const [tags, setTags] = useState((initialTags || []).map(t => t.name));
+export default function TagInput({ initialTags }) {
+  // Безопасная инициализация состояния, даже если initialTags не передан
+  const [tags, setTags] = useState(() => (initialTags || []).map(t => t.name));
   const [inputValue, setInputValue] = useState('');
 
+  // Синхронизация с невидимым полем для отправки на сервер
   const [hiddenInputValue, setHiddenInputValue] = useState(JSON.stringify(tags));
   useEffect(() => {
     setHiddenInputValue(JSON.stringify(tags));
   }, [tags]);
 
-  // --- 2. Добавляем useEffect для синхронизации ---
+  // Этот useEffect синхронизирует состояние, если initialTags изменятся (важно для редактирования)
   useEffect(() => {
     setTags((initialTags || []).map(t => t.name));
   }, [initialTags]);
-
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ',') {
@@ -41,9 +41,7 @@ export default function TagInput({ initialTags = [] }) {
         {tags.map((tag, index) => (
           <div key={index} className="flex items-center gap-1 bg-blue-100 text-blue-800 text-sm font-medium px-2 py-1 rounded-full">
             {tag}
-            <button type="button" onClick={() => removeTag(tag)} className="text-blue-500 hover:text-blue-700">
-              &times;
-            </button>
+            <button type="button" onClick={() => removeTag(tag)} className="text-blue-500 hover:text-blue-700">&times;</button>
           </div>
         ))}
         <input
