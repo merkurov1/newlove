@@ -71,9 +71,6 @@ export default function Header({ projects, settings }) {
               <div className="flex items-center gap-4">
                 
                 {/* <<< НОВАЯ ССЫЛКА НА ПРОФИЛЬ >>> */}
-                <Link href="/profile" title="Ваш профиль" className="text-xl hover:text-blue-600 transition-colors">
-                  👤
-                </Link>
 
                 <button onClick={() => signOut()} className="text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900">Sign out</button>
               </div>
