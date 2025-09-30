@@ -42,6 +42,7 @@ export async function generateMetadata({ params }) {
 
 
 
+export default async function ProjectPage({ params }) {
   const project = await getProject(params.slug);
   const content = project.content;
 
