@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
+import useImageUpload from './useImageUpload';
 
 export default function GalleryBlockEditor({ images, onChange }) {
   const [localImages, setLocalImages] = useState(images || []);
+  const { upload, loading, error } = useImageUpload();
 
-  const handleAdd = (e) => {
+  const handleAdd = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    // TODO: upload to server and get URL
-    // For now, just use a fake URL
-    const url = URL.createObjectURL(file);
+    const url = await upload(file);
+    if (!url) return;
     const newImg = { src: url, alt: '' };
     const updated = [...localImages, newImg];
     setLocalImages(updated);
@@ -44,10 +45,11 @@ export default function GalleryBlockEditor({ images, onChange }) {
           </div>
         ))}
         <label className="w-32 h-32 border rounded flex items-center justify-center cursor-pointer bg-gray-100">
-          +
+          {loading ? 'Загрузка...' : '+'}
           <input type="file" accept="image/*" onChange={handleAdd} className="hidden" />
         </label>
       </div>
+      {error && <div className="text-red-600 text-xs">{error}</div>}
     </div>
   );
 }

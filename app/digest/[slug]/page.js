@@ -1,7 +1,8 @@
 // app/digest/[slug]/page.js
-import { createClient } from '../../../lib/supabase-server'; // Убедитесь, что путь корректен
+import { createClient } from '../../../lib/supabase-server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import BlockRenderer from '@/components/BlockRenderer';
 
 // Эта функция получает данные для одного конкретного дайджеста по его slug
 async function getDigestBySlug(slug) {
@@ -59,12 +60,7 @@ export default async function DigestPage({ params }) {
           Этот стиль заставляет браузер уважать все переносы строк и пробелы,
           которые сгенерировал ИИ, идеально отображая форматирование поста.
         */}
-        <div 
-          className="prose lg:prose-xl max-w-none text-gray-800"
-          style={{ whiteSpace: 'pre-wrap' }}
-        >
-          {digest.content}
-        </div>
+        <BlockRenderer blocks={digest.content} />
       </article>
     </div>
   );
