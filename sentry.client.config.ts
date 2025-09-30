@@ -1,19 +1,2 @@
 // sentry.client.config.ts
-import * as Sentry from "@sentry/nextjs";
-
-Sentry.init({
-  dsn: "https://6ce114062f8188107b85b2255f4305dc@o4510107334606848.ingest.de.sentry.io/4510107337359440",
-  sendDefaultPii: true,
-  integrations: [
-    Sentry.replayIntegration(),
-    Sentry.feedbackIntegration({
-      colorScheme: "system",
-    }),
-  ],
-  enableLogs: true,
-  tracesSampleRate: 1.0,
-  replaysSessionSampleRate: 0.1,
-  replaysOnErrorSampleRate: 1.0,
-  enabled: process.env.NODE_ENV === 'production',
-});
-export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
+// Sentry client config is now handled in app/instrumentation-client.ts to avoid multiple initializations.
