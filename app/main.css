@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* DIAGNOSTIC: усиленный броский стиль для gallery-grid */
 .gallery-grid, div.gallery-grid, .prose .gallery-grid {
 	border: 5px solid red !important;
