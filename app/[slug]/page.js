@@ -29,13 +29,10 @@ async function getContent(slug) {
 // Компонент теперь принимает `type`, чтобы знать, что отображать
 function ContentDisplay({ content, type }) {
   const { title, publishedAt, content: htmlContent, author } = content;
-
+  const html = md.render(htmlContent || '');
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-8">{title}</h1>
-      
-      {/* <<< 2. УСЛОВНЫЙ РЕНДЕРИНГ >>>
-          Этот блок с автором и датой будет показан ТОЛЬКО если type === 'article' */}
       {type === 'article' && (
         <div className="flex items-center space-x-4 mb-8 text-gray-500">
           {author.image && (
@@ -56,7 +53,6 @@ function ContentDisplay({ content, type }) {
           )}
         </div>
       )}
-      const html = md.render(htmlContent || '');
       <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
     </article>
   );
