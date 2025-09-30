@@ -6,15 +6,29 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/products?select=*`, {
       headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
       cache: 'no-store',
     })
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Ошибка загрузки: ${res.status} ${res.statusText} - ${text}`);
+        }
+        return res.json();
+      })
       .then(data => {
+        if (!Array.isArray(data)) {
+          throw new Error('Некорректный формат данных от Supabase');
+        }
         setProducts(data);
+        setLoading(false);
+      })
+      .catch(e => {
+        setError(e.message || 'Неизвестная ошибка');
         setLoading(false);
       });
   }, []);
@@ -33,6 +47,7 @@ export default function AdminProductsPage() {
   };
 
   if (loading) return <div className="p-8">Загрузка...</div>;
+  if (error) return <div className="p-8 text-red-600">{error}</div>;
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
