@@ -47,26 +47,38 @@ export default async function ProjectPage({ params }) {
   const firstImageIndex = firstImageMatch ? content.indexOf(firstImageMatch[0]) : -1;
   const descriptionContent = firstImageIndex !== -1 ? content.substring(0, firstImageIndex) : content;
   const galleryContent = firstImageIndex !== -1 ? content.substring(firstImageIndex) : '';
+  // --- Post-processing: wrap consecutive images in div.gallery-grid ---
+  function wrapGalleryImages(html) {
+    // Находим последовательности <p><img ...></p> и оборачиваем их в div.gallery-grid
+    return html.replace(/((?:<p><img [^>]+><\/p>\s*){2,})/g, (match) => {
+      return `<div class="gallery-grid">${match}</div>`;
+    });
+  }
+
   const descriptionHtml = sanitizeHtml(md.render(descriptionContent), {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u']),
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
     allowedAttributes: {
       ...sanitizeHtml.defaults.allowedAttributes,
       img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
       a: ['href', 'name', 'target', 'rel'],
       iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
       span: ['class'],
+      div: ['class'],
     },
     allowedSchemes: ['http', 'https', 'mailto'],
     allowProtocolRelative: true,
   });
-  const galleryHtml = sanitizeHtml(md.render(galleryContent), {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u']),
+  let galleryHtml = md.render(galleryContent);
+  galleryHtml = wrapGalleryImages(galleryHtml);
+  galleryHtml = sanitizeHtml(galleryHtml, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
     allowedAttributes: {
       ...sanitizeHtml.defaults.allowedAttributes,
       img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
       a: ['href', 'name', 'target', 'rel'],
       iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
       span: ['class'],
+      div: ['class'],
     },
     allowedSchemes: ['http', 'https', 'mailto'],
     allowProtocolRelative: true,
