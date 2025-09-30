@@ -42,6 +42,7 @@ export async function generateMetadata({ params }) {
 }
 
 
+export default async function ArticlePage({ params }) {
   const article = await getArticle(params.slug);
   const heroImage = getFirstImage(article.content);
   const contentWithoutHero = heroImage ? article.content.replace(/!\[.*?\]\(.*?\)\n?/, '') : article.content;
