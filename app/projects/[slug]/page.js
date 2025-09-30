@@ -82,17 +82,8 @@ export default async function ProjectPage({ params }) {
 
   let galleryHtml;
   if (galleryGridMatch) {
-    // Если блок уже есть — просто санитайзим его
-    galleryHtml = sanitizeHtml(galleryContent, {
-      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'div']),
-      allowedAttributes: {
-        ...sanitizeHtml.defaults.allowedAttributes,
-        img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
-        div: ['class'],
-      },
-      allowedSchemes: ['http', 'https', 'mailto'],
-      allowProtocolRelative: true,
-    });
+    // Если блок уже есть — не фильтруем, вставляем как есть (т.к. формируется только через редактор)
+    galleryHtml = galleryContent;
   } else {
     // Старый режим: markdown -> postprocess -> sanitize
     galleryHtml = md.render(galleryContent);
