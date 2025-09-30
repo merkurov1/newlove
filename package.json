@@ -37,6 +37,7 @@
     "@vercel/analytics": "^1.5.0",
     "easymde": "^2.20.0",
     "express-rate-limit": "^8.1.0",
+    "html-react-parser": "^5.2.6",
     "jsonwebtoken": "^9.0.2",
     "lowlight": "^3.3.0",
     "markdown-it": "^14.1.0",
