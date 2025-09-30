@@ -1,0 +1,7 @@
+/* gallery-debug.css: броский стиль для gallery-grid */
+.gallery-grid, div.gallery-grid, .prose .gallery-grid {
+  border: 8px dashed blue !important;
+  background: #00f2ff55 !important;
+  min-height: 80px !important;
+  display: grid !important;
+}
