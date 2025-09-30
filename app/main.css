@@ -1,3 +1,10 @@
+/* Галерея проектов: изображения в markdown-таблицах */
+.prose table td img {
+	display: block;
+	width: 100%;
+	height: auto;
+	margin: 0 auto;
+}
 /* Анимация появления (fade-in) для emoji-picker и других элементов */
 .animate-fade-in {
 	animation: fadeIn 0.25s ease;
