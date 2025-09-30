@@ -46,13 +46,13 @@ export default async function Page({ params }) {
   const content = project.content;
   const isHtml = content.trim().startsWith('<');
 
-  let renderedContent;
+  let html;
   if (isHtml) {
-    // Tiptap/HTML: вставляем как есть, без .prose и sanitize
-    renderedContent = <div dangerouslySetInnerHTML={{ __html: content }} />;
+    // Tiptap/HTML: вставляем как есть, без sanitize
+    html = content;
   } else {
-    // Markdown: md.render + sanitize + .prose
-    const html = sanitizeHtml(md.render(content), {
+    // Markdown: md.render + sanitize
+    html = sanitizeHtml(md.render(content), {
       allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
       allowedAttributes: {
         ...sanitizeHtml.defaults.allowedAttributes,
@@ -65,7 +65,6 @@ export default async function Page({ params }) {
       allowedSchemes: ['http', 'https', 'mailto'],
       allowProtocolRelative: true,
     });
-    renderedContent = <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: html }} />;
   }
 
   return (
@@ -86,7 +85,7 @@ export default async function Page({ params }) {
           </div>
         )}
       </div>
-      {renderedContent}
+      <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
     </article>
   );
 }
