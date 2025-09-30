@@ -36,6 +36,7 @@
     "@vercel/analytics": "^1.5.0",
     "easymde": "^2.20.0",
     "emoji-mart": "^3.0.1",
+    "express-rate-limit": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "lowlight": "^3.3.0",
     "markdown-it": "^14.1.0",
@@ -53,6 +54,7 @@
     "react-simplemde-editor": "^5.2.0",
     "remark-gfm": "^4.0.0",
     "resend": "^3.5.0",
+    "sanitize-html": "^2.17.0",
     "stripe": "^18.5.0"
   },
   "devDependencies": {

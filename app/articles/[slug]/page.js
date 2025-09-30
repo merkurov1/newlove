@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 import md from '@/lib/markdown';
+import sanitizeHtml from 'sanitize-html';
 
 async function getArticle(slug) {
   const article = await prisma.article.findUnique({
@@ -46,7 +47,18 @@ export default async function ArticlePage({ params }) {
   const article = await getArticle(params.slug);
   const heroImage = getFirstImage(article.content);
   const contentWithoutHero = heroImage ? article.content.replace(/!\[.*?\]\(.*?\)\n?/, '') : article.content;
-  const html = md.render(contentWithoutHero);
+  const html = sanitizeHtml(md.render(contentWithoutHero), {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u']),
+    allowedAttributes: {
+      ...sanitizeHtml.defaults.allowedAttributes,
+      img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+      a: ['href', 'name', 'target', 'rel'],
+      iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+      span: ['class'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: true,
+  });
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
       <div className="text-center mb-12">
