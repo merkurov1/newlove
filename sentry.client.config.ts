@@ -14,7 +14,6 @@ Sentry.init({
   tracesSampleRate: 1.0,
   replaysSessionSampleRate: 0.1,
   replaysOnErrorSampleRate: 1.0,
-});
-export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
   enabled: process.env.NODE_ENV === 'production',
 });
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
