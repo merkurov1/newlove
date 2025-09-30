@@ -93,8 +93,7 @@ export default async function HomePage() {
                       })}
                       </p>
                   )}
-                  <div className="text-gray-700 mb-4 line-clamp-3 overflow-hidden flex-grow text-base sm:text-base prose prose-sm prose-blue max-w-none" 
-                    dangerouslySetInnerHTML={{ __html: article.content ? article.content.substring(0, 300) + '...' : '' }} />
+                  {/* Описание/контент убран по требованию — только заголовок и картинка */}
                   {article.tags && article.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
                       {article.tags.map(tag => (
