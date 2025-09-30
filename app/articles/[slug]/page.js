@@ -45,20 +45,28 @@ export async function generateMetadata({ params }) {
 
 export default async function ArticlePage({ params }) {
   const article = await getArticle(params.slug);
-  const heroImage = getFirstImage(article.content);
-  const contentWithoutHero = heroImage ? article.content.replace(/!\[.*?\]\(.*?\)\n?/, '') : article.content;
-  const html = sanitizeHtml(md.render(contentWithoutHero), {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u']),
-    allowedAttributes: {
-      ...sanitizeHtml.defaults.allowedAttributes,
-      img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
-      a: ['href', 'name', 'target', 'rel'],
-      iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-      span: ['class'],
-    },
-    allowedSchemes: ['http', 'https', 'mailto'],
-    allowProtocolRelative: true,
-  });
+  const content = article.content;
+  const isHtml = content.trim().startsWith('<');
+
+  let html;
+  if (isHtml) {
+    html = content;
+  } else {
+    html = sanitizeHtml(md.render(content), {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
+      allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+        a: ['href', 'name', 'target', 'rel'],
+        iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+        span: ['class'],
+        div: ['class'],
+      },
+      allowedSchemes: ['http', 'https', 'mailto'],
+      allowProtocolRelative: true,
+    });
+  }
+
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
       <div className="text-center mb-12">
@@ -77,14 +85,7 @@ export default async function ArticlePage({ params }) {
           </div>
         )}
       </div>
-      {heroImage && (
-        <div className="mb-12">
-          <Image src={heroImage} alt={article.title} width={1200} height={675} className="rounded-xl shadow-lg w-full" priority />
-        </div>
-      )}
-      <div className="prose lg:prose-xl max-w-none">
-        <div dangerouslySetInnerHTML={{ __html: html }} />
-      </div>
+      <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
     </article>
   );
 }
