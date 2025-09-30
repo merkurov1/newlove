@@ -34,9 +34,7 @@
 	border-spacing: 16px 16px;
 	margin-bottom: 2rem;
 }
-.prose table tr {
-	/* Убираем лишние отступы */
-}
+
 .prose table td {
 	padding: 0;
 	vertical-align: top;
@@ -80,9 +78,7 @@
  * Этот файл является вашим глобальным CSS.
  * Директивы Tailwind должны быть в начале.
  */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* @tailwind directives removed: Tailwind CSS подключается через PostCSS и js/ts-файлы, а не напрямую в этом CSS. */
 
 /**
  * Здесь можно добавлять только самые необходимые глобальные стили,
