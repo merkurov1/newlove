@@ -1,6 +1,7 @@
 import React, { useCallback, useRef } from 'react';
 import SimpleMdeReact from 'react-simplemde-editor';
 import 'easymde/dist/easymde.min.css';
+import md from '@/lib/markdown';
 
 export default function TiptapEditor({ value, onChange }) {
   const mdeRef = useRef();
@@ -31,8 +32,8 @@ export default function TiptapEditor({ value, onChange }) {
     autosave: { enabled: false },
     placeholder: 'Введите текст...',
     previewRender: (plainText) => {
-      // Можно добавить markdown-it для расширенного рендера
-      return window.marked ? window.marked(plainText) : plainText;
+      const html = md.render(plainText);
+      return `<div class="prose prose-blue max-w-none">${html}</div>`;
     },
     toolbar: [
       'bold', 'italic', 'heading', '|', 'quote', 'unordered-list', 'ordered-list', '|',
