@@ -1,12 +1,10 @@
 // app/projects/[slug]/page.js
 import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import Image from 'next/image';
 import Link from 'next/link';
-import MarkdownImage from '@/components/MarkdownImage';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
+import md from '@/lib/markdown';
 
 async function getProject(slug) {
   const project = await prisma.project.findUnique({
@@ -43,12 +41,13 @@ export async function generateMetadata({ params }) {
 
 export default async function ProjectPage({ params }) {
   const project = await getProject(params.slug);
-  const components = { img: MarkdownImage };
   const content = project.content;
   const firstImageMatch = content.match(/!\[.*?\]\(.*?\)/);
   const firstImageIndex = firstImageMatch ? content.indexOf(firstImageMatch[0]) : -1;
   const descriptionContent = firstImageIndex !== -1 ? content.substring(0, firstImageIndex) : content;
   const galleryContent = firstImageIndex !== -1 ? content.substring(firstImageIndex) : '';
+  const descriptionHtml = md.render(descriptionContent);
+  const galleryHtml = md.render(galleryContent);
 
   return (
     <article className="max-w-7xl mx-auto px-4 py-12">
@@ -71,13 +70,12 @@ export default async function ProjectPage({ params }) {
       
       {descriptionContent.trim() && (
         <div className="prose lg:prose-xl max-w-3xl mx-auto mb-12">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{descriptionContent}</ReactMarkdown>
+          <div dangerouslySetInnerHTML={{ __html: descriptionHtml }} />
         </div>
       )}
-      
       {galleryContent.trim() && (
         <div className="columns-1 md:columns-2 lg:columns-3 gap-8">
-          <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} className="prose prose-lg max-w-none">{galleryContent}</ReactMarkdown>
+          <div className="prose prose-lg max-w-none" dangerouslySetInnerHTML={{ __html: galleryHtml }} />
         </div>
       )}
     </article>
