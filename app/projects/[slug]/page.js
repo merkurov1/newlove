@@ -137,9 +137,7 @@ export default async function ProjectPage({ params }) {
         </div>
       )}
       {galleryContent.trim() && (
-        <div className="columns-1 md:columns-2 lg:columns-3 gap-8">
-          <div className="prose prose-lg max-w-none" dangerouslySetInnerHTML={{ __html: galleryHtml }} />
-        </div>
+        <div className="prose prose-lg max-w-none" dangerouslySetInnerHTML={{ __html: galleryHtml }} />
       )}
     </article>
   );
