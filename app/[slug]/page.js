@@ -1,8 +1,7 @@
 import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import Image from 'next/image';
+import md from '@/lib/markdown';
 
 // Эта функция не меняется, она по-прежнему определяет тип контента
 async function getContent(slug) {
@@ -57,7 +56,8 @@ function ContentDisplay({ content, type }) {
           )}
         </div>
       )}
-      <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+      const html = md.render(htmlContent || '');
+      <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
     </article>
   );
 }
