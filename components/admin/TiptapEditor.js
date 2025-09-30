@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
+import GalleryGrid from './tiptap-extension-gallery';
 
 
 export default function TiptapEditor({ value, onChange }) {
@@ -14,6 +15,7 @@ export default function TiptapEditor({ value, onChange }) {
     extensions: [
       StarterKit,
       Image.configure({ inline: false, allowBase64: false }),
+      GalleryGrid,
     ],
     content: value,
     onUpdate: ({ editor }) => {
