@@ -1,7 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import RichTextBlock from '@/components/RichTextBlock';
-import GalleryGrid from '@/components/GalleryGrid';
-// import CodeBlock from '@/components/CodeBlock'; // если потребуется
+import BlockRenderer from '@/components/BlockRenderer';
 
 export default async function ProjectPage({ params }: { params: { slug: string } }) {
   const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
@@ -16,22 +14,7 @@ export default async function ProjectPage({ params }: { params: { slug: string }
   return (
     <article>
       <h1>{project.title}</h1>
-      {project.content.map((block: any, idx: number) => {
-        switch (block.type) {
-          case 'richText':
-            return <RichTextBlock key={idx} html={block.html} />;
-          case 'gallery':
-            return <GalleryGrid key={idx} images={block.images} />;
-          case 'codeBlock':
-            return (
-              <pre key={idx}>
-                <code className={`language-${block.language}`}>{block.code}</code>
-              </pre>
-            );
-          default:
-            return null;
-        }
-      })}
+      <BlockRenderer blocks={project.content} />
     </article>
   );
 }
