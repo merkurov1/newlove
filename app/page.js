@@ -47,6 +47,13 @@ async function getArticles() {
 }
 
 export default async function HomePage() {
+
+  // Sentry test: вызвать ошибку на клиенте
+  if (typeof window !== "undefined") {
+    // eslint-disable-next-line no-undef
+    myUndefinedFunction();
+  }
+
   const rawArticles = await getArticles();
   // Получаем previewImage для каждой статьи асинхронно
   const articles = await Promise.all(
