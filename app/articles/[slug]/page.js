@@ -46,7 +46,6 @@ export async function generateMetadata({ params }) {
   const heroImage = getFirstImage(article.content);
   const contentWithoutHero = heroImage ? article.content.replace(/!\[.*?\]\(.*?\)\n?/, '') : article.content;
   const html = md.render(contentWithoutHero);
-
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
       <div className="text-center mb-12">
