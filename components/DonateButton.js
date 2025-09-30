@@ -15,7 +15,11 @@ export default function DonateButton() {
     if (data?.url) {
       window.location.href = data.url;
     } else {
-      alert('Ошибка при создании сессии Stripe.');
+      const errorMsg = data?.error ? `Ошибка Stripe: ${data.error}` : 'Ошибка при создании сессии Stripe.';
+      // Вывести ошибку в alert и консоль для диагностики
+      alert(errorMsg);
+      // eslint-disable-next-line no-console
+      console.error('Stripe donate error:', data);
     }
   };
 
