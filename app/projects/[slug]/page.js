@@ -59,25 +59,31 @@ export default async function Page({ params }) {
           span: ['class'],
           div: ['class'],
         },
+        allowedClasses: {
+          div: ['*'],
+        },
         allowedSchemes: ['http', 'https', 'mailto'],
         allowProtocolRelative: true,
       });
-  } else {
-    // Markdown: md.render + sanitize
-    html = sanitizeHtml(md.render(content), {
-      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
-      allowedAttributes: {
-        ...sanitizeHtml.defaults.allowedAttributes,
-        img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
-        a: ['href', 'name', 'target', 'rel'],
-        iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-        span: ['class'],
-        div: ['class'],
-      },
-      allowedSchemes: ['http', 'https', 'mailto'],
-      allowProtocolRelative: true,
-    });
-  }
+    } else {
+      // Markdown: md.render + sanitize
+      html = sanitizeHtml(md.render(content), {
+        allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
+        allowedAttributes: {
+          ...sanitizeHtml.defaults.allowedAttributes,
+          img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+          a: ['href', 'name', 'target', 'rel'],
+          iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+          span: ['class'],
+          div: ['class'],
+        },
+        allowedClasses: {
+          div: ['*'],
+        },
+        allowedSchemes: ['http', 'https', 'mailto'],
+        allowProtocolRelative: true,
+      });
+    }
 
   return (
     <article className="max-w-7xl mx-auto px-4 py-12">

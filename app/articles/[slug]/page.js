@@ -60,6 +60,9 @@ export default async function ArticlePage({ params }) {
         span: ['class'],
         div: ['class'],
       },
+      allowedClasses: {
+        div: ['*'],
+      },
       allowedSchemes: ['http', 'https', 'mailto'],
       allowProtocolRelative: true,
     });
@@ -73,6 +76,9 @@ export default async function ArticlePage({ params }) {
         iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
         span: ['class'],
         div: ['class'],
+      },
+      allowedClasses: {
+        div: ['*'],
       },
       allowedSchemes: ['http', 'https', 'mailto'],
       allowProtocolRelative: true,
