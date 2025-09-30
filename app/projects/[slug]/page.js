@@ -85,6 +85,12 @@ export default async function Page({ params }) {
           </div>
         )}
       </div>
+      {/* Тестовый gallery-grid вне dangerouslySetInnerHTML */}
+      <div className="gallery-grid">
+        <div>TEST 1</div>
+        <div>TEST 2</div>
+        <div>TEST 3</div>
+      </div>
       <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
     </article>
   );
