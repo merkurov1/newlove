@@ -40,6 +40,8 @@ export async function generateMetadata({ params }) {
     };
 }
 
+
+export default async function Page({ params }) {
   const project = await getProject(params.slug);
   const content = project.content;
   const isHtml = content.trim().startsWith('<');
