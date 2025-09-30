@@ -1,3 +1,4 @@
+"use client";
 import React, { useCallback, useRef } from 'react';
 import SimpleMdeReact from 'react-simplemde-editor';
 import 'easymde/dist/easymde.min.css';
