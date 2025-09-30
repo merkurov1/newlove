@@ -5,14 +5,14 @@
 
 import { useState } from 'react';
 import TagInput from '@/components/admin/TagInput';
-import TiptapEditor from '@/components/admin/TiptapEditor';
+import BlockEditor from '@/components/admin/BlockEditor';
 
 export default function ContentForm({ initialData, saveAction, type }) {
   const isEditing = !!initialData;
   // Управляемое состояние для всех полей
   const [title, setTitle] = useState(initialData?.title || '');
   const [slug, setSlug] = useState(initialData?.slug || '');
-  const [content, setContent] = useState(initialData?.content || '');
+  const [content, setContent] = useState(Array.isArray(initialData?.content) ? initialData.content : []);
   const [published, setPublished] = useState(initialData?.published || false);
   // TagInput управляет своим состоянием и сериализует в hidden input
 
@@ -47,8 +47,8 @@ export default function ContentForm({ initialData, saveAction, type }) {
 
       <TagInput initialTags={initialData?.tags} />
 
-      <TiptapEditor value={content} onChange={setContent} />
-      <textarea name="content" value={content} readOnly hidden />
+  <BlockEditor value={content} onChange={setContent} />
+  <textarea name="content" value={JSON.stringify(content)} readOnly hidden />
 
       <div className="flex items-center mt-2 mb-2">
         <input
