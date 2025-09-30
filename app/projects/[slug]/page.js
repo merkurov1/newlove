@@ -40,55 +40,17 @@ export async function generateMetadata({ params }) {
     };
 }
 
-export default async function ProjectPage({ params }) {
   const project = await getProject(params.slug);
   const content = project.content;
-  // --- Новый алгоритм: если есть <div class="gallery-grid">...</div>, не прогонять этот блок через markdown-it ---
-  const galleryGridMatch = content.match(/<div class="gallery-grid">[\s\S]*?<\/div>/);
-  let descriptionContent, galleryContent;
-  if (galleryGridMatch) {
-    // Всё до gallery-grid — описание, сам блок — галерея
-    const idx = content.indexOf(galleryGridMatch[0]);
-    descriptionContent = content.substring(0, idx);
-    galleryContent = galleryGridMatch[0];
+  const isHtml = content.trim().startsWith('<');
+
+  let renderedContent;
+  if (isHtml) {
+    // Tiptap/HTML: вставляем как есть, без .prose и sanitize
+    renderedContent = <div dangerouslySetInnerHTML={{ __html: content }} />;
   } else {
-    // Старый режим: ищем первую картинку в markdown
-    const firstImageMatch = content.match(/!\[.*?\]\(.*?\)/);
-    const firstImageIndex = firstImageMatch ? content.indexOf(firstImageMatch[0]) : -1;
-    descriptionContent = firstImageIndex !== -1 ? content.substring(0, firstImageIndex) : content;
-    galleryContent = firstImageIndex !== -1 ? content.substring(firstImageIndex) : '';
-  }
-
-  // --- Post-processing: wrap consecutive images in div.gallery-grid (только если нет gallery-grid) ---
-  function wrapGalleryImages(html) {
-    return html.replace(/((?:<p><img [^>]+><\/p>\s*){2,})/g, (match) => {
-      return `<div class="gallery-grid">${match}</div>`;
-    });
-  }
-
-  const descriptionHtml = sanitizeHtml(md.render(descriptionContent), {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
-    allowedAttributes: {
-      ...sanitizeHtml.defaults.allowedAttributes,
-      img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
-      a: ['href', 'name', 'target', 'rel'],
-      iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-      span: ['class'],
-      div: ['class'],
-    },
-    allowedSchemes: ['http', 'https', 'mailto'],
-    allowProtocolRelative: true,
-  });
-
-  let galleryHtml;
-  if (galleryGridMatch) {
-    // Если блок уже есть — не фильтруем, вставляем как есть (т.к. формируется только через редактор)
-    galleryHtml = galleryContent;
-  } else {
-    // Старый режим: markdown -> postprocess -> sanitize
-    galleryHtml = md.render(galleryContent);
-    galleryHtml = wrapGalleryImages(galleryHtml);
-    galleryHtml = sanitizeHtml(galleryHtml, {
+    // Markdown: md.render + sanitize + .prose
+    const html = sanitizeHtml(md.render(content), {
       allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
       allowedAttributes: {
         ...sanitizeHtml.defaults.allowedAttributes,
@@ -101,6 +63,7 @@ export default async function ProjectPage({ params }) {
       allowedSchemes: ['http', 'https', 'mailto'],
       allowProtocolRelative: true,
     });
+    renderedContent = <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: html }} />;
   }
 
   return (
@@ -121,15 +84,7 @@ export default async function ProjectPage({ params }) {
           </div>
         )}
       </div>
-      
-      {descriptionContent.trim() && (
-        <div className="prose lg:prose-xl max-w-3xl mx-auto mb-12">
-          <div dangerouslySetInnerHTML={{ __html: descriptionHtml }} />
-        </div>
-      )}
-      {galleryContent.trim() && (
-        <div className="prose prose-lg max-w-none" dangerouslySetInnerHTML={{ __html: galleryHtml }} />
-      )}
+      {renderedContent}
     </article>
   );
 }
