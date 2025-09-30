@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 
 const navItems = [
   { href: '/admin', label: 'Главная' },
+  { href: '/admin/users', label: 'Пользователи' },
+  { href: '/admin/subscribers', label: 'Подписчики' },
   { href: '/admin/articles', label: 'Статьи' },
   { href: '/admin/projects', label: 'Проекты' },
   { href: '/admin/letters', label: 'Рассылки' },
