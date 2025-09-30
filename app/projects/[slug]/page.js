@@ -46,10 +46,22 @@ export default async function Page({ params }) {
   const content = project.content;
   const isHtml = content.trim().startsWith('<');
 
-  let html;
-  if (isHtml) {
-    // Tiptap/HTML: вставляем как есть, без sanitize
-    html = content;
+    let html;
+    if (isHtml) {
+      // Tiptap/HTML: sanitize only to allow div.gallery-grid and class
+      html = sanitizeHtml(content, {
+        allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
+        allowedAttributes: {
+          ...sanitizeHtml.defaults.allowedAttributes,
+          img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+          a: ['href', 'name', 'target', 'rel'],
+          iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+          span: ['class'],
+          div: ['class'],
+        },
+        allowedSchemes: ['http', 'https', 'mailto'],
+        allowProtocolRelative: true,
+      });
   } else {
     // Markdown: md.render + sanitize
     html = sanitizeHtml(md.render(content), {
