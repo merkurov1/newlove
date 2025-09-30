@@ -1,11 +1,11 @@
+// src/components/RichTextBlock.tsx
 import React from 'react';
 
-type Props = { html: string };
-export default function RichTextBlock({ html }: Props) {
+export default function RichTextBlock({ text }: { text: string }) {
+  // `text` - это поле из вашего блока в Supabase
+  if (!text) return null;
+
   return (
-    <div
-      className="prose lg:prose-xl max-w-none"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <div dangerouslySetInnerHTML={{ __html: text }} />
   );
 }
