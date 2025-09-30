@@ -1,3 +1,8 @@
+// ВРЕМЕННО: тестовая ошибка для Sentry
+if (typeof window !== 'undefined') {
+  // @ts-ignore
+  myUndefinedFunction();
+}
 // app/admin/page.tsx
 
 
