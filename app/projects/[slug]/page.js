@@ -43,13 +43,24 @@ export async function generateMetadata({ params }) {
 export default async function ProjectPage({ params }) {
   const project = await getProject(params.slug);
   const content = project.content;
-  const firstImageMatch = content.match(/!\[.*?\]\(.*?\)/);
-  const firstImageIndex = firstImageMatch ? content.indexOf(firstImageMatch[0]) : -1;
-  const descriptionContent = firstImageIndex !== -1 ? content.substring(0, firstImageIndex) : content;
-  const galleryContent = firstImageIndex !== -1 ? content.substring(firstImageIndex) : '';
-  // --- Post-processing: wrap consecutive images in div.gallery-grid ---
+  // --- Новый алгоритм: если есть <div class="gallery-grid">...</div>, не прогонять этот блок через markdown-it ---
+  const galleryGridMatch = content.match(/<div class="gallery-grid">[\s\S]*?<\/div>/);
+  let descriptionContent, galleryContent;
+  if (galleryGridMatch) {
+    // Всё до gallery-grid — описание, сам блок — галерея
+    const idx = content.indexOf(galleryGridMatch[0]);
+    descriptionContent = content.substring(0, idx);
+    galleryContent = galleryGridMatch[0];
+  } else {
+    // Старый режим: ищем первую картинку в markdown
+    const firstImageMatch = content.match(/!\[.*?\]\(.*?\)/);
+    const firstImageIndex = firstImageMatch ? content.indexOf(firstImageMatch[0]) : -1;
+    descriptionContent = firstImageIndex !== -1 ? content.substring(0, firstImageIndex) : content;
+    galleryContent = firstImageIndex !== -1 ? content.substring(firstImageIndex) : '';
+  }
+
+  // --- Post-processing: wrap consecutive images in div.gallery-grid (только если нет gallery-grid) ---
   function wrapGalleryImages(html) {
-    // Находим последовательности <p><img ...></p> и оборачиваем их в div.gallery-grid
     return html.replace(/((?:<p><img [^>]+><\/p>\s*){2,})/g, (match) => {
       return `<div class="gallery-grid">${match}</div>`;
     });
@@ -68,21 +79,38 @@ export default async function ProjectPage({ params }) {
     allowedSchemes: ['http', 'https', 'mailto'],
     allowProtocolRelative: true,
   });
-  let galleryHtml = md.render(galleryContent);
-  galleryHtml = wrapGalleryImages(galleryHtml);
-  galleryHtml = sanitizeHtml(galleryHtml, {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
-    allowedAttributes: {
-      ...sanitizeHtml.defaults.allowedAttributes,
-      img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
-      a: ['href', 'name', 'target', 'rel'],
-      iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-      span: ['class'],
-      div: ['class'],
-    },
-    allowedSchemes: ['http', 'https', 'mailto'],
-    allowProtocolRelative: true,
-  });
+
+  let galleryHtml;
+  if (galleryGridMatch) {
+    // Если блок уже есть — просто санитайзим его
+    galleryHtml = sanitizeHtml(galleryContent, {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'div']),
+      allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+        div: ['class'],
+      },
+      allowedSchemes: ['http', 'https', 'mailto'],
+      allowProtocolRelative: true,
+    });
+  } else {
+    // Старый режим: markdown -> postprocess -> sanitize
+    galleryHtml = md.render(galleryContent);
+    galleryHtml = wrapGalleryImages(galleryHtml);
+    galleryHtml = sanitizeHtml(galleryHtml, {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
+      allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+        a: ['href', 'name', 'target', 'rel'],
+        iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+        span: ['class'],
+        div: ['class'],
+      },
+      allowedSchemes: ['http', 'https', 'mailto'],
+      allowProtocolRelative: true,
+    });
+  }
 
   return (
     <article className="max-w-7xl mx-auto px-4 py-12">
