@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import md from '@/lib/markdown';
+import sanitizeHtml from 'sanitize-html';
 
 // Эта функция не меняется, она по-прежнему определяет тип контента
 async function getContent(slug) {
@@ -29,7 +30,18 @@ async function getContent(slug) {
 // Компонент теперь принимает `type`, чтобы знать, что отображать
 function ContentDisplay({ content, type }) {
   const { title, publishedAt, content: htmlContent, author } = content;
-  const html = md.render(htmlContent || '');
+  const html = sanitizeHtml(md.render(htmlContent || ''), {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u']),
+    allowedAttributes: {
+      ...sanitizeHtml.defaults.allowedAttributes,
+      img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+      a: ['href', 'name', 'target', 'rel'],
+      iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+      span: ['class'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: true,
+  });
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-8">{title}</h1>

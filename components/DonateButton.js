@@ -2,8 +2,8 @@ import React from 'react';
 
 export default function DonateButton() {
   const handleDonate = async () => {
-    const amount = 50000; // 500.00 RUB (Stripe в копейках)
-    const currency = 'rub';
+  const amount = 1000; // 10.00 EUR (Stripe в центах)
+  const currency = 'eur';
     const successUrl = window.location.origin + '/?donate=success';
     const cancelUrl = window.location.origin + '/?donate=cancel';
     const res = await fetch('/api/stripe/checkout', {

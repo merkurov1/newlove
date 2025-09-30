@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 import md from '@/lib/markdown';
+import sanitizeHtml from 'sanitize-html';
 
 async function getProject(slug) {
   const project = await prisma.project.findUnique({
@@ -46,8 +47,30 @@ export default async function ProjectPage({ params }) {
   const firstImageIndex = firstImageMatch ? content.indexOf(firstImageMatch[0]) : -1;
   const descriptionContent = firstImageIndex !== -1 ? content.substring(0, firstImageIndex) : content;
   const galleryContent = firstImageIndex !== -1 ? content.substring(firstImageIndex) : '';
-  const descriptionHtml = md.render(descriptionContent);
-  const galleryHtml = md.render(galleryContent);
+  const descriptionHtml = sanitizeHtml(md.render(descriptionContent), {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u']),
+    allowedAttributes: {
+      ...sanitizeHtml.defaults.allowedAttributes,
+      img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+      a: ['href', 'name', 'target', 'rel'],
+      iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+      span: ['class'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: true,
+  });
+  const galleryHtml = sanitizeHtml(md.render(galleryContent), {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u']),
+    allowedAttributes: {
+      ...sanitizeHtml.defaults.allowedAttributes,
+      img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+      a: ['href', 'name', 'target', 'rel'],
+      iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
+      span: ['class'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: true,
+  });
 
   return (
     <article className="max-w-7xl mx-auto px-4 py-12">
