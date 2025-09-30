@@ -1,3 +1,8 @@
+/* DIAGNOSTIC: временная рамка для gallery-grid */
+.gallery-grid {
+	border: 5px solid red !important;
+	min-height: 50px !important;
+}
 /* Галерея изображений: grid всегда, даже вне .prose */
 .gallery-grid {
   display: grid;
