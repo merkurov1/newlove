@@ -1,3 +1,10 @@
+/* DIAGNOSTIC: усиленный броский стиль для gallery-grid */
+.gallery-grid, div.gallery-grid, .prose .gallery-grid {
+	border: 5px solid red !important;
+	background: #ff000033 !important;
+	min-height: 50px !important;
+	display: grid !important;
+}
 /* DIAGNOSTIC: временная рамка для gallery-grid */
 .gallery-grid {
 	border: 5px solid red !important;
