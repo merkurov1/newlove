@@ -4,9 +4,8 @@ import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
+import GalleryGrid from '@/components/GalleryGrid';
+import parse, { domToReact } from 'html-react-parser';
 
 async function getProject(slug) {
   const project = await prisma.project.findUnique({
@@ -43,7 +42,6 @@ export async function generateMetadata({ params }) {
 
 
 
-export default async function Page({ params }) {
   const project = await getProject(params.slug);
   const content = project.content;
 
@@ -72,15 +70,28 @@ export default async function Page({ params }) {
         <div>TEST 3</div>
       </div>
       <div className="prose lg:prose-xl max-w-none">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeRaw]}
-          components={{
-            div: ({node, ...props}) => <div {...props} />,
-          }}
-        >
-          {content}
-        </ReactMarkdown>
+        {parse(content, {
+          replace: domNode => {
+            if (
+              domNode.type === 'tag' &&
+              domNode.name === 'div' &&
+              domNode.attribs &&
+              domNode.attribs.class &&
+              domNode.attribs.class.split(' ').includes('gallery-grid')
+            ) {
+              // Собираем src всех <img> внутри div.gallery-grid
+              const images = [];
+              if (domNode.children) {
+                domNode.children.forEach(child => {
+                  if (child.name === 'img' && child.attribs && child.attribs.src) {
+                    images.push(child.attribs.src);
+                  }
+                });
+              }
+              return <GalleryGrid images={images} />;
+            }
+          }
+        })}
       </div>
     </article>
   );
