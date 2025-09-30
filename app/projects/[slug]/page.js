@@ -1,17 +1,18 @@
 // app/projects/[slug]/page.js
+
 import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 import GalleryGrid from '@/components/GalleryGrid';
-import parse, { domToReact } from 'html-react-parser';
+import parse from 'html-react-parser';
 import md from '@/lib/markdown';
 
 async function getProject(slug) {
   const project = await prisma.project.findUnique({
     where: { slug: slug, published: true },
-    include: { // <<< ИСПРАВЛЕНИЕ: ДОБАВЛЯЕМ ЗАГРУЗКУ ТЕГОВ
+    include: {
       author: { select: { name: true, image: true } },
       tags: true,
     },
@@ -22,7 +23,7 @@ async function getProject(slug) {
 
 export async function generateMetadata({ params }) {
     const project = await getProject(params.slug);
-    const previewImage = getFirstImage(project.content);
+    const previewImage = await getFirstImage(project.content); // getFirstImage is async
     const description = generateDescription(project.content);
     const baseUrl = 'https://merkurov.love';
 
@@ -41,12 +42,9 @@ export async function generateMetadata({ params }) {
     };
 }
 
-
-
 export default async function ProjectPage({ params }) {
   const project = await getProject(params.slug);
   const rawContent = project.content;
-  // Преобразуем markdown в html, если это не html
   const isHtml = rawContent.trim().startsWith('<');
   const content = isHtml ? rawContent : md.render(rawContent);
 
@@ -68,12 +66,7 @@ export default async function ProjectPage({ params }) {
           </div>
         )}
       </div>
-      {/* Тестовый gallery-grid вне markdown */}
-      <div className="gallery-grid">
-        <div>TEST 1</div>
-        <div>TEST 2</div>
-        <div>TEST 3</div>
-      </div>
+      
       <div className="prose lg:prose-xl max-w-none">
         {parse(content, {
           replace: domNode => {
@@ -84,20 +77,25 @@ export default async function ProjectPage({ params }) {
               domNode.attribs.class &&
               domNode.attribs.class.split(' ').includes('gallery-grid')
             ) {
-              // Собираем src всех <img> внутри div.gallery-grid (глубокий обход)
               const images = [];
               function findImages(children) {
                 if (!children) return;
                 children.forEach(child => {
                   if (child.name === 'img' && child.attribs && child.attribs.src) {
-                    images.push(child.attribs.src);
+                    // ✅ ИЗМЕНЕНИЕ ЗДЕСЬ: Собираем объект с src и alt
+                    images.push({
+                      src: child.attribs.src,
+                      alt: child.attribs.alt || 'Изображение из галереи'
+                    });
                   } else if (child.children) {
                     findImages(child.children);
                   }
                 });
               }
               findImages(domNode.children);
+              
               if (images.length === 0) {
+                 // Можно оставить для отладки или убрать
                 return <div className="text-red-600">[gallery-grid: нет изображений]</div>;
               }
               return <GalleryGrid images={images} />;
