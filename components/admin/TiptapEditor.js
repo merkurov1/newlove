@@ -71,12 +71,11 @@ export default function TiptapEditor({ value, onChange }) {
       <label className="block text-sm font-medium text-gray-700 mb-1">Содержимое (Markdown)</label>
       <SimpleMdeReact
         id="content-editor"
-        value={value || ''}
+        value={value}
         onChange={onChange}
         options={getMdeOptions()}
         getMdeInstance={(instance) => { mdeRef.current = instance; }}
       />
-      <textarea name="content" value={value || ''} readOnly hidden />
     </div>
   );
 }
