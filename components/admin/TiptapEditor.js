@@ -1,8 +1,25 @@
 "use client";
-import React, { useCallback, useRef } from 'react';
-import SimpleMdeReact from 'react-simplemde-editor';
+
+import React, { useCallback, useRef, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import 'easymde/dist/easymde.min.css';
 import md from '@/lib/markdown';
+
+// Skeleton loader для редактора
+function EditorSkeleton() {
+  return (
+    <div className="animate-pulse border rounded p-4 min-h-[200px] bg-gray-100">
+      <div className="h-6 bg-gray-200 rounded w-1/3 mb-4" />
+      <div className="h-4 bg-gray-200 rounded w-full mb-2" />
+      <div className="h-4 bg-gray-200 rounded w-5/6 mb-2" />
+      <div className="h-4 bg-gray-200 rounded w-2/3" />
+    </div>
+  );
+}
+
+// Динамический импорт SimpleMDE (SSR: false)
+const SimpleMdeReact = dynamic(() => import('react-simplemde-editor'), { ssr: false });
+
 
 export default function TiptapEditor({ value, onChange }) {
   const mdeRef = useRef();
@@ -69,13 +86,15 @@ export default function TiptapEditor({ value, onChange }) {
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">Содержимое (Markdown)</label>
-      <SimpleMdeReact
-        id="content-editor"
-        value={value}
-        onChange={onChange}
-        options={getMdeOptions()}
-        getMdeInstance={(instance) => { mdeRef.current = instance; }}
-      />
+      <Suspense fallback={<EditorSkeleton />}>
+        <SimpleMdeReact
+          id="content-editor"
+          value={value}
+          onChange={onChange}
+          options={getMdeOptions()}
+          getMdeInstance={(instance) => { mdeRef.current = instance; }}
+        />
+      </Suspense>
     </div>
   );
 }
