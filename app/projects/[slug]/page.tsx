@@ -11,10 +11,18 @@ export default async function ProjectPage({ params }: { params: { slug: string }
 
   if (!project) return <div>Проект не найден</div>;
 
+  let blocks = project.content;
+  if (typeof blocks === 'string') {
+    try {
+      blocks = JSON.parse(blocks);
+    } catch (e) {
+      blocks = [];
+    }
+  }
   return (
     <article>
       <h1>{project.title}</h1>
-      <BlockRenderer blocks={project.content} />
+      <BlockRenderer blocks={blocks} />
     </article>
   );
 }
