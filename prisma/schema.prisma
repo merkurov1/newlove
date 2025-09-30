@@ -1,3 +1,15 @@
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  price       Int
+  description String?
+  image       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
 // prisma/schema.prisma
 
 datasource db {
