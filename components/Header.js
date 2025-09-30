@@ -1,3 +1,14 @@
+              <li>
+                <Link href="/shop" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                  <span role="img" aria-label="Магазин">🛍️</span>
+                  <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
+                </Link>
+              </li>
+            <li>
+              <Link href="/shop" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">
+                <span role="img" aria-label="Магазин">🛍️</span>
+              </Link>
+            </li>
 'use client';
 
 import Link from 'next/link';
@@ -45,7 +56,12 @@ export default function Header({ projects, settings }) {
 
           <nav className="hidden items-center md:flex">
             <ul className="list-none flex items-center justify-center gap-6 text-xs font-semibold uppercase tracking-[0.2em]"> 
-              {/* Магазин временно скрыт из шапки */}
+              <li>
+                <Link href="/shop" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                  <span role="img" aria-label="Магазин">🛍️</span>
+                  <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
+                </Link>
+              </li>
               {Array.isArray(projects) && projects.map((project) => (
                 <li key={project.id}>
                   <Link href={`/${project.slug}`} className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
@@ -95,7 +111,11 @@ export default function Header({ projects, settings }) {
       <div className={`fixed inset-0 z-40 transform bg-white pt-24 transition-transform duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <nav className="container mx-auto px-4">
           <ul className="list-none flex flex-col items-center gap-6 text-sm font-semibold uppercase tracking-[0.2em]">
-            {/* Магазин временно скрыт из мобильного меню */}
+            <li>
+              <Link href="/shop" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">
+                <span role="img" aria-label="Магазин">🛍️</span>
+              </Link>
+            </li>
             {Array.isArray(projects) && projects.map((project) => (
               <li key={project.id}>
                 <Link href={`/${project.slug}`} onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">{project.title}</Link>
