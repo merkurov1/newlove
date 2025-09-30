@@ -115,8 +115,8 @@ async function ProfileContent({ username }) {
             <h2 className="text-2xl font-bold text-gray-800 mb-8">Публикации</h2>
             <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
               {/* Используем вёрстку карточек с главной страницы */}
-              {user.articles.map((article) => {
-                const previewImage = getFirstImage(article.content);
+              {await Promise.all(user.articles.map(async (article) => {
+                const previewImage = await getFirstImage(article.content);
                 return (
                   <div key={article.id} className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden">
                     {previewImage && (
@@ -136,7 +136,7 @@ async function ProfileContent({ username }) {
                     </div>
                   </div>
                 );
-              })}
+              }))}
             </div>
           </div>
         )}
