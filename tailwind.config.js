@@ -4,6 +4,12 @@ module.exports = {
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx}",
   ],
+  safelist: [
+    'prose',
+    'prose-lg',
+    'prose-xl',
+    'gallery-grid',
+  ],
   theme: {
     extend: {
       colors: {
