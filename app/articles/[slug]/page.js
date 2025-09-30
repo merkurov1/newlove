@@ -5,8 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
-import md from '@/lib/markdown';
-import sanitizeHtml from 'sanitize-html';
+import BlockRenderer from '@/components/BlockRenderer';
 
 async function getArticle(slug) {
   const article = await prisma.article.findUnique({
@@ -45,45 +44,7 @@ export async function generateMetadata({ params }) {
 
 export default async function ArticlePage({ params }) {
   const article = await getArticle(params.slug);
-  const content = article.content;
-  const isHtml = content.trim().startsWith('<');
 
-  let html;
-  if (isHtml) {
-    html = sanitizeHtml(content, {
-      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
-      allowedAttributes: {
-        ...sanitizeHtml.defaults.allowedAttributes,
-        img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
-        a: ['href', 'name', 'target', 'rel'],
-        iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-        span: ['class'],
-        div: ['class'],
-      },
-      allowedClasses: {
-        div: ['*'],
-      },
-      allowedSchemes: ['http', 'https', 'mailto'],
-      allowProtocolRelative: true,
-    });
-  } else {
-    html = sanitizeHtml(md.render(content), {
-      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
-      allowedAttributes: {
-        ...sanitizeHtml.defaults.allowedAttributes,
-        img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
-        a: ['href', 'name', 'target', 'rel'],
-        iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-        span: ['class'],
-        div: ['class'],
-      },
-      allowedClasses: {
-        div: ['*'],
-      },
-      allowedSchemes: ['http', 'https', 'mailto'],
-      allowProtocolRelative: true,
-    });
-  }
 
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
@@ -103,7 +64,7 @@ export default async function ArticlePage({ params }) {
           </div>
         )}
       </div>
-      <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
+  <BlockRenderer blocks={article.content} />
     </article>
   );
 }
