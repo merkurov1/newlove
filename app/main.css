@@ -1,18 +1,18 @@
-/* Галерея изображений в markdown через .gallery-grid */
-.prose .gallery-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-	gap: 1.5rem;
-	margin: 2rem 0;
+/* Галерея изображений: grid всегда, даже вне .prose */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
 }
-.prose .gallery-grid img {
-	width: 100%;
-	aspect-ratio: 4/3;
-	object-fit: cover;
-	border-radius: 0.5rem;
-	box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-	background: #f8fafc;
-	display: block;
+.gallery-grid img {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  background: #f8fafc;
+  display: block;
 }
 /* Галерея проектов: таблицы с изображениями */
 .prose table {
