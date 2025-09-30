@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 import GalleryGrid from '@/components/GalleryGrid';
 import parse, { domToReact } from 'html-react-parser';
+import md from '@/lib/markdown';
 
 async function getProject(slug) {
   const project = await prisma.project.findUnique({
@@ -44,7 +45,10 @@ export async function generateMetadata({ params }) {
 
 export default async function ProjectPage({ params }) {
   const project = await getProject(params.slug);
-  const content = project.content;
+  const rawContent = project.content;
+  // Преобразуем markdown в html, если это не html
+  const isHtml = rawContent.trim().startsWith('<');
+  const content = isHtml ? rawContent : md.render(rawContent);
 
   return (
     <article className="max-w-7xl mx-auto px-4 py-12">
@@ -80,14 +84,21 @@ export default async function ProjectPage({ params }) {
               domNode.attribs.class &&
               domNode.attribs.class.split(' ').includes('gallery-grid')
             ) {
-              // Собираем src всех <img> внутри div.gallery-grid
+              // Собираем src всех <img> внутри div.gallery-grid (глубокий обход)
               const images = [];
-              if (domNode.children) {
-                domNode.children.forEach(child => {
+              function findImages(children) {
+                if (!children) return;
+                children.forEach(child => {
                   if (child.name === 'img' && child.attribs && child.attribs.src) {
                     images.push(child.attribs.src);
+                  } else if (child.children) {
+                    findImages(child.children);
                   }
                 });
+              }
+              findImages(domNode.children);
+              if (images.length === 0) {
+                return <div className="text-red-600">[gallery-grid: нет изображений]</div>;
               }
               return <GalleryGrid images={images} />;
             }
