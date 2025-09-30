@@ -1,9 +1,11 @@
 // app/page.js
 
+
 import prisma from '../lib/prisma';
 import Link from 'next/link';
 import Image from 'next/image';
 import importDynamic from 'next/dynamic';
+import { getFirstImage } from '@/lib/contentUtils';
 
 const FadeInSection = importDynamic(() => import('@/components/FadeInSection'), { ssr: false });
 
@@ -14,12 +16,7 @@ export const metadata = {
 
 export const dynamic = 'force-dynamic';
 
-function getFirstImage(content) {
-  if (!content) return null;
-  const regex = /!\[.*?\]\((.*?)\)/;
-  const match = content.match(regex);
-  return match ? match[1] : null;
-}
+
 
 async function getArticles() {
   try {
@@ -51,16 +48,18 @@ async function getArticles() {
 
 export default async function HomePage() {
   const rawArticles = await getArticles();
-
-  const articles = rawArticles.map(article => ({
-    ...article,
-    previewImage: getFirstImage(article.content)
-  }));
+  // Получаем previewImage для каждой статьи асинхронно
+  const articles = await Promise.all(
+    rawArticles.map(async (article) => ({
+      ...article,
+      previewImage: await getFirstImage(article.content)
+    }))
+  );
 
   return (
     <div className="space-y-12">
       <FadeInSection>
-  <div className="grid gap-4 sm:gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {articles && articles.length > 0 ? (
             articles.map((article) => (
               <div
@@ -85,21 +84,21 @@ export default async function HomePage() {
                     </h2>
                   </Link>
                   {article.publishedAt && (
-                      <p className="text-sm text-gray-500 mb-4">
+                    <p className="text-sm text-gray-500 mb-4">
                       {new Date(article.publishedAt).toLocaleDateString('ru-RU', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
                       })}
-                      </p>
+                    </p>
                   )}
                   {/* Описание/контент убран по требованию — только заголовок и картинка */}
                   {article.tags && article.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
                       {article.tags.map(tag => (
-                        <Link 
+                        <Link
                           key={tag.id}
-                          href={`/tags/${tag.slug}`} 
+                          href={`/tags/${tag.slug}`}
                           className="bg-gray-100 text-gray-600 text-xs sm:text-xs font-medium px-3 py-2 rounded-full hover:bg-gray-200 min-h-[36px] min-w-[44px] flex items-center justify-center"
                         >
                           {tag.name}
