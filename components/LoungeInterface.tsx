@@ -2,8 +2,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 // components/LoungeInterface.js
 import { useState, useEffect, useRef } from 'react';
-import { Picker } from 'emoji-mart';
-import 'emoji-mart/css/emoji-mart.css';
 import { createClient } from '@/lib/supabase-browser';
 import { signIn } from 'next-auth/react';
 import Image from 'next/image';
@@ -38,8 +36,6 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   // --- СОСТОЯНИЕ ДЛЯ ОНЛАЙН-ПОЛЬЗОВАТЕЛЕЙ ---
   const [onlineUsers, setOnlineUsers] = useState<TypingUser[]>([]);
-  // --- СОСТОЯНИЕ ДЛЯ EMOJI PICKER ---
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   // --- СОСТОЯНИЕ ДЛЯ РЕАКЦИЙ ---
   // --- СОСТОЯНИЕ ДЛЯ REPLY ---
   const [replyTo, setReplyTo] = useState<null | { id: string; author: string | null; content: string }> (null);
@@ -302,25 +298,7 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
             </div>
           )}
           <textarea placeholder="Напишите сообщение..." value={newMessage} onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }} className="w-full p-3 border rounded-md resize-none text-base focus:ring-2 focus:ring-blue-400" rows={1} style={{ minHeight: 44, maxHeight: 120 }} />
-          <button type="button" onClick={() => setShowEmojiPicker(v => !v)} className="absolute right-2 top-2 text-2xl sm:text-2xl p-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition" tabIndex={-1} aria-label="Открыть emoji">
-            😊
-          </button>
-          {showEmojiPicker && (
-            <div className="absolute bottom-14 right-0 z-50 w-[95vw] max-w-xs sm:max-w-xs animate-fade-in">
-              <Picker
-                onSelect={(emoji: any) => {
-                  setNewMessage(newMessage + (emoji.native || emoji.colons || ''));
-                  setShowEmojiPicker(false);
-                }}
-                title="Выберите emoji"
-                emoji="point_up"
-                theme="light"
-                showPreview={false}
-                showSkinTones={false}
-                style={{ width: '100%', minWidth: 200, maxWidth: '95vw' }}
-              />
-            </div>
-          )}
+          {/* Emoji picker удалён */}
         </div>
   <button type="submit" className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300 active:scale-95 transition min-w-[44px] min-h-[44px] text-base" disabled={!newMessage.trim()}>Отправить</button>
       </form>
