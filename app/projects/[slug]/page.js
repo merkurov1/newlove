@@ -4,8 +4,9 @@ import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
-import md from '@/lib/markdown';
-import sanitizeHtml from 'sanitize-html';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 async function getProject(slug) {
   const project = await prisma.project.findUnique({
@@ -41,34 +42,10 @@ export async function generateMetadata({ params }) {
 }
 
 
+
 export default async function Page({ params }) {
   const project = await getProject(params.slug);
   const content = project.content;
-  const isHtml = content.trim().startsWith('<');
-
-    let html;
-    if (isHtml) {
-      // Tiptap/HTML: sanitize only to allow div.gallery-grid and class
-      html = sanitizeHtml(content, {
-        allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
-        allowedAttributes: {
-          ...sanitizeHtml.defaults.allowedAttributes,
-          img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
-          a: ['href', 'name', 'target', 'rel'],
-          iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-          span: ['class'],
-          div: ['class'],
-        },
-        allowedClasses: {
-          div: ['*'],
-        },
-        allowedSchemes: ['http', 'https', 'mailto'],
-        allowProtocolRelative: true,
-      });
-    } else {
-      // Markdown: md.render без sanitizeHtml (только для теста сохранения кастомных классов)
-      html = md.render(content);
-    }
 
   return (
     <article className="max-w-7xl mx-auto px-4 py-12">
@@ -88,13 +65,23 @@ export default async function Page({ params }) {
           </div>
         )}
       </div>
-      {/* Тестовый gallery-grid вне dangerouslySetInnerHTML */}
+      {/* Тестовый gallery-grid вне markdown */}
       <div className="gallery-grid">
         <div>TEST 1</div>
         <div>TEST 2</div>
         <div>TEST 3</div>
       </div>
-      <div className="prose lg:prose-xl max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
+      <div className="prose lg:prose-xl max-w-none">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeRaw]}
+          components={{
+            div: ({node, ...props}) => <div {...props} />,
+          }}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
     </article>
   );
 }
