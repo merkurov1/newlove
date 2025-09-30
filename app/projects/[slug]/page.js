@@ -66,23 +66,8 @@ export default async function Page({ params }) {
         allowProtocolRelative: true,
       });
     } else {
-      // Markdown: md.render + sanitize
-      html = sanitizeHtml(md.render(content), {
-        allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u', 'div']),
-        allowedAttributes: {
-          ...sanitizeHtml.defaults.allowedAttributes,
-          img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
-          a: ['href', 'name', 'target', 'rel'],
-          iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen'],
-          span: ['class'],
-          div: ['class'],
-        },
-        allowedClasses: {
-          div: ['*'],
-        },
-        allowedSchemes: ['http', 'https', 'mailto'],
-        allowProtocolRelative: true,
-      });
+      // Markdown: md.render без sanitizeHtml (только для теста сохранения кастомных классов)
+      html = md.render(content);
     }
 
   return (
