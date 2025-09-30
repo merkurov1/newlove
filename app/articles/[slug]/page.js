@@ -3,7 +3,9 @@ import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
+import md from '@/lib/markdown';
 
 async function getArticle(slug) {
   const article = await prisma.article.findUnique({
@@ -39,10 +41,11 @@ export async function generateMetadata({ params }) {
     };
 }
 
-export default async function ArticlePage({ params }) {
+
   const article = await getArticle(params.slug);
   const heroImage = getFirstImage(article.content);
   const contentWithoutHero = heroImage ? article.content.replace(/!\[.*?\]\(.*?\)\n?/, '') : article.content;
+  const html = md.render(contentWithoutHero);
 
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
@@ -62,15 +65,13 @@ export default async function ArticlePage({ params }) {
           </div>
         )}
       </div>
-      
       {heroImage && (
         <div className="mb-12">
           <Image src={heroImage} alt={article.title} width={1200} height={675} className="rounded-xl shadow-lg w-full" priority />
         </div>
       )}
-
       <div className="prose lg:prose-xl max-w-none">
-        <div dangerouslySetInnerHTML={{ __html: contentWithoutHero }} />
+        <div dangerouslySetInnerHTML={{ __html: html }} />
       </div>
     </article>
   );

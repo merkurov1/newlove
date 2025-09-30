@@ -1,25 +1,23 @@
 // Это теперь чистый Серверный Компонент. Директива 'use client' здесь не нужна.
 import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
-import EditLetterForm from '@/components/admin/EditLetterForm'; // Импортируем наш новый клиентский компонент
+
+
+import ContentForm from '@/components/admin/ContentForm';
+import { updateLetter } from '../../actions';
 
 export default async function EditLetterPage({ params }) {
   const letterId = params.id;
-  
-  // 1. Быстро загружаем все необходимые данные на сервере
   const letter = await prisma.letter.findUnique({
     where: { id: letterId },
   });
-
-  if (!letter) {
-    notFound();
-  }
-
-  // Также загружаем количество подписчиков
-  const subscriberCount = await prisma.subscriber.count();
-
-  // 2. Передаем эти данные как пропсы в наш интерактивный клиентский компонент
-  return <EditLetterForm letter={letter} subscriberCount={subscriberCount} />;
+  if (!letter) notFound();
+  return (
+    <div>
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Редактирование выпуска рассылки</h1>
+      <ContentForm initialData={letter} saveAction={updateLetter} type="выпуск" />
+    </div>
+  );
 }
 
 
