@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 
 
 import ContentForm from '@/components/admin/ContentForm';
-import { updateLetter } from '../../actions';
+import { updateLetter } from '../../../actions';
 
 export default async function EditLetterPage({ params }) {
   const letterId = params.id;
