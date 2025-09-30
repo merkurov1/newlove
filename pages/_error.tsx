@@ -1,7 +1,9 @@
+
 import * as Sentry from "@sentry/nextjs";
 import Error from "next/error";
+import type { ErrorProps } from "next/dist/pages/_error";
 
-const CustomErrorComponent = (props) => {
+const CustomErrorComponent = (props: ErrorProps) => {
   return <Error statusCode={props.statusCode} />;
 };
 
