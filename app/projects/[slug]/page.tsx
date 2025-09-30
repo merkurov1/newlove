@@ -1,42 +1,80 @@
 // app/projects/[slug]/page.tsx
 import { createClient } from '@supabase/supabase-js';
-import BlockRenderer from '@/components/BlockRenderer';
 import { notFound } from 'next/navigation';
+import BlockRenderer from '@/components/BlockRenderer';
 
-// Эта функция может быть вынесена в отдельный файл lib/supabase.ts
-// Убедитесь, что переменные окружения доступны на сервере
+// Определяем типы для данных, которые мы ожидаем
+interface Block {
+  type?: string;
+  blockType?: string;
+  [key: string]: any;
+}
+
+interface Project {
+  title: string;
+  content: Block[] | string;
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // Используйте SERVICE_ROLE_KEY для серверных компонентов
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export default async function ProjectPage({ params }: { params: { slug: string } }) {
-  const { data: project } = await supabase
+// --- Функция для получения данных проекта ---
+async function getProject(slug: string): Promise<Project | null> {
+  const { data } = await supabase
     .from('projects')
     .select('title, content')
-    .eq('slug', params.slug)
+    .eq('slug', slug)
     .single();
+  return data;
+}
 
-  if (!project) {
-    notFound();
-  }
+// --- Функция для генерации метаданных для SEO ---
+export async function generateMetadata({ params }: { params: { slug: string } }) {
+  const project = await getProject(params.slug);
+  if (!project) return { title: 'Проект не найден' };
 
-  // Supabase должен автоматически парсить jsonb, но на всякий случай оставляем проверку
-  let blocks = project.content;
-  if (typeof blocks === 'string') {
-    try {
-      blocks = JSON.parse(blocks);
-    } catch (e) {
-      console.error("Ошибка парсинга JSON:", e);
-      blocks = [];
+  let description = `Проект: ${project.title}`;
+  // Пытаемся взять первый текстовый блок для описания
+  if (Array.isArray(project.content) && project.content.length > 0) {
+    const firstTextBlock = project.content.find(b => (b.type === 'richText' || b.blockType === 'richText') && b.text);
+    if (firstTextBlock) {
+      description = firstTextBlock.text.replace(/<[^>]+>/g, '').substring(0, 155);
     }
   }
 
+  return {
+    title: project.title,
+    description: description,
+  };
+}
+
+// --- Основной компонент страницы ---
+export default async function ProjectPage({ params }: { params: { slug: string } }) {
+  const project = await getProject(params.slug);
+  if (!project) notFound();
+
+  let blocks: Block[] = [];
+
+  // Надёжно обрабатываем контент
+  if (typeof project.content === 'string') {
+    try {
+      blocks = JSON.parse(project.content);
+    } catch (e) {
+      console.error("Ошибка парсинга JSON:", e);
+    }
+  } else if (Array.isArray(project.content)) {
+    blocks = project.content;
+  }
+
   return (
-    <article className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-8 text-center">
+    <article className="max-w-4xl mx-auto px-4 py-12">
+      <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-10 text-center leading-tight">
         {project.title}
       </h1>
+      
+      {/* Плагин TailwindCSS Typography сделает текст из блоков красивым */}
       <div className="prose lg:prose-xl max-w-none">
         <BlockRenderer blocks={blocks} />
       </div>
