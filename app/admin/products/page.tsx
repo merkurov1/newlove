@@ -40,37 +40,41 @@ export default function AdminProductsPage() {
         <h1 className="text-2xl font-bold">Товары</h1>
         <Link href="/admin/products/new" className="rounded bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700 transition">Добавить товар</Link>
       </div>
-      <table className="min-w-full bg-white border rounded-lg overflow-hidden">
-        <thead>
-          <tr className="bg-gray-100 text-left">
-            <th className="p-3">Название</th>
-            <th className="p-3">Slug</th>
-            <th className="p-3">Цена</th>
-            <th className="p-3">Активен</th>
-            <th className="p-3">Действия</th>
-          </tr>
-        </thead>
-        <tbody>
-          {products.map((product: any) => (
-            <tr key={product.id} className="border-t hover:bg-gray-50">
-              <td className="p-3">{product.name}</td>
-              <td className="p-3">{product.slug}</td>
-              <td className="p-3">{product.price} ₽</td>
-              <td className="p-3">{product.active ? 'Да' : 'Нет'}</td>
-              <td className="p-3">
-                <Link href={`/admin/products/${product.id}/edit`} className="text-blue-600 hover:underline mr-2">Изменить</Link>
-                <button
-                  className="text-red-600 hover:underline disabled:opacity-50"
-                  onClick={() => handleDelete(product.id)}
-                  disabled={deleting === product.id}
-                >
-                  {deleting === product.id ? 'Удаление...' : 'Удалить'}
-                </button>
-              </td>
+      {products.length === 0 ? (
+        <div className="text-gray-500 text-center py-12 text-lg">Нет товаров</div>
+      ) : (
+        <table className="min-w-full bg-white border rounded-lg overflow-hidden">
+          <thead>
+            <tr className="bg-gray-100 text-left">
+              <th className="p-3">Название</th>
+              <th className="p-3">Slug</th>
+              <th className="p-3">Цена</th>
+              <th className="p-3">Активен</th>
+              <th className="p-3">Действия</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {products.map((product: any) => (
+              <tr key={product.id} className="border-t hover:bg-gray-50">
+                <td className="p-3">{product.name}</td>
+                <td className="p-3">{product.slug}</td>
+                <td className="p-3">{product.price} ₽</td>
+                <td className="p-3">{product.active ? 'Да' : 'Нет'}</td>
+                <td className="p-3">
+                  <Link href={`/admin/products/${product.id}/edit`} className="text-blue-600 hover:underline mr-2">Изменить</Link>
+                  <button
+                    className="text-red-600 hover:underline disabled:opacity-50"
+                    onClick={() => handleDelete(product.id)}
+                    disabled={deleting === product.id}
+                  >
+                    {deleting === product.id ? 'Удаление...' : 'Удалить'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
