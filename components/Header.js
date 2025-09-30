@@ -1,17 +1,9 @@
-              <li>
-                <Link href="/shop" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
-                  <span role="img" aria-label="Магазин">🛍️</span>
-                  <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
-                </Link>
-              </li>
-            <li>
-              <Link href="/shop" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">
-                <span role="img" aria-label="Магазин">🛍️</span>
-              </Link>
-            </li>
-'use client';
+// ...existing code...
+// ...existing code...
+"use client";
 
-import Link from 'next/link';
+import Link from "next/link";
+// ...existing code...
 import Image from 'next/image';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
