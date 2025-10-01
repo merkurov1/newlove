@@ -3,7 +3,7 @@ import React from 'react';
 import TextBlock from './blocks/TextBlock';
 import GalleryBlock from './blocks/GalleryBlock';
 import CodeBlock from './blocks/CodeBlock';
-import type { EditorJsBlock } from '@/types/editorjs';
+import type { EditorJsBlock } from '@/types/blocks';
 
 export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
   if (!Array.isArray(blocks)) {
@@ -19,21 +19,16 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
           return <div key={idx} style={{ color: 'red', margin: '12px 0' }}>Ошибка: некорректный блок данных</div>;
         }
         switch (block.type) {
-          case 'header':
-          case 'paragraph':
-          case 'list':
+          case 'richText':
             return <TextBlock key={idx} block={block} />;
-          case 'image':
-            return <GalleryBlock key={idx} block={block} />;
           case 'gallery':
+            return <GalleryBlock key={idx} block={block} />;
+          case 'image':
             return <GalleryBlock key={idx} block={block} />;
           case 'code':
             return <CodeBlock key={idx} block={block} />;
-          case 'richText':
-            // Для richText блоков ожидается поле html
-            return <div key={idx} className="prose max-w-none" dangerouslySetInnerHTML={{ __html: (block as any).html || '' }} />;
           default:
-            return <div key={idx} style={{ color: 'red', margin: '12px 0' }}>Неизвестный тип блока: {block.type}</div>;
+            return <div key={idx} style={{ color: 'red', margin: '12px 0' }}>Неизвестный тип блока</div>;
         }
       })}
     </>

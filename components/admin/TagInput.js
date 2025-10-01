@@ -2,7 +2,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-export default function TagInput({ initialTags }) {
+
+export default function TagInput({ initialTags, onChange }) {
   // Безопасная инициализация состояния, даже если initialTags не передан
   const [tags, setTags] = useState(() => (initialTags || []).map(t => t.name));
   const [inputValue, setInputValue] = useState('');
@@ -11,7 +12,8 @@ export default function TagInput({ initialTags }) {
   const [hiddenInputValue, setHiddenInputValue] = useState(JSON.stringify(tags));
   useEffect(() => {
     setHiddenInputValue(JSON.stringify(tags));
-  }, [tags]);
+    if (onChange) onChange(tags);
+  }, [tags, onChange]);
 
   // Этот useEffect синхронизирует состояние, если initialTags изменятся (важно для редактирования)
   useEffect(() => {
