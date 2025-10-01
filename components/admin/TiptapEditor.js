@@ -17,7 +17,7 @@ export default function TiptapEditor({ value, onChange }) {
       Image.configure({ inline: false, allowBase64: false }),
       GalleryGrid,
     ],
-    content: value,
+    content: value || '',
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
     },

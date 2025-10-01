@@ -1,51 +1,51 @@
 "use client";
-// components/admin/ContentForm.js
-'use client';
-
-
 import { useState } from 'react';
 import TagInput from '@/components/admin/TagInput';
 import BlockEditor from '@/components/admin/BlockEditor';
 import { Block } from '@/types/blocks';
 
-export default function ContentForm({ initialData, saveAction, type }) {
+interface ContentFormProps {
+  initialData?: any;
+  saveAction: any;
+  type: string;
+}
+
+function parseBlocks(raw: any): Block[] {
+  let arr = Array.isArray(raw) ? raw : (raw ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
+  return arr.map((block: any) => {
+    if (block.type === 'richText') {
+      return { type: 'richText', html: block.html || '' };
+    }
+    if (block.type === 'gallery') {
+      return { type: 'gallery', images: Array.isArray(block.images) ? block.images : [] };
+    }
+    if (block.type === 'codeBlock') {
+      return { type: 'codeBlock', code: block.code || '', language: block.language || 'js' };
+    }
+    return null;
+  }).filter(Boolean) as Block[];
+}
+
+export default function ContentForm({ initialData, saveAction, type }: ContentFormProps) {
   const isEditing = !!initialData;
-  // Управляемое состояние для всех полей
   const [title, setTitle] = useState(initialData?.title || '');
   const [slug, setSlug] = useState(initialData?.slug || '');
-  // Приводим content к массиву всегда и мигрируем richText-блоки: если text выглядит как JSON, заменяем на пустую строку
-  function parseBlocks(raw: any): Block[] {
-    let arr = Array.isArray(raw) ? raw : (raw ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
-    return arr.map((block: any) => {
-      if (block.type === 'richText') {
-        return { type: 'richText', html: block.html || '' };
-      }
-      if (block.type === 'gallery') {
-        return { type: 'gallery', images: Array.isArray(block.images) ? block.images : [] };
-      }
-      if (block.type === 'codeBlock') {
-        return { type: 'codeBlock', code: block.code || '', language: block.language || 'js' };
-      }
-      return null;
-    }).filter(Boolean) as Block[];
-  }
   const [content, setContent] = useState<Block[]>(parseBlocks(initialData?.content));
   const [published, setPublished] = useState(initialData?.published || false);
   const [error, setError] = useState('');
 
-  // Валидация структуры блоков
-  function validateBlocks(blocks) {
+  function validateBlocks(blocks: Block[]) {
     if (!Array.isArray(blocks) || blocks.length === 0) return false;
     for (const block of blocks) {
       if (!block.type) return false;
-      if (block.type === 'richText' && typeof block.text !== 'string') return false;
-      if (block.type === 'gallery' && (!Array.isArray(block.images) || block.images.some(img => !img.image || !img.image.url))) return false;
+      if (block.type === 'richText' && typeof block.html !== 'string') return false;
+      if (block.type === 'gallery' && (!Array.isArray(block.images))) return false;
       if (block.type === 'codeBlock' && typeof block.code !== 'string') return false;
     }
     return true;
   }
 
-  function handleSubmit(e) {
+  function handleSubmit(e: React.FormEvent) {
     if (!validateBlocks(content)) {
       e.preventDefault();
       setError('Проверьте структуру блоков: должен быть хотя бы один корректный блок.');
@@ -58,7 +58,6 @@ export default function ContentForm({ initialData, saveAction, type }) {
   return (
     <form action={saveAction} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
       {isEditing && <input type="hidden" name="id" value={initialData.id} />}
-
       <div>
         <label htmlFor="title" className="block text-sm font-medium text-gray-700">Название</label>
         <input
@@ -83,14 +82,10 @@ export default function ContentForm({ initialData, saveAction, type }) {
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
         />
       </div>
-
       <TagInput initialTags={initialData?.tags} />
-
-  <BlockEditor value={content} onChange={setContent} />
-  <textarea name="content" value={JSON.stringify(content)} readOnly hidden />
-
+      <BlockEditor value={content} onChange={setContent} />
+      <textarea name="content" value={JSON.stringify(content)} readOnly hidden />
       {error && <div className="text-red-600 text-sm font-medium">{error}</div>}
-
       <div className="flex items-center mt-2 mb-2">
         <input
           id="published"

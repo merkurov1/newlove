@@ -1,10 +1,11 @@
 // src/components/BlockRenderer.tsx
 import React from 'react';
+import { Block } from '@/types/blocks';
 import RichTextBlock from './RichTextBlock';
 import GalleryGrid from './GalleryGrid';
 import CodeBlock from './CodeBlock';
 
-export default function BlockRenderer({ blocks }: { blocks: any[] }) {
+export default function BlockRenderer({ blocks }: { blocks: Block[] }) {
   if (!Array.isArray(blocks)) {
     return <div style={{ color: 'red' }}>Ошибка: Блоки не являются массивом!</div>;
   }
@@ -15,12 +16,12 @@ export default function BlockRenderer({ blocks }: { blocks: any[] }) {
   return (
     <>
       {blocks.map((block, idx) => {
-        if (!block || typeof block !== 'object' || !block.type) {
+        if (!block || typeof block !== 'object' || !('type' in block)) {
           return <div key={idx} style={{ color: 'red', margin: '12px 0' }}>Ошибка: некорректный блок данных</div>;
         }
         switch (block.type) {
           case 'richText':
-            return <RichTextBlock key={idx} text={block.text} html={block.html} />;
+            return <RichTextBlock key={idx} html={block.html} />;
           case 'gallery':
             return <GalleryGrid key={idx} images={block.images} />;
           case 'codeBlock':

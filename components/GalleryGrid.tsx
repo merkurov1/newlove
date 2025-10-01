@@ -6,26 +6,18 @@ import Image from 'next/image';
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 
-// Ожидаем, что images будет массивом объектов, где каждый объект содержит image
-type ImageItem = {
-  image: {
-    url: string;
-    alt: string;
-    width: number;
-    height: number;
-  }
-}
+import { GalleryImage } from '@/types/blocks';
 
-export default function GalleryGrid({ images }: { images: ImageItem[] }) {
+export default function GalleryGrid({ images }: { images: GalleryImage[] }) {
   const [index, setIndex] = useState(-1);
 
   if (!images || images.length === 0) return null;
 
   // Готовим слайды для лайтбокса
   const slides = images.map(item => ({
-    src: item.image.url,
-    width: item.image.width,
-    height: item.image.height,
+    src: item.url,
+    width: 800, // можно добавить width/height в GalleryImage при необходимости
+    height: 600,
   }));
 
   return (
@@ -39,7 +31,7 @@ export default function GalleryGrid({ images }: { images: ImageItem[] }) {
       >
         {images.map((item, i) => (
           <div
-            key={item.image.url || i}
+            key={item.url || i}
             onClick={() => setIndex(i)}
             style={{
               position: 'relative', width: '100%', aspectRatio: '1 / 1',
@@ -47,8 +39,8 @@ export default function GalleryGrid({ images }: { images: ImageItem[] }) {
             }}
           >
             <Image
-              src={item.image.url}
-              alt={item.image.alt || `Gallery image ${i + 1}`}
+              src={item.url}
+              alt={item.alt || `Gallery image ${i + 1}`}
               fill
               style={{ objectFit: 'cover' }}
               className="transition-transform duration-300 hover:scale-105"
