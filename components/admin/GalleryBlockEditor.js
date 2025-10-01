@@ -6,20 +6,20 @@ export default function GalleryBlockEditor({ images, onChange }) {
   const { upload, loading, error } = useImageUpload();
 
   const handleAdd = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const url = await upload(file);
-  if (!url) return;
-  // TODO: получить width/height через Image API, пока только url и alt
-  const newImg = { image: { url, alt: '', width: 800, height: 600 } };
-  const updated = [...localImages, newImg];
-  setLocalImages(updated);
-  onChange(updated);
+    const file = e.target.files[0];
+    if (!file) return;
+    const url = await upload(file);
+    if (!url) return;
+    // Сохраняем { url, alt } для совместимости с типами
+    const newImg = { url, alt: '' };
+    const updated = [...localImages, newImg];
+    setLocalImages(updated);
+    onChange(updated);
   };
 
   const handleAltChange = (idx, alt) => {
     const updated = localImages.map((img, i) =>
-      i === idx ? { ...img, image: { ...img.image, alt } } : img
+      i === idx ? { ...img, alt } : img
     );
     setLocalImages(updated);
     onChange(updated);
@@ -36,11 +36,11 @@ export default function GalleryBlockEditor({ images, onChange }) {
       <div className="flex gap-2 flex-wrap mb-2">
         {localImages.map((img, i) => (
           <div key={i} className="relative w-32 h-32 border rounded overflow-hidden">
-            <img src={img.image.url} alt={img.image.alt} className="object-cover w-full h-full" />
+            <img src={img.url} alt={img.alt} className="object-cover w-full h-full" />
             <input
               type="text"
               placeholder="alt"
-              value={img.image.alt}
+              value={img.alt}
               onChange={e => handleAltChange(i, e.target.value)}
               className="absolute bottom-0 left-0 w-full bg-white bg-opacity-80 text-xs p-1 border-t"
             />
