@@ -11,14 +11,19 @@ export default function BlockEditor({ value, onChange }) {
   }, [value]);
 
   const handleBlockChange = (idx, newBlock) => {
-  const updated = blocks.map((b, i) => (i === idx ? newBlock : b));
-  setBlocks(updated);
-  onChange(updated);
+    // Для richText всегда используем поле html
+    if (newBlock.type === 'richText' && newBlock.text !== undefined) {
+      const { text, ...rest } = newBlock;
+      newBlock = { ...rest, html: newBlock.text };
+    }
+    const updated = blocks.map((b, i) => (i === idx ? newBlock : b));
+    setBlocks(updated);
+    onChange(updated);
   };
 
   const addBlock = (type) => {
     let block;
-    if (type === 'richText') block = { type: 'richText', text: '' };
+    if (type === 'richText') block = { type: 'richText', html: '' };
     else if (type === 'gallery') block = { type: 'gallery', images: [] };
     else if (type === 'codeBlock') block = { type: 'codeBlock', language: 'js', code: '' };
     const updated = [...blocks, block];
@@ -41,7 +46,7 @@ export default function BlockEditor({ value, onChange }) {
             <button type="button" onClick={() => removeBlock(idx)} className="text-red-500">Удалить</button>
           </div>
           {block.type === 'richText' && (
-            <TiptapEditor value={block.text} onChange={text => handleBlockChange(idx, { ...block, text })} />
+            <TiptapEditor value={block.html} onChange={html => handleBlockChange(idx, { ...block, html })} />
           )}
           {block.type === 'gallery' && (
             <GalleryBlockEditor
