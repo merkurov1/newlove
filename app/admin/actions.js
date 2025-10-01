@@ -105,16 +105,24 @@ export async function deleteArticle(formData) {
 export async function createProject(formData) {
   const session = await verifyAdmin();
   const title = formData.get('title')?.toString();
-  const content = formData.get('content')?.toString();
+  const contentRaw = formData.get('content')?.toString();
   const slug = formData.get('slug')?.toString();
   const published = formData.get('published') === 'on';
   const tagsToConnect = processTagsForPrisma(formData.get('tags')?.toString());
 
-  if (!title || !content || !slug) throw new Error('All fields are required.');
-  
+  if (!title || !contentRaw || !slug) throw new Error('All fields are required.');
+
+  let blocks;
+  try {
+    blocks = JSON.parse(contentRaw);
+  } catch {
+    throw new Error('Content is not valid JSON');
+  }
+  if (!Array.isArray(blocks)) throw new Error('Content is not an array of blocks');
+
   await prisma.project.create({
     data: { 
-      title, content, slug, published, 
+      title, content: JSON.stringify(blocks), slug, published, 
       publishedAt: published ? new Date() : null, 
       authorId: session.user.id,
       tags: { connectOrCreate: tagsToConnect },
@@ -128,17 +136,25 @@ export async function updateProject(formData) {
   await verifyAdmin();
   const id = formData.get('id')?.toString();
   const title = formData.get('title')?.toString();
-  const content = formData.get('content')?.toString();
+  const contentRaw = formData.get('content')?.toString();
   const slug = formData.get('slug')?.toString();
   const published = formData.get('published') === 'on';
   const tagsToConnect = processTagsForPrisma(formData.get('tags')?.toString());
 
-  if (!id || !title || !content || !slug) throw new Error('All fields are required.');
-  
+  if (!id || !title || !contentRaw || !slug) throw new Error('All fields are required.');
+
+  let blocks;
+  try {
+    blocks = JSON.parse(contentRaw);
+  } catch {
+    throw new Error('Content is not valid JSON');
+  }
+  if (!Array.isArray(blocks)) throw new Error('Content is not an array of blocks');
+
   await prisma.project.update({
     where: { id: id },
     data: { 
-      title, content, slug, published, 
+      title, content: JSON.stringify(blocks), slug, published, 
       publishedAt: published ? new Date() : null,
       tags: { 
         set: [], // Сначала отсоединяем все старые теги
