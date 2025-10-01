@@ -73,7 +73,11 @@ export default async function ProjectPage({ params }: { params: { slug: string }
       <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-10 text-center leading-tight">
         {project.title}
       </h1>
-      
+      {/* ВРЕМЕННО: выводим структуру blocks для отладки */}
+      <details style={{marginBottom: '2rem', background: '#f8f8f8', padding: '1rem', borderRadius: '8px'}}>
+        <summary style={{cursor: 'pointer', fontWeight: 'bold'}}>DEBUG: blocks</summary>
+        <pre style={{whiteSpace: 'pre-wrap', fontSize: '12px'}}>{JSON.stringify(blocks, null, 2)}</pre>
+      </details>
       {/* Плагин TailwindCSS Typography сделает текст из блоков красивым */}
       <div className="prose lg:prose-xl max-w-none">
         <BlockRenderer blocks={blocks} />
