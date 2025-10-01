@@ -38,9 +38,8 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     if (!Array.isArray(blocks) || blocks.length === 0) return false;
     for (const block of blocks) {
       if (!block.type) return false;
-      if (block.type === 'richText' && typeof block.html !== 'string') return false;
-      if (block.type === 'gallery' && (!Array.isArray(block.images))) return false;
-  // if (block.type === 'codeBlock' && typeof block.code !== 'string') return false;
+    if (block.type === 'richText' && typeof block.html !== 'string') return false;
+    if (block.type === 'gallery' && (!Array.isArray(block.images))) return false;
     }
     return true;
   }
