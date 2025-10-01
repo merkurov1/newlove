@@ -16,6 +16,7 @@ interface ContentFormProps {
 
 function parseBlocks(raw: any): Block[] {
   let arr = Array.isArray(raw) ? raw : (raw ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
+
   return arr.map((block: any) => {
     if (block.type === 'richText') {
       return { type: 'richText', html: block.html || '' };
@@ -25,6 +26,7 @@ function parseBlocks(raw: any): Block[] {
     }
     return null;
   }).filter(Boolean) as Block[];
+}
 
 
 export default function ContentForm({ initialData, saveAction, type }: ContentFormProps) {
