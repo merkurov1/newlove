@@ -36,6 +36,17 @@ export async function generateMetadata({ params }) {
 export default async function DigestPage({ params }) {
   const digest = await getDigestBySlug(params.slug);
 
+  let blocks = [];
+  if (typeof digest.content === 'string') {
+    try {
+      blocks = JSON.parse(digest.content);
+    } catch {
+      blocks = [];
+    }
+  } else if (Array.isArray(digest.content)) {
+    blocks = digest.content;
+  }
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       {/* Ссылка для возврата на главную страницу */}
@@ -56,11 +67,7 @@ export default async function DigestPage({ params }) {
           })}
         </p>
 
-        {/* Ключевой момент: div со стилем white-space: pre-wrap.
-          Этот стиль заставляет браузер уважать все переносы строк и пробелы,
-          которые сгенерировал ИИ, идеально отображая форматирование поста.
-        */}
-        <BlockRenderer blocks={digest.content} />
+        <BlockRenderer blocks={blocks} />
       </article>
     </div>
   );

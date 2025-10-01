@@ -74,10 +74,42 @@ export default async function ProjectPage({ params }: { params: { slug: string }
       <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-10 text-center leading-tight">
         {project.title}
       </h1>
-      {/* ВРЕМЕННО: выводим структуру blocks для отладки (без details/summary) */}
-      <pre style={{background:'#f8f8f8', padding:'1rem', borderRadius:'8px', marginBottom:'2rem', fontSize:'12px', whiteSpace:'pre-wrap'}}>
-        {JSON.stringify(blocks, null, 2)}
-      </pre>
+      {/* DEBUG BLOCK: максимально заметный */}
+      <div style={{
+        background: '#ff0',
+        color: '#d00',
+        border: '4px solid #d00',
+        padding: '2rem',
+        margin: '2rem 0',
+        fontSize: '18px',
+        zIndex: 9999,
+        position: 'relative',
+        boxShadow: '0 0 16px 4px #d00',
+        textAlign: 'left',
+        fontWeight: 'bold',
+        lineHeight: 1.4,
+        wordBreak: 'break-all',
+        whiteSpace: 'pre-wrap',
+        pointerEvents: 'auto',
+        opacity: 1,
+        display: 'block',
+      }}>
+        <div style={{fontSize:'22px',marginBottom:'1rem'}}>=== DEBUG BLOCKS START ===</div>
+        <pre style={{
+          background: 'none',
+          color: '#222',
+          fontSize: '16px',
+          margin: 0,
+          padding: 0,
+          border: 'none',
+          boxShadow: 'none',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-all',
+          fontFamily: 'monospace',
+          fontWeight: 'normal',
+        }}>{JSON.stringify(blocks, null, 2)}</pre>
+        <div style={{fontSize:'22px',marginTop:'1rem'}}>=== DEBUG BLOCKS END ===</div>
+      </div>
       {/* Плагин TailwindCSS Typography сделает текст из блоков красивым */}
       <div className="prose lg:prose-xl max-w-none">
         <BlockRenderer blocks={blocks} />
