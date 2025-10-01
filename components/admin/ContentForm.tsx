@@ -7,11 +7,12 @@ import { Block } from '@/types/blocks';
 
 
 
+
 interface ContentFormProps {
   initialData?: any;
   saveAction: any;
   type: string;
-}
+
 
 function parseBlocks(raw: any): Block[] {
   let arr = Array.isArray(raw) ? raw : (raw ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
