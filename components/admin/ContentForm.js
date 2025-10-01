@@ -12,8 +12,22 @@ export default function ContentForm({ initialData, saveAction, type }) {
   // Управляемое состояние для всех полей
   const [title, setTitle] = useState(initialData?.title || '');
   const [slug, setSlug] = useState(initialData?.slug || '');
-  // Приводим content к массиву всегда
-  const [content, setContent] = useState(Array.isArray(initialData?.content) ? initialData.content : (initialData?.content ? (() => { try { return JSON.parse(initialData.content); } catch { return []; } })() : []));
+  // Приводим content к массиву всегда и мигрируем richText-блоки: если text выглядит как JSON, заменяем на пустую строку
+  function migrateBlocks(raw) {
+    let arr = Array.isArray(raw) ? raw : (raw ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
+    return arr.map(block => {
+      if (block.type === 'richText' && typeof block.text === 'string') {
+        try {
+          JSON.parse(block.text); // если парсится как JSON — это не HTML
+          return { ...block, text: '' };
+        } catch {
+          return block;
+        }
+      }
+      return block;
+    });
+  }
+  const [content, setContent] = useState(migrateBlocks(initialData?.content));
   const [published, setPublished] = useState(initialData?.published || false);
   const [error, setError] = useState('');
 
