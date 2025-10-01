@@ -1,32 +1,23 @@
 
+
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
-import { createClient } from '@/lib/supabase-server';
 import BlockRenderer from '@/components/BlockRenderer';
+import prisma from '@/lib/prisma';
 
-interface Project {
-  id: string;
-  slug: string;
-  title: string;
-  content: string;
-  previewImage?: {
-    url: string;
-    alt?: string;
-  };
-}
-
-export default async function ProjectPage({ params }: { params: { slug: string } }) {
-  const supabase = createClient();
-  const { data: project, error } = await supabase
-    .from('projects')
-    .select('id, slug, title, content, previewImage')
-    .eq('slug', params.slug)
-    .single();
-
-  if (error || !project) {
+  const project = await prisma.project.findUnique({
+    where: { slug: params.slug },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      content: true,
+      previewImage: true,
+    },
+  });
+  if (!project) {
     notFound();
   }
-
   let blocks: any[] = [];
   if (Array.isArray(project.content)) {
     blocks = project.content;
@@ -37,15 +28,19 @@ export default async function ProjectPage({ params }: { params: { slug: string }
       blocks = [];
     }
   }
-
+  // previewImage хранится как JSON-объект или null
+  let previewImage: { url?: string; alt?: string } | null = null;
+  if (project.previewImage && typeof project.previewImage === 'object') {
+    previewImage = project.previewImage as any;
+  }
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-6">{project.title}</h1>
-      {project.previewImage && project.previewImage.url && (
+      {previewImage && previewImage.url && (
         <div className="relative w-full h-80 mb-8">
           <Image
-            src={project.previewImage.url}
-            alt={project.previewImage.alt || project.title}
+            src={previewImage.url}
+            alt={previewImage.alt || project.title}
             fill
             style={{ objectFit: 'cover' }}
             className="rounded-lg shadow-md"
