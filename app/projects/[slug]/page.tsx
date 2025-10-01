@@ -29,6 +29,19 @@ export default async function ProjectPage({ params }: { params: { slug: string }
     }
   }
 
+  // Дополнительная валидация структуры blocks
+  const isValidBlocks = Array.isArray(blocks) && blocks.every(
+    b => b && typeof b === 'object' && typeof b.type === 'string'
+  );
+  if (!isValidBlocks) {
+    console.error('Некорректные блоки для BlockRenderer:', blocks);
+    return (
+      <div className="text-red-600 bg-red-50 p-4 rounded">
+        Ошибка: некорректные блоки данных для рендера.<br />
+        <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(blocks, null, 2)}</pre>
+      </div>
+    );
+  }
   return (
     <div>
       <h1 className="text-3xl font-bold mb-4">{project.title}</h1>
