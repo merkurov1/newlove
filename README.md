@@ -19,7 +19,38 @@ dsada
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+## Projects Block Editor (Notion-style)
+
+### Как работает
+- В админке `/admin/projects/edit/[id]` используется Editor.js с поддержкой блоков: текст, список, заголовок, изображение, код.
+- Контент сохраняется в формате JSON (Editor.js OutputData) в поле `content` модели Project.
+- Для загрузки изображений используется API `/api/upload` (загружает в `/public/uploads`).
+- Публичная страница `/projects/[slug]` рендерит блоки через компоненты `BlockRenderer` и отдельные блоки.
+
+### Как добавить проект
+1. Создайте проект через API или напрямую в базе (укажите title, slug, authorId).
+2. Перейдите в `/admin/projects/edit/[id]` для наполнения контентом.
+3. Сохраняйте — данные отправляются в API и сохраняются в JSON.
+
+### Загрузка изображений
+- Файлы сохраняются в `/public/uploads` (локально). На проде рекомендуется интеграция с Supabase Storage или S3.
+- API `/api/upload` принимает POST с FormData (ключ image).
+
+### Требования
+- Node.js >= 18
+- Переменная окружения `DATABASE_URL` для Prisma/Supabase
+
+### Установка зависимостей
+```bash
+npm install @editorjs/editorjs @editorjs/header @editorjs/list @editorjs/image @editorjs/code
+```
+
+### Миграции Prisma
+- На Vercel миграции применяются автоматически (см. VERCEL_PRISMA_MIGRATION.md)
+- Локально: `npx prisma db push` или `npx prisma migrate dev`
+
+---
 
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
