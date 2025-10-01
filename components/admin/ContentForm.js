@@ -17,11 +17,12 @@ export default function ContentForm({ initialData, saveAction, type }) {
     let arr = Array.isArray(raw) ? raw : (raw ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
     return arr.map(block => {
       if (block.type === 'richText' && typeof block.text === 'string') {
-        try {
-          JSON.parse(block.text); // если парсится как JSON — это не HTML
-          return { ...block, text: '' };
-        } catch {
-          return block;
+        // Если text выглядит как JSON, очищаем
+        if (/^\s*[{\[]/.test(block.text)) {
+          try {
+            JSON.parse(block.text);
+            return { ...block, text: '' };
+          } catch {}
         }
       }
       return block;
