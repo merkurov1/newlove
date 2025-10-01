@@ -27,6 +27,17 @@ export default async function ProjectPage({ params }: { params: { slug: string }
     notFound();
   }
 
+  let blocks;
+  if (Array.isArray(project.content)) {
+    blocks = project.content;
+  } else {
+    try {
+      blocks = JSON.parse(project.content);
+    } catch (e) {
+      blocks = null;
+    }
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-6">{project.title}</h1>
@@ -41,21 +52,18 @@ export default async function ProjectPage({ params }: { params: { slug: string }
           />
         </div>
       )}
-      {project.content && (
-        <div className="prose prose-lg max-w-none">
-          {Array.isArray(project.content)
-            ? <BlockRenderer blocks={project.content} />
-            : (() => {
-                let blocks;
-                try {
-                  blocks = JSON.parse(project.content);
-                } catch (e) {
-                  return <pre style={{color:'red'}}>Ошибка парсинга: {String(e)}\n{String(project.content)}</pre>;
-                }
-                return <BlockRenderer blocks={blocks} />;
-              })()
-          }
-        </div>
+      {blocks && (
+        <>
+          <pre style={{background:'#f6f8fa',color:'#333',fontSize:'13px',padding:'12px',borderRadius:'8px',marginBottom:'16px',overflowX:'auto'}}>
+            {JSON.stringify(blocks, null, 2)}
+          </pre>
+          <div className="prose prose-lg max-w-none">
+            <BlockRenderer blocks={blocks} />
+          </div>
+        </>
+      )}
+      {!blocks && (
+        <div style={{color:'red'}}>Ошибка парсинга content: {String(project.content)}</div>
       )}
     </div>
   );
