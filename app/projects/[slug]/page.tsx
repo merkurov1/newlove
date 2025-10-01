@@ -1,4 +1,5 @@
 // app/projects/[slug]/page.tsx
+import React from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { notFound } from 'next/navigation';
 import BlockRenderer from '@/components/BlockRenderer';
