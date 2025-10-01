@@ -1,3 +1,4 @@
+"use client";
 // app/admin/projects/new/page.js
 import ContentForm from '@/components/admin/ContentForm';
 import { createProject } from '../../actions';
