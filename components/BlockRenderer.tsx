@@ -25,8 +25,13 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
             return <TextBlock key={idx} block={block} />;
           case 'image':
             return <GalleryBlock key={idx} block={block} />;
+          case 'gallery':
+            return <GalleryBlock key={idx} block={block} />;
           case 'code':
             return <CodeBlock key={idx} block={block} />;
+          case 'richText':
+            // Для richText блоков ожидается поле html
+            return <div key={idx} className="prose max-w-none" dangerouslySetInnerHTML={{ __html: (block as any).html || '' }} />;
           default:
             return <div key={idx} style={{ color: 'red', margin: '12px 0' }}>Неизвестный тип блока: {block.type}</div>;
         }
