@@ -1,91 +1,55 @@
 // app/projects/[slug]/page.tsx
-import React from 'react';
-import { createClient } from '@supabase/supabase-js';
+
 import { notFound } from 'next/navigation';
-import BlockRenderer from '@/components/BlockRenderer';
+import GalleryGrid from '@/components/GalleryGrid';
+import RichTextBlock from '@/components/RichTextBlock';
+import CodeBlock from '@/components/CodeBlock';
+import prisma from '@/lib/prisma';
 
-// Определяем типы для данных, которые мы ожидаем
-interface Block {
-  type?: string;
-  blockType?: string;
-  [key: string]: any;
+const BLOCK_COMPONENTS = {
+  richText: RichTextBlock,
+  gallery: GalleryGrid,
+  codeBlock: CodeBlock,
+};
+
+async function getProject(slug: string) {
+  return await prisma.project.findUnique({
+    where: { slug },
+    select: { title: true, content: true },
+  });
 }
 
-interface Project {
-  title: string;
-  content: Block[] | string;
-}
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// --- Функция для получения данных проекта ---
-async function getProject(slug: string): Promise<Project | null> {
-  const { data } = await supabase
-    .from('projects')
-    .select('title, content')
-    .eq('slug', slug)
-    .single();
-  return data;
-}
-
-// --- Функция для генерации метаданных для SEO ---
-export async function generateMetadata({ params }: { params: { slug: string } }) {
-  const project = await getProject(params.slug);
-  if (!project) return { title: 'Проект не найден' };
-
-  let description = `Проект: ${project.title}`;
-  // Пытаемся взять первый текстовый блок для описания
-  if (Array.isArray(project.content) && project.content.length > 0) {
-    const firstTextBlock = project.content.find(b => (b.type === 'richText' || b.blockType === 'richText') && b.text);
-    if (firstTextBlock) {
-      description = firstTextBlock.text.replace(/<[^>]+>/g, '').substring(0, 155);
-    }
-  }
-
-  return {
-    title: project.title,
-    description: description,
-  };
-}
-
-// --- Основной компонент страницы ---
 export default async function ProjectPage({ params }: { params: { slug: string } }) {
   const project = await getProject(params.slug);
   if (!project) notFound();
 
-  let blocks: Block[] = [];
-  if (typeof project.content === 'string') {
-    try {
-      blocks = JSON.parse(project.content);
-    } catch {
-      return <div style={{background:'#f00',color:'#fff',padding:'2rem',fontWeight:'bold'}}>Ошибка: content не является валидным JSON массивом блоков!</div>;
-    }
-  } else if (Array.isArray(project.content)) {
-    blocks = project.content;
-  } else {
-    return <div style={{background:'#f00',color:'#fff',padding:'2rem',fontWeight:'bold'}}>Ошибка: content не массив блоков!</div>;
+  let blocks;
+  try {
+    blocks = JSON.parse(project.content);
+  } catch {
+    return <div className="bg-red-100 text-red-800 p-6 rounded">Ошибка: контент проекта повреждён.</div>;
   }
-  // Валидация структуры блоков
-  const valid = Array.isArray(blocks) && blocks.every(b => b.type);
-  if (!valid) {
-    return <div style={{background:'#f00',color:'#fff',padding:'2rem',fontWeight:'bold'}}>Ошибка: структура блоков некорректна!</div>;
+  if (!Array.isArray(blocks)) {
+    return <div className="bg-red-100 text-red-800 p-6 rounded">Ошибка: контент не является массивом блоков.</div>;
   }
+
   return (
     <article className="max-w-4xl mx-auto px-4 py-12">
-      <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-10 text-center leading-tight">
-        {project.title}
-      </h1>
-      <div style={{background:'#ff0',color:'#d00',border:'4px solid #d00',padding:'2rem',margin:'2rem 0',fontSize:'18px',zIndex:9999,position:'relative',boxShadow:'0 0 16px 4px #d00',textAlign:'left',fontWeight:'bold',lineHeight:1.4,wordBreak:'break-all',whiteSpace:'pre-wrap',pointerEvents:'auto',opacity:1,display:'block'}}>
-        <div style={{fontSize:'22px',marginBottom:'1rem'}}>=== DEBUG BLOCKS START ===</div>
-        <pre style={{background:'none',color:'#222',fontSize:'16px',margin:0,padding:0,border:'none',boxShadow:'none',whiteSpace:'pre-wrap',wordBreak:'break-all',fontFamily:'monospace',fontWeight:'normal'}}>{JSON.stringify(blocks, null, 2)}</pre>
-        <div style={{fontSize:'22px',marginTop:'1rem'}}>=== DEBUG BLOCKS END ===</div>
-      </div>
-      <div className="prose lg:prose-xl max-w-none">
-        <BlockRenderer blocks={blocks} />
-      </div>
+      <h1 className="text-4xl font-extrabold mb-8">{project.title}</h1>
+      {blocks.length === 0 && (
+        <div className="text-gray-500 text-center my-12">Контент для этого проекта отсутствует.</div>
+      )}
+      {blocks.map((block, idx) => {
+        const Component = BLOCK_COMPONENTS[block.type as keyof typeof BLOCK_COMPONENTS];
+        if (!Component) {
+          return (
+            <div key={idx} className="bg-yellow-100 text-yellow-800 p-4 rounded my-4">
+              Неизвестный тип блока: <b>{block.type}</b>
+            </div>
+          );
+        }
+        return <Component key={idx} {...block} />;
+      })}
     </article>
   );
 }
