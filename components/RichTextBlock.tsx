@@ -16,11 +16,6 @@ export default function RichTextBlock({ text, html }: { text?: string, html?: st
     content = html;
   }
   if (!content) return null;
-  return <>
-    <div style={{background:'#f6f8fa',color:'#333',fontSize:'13px',padding:'8px',borderRadius:'6px',marginBottom:'8px',overflowX:'auto'}}>
-      richTextBlock: {JSON.stringify({ text, html }, null, 2)}
-    </div>
-    <div dangerouslySetInnerHTML={{ __html: content }} />
-  </>;
+  return <div dangerouslySetInnerHTML={{ __html: content }} />;
 }
 
