@@ -112,6 +112,12 @@ export async function createProject(formData) {
 
   if (!title || !contentRaw || !slug) throw new Error('All fields are required.');
 
+  // Проверка уникальности slug
+  const existing = await prisma.project.findUnique({ where: { slug } });
+  if (existing) {
+    throw new Error('Проект с таким slug уже существует. Пожалуйста, выберите другой URL.');
+  }
+
   let blocks;
   try {
     blocks = JSON.parse(contentRaw);
