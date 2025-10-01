@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import TiptapEditor from './TiptapEditor';
 import GalleryBlockEditor from './GalleryBlockEditor';
+import { EditorJsBlock } from '@/types/blocks';
 export default function BlockEditor({ value, onChange }) {
-  const [blocks, setBlocks] = useState(value || []);
+  const [blocks, setBlocks] = useState(Array.isArray(value) ? value : []);
 
   // Синхронизируем value -> blocks при изменении value (например, при редактировании)
   React.useEffect(() => {
@@ -10,11 +11,8 @@ export default function BlockEditor({ value, onChange }) {
   }, [value]);
 
   const handleBlockChange = (idx, newBlock) => {
-    // Для richText всегда используем поле html
-    if (newBlock.type === 'richText' && newBlock.text !== undefined) {
-      const { text, ...rest } = newBlock;
-      newBlock = { ...rest, html: newBlock.text };
-    }
+    // Always enforce EditorJsBlock shape
+    if (!newBlock || typeof newBlock.type !== 'string' || typeof newBlock.data !== 'object') return;
     const updated = blocks.map((b, i) => (i === idx ? newBlock : b));
     setBlocks(updated);
     onChange(updated);
@@ -22,8 +20,11 @@ export default function BlockEditor({ value, onChange }) {
 
   const addBlock = (type) => {
     let block;
-    if (type === 'richText') block = { type: 'richText', html: '' };
-  else if (type === 'gallery') block = { type: 'gallery', images: [] };
+    if (type === 'richText') block = { type: 'richText', data: { html: '' } };
+    else if (type === 'gallery') block = { type: 'gallery', data: { images: [] } };
+    else if (type === 'code') block = { type: 'code', data: { code: '' } };
+    else if (type === 'image') block = { type: 'image', data: { url: '', caption: '' } };
+    else return;
     const updated = [...blocks, block];
     setBlocks(updated);
     onChange(updated);
@@ -44,20 +45,20 @@ export default function BlockEditor({ value, onChange }) {
             <button type="button" onClick={() => removeBlock(idx)} className="text-red-500">Удалить</button>
           </div>
           {block.type === 'richText' && (
-            <TiptapEditor value={block.html} onChange={html => handleBlockChange(idx, { ...block, html })} />
+            <TiptapEditor value={block.data.html} onChange={html => handleBlockChange(idx, { type: 'richText', data: { html } })} />
           )}
           {block.type === 'gallery' && (
             <GalleryBlockEditor
-              images={block.images}
-              onChange={imgs => handleBlockChange(idx, { ...block, images: imgs })}
+              images={block.data.images}
+              onChange={imgs => handleBlockChange(idx, { type: 'gallery', data: { images: imgs } })}
             />
           )}
-          {/* codeBlock больше не поддерживается */}
+          {/* Add support for code/image if needed */}
         </div>
       ))}
       <div className="flex gap-2 mt-4">
-  <button type="button" onClick={() => addBlock('richText')} className="bg-blue-600 text-white px-4 py-2 rounded">+ Текст</button>
-  <button type="button" onClick={() => addBlock('gallery')} className="bg-green-600 text-white px-4 py-2 rounded">+ Галерея</button>
+        <button type="button" onClick={() => addBlock('richText')} className="bg-blue-600 text-white px-4 py-2 rounded">+ Текст</button>
+        <button type="button" onClick={() => addBlock('gallery')} className="bg-green-600 text-white px-4 py-2 rounded">+ Галерея</button>
       </div>
     </div>
   );

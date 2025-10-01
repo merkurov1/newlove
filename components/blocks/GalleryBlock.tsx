@@ -1,45 +1,20 @@
-
 import React from 'react';
+import type { EditorJsBlock, GalleryImage } from '@/types/blocks';
 
-type EditorJsImageBlock = {
-  type: 'image';
-  data: {
-    file?: { url: string };
-    url?: string;
-    caption?: string;
-  };
-};
-
-type CustomGalleryImage = {
-  url: string;
-  alt?: string;
-};
-
-type CustomGalleryBlock = {
-  type: 'gallery';
-  images: CustomGalleryImage[];
-};
-
-type GalleryBlockProps = {
-  block: EditorJsImageBlock | CustomGalleryBlock | any;
-};
-
-export default function GalleryBlock({ block }: GalleryBlockProps) {
-  // Если это Editor.js image block
+export default function GalleryBlock({ block }: { block: EditorJsBlock }) {
   if (block.type === 'image') {
-    const url = block.data.file?.url || block.data.url;
+    const { url, caption } = block.data;
     return (
       <div className="my-4">
-        <img src={url} alt={block.data.caption || ''} className="rounded shadow" />
-        {block.data.caption && <div className="text-sm text-gray-500">{block.data.caption}</div>}
+        <img src={url} alt={caption || ''} className="rounded shadow" />
+        {caption && <div className="text-sm text-gray-500">{caption}</div>}
       </div>
     );
   }
-  // Если это кастомный gallery block с images: [{url, alt}]
-  if (block.type === 'gallery' && Array.isArray(block.images)) {
+  if (block.type === 'gallery' && Array.isArray(block.data.images)) {
     return (
       <div className="my-4 grid grid-cols-2 md:grid-cols-3 gap-4">
-        {block.images.map((img: CustomGalleryImage, i: number) => (
+        {block.data.images.map((img: GalleryImage, i: number) => (
           <div key={i} className="relative w-full aspect-square bg-gray-100 rounded overflow-hidden flex items-center justify-center">
             <img src={img.url} alt={img.alt || ''} className="object-cover w-full h-full" />
             {img.alt && <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs px-2 py-1">{img.alt}</div>}
