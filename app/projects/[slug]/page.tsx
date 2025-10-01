@@ -7,7 +7,14 @@ import type { EditorJsBlock } from '@/types/blocks';
 
 export default async function ProjectPage({ params }: { params: { slug: string } }) {
   const project = await prisma.project.findUnique({ where: { slug: params.slug } });
-  if (!project) return <div>Проект не найден</div>;
+  if (!project) {
+    return (
+      <div className="max-w-2xl mx-auto mt-16 p-6 bg-red-50 text-red-700 rounded shadow text-center">
+        <h1 className="text-2xl font-bold mb-2">Проект не найден</h1>
+        <p>Возможно, он был удалён или ещё не опубликован.</p>
+      </div>
+    );
+  }
 
   let blocks: EditorJsBlock[] = [];
   try {
@@ -25,16 +32,19 @@ export default async function ProjectPage({ params }: { params: { slug: string }
 
   if (!blocks.length) {
     return (
-      <div className="text-red-600 bg-red-50 p-4 rounded">
-        Ошибка: контент проекта повреждён или отсутствует.
+      <div className="max-w-2xl mx-auto mt-16 p-6 bg-red-50 text-red-700 rounded shadow text-center">
+        <h1 className="text-2xl font-bold mb-2">Ошибка контента</h1>
+        <p>Контент проекта повреждён или отсутствует.</p>
       </div>
     );
   }
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-4">{project.title}</h1>
-      <BlockRenderer blocks={blocks} />
-    </div>
+    <article className="max-w-3xl mx-auto px-4 py-12">
+      <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-8 text-center">{project.title}</h1>
+      <div className="prose prose-lg max-w-none mx-auto">
+        <BlockRenderer blocks={blocks} />
+      </div>
+    </article>
   );
 }

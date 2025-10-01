@@ -23,5 +23,9 @@ export default function GalleryBlock({ block }: { block: EditorJsBlock }) {
       </div>
     );
   }
-  return <div className="text-red-500">Ошибка: некорректный блок галереи</div>;
+  return (
+    <div className="my-8 p-4 bg-red-50 text-red-700 rounded text-center font-medium border border-red-200">
+      Ошибка: некорректный блок галереи
+    </div>
+  );
 }

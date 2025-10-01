@@ -7,7 +7,11 @@ import type { EditorJsBlock } from '@/types/blocks';
 
 export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
   if (!Array.isArray(blocks) || !blocks.length) {
-    return <div className="text-gray-500">Контент отсутствует.</div>;
+    return (
+      <div className="my-8 p-4 bg-yellow-50 text-yellow-800 rounded text-center font-medium border border-yellow-200">
+        Контент отсутствует.
+      </div>
+    );
   }
   return (
     <>
