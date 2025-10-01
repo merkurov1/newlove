@@ -4,6 +4,7 @@ import React from 'react';
 // Ожидаем, что из Supabase придет поле 'text' или 'html'
 // и передастся сюда через BlockRenderer
 export default function RichTextBlock({ text, html }: { text?: string, html?: string }) {
+  console.log('RichTextBlock props:', { text, html });
   let content = '';
   if (typeof text === 'string') {
     content = text;

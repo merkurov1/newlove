@@ -31,6 +31,11 @@ export default async function ProjectPage({ params }: { params: { slug: string }
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-6">{project.title}</h1>
+      {/* ВРЕМЕННО: Показываем структуру блоков для отладки */}
+      <details style={{marginBottom: 24, background: '#f8f8f8', padding: 12, borderRadius: 8}}>
+        <summary style={{cursor: 'pointer', fontWeight: 'bold'}}>Структура blocks (debug)</summary>
+        <pre style={{fontSize: 12, whiteSpace: 'pre-wrap'}}>{JSON.stringify(blocks, null, 2)}</pre>
+      </details>
       <div className="prose prose-lg max-w-none">
         <BlockRenderer blocks={blocks} />
       </div>
