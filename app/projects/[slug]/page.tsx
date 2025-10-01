@@ -43,7 +43,18 @@ export default async function ProjectPage({ params }: { params: { slug: string }
       )}
       {project.content && (
         <div className="prose prose-lg max-w-none">
-          <BlockRenderer blocks={typeof project.content === 'string' ? JSON.parse(project.content) : project.content} />
+          {Array.isArray(project.content)
+            ? <BlockRenderer blocks={project.content} />
+            : (() => {
+                let blocks;
+                try {
+                  blocks = JSON.parse(project.content);
+                } catch (e) {
+                  return <pre style={{color:'red'}}>Ошибка парсинга: {String(e)}\n{String(project.content)}</pre>;
+                }
+                return <BlockRenderer blocks={blocks} />;
+              })()
+          }
         </div>
       )}
     </div>
