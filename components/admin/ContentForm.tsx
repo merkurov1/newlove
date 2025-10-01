@@ -19,9 +19,6 @@ function parseBlocks(raw: any): Block[] {
     if (block.type === 'gallery') {
       return { type: 'gallery', images: Array.isArray(block.images) ? block.images : [] };
     }
-    if (block.type === 'codeBlock') {
-      return { type: 'codeBlock', code: block.code || '', language: block.language || 'js' };
-    }
     return null;
   }).filter(Boolean) as Block[];
 }
