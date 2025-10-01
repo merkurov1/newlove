@@ -1,6 +1,8 @@
+
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase-server';
+import BlockRenderer from '@/components/BlockRenderer';
 
 interface Project {
   id: string;
@@ -39,7 +41,11 @@ export default async function ProjectPage({ params }: { params: { slug: string }
           />
         </div>
       )}
-      <div className="prose prose-lg max-w-none" dangerouslySetInnerHTML={{ __html: project.content }} />
+      {project.content && (
+        <div className="prose prose-lg max-w-none">
+          <BlockRenderer blocks={typeof project.content === 'string' ? JSON.parse(project.content) : project.content} />
+        </div>
+      )}
     </div>
   );
 }
