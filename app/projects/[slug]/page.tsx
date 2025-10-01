@@ -1,10 +1,10 @@
 
 
-
 import { notFound } from 'next/navigation';
 import BlockRenderer from '@/components/BlockRenderer';
 import prisma from '@/lib/prisma';
 
+export default async function ProjectPage({ params }: { params: { slug: string } }) {
   const project = await prisma.project.findUnique({
     where: { slug: params.slug },
     select: {
