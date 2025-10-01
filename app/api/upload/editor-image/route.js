@@ -39,4 +39,4 @@ export async function POST(req, res) {
   }
   const { data: urlData } = supabase.storage.from('media').getPublicUrl(fileName);
   return NextResponse.json({ success: 1, file: { url: urlData.publicUrl } });
-}
+  // This route is now removed as it was unused.
