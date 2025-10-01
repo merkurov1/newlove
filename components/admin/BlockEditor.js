@@ -5,25 +5,31 @@ import GalleryBlockEditor from './GalleryBlockEditor';
 export default function BlockEditor({ value, onChange }) {
   const [blocks, setBlocks] = useState(value || []);
 
+  // Синхронизируем value -> blocks при изменении value (например, при редактировании)
+  React.useEffect(() => {
+    setBlocks(Array.isArray(value) ? value : []);
+  }, [value]);
+
   const handleBlockChange = (idx, newBlock) => {
-    const updated = blocks.map((b, i) => (i === idx ? newBlock : b));
-    setBlocks(updated);
-    onChange(updated);
+  const updated = blocks.map((b, i) => (i === idx ? newBlock : b));
+  setBlocks(updated);
+  onChange(updated);
   };
 
   const addBlock = (type) => {
-  let block;
-  if (type === 'richText') block = { type: 'richText', text: '' };
-  else if (type === 'gallery') block = { type: 'gallery', images: [] };
-  else if (type === 'codeBlock') block = { type: 'codeBlock', language: 'js', code: '' };
-  setBlocks([...blocks, block]);
-  onChange([...blocks, block]);
+    let block;
+    if (type === 'richText') block = { type: 'richText', text: '' };
+    else if (type === 'gallery') block = { type: 'gallery', images: [] };
+    else if (type === 'codeBlock') block = { type: 'codeBlock', language: 'js', code: '' };
+    const updated = [...blocks, block];
+    setBlocks(updated);
+    onChange(updated);
   };
 
   const removeBlock = (idx) => {
-    const updated = blocks.filter((_, i) => i !== idx);
-    setBlocks(updated);
-    onChange(updated);
+  const updated = blocks.filter((_, i) => i !== idx);
+  setBlocks(updated);
+  onChange(updated);
   };
 
   return (
