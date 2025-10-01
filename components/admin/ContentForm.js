@@ -12,12 +12,35 @@ export default function ContentForm({ initialData, saveAction, type }) {
   // Управляемое состояние для всех полей
   const [title, setTitle] = useState(initialData?.title || '');
   const [slug, setSlug] = useState(initialData?.slug || '');
-  const [content, setContent] = useState(Array.isArray(initialData?.content) ? initialData.content : []);
+  // Приводим content к массиву всегда
+  const [content, setContent] = useState(Array.isArray(initialData?.content) ? initialData.content : (initialData?.content ? (() => { try { return JSON.parse(initialData.content); } catch { return []; } })() : []));
   const [published, setPublished] = useState(initialData?.published || false);
-  // TagInput управляет своим состоянием и сериализует в hidden input
+  const [error, setError] = useState('');
+
+  // Валидация структуры блоков
+  function validateBlocks(blocks) {
+    if (!Array.isArray(blocks) || blocks.length === 0) return false;
+    for (const block of blocks) {
+      if (!block.type) return false;
+      if (block.type === 'richText' && typeof block.text !== 'string') return false;
+      if (block.type === 'gallery' && (!Array.isArray(block.images) || block.images.some(img => !img.image || !img.image.url))) return false;
+      if (block.type === 'codeBlock' && typeof block.code !== 'string') return false;
+    }
+    return true;
+  }
+
+  function handleSubmit(e) {
+    if (!validateBlocks(content)) {
+      e.preventDefault();
+      setError('Проверьте структуру блоков: должен быть хотя бы один корректный блок.');
+      return false;
+    }
+    setError('');
+    return true;
+  }
 
   return (
-    <form action={saveAction} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md">
+    <form action={saveAction} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
       {isEditing && <input type="hidden" name="id" value={initialData.id} />}
 
       <div>
@@ -47,8 +70,10 @@ export default function ContentForm({ initialData, saveAction, type }) {
 
       <TagInput initialTags={initialData?.tags} />
 
-  <BlockEditor value={content} onChange={setContent} />
-  <textarea name="content" value={JSON.stringify(content)} readOnly hidden />
+      <BlockEditor value={Array.isArray(content) ? content : []} onChange={setContent} />
+      <textarea name="content" value={JSON.stringify(content)} readOnly hidden />
+
+      {error && <div className="text-red-600 text-sm font-medium">{error}</div>}
 
       <div className="flex items-center mt-2 mb-2">
         <input
