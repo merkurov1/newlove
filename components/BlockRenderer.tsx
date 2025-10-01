@@ -19,16 +19,17 @@ export default function BlockRenderer({ blocks }: { blocks: Block[] }) {
         if (!block || typeof block !== 'object' || !('type' in block)) {
           return <div key={idx} style={{ color: 'red', margin: '12px 0' }}>Ошибка: некорректный блок данных</div>;
         }
-        switch (block.type) {
-          case 'richText':
-            return <RichTextBlock key={idx} html={block.html} />;
-          case 'gallery':
-            return <GalleryGrid key={idx} images={block.images} />;
-          case 'codeBlock':
-            return <CodeBlock key={idx} code={block.code} language={block.language} />;
-          default:
-            return <div key={idx} style={{ color: 'red', margin: '12px 0' }}>Неизвестный тип блока: {block.type}</div>;
+        if (block.type === 'richText') {
+          return <RichTextBlock key={idx} html={block.html} />;
         }
+        if (block.type === 'gallery') {
+          return <GalleryGrid key={idx} images={block.images} />;
+        }
+        if (block.type === 'codeBlock') {
+          return <CodeBlock key={idx} code={block.code} language={block.language} />;
+        }
+        // fallback для неизвестного типа
+        return <div key={idx} style={{ color: 'red', margin: '12px 0' }}>Неизвестный тип блока</div>;
       })}
     </>
   );
