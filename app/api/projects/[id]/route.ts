@@ -29,8 +29,18 @@ export async function POST(req: NextRequest) {
   if (!title || !slug || !authorId) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
+  // Валидация структуры content
+  let blocks;
+  try {
+    blocks = typeof content === 'string' ? JSON.parse(content) : content;
+  } catch {
+    return NextResponse.json({ error: 'Content is not valid JSON' }, { status: 400 });
+  }
+  if (!Array.isArray(blocks) || blocks.some(b => !b.type)) {
+    return NextResponse.json({ error: 'Content must be array of blocks with type' }, { status: 400 });
+  }
   const project = await prisma.project.create({
-    data: { title, slug, content, authorId, published },
+    data: { title, slug, content: JSON.stringify(blocks), authorId, published },
   });
   return NextResponse.json(project);
 }
