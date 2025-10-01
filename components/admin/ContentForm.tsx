@@ -10,12 +10,12 @@ import { EditorJsBlock } from '@/types/blocks';
 
 
 
+
 interface ContentFormProps {
   initialData?: any;
   saveAction: any;
   type: string;
 }
-
 
 function parseBlocks(raw: any): EditorJsBlock[] {
   if (!raw) return [];
@@ -26,15 +26,16 @@ function parseBlocks(raw: any): EditorJsBlock[] {
 
 
 export default function ContentForm({ initialData, saveAction, type }: ContentFormProps) {
-  const isEditing = !!initialData;
-  const [title, setTitle] = useState(initialData?.title || '');
-  const [slug, setSlug] = useState(initialData?.slug || '');
-  const [content, setContent] = useState<EditorJsBlock[]>(parseBlocks(initialData?.content));
-  const [published, setPublished] = useState(initialData?.published || false);
+  const safeInitial = initialData && typeof initialData === 'object' ? initialData : {};
+  const isEditing = !!safeInitial && !!safeInitial.id;
+  const [title, setTitle] = useState(safeInitial.title || '');
+  const [slug, setSlug] = useState(safeInitial.slug || '');
+  const [content, setContent] = useState<EditorJsBlock[]>(parseBlocks(safeInitial.content));
+  const [published, setPublished] = useState(safeInitial.published || false);
   const [error, setError] = useState('');
   const { data: session, status } = useSession();
-  const authorId = initialData?.authorId || session?.user?.id || '';
-  const [tags, setTags] = useState<string[]>(() => (initialData?.tags || []).map((t: any) => t.name));
+  const authorId = safeInitial.authorId || session?.user?.id || '';
+  const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
 
   function validateBlocks(blocks: EditorJsBlock[]) {
     if (!Array.isArray(blocks) || blocks.length === 0) return false;
@@ -68,7 +69,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
 
   return (
   <form action={saveAction} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
-      {isEditing && <input type="hidden" name="id" value={initialData.id} />}
+  {isEditing && <input type="hidden" name="id" value={safeInitial.id} />}
       <div>
         <label htmlFor="title" className="block text-sm font-medium text-gray-700">Название</label>
         <input
@@ -93,7 +94,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
         />
       </div>
-      <TagInput initialTags={initialData?.tags} onChange={setTags} />
+  <TagInput initialTags={safeInitial.tags} onChange={setTags} />
   <BlockEditor value={content} onChange={setContent} />
       <input type="hidden" name="authorId" value={authorId} />
       <input type="hidden" name="tags" value={JSON.stringify(tags)} />
