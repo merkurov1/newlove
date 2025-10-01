@@ -1,46 +1,36 @@
 
-import { NextRequest, NextResponse } from 'next/server';
+
 import { prisma } from '@/lib/prisma';
+import { ProjectSchema } from '@/lib/validation/project';
+import { handleApiError } from '@/lib/middleware/errorHandler';
+import { withValidation } from '@/lib/middleware/validate';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
+import { withHelmet } from '@/lib/middleware/helmet';
+import { requireAdmin } from '@/lib/middleware/auth';
 
-// ВАЖНО: authorId должен быть передан с фронта или получен из сессии (упрощённо — из тела запроса)
-
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export const GET = handleApiError(async (req: any, { params }: { params: { id: string } }) => {
   const project = await prisma.project.findUnique({ where: { id: params.id } });
-  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json(project);
-}
+  if (!project) return Response.json({ error: 'Not found' }, { status: 404 });
+  return Response.json(project);
+});
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const data = await req.json();
+export const PUT = withHelmet(withRateLimit(handleApiError(withValidation(ProjectSchema, async (req: any, data: any, { params }: { params: { id: string } }) => {
+  const auth = await requireAdmin(req);
+  if (auth) return auth;
   const { title, slug, content, authorId, published = false } = data;
-  if (!title || !slug || !authorId) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-  }
   const project = await prisma.project.update({
     where: { id: params.id },
     data: { title, slug, content, authorId, published },
   });
-  return NextResponse.json(project);
-}
+  return Response.json(project);
+}))));
 
-export async function POST(req: NextRequest) {
-  const data = await req.json();
+export const POST = withHelmet(withRateLimit(handleApiError(withValidation(ProjectSchema, async (req: any, data: any) => {
+  const auth = await requireAdmin(req);
+  if (auth) return auth;
   const { title, slug, content, authorId, published = false } = data;
-  if (!title || !slug || !authorId) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-  }
-  // Валидация структуры content
-  let blocks;
-  try {
-    blocks = typeof content === 'string' ? JSON.parse(content) : content;
-  } catch {
-    return NextResponse.json({ error: 'Content is not valid JSON' }, { status: 400 });
-  }
-  if (!Array.isArray(blocks) || blocks.some(b => !b.type)) {
-    return NextResponse.json({ error: 'Content must be array of blocks with type' }, { status: 400 });
-  }
   const project = await prisma.project.create({
-    data: { title, slug, content: JSON.stringify(blocks), authorId, published },
+    data: { title, slug, content, authorId, published },
   });
-  return NextResponse.json(project);
-}
+  return Response.json(project);
+}))));
