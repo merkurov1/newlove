@@ -27,14 +27,14 @@ export default async function ProjectPage({ params }: { params: { slug: string }
     notFound();
   }
 
-  let blocks;
+  let blocks: any[] = [];
   if (Array.isArray(project.content)) {
     blocks = project.content;
   } else {
     try {
       blocks = JSON.parse(project.content);
     } catch (e) {
-      blocks = null;
+      blocks = [];
     }
   }
 
@@ -52,19 +52,9 @@ export default async function ProjectPage({ params }: { params: { slug: string }
           />
         </div>
       )}
-      {blocks && (
-        <>
-          <pre style={{background:'#f6f8fa',color:'#333',fontSize:'13px',padding:'12px',borderRadius:'8px',marginBottom:'16px',overflowX:'auto'}}>
-            {JSON.stringify(blocks, null, 2)}
-          </pre>
-          <div className="prose prose-lg max-w-none">
-            <BlockRenderer blocks={blocks} />
-          </div>
-        </>
-      )}
-      {!blocks && (
-        <div style={{color:'red'}}>Ошибка парсинга content: {String(project.content)}</div>
-      )}
+      <div className="prose prose-lg max-w-none">
+        <BlockRenderer blocks={blocks} />
+      </div>
     </div>
   );
 }
