@@ -125,10 +125,15 @@ export async function createProject(formData) {
     throw new Error('Content is not valid JSON');
   }
   if (!Array.isArray(blocks)) throw new Error('Content is not an array of blocks');
+  // Жёсткая валидация структуры блоков
+  const validBlocks = blocks.filter(
+    b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
+  );
+  if (validBlocks.length === 0) throw new Error('No valid blocks');
 
   await prisma.project.create({
     data: { 
-      title, content: JSON.stringify(blocks), slug, published, 
+      title, content: JSON.stringify(validBlocks), slug, published, 
       publishedAt: published ? new Date() : null, 
       authorId: session.user.id,
       tags: { connectOrCreate: tagsToConnect },
@@ -156,15 +161,20 @@ export async function updateProject(formData) {
     throw new Error('Content is not valid JSON');
   }
   if (!Array.isArray(blocks)) throw new Error('Content is not an array of blocks');
+  // Жёсткая валидация структуры блоков
+  const validBlocks = blocks.filter(
+    b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
+  );
+  if (validBlocks.length === 0) throw new Error('No valid blocks');
 
   await prisma.project.update({
     where: { id: id },
     data: { 
-      title, content: JSON.stringify(blocks), slug, published, 
+      title, content: JSON.stringify(validBlocks), slug, published, 
       publishedAt: published ? new Date() : null,
       tags: { 
-        set: [], // Сначала отсоединяем все старые теги
-        connectOrCreate: tagsToConnect, // Затем присоединяем новый набор
+        set: [],
+        connectOrCreate: tagsToConnect,
       },
     },
   });
