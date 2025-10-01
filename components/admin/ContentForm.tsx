@@ -40,7 +40,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       if (!block.type) return false;
       if (block.type === 'richText' && typeof block.html !== 'string') return false;
       if (block.type === 'gallery' && (!Array.isArray(block.images))) return false;
-      if (block.type === 'codeBlock' && typeof block.code !== 'string') return false;
+  // if (block.type === 'codeBlock' && typeof block.code !== 'string') return false;
     }
     return true;
   }
