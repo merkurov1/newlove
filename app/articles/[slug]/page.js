@@ -50,12 +50,18 @@ export default async function ArticlePage({ params }) {
     try {
       blocks = JSON.parse(article.content);
     } catch {
-      blocks = [];
+      return <div style={{background:'#f00',color:'#fff',padding:'2rem',fontWeight:'bold'}}>Ошибка: content не является валидным JSON массивом блоков!</div>;
     }
   } else if (Array.isArray(article.content)) {
     blocks = article.content;
+  } else {
+    return <div style={{background:'#f00',color:'#fff',padding:'2rem',fontWeight:'bold'}}>Ошибка: content не массив блоков!</div>;
   }
-
+  // Валидация структуры блоков
+  const valid = Array.isArray(blocks) && blocks.every(b => b.type);
+  if (!valid) {
+    return <div style={{background:'#f00',color:'#fff',padding:'2rem',fontWeight:'bold'}}>Ошибка: структура блоков некорректна!</div>;
+  }
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
       <div className="text-center mb-12">
@@ -73,6 +79,11 @@ export default async function ArticlePage({ params }) {
             ))}
           </div>
         )}
+      </div>
+      <div style={{background:'#ff0',color:'#d00',border:'4px solid #d00',padding:'2rem',margin:'2rem 0',fontSize:'18px',zIndex:9999,position:'relative',boxShadow:'0 0 16px 4px #d00',textAlign:'left',fontWeight:'bold',lineHeight:1.4,wordBreak:'break-all',whiteSpace:'pre-wrap',pointerEvents:'auto',opacity:1,display:'block'}}>
+        <div style={{fontSize:'22px',marginBottom:'1rem'}}>=== DEBUG BLOCKS START ===</div>
+        <pre style={{background:'none',color:'#222',fontSize:'16px',margin:0,padding:0,border:'none',boxShadow:'none',whiteSpace:'pre-wrap',wordBreak:'break-all',fontFamily:'monospace',fontWeight:'normal'}}>{JSON.stringify(blocks, null, 2)}</pre>
+        <div style={{fontSize:'22px',marginTop:'1rem'}}>=== DEBUG BLOCKS END ===</div>
       </div>
       <BlockRenderer blocks={blocks} />
     </article>
