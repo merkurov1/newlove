@@ -9,8 +9,15 @@ export default async function ProjectPage({ params }: { params: { slug: string }
 
   // Editor.js OutputData: { time, blocks, version }
   let blocks: any[] = [];
-  if (project.content && typeof project.content === 'object' && Array.isArray(project.content.blocks)) {
-    blocks = project.content.blocks;
+  // Если content — объект с полем blocks (Editor.js OutputData)
+  if (
+    project.content &&
+    typeof project.content === 'object' &&
+    !Array.isArray(project.content) &&
+    'blocks' in project.content &&
+    Array.isArray((project.content as any).blocks)
+  ) {
+    blocks = (project.content as any).blocks;
   } else if (Array.isArray(project.content)) {
     blocks = project.content;
   } else if (typeof project.content === 'string') {
