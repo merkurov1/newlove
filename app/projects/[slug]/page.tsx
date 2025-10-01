@@ -57,60 +57,32 @@ export default async function ProjectPage({ params }: { params: { slug: string }
   if (!project) notFound();
 
   let blocks: Block[] = [];
-
-  // Надёжно обрабатываем контент
   if (typeof project.content === 'string') {
     try {
       blocks = JSON.parse(project.content);
-    } catch (e) {
-      console.error("Ошибка парсинга JSON:", e);
+    } catch {
+      return <div style={{background:'#f00',color:'#fff',padding:'2rem',fontWeight:'bold'}}>Ошибка: content не является валидным JSON массивом блоков!</div>;
     }
   } else if (Array.isArray(project.content)) {
     blocks = project.content;
+  } else {
+    return <div style={{background:'#f00',color:'#fff',padding:'2rem',fontWeight:'bold'}}>Ошибка: content не массив блоков!</div>;
   }
-
+  // Валидация структуры блоков
+  const valid = Array.isArray(blocks) && blocks.every(b => b.type);
+  if (!valid) {
+    return <div style={{background:'#f00',color:'#fff',padding:'2rem',fontWeight:'bold'}}>Ошибка: структура блоков некорректна!</div>;
+  }
   return (
     <article className="max-w-4xl mx-auto px-4 py-12">
       <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-10 text-center leading-tight">
         {project.title}
       </h1>
-      {/* DEBUG BLOCK: максимально заметный */}
-      <div style={{
-        background: '#ff0',
-        color: '#d00',
-        border: '4px solid #d00',
-        padding: '2rem',
-        margin: '2rem 0',
-        fontSize: '18px',
-        zIndex: 9999,
-        position: 'relative',
-        boxShadow: '0 0 16px 4px #d00',
-        textAlign: 'left',
-        fontWeight: 'bold',
-        lineHeight: 1.4,
-        wordBreak: 'break-all',
-        whiteSpace: 'pre-wrap',
-        pointerEvents: 'auto',
-        opacity: 1,
-        display: 'block',
-      }}>
+      <div style={{background:'#ff0',color:'#d00',border:'4px solid #d00',padding:'2rem',margin:'2rem 0',fontSize:'18px',zIndex:9999,position:'relative',boxShadow:'0 0 16px 4px #d00',textAlign:'left',fontWeight:'bold',lineHeight:1.4,wordBreak:'break-all',whiteSpace:'pre-wrap',pointerEvents:'auto',opacity:1,display:'block'}}>
         <div style={{fontSize:'22px',marginBottom:'1rem'}}>=== DEBUG BLOCKS START ===</div>
-        <pre style={{
-          background: 'none',
-          color: '#222',
-          fontSize: '16px',
-          margin: 0,
-          padding: 0,
-          border: 'none',
-          boxShadow: 'none',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-all',
-          fontFamily: 'monospace',
-          fontWeight: 'normal',
-        }}>{JSON.stringify(blocks, null, 2)}</pre>
+        <pre style={{background:'none',color:'#222',fontSize:'16px',margin:0,padding:0,border:'none',boxShadow:'none',whiteSpace:'pre-wrap',wordBreak:'break-all',fontFamily:'monospace',fontWeight:'normal'}}>{JSON.stringify(blocks, null, 2)}</pre>
         <div style={{fontSize:'22px',marginTop:'1rem'}}>=== DEBUG BLOCKS END ===</div>
       </div>
-      {/* Плагин TailwindCSS Typography сделает текст из блоков красивым */}
       <div className="prose lg:prose-xl max-w-none">
         <BlockRenderer blocks={blocks} />
       </div>
