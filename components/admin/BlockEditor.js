@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import TiptapEditor from './TiptapEditor';
 import GalleryBlockEditor from './GalleryBlockEditor';
-
 export default function BlockEditor({ value, onChange }) {
   const [blocks, setBlocks] = useState(value || []);
 

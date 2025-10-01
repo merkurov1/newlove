@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import useImageUpload from './useImageUpload';
-
 export default function GalleryBlockEditor({ images, onChange }) {
   const [localImages, setLocalImages] = useState(images || []);
   const { upload, loading, error } = useImageUpload();
