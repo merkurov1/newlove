@@ -45,6 +45,16 @@ export async function generateMetadata({ params }) {
 export default async function ArticlePage({ params }) {
   const article = await getArticle(params.slug);
 
+  let blocks = [];
+  if (typeof article.content === 'string') {
+    try {
+      blocks = JSON.parse(article.content);
+    } catch {
+      blocks = [];
+    }
+  } else if (Array.isArray(article.content)) {
+    blocks = article.content;
+  }
 
   return (
     <article className="max-w-3xl mx-auto px-4 py-12">
@@ -64,7 +74,7 @@ export default async function ArticlePage({ params }) {
           </div>
         )}
       </div>
-  <BlockRenderer blocks={article.content} />
+      <BlockRenderer blocks={blocks} />
     </article>
   );
 }
