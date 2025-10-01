@@ -28,8 +28,7 @@ export default async function ProjectPage({ params }: { params: { slug: string }
   if (validBlocks.length === 0) {
     return (
       <div className="text-red-600 bg-red-50 p-4 rounded">
-        Ошибка: некорректные блоки данных для рендера.<br />
-        <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(blocks, null, 2)}</pre>
+        Ошибка: контент проекта повреждён или отсутствует.
       </div>
     );
   }
