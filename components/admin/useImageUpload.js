@@ -8,18 +8,28 @@ export default function useImageUpload() {
   const upload = async (file) => {
     setLoading(true);
     setError(null);
-    const formData = new FormData();
-    formData.append('image', file);
-    const res = await fetch('/api/upload/editor-image', {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (data.success && data.file?.url) {
-      return data.file.url;
-    } else {
-      setError(data.error || 'Ошибка загрузки');
+    
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const res = await fetch('/api/upload/editor-image', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await res.json();
+      setLoading(false);
+      
+      if (data.success && data.file?.url) {
+        return data.file.url;
+      } else {
+        setError(data.error || 'Ошибка загрузки');
+        return null;
+      }
+    } catch (err) {
+      setLoading(false);
+      setError('Ошибка сети при загрузке файла');
       return null;
     }
   };

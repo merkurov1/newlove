@@ -69,7 +69,9 @@ export async function GET() {
     return NextResponse.json({ message: 'News processing finished successfully.' });
 
   } catch (error) {
-    console.error('Error processing news:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error processing news:', error);
+    }
+    return new Response('Error processing news', { status: 500 });
   }
 }

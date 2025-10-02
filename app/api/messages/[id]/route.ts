@@ -45,7 +45,9 @@ export async function DELETE(
     return new NextResponse('Message deleted', { status: 200 });
 
   } catch (error) {
-    console.error('Error deleting message:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error deleting message:', error);
+    }
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }

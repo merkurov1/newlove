@@ -25,9 +25,11 @@ export default function MediaPage() {
       const filesWithUrls = await Promise.all(
         data.map(async (file) => {
           const { data: urlData, error: urlError } = await supabase.storage.from('media').createSignedUrl(file.name, 60 * 60);
-          if (urlError || !urlData?.signedUrl) {
-            console.error('Ошибка создания signedUrl:', urlError, file.name, urlData);
-            return { ...file, publicUrl: null, urlError: urlError?.message || 'Нет signedUrl' };
+          if (urlError) {
+            if (process.env.NODE_ENV === 'development') {
+              console.error('Ошибка создания signedUrl:', urlError, file.name, urlData);
+            }
+            return { ...file, publicUrl: null };
           }
           return { ...file, publicUrl: urlData.signedUrl };
         })

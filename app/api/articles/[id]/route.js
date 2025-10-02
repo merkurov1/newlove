@@ -15,8 +15,13 @@ export async function GET(request, { params }) {
 
     return NextResponse.json(article);
   } catch (error) {
-    console.error("Error fetching article:", error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    if (process.env.NODE_ENV === 'development') {
+      console.error("Error fetching article:", error);
+    }
+    return new Response(JSON.stringify({ error: "Article not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
 
