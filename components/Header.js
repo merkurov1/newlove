@@ -11,8 +11,8 @@ export default function Header({ projects, settings }) {
 
   const site_name = settings?.site_name || 'Anton Merkurov';
   const slogan = settings?.slogan || 'Art x Love x Money';
-  // Принудительно используем рабочий URL логотипа
-  const logoUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png';
+  // Простая и чистая логика: settings (правильный URL) -> локальный fallback
+  const logoUrl = settings?.logo_url || '/images/logo.svg';
 
   useEffect(() => {
     const handleResize = () => {
