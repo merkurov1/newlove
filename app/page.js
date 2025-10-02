@@ -7,6 +7,7 @@ import Image from 'next/image';
 import importDynamic from 'next/dynamic';
 import { getFirstImage } from '@/lib/contentUtils';
 import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
+import SafeImage from '@/components/SafeImage';
 
 const FadeInSection = importDynamic(() => import('@/components/FadeInSection'), { ssr: false });
 
@@ -143,16 +144,12 @@ export default async function HomePage() {
                     aria-label={`Читать статью: ${article.title}`}
                   >
                     {article.previewImage ? (
-                      <Image
+                      <SafeImage
                         src={article.previewImage}
                         alt={`Изображение к статье: ${article.title}`}
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="object-cover group-hover:scale-105 transition-transform duration-300 rounded-lg"
-                        onError={(e) => {
-                          console.error('Failed to load image:', article.previewImage);
-                          e.currentTarget.style.display = 'none';
-                        }}
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center rounded-lg">
