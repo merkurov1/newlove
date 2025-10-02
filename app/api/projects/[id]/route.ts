@@ -18,9 +18,20 @@ export const PUT = withHelmet(withRateLimit(handleApiError(withValidation(Projec
   const auth = await requireAdmin(req);
   if (auth) return auth;
   const { title, slug, content, authorId, published = false } = data;
+  let parsedContent = content;
+  if (typeof content === 'string') {
+    try {
+      parsedContent = JSON.parse(content);
+    } catch {
+      return Response.json({ error: 'Content must be a valid JSON array of blocks' }, { status: 400 });
+    }
+  }
+  if (!Array.isArray(parsedContent)) {
+    return Response.json({ error: 'Content must be an array of blocks' }, { status: 400 });
+  }
   const project = await prisma.project.update({
     where: { id: params.id },
-    data: { title, slug, content, authorId, published },
+    data: { title, slug, content: parsedContent, authorId, published },
   });
   return Response.json(project);
 }))));
@@ -29,8 +40,19 @@ export const POST = withHelmet(withRateLimit(handleApiError(withValidation(Proje
   const auth = await requireAdmin(req);
   if (auth) return auth;
   const { title, slug, content, authorId, published = false } = data;
+  let parsedContent = content;
+  if (typeof content === 'string') {
+    try {
+      parsedContent = JSON.parse(content);
+    } catch {
+      return Response.json({ error: 'Content must be a valid JSON array of blocks' }, { status: 400 });
+    }
+  }
+  if (!Array.isArray(parsedContent)) {
+    return Response.json({ error: 'Content must be an array of blocks' }, { status: 400 });
+  }
   const project = await prisma.project.create({
-    data: { title, slug, content, authorId, published },
+    data: { title, slug, content: parsedContent, authorId, published },
   });
   return Response.json(project);
 }))));
