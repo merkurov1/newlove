@@ -57,7 +57,7 @@ export default function AdminProductNewPage() {
           <input name="slug" value={form.slug} onChange={handleChange} required className="w-full border rounded px-3 py-2" />
         </div>
         <div>
-          <label className="block mb-1 font-medium">Цена (₽)</label>
+          <label className="block mb-1 font-medium">Цена (£)</label>
           <input name="price" value={form.price} onChange={handleChange} required type="number" min="1" className="w-full border rounded px-3 py-2" />
         </div>
         <div>

@@ -250,7 +250,7 @@ export default function ProductsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Цена (₽) *
+                    Цена (£) *
                   </label>
                   <input
                     type="number"
@@ -436,7 +436,7 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-900">
-                          {Number(product.price).toLocaleString('ru-RU')} ₽
+                          £{Number(product.price).toLocaleString('en-GB')}
                         </span>
                       </td>
                       <td className="px-4 py-3">
