@@ -46,6 +46,12 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       if (block.type === 'gallery' && (!Array.isArray(block.data.images))) return false;
       if (block.type === 'image' && typeof block.data.url !== 'string') return false;
       if (block.type === 'code' && typeof block.data.code !== 'string') return false;
+      if (block.type === 'columns') {
+        if (!Array.isArray(block.data.columns)) return false;
+        for (const column of block.data.columns) {
+          if (!column || typeof column.html !== 'string') return false;
+        }
+      }
     }
     return true;
   }

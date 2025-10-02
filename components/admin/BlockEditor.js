@@ -24,6 +24,15 @@ export default function BlockEditor({ value, onChange }) {
     else if (type === 'gallery') block = { type: 'gallery', data: { images: [] } };
     else if (type === 'code') block = { type: 'code', data: { code: '' } };
     else if (type === 'image') block = { type: 'image', data: { url: '', caption: '' } };
+    else if (type === 'columns') block = { 
+      type: 'columns', 
+      data: { 
+        columns: [
+          { html: '' },
+          { html: '' }
+        ]
+      }
+    };
     else return;
     const updated = [...blocks, block];
     setBlocks(updated);
@@ -86,11 +95,60 @@ export default function BlockEditor({ value, onChange }) {
               )}
             </div>
           )}
+          {block.type === 'columns' && (
+            <div>
+              <label className="block text-sm font-medium mb-2">Колонки</label>
+              <div className="grid grid-cols-2 gap-4">
+                {block.data.columns.map((column, colIdx) => (
+                  <div key={colIdx} className="border rounded p-2">
+                    <label className="block text-xs text-gray-600 mb-1">Колонка {colIdx + 1}</label>
+                    <TiptapEditor 
+                      value={column.html} 
+                      onChange={html => {
+                        const newColumns = [...block.data.columns];
+                        newColumns[colIdx] = { html };
+                        handleBlockChange(idx, { type: 'columns', data: { columns: newColumns } });
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    if (block.data.columns.length < 3) {
+                      const newColumns = [...block.data.columns, { html: '' }];
+                      handleBlockChange(idx, { type: 'columns', data: { columns: newColumns } });
+                    }
+                  }}
+                  className="text-sm bg-gray-200 px-2 py-1 rounded"
+                  disabled={block.data.columns.length >= 3}
+                >
+                  + Колонка
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    if (block.data.columns.length > 1) {
+                      const newColumns = block.data.columns.slice(0, -1);
+                      handleBlockChange(idx, { type: 'columns', data: { columns: newColumns } });
+                    }
+                  }}
+                  className="text-sm bg-gray-200 px-2 py-1 rounded"
+                  disabled={block.data.columns.length <= 1}
+                >
+                  - Колонка
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ))}
       <div className="flex gap-2 mt-4">
         <button type="button" onClick={() => addBlock('richText')} className="bg-blue-600 text-white px-4 py-2 rounded">+ Текст</button>
         <button type="button" onClick={() => addBlock('gallery')} className="bg-green-600 text-white px-4 py-2 rounded">+ Галерея</button>
+        <button type="button" onClick={() => addBlock('columns')} className="bg-purple-600 text-white px-4 py-2 rounded">+ Колонки</button>
       </div>
     </div>
   );
