@@ -222,7 +222,7 @@ function ProjectComponent({ project }) {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <article>
         <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">{project.title}</h1>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">{project.title}</h1>
         </header>
         
         <div className="prose prose-lg max-w-none">
