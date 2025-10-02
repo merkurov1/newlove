@@ -18,19 +18,27 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'nzasvblckrwsnlxsqfma.supabase.co',
         port: '',
-        pathname: '/storage/v1/object/public/media/**',
+        pathname: '/storage/v1/object/public/**',
       },
       {
         protocol: 'https',
         hostname: 'lh3.googleusercontent.com', // Для аватарок из Google-аккаунтов
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co', // Все поддомены Supabase
+        port: '',
+        pathname: '/**',
       }
     ],
     // Поддержка локальных изображений из /public/uploads
-    domains: [],
+    domains: ['nzasvblckrwsnlxsqfma.supabase.co'],
     unoptimized: false,
     formats: ['image/webp', 'image/avif'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
 };
 

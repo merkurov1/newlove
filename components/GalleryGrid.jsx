@@ -1,4 +1,4 @@
-// src/components/GalleryGrid.tsx
+// src/components/GalleryGrid.jsx
 "use client";
 
 import { useState } from 'react';
@@ -6,9 +6,7 @@ import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import SafeImage from '@/components/SafeImage';
 
-import { GalleryImage } from '@/types/blocks';
-
-export default function GalleryGrid({ images }: { images: GalleryImage[] }) {
+export default function GalleryGrid({ images }) {
   const [index, setIndex] = useState(-1);
 
   if (!images || images.length === 0) return null;
@@ -43,7 +41,7 @@ export default function GalleryGrid({ images }: { images: GalleryImage[] }) {
             <SafeImage
               src={item.url}
               alt={item.alt || `Gallery image ${i + 1}`}
-              fill
+              fill={true}
               className="transition-all duration-300 object-cover"
               sizes="(max-width: 768px) 100vw, 50vw"
             />
