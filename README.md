@@ -12,8 +12,6 @@ yarn dev
 pnpm dev
 # or
 
-фвфыв
-dsada
 
 ```
 
