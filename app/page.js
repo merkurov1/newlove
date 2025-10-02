@@ -3,7 +3,7 @@
 
 import prisma from '../lib/prisma';
 import Link from 'next/link';
-import Image from 'next/image';
+import SafeImage from '@/components/SafeImage';
 import importDynamic from 'next/dynamic';
 import { getFirstImage } from '@/lib/contentUtils';
 import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
@@ -143,7 +143,7 @@ export default async function HomePage() {
                     aria-label={`Читать статью: ${article.title}`}
                   >
                     {article.previewImage ? (
-                      <Image
+                      <SafeImage
                         src={article.previewImage}
                         alt={`Изображение к статье: ${article.title}`}
                         fill
@@ -195,7 +195,7 @@ export default async function HomePage() {
                   )}
                   <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-100">
                     {article.author.image && (
-                      <Image 
+                      <SafeImage 
                         src={article.author.image} 
                         alt={`Фото автора ${article.author.name}`} 
                         width={32} 
