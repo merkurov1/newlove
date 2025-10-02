@@ -15,7 +15,9 @@ async function getDigestBySlug(slug) {
     .single(); // .single() выбирает только одну запись. Если ничего не найдено, вернет null.
 
   if (error && !data) {
-    console.error('Error fetching digest:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error fetching digest:', error);
+    }
     // Если дайджест не найден, показываем страницу 404
     notFound();
   }

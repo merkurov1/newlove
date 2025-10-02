@@ -35,7 +35,10 @@ export default async function ProjectPage({ params }: { params: { slug: string }
       );
     }
   } catch (error) {
-    console.error('Ошибка парсинга контента:', error);
+    // Логируем только в development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Ошибка парсинга контента:', error);
+    }
     // blocks останется пустым
   }
 

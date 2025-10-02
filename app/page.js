@@ -41,7 +41,10 @@ async function getArticles() {
     });
     return articles;
   } catch (error) {
-    console.error("!!! Ошибка при загрузке статей для главной страницы:", error);
+    // Логируем только в development
+    if (process.env.NODE_ENV === 'development') {
+      console.error("!!! Ошибка при загрузке статей для главной страницы:", error);
+    }
     return [];
   }
 }

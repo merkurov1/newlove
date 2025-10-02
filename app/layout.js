@@ -74,7 +74,10 @@ export default async function RootLayout({ children }) {
       orderBy: { createdAt: 'asc' },
     });
   } catch (error) {
-    console.error('Database connection error:', error.message);
+    // Логируем только в development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Database connection error:', error.message);
+    }
     // Используем пустой массив для проектов
     projects = [];
   }
@@ -89,7 +92,10 @@ export default async function RootLayout({ children }) {
   try {
     subscriberCount = await prisma.subscriber.count();
   } catch (error) {
-    console.error('Ошибка при подсчёте подписчиков:', error);
+    // Логируем только в development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Ошибка при подсчёте подписчиков:', error);
+    }
   }
 
   return (

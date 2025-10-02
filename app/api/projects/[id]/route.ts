@@ -41,7 +41,9 @@ export async function GET(
     return NextResponse.json(project);
     
   } catch (error) {
-    console.error('Ошибка при получении проекта:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Ошибка при получении проекта:', error);
+    }
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 });
   }
 }
@@ -95,7 +97,9 @@ export async function PUT(
     return NextResponse.json(project);
 
   } catch (error) {
-    console.error('Ошибка при обновлении проекта:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Ошибка при обновлении проекта:', error);
+    }
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 });
   }
 }
@@ -119,7 +123,9 @@ export async function DELETE(
     return NextResponse.json({ message: 'Проект успешно удален' });
 
   } catch (error) {
-    console.error('Ошибка при удалении проекта:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Ошибка при удалении проекта:', error);
+    }
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 });
   }
 }

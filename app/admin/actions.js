@@ -222,7 +222,10 @@ export async function updateProfile(prevState, formData) {
     if (error.code === 'P2002' && error.meta?.target?.includes('username')) {
       return { status: 'error', message: 'Этот username уже занят. Пожалуйста, выберите другой.' };
     }
-    console.error('Ошибка обновления профиля:', error);
+    // Логируем только в development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Ошибка обновления профиля:', error);
+    }
     return { status: 'error', message: 'Произошла неизвестная ошибка.' };
   }
 }
