@@ -6,16 +6,31 @@ import CodeBlock from './blocks/CodeBlock';
 import type { EditorJsBlock } from '@/types/blocks';
 
 export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
+  // Отладочная информация
+  console.log('BlockRenderer получил блоки:', blocks);
+  
   if (!Array.isArray(blocks) || !blocks.length) {
     return (
       <div className="my-8 p-4 bg-yellow-50 text-yellow-800 rounded text-center font-medium border border-yellow-200">
-        Контент отсутствует.
+        <div>Контент отсутствует.</div>
+        <div className="text-xs mt-2">Блоки: {JSON.stringify(blocks)}</div>
       </div>
     );
   }
   
   return (
-    <>
+    <div>
+      {/* ВРЕМЕННАЯ ОТЛАДОЧНАЯ ИНФОРМАЦИЯ */}
+      <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-sm">
+        <strong className="text-green-800">BlockRenderer:</strong> Обрабатываю {blocks.length} блоков
+        <details className="mt-2">
+          <summary className="cursor-pointer text-green-600">Показать все блоки</summary>
+          <pre className="mt-2 bg-white p-2 rounded text-xs overflow-auto max-h-32">
+            {JSON.stringify(blocks, null, 2)}
+          </pre>
+        </details>
+      </div>
+      
       {blocks.map((block, idx) => {
         switch (block.type) {
           case 'paragraph':
@@ -68,6 +83,6 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
             );
         }
       })}
-    </>
+    </div>
   );
 }

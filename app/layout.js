@@ -66,10 +66,18 @@ export const metadata = {
 
 
 export default async function RootLayout({ children }) {
-  const projects = await prisma.project.findMany({
-    where: { published: true },
-    orderBy: { createdAt: 'asc' },
-  });
+  // Временно отключаем запрос к базе данных до настройки DATABASE_URL
+  let projects = [];
+  try {
+    projects = await prisma.project.findMany({
+      where: { published: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  } catch (error) {
+    console.error('Database connection error:', error.message);
+    // Используем пустой массив для проектов
+    projects = [];
+  }
 
   const settings = { 
     site_name: 'Anton Merkurov', 
@@ -77,7 +85,12 @@ export default async function RootLayout({ children }) {
     logo_url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png' 
   };
 
-  const subscriberCount = await prisma.subscriber.count();
+  let subscriberCount = 0;
+  try {
+    subscriberCount = await prisma.subscriber.count();
+  } catch (error) {
+    console.error('Ошибка при подсчёте подписчиков:', error);
+  }
 
   return (
     // Применяем шрифт через CSS переменную
