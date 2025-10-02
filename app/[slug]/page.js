@@ -223,12 +223,6 @@ function ProjectComponent({ project }) {
       <article>
         <header className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">{project.title}</h1>
-          
-          <div className="text-sm text-gray-600 mb-6">
-            <time dateTime={project.createdAt}>
-              Опубликовано: {new Date(project.createdAt).toLocaleDateString('ru-RU')}
-            </time>
-          </div>
         </header>
         
         <div className="prose prose-lg max-w-none">
