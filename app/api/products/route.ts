@@ -33,7 +33,9 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await request.json();
-    const { name, slug, price, description, image } = data;
+    console.log('Creating product with data:', data);
+    
+    const { name, slug, price, description, image, active } = data;
 
     if (!name || !slug || !price) {
       return NextResponse.json(
@@ -51,23 +53,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const productData = {
+      id: createId(), // Явно генерируем CUID
+      name,
+      slug,
+      price: parseFloat(price), // Исправлено на parseFloat для Decimal
+      description: description || null,
+      image: image || null,
+      active: active !== undefined ? Boolean(active) : true
+    };
+    
+    console.log('Creating product with processed data:', productData);
+
     const product = await prisma.product.create({
-      data: {
-        id: createId(), // Явно генерируем CUID
-        name,
-        slug,
-        price: parseFloat(price), // Исправлено на parseFloat для Decimal
-        description,
-        image,
-        active: true
-      }
+      data: productData
     });
+    
+    console.log('Product created successfully:', product);
 
     return NextResponse.json(product, { status: 201 });
   } catch (error) {
     console.error('Error creating product:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: `Internal Server Error: ${error instanceof Error ? error.message : 'Unknown error'}` },
       { status: 500 }
     );
   }
