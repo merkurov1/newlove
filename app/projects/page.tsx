@@ -47,7 +47,7 @@ export default async function ProjectsPage() {
       </h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {projects.map((project) => (
-          <Link href={`/projects/${project.slug}`} key={project.id} className="block group">
+          <Link href={`/${project.slug}`} key={project.id} className="block group">
             <div className="flex flex-col h-full bg-white rounded-lg shadow-lg overflow-hidden transition-shadow duration-300 hover:shadow-xl">
               <div className="relative w-full h-56 bg-gray-200">
                 {/* ✅ РЕШЕНИЕ ОШИБКИ:

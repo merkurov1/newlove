@@ -53,7 +53,39 @@ export default function BlockEditor({ value, onChange }) {
               onChange={imgs => handleBlockChange(idx, { type: 'gallery', data: { images: imgs } })}
             />
           )}
-          {/* Add support for code/image if needed */}
+          {block.type === 'code' && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Код</label>
+              <textarea
+                className="w-full font-mono text-xs border rounded p-2"
+                rows={6}
+                value={block.data.code}
+                onChange={e => handleBlockChange(idx, { type: 'code', data: { code: e.target.value } })}
+              />
+            </div>
+          )}
+          {block.type === 'image' && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Изображение (URL)</label>
+              <input
+                type="text"
+                className="w-full border rounded p-2 mb-2"
+                value={block.data.url}
+                onChange={e => handleBlockChange(idx, { type: 'image', data: { ...block.data, url: e.target.value } })}
+                placeholder="URL изображения"
+              />
+              <input
+                type="text"
+                className="w-full border rounded p-2"
+                value={block.data.caption}
+                onChange={e => handleBlockChange(idx, { type: 'image', data: { ...block.data, caption: e.target.value } })}
+                placeholder="Подпись (необязательно)"
+              />
+              {block.data.url && (
+                <img src={block.data.url} alt="preview" className="max-h-40 mt-2 border rounded" />
+              )}
+            </div>
+          )}
         </div>
       ))}
       <div className="flex gap-2 mt-4">

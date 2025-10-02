@@ -56,7 +56,7 @@ export default function Header({ projects, settings }) {
               </li>
               {Array.isArray(projects) && projects.map((project) => (
                 <li key={project.id}>
-                  <Link href={`/projects/${project.slug}`} className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                  <Link href={`/${project.slug}`} className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
                     {project.title}
                     <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
                   </Link>
