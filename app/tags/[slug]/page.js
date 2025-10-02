@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import SafeImage from '@/components/SafeImage';
 
 // --- 1. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ---
 // Находит тег по его slug и подгружает все связанные с ним статьи
@@ -68,7 +69,7 @@ export default async function TagPage({ params }) {
               <div key={article.id} className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden">
                 {previewImage && (
                   <Link href={`/${article.slug}`} className="block relative w-full h-48">
-                    <Image src={previewImage} alt={article.title} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <SafeImage src={previewImage} alt={article.title} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-300" />
                   </Link>
                 )}
                 <div className="p-6 flex-grow flex flex-col">
@@ -83,7 +84,7 @@ export default async function TagPage({ params }) {
                     </div>
                   )}
                   <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-100">
-                    {article.author.image && <Image src={article.author.image} alt={article.author.name || ''} width={32} height={32} className="rounded-full" />}
+                    {article.author.image && <SafeImage src={article.author.image} alt={article.author.name || ''} width={32} height={32} className="rounded-full" />}
                     <span className="text-sm font-medium text-gray-600">{article.author.name}</span>
                   </div>
                 </div>

@@ -196,7 +196,7 @@ export default async function HomePage() {
                   )}
                   <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-100">
                     {article.author.image && (
-                      <Image 
+                      <SafeImage 
                         src={article.author.image} 
                         alt={`Фото автора ${article.author.name}`} 
                         width={32} 

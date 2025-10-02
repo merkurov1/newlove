@@ -81,7 +81,7 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
               <div key={idx} className="my-8">
                 <blockquote className="border-l-4 border-gray-300 pl-6 py-4 bg-gray-50 rounded-r-lg">
                   <p className="text-lg italic text-gray-800 leading-relaxed mb-4">
-                    "{block.data.text}"
+                    &ldquo;{block.data.text}&rdquo;
                   </p>
                   {(block.data.author || block.data.source) && (
                     <footer className="text-sm text-gray-600">
