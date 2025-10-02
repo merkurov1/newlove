@@ -2,9 +2,9 @@
 "use client";
 
 import { useState } from 'react';
-import Image from 'next/image';
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
+import SafeImage from '@/components/SafeImage';
 
 import { GalleryImage } from '@/types/blocks';
 
@@ -40,12 +40,11 @@ export default function GalleryGrid({ images }: { images: GalleryImage[] }) {
             }}
             className="hover:scale-105 shadow-md hover:shadow-lg"
           >
-            <Image
+            <SafeImage
               src={item.url}
               alt={item.alt || `Gallery image ${i + 1}`}
               fill
-              style={{ objectFit: 'cover' }}
-              className="transition-all duration-300"
+              className="transition-all duration-300 object-cover"
               sizes="(max-width: 768px) 100vw, 50vw"
             />
             {/* Индикатор кликабельности */}
