@@ -13,19 +13,59 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
       </div>
     );
   }
+  
   return (
     <>
       {blocks.map((block, idx) => {
         switch (block.type) {
+          case 'paragraph':
+            return (
+              <div key={idx} className="mb-4">
+                <p className="text-gray-800 leading-relaxed" dangerouslySetInnerHTML={{ __html: block.data.text || '' }} />
+              </div>
+            );
+          case 'header':
+            const HeaderTag = `h${block.data.level || 2}` as keyof JSX.IntrinsicElements;
+            return (
+              <div key={idx} className="mb-6">
+                <HeaderTag className="font-bold text-gray-900 leading-tight" dangerouslySetInnerHTML={{ __html: block.data.text || '' }} />
+              </div>
+            );
+          case 'list':
+            const ListTag = block.data.style === 'ordered' ? 'ol' : 'ul';
+            return (
+              <div key={idx} className="mb-4">
+                <ListTag className={block.data.style === 'ordered' ? 'list-decimal list-inside' : 'list-disc list-inside'}>
+                  {block.data.items?.map((item: string, itemIdx: number) => (
+                    <li key={itemIdx} className="mb-1" dangerouslySetInnerHTML={{ __html: item }} />
+                  ))}
+                </ListTag>
+              </div>
+            );
+          case 'code':
+            return <CodeBlock key={idx} block={block} />;
+          case 'image':
+            return (
+              <div key={idx} className="my-6">
+                <img src={block.data.file?.url || block.data.url} alt={block.data.caption || ''} className="rounded shadow max-w-full h-auto" />
+                {block.data.caption && (
+                  <p className="text-sm text-gray-500 mt-2 text-center">{block.data.caption}</p>
+                )}
+              </div>
+            );
+          // Обратная совместимость с кастомными типами
           case 'richText':
             return <TextBlock key={idx} block={block} />;
           case 'gallery':
-          case 'image':
             return <GalleryBlock key={idx} block={block} />;
-          case 'code':
-            return <CodeBlock key={idx} block={block} />;
           default:
-            return null;
+            console.warn('Unknown block type:', (block as any).type);
+            return (
+              <div key={idx} className="my-4 p-3 bg-gray-100 border-l-4 border-gray-400 text-gray-600">
+                <strong>Неизвестный тип блока:</strong> {(block as any).type}
+                <pre className="mt-2 text-xs overflow-auto">{JSON.stringify(block, null, 2)}</pre>
+              </div>
+            );
         }
       })}
     </>
