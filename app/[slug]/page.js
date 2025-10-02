@@ -199,7 +199,7 @@ function ArticleComponent({ article }) {
         <SocialShare 
           title={article.title}
           url={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/${article.slug}`}
-          description={generateDescription(blocks)}
+          description={generateDescription(article.content)}
         />
       </article>
     </div>

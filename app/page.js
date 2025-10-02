@@ -33,7 +33,7 @@ export const metadata = {
     locale: 'ru_RU',
     type: 'website',
     images: [{
-      url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-home.png',
+      url: 'https://nzasvblckrwsnlxsqfma.supabase.co/storage/v1/object/public/media/og-home.png',
       width: 1200,
       height: 630,
       alt: 'Anton Merkurov - Медиа, технологии и искусство'
@@ -43,7 +43,7 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'Anton Merkurov | Art x Love x Money',
     description: 'Медиа, технологии и современное искусство',
-    images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-home.png']
+    images: ['https://nzasvblckrwsnlxsqfma.supabase.co/storage/v1/object/public/media/og-home.png']
   }
 };
 
@@ -144,7 +144,7 @@ export default async function HomePage() {
                     aria-label={`Читать статью: ${article.title}`}
                   >
                     {article.previewImage ? (
-                      <Image
+                      <SafeImage
                         src={article.previewImage}
                         alt={`Изображение к статье: ${article.title}`}
                         fill
