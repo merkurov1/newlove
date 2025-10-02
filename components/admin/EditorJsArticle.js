@@ -6,7 +6,7 @@ import Header from '@editorjs/header';
 import List from '@editorjs/list';
 import Embed from '@editorjs/embed';
 import ImageTool from '@editorjs/image';
-// Для загрузки изображений через Supabase
+import { uploadImage, validateImageFile } from './editorUtils';
 
 
 export default function EditorJsArticle({ value, onChange }) {
@@ -26,17 +26,19 @@ export default function EditorJsArticle({ value, onChange }) {
             config: {
               uploader: {
                 async uploadByFile(file) {
-                  const formData = new FormData();
-                  formData.append('image', file);
-                  const res = await fetch('/api/upload/editor-image', {
-                    method: 'POST',
-                    body: formData,
-                  });
-                  const data = await res.json();
-                  if (data.success) {
-                    return { success: 1, file: { url: data.file.url } };
+                  // Валидация файла
+                  const validation = validateImageFile(file);
+                  if (!validation.valid) {
+                    return { success: 0, error: validation.error };
+                  }
+                  
+                  // Загрузка через общие утилиты
+                  const result = await uploadImage(file, 'EditorJS');
+                  
+                  if (result.success && result.url) {
+                    return { success: 1, file: { url: result.url } };
                   } else {
-                    return { success: 0, error: data.error || 'Upload failed' };
+                    return { success: 0, error: result.error || 'Upload failed' };
                   }
                 },
               },
