@@ -1,42 +1,48 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
-export default function SafeImage({ 
-  src, 
-  alt = 'Изображение', 
-  width, 
-  height, 
-  fill, 
-  sizes, 
-  className = '', 
-  priority = false,
-  onError: customOnError,
-  ...otherProps 
-}) {
-  const [hasError, setHasError] = useState(false);
+/**
+ * Безопасный компонент изображения с fallback
+ * Архитектурно правильная реализация без конфликтов пропсов
+ */
+export default function SafeImage(props) {
+  const { 
+    src, 
+    alt = 'Изображение', 
+    width, 
+    height, 
+    fill = false,
+    sizes, 
+    className = '', 
+    priority = false,
+    style,
+    ...imageProps // Только валидные пропсы Image
+  } = props;
 
-  const handleError = () => {
-    setHasError(true);
-    // Вызываем пользовательский обработчик если есть
-    if (customOnError) {
-      customOnError();
-    }
-  };
+  const [imageError, setImageError] = useState(false);
 
-  // Если нет src или произошла ошибка - показываем fallback
-  if (!src || hasError) {
+  // Стабильный обработчик ошибок
+  const handleImageError = useCallback(() => {
+    setImageError(true);
+  }, []);
+
+  // Fallback UI
+  const renderFallback = () => {
     const fallbackContent = (
-      <div className="text-center text-gray-400">
-        <div className="text-2xl mb-1">📷</div>
-        <div className="text-xs">Изображение недоступно</div>
+      <div className="text-center text-gray-400 p-2">
+        <div className="text-xl mb-1">📷</div>
+        <div className="text-xs">Изображение</div>
       </div>
     );
 
     if (fill) {
       return (
-        <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+        <div 
+          className={`absolute inset-0 bg-gray-100 flex items-center justify-center ${className}`}
+          style={style}
+        >
           {fallbackContent}
         </div>
       );
@@ -49,15 +55,21 @@ export default function SafeImage({
           width: width || 'auto', 
           height: height || 'auto',
           minWidth: width ? `${width}px` : '40px',
-          minHeight: height ? `${height}px` : '40px'
+          minHeight: height ? `${height}px` : '40px',
+          ...style
         }}
       >
         {fallbackContent}
       </div>
     );
+  };
+
+  // Показываем fallback если нет src или ошибка
+  if (!src || imageError) {
+    return renderFallback();
   }
 
-  // Рендерим Next.js Image с правильными пропсами
+  // Рендерим Image БЕЗ конфликтующих пропсов
   return (
     <Image
       src={src}
@@ -68,8 +80,9 @@ export default function SafeImage({
       sizes={sizes}
       className={className}
       priority={priority}
-      onError={handleError}
-      {...otherProps}
+      style={style}
+      onError={handleImageError}
+      // НЕ используем ...imageProps чтобы избежать переписывания onError
     />
   );
 }
