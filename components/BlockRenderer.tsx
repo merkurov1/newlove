@@ -2,7 +2,7 @@
 import React from 'react';
 import Image from 'next/image';
 import TextBlock from './blocks/TextBlock';
-import GalleryBlock from './blocks/GalleryBlock';
+import GalleryGrid from './GalleryGrid';
 import CodeBlock from './blocks/CodeBlock';
 import type { EditorJsBlock } from '@/types/blocks';
 
@@ -151,7 +151,10 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
             );
           // Обратная совместимость с другими кастомными типами
           case 'gallery':
-            return <GalleryBlock key={idx} block={block} />;
+            if (block.type === 'gallery' && Array.isArray(block.data.images)) {
+              return <GalleryGrid key={idx} images={block.data.images} />;
+            }
+            return null;
           default:
             console.warn('Unknown block type:', (block as any).type);
             return (
