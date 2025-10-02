@@ -1,19 +1,41 @@
 import React, { useState } from 'react';
-import useImageUpload from './useImageUpload';
+import { uploadImage, validateImageFile, handleEditorError } from './editorUtils';
+
 export default function GalleryBlockEditor({ images, onChange }) {
   const [localImages, setLocalImages] = useState(Array.isArray(images) ? images : []);
-  const { upload, loading, error } = useImageUpload();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleAdd = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const url = await upload(file);
-    if (!url) return;
-    // Сохраняем { url, alt } для совместимости с типами
-    const newImg = { url, alt: '' };
-    const updated = [...localImages, newImg];
-    setLocalImages(updated);
-    onChange(updated);
+    
+    // Валидация файла
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      setError(validation.error);
+      handleEditorError(validation.error, 'GalleryBlockEditor', false);
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
+    // Загрузка через общие утилиты
+    const result = await uploadImage(file, 'GalleryBlockEditor');
+    
+    setLoading(false);
+    
+    if (result.success && result.url) {
+      // Сохраняем { url, alt } для совместимости с типами
+      const newImg = { url: result.url, alt: '' };
+      const updated = [...localImages, newImg];
+      setLocalImages(updated);
+      onChange(updated);
+    } else {
+      setError(result.error);
+      handleEditorError(result.error, 'GalleryBlockEditor', false);
+    }
   };
 
   const handleAltChange = (idx, alt) => {
