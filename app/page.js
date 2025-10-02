@@ -113,9 +113,7 @@ export default async function HomePage() {
       {/* Articles Section */}
       <section aria-labelledby="articles-heading">
         <div className="flex items-center justify-between mb-8">
-          <h2 id="articles-heading" className="text-2xl font-bold text-gray-900">
-            Последние публикации
-          </h2>
+          <div className="flex-1"></div>
           <Link 
             href="/articles" 
             className="text-blue-600 hover:text-blue-700 font-medium"
@@ -134,21 +132,28 @@ export default async function HomePage() {
                   className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden p-3 sm:p-6"
                   role="listitem"
                 >
-                  {article.previewImage && (
-                    <Link 
-                      href={`/${article.slug}`} 
-                      className="block relative w-full h-48"
-                      aria-label={`Читать статью: ${article.title}`}
-                    >
+                  <Link 
+                    href={`/${article.slug}`} 
+                    className="block relative w-full h-48 mb-4"
+                    aria-label={`Читать статью: ${article.title}`}
+                  >
+                    {article.previewImage ? (
                       <Image
                         src={article.previewImage}
                         alt={`Изображение к статье: ${article.title}`}
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="object-cover group-hover:scale-105 transition-transform duration-300 rounded-lg"
                       />
-                    </Link>
-                )}
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center rounded-lg">
+                        <div className="text-center">
+                          <div className="text-4xl text-gray-300 mb-2">📄</div>
+                          <div className="text-sm text-gray-400">Без изображения</div>
+                        </div>
+                      </div>
+                    )}
+                  </Link>
                 <div className="flex-grow flex flex-col">
                   <Link href={`/${article.slug}`}>
                     <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
