@@ -82,20 +82,25 @@ async function getArticles() {
 }
 
 export default async function HomePage() {
-
-  // Sentry test: вызвать ошибку на клиенте
-  if (typeof window !== "undefined") {
-    // eslint-disable-next-line no-undef
-    myUndefinedFunction();
-  }
-
   const rawArticles = await getArticles();
+  
   // Получаем previewImage для каждой статьи асинхронно
   const articles = await Promise.all(
-    rawArticles.map(async (article) => ({
-      ...article,
-      previewImage: await getFirstImage(article.content)
-    }))
+    rawArticles.map(async (article) => {
+      try {
+        const previewImage = await getFirstImage(article.content);
+        return {
+          ...article,
+          previewImage
+        };
+      } catch (error) {
+        console.error('Error getting preview image for article:', article.id, error);
+        return {
+          ...article,
+          previewImage: null
+        };
+      }
+    })
   );
 
   return (
@@ -144,6 +149,10 @@ export default async function HomePage() {
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="object-cover group-hover:scale-105 transition-transform duration-300 rounded-lg"
+                        onError={(e) => {
+                          console.error('Failed to load image:', article.previewImage);
+                          e.currentTarget.style.display = 'none';
+                        }}
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center rounded-lg">

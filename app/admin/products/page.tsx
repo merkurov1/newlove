@@ -5,6 +5,7 @@ import { Card } from '@/components/admin/Card';
 import { Button } from '@/components/admin/Button';
 import { SearchBox } from '@/components/admin/SearchBox';
 import { useNotifications } from '@/components/admin/NotificationSystem';
+import ImageUploader from '@/components/ImageUploader';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -276,6 +277,32 @@ export default function ProductsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="https://example.com/image.jpg"
                   />
+                  
+                  <div className="mt-4">
+                    <ImageUploader 
+                      onUploadSuccess={(markdownImage: string) => {
+                        // Извлекаем URL из markdown формата ![_](url)
+                        const urlMatch = markdownImage.match(/\!\[.*?\]\((.*?)\)/);
+                        if (urlMatch) {
+                          setFormData(prev => ({ ...prev, image: urlMatch[1] }));
+                        }
+                      }}
+                    />
+                  </div>
+                  
+                  {formData.image && (
+                    <div className="mt-4">
+                      <p className="text-sm text-gray-600 mb-2">Превью изображения:</p>
+                      <img 
+                        src={formData.image} 
+                        alt="Превью" 
+                        className="w-32 h-32 object-cover rounded-lg border border-gray-200"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
