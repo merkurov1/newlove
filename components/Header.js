@@ -1,9 +1,6 @@
-// ...existing code...
-// ...existing code...
 "use client";
 
 import Link from "next/link";
-// ...existing code...
 import SafeImage from '@/components/SafeImage';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
