@@ -352,7 +352,7 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-900">
-                          {product.price.toLocaleString('ru-RU')} ₽
+                          {Number(product.price).toLocaleString('ru-RU')} ₽
                         </span>
                       </td>
                       <td className="px-4 py-3">

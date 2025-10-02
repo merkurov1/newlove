@@ -46,7 +46,7 @@ function ProductCard({ product }: { product: any }) {
         
         <div className="flex items-center justify-between">
           <div className="text-2xl font-bold text-gray-900">
-            {product.price.toLocaleString('ru-RU')} ₽
+            {Number(product.price).toLocaleString('ru-RU')} ₽
           </div>
           <Link 
             href={`/shop/${product.slug}`} 

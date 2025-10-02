@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // Валидация данных продукта
-    if (!product.name || !product.price || product.price <= 0) {
+    if (!product.name || !product.price || Number(product.price) <= 0) {
       return NextResponse.json({ error: 'Invalid product data' }, { status: 400 });
     }
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               description: product.description || undefined,
               images: product.image ? [product.image] : undefined,
             },
-            unit_amount: Math.round(product.price * 100), // рубли → копейки, округляем
+            unit_amount: Math.round(Number(product.price) * 100), // рубли → копейки, округляем
           },
           quantity: 1,
         },
