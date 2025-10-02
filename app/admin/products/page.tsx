@@ -5,10 +5,11 @@ import { Card } from '@/components/admin/Card';
 import { Button } from '@/components/admin/Button';
 import { SearchBox } from '@/components/admin/SearchBox';
 import { useNotifications } from '@/components/admin/NotificationSystem';
-import { createProduct, updateProduct, deleteProduct } from '../actions';
+import Link from 'next/link';
+import Image from 'next/image';
 
 interface Product {
-  id: number;
+  id: string;
   name: string;
   slug: string;
   description?: string;
@@ -16,6 +17,7 @@ interface Product {
   image?: string;
   active: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 interface ProductFormData {
@@ -43,6 +45,7 @@ export default function ProductsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState<ProductFormData>(emptyForm);
+  const [formLoading, setFormLoading] = useState(false);
   const { addNotification } = useNotifications();
 
   const fetchProducts = async () => {
@@ -51,9 +54,12 @@ export default function ProductsPage() {
       if (response.ok) {
         const data = await response.json();
         setProducts(data);
+      } else {
+        addNotification({ type: 'error', title: 'Ошибка при загрузке товаров' });
       }
     } catch (error) {
-      console.error('Ошибка загрузки товаров:', error);
+      console.error('Error fetching products:', error);
+      addNotification({ type: 'error', title: 'Ошибка при загрузке товаров' });
     } finally {
       setLoading(false);
     }
@@ -63,99 +69,60 @@ export default function ProductsPage() {
     fetchProducts();
   }, []);
 
-  const showSuccessNotification = (message: string) => {
-    addNotification({
-      type: 'success',
-      title: 'Успех',
-      message
-    });
-  };
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+    }));
 
-  const showErrorNotification = (message: string) => {
-    addNotification({
-      type: 'error',
-      title: 'Ошибка',
-      message
-    });
-  };
-
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[а-я]/g, (char) => {
-        const map: { [key: string]: string } = {
-          'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
-          'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-          'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-          'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
-          'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
-        };
-        return map[char] || char;
-      })
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-  };
-
-  const handleInputChange = (field: keyof ProductFormData, value: string | boolean) => {
-    setFormData(prev => {
-      const updated = { ...prev, [field]: value };
-      
-      if (field === 'name' && typeof value === 'string') {
-        updated.slug = generateSlug(value);
-      }
-      
-      return updated;
-    });
-  };
-
-  const resetForm = () => {
-    setFormData(emptyForm);
-    setEditingProduct(null);
-    setShowForm(false);
+    // Автогенерация slug из названия
+    if (name === 'name' && !editingProduct) {
+      const slug = value
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .trim();
+      setFormData(prev => ({ ...prev, slug }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setFormLoading(true);
+
     try {
-      const productData = {
-        name: formData.name,
-        slug: formData.slug,
-        description: formData.description || null,
-        price: parseFloat(formData.price),
-        image: formData.image || null,
-        active: formData.active,
-      };
+      const url = editingProduct 
+        ? `/api/products/${editingProduct.id}`
+        : '/api/products';
+      
+      const method = editingProduct ? 'PUT' : 'POST';
 
-      if (editingProduct) {
-        const formDataObj = new FormData();
-        formDataObj.append('id', editingProduct.id.toString());
-        formDataObj.append('name', productData.name);
-        formDataObj.append('slug', productData.slug);
-        formDataObj.append('description', productData.description || '');
-        formDataObj.append('price', productData.price.toString());
-        formDataObj.append('image', productData.image || '');
-        formDataObj.append('active', productData.active.toString());
-        
-        await updateProduct(formDataObj);
-        showSuccessNotification('Товар успешно обновлен');
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      if (response.ok) {
+        addNotification({
+          type: 'success',
+          title: editingProduct ? 'Товар успешно обновлен!' : 'Товар успешно создан!'
+        });
+        setShowForm(false);
+        setEditingProduct(null);
+        setFormData(emptyForm);
+        fetchProducts();
       } else {
-        const formDataObj = new FormData();
-        formDataObj.append('name', productData.name);
-        formDataObj.append('slug', productData.slug);
-        formDataObj.append('description', productData.description || '');
-        formDataObj.append('price', productData.price.toString());
-        formDataObj.append('image', productData.image || '');
-        formDataObj.append('active', productData.active.toString());
-        
-        await createProduct(formDataObj);
-        showSuccessNotification('Товар успешно создан');
+        const error = await response.json();
+        addNotification({ type: 'error', title: error.error || 'Ошибка при сохранении товара' });
       }
-
-      await fetchProducts();
-      resetForm();
     } catch (error) {
-      showErrorNotification('Произошла ошибка при сохранении');
+      console.error('Error saving product:', error);
+      addNotification({ type: 'error', title: 'Ошибка при сохранении товара' });
+    } finally {
+      setFormLoading(false);
     }
   };
 
@@ -167,23 +134,37 @@ export default function ProductsPage() {
       description: product.description || '',
       price: product.price.toString(),
       image: product.image || '',
-      active: product.active,
+      active: product.active
     });
     setShowForm(true);
   };
 
   const handleDelete = async (product: Product) => {
-    if (!confirm(`Удалить товар "${product.name}"?`)) return;
-    
-    try {
-      const formData = new FormData();
-      formData.append('id', product.id.toString());
-      await deleteProduct(formData);
-      showSuccessNotification('Товар успешно удален');
-      await fetchProducts();
-    } catch (error) {
-      showErrorNotification('Произошла ошибка при удалении');
+    if (!confirm(`Вы уверены, что хотите удалить товар "${product.name}"?`)) {
+      return;
     }
+
+    try {
+      const response = await fetch(`/api/products/${product.id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        addNotification({ type: 'success', title: 'Товар успешно удален!' });
+        fetchProducts();
+      } else {
+        addNotification({ type: 'error', title: 'Ошибка при удалении товара' });
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      addNotification({ type: 'error', title: 'Ошибка при удалении товара' });
+    }
+  };
+
+  const handleCancel = () => {
+    setShowForm(false);
+    setEditingProduct(null);
+    setFormData(emptyForm);
   };
 
   const filteredProducts = products.filter(product =>
@@ -193,161 +174,237 @@ export default function ProductsPage() {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-48 mb-6"></div>
-          <div className="space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Управление товарами</h1>
-        <Button onClick={() => setShowForm(true)}>
-          Добавить товар
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Управление товарами</h1>
+          <p className="text-gray-600 mt-1">Создавайте и редактируйте товары для магазина</p>
+        </div>
+        <Button
+          onClick={() => setShowForm(true)}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          + Добавить товар
         </Button>
       </div>
 
+      {/* Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-lg font-semibold mb-4">
-                {editingProduct ? 'Редактировать товар' : 'Добавить товар'}
+        <Card className="border-l-4 border-l-blue-500">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold">
+                {editingProduct ? 'Редактировать товар' : 'Добавить новый товар'}
               </h2>
-              
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <Button
+                onClick={handleCancel}
+                variant="secondary"
+                className="text-gray-500 hover:text-gray-700"
+              >
+                Отмена
+              </Button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Название *
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Название товара *
                   </label>
                   <input
                     type="text"
+                    name="name"
                     value={formData.name}
-                    onChange={(e) => handleInputChange('name', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={handleInputChange}
                     required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Введите название товара"
                   />
                 </div>
-
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     URL (slug) *
                   </label>
                   <input
                     type="text"
+                    name="slug"
                     value={formData.slug}
-                    onChange={(e) => handleInputChange('slug', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={handleInputChange}
                     required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Описание
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => handleInputChange('description', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows={3}
+                    placeholder="url-tovara"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Цена (₽) *
                   </label>
                   <input
                     type="number"
+                    name="price"
                     value={formData.price}
-                    onChange={(e) => handleInputChange('price', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={handleInputChange}
+                    required
                     min="0"
                     step="0.01"
-                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0.00"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     URL изображения
                   </label>
                   <input
                     type="url"
+                    name="image"
                     value={formData.image}
-                    onChange={(e) => handleInputChange('image', e.target.value)}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="https://example.com/image.jpg"
                   />
                 </div>
+              </div>
 
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.active}
-                    onChange={(e) => handleInputChange('active', e.target.checked)}
-                    className="mr-2"
-                  />
-                  <label className="text-sm font-medium text-gray-700">
-                    Активный товар
-                  </label>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Описание
+                </label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Описание товара..."
+                />
+              </div>
 
-                <div className="flex space-x-3 pt-4">
-                  <Button type="submit" className="flex-1">
-                    {editingProduct ? 'Обновить' : 'Создать'}
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="secondary" 
-                    onClick={resetForm}
-                    className="flex-1"
-                  >
-                    Отмена
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </Card>
-        </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="active"
+                  checked={formData.active}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 block text-sm text-gray-700">
+                  Товар активен (показывается в магазине)
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="submit"
+                  disabled={formLoading}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {formLoading ? 'Сохранение...' : (editingProduct ? 'Обновить' : 'Создать')}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleCancel}
+                  variant="secondary"
+                >
+                  Отмена
+                </Button>
+              </div>
+            </form>
+          </div>
+        </Card>
       )}
 
+      {/* Search */}
+      <Card>
+        <div className="p-4">
+          <SearchBox
+            onSearch={setSearchTerm}
+            placeholder="Поиск товаров..."
+          />
+        </div>
+      </Card>
+
+      {/* Products List */}
       <Card>
         <div className="p-6">
-          <div className="mb-4">
-            <SearchBox
-              onSearch={setSearchTerm}
-              placeholder="Поиск товаров..."
-            />
-          </div>
-          
-          {filteredProducts.length > 0 ? (
+          {filteredProducts.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-gray-400 text-6xl mb-4">🛍️</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {searchTerm ? 'Товары не найдены' : 'Товаров пока нет'}
+              </h3>
+              <p className="text-gray-500 mb-4">
+                {searchTerm 
+                  ? 'Попробуйте изменить поисковый запрос'
+                  : 'Создайте первый товар для вашего магазина'
+                }
+              </p>
+              {!searchTerm && (
+                <Button
+                  onClick={() => setShowForm(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Добавить товар
+                </Button>
+              )}
+            </div>
+          ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full bg-white">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Название</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Цена</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Статус</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Дата</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Действия</th>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Товар
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Цена
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Статус
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Создан
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Действия
+                    </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="bg-white divide-y divide-gray-200">
                   {filteredProducts.map((product) => (
-                    <tr key={product.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr key={product.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
-                        <div>
-                          <div className="font-medium text-gray-900">{product.name}</div>
-                          <div className="text-sm text-gray-500">/{product.slug}</div>
+                        <div className="flex items-center">
+                          {product.image && (
+                            <div className="flex-shrink-0 h-12 w-12 mr-3">
+                              <Image
+                                src={product.image}
+                                alt={product.name}
+                                width={48}
+                                height={48}
+                                className="h-12 w-12 rounded-lg object-cover"
+                              />
+                            </div>
+                          )}
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {product.name}
+                            </div>
+                            <div className="text-sm text-gray-500">/{product.slug}</div>
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -367,23 +424,27 @@ export default function ProductsPage() {
                       <td className="px-4 py-3 text-sm text-gray-500">
                         {new Date(product.createdAt).toLocaleDateString('ru-RU')}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleEdit(product)}
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/shop/${product.slug}`}
+                            target="_blank"
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                           >
-                            Редактировать
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
+                            Открыть
+                          </Link>
+                          <button
+                            onClick={() => handleEdit(product)}
+                            className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                          >
+                            Изменить
+                          </button>
+                          <button
                             onClick={() => handleDelete(product)}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
                           >
                             Удалить
-                          </Button>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -391,27 +452,35 @@ export default function ProductsPage() {
                 </tbody>
               </table>
             </div>
-          ) : (
-            <div className="text-center py-12">
-              <div className="text-gray-400 text-6xl mb-4">📦</div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {searchTerm ? 'Товары не найдены' : 'Нет товаров'}
-              </h3>
-              <p className="text-gray-500 mb-4">
-                {searchTerm 
-                  ? 'Попробуйте изменить критерии поиска'
-                  : 'Добавьте первый товар в магазин'
-                }
-              </p>
-              {!searchTerm && (
-                <Button onClick={() => setShowForm(true)}>
-                  Добавить товар
-                </Button>
-              )}
-            </div>
           )}
         </div>
       </Card>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <div className="p-4">
+            <div className="text-sm font-medium text-gray-500">Всего товаров</div>
+            <div className="text-2xl font-bold text-gray-900">{products.length}</div>
+          </div>
+        </Card>
+        <Card>
+          <div className="p-4">
+            <div className="text-sm font-medium text-gray-500">Активных</div>
+            <div className="text-2xl font-bold text-green-600">
+              {products.filter(p => p.active).length}
+            </div>
+          </div>
+        </Card>
+        <Card>
+          <div className="p-4">
+            <div className="text-sm font-medium text-gray-500">Неактивных</div>
+            <div className="text-2xl font-bold text-red-600">
+              {products.filter(p => !p.active).length}
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

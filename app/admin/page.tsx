@@ -8,6 +8,7 @@ async function getStats() {
       usersCount,
       articlesCount,
       projectsCount,
+      productsCount,
       lettersCount,
       subscribersCount,
       messagesCount,
@@ -15,6 +16,7 @@ async function getStats() {
       prisma.user.count(),
       prisma.article.count(),
       prisma.project.count(),
+      prisma.product.count(),
       prisma.letter.count(),
       prisma.subscriber.count(),
       prisma.message.count(),
@@ -44,6 +46,7 @@ async function getStats() {
         users: usersCount,
         articles: articlesCount,
         projects: projectsCount,
+        products: productsCount,
         letters: lettersCount,
         subscribers: subscribersCount,
         messages: messagesCount,
@@ -119,7 +122,14 @@ export default async function AdminDashboard() {
           href="/admin/projects"
         />
         <StatCard
-          icon="👥"
+          icon="�️"
+          title="Товары"
+          count={counts.products}
+          color="bg-orange-50 text-orange-900 hover:bg-orange-100"
+          href="/admin/products"
+        />
+        <StatCard
+          icon="�👥"
           title="Пользователи"
           count={counts.users}
           color="bg-green-50 text-green-900 hover:bg-green-100"
@@ -164,6 +174,13 @@ export default async function AdminDashboard() {
               <div className="text-3xl mb-2 opacity-60 group-hover:opacity-80">🚀</div>
               <h3 className="font-semibold text-gray-800">Новый проект</h3>
               <p className="text-sm text-gray-600 mt-1">Добавить проект</p>
+            </div>
+          </Link>
+          <Link href="/admin/products" className="block p-4 rounded-lg border-2 border-dashed border-orange-300 hover:bg-orange-50 hover:border-solid transition-all duration-200 group">
+            <div className="text-center">
+              <div className="text-3xl mb-2 opacity-60 group-hover:opacity-80">🛍️</div>
+              <h3 className="font-semibold text-gray-800">Новый товар</h3>
+              <p className="text-sm text-gray-600 mt-1">Управление товарами</p>
             </div>
           </Link>
           <Link href="/admin/letters/new" className="block p-4 rounded-lg border-2 border-dashed border-yellow-300 hover:bg-yellow-50 hover:border-solid transition-all duration-200 group">

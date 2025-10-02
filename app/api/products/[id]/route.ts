@@ -61,7 +61,7 @@ export async function PUT(
       data: {
         name,
         slug,
-        price: parseInt(price),
+        price: parseFloat(price), // Исправлено на parseFloat для Decimal
         description,
         image,
         active: active ?? true
