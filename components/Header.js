@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 // ...existing code...
-import SafeImage from '@/components/SafeImage';
+import Image from 'next/image';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
 
@@ -32,11 +32,12 @@ export default function Header({ projects, settings }) {
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
           
           <Link href="/" className="group flex items-center space-x-4">
-            <SafeImage 
+            <Image 
               src={logoUrl} 
               alt="Логотип" 
               width={40}
               height={40}
+              priority
               className="transition-transform duration-300 group-hover:scale-110"
             />
             <div>

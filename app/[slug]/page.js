@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 
-import SafeImage from '@/components/SafeImage';
+import Image from 'next/image';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 import BlockRenderer from '@/components/BlockRenderer';
 import SocialShare from '@/components/SocialShare';
@@ -156,7 +156,7 @@ function ArticleComponent({ article }) {
           
           <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0 text-sm text-gray-600 mb-6">
             {article.author?.image && (
-              <SafeImage
+              <Image
                 src={article.author.image}
                 alt={article.author.name || 'Автор'}
                 width={32}

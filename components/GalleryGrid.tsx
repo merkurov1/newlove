@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
-import SafeImage from '@/components/SafeImage';
+import Image from 'next/image';
 
 import { GalleryImage } from '@/types/blocks';
 
@@ -40,7 +40,7 @@ export default function GalleryGrid({ images }: { images: GalleryImage[] }) {
             }}
             className="hover:scale-105 shadow-md hover:shadow-lg"
           >
-            <SafeImage
+            <Image
               src={item.url}
               alt={item.alt || `Gallery image ${i + 1}`}
               fill
