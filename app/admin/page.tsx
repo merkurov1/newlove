@@ -12,6 +12,10 @@ async function getStats() {
       lettersCount,
       subscribersCount,
       messagesCount,
+      publishedArticlesCount,
+      draftArticlesCount,
+      publishedProjectsCount,
+      totalTagsCount,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.article.count(),
@@ -20,6 +24,10 @@ async function getStats() {
       prisma.letter.count(),
       prisma.subscriber.count(),
       prisma.message.count(),
+      prisma.article.count({ where: { published: true } }),
+      prisma.article.count({ where: { published: false } }),
+      prisma.project.count({ where: { published: true } }),
+      prisma.tag.count(),
     ]);
 
     // Получить недавние статьи и проекты
@@ -50,6 +58,10 @@ async function getStats() {
         letters: lettersCount,
         subscribers: subscribersCount,
         messages: messagesCount,
+        publishedArticles: publishedArticlesCount,
+        draftArticles: draftArticlesCount,
+        publishedProjects: publishedProjectsCount,
+        totalTags: totalTagsCount,
       },
       recent: {
         articles: recentArticles,
@@ -156,6 +168,33 @@ export default async function AdminDashboard() {
           color="bg-indigo-50 text-indigo-900 hover:bg-indigo-100"
           href="/admin/orders"
         />
+      </div>
+
+      {/* Extended Stats */}
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Детальная статистика</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white p-4 rounded-lg border shadow-sm">
+            <div className="text-sm text-gray-600">Опубликованные статьи</div>
+            <div className="text-2xl font-bold text-green-600">{counts.publishedArticles}</div>
+            <div className="text-xs text-gray-500">из {counts.articles} всего</div>
+          </div>
+          <div className="bg-white p-4 rounded-lg border shadow-sm">
+            <div className="text-sm text-gray-600">Черновики статей</div>
+            <div className="text-2xl font-bold text-yellow-600">{counts.draftArticles}</div>
+            <div className="text-xs text-gray-500">не опубликованы</div>
+          </div>
+          <div className="bg-white p-4 rounded-lg border shadow-sm">
+            <div className="text-sm text-gray-600">Опубл. проекты</div>
+            <div className="text-2xl font-bold text-purple-600">{counts.publishedProjects}</div>
+            <div className="text-xs text-gray-500">из {counts.projects} всего</div>
+          </div>
+          <div className="bg-white p-4 rounded-lg border shadow-sm">
+            <div className="text-sm text-gray-600">Всего тегов</div>
+            <div className="text-2xl font-bold text-blue-600">{counts.totalTags}</div>
+            <div className="text-xs text-gray-500">для организации</div>
+          </div>
+        </div>
       </div>
 
       {/* Quick Actions */}

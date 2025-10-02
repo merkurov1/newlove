@@ -13,7 +13,7 @@ import SafeImage from '@/components/SafeImage';
 function FallbackAvatar({ name }) {
   const letter = (name || '?').charAt(0).toUpperCase();
   return (
-    <div className="w-32 h-32 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-5xl font-bold mb-4 shadow-lg">
+    <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-3xl sm:text-5xl font-bold mb-4 shadow-lg">
       {letter}
     </div>
   );
@@ -95,7 +95,7 @@ async function ProfileContent({ username }) {
         ) : (
           <FallbackAvatar name={user.name} />
         )}
-        <h1 className="text-4xl font-bold text-gray-900">{user.name}</h1>
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{user.name}</h1>
         <p className="text-lg text-gray-500 mt-1">@{user.username}</p>
         
         {user.bio && (
@@ -172,7 +172,7 @@ export default function UserProfilePage({ params }) {
         ) : (
           <FallbackAvatar name={user.name} />
         )}
-        <h1 className="text-4xl font-bold text-gray-900">{user.name}</h1>
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">{user.name}</h1>
         <p className="text-lg text-gray-500 mt-1">@{user.username}</p>
         
         {user.bio && (

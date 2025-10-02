@@ -148,12 +148,12 @@ function ArticleComponent({ article }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <article>
         <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">{article.title}</h1>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">{article.title}</h1>
           
-          <div className="flex items-center space-x-4 text-sm text-gray-600 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0 text-sm text-gray-600 mb-6">
             {article.author?.image && (
               <Image
                 src={article.author.image}
@@ -219,7 +219,7 @@ function ProjectComponent({ project }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <article>
         <header className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">{project.title}</h1>
