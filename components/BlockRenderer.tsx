@@ -1,6 +1,6 @@
 // src/components/BlockRenderer.tsx
 import React from 'react';
-import SafeImage from './SafeImage';
+import SafeImage from '@/components/SafeImage';
 import TextBlock from './blocks/TextBlock';
 import GalleryGrid from './GalleryGrid';
 import CodeBlock from './blocks/CodeBlock';
