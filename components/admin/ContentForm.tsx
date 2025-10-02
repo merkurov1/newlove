@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import TagInput from '@/components/admin/TagInput';
 import BlockEditor from '@/components/admin/BlockEditor';
+import { createSeoSlug } from '@/lib/slugUtils';
 
 import { EditorJsBlock } from '@/types/blocks';
 
@@ -30,11 +31,29 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   const isEditing = !!safeInitial && !!safeInitial.id;
   const [title, setTitle] = useState(safeInitial.title || '');
   const [slug, setSlug] = useState(safeInitial.slug || '');
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(isEditing); // Для редактирования не автогенерируем
   const [content, setContent] = useState<EditorJsBlock[]>(parseBlocks(safeInitial.content));
   const [published, setPublished] = useState(safeInitial.published || false);
   const [error, setError] = useState('');
   const { data: session, status } = useSession();
   const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
+
+  // Автогенерация slug из title
+  useEffect(() => {
+    if (!slugManuallyEdited && title.trim()) {
+      const generatedSlug = createSeoSlug(title);
+      setSlug(generatedSlug);
+    }
+  }, [title, slugManuallyEdited]);
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTitle(e.target.value);
+  };
+
+  const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSlug(e.target.value);
+    setSlugManuallyEdited(true); // Отмечаем, что slug редактировался вручную
+  };
 
   function validateBlocks(blocks: EditorJsBlock[]) {
     if (!Array.isArray(blocks) || blocks.length === 0) return false;
@@ -85,19 +104,26 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           id="title"
           required
           value={title}
-          onChange={e => setTitle(e.target.value)}
+          onChange={handleTitleChange}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
         />
       </div>
       <div>
-        <label htmlFor="slug" className="block text-sm font-medium text-gray-700">URL (slug)</label>
+        <label htmlFor="slug" className="block text-sm font-medium text-gray-700">
+          URL (slug)
+          {!slugManuallyEdited && (
+            <span className="text-xs text-gray-500 ml-2">
+              (автогенерируется из названия)
+            </span>
+          )}
+        </label>
         <input
           type="text"
           name="slug"
           id="slug"
           required
           value={slug}
-          onChange={e => setSlug(e.target.value)}
+          onChange={handleSlugChange}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
         />
       </div>

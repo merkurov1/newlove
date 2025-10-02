@@ -39,7 +39,7 @@ export default function GalleryBlock({ block }: { block: EditorJsBlock }) {
     );
   }
   return (
-    <div className="my-8 p-4 bg-red-50 text-red-700 rounded text-center font-medium border border-red-200">
+    <div className="my-8 p-4 bg-gray-50 text-gray-600 rounded text-center font-medium border border-gray-200">
       Ошибка: некорректный блок галереи
     </div>
   );
