@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Button, Table, SearchBox, NotificationSystem } from '@/components/admin/AdminComponents';
+import { Card } from '@/components/admin/Card';
+import { Button } from '@/components/admin/Button';
+import { SearchBox } from '@/components/admin/SearchBox';
+import { useNotifications } from '@/components/admin/NotificationSystem';
 import { createProduct, updateProduct, deleteProduct } from '../actions';
 
 interface Product {
@@ -40,9 +43,7 @@ export default function ProductsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState<ProductFormData>(emptyForm);
-  const [showNotification, setShowNotification] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
-  const [notificationType, setNotificationType] = useState<'success' | 'error'>('success');
+  const { addNotification } = useNotifications();
 
   const fetchProducts = async () => {
     try {
@@ -63,15 +64,19 @@ export default function ProductsPage() {
   }, []);
 
   const showSuccessNotification = (message: string) => {
-    setNotificationMessage(message);
-    setNotificationType('success');
-    setShowNotification(true);
+    addNotification({
+      type: 'success',
+      title: 'Успех',
+      message
+    });
   };
 
   const showErrorNotification = (message: string) => {
-    setNotificationMessage(message);
-    setNotificationType('error');
-    setShowNotification(true);
+    addNotification({
+      type: 'error',
+      title: 'Ошибка',
+      message
+    });
   };
 
   const generateSlug = (name: string) => {
@@ -95,7 +100,6 @@ export default function ProductsPage() {
     setFormData(prev => {
       const updated = { ...prev, [field]: value };
       
-      // Автоматически генерируем slug при изменении названия
       if (field === 'name' && typeof value === 'string') {
         updated.slug = generateSlug(value);
       }
@@ -123,21 +127,33 @@ export default function ProductsPage() {
         active: formData.active,
       };
 
-      let result;
       if (editingProduct) {
-        result = await updateProduct(editingProduct.id, productData);
+        const formDataObj = new FormData();
+        formDataObj.append('id', editingProduct.id.toString());
+        formDataObj.append('name', productData.name);
+        formDataObj.append('slug', productData.slug);
+        formDataObj.append('description', productData.description || '');
+        formDataObj.append('price', productData.price.toString());
+        formDataObj.append('image', productData.image || '');
+        formDataObj.append('active', productData.active.toString());
+        
+        await updateProduct(formDataObj);
         showSuccessNotification('Товар успешно обновлен');
       } else {
-        result = await createProduct(productData);
+        const formDataObj = new FormData();
+        formDataObj.append('name', productData.name);
+        formDataObj.append('slug', productData.slug);
+        formDataObj.append('description', productData.description || '');
+        formDataObj.append('price', productData.price.toString());
+        formDataObj.append('image', productData.image || '');
+        formDataObj.append('active', productData.active.toString());
+        
+        await createProduct(formDataObj);
         showSuccessNotification('Товар успешно создан');
       }
 
-      if (result.success) {
-        await fetchProducts();
-        resetForm();
-      } else {
-        showErrorNotification(result.error || 'Произошла ошибка');
-      }
+      await fetchProducts();
+      resetForm();
     } catch (error) {
       showErrorNotification('Произошла ошибка при сохранении');
     }
@@ -160,13 +176,11 @@ export default function ProductsPage() {
     if (!confirm(`Удалить товар "${product.name}"?`)) return;
     
     try {
-      const result = await deleteProduct(product.id);
-      if (result.success) {
-        showSuccessNotification('Товар успешно удален');
-        await fetchProducts();
-      } else {
-        showErrorNotification(result.error || 'Ошибка при удалении');
-      }
+      const formData = new FormData();
+      formData.append('id', product.id.toString());
+      await deleteProduct(formData);
+      showSuccessNotification('Товар успешно удален');
+      await fetchProducts();
     } catch (error) {
       showErrorNotification('Произошла ошибка при удалении');
     }
@@ -176,70 +190,6 @@ export default function ProductsPage() {
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.slug.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  const columns = [
-    {
-      header: 'Название',
-      accessor: 'name' as keyof Product,
-      render: (product: Product) => (
-        <div>
-          <div className="font-medium text-gray-900">{product.name}</div>
-          <div className="text-sm text-gray-500">/{product.slug}</div>
-        </div>
-      ),
-    },
-    {
-      header: 'Цена',
-      accessor: 'price' as keyof Product,
-      render: (product: Product) => (
-        <span className="font-medium text-gray-900">
-          {product.price.toLocaleString('ru-RU')} ₽
-        </span>
-      ),
-    },
-    {
-      header: 'Статус',
-      accessor: 'active' as keyof Product,
-      render: (product: Product) => (
-        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-          product.active 
-            ? 'bg-green-100 text-green-800' 
-            : 'bg-red-100 text-red-800'
-        }`}>
-          {product.active ? 'Активен' : 'Неактивен'}
-        </span>
-      ),
-    },
-    {
-      header: 'Дата создания',
-      accessor: 'createdAt' as keyof Product,
-      render: (product: Product) => 
-        new Date(product.createdAt).toLocaleDateString('ru-RU'),
-    },
-    {
-      header: 'Действия',
-      accessor: 'id' as keyof Product,
-      render: (product: Product) => (
-        <div className="flex space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleEdit(product)}
-          >
-            Редактировать
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleDelete(product)}
-            className="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
-          >
-            Удалить
-          </Button>
-        </div>
-      ),
-    },
-  ];
 
   if (loading) {
     return (
@@ -357,7 +307,7 @@ export default function ProductsPage() {
                   </Button>
                   <Button 
                     type="button" 
-                    variant="outline" 
+                    variant="secondary" 
                     onClick={resetForm}
                     className="flex-1"
                   >
@@ -374,17 +324,73 @@ export default function ProductsPage() {
         <div className="p-6">
           <div className="mb-4">
             <SearchBox
-              value={searchTerm}
-              onChange={setSearchTerm}
+              onSearch={setSearchTerm}
               placeholder="Поиск товаров..."
             />
           </div>
           
           {filteredProducts.length > 0 ? (
-            <Table
-              data={filteredProducts}
-              columns={columns}
-            />
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Название</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Цена</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Статус</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Дата</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProducts.map((product) => (
+                    <tr key={product.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div>
+                          <div className="font-medium text-gray-900">{product.name}</div>
+                          <div className="text-sm text-gray-500">/{product.slug}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-gray-900">
+                          {product.price.toLocaleString('ru-RU')} ₽
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          product.active 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {product.active ? 'Активен' : 'Неактивен'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {new Date(product.createdAt).toLocaleDateString('ru-RU')}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleEdit(product)}
+                          >
+                            Редактировать
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleDelete(product)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Удалить
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <div className="text-center py-12">
               <div className="text-gray-400 text-6xl mb-4">📦</div>
@@ -406,13 +412,6 @@ export default function ProductsPage() {
           )}
         </div>
       </Card>
-
-      <NotificationSystem
-        show={showNotification}
-        message={notificationMessage}
-        type={notificationType}
-        onClose={() => setShowNotification(false)}
-      />
     </div>
   );
 }

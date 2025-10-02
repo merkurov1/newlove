@@ -24,6 +24,8 @@ export default function MediaPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadingFiles, setUploadingFiles] = useState<string[]>([]);
+  const [deletingFiles, setDeletingFiles] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   
   const supabase = createClientComponentClient();
   const { addNotification } = useNotifications();
@@ -142,6 +144,102 @@ export default function MediaPage() {
     }
   };
 
+  const deleteFile = async (fileName: string) => {
+    if (!confirm(`Удалить файл "${fileName}"? Это действие нельзя отменить.`)) {
+      return;
+    }
+
+    setDeletingFiles(prev => [...prev, fileName]);
+
+    try {
+      const { error } = await supabase.storage
+        .from('media')
+        .remove([fileName]);
+
+      if (error) {
+        addNotification({
+          type: 'error',
+          title: 'Ошибка удаления',
+          message: `Не удалось удалить ${fileName}: ${error.message}`
+        });
+      } else {
+        addNotification({
+          type: 'success',
+          title: 'Файл удален',
+          message: `${fileName} успешно удален`
+        });
+        
+        // Обновляем список файлов
+        await fetchFiles();
+      }
+    } catch (err) {
+      addNotification({
+        type: 'error',
+        title: 'Ошибка удаления',
+        message: `Произошла ошибка при удалении ${fileName}`
+      });
+    } finally {
+      setDeletingFiles(prev => prev.filter(name => name !== fileName));
+    }
+  };
+
+  const deleteSelectedFiles = async () => {
+    if (selectedFiles.length === 0) return;
+    
+    if (!confirm(`Удалить ${selectedFiles.length} файл(ов)? Это действие нельзя отменить.`)) {
+      return;
+    }
+
+    setDeletingFiles(prev => [...prev, ...selectedFiles]);
+
+    try {
+      const { error } = await supabase.storage
+        .from('media')
+        .remove(selectedFiles);
+
+      if (error) {
+        addNotification({
+          type: 'error',
+          title: 'Ошибка удаления',
+          message: `Не удалось удалить файлы: ${error.message}`
+        });
+      } else {
+        addNotification({
+          type: 'success',
+          title: 'Файлы удалены',
+          message: `${selectedFiles.length} файл(ов) успешно удалено`
+        });
+        
+        setSelectedFiles([]);
+        await fetchFiles();
+      }
+    } catch (err) {
+      addNotification({
+        type: 'error',
+        title: 'Ошибка удаления',
+        message: 'Произошла ошибка при удалении файлов'
+      });
+    } finally {
+      setDeletingFiles(prev => prev.filter(name => !selectedFiles.includes(name)));
+    }
+  };
+
+  const toggleFileSelection = (fileName: string) => {
+    setSelectedFiles(prev => 
+      prev.includes(fileName) 
+        ? prev.filter(name => name !== fileName)
+        : [...prev, fileName]
+    );
+  };
+
+  const selectAllFiles = () => {
+    if (selectedFiles.length === filteredFiles.length) {
+      setSelectedFiles([]);
+    } else {
+      setSelectedFiles(filteredFiles.map(file => file.name));
+    }
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} Б`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
@@ -161,9 +259,18 @@ export default function MediaPage() {
       <Card>
         <CardHeader 
           title="Медиафайлы" 
-          subtitle={`Всего файлов: ${files.length}`}
+          subtitle={selectedFiles.length > 0 ? `Выбрано: ${selectedFiles.length} файл(ов)` : `Всего файлов: ${files.length}`}
           action={
             <div className="flex space-x-3">
+              {selectedFiles.length > 0 && (
+                <Button 
+                  variant="secondary" 
+                  onClick={deleteSelectedFiles}
+                  className="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
+                >
+                  🗑️ Удалить выбранные ({selectedFiles.length})
+                </Button>
+              )}
               <label className="cursor-pointer">
                 <Button variant="primary">
                   📎 Загрузить файлы
@@ -200,11 +307,27 @@ export default function MediaPage() {
           ) : (
             <>
               <div className="mb-6">
-                <SearchBox
-                  onSearch={setSearchQuery}
-                  placeholder="Поиск файлов по имени..."
-                  className="max-w-md"
-                />
+                <div className="flex items-center justify-between mb-4">
+                  <SearchBox
+                    onSearch={setSearchQuery}
+                    placeholder="Поиск файлов по имени..."
+                    className="max-w-md"
+                  />
+                  
+                  {filteredFiles.length > 0 && (
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedFiles.length === filteredFiles.length}
+                        onChange={selectAllFiles}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm text-gray-600">
+                        Выбрать все
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {uploadingFiles.length > 0 && (
@@ -236,7 +359,22 @@ export default function MediaPage() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                   {filteredFiles.map((file) => (
-                    <div key={file.name} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div 
+                      key={file.name} 
+                      className={`bg-white border rounded-lg p-4 hover:shadow-md transition-shadow relative ${
+                        selectedFiles.includes(file.name) ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
+                      }`}
+                    >
+                      {/* Чекбокс для выбора файла */}
+                      <div className="absolute top-2 left-2 z-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedFiles.includes(file.name)}
+                          onChange={() => toggleFileSelection(file.name)}
+                          className="rounded border-gray-300 bg-white shadow"
+                        />
+                      </div>
+                      
                       {file.publicUrl ? (
                         <div className="aspect-square mb-3 bg-gray-50 rounded-lg overflow-hidden">
                           {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
@@ -286,6 +424,16 @@ export default function MediaPage() {
                               className="text-xs"
                             >
                               👁️
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => deleteFile(file.name)}
+                              disabled={deletingFiles.includes(file.name)}
+                              className="text-xs text-red-600 hover:text-red-700 border-red-300 hover:border-red-400 disabled:opacity-50"
+                              title="Удалить файл"
+                            >
+                              {deletingFiles.includes(file.name) ? '⏳' : '🗑️'}
                             </Button>
                           </div>
                         )}
