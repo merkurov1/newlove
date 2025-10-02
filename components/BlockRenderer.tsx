@@ -1,6 +1,6 @@
 // src/components/BlockRenderer.tsx
 import React from 'react';
-import Image from 'next/image';
+import SafeImage from '@/components/SafeImage';
 import TextBlock from './blocks/TextBlock';
 import GalleryGrid from './GalleryGrid';
 import CodeBlock from './blocks/CodeBlock';
@@ -61,7 +61,7 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
             return (
               <div key={idx} className="my-6">
                 <div className="relative max-w-3xl mx-auto">
-                  <Image 
+                  <SafeImage 
                     src={imageUrl} 
                     alt={block.data.caption || 'Изображение статьи'} 
                     width={800}

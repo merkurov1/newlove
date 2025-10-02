@@ -1,5 +1,5 @@
 import React from 'react';
-import Image from 'next/image';
+import SafeImage from '@/components/SafeImage';
 import type { EditorJsBlock, GalleryImage } from '@/types/blocks';
 
 export default function GalleryBlock({ block }: { block: EditorJsBlock }) {
@@ -9,7 +9,7 @@ export default function GalleryBlock({ block }: { block: EditorJsBlock }) {
     
     return (
       <div className="my-4">
-        <Image 
+        <SafeImage 
           src={url} 
           alt={caption || 'Изображение'} 
           width={600}
@@ -25,7 +25,7 @@ export default function GalleryBlock({ block }: { block: EditorJsBlock }) {
       <div className="my-4 grid grid-cols-2 md:grid-cols-3 gap-4">
         {block.data.images.map((img: GalleryImage, i: number) => (
           <div key={i} className="relative w-full aspect-square bg-gray-100 rounded overflow-hidden flex items-center justify-center">
-            <Image 
+            <SafeImage 
               src={img.url} 
               alt={img.alt || `Изображение галереи ${i + 1}`} 
               fill
