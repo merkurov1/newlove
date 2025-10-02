@@ -15,9 +15,22 @@ interface SafeImageProps {
 
 export default function SafeImage({ src, alt, fill, sizes, className, width, height }: SafeImageProps) {
   const [imageError, setImageError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   const handleError = () => {
-    console.error('Failed to load image:', src);
+    console.log('Image failed to load:', src);
+    
+    // Пробуем перезагрузить 1 раз
+    if (retryCount < 1) {
+      setRetryCount(retryCount + 1);
+      setTimeout(() => {
+        // Форсируем обновление src
+        const newSrc = src.includes('?') ? `${src}&retry=${retryCount + 1}` : `${src}?retry=${retryCount + 1}`;
+        console.log('Retrying image load:', newSrc);
+      }, 1000);
+      return;
+    }
+    
     setImageError(true);
   };
 

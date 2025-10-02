@@ -144,7 +144,7 @@ export default async function HomePage() {
                     aria-label={`Читать статью: ${article.title}`}
                   >
                     {article.previewImage ? (
-                      <SafeImage
+                      <Image
                         src={article.previewImage}
                         alt={`Изображение к статье: ${article.title}`}
                         fill
