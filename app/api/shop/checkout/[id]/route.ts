@@ -57,13 +57,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       line_items: [
         {
           price_data: {
-            currency: 'rub',
+            currency: 'gbp',
             product_data: {
               name: product.name,
               description: product.description || undefined,
               images: product.image ? [product.image] : undefined,
             },
-            unit_amount: Math.round(Number(product.price) * 100), // рубли → копейки, округляем
+            unit_amount: Math.round(Number(product.price) * 100), // фунты → пенсы, округляем
           },
           quantity: 1,
         },
