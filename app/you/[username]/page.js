@@ -7,7 +7,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Suspense } from 'react';
 import { getFirstImage } from '@/lib/contentUtils';
-import Image from 'next/image';
 
 // Fallback-аватар по первой букве
 function FallbackAvatar({ name }) {
