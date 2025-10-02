@@ -18,7 +18,9 @@ export default function SafeImage({ src, alt, fill, sizes, className, width, hei
   const [retryCount, setRetryCount] = useState(0);
 
   const handleError = () => {
-    console.log('Image failed to load:', src);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Image failed to load:', src);
+    }
     
     // Пробуем перезагрузить 1 раз
     if (retryCount < 1) {
@@ -26,7 +28,9 @@ export default function SafeImage({ src, alt, fill, sizes, className, width, hei
       setTimeout(() => {
         // Форсируем обновление src
         const newSrc = src.includes('?') ? `${src}&retry=${retryCount + 1}` : `${src}?retry=${retryCount + 1}`;
-        console.log('Retrying image load:', newSrc);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Retrying image load:', newSrc);
+        }
       }, 1000);
       return;
     }
