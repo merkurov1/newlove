@@ -22,10 +22,11 @@ const supabase = createClient(
 );
 
 export default async function ProjectsPage() {
-  // Запрашиваем только те поля, которые нужны для превью
+  // Запрашиваем только опубликованные проекты
   const { data: projects } = await supabase
     .from('projects')
     .select('id, slug, title, previewImage')
+    .eq('published', true)  // Фильтруем только опубликованные
     .order('publishedAt', { ascending: false });
 
   if (!projects || projects.length === 0) {

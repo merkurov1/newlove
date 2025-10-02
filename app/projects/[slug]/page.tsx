@@ -6,7 +6,12 @@ import BlockRenderer from '@/components/BlockRenderer';
 import type { EditorJsBlock } from '@/types/blocks';
 
 export default async function ProjectPage({ params }: { params: { slug: string } }) {
-  const project = await prisma.project.findUnique({ where: { slug: params.slug } });
+  const project = await prisma.project.findUnique({ 
+    where: { 
+      slug: params.slug,
+      published: true  // Показываем только опубликованные проекты
+    } 
+  });
   if (!project) {
     return (
       <div className="max-w-2xl mx-auto mt-16 p-6 bg-red-50 text-red-700 rounded shadow text-center">
