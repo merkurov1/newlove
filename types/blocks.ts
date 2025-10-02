@@ -10,4 +10,5 @@ export type EditorJsBlock =
   | { type: 'image'; data: { file?: { url: string }; url?: string; caption?: string } }
   // Кастомные типы (обратная совместимость)
   | { type: 'richText'; data: { html: string } }
-  | { type: 'gallery'; data: { images: GalleryImage[] } };
+  | { type: 'gallery'; data: { images: GalleryImage[] } }
+  | { type: 'columns'; data: { columns: Array<{ html: string }> } };

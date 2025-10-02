@@ -60,6 +60,21 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
                 <div dangerouslySetInnerHTML={{ __html: block.data.html || '' }} />
               </div>
             );
+          // Поддержка колоночной верстки
+          case 'columns':
+            return (
+              <div key={idx} className={`mb-6 grid gap-6 ${
+                block.data.columns?.length === 2 ? 'grid-cols-1 md:grid-cols-2' :
+                block.data.columns?.length === 3 ? 'grid-cols-1 md:grid-cols-3' :
+                'grid-cols-1'
+              }`}>
+                {block.data.columns?.map((column: any, colIdx: number) => (
+                  <div key={colIdx} className="prose prose-lg max-w-none">
+                    <div dangerouslySetInnerHTML={{ __html: column.html || '' }} />
+                  </div>
+                ))}
+              </div>
+            );
           // Обратная совместимость с другими кастомными типами
           case 'gallery':
             return <GalleryBlock key={idx} block={block} />;
