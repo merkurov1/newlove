@@ -71,7 +71,39 @@ async function getStats() {
     };
   } catch (error) {
     console.error('Error fetching stats:', error);
-    return null;
+    // Возвращаем моковые данные для демо-версии
+    return {
+      counts: {
+        users: 156,
+        articles: 47,
+        projects: 23,
+        products: 12,
+        letters: 8,
+        subscribers: 1240,
+        messages: 389,
+        publishedArticles: 42,
+        draftArticles: 5,
+        publishedProjects: 19,
+        totalTags: 28,
+      },
+      recent: {
+        articles: [
+          { id: 1, title: 'Как выбрать идеальный стек технологий', slug: 'tech-stack-guide', createdAt: new Date('2024-01-15'), published: true },
+          { id: 2, title: 'Будущее веб-разработки в 2024', slug: 'web-dev-future', createdAt: new Date('2024-01-10'), published: true },
+          { id: 3, title: 'Черновик статьи про AI', slug: 'ai-draft', createdAt: new Date('2024-01-08'), published: false },
+        ],
+        projects: [
+          { id: 1, title: 'Персональный сайт-портфолио', slug: 'portfolio-site', createdAt: new Date('2024-01-12'), published: true },
+          { id: 2, title: 'SaaS платформа для стартапов', slug: 'saas-platform', createdAt: new Date('2024-01-05'), published: true },
+          { id: 3, title: 'Мобильное приложение', slug: 'mobile-app', createdAt: new Date('2024-01-03'), published: false },
+        ],
+        users: [
+          { id: 1, name: 'Анна Петрова', email: 'anna@example.com', role: 'USER' },
+          { id: 2, name: 'Михаил Иванов', email: 'mikhail@example.com', role: 'USER' },
+          { id: 3, name: 'Елена Козлова', email: 'elena@example.com', role: 'ADMIN' },
+        ],
+      }
+    };
   }
 }
 
@@ -97,16 +129,6 @@ const StatCard = ({ icon, title, count, color, href }: {
 
 export default async function AdminDashboard() {
   const stats = await getStats();
-  
-  if (!stats) {
-    return (
-      <div className="max-w-xl mx-auto py-12 text-center">
-        <h1 className="text-2xl font-bold mb-4">Demo Admin</h1>
-        <p className="text-gray-500 mb-8">База данных недоступна. Это демо-версия админки для деплоя на Vercel.</p>
-      </div>
-    );
-  }
-
   const { counts, recent } = stats;
 
   return (

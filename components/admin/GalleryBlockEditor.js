@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { uploadImage, validateImageFile, handleEditorError } from './editorUtils';
 
 export default function GalleryBlockEditor({ images, onChange }) {
@@ -57,7 +58,13 @@ export default function GalleryBlockEditor({ images, onChange }) {
       <div className="flex gap-2 flex-wrap mb-2">
         {localImages.map((img, i) => (
           <div key={i} className="relative w-32 h-32 border rounded overflow-hidden">
-            <img src={img.url} alt={img.alt} className="object-cover w-full h-full" />
+            <Image 
+              src={img.url} 
+              alt={img.alt || `Изображение ${i + 1}`} 
+              width={128}
+              height={128}
+              className="object-cover w-full h-full" 
+            />
             <input
               type="text"
               placeholder="alt"

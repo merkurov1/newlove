@@ -1,5 +1,6 @@
 // src/components/BlockRenderer.tsx
 import React from 'react';
+import Image from 'next/image';
 import TextBlock from './blocks/TextBlock';
 import GalleryBlock from './blocks/GalleryBlock';
 import CodeBlock from './blocks/CodeBlock';
@@ -54,9 +55,22 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
           case 'code':
             return <CodeBlock key={idx} block={block} />;
           case 'image':
+            const imageUrl = block.data.file?.url || block.data.url;
+            if (!imageUrl) return null;
+            
             return (
               <div key={idx} className="my-6">
-                <img src={block.data.file?.url || block.data.url} alt={block.data.caption || ''} className="rounded shadow max-w-full h-auto" />
+                <div className="relative max-w-3xl mx-auto">
+                  <Image 
+                    src={imageUrl} 
+                    alt={block.data.caption || 'Изображение статьи'} 
+                    width={800}
+                    height={600}
+                    className="rounded shadow w-full h-auto object-cover" 
+                    priority={idx === 0} // Приоритет для первого изображения (LCP)
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  />
+                </div>
                 {block.data.caption && (
                   <p className="text-sm text-gray-500 mt-2 text-center">{block.data.caption}</p>
                 )}

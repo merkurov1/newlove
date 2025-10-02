@@ -38,7 +38,7 @@ export default function EditorJsArticle({ value, onChange }) {
                   if (result.success && result.url) {
                     return { success: 1, file: { url: result.url } };
                   } else {
-                    return { success: 0, error: result.error || 'Upload failed' };
+                    return { success: 0, error: result.error || 'Ошибка загрузки' };
                   }
                 },
               },
@@ -59,7 +59,7 @@ export default function EditorJsArticle({ value, onChange }) {
         editorRef.current = null;
       }
     };
-  }, []);
+  }, [value, onChange]); // Добавили зависимости
 
   // Обновление value при редактировании (если нужно)
   useEffect(() => {

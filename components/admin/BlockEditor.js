@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Image from 'next/image';
 import TiptapEditor from './TiptapEditor';
 import GalleryBlockEditor from './GalleryBlockEditor';
 import { EditorJsBlock } from '@/types/blocks';
@@ -113,7 +114,13 @@ export default function BlockEditor({ value, onChange }) {
                 placeholder="Подпись (необязательно)"
               />
               {block.data.url && (
-                <img src={block.data.url} alt="preview" className="max-h-40 mt-2 border rounded" />
+                <Image 
+                  src={block.data.url} 
+                  alt={block.data.caption || "Превью изображения"} 
+                  width={200}
+                  height={160}
+                  className="max-h-40 mt-2 border rounded object-cover" 
+                />
               )}
             </div>
           )}
