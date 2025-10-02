@@ -23,10 +23,10 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
   return {
     title: `${product.name} - Магазин`,
-    description: product.description || `Купить ${product.name} за ${product.price} ₽`,
+    description: product.description || `Купить ${product.name} за ${Number(product.price)} ₽`,
     openGraph: {
       title: product.name,
-      description: product.description || `Купить ${product.name} за ${product.price} ₽`,
+      description: product.description || `Купить ${product.name} за ${Number(product.price)} ₽`,
       images: product.image ? [{ url: product.image }] : [],
       type: 'product',
     },
@@ -99,7 +99,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
                 
                 <div className="flex items-baseline mb-8">
                   <span className="text-4xl font-bold text-gray-900">
-                    {product.price.toLocaleString('ru-RU')}
+                    {Number(product.price).toLocaleString('ru-RU')}
                   </span>
                   <span className="text-2xl text-gray-500 ml-2">₽</span>
                 </div>
