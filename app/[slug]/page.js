@@ -30,6 +30,16 @@ async function getContent(slug) {
 // Компонент теперь принимает `type`, чтобы знать, что отображать
 function ContentDisplay({ content, type }) {
   const { title, publishedAt, content: htmlContent, author } = content;
+  if (typeof htmlContent !== 'string') {
+    return (
+      <article className="max-w-3xl mx-auto px-4 py-12">
+        <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-8">{title}</h1>
+        <div className="bg-red-100 text-red-700 p-4 rounded mb-8 font-bold border border-red-300">
+          Ошибка: поле <code>content</code> должно быть строкой markdown, но получено: {typeof htmlContent}
+        </div>
+      </article>
+    );
+  }
   const html = sanitizeHtml(md.render(htmlContent || ''), {
     allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'iframe', 'del', 'ins', 'kbd', 's', 'u']),
     allowedAttributes: {
