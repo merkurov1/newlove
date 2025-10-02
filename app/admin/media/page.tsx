@@ -72,36 +72,65 @@ export default function MediaPage() {
     const selectedFiles = event.target.files;
     if (!selectedFiles) return;
 
-    for (const file of Array.from(selectedFiles)) {
-      setUploadingFiles(prev => [...prev, file.name]);
+    const fileArray = Array.from(selectedFiles);
+    
+    // Добавляем все файлы в состояние загрузки
+    setUploadingFiles(prev => [...prev, ...fileArray.map(f => f.name)]);
       
-      try {
-        const { error } = await supabase.storage
-          .from('media')
-          .upload(file.name, file);
+    try {
+      const formData = new FormData();
+      fileArray.forEach(file => {
+        formData.append('files', file);
+      });
 
-        if (error) {
-          addNotification({
-            type: 'error',
-            title: 'Ошибка загрузки',
-            message: `Не удалось загрузить ${file.name}: ${error.message}`
-          });
-        } else {
-          addNotification({
-            type: 'success',
-            title: 'Файл загружен',
-            message: `${file.name} успешно загружен`
-          });
-        }
-      } catch (err) {
+      const response = await fetch('/api/media/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
         addNotification({
           type: 'error',
           title: 'Ошибка загрузки',
-          message: `Произошла ошибка при загрузке ${file.name}`
+          message: data.error || 'Не удалось загрузить файлы'
         });
-      } finally {
-        setUploadingFiles(prev => prev.filter(name => name !== file.name));
+      } else {
+        // Показываем результаты по каждому файлу
+        data.results.forEach((result: any) => {
+          if (result.success) {
+            addNotification({
+              type: 'success',
+              title: 'Файл загружен',
+              message: `${result.fileName} успешно загружен`
+            });
+          } else {
+            addNotification({
+              type: 'error',
+              title: 'Ошибка загрузки',
+              message: `${result.fileName}: ${result.error}`
+            });
+          }
+        });
+
+        if (data.success) {
+          addNotification({
+            type: 'success',
+            title: 'Загрузка завершена',
+            message: `Загружено файлов: ${data.results.filter((r: any) => r.success).length}`
+          });
+        }
       }
+    } catch (err) {
+      addNotification({
+        type: 'error',
+        title: 'Ошибка загрузки',
+        message: 'Произошла ошибка при загрузке файлов'
+      });
+    } finally {
+      // Убираем все файлы из состояния загрузки
+      setUploadingFiles(prev => prev.filter(name => !fileArray.map(f => f.name).includes(name)));
     }
 
     // Обновляем список файлов
