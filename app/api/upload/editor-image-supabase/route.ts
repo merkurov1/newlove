@@ -1,24 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
+import { createClient } from '@supabase/supabase-js';
 
-// Vercel не поддерживает запись в /public, используем временную папку
-import path from 'path';
-import fs from 'fs/promises';
-import os from 'os';
-
-// На Vercel используем /tmp, локально - /public/uploads
-const UPLOAD_DIR = process.env.VERCEL 
-  ? '/tmp/uploads' 
-  : path.join(process.cwd(), 'public', 'uploads');
+// Используем Supabase Storage для продакшена на Vercel
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(req: NextRequest) {
-  console.log('🚀 API /upload/editor-image: Начинаю обработку запроса');
-  console.log('🔧 Среда выполнения:', {
-    vercel: !!process.env.VERCEL,
-    uploadDir: UPLOAD_DIR,
-    platform: os.platform()
-  });
+  console.log('🚀 API /upload/editor-image-supabase: Начинаю обработку запроса');
   
   try {
     // Проверка аутентификации
@@ -65,32 +57,36 @@ export async function POST(req: NextRequest) {
     try {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const filename = `${Date.now()}-${file.name}`.replace(/\s+/g, '-');
+      const filename = `editor-images/${Date.now()}-${file.name}`.replace(/\s+/g, '-');
       
-      console.log('📂 Создаю директорию:', UPLOAD_DIR);
-      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+      console.log('📤 Загружаю в Supabase Storage:', filename);
       
-      const filePath = path.join(UPLOAD_DIR, filename);
-      console.log('💾 Сохраняю файл в:', filePath);
-      
-      await fs.writeFile(filePath, buffer);
-      
-      // На Vercel файлы нужно возвращать как base64 или использовать внешнее хранилище
-      let url: string;
-      if (process.env.VERCEL) {
-        // На Vercel возвращаем base64 URL (временное решение)
-        const base64 = buffer.toString('base64');
-        url = `data:${file.type};base64,${base64}`;
-        console.log('🔗 Vercel: возвращаю base64 URL (размер:', base64.length, 'символов)');
-      } else {
-        url = `/uploads/${filename}`;
-        console.log('🔗 Локально: возвращаю файловый URL:', url);
+      const { data, error } = await supabase.storage
+        .from('media')
+        .upload(filename, buffer, {
+          contentType: file.type,
+          upsert: false
+        });
+
+      if (error) {
+        console.error('❌ Ошибка Supabase Storage:', error);
+        return NextResponse.json({ 
+          success: false, 
+          error: `Storage error: ${error.message}` 
+        }, { status: 500 });
       }
 
-      console.log('✅ Файл успешно обработан:', {
+      // Получаем публичный URL
+      const { data: urlData } = supabase.storage
+        .from('media')
+        .getPublicUrl(filename);
+
+      const url = urlData.publicUrl;
+      
+      console.log('✅ Файл успешно загружен в Supabase:', {
         filename,
-        size: file.size,
-        urlType: process.env.VERCEL ? 'base64' : 'file'
+        url,
+        size: file.size
       });
 
       return NextResponse.json({
@@ -103,15 +99,10 @@ export async function POST(req: NextRequest) {
         }
       });
     } catch (error) {
-      console.error('💥 Ошибка при сохранении файла:', error);
-      console.error('📋 Детали ошибки:', {
-        name: (error as Error).name,
-        message: (error as Error).message,
-        stack: (error as Error).stack?.split('\n').slice(0, 3)
-      });
+      console.error('💥 Ошибка при загрузке в Supabase:', error);
       return NextResponse.json({ 
         success: false, 
-        error: `Failed to save file: ${(error as Error).message}` 
+        error: `Failed to upload: ${(error as Error).message}` 
       }, { status: 500 });
     }
   } catch (error) {
