@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 import prisma from '@/lib/prisma';
+import { createId } from '@paralleldrive/cuid2';
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,9 +53,10 @@ export async function POST(request: NextRequest) {
 
     const product = await prisma.product.create({
       data: {
+        id: createId(), // Явно генерируем CUID
         name,
         slug,
-        price: parseInt(price),
+        price: parseFloat(price), // Исправлено на parseFloat для Decimal
         description,
         image,
         active: true

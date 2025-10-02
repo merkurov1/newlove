@@ -7,6 +7,7 @@ const navItems = [
   { href: '/admin', label: 'Панель', icon: '📊' },
   { href: '/admin/articles', label: 'Статьи', icon: '📄' },
   { href: '/admin/projects', label: 'Проекты', icon: '🚀' },
+  { href: '/admin/products', label: 'Товары', icon: '🛍️' },
   { href: '/admin/letters', label: 'Письма', icon: '💌' },
   { href: '/admin/subscribers', label: 'Подписчики', icon: '📧' },
   { href: '/admin/users', label: 'Пользователи', icon: '👥' },
