@@ -33,6 +33,8 @@ export default function BlockEditor({ value, onChange }) {
         ]
       }
     };
+    else if (type === 'quote') block = { type: 'quote', data: { text: '', author: '', source: '' } };
+    else if (type === 'video') block = { type: 'video', data: { url: '', caption: '', platform: 'youtube' } };
     else return;
     const updated = [...blocks, block];
     setBlocks(updated);
@@ -40,18 +42,38 @@ export default function BlockEditor({ value, onChange }) {
   };
 
   const removeBlock = (idx) => {
-  const updated = blocks.filter((_, i) => i !== idx);
-  setBlocks(updated);
-  onChange(updated);
+    const updated = blocks.filter((_, i) => i !== idx);
+    setBlocks(updated);
+    onChange(updated);
+  };
+
+  const duplicateBlock = (idx) => {
+    const blockToDuplicate = { ...blocks[idx] };
+    const updated = [...blocks.slice(0, idx + 1), blockToDuplicate, ...blocks.slice(idx + 1)];
+    setBlocks(updated);
+    onChange(updated);
+  };
+
+  const moveBlock = (fromIdx, toIdx) => {
+    const updated = [...blocks];
+    const [movedBlock] = updated.splice(fromIdx, 1);
+    updated.splice(toIdx, 0, movedBlock);
+    setBlocks(updated);
+    onChange(updated);
   };
 
   return (
     <div className="space-y-6">
       {blocks.map((block, idx) => (
         <div key={idx} className="border rounded p-4 bg-gray-50 mb-2">
-          <div className="flex justify-between mb-2">
-            <span className="font-bold">{block.type}</span>
-            <button type="button" onClick={() => removeBlock(idx)} className="text-red-500">Удалить</button>
+          <div className="flex justify-between items-center mb-2">
+            <span className="font-bold capitalize">{block.type === 'richText' ? 'Текст' : block.type === 'quote' ? 'Цитата' : block.type === 'video' ? 'Видео' : block.type}</span>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => duplicateBlock(idx)} className="text-blue-500 text-sm hover:underline">Дублировать</button>
+              {idx > 0 && <button type="button" onClick={() => moveBlock(idx, idx - 1)} className="text-gray-500 text-sm hover:underline">↑</button>}
+              {idx < blocks.length - 1 && <button type="button" onClick={() => moveBlock(idx, idx + 1)} className="text-gray-500 text-sm hover:underline">↓</button>}
+              <button type="button" onClick={() => removeBlock(idx)} className="text-red-500 text-sm hover:underline">Удалить</button>
+            </div>
           </div>
           {block.type === 'richText' && (
             <TiptapEditor value={block.data.html} onChange={html => handleBlockChange(idx, { type: 'richText', data: { html } })} />
@@ -143,12 +165,77 @@ export default function BlockEditor({ value, onChange }) {
               </div>
             </div>
           )}
+          {block.type === 'quote' && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Текст цитаты</label>
+              <textarea
+                className="w-full border rounded p-2 mb-2"
+                rows={3}
+                value={block.data.text}
+                onChange={e => handleBlockChange(idx, { type: 'quote', data: { ...block.data, text: e.target.value } })}
+                placeholder="Введите текст цитаты..."
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Автор</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded p-2"
+                    value={block.data.author || ''}
+                    onChange={e => handleBlockChange(idx, { type: 'quote', data: { ...block.data, author: e.target.value } })}
+                    placeholder="Автор цитаты"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Источник</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded p-2"
+                    value={block.data.source || ''}
+                    onChange={e => handleBlockChange(idx, { type: 'quote', data: { ...block.data, source: e.target.value } })}
+                    placeholder="Книга, статья, etc."
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          {block.type === 'video' && (
+            <div>
+              <label className="block text-sm font-medium mb-1">URL видео</label>
+              <input
+                type="text"
+                className="w-full border rounded p-2 mb-2"
+                value={block.data.url}
+                onChange={e => {
+                  const url = e.target.value;
+                  const platform = url.includes('youtube') || url.includes('youtu.be') ? 'youtube' : 
+                                  url.includes('vimeo') ? 'vimeo' : 'other';
+                  handleBlockChange(idx, { type: 'video', data: { ...block.data, url, platform } });
+                }}
+                placeholder="https://www.youtube.com/watch?v=... или https://vimeo.com/..."
+              />
+              <input
+                type="text"
+                className="w-full border rounded p-2 mb-2"
+                value={block.data.caption || ''}
+                onChange={e => handleBlockChange(idx, { type: 'video', data: { ...block.data, caption: e.target.value } })}
+                placeholder="Подпись к видео (необязательно)"
+              />
+              {block.data.url && (
+                <div className="mt-2 p-2 bg-blue-50 rounded text-sm text-blue-700">
+                  📹 Предпросмотр: {block.data.platform === 'youtube' ? 'YouTube' : block.data.platform === 'vimeo' ? 'Vimeo' : 'Видео'}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ))}
-      <div className="flex gap-2 mt-4">
-        <button type="button" onClick={() => addBlock('richText')} className="bg-blue-600 text-white px-4 py-2 rounded">+ Текст</button>
-        <button type="button" onClick={() => addBlock('gallery')} className="bg-green-600 text-white px-4 py-2 rounded">+ Галерея</button>
-        <button type="button" onClick={() => addBlock('columns')} className="bg-purple-600 text-white px-4 py-2 rounded">+ Колонки</button>
+      <div className="flex flex-wrap gap-2 mt-4">
+        <button type="button" onClick={() => addBlock('richText')} className="bg-blue-600 text-white px-4 py-2 rounded text-sm">+ Текст</button>
+        <button type="button" onClick={() => addBlock('gallery')} className="bg-green-600 text-white px-4 py-2 rounded text-sm">+ Галерея</button>
+        <button type="button" onClick={() => addBlock('columns')} className="bg-purple-600 text-white px-4 py-2 rounded text-sm">+ Колонки</button>
+        <button type="button" onClick={() => addBlock('quote')} className="bg-orange-600 text-white px-4 py-2 rounded text-sm">+ Цитата</button>
+        <button type="button" onClick={() => addBlock('video')} className="bg-red-600 text-white px-4 py-2 rounded text-sm">+ Видео</button>
       </div>
     </div>
   );

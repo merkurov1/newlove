@@ -75,6 +75,57 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
                 ))}
               </div>
             );
+          // Поддержка цитат
+          case 'quote':
+            return (
+              <div key={idx} className="my-8">
+                <blockquote className="border-l-4 border-gray-300 pl-6 py-4 bg-gray-50 rounded-r-lg">
+                  <p className="text-lg italic text-gray-800 leading-relaxed mb-4">
+                    "{block.data.text}"
+                  </p>
+                  {(block.data.author || block.data.source) && (
+                    <footer className="text-sm text-gray-600">
+                      {block.data.author && <span className="font-medium">— {block.data.author}</span>}
+                      {block.data.source && <span>, {block.data.source}</span>}
+                    </footer>
+                  )}
+                </blockquote>
+              </div>
+            );
+          // Поддержка видео
+          case 'video':
+            const getEmbedUrl = (url: string) => {
+              if (url.includes('youtube.com/watch?v=')) {
+                const videoId = url.split('v=')[1]?.split('&')[0];
+                return `https://www.youtube.com/embed/${videoId}`;
+              }
+              if (url.includes('youtu.be/')) {
+                const videoId = url.split('youtu.be/')[1]?.split('?')[0];
+                return `https://www.youtube.com/embed/${videoId}`;
+              }
+              if (url.includes('vimeo.com/')) {
+                const videoId = url.split('vimeo.com/')[1]?.split('?')[0];
+                return `https://player.vimeo.com/video/${videoId}`;
+              }
+              return url;
+            };
+            
+            return (
+              <div key={idx} className="my-6">
+                <div className="relative aspect-video rounded-lg overflow-hidden bg-black">
+                  <iframe
+                    src={getEmbedUrl(block.data.url)}
+                    className="absolute inset-0 w-full h-full"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+                {block.data.caption && (
+                  <p className="text-sm text-gray-500 mt-2 text-center">{block.data.caption}</p>
+                )}
+              </div>
+            );
           // Обратная совместимость с другими кастомными типами
           case 'gallery':
             return <GalleryBlock key={idx} block={block} />;

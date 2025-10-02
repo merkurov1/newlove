@@ -8,89 +8,143 @@ import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 import BlockRenderer from '@/components/BlockRenderer';
 
 async function getContent(slug) {
+  console.log('🔍 getContent called for slug:', slug);
+  
   // Исключаем статические маршруты
   const staticRoutes = ['admin', 'api', 'articles', 'auth', 'digest', 'profile', 'projects', 'rss.xml', 'sentry-example-page', 'shop', 'tags', 'talks', 'users', 'you'];
   if (staticRoutes.includes(slug)) {
+    console.log('⏭️ Skipping static route:', slug);
     return null;
   }
   
-  // Сначала ищем статью
-  const article = await prisma.article.findUnique({
-    where: { slug: slug, published: true },
-    include: {
-      author: { select: { name: true, image: true } },
-      tags: true,
-    },
-  });
-  
-  if (article) {
-    return { type: 'article', content: article };
+  try {
+    console.log('📰 Searching for article with slug:', slug);
+    // Сначала ищем статью
+    const article = await prisma.article.findUnique({
+      where: { slug: slug, published: true },
+      include: {
+        author: { select: { name: true, image: true } },
+        tags: true,
+      },
+    });
+    
+    if (article) {
+      console.log('✅ Found article:', article.title);
+      return { type: 'article', content: article };
+    }
+    
+    console.log('📁 Searching for project with slug:', slug);
+    // Если статья не найдена, ищем проект
+    const project = await prisma.project.findUnique({
+      where: { slug: slug, published: true }
+    });
+    
+    if (project) {
+      console.log('✅ Found project:', project.title);
+      return { type: 'project', content: project };
+    }
+    
+    console.log('❌ No content found for slug:', slug);
+    return null;
+  } catch (error) {
+    console.error('💥 Error in getContent:', error);
+    throw error;
   }
-  
-  // Если статья не найдена, ищем проект
-  const project = await prisma.project.findUnique({
-    where: { slug: slug, published: true }
-  });
-  
-  if (project) {
-    return { type: 'project', content: project };
-  }
-  
-  return null;
 }
 
 export async function generateMetadata({ params }) {
-  const result = await getContent(params.slug);
-  if (!result) return { title: 'Не найдено' };
+  console.log('🏷️ generateMetadata called for slug:', params.slug);
   
-  const { type, content } = result;
-  const previewImage = getFirstImage(content.content);
-  const description = generateDescription(content.content);
-  const baseUrl = 'https://merkurov.love';
+  try {
+    const result = await getContent(params.slug);
+    if (!result) {
+      console.log('❌ No metadata result found');
+      return { title: 'Не найдено' };
+    }
+    
+    const { type, content } = result;
+    console.log('✅ Generating metadata for:', { type, title: content.title });
+    
+    const previewImage = content.content ? await getFirstImage(content.content) : null;
+    const description = content.content ? generateDescription(content.content) : (content.title || 'Описание недоступно');
+    const baseUrl = 'https://merkurov.love';
 
-  return {
-    title: content.title,
-    description: description,
-    openGraph: {
+    return {
       title: content.title,
       description: description,
-      url: `${baseUrl}/${content.slug}`,
-      images: previewImage ? [{ url: previewImage }] : [],
-      type: 'article',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: content.title,
-      description: description,
-      images: previewImage ? [previewImage] : [],
-    },
-  };
+      openGraph: {
+        title: content.title,
+        description: description,
+        url: `${baseUrl}/${content.slug}`,
+        images: previewImage ? [{ url: previewImage }] : [],
+        type: 'article',
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: content.title,
+        description: description,
+        images: previewImage ? [previewImage] : [],
+      },
+    };
+  } catch (error) {
+    console.error('💥 Error in generateMetadata:', error);
+    return { 
+      title: 'Ошибка загрузки',
+      description: 'Произошла ошибка при загрузке метаданных'
+    };
+  }
 }
 
 export default async function ContentPage({ params }) {
-  const result = await getContent(params.slug);
+  console.log('🚀 ContentPage called with params:', params);
   
-  if (!result) {
-    notFound();
-  }
-  
-  const { type, content } = result;
-  
-  if (type === 'article') {
-    return <ArticleComponent article={content} />;
-  } else {
-    return <ProjectComponent project={content} />;
+  try {
+    const result = await getContent(params.slug);
+    
+    if (!result) {
+      console.log('❌ No result found, calling notFound()');
+      notFound();
+    }
+    
+    const { type, content } = result;
+    console.log('✅ Rendering content:', { type, title: content.title });
+    
+    if (type === 'article') {
+      return <ArticleComponent article={content} />;
+    } else {
+      return <ProjectComponent project={content} />;
+    }
+  } catch (error) {
+    console.error('💥 Error in ContentPage:', error);
+    return (
+      <div className="max-w-2xl mx-auto mt-16 p-6 bg-red-50 text-red-700 rounded shadow text-center">
+        <h1 className="text-2xl font-bold mb-2">Ошибка загрузки</h1>
+        <p>Произошла ошибка при загрузке содержимого: {error.message}</p>
+        <pre className="mt-4 text-xs overflow-auto bg-red-100 p-2 rounded">
+          {error.stack}
+        </pre>
+      </div>
+    );
   }
 }
 
 function ArticleComponent({ article }) {
+  console.log('📰 Rendering ArticleComponent:', article.title);
+  
   let blocks = [];
   try {
-    const raw = typeof article.content === 'string' ? article.content : JSON.stringify(article.content);
-    const parsed = JSON.parse(raw);
-    blocks = Array.isArray(parsed) ? parsed : [parsed];
+    if (article.content) {
+      const raw = typeof article.content === 'string' ? article.content : JSON.stringify(article.content);
+      const parsed = JSON.parse(raw);
+      blocks = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+      console.log('📦 Parsed article blocks:', blocks.length, 'blocks');
+    } else {
+      console.log('⚠️ No content found for article');
+    }
   } catch (error) {
-    console.error('Ошибка парсинга контента статьи:', error);
+    console.error('💥 Error parsing article content:', error);
+    console.log('📋 Raw content:', article.content);
+    blocks = [];
   }
 
   return (
@@ -132,7 +186,13 @@ function ArticleComponent({ article }) {
         </header>
         
         <div className="prose prose-lg max-w-none">
-          <BlockRenderer blocks={blocks} />
+          {blocks.length > 0 ? (
+            <BlockRenderer blocks={blocks} />
+          ) : (
+            <div className="text-gray-500 italic py-8">
+              Содержимое статьи пока не добавлено.
+            </div>
+          )}
         </div>
       </article>
     </div>
@@ -140,13 +200,22 @@ function ArticleComponent({ article }) {
 }
 
 function ProjectComponent({ project }) {
+  console.log('📁 Rendering ProjectComponent:', project.title);
+  
   let blocks = [];
   try {
-    const raw = typeof project.content === 'string' ? project.content : JSON.stringify(project.content);
-    const parsed = JSON.parse(raw);
-    blocks = Array.isArray(parsed) ? parsed : [parsed];
+    if (project.content) {
+      const raw = typeof project.content === 'string' ? project.content : JSON.stringify(project.content);
+      const parsed = JSON.parse(raw);
+      blocks = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+      console.log('📦 Parsed project blocks:', blocks.length, 'blocks');
+    } else {
+      console.log('⚠️ No content found for project');
+    }
   } catch (error) {
-    console.error('Ошибка парсинга контента проекта:', error);
+    console.error('💥 Error parsing project content:', error);
+    console.log('📋 Raw content:', project.content);
+    blocks = [];
   }
 
   return (
@@ -163,7 +232,13 @@ function ProjectComponent({ project }) {
         </header>
         
         <div className="prose prose-lg max-w-none">
-          <BlockRenderer blocks={blocks} />
+          {blocks.length > 0 ? (
+            <BlockRenderer blocks={blocks} />
+          ) : (
+            <div className="text-gray-500 italic py-8">
+              Содержимое проекта пока не добавлено.
+            </div>
+          )}
         </div>
       </article>
     </div>

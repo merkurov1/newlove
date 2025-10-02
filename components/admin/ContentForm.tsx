@@ -52,6 +52,8 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           if (!column || typeof column.html !== 'string') return false;
         }
       }
+      if (block.type === 'quote' && typeof block.data.text !== 'string') return false;
+      if (block.type === 'video' && typeof block.data.url !== 'string') return false;
     }
     return true;
   }
