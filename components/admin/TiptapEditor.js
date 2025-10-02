@@ -5,6 +5,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import GalleryGrid from './tiptap-extension-gallery';
+import { uploadImage, validateImageFile, handleEditorError, tiptapConfig } from './editorUtils';
 
 
 export default function TiptapEditor({ value, onChange }) {
@@ -13,37 +14,39 @@ export default function TiptapEditor({ value, onChange }) {
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Image.configure({ inline: false, allowBase64: false }),
+      Image.configure(tiptapConfig.extensions.image),
       GalleryGrid,
     ],
     content: value || '',
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
     },
-    editorProps: {
-      attributes: {
-        class: 'prose prose-lg min-h-[300px] max-w-none focus:outline-none',
-      },
-    },
+    editorProps: tiptapConfig.extensions.editorProps,
   });
 
-  // Загрузка изображения через Supabase
+  // Загрузка изображения с использованием общих утилит
   const fileInputRef = useRef();
   const handleImageUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    const formData = new FormData();
-    formData.append('image', file);
-    const res = await fetch('/api/upload/editor-image', {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await res.json();
-    if (data.success && data.file?.url) {
-      editor.chain().focus().setImage({ src: data.file.url }).run();
-    } else {
-      alert('Ошибка загрузки: ' + (data.error || 'Неизвестная ошибка'));
+    
+    // Валидация файла
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      handleEditorError(validation.error, 'TiptapEditor');
+      event.target.value = '';
+      return;
     }
+    
+    // Загрузка изображения
+    const result = await uploadImage(file, 'TiptapEditor');
+    
+    if (result.success && result.url) {
+      editor.chain().focus().setImage({ src: result.url }).run();
+    } else {
+      handleEditorError(result.error, 'TiptapEditor');
+    }
+    
     event.target.value = '';
   };
 
