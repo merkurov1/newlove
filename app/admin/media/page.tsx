@@ -50,32 +50,16 @@ export default function MediaPage() {
     setError(null);
     
     try {
-      const { data, error } = await supabase.storage.from('media').list('', { 
-        limit: 100, 
-        offset: 0 
-      });
+      const response = await fetch('/api/media');
+      const data = await response.json();
       
-      if (error || !data) {
+      if (!response.ok) {
         setFiles([]);
-        setError(error?.message || 'Ошибка получения списка файлов');
+        setError(data.error || 'Ошибка получения списка файлов');
         return;
       }
 
-      // Получаем URL для каждого файла
-      const filesWithUrls = await Promise.all(
-        data.map(async (file) => {
-          const { data: urlData, error: urlError } = await supabase.storage
-            .from('media')
-            .createSignedUrl(file.name, 60 * 60);
-            
-          return {
-            ...file,
-            publicUrl: urlError ? null : urlData.signedUrl
-          };
-        })
-      );
-      
-      setFiles(filesWithUrls);
+      setFiles(data.files || []);
     } catch (err) {
       setError('Произошла ошибка при загрузке файлов');
       console.error('Error fetching files:', err);
@@ -152,15 +136,21 @@ export default function MediaPage() {
     setDeletingFiles(prev => [...prev, fileName]);
 
     try {
-      const { error } = await supabase.storage
-        .from('media')
-        .remove([fileName]);
+      const response = await fetch('/api/media/delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ fileName }),
+      });
 
-      if (error) {
+      const data = await response.json();
+
+      if (!response.ok) {
         addNotification({
           type: 'error',
           title: 'Ошибка удаления',
-          message: `Не удалось удалить ${fileName}: ${error.message}`
+          message: data.error || `Не удалось удалить ${fileName}`
         });
       } else {
         addNotification({
@@ -193,15 +183,21 @@ export default function MediaPage() {
     setDeletingFiles(prev => [...prev, ...selectedFiles]);
 
     try {
-      const { error } = await supabase.storage
-        .from('media')
-        .remove(selectedFiles);
+      const response = await fetch('/api/media/delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ fileNames: selectedFiles }),
+      });
 
-      if (error) {
+      const data = await response.json();
+
+      if (!response.ok) {
         addNotification({
           type: 'error',
           title: 'Ошибка удаления',
-          message: `Не удалось удалить файлы: ${error.message}`
+          message: data.error || 'Не удалось удалить файлы'
         });
       } else {
         addNotification({
