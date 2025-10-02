@@ -9,9 +9,7 @@ module.exports = {
     'prose-lg',
     'prose-xl',
     'gallery-grid',
-    {
-      pattern: /gallery-grid.*/,
-    },
+    'not-prose',
   ],
   theme: {
     extend: {
