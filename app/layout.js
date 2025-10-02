@@ -41,7 +41,7 @@ export const metadata = {
     images: [
       {
         // ВАЖНО: Укажите здесь URL на красивую картинку для превью
-        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png', // Пример
+        url: 'https://nzasvblckrwsnlxsqfma.supabase.co/storage/v1/object/public/media/og-image.png', // Пример
         width: 1200,
         height: 630,
         alt: 'Anton Merkurov - Art x Love x Money',
@@ -55,7 +55,7 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'Anton Merkurov | Art x Love x Money',
     description: 'Медиа, технологии и искусство',
-    images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png'],
+    images: ['https://nzasvblckrwsnlxsqfma.supabase.co/storage/v1/object/public/media/og-image.png'],
     creator: '@merkurov',
     site: '@merkurov',
   },
@@ -115,7 +115,7 @@ export default async function RootLayout({ children }) {
   const settings = { 
     site_name: 'Anton Merkurov', 
     slogan: 'Art x Love x Money', 
-    logo_url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png' 
+    logo_url: 'https://nzasvblckrwsnlxsqfma.supabase.co/storage/v1/object/public/media/logo.png' 
   };
 
   let subscriberCount = 0;
@@ -142,13 +142,13 @@ export default async function RootLayout({ children }) {
         />
         <link
           rel="preload"
-          href="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png"
+          href="https://nzasvblckrwsnlxsqfma.supabase.co/storage/v1/object/public/media/og-image.png"
           as="image"
           type="image/png"
           crossOrigin="anonymous"
         />
         {/* DNS prefetch for external domains */}
-        <link rel="dns-prefetch" href="//txvkqcitalfbjytmnawq.supabase.co" />
+        <link rel="dns-prefetch" href="//nzasvblckrwsnlxsqfma.supabase.co" />
         <link rel="dns-prefetch" href="//fonts.googleapis.com" />
         <link rel="dns-prefetch" href="//vercel.com" />
       </head>

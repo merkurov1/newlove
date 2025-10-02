@@ -10,7 +10,7 @@ export default function ImageUploader({ onUploadSuccess }) {
   const [error, setError] = useState(null);
 
   async function handleFileUpload(event) {
-    if (!session || !session.supabaseAccessToken) {
+    if (!session?.user) {
       setError('Ошибка: вы не авторизованы для загрузки файлов.');
       return;
     }
@@ -23,28 +23,30 @@ export default function ImageUploader({ onUploadSuccess }) {
         throw new Error('Вы не выбрали файл для загрузки.');
       }
 
-      // <<< 1. Удаляем устаревшую и неработающую строку >>>
-      // supabase.auth.setAuth(session.supabaseAccessToken); // ЭТОЙ КОМАНДЫ БОЛЬШЕ НЕТ
+      // Используем новый API endpoint для загрузки
+      const formData = new FormData();
+      formData.append('files', file);
 
-      const fileName = `${Date.now()}-${file.name}`;
-      
-      // <<< 2. КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Передаем токен в заголовках запроса >>>
-      // Мы добавляем "пропуск" (токен) напрямую к нашему файлу
-      const { data, error: uploadError } = await supabase.storage
-        .from('media')
-        .upload(fileName, file, {
-          headers: {
-            Authorization: `Bearer ${session.supabaseAccessToken}`,
-          },
-        });
+      const response = await fetch('/api/media/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
-      if (uploadError) {
-        throw uploadError;
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Ошибка при загрузке файла');
       }
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from('media')
-        .getPublicUrl(fileName);
+
+      // Проверяем результат загрузки
+      const uploadResult = data.results[0];
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Ошибка при загрузке файла');
+      }
+
+      // Получаем публичный URL загруженного файла
+      const fileName = uploadResult.fileName;
+      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${fileName}`;
 
       const markdownImage = `![_](${publicUrl})`;
       onUploadSuccess(markdownImage);
