@@ -7,7 +7,6 @@ import Image from 'next/image';
 import importDynamic from 'next/dynamic';
 import { getFirstImage } from '@/lib/contentUtils';
 import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
-import Image from 'next/image';
 
 const FadeInSection = importDynamic(() => import('@/components/FadeInSection'), { ssr: false });
 

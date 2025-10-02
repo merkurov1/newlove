@@ -4,7 +4,6 @@ import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import Image from 'next/image';
 
 // --- 1. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ---
 // Находит тег по его slug и подгружает все связанные с ним статьи
