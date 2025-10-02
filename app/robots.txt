@@ -1,0 +1,49 @@
+User-agent: *
+Allow: /
+
+# Главные страницы
+Allow: /
+Allow: /articles
+Allow: /projects
+Allow: /shop
+Allow: /talks
+
+# Публичные страницы
+Allow: /articles/
+Allow: /projects/
+Allow: /shop/
+Allow: /talks/
+Allow: /tags/
+
+# Запрещенные пути
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /profile
+Disallow: /you/
+Disallow: /users
+
+# Специальные файлы
+Allow: /sitemap.xml
+Allow: /rss.xml
+Allow: /robots.txt
+
+# Sitemap
+Sitemap: https://merkurov.love/sitemap.xml
+
+# Crawl-delay для ботов (необязательно)
+Crawl-delay: 1
+
+# Дополнительные настройки для Google
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+
+# Дополнительные настройки для Bing
+User-agent: bingbot
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/

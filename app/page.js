@@ -6,12 +6,44 @@ import Link from 'next/link';
 import Image from 'next/image';
 import importDynamic from 'next/dynamic';
 import { getFirstImage } from '@/lib/contentUtils';
+import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
 
 const FadeInSection = importDynamic(() => import('@/components/FadeInSection'), { ssr: false });
 
 // --- БЛОК МЕТАДАННЫХ ---
 export const metadata = {
-  description: 'Главная страница персонального сайта и блога Антона Меркурова. Последние публикации о медиа, технологиях и искусстве.',
+  title: 'Anton Merkurov | Art x Love x Money - Медиа, технологии и искусство',
+  description: 'Персональный сайт и блог Антона Меркурова. Последние публикации о медиа, технологиях, digital-маркетинге и современном искусстве.',
+  keywords: ['Антон Меркуров', 'медиа', 'технологии', 'digital', 'искусство', 'блог', 'статьи', 'маркетинг'],
+  authors: [{ name: 'Anton Merkurov', url: 'https://merkurov.love' }],
+  creator: 'Anton Merkurov',
+  publisher: 'Anton Merkurov',
+  alternates: {
+    canonical: 'https://merkurov.love',
+    types: {
+      'application/rss+xml': 'https://merkurov.love/rss.xml'
+    }
+  },
+  openGraph: {
+    title: 'Anton Merkurov | Art x Love x Money',
+    description: 'Персональный сайт и блог о медиа, технологиях и современном искусстве.',
+    url: 'https://merkurov.love',
+    siteName: 'Anton Merkurov',
+    locale: 'ru_RU',
+    type: 'website',
+    images: [{
+      url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-home.png',
+      width: 1200,
+      height: 630,
+      alt: 'Anton Merkurov - Медиа, технологии и искусство'
+    }]
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Anton Merkurov | Art x Love x Money',
+    description: 'Медиа, технологии и современное искусство',
+    images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-home.png']
+  }
 };
 
 export const dynamic = 'force-dynamic';
@@ -68,48 +100,83 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-12">
-      <FadeInSection>
-        <div className="grid gap-4 sm:gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {articles && articles.length > 0 ? (
-            articles.map((article) => (
-              <div
-                key={article.id}
-                className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden p-3 sm:p-6"
-              >
-                {article.previewImage && (
-                  <Link href={`/${article.slug}`} className="block relative w-full h-48">
-                    <Image
-                      src={article.previewImage}
-                      alt={article.title}
-                      fill
-                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </Link>
+      {/* Hero Section */}
+      <section aria-labelledby="hero-heading" className="text-center py-8">
+        <h1 id="hero-heading" className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          Добро пожаловать в мир медиа и технологий
+        </h1>
+        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          Исследуем пересечение искусства, любви и денег в цифровую эпоху
+        </p>
+      </section>
+
+      {/* Articles Section */}
+      <section aria-labelledby="articles-heading">
+        <div className="flex items-center justify-between mb-8">
+          <h2 id="articles-heading" className="text-2xl font-bold text-gray-900">
+            Последние публикации
+          </h2>
+          <Link 
+            href="/articles" 
+            className="text-blue-600 hover:text-blue-700 font-medium"
+            aria-label="Посмотреть все статьи"
+          >
+            Все статьи →
+          </Link>
+        </div>
+        
+        <FadeInSection>
+          <div className="grid gap-4 sm:gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" role="list">
+            {articles && articles.length > 0 ? (
+              articles.map((article) => (
+                <article
+                  key={article.id}
+                  className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden p-3 sm:p-6"
+                  role="listitem"
+                >
+                  {article.previewImage && (
+                    <Link 
+                      href={`/${article.slug}`} 
+                      className="block relative w-full h-48"
+                      aria-label={`Читать статью: ${article.title}`}
+                    >
+                      <Image
+                        src={article.previewImage}
+                        alt={`Изображение к статье: ${article.title}`}
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </Link>
                 )}
                 <div className="flex-grow flex flex-col">
                   <Link href={`/${article.slug}`}>
-                    <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
+                    <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
                       {article.title}
-                    </h2>
+                    </h3>
                   </Link>
                   {article.publishedAt && (
-                    <p className="text-sm text-gray-500 mb-4">
+                    <time 
+                      className="text-sm text-gray-500 mb-4"
+                      dateTime={article.publishedAt}
+                    >
                       {new Date(article.publishedAt).toLocaleDateString('ru-RU', {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric',
                       })}
-                    </p>
+                    </time>
                   )}
                   {/* Описание/контент убран по требованию — только заголовок и картинка */}
                   {article.tags && article.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="flex flex-wrap gap-2 mb-4" role="list">
                       {article.tags.map(tag => (
                         <Link
                           key={tag.id}
                           href={`/tags/${tag.slug}`}
                           className="bg-gray-100 text-gray-600 text-xs sm:text-xs font-medium px-3 py-2 rounded-full hover:bg-gray-200 min-h-[36px] min-w-[44px] flex items-center justify-center"
+                          role="listitem"
+                          aria-label={`Статьи с тегом ${tag.name}`}
                         >
                           {tag.name}
                         </Link>
@@ -118,18 +185,53 @@ export default async function HomePage() {
                   )}
                   <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-100">
                     {article.author.image && (
-                      <Image src={article.author.image} alt={article.author.name || ''} width={32} height={32} className="rounded-full" />
+                      <Image 
+                        src={article.author.image} 
+                        alt={`Фото автора ${article.author.name}`} 
+                        width={32} 
+                        height={32} 
+                        className="rounded-full" 
+                      />
                     )}
                     <span className="text-sm font-medium text-gray-600">{article.author.name}</span>
                   </div>
                 </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-center text-gray-500 col-span-full">Здесь пока нет опубликованных статей. Самое время написать первую!</p>
-          )}
-        </div>
-      </FadeInSection>
+                </article>
+              ))
+            ) : (
+              <p className="text-center text-gray-500 col-span-full">Здесь пока нет опубликованных статей. Самое время написать первую!</p>
+            )}
+          </div>
+        </FadeInSection>
+      </section>
+      
+      {/* SEO Structured Data */}
+      <PersonSchema
+        name="Anton Merkurov"
+        url="https://merkurov.love"
+        image="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/anton-photo.jpg"
+        jobTitle="Digital Strategist & Media Expert"
+        description="Эксперт по медиа, технологиям и цифровым стратегиям. Автор блога о современном искусстве и digital-трендах."
+        sameAs={[
+          "https://t.me/merkurov_channel",
+          "https://twitter.com/merkurov",
+          "https://instagram.com/merkurov"
+        ]}
+      />
+      
+      <WebsiteSchema
+        name="Anton Merkurov"
+        url="https://merkurov.love"
+        description="Персональный сайт и блог Антона Меркурова о медиа, технологиях и современном искусстве"
+        author="Anton Merkurov"
+      />
+      
+      <BlogSchema
+        name="Anton Merkurov Blog"
+        url="https://merkurov.love"
+        description="Блог о медиа, технологиях, digital-маркетинге и современном искусстве"
+        author="Anton Merkurov"
+      />
     </div>
   );
 }
