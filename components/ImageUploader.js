@@ -53,7 +53,9 @@ export default function ImageUploader({ onUploadSuccess }) {
 
     } catch (error) {
       setError(error.message);
-      console.error('Ошибка при загрузке изображения:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Ошибка при загрузке изображения:', error);
+      }
     } finally {
       setUploading(false);
     }

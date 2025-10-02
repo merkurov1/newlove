@@ -37,21 +37,27 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get('image') as File;
-    console.log('📁 Получен файл:', {
-      name: file?.name,
-      type: file?.type,
-      size: file?.size
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📁 Получен файл:', {
+        name: file?.name,
+        type: file?.type,
+        size: file?.size
+      });
+    }
     
     if (!file) {
-      console.log('❌ Файл не найден в запросе');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('❌ Файл не найден в запросе');
+      }
       return NextResponse.json({ success: false, error: 'No file uploaded' }, { status: 400 });
     }
 
     // Валидация типа файла
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
-      console.log('❌ Неподдерживаемый тип файла:', file.type);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('❌ Неподдерживаемый тип файла:', file.type);
+      }
       return NextResponse.json({ success: false, error: 'Invalid file type' }, { status: 400 });
     }
 
