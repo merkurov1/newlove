@@ -11,6 +11,7 @@ export default function Header({ projects, settings }) {
 
   const site_name = settings?.site_name || 'Anton Merkurov';
   const slogan = settings?.slogan || 'Art x Love x Money';
+  // Возвращаем логику: сначала из settings, затем локальный fallback
   const logoUrl = settings?.logo_url || '/images/logo.svg';
 
   useEffect(() => {
