@@ -145,7 +145,7 @@ export default function Header({ projects, settings }) {
                     ⚙️ Настройки
                 </Link>
                 <div className="flex items-center gap-2 mt-4">
-                   {session.user?.image && <Image src={session.user.image} alt={session.user.name || 'Аватар'} width={32} height={32} className="rounded-full" />}
+                   {session.user?.image && <SafeImage src={session.user.image} alt={session.user.name || 'Аватар'} width={32} height={32} className="rounded-full" />}
                    <span className="text-sm font-medium text-gray-700">{session.user.name}</span>
                 </div>
                 <button onClick={() => { signOut(); setIsMenuOpen(false); }} className="mt-2 text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900">Sign out</button>
