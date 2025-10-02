@@ -26,9 +26,18 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
             );
           case 'header':
             const HeaderTag = `h${block.data.level || 2}` as keyof JSX.IntrinsicElements;
+            const sizeClasses = {
+              1: 'text-xl sm:text-2xl lg:text-3xl',
+              2: 'text-lg sm:text-xl lg:text-2xl', 
+              3: 'text-base sm:text-lg lg:text-xl',
+              4: 'text-sm sm:text-base lg:text-lg',
+              5: 'text-sm sm:text-base',
+              6: 'text-xs sm:text-sm'
+            }[block.data.level || 2] || 'text-lg sm:text-xl lg:text-2xl';
+            
             return (
               <div key={idx} className="mb-6">
-                <HeaderTag className="font-bold text-gray-900 leading-tight" dangerouslySetInnerHTML={{ __html: block.data.text || '' }} />
+                <HeaderTag className={`font-bold text-gray-900 leading-tight ${sizeClasses}`} dangerouslySetInnerHTML={{ __html: block.data.text || '' }} />
               </div>
             );
           case 'list':

@@ -54,10 +54,10 @@ export default async function TagPage({ params }) {
   }
 
   return (
-    <div className="container mx-auto px-4 py-12">
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="mb-12">
         <p className="text-lg text-gray-500">Материалы по тегу</p>
-        <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900"># {tag.name}</h1>
+        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-gray-900"># {tag.name}</h1>
       </div>
 
       {/* --- СЕТКА СТАТЕЙ (аналогично главной странице) --- */}
