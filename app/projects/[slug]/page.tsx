@@ -1,7 +1,7 @@
 
 
 
-import { prisma } from '@/lib/prisma';
+import prisma from '@/lib/prisma';
 import BlockRenderer from '@/components/BlockRenderer';
 import type { EditorJsBlock } from '@/types/blocks';
 
@@ -31,7 +31,8 @@ export default async function ProjectPage({ params }: { params: { slug: string }
           b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
       );
     }
-  } catch {
+  } catch (error) {
+    console.error('Error parsing project content:', error);
     // blocks останется пустым
   }
 
