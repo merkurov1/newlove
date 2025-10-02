@@ -220,7 +220,7 @@ export default async function HomePage() {
       <PersonSchema
         name="Anton Merkurov"
         url="https://merkurov.love"
-        image="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/anton-photo.jpg"
+        image="https://nzasvblckrwsnlxsqfma.supabase.co/storage/v1/object/public/media/anton-photo.jpg"
         jobTitle="Digital Strategist & Media Expert"
         description="Эксперт по медиа, технологиям и цифровым стратегиям. Автор блога о современном искусстве и digital-трендах."
         sameAs={[
