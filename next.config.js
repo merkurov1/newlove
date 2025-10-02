@@ -5,7 +5,13 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true
   },
-  // <<< ДОБАВЛЕННЫЙ БЛОК ДЛЯ РАБОТЫ ЛОГОТИПА
+  // Оптимизация для Vercel
+  output: 'standalone',
+  experimental: {
+    // Оптимизация для production
+    optimizeCss: true,
+  },
+  // Конфигурация изображений
   images: {
     remotePatterns: [
       {
@@ -21,6 +27,10 @@ const nextConfig = {
         pathname: '/**',
       }
     ],
+    // Поддержка локальных изображений из /public/uploads
+    domains: [],
+    unoptimized: false,
+    formats: ['image/webp', 'image/avif'],
   },
 };
 

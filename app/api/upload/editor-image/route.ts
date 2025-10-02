@@ -11,14 +11,15 @@ const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
 export async function POST(req: NextRequest) {
   console.log('🚀 API /upload/editor-image: Начинаю обработку запроса');
   
-  // Проверка аутентификации
-  const session = await getServerSession(authOptions);
-  console.log('👤 Сессия пользователя:', {
-    exists: !!session,
-    userId: session?.user?.id,
-    role: (session?.user as any)?.role,
-    email: session?.user?.email
-  });
+  try {
+    // Проверка аутентификации
+    const session = await getServerSession(authOptions);
+    console.log('👤 Сессия пользователя:', {
+      exists: !!session,
+      userId: session?.user?.id,
+      role: (session?.user as any)?.role,
+      email: session?.user?.email
+    });
   
   if (!session?.user || (session.user as any).role !== 'ADMIN') {
     console.log('🚫 Отказано в доступе: пользователь не является администратором');
@@ -80,5 +81,9 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('💥 Ошибка при сохранении файла:', error);
     return NextResponse.json({ success: false, error: 'Failed to save file' }, { status: 500 });
+  }
+  } catch (error) {
+    console.error('💥 Критическая ошибка в API:', error);
+    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
 }

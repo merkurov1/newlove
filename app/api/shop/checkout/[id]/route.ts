@@ -2,12 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { sanitizeString } from '@/lib/validation/security';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+// Проверка переменных окружения при билде
+if (!process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV !== 'development') {
+  console.warn('⚠️ STRIPE_SECRET_KEY not configured');
+}
+
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2025-08-27.basil',
-});
+}) : null;
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    // Проверка конфигурации Stripe
+    if (!stripe) {
+      console.error('❌ Stripe not configured');
+      return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
+    }
+
     const { id } = params;
     
     // Валидация ID продукта
