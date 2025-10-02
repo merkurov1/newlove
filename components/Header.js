@@ -14,7 +14,7 @@ export default function Header({ projects, settings }) {
 
   const site_name = settings?.site_name || 'Anton Merkurov';
   const slogan = settings?.slogan || 'Art x Love x Money';
-  const logoUrl = settings?.logo_url || 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png';
+  const logoUrl = settings?.logo_url || 'https://nzasvblckrwsnlxsqfma.supabase.co/storage/v1/object/public/media/logo.png';
 
   useEffect(() => {
     const handleResize = () => {

@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 import BlockRenderer from '@/components/BlockRenderer';
+import SocialShare from '@/components/SocialShare';
 
 async function getContent(slug) {
   console.log('🔍 getContent called for slug:', slug);
@@ -194,6 +195,12 @@ function ArticleComponent({ article }) {
             </div>
           )}
         </div>
+        
+        <SocialShare 
+          title={article.title}
+          url={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/${article.slug}`}
+          description={generateDescription(blocks)}
+        />
       </article>
     </div>
   );
