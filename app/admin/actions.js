@@ -304,7 +304,7 @@ export async function createProduct(formData) {
     data: { 
       name, 
       slug, 
-      price: parseInt(price), 
+      price: parseFloat(price), 
       description, 
       image,
       active: true
@@ -338,7 +338,7 @@ export async function updateProduct(formData) {
     data: { 
       name, 
       slug, 
-      price: parseInt(price), 
+      price: parseFloat(price), 
       description, 
       image,
       active

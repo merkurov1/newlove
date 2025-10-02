@@ -165,10 +165,10 @@ model Tag {
 
 // --- МОДЕЛЬ ПРОДУКТОВ ---
 model Product {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String
   slug        String   @unique
-  price       Int
+  price       Decimal  @db.Decimal(10,2)
   description String?
   image       String?
   active      Boolean  @default(true)
