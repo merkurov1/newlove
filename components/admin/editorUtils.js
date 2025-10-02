@@ -5,30 +5,51 @@
  * Универсальная функция загрузки изображений для всех редакторов
  * @param {File} file - Файл изображения
  * @param {string} componentName - Имя компонента для логирования (например, 'TiptapEditor')
+ * @param {boolean} useSupabase - Использовать Supabase Storage (рекомендуется для Vercel)
  * @returns {Promise<{success: boolean, url?: string, error?: string}>}
  */
-export async function uploadImage(file, componentName = 'Editor') {
+export async function uploadImage(file, componentName = 'Editor', useSupabase = true) {
   console.log(`🖼️ ${componentName}: Начинаю загрузку изображения:`, file.name);
+  console.log(`📊 ${componentName}: Детали файла:`, {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    lastModified: file.lastModified,
+    useSupabase
+  });
   
+  const endpoint = useSupabase ? '/api/upload/editor-image-supabase' : '/api/upload/editor-image';
   const formData = new FormData();
   formData.append('image', file);
   
   try {
-    const res = await fetch('/api/upload/editor-image', {
+    console.log(`🚀 ${componentName}: Отправляю запрос на ${endpoint}`);
+    const res = await fetch(endpoint, {
       method: 'POST',
       body: formData,
       // NextAuth автоматически передает cookies с сессией
     });
     
     console.log(`📡 ${componentName}: Ответ сервера статус:`, res.status);
+    console.log(`📋 ${componentName}: Заголовки ответа:`, Object.fromEntries(res.headers.entries()));
     
     if (!res.ok) {
       const errorText = await res.text();
       console.error(`❌ ${componentName}: Ошибка HTTP`, res.status, errorText);
-      return { 
-        success: false, 
-        error: `HTTP ${res.status}: ${errorText}` 
-      };
+      
+      // Попытаемся распарсить JSON из ошибки
+      try {
+        const errorData = JSON.parse(errorText);
+        return { 
+          success: false, 
+          error: errorData.error || `HTTP ${res.status}` 
+        };
+      } catch {
+        return { 
+          success: false, 
+          error: `HTTP ${res.status}: ${errorText}` 
+        };
+      }
     }
     
     const data = await res.json();
@@ -44,14 +65,14 @@ export async function uploadImage(file, componentName = 'Editor') {
       console.error(`❌ ${componentName}: Неудачная загрузка:`, data);
       return { 
         success: false, 
-        error: data.error || 'Неизвестная ошибка' 
+        error: data.error || 'Неизвестная ошибка сервера' 
       };
     }
   } catch (error) {
     console.error(`💥 ${componentName}: Исключение при загрузке:`, error);
     return { 
       success: false, 
-      error: error.message 
+      error: `Network error: ${error.message}` 
     };
   }
 }
