@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Suspense } from 'react';
 import { getFirstImage } from '@/lib/contentUtils';
+import SafeImage from '@/components/SafeImage';
 
 // Fallback-аватар по первой букве
 function FallbackAvatar({ name }) {
@@ -84,7 +85,7 @@ async function ProfileContent({ username }) {
       {/* --- БЛОК С ИНФОРМАЦИЕЙ О ПОЛЬЗОВАТЕЛЕ --- */}
       <div className="flex flex-col items-center text-center mb-16">
         {user.image ? (
-          <Image 
+          <SafeImage 
             src={user.image}
             alt={user.name || 'Аватар'}
             width={128}
@@ -121,7 +122,7 @@ async function ProfileContent({ username }) {
                   <div key={article.id} className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden">
                     {previewImage && (
                       <Link href={`/${article.slug}`} className="block relative w-full h-48">
-                        <Image src={previewImage} alt={article.title} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <SafeImage src={previewImage} alt={article.title} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-300" />
                       </Link>
                     )}
                     <div className="p-6 flex-grow flex flex-col">
@@ -161,7 +162,7 @@ export default function UserProfilePage({ params }) {
       {/* --- БЛОК С ИНФОРМАЦИЕЙ О ПОЛЬЗОВАТЕЛЕ --- */}
       <div className="flex flex-col items-center text-center mb-16">
         {user.image ? (
-          <Image 
+          <SafeImage 
             src={user.image}
             alt={user.name || 'Аватар'}
             width={128}
@@ -198,7 +199,7 @@ export default function UserProfilePage({ params }) {
                   <div key={article.id} className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden">
                     {previewImage && (
                       <Link href={`/${article.slug}`} className="block relative w-full h-48">
-                        <Image src={previewImage} alt={article.title} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <SafeImage src={previewImage} alt={article.title} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-300" />
                       </Link>
                     )}
                     <div className="p-6 flex-grow flex flex-col">
