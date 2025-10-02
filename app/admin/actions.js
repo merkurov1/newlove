@@ -73,6 +73,12 @@ export async function createArticle(formData) {
   );
   if (validBlocks.length === 0) throw new Error('No valid blocks');
   
+  // Валидация authorId - должен быть строкой для cuid
+  const authorId = session.user.id?.toString();
+  if (!authorId || authorId.length < 20) {
+    throw new Error('Invalid author ID format');
+  }
+  
   await prisma.article.create({
     data: { 
       title, 
@@ -80,7 +86,7 @@ export async function createArticle(formData) {
       slug, 
       published, 
       publishedAt: published ? new Date() : null, 
-      authorId: session.user.id,
+      authorId: authorId,
       tags: { connectOrCreate: tagsToConnect },
     },
   });
@@ -98,6 +104,11 @@ export async function updateArticle(formData) {
   const tagsToConnect = processTagsForPrisma(formData.get('tags')?.toString());
 
   if (!id || !title || !contentRaw || !slug) throw new Error('All fields are required.');
+  
+  // Валидация id - должен быть строкой для cuid
+  if (!id || id.length < 20) {
+    throw new Error('Invalid article ID format');
+  }
   
   // Валидация JSON контента
   let blocks;
@@ -272,6 +283,81 @@ export async function updateProfile(prevState, formData) {
   }
 }
 
+// --- ТОВАРЫ (Products) ---
+export async function createProduct(formData) {
+  const session = await verifyAdmin();
+  const name = formData.get('name')?.toString();
+  const slug = formData.get('slug')?.toString();
+  const price = formData.get('price')?.toString();
+  const description = formData.get('description')?.toString();
+  const image = formData.get('image')?.toString();
+
+  if (!name || !slug || !price) throw new Error('Name, slug and price are required.');
+
+  // Проверка уникальности slug
+  const existing = await prisma.product.findUnique({ where: { slug } });
+  if (existing) {
+    throw new Error('Товар с таким slug уже существует. Пожалуйста, выберите другой URL.');
+  }
+
+  await prisma.product.create({
+    data: { 
+      name, 
+      slug, 
+      price: parseInt(price), 
+      description, 
+      image,
+      active: true
+    },
+  });
+  revalidatePath('/admin/products');
+  revalidatePath('/shop');
+  redirect('/admin/products');
+}
+
+export async function updateProduct(formData) {
+  await verifyAdmin();
+  const id = formData.get('id')?.toString();
+  const name = formData.get('name')?.toString();
+  const slug = formData.get('slug')?.toString();
+  const price = formData.get('price')?.toString();
+  const description = formData.get('description')?.toString();
+  const image = formData.get('image')?.toString();
+  const active = formData.get('active') === 'on';
+
+  if (!id || !name || !slug || !price) throw new Error('All required fields must be filled.');
+
+  // Проверка уникальности slug (исключая текущий товар)
+  const existing = await prisma.product.findUnique({ where: { slug } });
+  if (existing && existing.id !== id) {
+    throw new Error('Товар с таким slug уже существует. Пожалуйста, выберите другой URL.');
+  }
+
+  await prisma.product.update({
+    where: { id: id },
+    data: { 
+      name, 
+      slug, 
+      price: parseInt(price), 
+      description, 
+      image,
+      active
+    },
+  });
+  revalidatePath('/admin/products');
+  revalidatePath('/shop');
+  redirect('/admin/products');
+}
+
+export async function deleteProduct(formData) {
+  await verifyAdmin();
+  const id = formData.get('id')?.toString();
+  if (!id) { throw new Error('Product ID is required.'); }
+  
+  await prisma.product.delete({ where: { id: id } });
+  revalidatePath('/admin/products');
+  revalidatePath('/shop');
+}
 
 // --- РАССЫЛКИ И ПОДПИСКИ (без изменений) ---
 export async function subscribeToNewsletter(prevState, formData) { /* ... */ }

@@ -34,7 +34,6 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   const [published, setPublished] = useState(safeInitial.published || false);
   const [error, setError] = useState('');
   const { data: session, status } = useSession();
-  const authorId = safeInitial.authorId || session?.user?.id || '';
   const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
 
   function validateBlocks(blocks: EditorJsBlock[]) {
@@ -59,7 +58,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   }
 
   async function handleSubmit(e: React.FormEvent) {
-    if (status !== 'authenticated' || !authorId) {
+    if (status !== 'authenticated') {
       e.preventDefault();
       setError('Ошибка: не определён автор. Войдите в систему.');
       return false;
@@ -104,7 +103,6 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       </div>
   <TagInput initialTags={safeInitial.tags} onChange={setTags} />
   <BlockEditor value={content} onChange={setContent} />
-      <input type="hidden" name="authorId" value={authorId} />
       <input type="hidden" name="tags" value={JSON.stringify(tags)} />
   <textarea name="content" value={JSON.stringify(content)} readOnly hidden />
       {error && <div className="text-red-600 text-sm font-medium">{error}</div>}
