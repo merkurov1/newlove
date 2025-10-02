@@ -16,8 +16,6 @@ interface ProjectPreview {
 }
 
 export default async function ProjectsPage() {
-  console.log('🔍 ProjectsPage: Загрузка списка проектов...');
-  
   // Запрашиваем только опубликованные проекты через Prisma
   const projects = await prisma.project.findMany({
     where: { published: true },
@@ -30,8 +28,6 @@ export default async function ProjectsPage() {
     },
     orderBy: { publishedAt: 'desc' },
   });
-
-  console.log('🔍 ProjectsPage: Найдено проектов:', projects.length);
 
   if (!projects || projects.length === 0) {
     return (
