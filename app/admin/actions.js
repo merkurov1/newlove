@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { Resend } from 'resend';
 import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
+import { createId } from '@paralleldrive/cuid2';
 
 async function verifyAdmin() {
   const session = await getServerSession(authOptions);
@@ -34,7 +35,11 @@ function processTagsForPrisma(tagsString) {
     
     return tagNames.map(name => ({
       where: { name: name },
-      create: { name: name, slug: slugify(name) },
+      create: { 
+        id: createId(), // Явно генерируем CUID для тега
+        name: name, 
+        slug: slugify(name) 
+      },
     }));
   } catch (e) {
     return [];
@@ -79,8 +84,12 @@ export async function createArticle(formData) {
     throw new Error('Invalid author ID format');
   }
   
+  // Явно генерируем CUID для статьи
+  const articleId = createId();
+  
   await prisma.article.create({
     data: { 
+      id: articleId, // Явно указываем CUID
       title, 
       content: JSON.stringify(validBlocks), // Сохраняем как строку для совместимости с String полем
       slug, 
@@ -184,8 +193,12 @@ export async function createProject(formData) {
   );
   if (validBlocks.length === 0) throw new Error('No valid blocks');
 
+  // Явно генерируем CUID для проекта
+  const projectId = createId();
+
   await prisma.project.create({
     data: { 
+      id: projectId, // Явно указываем CUID
       title, content: JSON.stringify(validBlocks), slug, published, 
       publishedAt: published ? new Date() : null, 
       authorId: session.user.id,
@@ -300,8 +313,12 @@ export async function createProduct(formData) {
     throw new Error('Товар с таким slug уже существует. Пожалуйста, выберите другой URL.');
   }
 
+  // Явно генерируем CUID для продукта
+  const productId = createId();
+
   await prisma.product.create({
     data: { 
+      id: productId, // Явно указываем CUID
       name, 
       slug, 
       price: parseFloat(price), 

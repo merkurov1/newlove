@@ -27,6 +27,11 @@ export const metadata = {
     template: '%s | Anton Merkurov', // Шаблон для дочерних страниц (напр. "Моя статья | Anton Merkurov")
   },
   description: "Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.",
+  keywords: ['Антон Меркуров', 'медиа', 'технологии', 'digital', 'искусство', 'блог', 'статьи', 'маркетинг'],
+  authors: [{ name: 'Anton Merkurov', url: 'https://merkurov.love' }],
+  creator: 'Anton Merkurov',
+  publisher: 'Anton Merkurov',
+  category: 'Technology',
   // Метаданные для превью в соцсетях (Open Graph)
   openGraph: {
     title: 'Anton Merkurov | Art x Love x Money',
@@ -39,10 +44,20 @@ export const metadata = {
         url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png', // Пример
         width: 1200,
         height: 630,
+        alt: 'Anton Merkurov - Art x Love x Money',
       },
     ],
     locale: 'ru_RU',
     type: 'website',
+  },
+  // Twitter Card
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Anton Merkurov | Art x Love x Money',
+    description: 'Медиа, технологии и искусство',
+    images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png'],
+    creator: '@merkurov',
+    site: '@merkurov',
   },
   // Дополнительные метаданные
   robots: {
@@ -61,6 +76,21 @@ export const metadata = {
     icon: '/favicon.ico',
     // shortcut: '/shortcut-icon.png',
     // apple: '/apple-touch-icon.png',
+  },
+  // Верификация для поисковых систем
+  verification: {
+    // google: 'your-google-verification-code',
+    // yandex: 'your-yandex-verification-code',
+  },
+  // Альтернативные URL
+  alternates: {
+    canonical: 'https://merkurov.love',
+    languages: {
+      'ru-RU': 'https://merkurov.love',
+    },
+    types: {
+      'application/rss+xml': 'https://merkurov.love/rss.xml',
+    },
   },
 };
 
@@ -101,6 +131,27 @@ export default async function RootLayout({ children }) {
   return (
     // Применяем шрифт через CSS переменную
     <html lang="ru" className={`${inter.variable} font-sans`}>
+      <head>
+        {/* Preload critical resources */}
+        <link
+          rel="preload"
+          href={settings.logo_url}
+          as="image"
+          type="image/png"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png"
+          as="image"
+          type="image/png"
+          crossOrigin="anonymous"
+        />
+        {/* DNS prefetch for external domains */}
+        <link rel="dns-prefetch" href="//txvkqcitalfbjytmnawq.supabase.co" />
+        <link rel="dns-prefetch" href="//fonts.googleapis.com" />
+        <link rel="dns-prefetch" href="//vercel.com" />
+      </head>
       <body className="bg-white text-gray-800 min-h-screen">
         <AuthProvider>
           <div className="flex flex-col min-h-screen">
