@@ -6,6 +6,10 @@ import { JWT } from 'next-auth/jwt';
 export enum Role {
   USER = 'USER',
   ADMIN = 'ADMIN',
+  SUBSCRIBER = 'SUBSCRIBER',
+  PATRON = 'PATRON', 
+  PREMIUM = 'PREMIUM',
+  SPONSOR = 'SPONSOR',
 }
 
 declare module 'next-auth' {
