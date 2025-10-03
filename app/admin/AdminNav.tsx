@@ -14,6 +14,8 @@ const navItems = [
   { href: '/admin/media', label: 'Медиа', icon: '🖼️' },
   { href: '/admin/banners', label: 'Баннеры', icon: '🎨' },
   { href: '/admin/orders', label: 'Заказы', icon: '💬' },
+  { href: '/lab', label: 'Lab', icon: '🧪' },
+  { href: '/kit', label: 'Kit', icon: '🛠️' },
 ];
 
 export default function AdminNav() {
