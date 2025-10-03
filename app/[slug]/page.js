@@ -7,6 +7,8 @@ import Image from 'next/image';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 import BlockRenderer from '@/components/BlockRenderer';
 import SocialShare from '@/components/SocialShare';
+import EditButton from '@/components/EditButton';
+import { EditProvider } from '@/components/EditContext';
 
 async function getContent(slug) {
   console.log('🔍 getContent called for slug:', slug);
@@ -149,60 +151,71 @@ function ArticleComponent({ article }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <article>
-        <header className="mb-8">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">{article.title}</h1>
-          
-          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0 text-sm text-gray-600 mb-6">
-            {article.author?.image && (
-              <Image
-                src={article.author.image}
-                alt={article.author.name || 'Автор'}
-                width={32}
-                height={32}
-                className="rounded-full"
-              />
+    <EditProvider value={{ 
+      contentType: 'article', 
+      contentId: article.id, 
+      slug: article.slug,
+      title: article.title,
+      isEditable: true 
+    }}>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <article>
+          <header className="mb-8">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">{article.title}</h1>
+            
+            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0 text-sm text-gray-600 mb-6">
+              {article.author?.image && (
+                <Image
+                  src={article.author.image}
+                  alt={article.author.name || 'Автор'}
+                  width={32}
+                  height={32}
+                  className="rounded-full"
+                />
+              )}
+              <span>Автор: {article.author?.name || 'Неизвестен'}</span>
+              <span>•</span>
+              <time dateTime={article.createdAt}>
+                {new Date(article.createdAt).toLocaleDateString('ru-RU')}
+              </time>
+            </div>
+            
+            {article.tags && article.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-6">
+                {article.tags.map((tag) => (
+                  <Link
+                    key={tag.id}
+                    href={`/tags/${tag.name}`}
+                    className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full hover:bg-blue-200"
+                  >
+                    #{tag.name}
+                  </Link>
+                ))}
+              </div>
             )}
-            <span>Автор: {article.author?.name || 'Неизвестен'}</span>
-            <span>•</span>
-            <time dateTime={article.createdAt}>
-              {new Date(article.createdAt).toLocaleDateString('ru-RU')}
-            </time>
+          </header>
+          
+          <div className="prose prose-lg max-w-none">
+            {blocks.length > 0 ? (
+              <BlockRenderer blocks={blocks} />
+            ) : (
+              <div className="text-gray-500 italic py-8">
+                Содержимое статьи пока не добавлено.
+              </div>
+            )}
           </div>
           
-          {article.tags && article.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-6">
-              {article.tags.map((tag) => (
-                <Link
-                  key={tag.id}
-                  href={`/tags/${tag.name}`}
-                  className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full hover:bg-blue-200"
-                >
-                  #{tag.name}
-                </Link>
-              ))}
-            </div>
-          )}
-        </header>
+          <SocialShare 
+            title={article.title}
+            url={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/${article.slug}`}
+            description={generateDescription(article.content)}
+          />
+        </article>
         
-        <div className="prose prose-lg max-w-none">
-          {blocks.length > 0 ? (
-            <BlockRenderer blocks={blocks} />
-          ) : (
-            <div className="text-gray-500 italic py-8">
-              Содержимое статьи пока не добавлено.
-            </div>
-          )}
-        </div>
-        
-        <SocialShare 
-          title={article.title}
-          url={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/${article.slug}`}
-          description={generateDescription(article.content)}
-        />
-      </article>
-    </div>
+        {/* Floating Edit Button - автоматически получает контекст */}
+        <EditButton variant="floating" />
+      </div>
+    </EditProvider>
   );
 }
 
@@ -226,22 +239,33 @@ function ProjectComponent({ project }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <article>
-        <header className="mb-8">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">{project.title}</h1>
-        </header>
+    <EditProvider value={{ 
+      contentType: 'project', 
+      contentId: project.id, 
+      slug: project.slug,
+      title: project.title,
+      isEditable: true 
+    }}>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <article>
+          <header className="mb-8">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">{project.title}</h1>
+          </header>
+          
+          <div className="prose prose-lg max-w-none">
+            {blocks.length > 0 ? (
+              <BlockRenderer blocks={blocks} />
+            ) : (
+              <div className="text-gray-500 italic py-8">
+                Содержимое проекта пока не добавлено.
+              </div>
+            )}
+          </div>
+        </article>
         
-        <div className="prose prose-lg max-w-none">
-          {blocks.length > 0 ? (
-            <BlockRenderer blocks={blocks} />
-          ) : (
-            <div className="text-gray-500 italic py-8">
-              Содержимое проекта пока не добавлено.
-            </div>
-          )}
-        </div>
-      </article>
-    </div>
+        {/* Floating Edit Button - автоматически получает контекст */}
+        <EditButton variant="floating" />
+      </div>
+    </EditProvider>
   );
 }
