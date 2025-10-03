@@ -19,6 +19,7 @@
     "db:help": "node scripts/migration-toolkit.js help"
   },
   "dependencies": {
+    "@atproto/api": "^0.17.0",
     "@editorjs/code": "^2.9.3",
     "@editorjs/editorjs": "^2.31.0",
     "@editorjs/embed": "^2.7.6",

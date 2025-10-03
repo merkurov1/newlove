@@ -1,5 +1,6 @@
 // app/lab/bluesky/page.tsx
 import AuthGuard from '@/components/AuthGuard';
+import BlueskyFeed from '@/components/BlueskyFeed';
 import Link from 'next/link';
 
 export const metadata = {
@@ -35,12 +36,12 @@ export default function BlueskyLabPage() {
           <div className="flex items-center">
             <div className="bg-blue-100 rounded-full p-2 mr-4">
               <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-blue-900">В разработке</h3>
-              <p className="text-blue-700">Тестируется AT Protocol и возможности интеграции</p>
+              <h3 className="text-lg font-semibold text-blue-900">🎉 Готово к работе!</h3>
+              <p className="text-blue-700">Интеграция с Bluesky активна. Ниже вы можете видеть последние посты.</p>
             </div>
           </div>
         </div>
@@ -92,40 +93,26 @@ export default function BlueskyLabPage() {
           </div>
         </div>
 
-        {/* Demo Area */}
+        {/* Bluesky Feed Demo */}
         <div className="bg-gray-50 rounded-xl p-8 mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">🧪 Демо-зона</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">� Живая лента Bluesky</h2>
           
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">🚧</div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">В разработке</h3>
-              <p className="text-gray-600 max-w-md mx-auto">
-                Здесь будет интерактивная демонстрация интеграции с Bluesky. 
-                Пока идет изучение AT Protocol и разработка API.
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-gray-600">
+                Прямая интеграция с аккаунтом <strong>@merkurov.love</strong>
               </p>
-              
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg mx-auto">
-                <div className="text-center">
-                  <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-2">
-                    <span className="text-blue-600 font-semibold">1</span>
-                  </div>
-                  <p className="text-sm text-gray-600">Подключение аккаунта</p>
-                </div>
-                <div className="text-center">
-                  <div className="bg-gray-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-2">
-                    <span className="text-gray-400 font-semibold">2</span>
-                  </div>
-                  <p className="text-sm text-gray-400">Синхронизация постов</p>
-                </div>
-                <div className="text-center">
-                  <div className="bg-gray-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-2">
-                    <span className="text-gray-400 font-semibold">3</span>
-                  </div>
-                  <p className="text-sm text-gray-400">Автопостинг</p>
-                </div>
-              </div>
+              <a 
+                href="https://bsky.app/profile/merkurov.love"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 transition-colors text-sm"
+              >
+                Открыть в Bluesky →
+              </a>
             </div>
+            
+            <BlueskyFeed />
           </div>
         </div>
 
@@ -139,14 +126,23 @@ export default function BlueskyLabPage() {
               открытый протокол для децентрализованных социальных сетей.
             </p>
             
-            <h3>Этапы интеграции</h3>
+            <h3>Реализованные возможности</h3>
             <ol>
-              <li><strong>Изучение API</strong> — анализ возможностей AT Protocol</li>
-              <li><strong>Авторизация</strong> — настройка OAuth для Bluesky</li>
-              <li><strong>Базовые операции</strong> — создание и чтение постов</li>
-              <li><strong>Автоматизация</strong> — настройка автопостинга статей</li>
-              <li><strong>UI интеграция</strong> — добавление в интерфейс сайта</li>
+              <li><strong>✅ AT Protocol API</strong> — подключение к Bluesky через @atproto/api</li>
+              <li><strong>✅ Авторизация</strong> — безопасная аутентификация через App Password</li>
+              <li><strong>✅ Чтение постов</strong> — получение ленты пользователя в реальном времени</li>
+              <li><strong>✅ UI интеграция</strong> — красивое отображение постов в дизайне сайта</li>
+              <li><strong>🔄 Автопостинг</strong> — планируется автоматическая публикация статей</li>
             </ol>
+            
+            <h3>Технические особенности</h3>
+            <ul>
+              <li>Backend proxy для безопасности credentials</li>
+              <li>Поддержка изображений и внешних ссылок</li>
+              <li>Lazy loading с кнопкой "Загрузить ещё"</li>
+              <li>Адаптивный дизайн для мобильных устройств</li>
+              <li>Обработка ошибок и loading состояний</li>
+            </ul>
             
             <h3>Преимущества</h3>
             <ul>
