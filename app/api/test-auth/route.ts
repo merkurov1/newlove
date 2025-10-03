@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
+import { getRoleEmoji, getRoleName } from '@/lib/roles';
 
 export async function GET() {
   try {
@@ -15,6 +16,8 @@ export async function GET() {
           email: session.user?.email,
           name: session.user?.name,
           role: session.user?.role,
+          roleEmoji: getRoleEmoji(session.user?.role),
+          roleName: getRoleName(session.user?.role),
           username: session.user?.username,
         },
         hasSupabaseToken: !!session.supabaseAccessToken
