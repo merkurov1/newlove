@@ -296,85 +296,8 @@ export async function updateProfile(prevState, formData) {
   }
 }
 
-// --- ТОВАРЫ (Products) ---
-export async function createProduct(formData) {
-  const session = await verifyAdmin();
-  const name = formData.get('name')?.toString();
-  const slug = formData.get('slug')?.toString();
-  const price = formData.get('price')?.toString();
-  const description = formData.get('description')?.toString();
-  const image = formData.get('image')?.toString();
-
-  if (!name || !slug || !price) throw new Error('Name, slug and price are required.');
-
-  // Проверка уникальности slug
-  const existing = await prisma.product.findUnique({ where: { slug } });
-  if (existing) {
-    throw new Error('Товар с таким slug уже существует. Пожалуйста, выберите другой URL.');
-  }
-
-  // Явно генерируем CUID для продукта
-  const productId = createId();
-
-  await prisma.product.create({
-    data: { 
-      id: productId, // Явно указываем CUID
-      name, 
-      slug, 
-      price: parseFloat(price), 
-      description, 
-      image,
-      active: true
-    },
-  });
-  revalidatePath('/admin/products');
-  revalidatePath('/shop');
-  redirect('/admin/products');
-}
-
-export async function updateProduct(formData) {
-  await verifyAdmin();
-  const id = formData.get('id')?.toString();
-  const name = formData.get('name')?.toString();
-  const slug = formData.get('slug')?.toString();
-  const price = formData.get('price')?.toString();
-  const description = formData.get('description')?.toString();
-  const image = formData.get('image')?.toString();
-  const active = formData.get('active') === 'on';
-
-  if (!id || !name || !slug || !price) throw new Error('All required fields must be filled.');
-
-  // Проверка уникальности slug (исключая текущий товар)
-  const existing = await prisma.product.findUnique({ where: { slug } });
-  if (existing && existing.id !== id) {
-    throw new Error('Товар с таким slug уже существует. Пожалуйста, выберите другой URL.');
-  }
-
-  await prisma.product.update({
-    where: { id: id },
-    data: { 
-      name, 
-      slug, 
-      price: parseFloat(price), 
-      description, 
-      image,
-      active
-    },
-  });
-  revalidatePath('/admin/products');
-  revalidatePath('/shop');
-  redirect('/admin/products');
-}
-
-export async function deleteProduct(formData) {
-  await verifyAdmin();
-  const id = formData.get('id')?.toString();
-  if (!id) { throw new Error('Product ID is required.'); }
-  
-  await prisma.product.delete({ where: { id: id } });
-  revalidatePath('/admin/products');
-  revalidatePath('/shop');
-}
+// --- ТОВАРЫ (Products) - УДАЛЕНО ---
+// Все функции для работы с товарами убраны
 
 // --- РАССЫЛКИ И ПОДПИСКИ (без изменений) ---
 export async function subscribeToNewsletter(prevState, formData) { /* ... */ }

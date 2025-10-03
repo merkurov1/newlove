@@ -163,17 +163,5 @@ model Tag {
   updatedAt DateTime  @updatedAt
 }
 
-// --- МОДЕЛЬ ПРОДУКТОВ ---
-model Product {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  price       Decimal  @db.Decimal(10,2)
-  description String?
-  image       String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("products")
-}
+// --- МОДЕЛЬ ПРОДУКТОВ УДАЛЕНА ---
+// Убираем модель Product полностью
