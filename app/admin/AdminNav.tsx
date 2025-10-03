@@ -12,6 +12,7 @@ const navItems = [
   { href: '/admin/subscribers', label: 'Подписчики', icon: '📧' },
   { href: '/admin/users', label: 'Пользователи', icon: '👥' },
   { href: '/admin/media', label: 'Медиа', icon: '🖼️' },
+  { href: '/admin/banners', label: 'Баннеры', icon: '🎨' },
   { href: '/admin/orders', label: 'Заказы', icon: '💬' },
 ];
 

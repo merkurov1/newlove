@@ -7,6 +7,7 @@ import SafeImage from '@/components/SafeImage';
 import importDynamic from 'next/dynamic';
 import { getFirstImage } from '@/lib/contentUtils';
 import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
+import WelcomeBanner from '@/components/WelcomeBanner';
 
 const FadeInSection = importDynamic(() => import('@/components/FadeInSection'), { ssr: false });
 
@@ -105,15 +106,8 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-12">
-      {/* Hero Section */}
-      <section aria-labelledby="hero-heading" className="text-center py-8">
-        <h1 id="hero-heading" className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-          Добро пожаловать в мир медиа и технологий
-        </h1>
-        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-          Исследуем пересечение искусства, любви и денег в цифровую эпоху
-        </p>
-      </section>
+      {/* Smart Welcome Banner */}
+      <WelcomeBanner />
 
       {/* Articles Section */}
       <section aria-labelledby="articles-heading">
