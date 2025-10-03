@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Получаем пользователей с информацией о подписке
     const users = await prisma.user.findMany({
       orderBy: { name: 'asc' },
       select: {
@@ -20,10 +21,40 @@ export async function GET(request: NextRequest) {
         email: true,
         role: true,
         image: true,
+        bio: true,
+        website: true,
+        subscription: {
+          select: {
+            id: true,
+            email: true,
+            createdAt: true,
+          }
+        },
+        _count: {
+          select: {
+            articles: true,
+            projects: true,
+            messages: true,
+          }
+        }
       },
     });
 
-    return NextResponse.json(users);
+    // Также получаем подписчиков без аккаунтов
+    const orphanSubscribers = await prisma.subscriber.findMany({
+      where: { userId: null },
+      select: {
+        id: true,
+        email: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return NextResponse.json({ 
+      users, 
+      orphanSubscribers 
+    });
   } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(
