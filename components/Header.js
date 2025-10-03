@@ -55,12 +55,29 @@ export default function Header({ projects, settings }) {
                   </Link>
                 </li>
               ))}
-              <li>
-                <Link href="/talks" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
-                  Talks
-                  <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
-                </Link>
-              </li>
+              {/* Защищенные разделы только для авторизованных */}
+              {status === 'authenticated' && (
+                <>
+                  <li>
+                    <Link href="/talks" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                      Talks
+                      <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/lab" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                      Lab
+                      <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/kit" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                      Kit
+                      <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
+                    </Link>
+                  </li>
+                </>
+              )}
             </ul>
           </nav>
 
@@ -99,9 +116,20 @@ export default function Header({ projects, settings }) {
                 <Link href={`/${project.slug}`} onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">{project.title}</Link>
               </li>
             ))}
-            <li>
-              <Link href="/talks" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Talks</Link>
-            </li>
+            {/* Защищенные разделы только для авторизованных */}
+            {status === 'authenticated' && (
+              <>
+                <li>
+                  <Link href="/talks" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Talks</Link>
+                </li>
+                <li>
+                  <Link href="/lab" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Lab</Link>
+                </li>
+                <li>
+                  <Link href="/kit" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Kit</Link>
+                </li>
+              </>
+            )}
             {/* Ссылки из UserSidebar перенесены сюда */}
             {status === 'authenticated' && (
               (() => {
