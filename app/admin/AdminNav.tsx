@@ -7,13 +7,14 @@ const navItems = [
   { href: '/admin', label: 'Панель', icon: '📊' },
   { href: '/admin/articles', label: 'Статьи', icon: '📄' },
   { href: '/admin/projects', label: 'Проекты', icon: '🚀' },
-  { href: '/admin/products', label: 'Товары', icon: '🛍️' },
+  // { href: '/admin/products', label: 'Товары', icon: '🛍️' }, // Отключаем товары
   { href: '/admin/letters', label: 'Письма', icon: '💌' },
   { href: '/admin/subscribers', label: 'Подписчики', icon: '📧' },
   { href: '/admin/users', label: 'Пользователи', icon: '👥' },
   { href: '/admin/media', label: 'Медиа', icon: '🖼️' },
   { href: '/admin/banners', label: 'Баннеры', icon: '🎨' },
-  { href: '/admin/orders', label: 'Заказы', icon: '💬' },
+  // { href: '/admin/orders', label: 'Заказы', icon: '💬' }, // Отключаем заказы
+  { href: '/roles-demo', label: 'Роли', icon: '🎭' }, // Добавляем роли
   { href: '/lab', label: 'Lab', icon: '🧪' },
   { href: '/kit', label: 'Kit', icon: '🛠️' },
 ];
