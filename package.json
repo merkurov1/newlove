@@ -7,7 +7,16 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "vercel-build": "npm run db:deploy && npm run build",
+    "db:status": "node scripts/migration-toolkit.js status",
+    "db:validate": "node scripts/migration-toolkit.js validate",
+    "db:generate": "node scripts/migration-toolkit.js generate",
+    "db:create": "node scripts/migration-toolkit.js create",
+    "db:deploy": "npx prisma migrate deploy",
+    "db:backup": "node scripts/migration-toolkit.js backup",
+    "db:workflow": "node scripts/migration-toolkit.js workflow",
+    "db:help": "node scripts/migration-toolkit.js help"
   },
   "dependencies": {
     "@editorjs/code": "^2.9.3",

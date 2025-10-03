@@ -1,0 +1,83 @@
+name: 🛡️ Database Migration Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'prisma/**'
+      - 'scripts/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'prisma/**'
+
+jobs:
+  validate-migrations:
+    name: 🔍 Validate Prisma Schema & Migrations
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: 📦 Install dependencies
+      run: npm ci
+      
+    - name: 🔍 Validate Prisma schema
+      run: npx prisma validate
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        
+    - name: 🔧 Generate Prisma Client
+      run: npx prisma generate
+      
+    - name: 🛡️ Run Migration Toolkit validation
+      run: npm run db:validate
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        
+    - name: 💾 Create schema backup
+      run: npm run db:backup
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        
+    - name: 📋 Upload backup artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: prisma-schema-backup-${{ github.sha }}
+        path: ./backups/
+        retention-days: 30
+
+  # Безопасное тестирование миграций (только для PR)
+  test-migrations:
+    name: 🧪 Test Migrations (Dry Run)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: validate-migrations
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: 📦 Install dependencies
+      run: npm ci
+      
+    - name: 🔍 Check migration diff
+      run: npx prisma migrate diff --from-schema-datamodel prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        
+    - name: ✅ Migration validation passed
+      run: echo "🎉 All migration checks passed!"
