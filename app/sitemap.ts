@@ -25,12 +25,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly' as const,
       priority: 0.8,
     },
-    {
-      url: `${baseUrl}/shop`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly' as const,
-      priority: 0.7,
-    },
+    // Убираем /shop
+    // {
+    //   url: `${baseUrl}/shop`,
+    //   lastModified: new Date(),
+    //   changeFrequency: 'weekly' as const,
+    //   priority: 0.7,
+    // },
     {
       url: `${baseUrl}/talks`,
       lastModified: new Date(),
@@ -75,22 +76,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7,
     }));
 
-    // Получаем товары
-    const products = await prisma.product.findMany({
-      where: { active: true },
-      select: {
-        slug: true,
-        updatedAt: true,
-        createdAt: true,
-      }
-    });
-
-    const productPages = products.map(product => ({
-      url: `${baseUrl}/shop/${product.slug}`,
-      lastModified: product.updatedAt || product.createdAt || new Date(),
-      changeFrequency: 'weekly' as const,
-      priority: 0.6,
-    }));
+    // --- ПРОДУКТЫ УДАЛЕНЫ ---
+    // Убираем все связанное с товарами
 
     // Получаем теги со статьями
     const tags = await prisma.tag.findMany({
@@ -119,7 +106,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       ...staticPages,
       ...articlePages,
       ...projectPages,
-      ...productPages,
+      // ...productPages, // Убираем продукты
       ...tagPages
     ];
 
