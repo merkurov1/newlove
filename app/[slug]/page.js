@@ -9,6 +9,7 @@ import BlockRenderer from '@/components/BlockRenderer';
 import SocialShare from '@/components/SocialShare';
 import EditButton from '@/components/EditButton';
 import { EditProvider } from '@/components/EditContext';
+import DebugEditButton from '@/components/DebugEditButton';
 
 async function getContent(slug) {
   console.log('🔍 getContent called for slug:', slug);
@@ -161,7 +162,10 @@ function ArticleComponent({ article }) {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <article>
           <header className="mb-8">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">{article.title}</h1>
+            <div className="flex justify-between items-start mb-4">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 flex-1">{article.title}</h1>
+              <EditButton variant="inline" showLabel={true} className="ml-4 flex-shrink-0" />
+            </div>
             
             <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0 text-sm text-gray-600 mb-6">
               {article.author?.image && (
@@ -214,6 +218,7 @@ function ArticleComponent({ article }) {
         
         {/* Floating Edit Button - автоматически получает контекст */}
         <EditButton variant="floating" />
+        <DebugEditButton />
       </div>
     </EditProvider>
   );
@@ -249,7 +254,10 @@ function ProjectComponent({ project }) {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <article>
           <header className="mb-8">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">{project.title}</h1>
+            <div className="flex justify-between items-start mb-4">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 flex-1">{project.title}</h1>
+              <EditButton variant="inline" showLabel={true} className="ml-4 flex-shrink-0" />
+            </div>
           </header>
           
           <div className="prose prose-lg max-w-none">
@@ -265,6 +273,7 @@ function ProjectComponent({ project }) {
         
         {/* Floating Edit Button - автоматически получает контекст */}
         <EditButton variant="floating" />
+        <DebugEditButton />
       </div>
     </EditProvider>
   );
