@@ -67,6 +67,12 @@ const nextConfig = {
         hostname: 'example.com', // Для тестовых изображений
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.ibb.co', // Для изображений открыток
+        port: '',
+        pathname: '/**',
       }
     ],
     // Поддержка локальных изображений из /public/uploads

@@ -108,27 +108,19 @@ export default function PostcardShop() {
           }`}
         >
           {/* Изображение открытки */}
-          <div className="relative aspect-[4/3] bg-gray-100 flex items-center justify-center">
-            {postcard.image.includes('example.com') ? (
-              // Для тестовых изображений показываем заглушку
-              <div className="text-center text-gray-500">
-                <div className="text-4xl mb-2">🎨</div>
-                <div className="text-sm">Образец открытки</div>
-              </div>
-            ) : (
-              <Image
-                src={postcard.image}
-                alt={postcard.title}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 50vw"
-                onError={(e) => {
-                  // Если изображение не загружается, показываем заглушку
-                  e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xNzUgMTI1SDIyNVYxNzVIMTc1VjEyNVoiIGZpbGw9IiM5Q0EzQUYiLz4KPHBhdGggZD0iTTE1MCAyMDBIMjUwVjE3NUgxNTBWMjAwWiIgZmlsbD0iIzlDQTNBRiIvPgo8L3N2Zz4K';
-                  e.currentTarget.style.objectFit = 'contain';
-                }}
-              />
-            )}
+          <div className="relative aspect-[4/3] bg-gray-100">
+            <Image
+              src={postcard.image.includes('example.com') ? 'https://i.ibb.co/YB01f0LC/IMG-0553.jpg' : postcard.image}
+              alt={postcard.title}
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 50vw"
+              onError={(e) => {
+                // Если изображение не загружается, показываем заглушку
+                e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xNzUgMTI1SDIyNVYxNzVIMTc1VjEyNVoiIGZpbGw9IiM5Q0EzQUYiLz4KPHBhdGggZD0iTTE1MCAyMDBIMjUwVjE3NUgxNTBWMjAwWiIgZmlsbD0iIzlDQTNBRiIvPgo8L3N2Zz4K';
+                e.currentTarget.style.objectFit = 'contain';
+              }}
+            />
             {postcard.featured && (
               <div className="absolute top-3 left-3 bg-orange-500 text-white px-2 py-1 rounded text-xs font-medium">
                 🌟 Рекомендуем
