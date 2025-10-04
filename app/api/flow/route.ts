@@ -1,5 +1,7 @@
 // app/api/flow/route.ts
 import { NextResponse } from 'next/server';
+import { BskyAgent } from '@atproto/api';
+import Parser from 'rss-parser';
 
 interface FlowItem {
   id: string;
@@ -29,21 +31,175 @@ interface FlowItem {
   };
 }
 
+// Функция для получения данных Bluesky
+async function getBlueskyData() {
+  try {
+    const agent = new BskyAgent({ service: 'https://bsky.social' });
+    await agent.login({
+      identifier: process.env.BLUESKY_IDENTIFIER!,
+      password: process.env.BLUESKY_PASSWORD!
+    });
+
+    const response = await agent.getAuthorFeed({
+      actor: process.env.BLUESKY_IDENTIFIER!,
+      limit: 10
+    });
+
+    if (!response.success) {
+      throw new Error('Failed to fetch Bluesky posts');
+    }
+
+    // Фильтруем реплаи
+    const posts = response.data.feed
+      .filter(item => !item.reply)
+      .map(item => {
+        const images: string[] = [];
+        
+        if (item.post.embed) {
+          if (item.post.embed.$type === 'app.bsky.embed.images#view') {
+            const embed = item.post.embed as any;
+            images.push(...embed.images.map((img: any) => img.fullsize));
+          } else if (item.post.embed.$type === 'app.bsky.embed.recordWithMedia#view') {
+            const embed = item.post.embed as any;
+            if (embed.media?.$type === 'app.bsky.embed.images#view') {
+              images.push(...embed.media.images.map((img: any) => img.fullsize));
+            }
+          }
+        }
+
+        return {
+          uri: item.post.uri,
+          cid: item.post.cid,
+          author: item.post.author,
+          record: item.post.record,
+          replyCount: item.post.replyCount || 0,
+          repostCount: item.post.repostCount || 0,
+          likeCount: item.post.likeCount || 0,
+          images,
+          embed: item.post.embed
+        };
+      });
+
+    return { posts };
+  } catch (error) {
+    console.error('Bluesky error:', error);
+    return { posts: [] };
+  }
+}
+
+// Функция для получения данных Medium
+async function getMediumData() {
+  try {
+    const parser = new Parser();
+    const feed = await parser.parseURL('https://medium.com/@merkurov/feed');
+    
+    const articles = feed.items.slice(0, 10).map(item => {
+      const content = item.content || item.contentSnippet || '';
+      const textContent = content.replace(/<[^>]*>/g, '').substring(0, 300);
+      
+      const estimateReadTime = (text: string) => {
+        const wordsPerMinute = 200;
+        const words = text.split(' ').length;
+        const minutes = Math.ceil(words / wordsPerMinute);
+        return `${minutes} мин чтения`;
+      };
+
+      return {
+        title: item.title || '',
+        link: item.link || '',
+        publishedAt: item.pubDate || new Date().toISOString(),
+        author: item.creator || 'Anton Merkurov',
+        excerpt: textContent + (content.length > 300 ? '...' : ''),
+        categories: item.categories || [],
+        id: item.guid || item.link,
+        readingTime: estimateReadTime(textContent)
+      };
+    });
+
+    return { articles };
+  } catch (error) {
+    console.error('Medium error:', error);
+    return { articles: [] };
+  }
+}
+
+// Функция для получения данных YouTube
+async function getYouTubeData() {
+  try {
+    const channelId = process.env.YOUTUBE_CHANNEL_ID;
+    const apiKey = process.env.YOUTUBE_API_KEY;
+
+    if (!channelId || !apiKey) {
+      throw new Error('YouTube API credentials not configured');
+    }
+
+    // Получаем список видео
+    const searchResponse = await fetch(
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&order=date&maxResults=20&key=${apiKey}`
+    );
+
+    if (!searchResponse.ok) {
+      throw new Error('YouTube search failed');
+    }
+
+    const searchData = await searchResponse.json();
+    const videoIds = searchData.items.map((item: any) => item.id.videoId).join(',');
+
+    // Получаем детали видео
+    const detailsResponse = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${videoIds}&key=${apiKey}`
+    );
+
+    if (!detailsResponse.ok) {
+      throw new Error('YouTube details failed');
+    }
+
+    const detailsData = await detailsResponse.json();
+
+    // Фильтруем только Shorts (менее 60 секунд)
+    const isShortVideo = (duration: string) => {
+      const match = duration.match(/PT(?:(\d+)M)?(?:(\d+)S)?/);
+      if (!match) return false;
+      
+      const minutes = parseInt(match[1] || '0');
+      const seconds = parseInt(match[2] || '0');
+      const totalSeconds = minutes * 60 + seconds;
+      
+      return totalSeconds <= 60;
+    };
+
+    const videos = detailsData.items
+      .filter((video: any) => isShortVideo(video.contentDetails.duration))
+      .slice(0, 10)
+      .map((video: any) => ({
+        id: video.id,
+        title: video.snippet.title,
+        description: video.snippet.description,
+        thumbnail: video.snippet.thumbnails.high.url,
+        publishedAt: video.snippet.publishedAt,
+        duration: video.contentDetails.duration,
+        viewCount: parseInt(video.statistics.viewCount || '0'),
+        likeCount: parseInt(video.statistics.likeCount || '0'),
+        commentCount: parseInt(video.statistics.commentCount || '0'),
+        channelTitle: video.snippet.channelTitle,
+        url: `https://www.youtube.com/watch?v=${video.id}`
+      }));
+
+    return { videos };
+  } catch (error) {
+    console.error('YouTube error:', error);
+    return { videos: [] };
+  }
+}
+
 export async function GET() {
   try {
-    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    
     // Параллельно получаем данные из всех источников
-    const [blueskyRes, mediumRes, youtubeRes] = await Promise.all([
-      fetch(`${baseUrl}/api/bluesky/posts`).catch(() => null),
-      fetch(`${baseUrl}/api/medium/posts`).catch(() => null),
-      fetch(`${baseUrl}/api/youtube/shorts`).catch(() => null)
+    const [blueskyData, mediumData, youtubeData] = await Promise.all([
+      getBlueskyData(),
+      getMediumData(), 
+      getYouTubeData()
     ]);
-
-    // Парсим ответы
-    const blueskyData = blueskyRes?.ok ? await blueskyRes.json() : { posts: [] };
-    const mediumData = mediumRes?.ok ? await mediumRes.json() : { articles: [] };
-    const youtubeData = youtubeRes?.ok ? await youtubeRes.json() : { videos: [] };
 
     // Унифицируем данные в общий формат
     const flowItems: FlowItem[] = [];
@@ -56,14 +212,14 @@ export async function GET() {
         platform: 'Bluesky',
         platformIcon: '🦋',
         platformColor: 'bg-blue-500',
-        title: post.text.length > 100 ? post.text.substring(0, 100) + '...' : post.text,
-        content: post.text,
+        title: post.record.text.length > 100 ? post.record.text.substring(0, 100) + '...' : post.record.text,
+        content: post.record.text,
         url: `https://bsky.app/profile/${post.author.handle}/post/${post.uri.split('/').pop()}`,
         author: post.author.displayName || post.author.handle,
         authorHandle: post.author.handle,
         authorAvatar: post.author.avatar,
-        publishedAt: post.createdAt,
-        timestamp: new Date(post.createdAt).getTime(),
+        publishedAt: post.record.createdAt,
+        timestamp: new Date(post.record.createdAt).getTime(),
         images: post.images || [],
         stats: {
           likes: post.likeCount || 0,
