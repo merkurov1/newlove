@@ -334,21 +334,23 @@ export async function createLetter(formData) {
     throw new Error('Заполните все обязательные поля.');
   }
 
-  // Валидируем и нормализуем content
-  let content = rawContent;
+  // Валидация JSON контента (аналогично updateArticle)
+  let validBlocks;
   try {
-    // Проверяем, является ли content валидным JSON
-    const parsedContent = JSON.parse(rawContent);
-    if (Array.isArray(parsedContent)) {
-      // Если это массив блоков EditorJS, сохраняем как JSON
-      content = JSON.stringify(parsedContent);
-    } else {
-      // Иначе сохраняем как есть
-      content = rawContent;
+    const blocks = JSON.parse(rawContent);
+    if (!Array.isArray(blocks)) {
+      throw new Error('Content is not an array of blocks');
+    }
+    
+    // Валидация структуры блоков
+    validBlocks = blocks.filter(
+      b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
+    );
+    if (validBlocks.length === 0) {
+      throw new Error('No valid blocks');
     }
   } catch (e) {
-    // Если не JSON, сохраняем как строку
-    content = rawContent;
+    throw new Error('Content is not valid JSON: ' + e.message);
   }
 
   try {
@@ -357,7 +359,7 @@ export async function createLetter(formData) {
         id: createId(),
         title,
         slug,
-        content,
+        content: JSON.stringify(validBlocks), // Сохраняем как строку для совместимости
         published,
         authorId: session.user.id,
         tags: {
@@ -381,8 +383,8 @@ export async function createLetter(formData) {
 export async function updateLetter(formData) {
   const session = await verifyAdmin();
   const id = formData.get('id')?.toString();
-  const title = formData.get('title')?.toString().trim();
-  const slug = formData.get('slug')?.toString().trim();
+  const title = formData.get('title')?.toString()?.trim();
+  const slug = formData.get('slug')?.toString()?.trim();
   const rawContent = formData.get('content')?.toString();
   const tagsString = formData.get('tags')?.toString();
   const published = formData.get('published') === 'on';
@@ -391,21 +393,28 @@ export async function updateLetter(formData) {
     throw new Error('Заполните все обязательные поля.');
   }
 
-  // Валидируем и нормализуем content
-  let content = rawContent;
+  // Валидация id - должен быть строкой для cuid
+  if (!id || id.length < 20) {
+    throw new Error('Invalid letter ID format');
+  }
+
+  // Валидация JSON контента (аналогично updateArticle)
+  let validBlocks;
   try {
-    // Проверяем, является ли content валидным JSON
-    const parsedContent = JSON.parse(rawContent);
-    if (Array.isArray(parsedContent)) {
-      // Если это массив блоков EditorJS, сохраняем как JSON
-      content = JSON.stringify(parsedContent);
-    } else {
-      // Иначе сохраняем как есть
-      content = rawContent;
+    const blocks = JSON.parse(rawContent);
+    if (!Array.isArray(blocks)) {
+      throw new Error('Content is not an array of blocks');
+    }
+    
+    // Валидация структуры блоков
+    validBlocks = blocks.filter(
+      b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
+    );
+    if (validBlocks.length === 0) {
+      throw new Error('No valid blocks');
     }
   } catch (e) {
-    // Если не JSON, сохраняем как строку
-    content = rawContent;
+    throw new Error('Content is not valid JSON: ' + e.message);
   }
 
   try {
@@ -434,7 +443,7 @@ export async function updateLetter(formData) {
       data: {
         title,
         slug,
-        content,
+        content: JSON.stringify(validBlocks), // Сохраняем как строку для совместимости
         published,
         updatedAt: new Date(),
         tags: {

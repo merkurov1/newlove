@@ -10,6 +10,7 @@ export default async function EditLetterPage({ params }) {
   const letterId = params.id;
   const letter = await prisma.letter.findUnique({
     where: { id: letterId },
+    include: { tags: true } // Включаем теги для редактирования
   });
   if (!letter) notFound();
   return (
