@@ -5,6 +5,7 @@ import { Inter } from 'next/font/google';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import AuthProvider from '@/components/AuthProvider';
+import GlobalErrorHandler from '@/components/GlobalErrorHandler';
 import prisma from '@/lib/prisma';
 import { Analytics } from '@vercel/analytics/react';
 import { UmamiScript } from '@/lib/umami';
@@ -152,6 +153,7 @@ export default async function RootLayout({ children }) {
         <link rel="dns-prefetch" href="//vercel.com" />
       </head>
       <body className="bg-white text-gray-800 min-h-screen">
+        <GlobalErrorHandler />
         <AuthProvider>
           <div className="flex flex-col min-h-screen">
             <Header projects={projects} settings={settings} />
