@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 export default function GlobalErrorHandler() {
   useEffect(() => {
     // Обработчик для неперехваченных ошибок
-    const handleUnhandledRejection = (event) => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       // Фильтруем ошибки браузерных расширений
       if (
         event.reason?.message?.includes('runtime.sendMessage') ||
@@ -26,7 +26,7 @@ export default function GlobalErrorHandler() {
     };
 
     // Обработчик для глобальных ошибок
-    const handleError = (event) => {
+    const handleError = (event: ErrorEvent) => {
       // Фильтруем ошибки браузерных расширений
       if (
         event.error?.message?.includes('runtime.sendMessage') ||
