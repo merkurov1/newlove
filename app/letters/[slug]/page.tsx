@@ -122,14 +122,73 @@ const mockLetters: Letter[] = [
 ];
 
 async function getLetter(slug: string): Promise<Letter | null> {
-  // В реальном проекте здесь будет API запрос к базе данных
-  // const letter = await prisma.letter.findUnique({
-  //   where: { slug },
-  //   include: { author: true }
-  // });
-  
-  // Пока используем моковые данные
-  return mockLetters.find(letter => letter.slug === slug) || null;
+  try {
+    const prisma = (await import('@/lib/prisma')).default;
+    
+    const letter = await prisma.letter.findUnique({
+      where: { 
+        slug,
+        published: true // Только опубликованные письма
+      },
+      include: { 
+        author: {
+          select: {
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!letter) {
+      return null;
+    }
+
+    // Обрабатываем контент - может быть JSON или HTML строкой
+    let content = '';
+    if (typeof letter.content === 'string') {
+      try {
+        // Если это JSON, пытаемся его распарсить и преобразовать в HTML
+        const jsonContent = JSON.parse(letter.content);
+        if (Array.isArray(jsonContent)) {
+          // Это EditorJS блоки, конвертируем в HTML
+          content = jsonContent.map(block => {
+            switch (block.type) {
+              case 'richText':
+                return block.data.html || '';
+              case 'paragraph':
+                return `<p>${block.data.text || ''}</p>`;
+              default:
+                return '';
+            }
+          }).join('');
+        } else {
+          content = letter.content;
+        }
+      } catch {
+        // Если не JSON, используем как HTML
+        content = letter.content;
+      }
+    } else {
+      content = JSON.stringify(letter.content);
+    }
+
+    return {
+      id: letter.id,
+      title: letter.title,
+      slug: letter.slug,
+      content,
+      publishedAt: letter.publishedAt?.toISOString() || letter.createdAt.toISOString(),
+      createdAt: letter.createdAt.toISOString(),
+      author: {
+        name: letter.author.name || 'Автор',
+        email: letter.author.email || ''
+      }
+    };
+  } catch (error) {
+    console.error('Error fetching letter:', error);
+    return null;
+  }
 }
 
 export default async function LetterPage({ params }: { params: { slug: string } }) {

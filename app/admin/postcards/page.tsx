@@ -2,78 +2,105 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { updatePostcard, deletePostcard } from '../actions';
 
-// Заглушка данных до того как Prisma модели заработают
-const initialMockPostcards = [
-  {
-    id: 'postcard_1',
-    title: 'Авторская открытка "Закат"',
-    description: 'Уникальная открытка с авторским рисунком заката над городом',
-    image: 'https://example.com/postcard1.jpg',
-    price: 2900,
-    available: true,
-    featured: true,
-    createdAt: new Date(),
-    _count: { orders: 3 }
-  },
-  {
-    id: 'postcard_2', 
-    title: 'Открытка "Минимализм"',
-    description: 'Стильная минималистичная открытка в черно-белых тонах',
-    image: 'https://example.com/postcard2.jpg',
-    price: 2900,
-    available: true,
-    featured: false,
-    createdAt: new Date(),
-    _count: { orders: 1 }
-  }
-];
+interface Postcard {
+  id: string;
+  title: string;
+  description: string | null;
+  image: string;
+  price: number;
+  available: boolean;
+  featured: boolean;
+  createdAt: string;
+  _count?: { orders: number };
+}
 
 export default function AdminPostcardsPage() {
-  const [postcards, setPostcards] = useState(initialMockPostcards);
-  const [editingPostcard, setEditingPostcard] = useState<any>(null);
+  const [postcards, setPostcards] = useState<Postcard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingPostcard, setEditingPostcard] = useState<Postcard | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+
+  // Загружаем открытки из API
+  useEffect(() => {
+    const fetchPostcards = async () => {
+      try {
+        const response = await fetch('/api/postcards');
+        if (response.ok) {
+          const data = await response.json();
+          setPostcards(data.postcards || []);
+        }
+      } catch (error) {
+        console.error('Error fetching postcards:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPostcards();
+  }, []);
 
   const formatPrice = (priceInPence: number) => {
     return `£${(priceInPence / 100).toFixed(0)}`;
   };
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('ru-RU', {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('ru-RU', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
     });
   };
 
-  const handleEdit = (postcard: any) => {
-    setEditingPostcard({...postcard});
+  const handleEdit = (postcard: Postcard) => {
+    setEditingPostcard({ ...postcard });
     setIsEditing(true);
   };
 
-  const handleSave = () => {
-    if (editingPostcard) {
-      // Проверяем валидность данных
-      if (!editingPostcard.title || !editingPostcard.description || editingPostcard.price < 0) {
-        alert('Пожалуйста, заполните все обязательные поля корректно');
-        return;
-      }
+  const handleSave = async () => {
+    if (!editingPostcard) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('id', editingPostcard.id);
+      formData.append('title', editingPostcard.title);
+      formData.append('description', editingPostcard.description || '');
+      formData.append('image', editingPostcard.image);
+      formData.append('price', editingPostcard.price.toString());
+      if (editingPostcard.available) formData.append('available', 'on');
+      if (editingPostcard.featured) formData.append('featured', 'on');
+
+      await updatePostcard(formData);
       
-      setPostcards(postcards.map(p => 
-        p.id === editingPostcard.id ? {...editingPostcard} : p
-      ));
+      // Обновляем локальное состояние
+      setPostcards(prev => 
+        prev.map(p => p.id === editingPostcard.id ? editingPostcard : p)
+      );
+      
       setIsEditing(false);
       setEditingPostcard(null);
-      
-      // Показываем сообщение об успехе
-      alert('Открытка успешно обновлена!');
+    } catch (error) {
+      console.error('Error saving postcard:', error);
+      alert('Ошибка при сохранении открытки');
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Вы уверены, что хотите удалить эту открытку?')) {
-      setPostcards(postcards.filter(p => p.id !== id));
+  const handleDelete = async (id: string) => {
+    if (!confirm('Вы уверены, что хотите удалить эту открытку?')) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('id', id);
+      
+      await deletePostcard(formData);
+      
+      // Удаляем из локального состояния
+      setPostcards(prev => prev.filter(p => p.id !== id));
+    } catch (error) {
+      console.error('Error deleting postcard:', error);
+      alert('Ошибка при удалении открытки');
     }
   };
 
@@ -82,313 +109,258 @@ export default function AdminPostcardsPage() {
     setEditingPostcard(null);
   };
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-64">
+        <div className="text-lg text-gray-600">Загрузка открыток...</div>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <div className="flex justify-between items-center mb-8">
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Управление открытками</h1>
-          <p className="text-gray-600 mt-2">Создание и редактирование авторских открыток</p>
+          <p className="text-gray-600 mt-1">Редактирование авторских открыток для продажи</p>
         </div>
         <Link 
-          href="/admin/postcards/new"
-          className="bg-orange-600 text-white py-2 px-4 rounded-md hover:bg-orange-700 transition-colors"
+          href="/admin" 
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
-          + Добавить открытку
+          ← Назад в админку
         </Link>
       </div>
 
-      {/* Статистика */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-orange-100 rounded-md flex items-center justify-center">
-                <span className="text-orange-600 text-lg">🎨</span>
-              </div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Всего открыток</p>
-              <p className="text-2xl font-semibold text-gray-900">{postcards.length}</p>
-            </div>
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-lg border shadow-sm">
+          <div className="text-sm text-gray-600">Всего открыток</div>
+          <div className="text-2xl font-bold text-blue-600">{postcards.length}</div>
+        </div>
+        <div className="bg-white p-4 rounded-lg border shadow-sm">
+          <div className="text-sm text-gray-600">Доступных</div>
+          <div className="text-2xl font-bold text-green-600">
+            {postcards.filter(p => p.available).length}
           </div>
         </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
-                <span className="text-green-600 text-lg">✅</span>
-              </div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Доступно</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {postcards.filter(p => p.available).length}
-              </p>
-            </div>
+        <div className="bg-white p-4 rounded-lg border shadow-sm">
+          <div className="text-sm text-gray-600">Рекомендуемых</div>
+          <div className="text-2xl font-bold text-purple-600">
+            {postcards.filter(p => p.featured).length}
           </div>
         </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-yellow-100 rounded-md flex items-center justify-center">
-                <span className="text-yellow-600 text-lg">⭐</span>
-              </div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Рекомендуемые</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {postcards.filter(p => p.featured).length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
-                <span className="text-blue-600 text-lg">📦</span>
-              </div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Всего заказов</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {postcards.reduce((sum, p) => sum + p._count.orders, 0)}
-              </p>
-            </div>
+        <div className="bg-white p-4 rounded-lg border shadow-sm">
+          <div className="text-sm text-gray-600">Всего заказов</div>
+          <div className="text-2xl font-bold text-orange-600">
+            {postcards.reduce((sum, p) => sum + (p._count?.orders || 0), 0)}
           </div>
         </div>
       </div>
 
-      {/* Список открыток */}
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
+      {/* Postcards List */}
+      <div className="bg-white rounded-lg shadow-sm border">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">Открытки</h2>
+        </div>
+        
         {postcards.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">
-            <div className="text-4xl mb-4">🎨</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Пока нет открыток</h3>
-            <p className="text-gray-500 mb-4">Создайте первую авторскую открытку</p>
-            <Link 
-              href="/admin/postcards/new"
-              className="inline-flex items-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
-            >
-              Добавить открытку
-            </Link>
+          <div className="p-8 text-center text-gray-500">
+            <div className="text-4xl mb-4">🖼️</div>
+            <h3 className="text-lg font-medium mb-2">Открыток пока нет</h3>
+            <p className="text-sm">Добавьте первую открытку для продажи</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Открытка
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Цена
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Статус
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Заказов
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Создана
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Действия
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {postcards.map((postcard) => (
-                  <tr key={postcard.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-16 w-16">
-                          <div className="h-16 w-16 rounded-lg bg-gray-200 flex items-center justify-center">
-                            <span className="text-gray-400 text-2xl">🎨</span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                            {postcard.title}
-                            {postcard.featured && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                                ⭐ Рекомендуем
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-500 max-w-xs truncate">
-                            {postcard.description}
-                          </div>
-                        </div>
+          <div className="divide-y divide-gray-200">
+            {postcards.map((postcard) => (
+              <div key={postcard.id} className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
+                      <Image 
+                        src={postcard.image} 
+                        alt={postcard.title}
+                        fill
+                        className="object-cover"
+                        onError={() => {
+                          // Fallback если изображение не загружается
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-medium text-gray-900">{postcard.title}</h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {postcard.description || 'Без описания'}
+                      </p>
+                      <div className="flex items-center gap-4 mt-2">
+                        <span className="text-lg font-bold text-gray-900">
+                          {formatPrice(postcard.price)}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {formatDate(postcard.createdAt)}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          Заказов: {postcard._count?.orders || 0}
+                        </span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {formatPrice(postcard.price)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        postcard.available 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {postcard.available ? '✅ Доступна' : '❌ Недоступна'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {postcard._count.orders}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(postcard.createdAt)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end gap-2">
-                        <button 
-                          onClick={() => handleEdit(postcard)}
-                          className="text-blue-600 hover:text-blue-900 transition-colors"
-                        >
-                          Изменить
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(postcard.id)}
-                          className="text-red-600 hover:text-red-900 transition-colors"
-                        >
-                          Удалить
-                        </button>
-                        <Link 
-                          href={`/admin/postcards/orders/${postcard.id}`}
-                          className="text-green-600 hover:text-green-900 transition-colors"
-                        >
-                          Заказы
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-3">
+                    {/* Status badges */}
+                    <div className="flex space-x-2">
+                      {postcard.available && (
+                        <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                          Доступна
+                        </span>
+                      )}
+                      {postcard.featured && (
+                        <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
+                          Рекомендуемая
+                        </span>
+                      )}
+                      {!postcard.available && (
+                        <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
+                          Недоступна
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Action buttons */}
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEdit(postcard)}
+                        className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                      >
+                        Изменить
+                      </button>
+                      <button
+                        onClick={() => handleDelete(postcard.id)}
+                        className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200"
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Полезные ссылки */}
-      <div className="mt-8 bg-blue-50 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">
-          🔗 Полезные ссылки
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link 
-            href="/admin/postcards/orders"
-            className="block p-4 bg-white rounded-lg border border-blue-200 hover:border-blue-300 transition-colors"
-          >
-            <div className="font-medium text-gray-900">📦 Все заказы</div>
-            <div className="text-sm text-gray-600">Управление заказами открыток</div>
-          </Link>
-          <Link 
-            href="/letters"
-            className="block p-4 bg-white rounded-lg border border-blue-200 hover:border-blue-300 transition-colors"
-          >
-            <div className="font-medium text-gray-900">👀 Посмотреть магазин</div>
-            <div className="text-sm text-gray-600">Как видят пользователи</div>
-          </Link>
-          <Link 
-            href="/admin/media"
-            className="block p-4 bg-white rounded-lg border border-blue-200 hover:border-blue-300 transition-colors"
-          >
-            <div className="font-medium text-gray-900">🖼️ Загрузить изображения</div>
-            <div className="text-sm text-gray-600">Медиа для открыток</div>
-          </Link>
-        </div>
-      </div>
-
-      {/* Модальное окно для редактирования */}
+      {/* Edit Modal */}
       {isEditing && editingPostcard && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Редактировать открытку
-              </h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Название</label>
-                  <input
-                    type="text"
-                    value={editingPostcard.title}
-                    onChange={(e) => setEditingPostcard({...editingPostcard, title: e.target.value})}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-orange-500 focus:outline-none focus:ring-orange-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Описание</label>
-                  <textarea
-                    value={editingPostcard.description}
-                    onChange={(e) => setEditingPostcard({...editingPostcard, description: e.target.value})}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-orange-500 focus:outline-none focus:ring-orange-500"
-                    rows={3}
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Цена (в фунтах)</label>
-                  <input
-                    type="number"
-                    value={editingPostcard.price / 100}
-                    onChange={(e) => {
-                      const value = parseFloat(e.target.value);
-                      const priceInPence = isNaN(value) ? 0 : Math.round(value * 100);
-                      setEditingPostcard({...editingPostcard, price: priceInPence});
-                    }}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-orange-500 focus:outline-none focus:ring-orange-500"
-                    step="0.01"
-                    min="0"
-                  />
-                </div>
-                
-                <div className="flex items-center space-x-4">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={editingPostcard.available}
-                      onChange={(e) => setEditingPostcard({...editingPostcard, available: e.target.checked})}
-                      className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Доступна для заказа</span>
-                  </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={editingPostcard.featured}
-                      onChange={(e) => setEditingPostcard({...editingPostcard, featured: e.target.checked})}
-                      className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Рекомендуемая</span>
-                  </label>
-                </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Редактировать открытку</h3>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Название
+                </label>
+                <input
+                  type="text"
+                  value={editingPostcard.title}
+                  onChange={(e) => setEditingPostcard({
+                    ...editingPostcard,
+                    title: e.target.value
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
               
-              <div className="flex justify-end space-x-2 mt-6">
-                <button
-                  onClick={handleCancel}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={handleSave}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
-                >
-                  Сохранить
-                </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Описание
+                </label>
+                <textarea
+                  value={editingPostcard.description || ''}
+                  onChange={(e) => setEditingPostcard({
+                    ...editingPostcard,
+                    description: e.target.value
+                  })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Изображение (URL)
+                </label>
+                <input
+                  type="url"
+                  value={editingPostcard.image}
+                  onChange={(e) => setEditingPostcard({
+                    ...editingPostcard,
+                    image: e.target.value
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Цена (в пенсах)
+                </label>
+                <input
+                  type="number"
+                  value={editingPostcard.price}
+                  onChange={(e) => setEditingPostcard({
+                    ...editingPostcard,
+                    price: parseInt(e.target.value) || 0
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div className="flex space-x-4">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={editingPostcard.available}
+                    onChange={(e) => setEditingPostcard({
+                      ...editingPostcard,
+                      available: e.target.checked
+                    })}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Доступна для заказа</span>
+                </label>
+                
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={editingPostcard.featured}
+                    onChange={(e) => setEditingPostcard({
+                      ...editingPostcard,
+                      featured: e.target.checked
+                    })}
+                    className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Рекомендуемая</span>
+                </label>
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                onClick={handleCancel}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+              >
+                Сохранить
+              </button>
             </div>
           </div>
         </div>
