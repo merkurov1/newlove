@@ -132,11 +132,6 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
 
   // Функция для отправки тестового письма
   async function handleTestSend() {
-    if (!session?.user?.email) {
-      setError('Не удалось определить ваш email для тестовой отправки');
-      return;
-    }
-
     if (!title || !content.length) {
       setError('Заполните название и содержание письма для тестовой отправки');
       return;
@@ -153,12 +148,12 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
         body: JSON.stringify({
           title,
           content,
-          recipientEmail: session.user.email,
         }),
       });
 
       if (response.ok) {
-        setError(`✅ Тестовое письмо отправлено на ${session.user.email}`);
+        const data = await response.json();
+        setError(`✅ ${data.message}`);
       } else {
         const data = await response.json();
         setError(`❌ Ошибка отправки: ${data.error || 'Неизвестная ошибка'}`);
@@ -228,8 +223,14 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           onChange={e => setPublished(e.target.checked)}
           className="h-6 w-6 rounded border-gray-300 text-blue-600"
         />
-        <label htmlFor="published" className="ml-3 block text-base text-gray-900">Опубликовано</label>
+        <label htmlFor="published" className="ml-3 block text-base text-gray-900">
+          Опубликовано на сайте
+        </label>
       </div>
+      <p className="text-sm text-gray-600 mb-4">
+        ✓ Опубликованные письма видны на сайте в разделе Letters<br/>
+        📧 Отправка рассылки — отдельная операция (после публикации)
+      </p>
       <div className="mt-4 space-y-3">
         <button type="submit" className="w-full flex justify-center py-3 px-4 border rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 min-h-[44px]">
           {isEditing ? 'Сохранить изменения' : `Создать ${type}`}
@@ -243,7 +244,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
             disabled={!title || !content.length}
             className="w-full flex justify-center py-3 px-4 border border-orange-500 rounded-md shadow-sm text-base font-medium text-orange-600 bg-white hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
           >
-            📧 Отправить себе на тест
+            📧 Отправить тест админу
           </button>
         )}
       </div>
