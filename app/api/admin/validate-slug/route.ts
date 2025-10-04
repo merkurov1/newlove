@@ -28,21 +28,21 @@ export async function GET(request: Request) {
         const letter = await prisma.letter.findUnique({
           where: { slug }
         });
-        exists = letter && letter.id !== excludeId;
+        exists = letter !== null && letter.id !== excludeId;
         break;
 
       case 'article':
         const article = await prisma.article.findUnique({
           where: { slug }
         });
-        exists = article && article.id !== excludeId;
+        exists = article !== null && article.id !== excludeId;
         break;
 
       case 'project':
         const project = await prisma.project.findUnique({
           where: { slug }
         });
-        exists = project && project.id !== excludeId;
+        exists = project !== null && project.id !== excludeId;
         break;
 
       default:
