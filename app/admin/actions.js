@@ -299,9 +299,327 @@ export async function updateProfile(prevState, formData) {
 // --- ТОВАРЫ (Products) - УДАЛЕНО ---
 // Все функции для работы с товарами убраны
 
-// --- РАССЫЛКИ И ПОДПИСКИ (без изменений) ---
-export async function subscribeToNewsletter(prevState, formData) { /* ... */ }
-export async function createLetter(formData) { /* ... */ }
-export async function updateLetter(formData) { /* ... */ }
-export async function deleteLetter(formData) { /* ... */ }
-export async function sendLetter(prevState, formData) { /* ... */ }
+// --- РАССЫЛКИ И ПОДПИСКИ ---
+export async function subscribeToNewsletter(prevState, formData) {
+  const email = formData.get('email')?.toString().trim();
+  if (!email || !/\S+@\S+\.\S+/.test(email)) {
+    return { status: 'error', message: 'Введите корректный email адрес.' };
+  }
+  try {
+    const existing = await prisma.newsletterSubscriber.findUnique({ where: { email } });
+    if (existing) {
+      return { status: 'error', message: 'Этот email уже подписан на рассылку.' };
+    }
+    await prisma.newsletterSubscriber.create({ 
+      data: { 
+        id: createId(),
+        email 
+      } 
+    });
+    return { status: 'success', message: 'Спасибо за подписку! Проверьте почту.' };
+  } catch (error) {
+    return { status: 'error', message: 'Произошла ошибка при подписке. Попробуйте позже.' };
+  }
+}
+
+export async function createLetter(formData) {
+  const session = await verifyAdmin();
+  const title = formData.get('title')?.toString().trim();
+  const slug = formData.get('slug')?.toString().trim();
+  const content = formData.get('content')?.toString();
+  const tagsString = formData.get('tags')?.toString();
+  const published = formData.get('published') === 'on';
+
+  if (!title || !slug || !content) {
+    throw new Error('Заполните все обязательные поля.');
+  }
+
+  try {
+    const letter = await prisma.letter.create({
+      data: {
+        id: createId(),
+        title,
+        slug,
+        content,
+        published,
+        authorId: session.user.id,
+        tags: {
+          connectOrCreate: processTagsForPrisma(tagsString),
+        },
+      },
+    });
+
+    revalidatePath('/admin/letters');
+    revalidatePath('/letters');
+    if (published) revalidatePath(`/letters/${letter.slug}`);
+    redirect('/admin/letters');
+  } catch (error) {
+    if (error.code === 'P2002' && error.meta?.target?.includes('slug')) {
+      throw new Error('Статья с таким URL уже существует. Используйте другой slug.');
+    }
+    throw new Error('Ошибка при создании письма: ' + error.message);
+  }
+}
+
+export async function updateLetter(formData) {
+  const session = await verifyAdmin();
+  const id = formData.get('id')?.toString();
+  const title = formData.get('title')?.toString().trim();
+  const slug = formData.get('slug')?.toString().trim();
+  const content = formData.get('content')?.toString();
+  const tagsString = formData.get('tags')?.toString();
+  const published = formData.get('published') === 'on';
+
+  if (!id || !title || !slug || !content) {
+    throw new Error('Заполните все обязательные поля.');
+  }
+
+  try {
+    // Проверяем, что letter существует
+    const existingLetter = await prisma.letter.findUnique({
+      where: { id },
+      include: { tags: true }
+    });
+
+    if (!existingLetter) {
+      throw new Error('Письмо не найдено.');
+    }
+
+    // Проверяем уникальность slug (исключаем текущее письмо)
+    const existingSlugLetter = await prisma.letter.findUnique({
+      where: { slug }
+    });
+    
+    if (existingSlugLetter && existingSlugLetter.id !== id) {
+      throw new Error('Письмо с таким URL уже существует. Используйте другой slug.');
+    }
+
+    // Обновляем письмо
+    const updatedLetter = await prisma.letter.update({
+      where: { id },
+      data: {
+        title,
+        slug,
+        content,
+        published,
+        updatedAt: new Date(),
+        tags: {
+          set: [], // Сначала отключаем все теги
+          connectOrCreate: processTagsForPrisma(tagsString), // Затем подключаем новые
+        },
+      },
+    });
+
+    // Обновляем кеш страниц
+    revalidatePath('/admin/letters');
+    revalidatePath('/letters');
+    revalidatePath(`/admin/letters/edit/${id}`);
+    if (published) {
+      revalidatePath(`/letters/${updatedLetter.slug}`);
+    }
+    // Если slug изменился, обновляем старую страницу тоже
+    if (existingLetter.slug !== slug && existingLetter.published) {
+      revalidatePath(`/letters/${existingLetter.slug}`);
+    }
+
+    redirect('/admin/letters');
+  } catch (error) {
+    if (error.code === 'P2002' && error.meta?.target?.includes('slug')) {
+      throw new Error('Письмо с таким URL уже существует. Используйте другой slug.');
+    }
+    throw new Error('Ошибка при обновлении письма: ' + error.message);
+  }
+}
+
+export async function deleteLetter(formData) {
+  await verifyAdmin();
+  const id = formData.get('id')?.toString();
+  if (!id) {
+    throw new Error('Letter ID is required.');
+  }
+  
+  const letter = await prisma.letter.findUnique({ where: { id } });
+  if (!letter) {
+    throw new Error('Письмо не найдено.');
+  }
+
+  await prisma.letter.delete({ where: { id } });
+  
+  revalidatePath('/admin/letters');
+  revalidatePath('/letters');
+  if (letter.published) {
+    revalidatePath(`/letters/${letter.slug}`);
+  }
+}
+
+export async function sendLetter(prevState, formData) {
+  const session = await verifyAdmin();
+  const letterId = formData.get('letterId')?.toString();
+  
+  if (!letterId) {
+    return { status: 'error', message: 'Не указан ID письма.' };
+  }
+
+  try {
+    const letter = await prisma.letter.findUnique({
+      where: { id: letterId },
+      include: { author: true }
+    });
+
+    if (!letter) {
+      return { status: 'error', message: 'Письмо не найдено.' };
+    }
+
+    if (letter.sentAt) {
+      return { status: 'error', message: 'Это письмо уже было отправлено.' };
+    }
+
+    // Получаем всех активных подписчиков
+    const subscribers = await prisma.newsletterSubscriber.findMany({
+      where: { isActive: true },
+      select: { email: true }
+    });
+
+    if (subscribers.length === 0) {
+      return { status: 'error', message: 'Нет активных подписчиков для отправки.' };
+    }
+
+    // Инициализируем Resend
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    
+    // Рендерим email
+    const emailHtml = await renderNewsletterEmail(letter);
+    
+    // Отправляем письмо
+    const { data, error } = await resend.emails.send({
+      from: 'Anton Merkurov <letters@merkurov.com>',
+      to: subscribers.map(s => s.email),
+      subject: letter.title,
+      html: emailHtml,
+    });
+
+    if (error) {
+      return { status: 'error', message: `Ошибка отправки: ${error.message}` };
+    }
+
+    // Отмечаем письмо как отправленное
+    await prisma.letter.update({
+      where: { id: letterId },
+      data: { sentAt: new Date() }
+    });
+
+    revalidatePath(`/admin/letters/edit/${letterId}`);
+    revalidatePath('/admin/letters');
+    
+    return { 
+      status: 'success', 
+      message: `Письмо успешно отправлено ${subscribers.length} подписчикам!` 
+    };
+
+  } catch (error) {
+    console.error('Ошибка отправки рассылки:', error);
+    return { 
+      status: 'error', 
+      message: 'Произошла ошибка при отправке. Попробуйте позже.' 
+    };
+  }
+}
+
+// --- ОТКРЫТКИ (Postcards) ---
+export async function createPostcard(formData) {
+  const session = await verifyAdmin();
+  const title = formData.get('title')?.toString().trim();
+  const description = formData.get('description')?.toString().trim();
+  const image = formData.get('image')?.toString().trim();
+  const price = parseInt(formData.get('price')?.toString() || '0');
+  const available = formData.get('available') === 'on';
+  const featured = formData.get('featured') === 'on';
+
+  if (!title || !image || !price || price <= 0) {
+    throw new Error('Заполните все обязательные поля.');
+  }
+
+  try {
+    const postcard = await prisma.postcard.create({
+      data: {
+        id: createId(),
+        title,
+        description,
+        image,
+        price,
+        available,
+        featured,
+      },
+    });
+
+    revalidatePath('/admin/postcards');
+    revalidatePath('/letters'); // Обновляем страницу с открытками
+    return { success: true, postcard };
+  } catch (error) {
+    throw new Error('Ошибка при создании открытки: ' + error.message);
+  }
+}
+
+export async function updatePostcard(formData) {
+  const session = await verifyAdmin();
+  const id = formData.get('id')?.toString();
+  const title = formData.get('title')?.toString().trim();
+  const description = formData.get('description')?.toString().trim();
+  const image = formData.get('image')?.toString().trim();
+  const price = parseInt(formData.get('price')?.toString() || '0');
+  const available = formData.get('available') === 'on';
+  const featured = formData.get('featured') === 'on';
+
+  if (!id || !title || !image || !price || price <= 0) {
+    throw new Error('Заполните все обязательные поля.');
+  }
+
+  try {
+    const updatedPostcard = await prisma.postcard.update({
+      where: { id },
+      data: {
+        title,
+        description,
+        image,
+        price,
+        available,
+        featured,
+        updatedAt: new Date(),
+      },
+    });
+
+    revalidatePath('/admin/postcards');
+    revalidatePath('/letters'); // Обновляем страницу с открытками
+    return { success: true, postcard: updatedPostcard };
+  } catch (error) {
+    throw new Error('Ошибка при обновлении открытки: ' + error.message);
+  }
+}
+
+export async function deletePostcard(formData) {
+  await verifyAdmin();
+  const id = formData.get('id')?.toString();
+  
+  if (!id) {
+    throw new Error('Postcard ID is required.');
+  }
+
+  try {
+    // Проверяем есть ли заказы для этой открытки
+    const ordersCount = await prisma.postcardOrder.count({
+      where: { postcardId: id }
+    });
+
+    if (ordersCount > 0) {
+      throw new Error('Нельзя удалить открытку с существующими заказами.');
+    }
+
+    await prisma.postcard.delete({ where: { id } });
+    
+    revalidatePath('/admin/postcards');
+    revalidatePath('/letters'); // Обновляем страницу с открытками
+    return { success: true };
+  } catch (error) {
+    throw new Error('Ошибка при удалении открытки: ' + error.message);
+  }
+}

@@ -31,28 +31,62 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   const isEditing = !!safeInitial && !!safeInitial.id;
   const [title, setTitle] = useState(safeInitial.title || '');
   const [slug, setSlug] = useState(safeInitial.slug || '');
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(isEditing); // Для редактирования не автогенерируем
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false); // Всегда разрешаем автогенерацию
   const [content, setContent] = useState<EditorJsBlock[]>(parseBlocks(safeInitial.content));
   const [published, setPublished] = useState(safeInitial.published || false);
   const [error, setError] = useState('');
+  const [slugError, setSlugError] = useState('');
+  const [isCheckingSlug, setIsCheckingSlug] = useState(false);
   const { data: session, status } = useSession();
   const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
+
+  // Функция проверки уникальности slug
+  const checkSlugUniqueness = async (slugToCheck: string) => {
+    if (!slugToCheck || isEditing) return; // Для редактирования не проверяем
+
+    setIsCheckingSlug(true);
+    setSlugError('');
+
+    try {
+      const response = await fetch(`/api/admin/validate-slug?slug=${encodeURIComponent(slugToCheck)}&type=letter${isEditing ? `&excludeId=${safeInitial.id}` : ''}`);
+      const data = await response.json();
+      
+      if (!data.available) {
+        setSlugError('Этот URL уже используется. Измените slug.');
+      }
+    } catch (err) {
+      console.error('Ошибка проверки slug:', err);
+    } finally {
+      setIsCheckingSlug(false);
+    }
+  };
 
   // Автогенерация slug из title
   useEffect(() => {
     if (!slugManuallyEdited && title.trim()) {
       const generatedSlug = createSeoSlug(title);
       setSlug(generatedSlug);
+      // Проверяем уникальность только для новых записей
+      if (!isEditing) {
+        checkSlugUniqueness(generatedSlug);
+      }
     }
-  }, [title, slugManuallyEdited]);
+  }, [title, slugManuallyEdited, isEditing]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);
   };
 
   const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSlug(e.target.value);
+    const newSlug = e.target.value;
+    setSlug(newSlug);
     setSlugManuallyEdited(true); // Отмечаем, что slug редактировался вручную
+    setSlugError(''); // Сбрасываем ошибку
+    
+    // Проверяем уникальность при ручном вводе
+    if (newSlug.trim()) {
+      checkSlugUniqueness(newSlug);
+    }
   };
 
   function validateBlocks(blocks: EditorJsBlock[]) {
@@ -85,6 +119,11 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     if (!validateBlocks(content)) {
       e.preventDefault();
       setError('Проверьте структуру блоков: должен быть хотя бы один корректный блок.');
+      return false;
+    }
+    if (slugError) {
+      e.preventDefault();
+      setError('Исправьте ошибки в URL перед сохранением.');
       return false;
     }
     setError('');
@@ -154,6 +193,11 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
               (автогенерируется из названия)
             </span>
           )}
+          {isCheckingSlug && (
+            <span className="text-xs text-blue-500 ml-2">
+              (проверяем уникальность...)
+            </span>
+          )}
         </label>
         <input
           type="text"
@@ -162,8 +206,13 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           required
           value={slug}
           onChange={handleSlugChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
+          className={`mt-1 block w-full rounded-md shadow-sm text-base px-3 py-3 ${
+            slugError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+          }`}
         />
+        {slugError && (
+          <p className="mt-1 text-sm text-red-600">{slugError}</p>
+        )}
       </div>
   <TagInput initialTags={safeInitial.tags} onChange={setTags} />
   <BlockEditor value={content} onChange={setContent} />

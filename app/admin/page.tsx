@@ -140,32 +140,32 @@ export default async function AdminDashboard() {
           href="/admin/projects"
         />
         <StatCard
-          icon="👥"
-          title="Пользователи"
-          count={counts.users}
-          color="bg-green-50 text-green-900 hover:bg-green-100"
-          href="/admin/users"
-        />
-        <StatCard
-          icon="💌"
+          icon="�"
           title="Письма"
           count={counts.letters}
           color="bg-yellow-50 text-yellow-900 hover:bg-yellow-100"
           href="/admin/letters"
         />
         <StatCard
-          icon="📧"
+          icon="�️"
+          title="Открытки"
+          count={0} // TODO: добавить счетчик открыток
+          color="bg-orange-50 text-orange-900 hover:bg-orange-100"
+          href="/admin/postcards"
+        />
+        <StatCard
+          icon="�"
+          title="Пользователи"
+          count={counts.users}
+          color="bg-green-50 text-green-900 hover:bg-green-100"
+          href="/admin/users"
+        />
+        <StatCard
+          icon="�"
           title="Подписчики"
           count={counts.subscribers}
           color="bg-red-50 text-red-900 hover:bg-red-100"
           href="/admin/subscribers"
-        />
-        <StatCard
-          icon="💬"
-          title="Сообщения"
-          count={counts.messages}
-          color="bg-indigo-50 text-indigo-900 hover:bg-indigo-100"
-          href="/admin/orders"
         />
       </div>
 
@@ -221,25 +221,11 @@ export default async function AdminDashboard() {
               <p className="text-sm text-gray-600 mt-1">Написать письмо</p>
             </div>
           </Link>
-          <Link href="/admin/media" className="block p-4 rounded-lg border-2 border-dashed border-green-300 hover:bg-green-50 hover:border-solid transition-all duration-200 group">
+          <Link href="/admin/postcards" className="block p-4 rounded-lg border-2 border-dashed border-orange-300 hover:bg-orange-50 hover:border-solid transition-all duration-200 group">
             <div className="text-center">
               <div className="text-3xl mb-2 opacity-60 group-hover:opacity-80">🖼️</div>
-              <h3 className="font-semibold text-gray-800">Медиафайлы</h3>
-              <p className="text-sm text-gray-600 mt-1">Управление файлами</p>
-            </div>
-          </Link>
-          <Link href="/lab" className="block p-4 rounded-lg border-2 border-dashed border-cyan-300 hover:bg-cyan-50 hover:border-solid transition-all duration-200 group">
-            <div className="text-center">
-              <div className="text-3xl mb-2 opacity-60 group-hover:opacity-80">🧪</div>
-              <h3 className="font-semibold text-gray-800">Лаборатория</h3>
-              <p className="text-sm text-gray-600 mt-1">Эксперименты</p>
-            </div>
-          </Link>
-          <Link href="/kit" className="block p-4 rounded-lg border-2 border-dashed border-pink-300 hover:bg-pink-50 hover:border-solid transition-all duration-200 group">
-            <div className="text-center">
-              <div className="text-3xl mb-2 opacity-60 group-hover:opacity-80">🛠️</div>
-              <h3 className="font-semibold text-gray-800">Kit ресурсы</h3>
-              <p className="text-sm text-gray-600 mt-1">Инструменты</p>
+              <h3 className="font-semibold text-gray-800">Управление открытками</h3>
+              <p className="text-sm text-gray-600 mt-1">Редактировать открытки</p>
             </div>
           </Link>
         </div>
