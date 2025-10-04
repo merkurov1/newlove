@@ -1,6 +1,34 @@
 // app/api/flow/route.ts
 import { NextResponse } from 'next/server';
 
+interface FlowItem {
+  id: string;
+  type: 'bluesky' | 'medium' | 'youtube';
+  platform: string;
+  platformIcon: string;
+  platformColor: string;
+  title: string;
+  content: string;
+  url: string;
+  author: string;
+  authorHandle?: string;
+  authorAvatar?: string;
+  publishedAt: string;
+  timestamp: number;
+  images?: string[];
+  thumbnail?: string;
+  duration?: string;
+  readingTime?: string;
+  categories?: string[];
+  stats?: {
+    likes?: number;
+    reposts?: number;
+    replies?: number;
+    views?: number;
+    comments?: number;
+  };
+}
+
 export async function GET() {
   try {
     const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
@@ -18,7 +46,7 @@ export async function GET() {
     const youtubeData = youtubeRes?.ok ? await youtubeRes.json() : { videos: [] };
 
     // Унифицируем данные в общий формат
-    const flowItems = [];
+    const flowItems: FlowItem[] = [];
 
     // Добавляем Bluesky посты
     blueskyData.posts?.forEach((post: any) => {
