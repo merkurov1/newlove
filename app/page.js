@@ -8,6 +8,7 @@ import importDynamic from 'next/dynamic';
 import { getFirstImage } from '@/lib/contentUtils';
 import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
 import WelcomeBanner from '@/components/WelcomeBanner';
+import FlowFeed from '@/components/FlowFeed';
 
 const FadeInSection = importDynamic(() => import('@/components/FadeInSection'), { ssr: false });
 
@@ -108,6 +109,36 @@ export default async function HomePage() {
     <div className="space-y-12">
       {/* Smart Welcome Banner */}
       <WelcomeBanner />
+
+      {/* Flow Section */}
+      <section aria-labelledby="flow-heading" className="bg-gray-50 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 id="flow-heading" className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+                🌊 Flow
+              </h2>
+              <p className="text-gray-600">
+                Последние публикации из всех платформ в едином потоке
+              </p>
+            </div>
+            <Link 
+              href="/lab"
+              className="text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+              aria-label="Перейти в лабораторию"
+            >
+              Лаборатория
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
+          
+          <FadeInSection>
+            <FlowFeed limit={7} />
+          </FadeInSection>
+        </div>
+      </section>
 
       {/* Articles Section */}
       <section aria-labelledby="articles-heading">
