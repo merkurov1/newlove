@@ -76,6 +76,12 @@ export default function Header({ projects, settings }) {
                       <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
                     </Link>
                   </li>
+                  <li>
+                    <Link href="/letters" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                      Letters
+                      <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
+                    </Link>
+                  </li>
                 </>
               )}
             </ul>
@@ -127,6 +133,9 @@ export default function Header({ projects, settings }) {
                 </li>
                 <li>
                   <Link href="/kit" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Kit</Link>
+                </li>
+                <li>
+                  <Link href="/letters" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Letters</Link>
                 </li>
               </>
             )}

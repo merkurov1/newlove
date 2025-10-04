@@ -41,8 +41,8 @@ export default function PostcardShop() {
     fetchPostcards();
   }, []);
 
-  const formatPrice = (priceInCopecks: number) => {
-    return `${(priceInCopecks / 100).toFixed(0)} ₽`;
+  const formatPrice = (priceInPence: number) => {
+    return `£${(priceInPence / 100).toFixed(0)}`;
   };
 
   const handleOrderClick = (postcard: Postcard) => {

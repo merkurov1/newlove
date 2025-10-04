@@ -1,16 +1,17 @@
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
-
-export const dynamic = 'force-dynamic';
+import { useState } from 'react';
 
 // Заглушка данных до того как Prisma модели заработают
-const mockPostcards = [
+const initialMockPostcards = [
   {
     id: 'postcard_1',
     title: 'Авторская открытка "Закат"',
     description: 'Уникальная открытка с авторским рисунком заката над городом',
     image: 'https://example.com/postcard1.jpg',
-    price: 50000,
+    price: 2900,
     available: true,
     featured: true,
     createdAt: new Date(),
@@ -21,7 +22,7 @@ const mockPostcards = [
     title: 'Открытка "Минимализм"',
     description: 'Стильная минималистичная открытка в черно-белых тонах',
     image: 'https://example.com/postcard2.jpg',
-    price: 35000,
+    price: 2900,
     available: true,
     featured: false,
     createdAt: new Date(),
@@ -29,21 +30,13 @@ const mockPostcards = [
   }
 ];
 
-export default async function AdminPostcardsPage() {
-  // TODO: Заменить на реальный запрос когда Prisma модели заработают
-  // const postcards = await prisma.postcard.findMany({
-  //   orderBy: { createdAt: 'desc' },
-  //   include: {
-  //     _count: {
-  //       select: { orders: true }
-  //     }
-  //   }
-  // });
+export default function AdminPostcardsPage() {
+  const [postcards, setPostcards] = useState(initialMockPostcards);
+  const [editingPostcard, setEditingPostcard] = useState<any>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
-  const postcards = mockPostcards;
-
-  const formatPrice = (priceInCopecks: number) => {
-    return `${(priceInCopecks / 100).toFixed(0)} ₽`;
+  const formatPrice = (priceInPence: number) => {
+    return `£${(priceInPence / 100).toFixed(0)}`;
   };
 
   const formatDate = (date: Date) => {
@@ -52,6 +45,41 @@ export default async function AdminPostcardsPage() {
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  const handleEdit = (postcard: any) => {
+    setEditingPostcard({...postcard});
+    setIsEditing(true);
+  };
+
+  const handleSave = () => {
+    if (editingPostcard) {
+      // Проверяем валидность данных
+      if (!editingPostcard.title || !editingPostcard.description || editingPostcard.price < 0) {
+        alert('Пожалуйста, заполните все обязательные поля корректно');
+        return;
+      }
+      
+      setPostcards(postcards.map(p => 
+        p.id === editingPostcard.id ? {...editingPostcard} : p
+      ));
+      setIsEditing(false);
+      setEditingPostcard(null);
+      
+      // Показываем сообщение об успехе
+      alert('Открытка успешно обновлена!');
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('Вы уверены, что хотите удалить эту открытку?')) {
+      setPostcards(postcards.filter(p => p.id !== id));
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditingPostcard(null);
   };
 
   return (
@@ -220,12 +248,18 @@ export default async function AdminPostcardsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">
-                        <Link 
-                          href={`/admin/postcards/edit/${postcard.id}`}
+                        <button 
+                          onClick={() => handleEdit(postcard)}
                           className="text-blue-600 hover:text-blue-900 transition-colors"
                         >
                           Изменить
-                        </Link>
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(postcard.id)}
+                          className="text-red-600 hover:text-red-900 transition-colors"
+                        >
+                          Удалить
+                        </button>
                         <Link 
                           href={`/admin/postcards/orders/${postcard.id}`}
                           className="text-green-600 hover:text-green-900 transition-colors"
@@ -271,6 +305,94 @@ export default async function AdminPostcardsPage() {
           </Link>
         </div>
       </div>
+
+      {/* Модальное окно для редактирования */}
+      {isEditing && editingPostcard && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Редактировать открытку
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Название</label>
+                  <input
+                    type="text"
+                    value={editingPostcard.title}
+                    onChange={(e) => setEditingPostcard({...editingPostcard, title: e.target.value})}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-orange-500 focus:outline-none focus:ring-orange-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Описание</label>
+                  <textarea
+                    value={editingPostcard.description}
+                    onChange={(e) => setEditingPostcard({...editingPostcard, description: e.target.value})}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-orange-500 focus:outline-none focus:ring-orange-500"
+                    rows={3}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Цена (в фунтах)</label>
+                  <input
+                    type="number"
+                    value={editingPostcard.price / 100}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      const priceInPence = isNaN(value) ? 0 : Math.round(value * 100);
+                      setEditingPostcard({...editingPostcard, price: priceInPence});
+                    }}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-orange-500 focus:outline-none focus:ring-orange-500"
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
+                
+                <div className="flex items-center space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={editingPostcard.available}
+                      onChange={(e) => setEditingPostcard({...editingPostcard, available: e.target.checked})}
+                      className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Доступна для заказа</span>
+                  </label>
+                  
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={editingPostcard.featured}
+                      onChange={(e) => setEditingPostcard({...editingPostcard, featured: e.target.checked})}
+                      className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Рекомендуемая</span>
+                  </label>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-2 mt-6">
+                <button
+                  onClick={handleCancel}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleSave}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
+                >
+                  Сохранить
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
