@@ -326,12 +326,29 @@ export async function createLetter(formData) {
   const session = await verifyAdmin();
   const title = formData.get('title')?.toString().trim();
   const slug = formData.get('slug')?.toString().trim();
-  const content = formData.get('content')?.toString();
+  const rawContent = formData.get('content')?.toString();
   const tagsString = formData.get('tags')?.toString();
   const published = formData.get('published') === 'on';
 
-  if (!title || !slug || !content) {
+  if (!title || !slug || !rawContent) {
     throw new Error('Заполните все обязательные поля.');
+  }
+
+  // Валидируем и нормализуем content
+  let content = rawContent;
+  try {
+    // Проверяем, является ли content валидным JSON
+    const parsedContent = JSON.parse(rawContent);
+    if (Array.isArray(parsedContent)) {
+      // Если это массив блоков EditorJS, сохраняем как JSON
+      content = JSON.stringify(parsedContent);
+    } else {
+      // Иначе сохраняем как есть
+      content = rawContent;
+    }
+  } catch (e) {
+    // Если не JSON, сохраняем как строку
+    content = rawContent;
   }
 
   try {
@@ -366,12 +383,29 @@ export async function updateLetter(formData) {
   const id = formData.get('id')?.toString();
   const title = formData.get('title')?.toString().trim();
   const slug = formData.get('slug')?.toString().trim();
-  const content = formData.get('content')?.toString();
+  const rawContent = formData.get('content')?.toString();
   const tagsString = formData.get('tags')?.toString();
   const published = formData.get('published') === 'on';
 
-  if (!id || !title || !slug || !content) {
+  if (!id || !title || !slug || !rawContent) {
     throw new Error('Заполните все обязательные поля.');
+  }
+
+  // Валидируем и нормализуем content
+  let content = rawContent;
+  try {
+    // Проверяем, является ли content валидным JSON
+    const parsedContent = JSON.parse(rawContent);
+    if (Array.isArray(parsedContent)) {
+      // Если это массив блоков EditorJS, сохраняем как JSON
+      content = JSON.stringify(parsedContent);
+    } else {
+      // Иначе сохраняем как есть
+      content = rawContent;
+    }
+  } catch (e) {
+    // Если не JSON, сохраняем как строку
+    content = rawContent;
   }
 
   try {
