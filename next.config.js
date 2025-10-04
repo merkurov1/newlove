@@ -61,6 +61,12 @@ const nextConfig = {
         hostname: 'cdn-images-1.medium.com', // Для изображений Medium
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'example.com', // Для тестовых изображений
+        port: '',
+        pathname: '/**',
       }
     ],
     // Поддержка локальных изображений из /public/uploads
