@@ -152,6 +152,9 @@ model Letter {
   updatedAt   DateTime  @updatedAt
   authorId    String
   author      User      @relation(fields: [authorId], references: [id])
+  
+  tags        Tag[]     // <-- ДОБАВЛЯЕМ СВЯЗЬ С ТЕГАМИ
+  
   @@map("letters")
 }
 
@@ -163,6 +166,7 @@ model Tag {
   
   articles  Article[] // <-- Обратная связь со статьями
   projects  Project[] // <-- Обратная связь с проектами
+  letters   Letter[]  // <-- ДОБАВЛЯЕМ ОБРАТНУЮ СВЯЗЬ С ПИСЬМАМИ
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
