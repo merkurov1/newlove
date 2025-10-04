@@ -8,6 +8,7 @@ const navItems = [
   { href: '/admin/articles', label: 'Статьи', icon: '📄' },
   { href: '/admin/projects', label: 'Проекты', icon: '🚀' },
   { href: '/admin/letters', label: 'Письма', icon: '💌' },
+  { href: '/admin/postcards', label: 'Открытки', icon: '🎨' },
   { href: '/admin/users', label: 'Пользователи', icon: '👥' }, // Обновленная система
   { href: '/admin/media', label: 'Медиа', icon: '🖼️' },
   { href: '/admin/banners', label: 'Баннеры', icon: '🎨' },
