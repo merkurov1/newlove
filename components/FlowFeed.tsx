@@ -81,31 +81,7 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
     const stats = item.stats;
     if (!stats) return null;
 
-    if (item.type === 'bluesky') {
-      return (
-        <div className="flex items-center gap-4 text-xs text-gray-500">
-          {stats.likes !== undefined && (
-            <span className="flex items-center gap-1">
-              <span>❤️</span>
-              {stats.likes}
-            </span>
-          )}
-          {stats.reposts !== undefined && (
-            <span className="flex items-center gap-1">
-              <span>🔄</span>
-              {stats.reposts}
-            </span>
-          )}
-          {stats.replies !== undefined && (
-            <span className="flex items-center gap-1">
-              <span>💬</span>
-              {stats.replies}
-            </span>
-          )}
-        </div>
-      );
-    }
-
+    // Показываем статистику только для YouTube
     if (item.type === 'youtube') {
       return (
         <div className="flex items-center gap-4 text-xs text-gray-500">
@@ -263,37 +239,25 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
               </div>
             )}
 
-            {/* Метаданные для Medium */}
-            {item.type === 'medium' && (
-              <div className="flex items-center gap-3 mb-4">
-                {item.readingTime && (
-                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                    📖 {item.readingTime}
-                  </span>
-                )}
-                {item.categories && item.categories.map((cat, idx) => (
-                  <span key={idx} className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded">
-                    {cat}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Футер с статистикой и ссылкой */}
+            {/* Футер с ограниченным контентом */}
             <div className="flex items-center justify-between">
-              {formatStats(item)}
+              {/* Показываем статистику только для YouTube */}
+              {item.type === 'youtube' && formatStats(item)}
               
-              <a
-                href={item.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
-              >
-                Открыть
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
+              {/* Показываем ссылку только для YouTube */}
+              {item.type === 'youtube' && (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
+                >
+                  Открыть
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
             </div>
           </div>
         </article>

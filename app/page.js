@@ -111,10 +111,10 @@ export default async function HomePage() {
       <WelcomeBanner />
 
       {/* Two-column layout: Articles + Flow */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
+      <section className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12">
         
-        {/* Articles Section - Left column (2/3 width on desktop) */}
-        <div className="lg:col-span-2">
+        {/* Articles Section - Left column (3/5 width on desktop) */}
+        <div className="lg:col-span-3">
           <div className="flex items-center justify-between mb-8">
             <div className="flex-1"></div>
             <Link 
@@ -213,8 +213,8 @@ export default async function HomePage() {
           </FadeInSection>
         </div>
 
-        {/* Flow Section - Right column (1/3 width on desktop) */}
-        <div className="lg:col-span-1">
+        {/* Flow Section - Right column (2/5 width on desktop) */}
+        <div className="lg:col-span-2">
           <div className="bg-gray-50 rounded-xl p-6 lg:sticky lg:top-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">
