@@ -37,6 +37,30 @@ const nextConfig = {
         hostname: '*.supabase.co', // Все поддомены Supabase
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.bsky.app', // Для изображений Bluesky
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.ytimg.com', // Для превью YouTube
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'miro.medium.com', // Для изображений Medium
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn-images-1.medium.com', // Для изображений Medium
+        port: '',
+        pathname: '/**',
       }
     ],
     // Поддержка локальных изображений из /public/uploads
