@@ -68,7 +68,7 @@ const NewsletterEmail = ({ title = 'Тема письма', content = '' }) => {
             <div dangerouslySetInnerHTML={{ __html: contentHtml }} />
             <Hr style={hr} />
             <Text style={footer}>
-              Anton Merkurov | Вы получили это письмо, потому что подписались на рассылку на сайте merkurov.love
+              Anton Merkurov | Вы получили это письмо, потому что подписались на рассылку на сайте new.merkurov.love
             </Text>
           </Section>
         </Container>

@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
     // Отправляем тестовое письмо
     const result = await resend.emails.send({
-      from: 'Anton Merkurov <letters@merkurov.com>',
+      from: 'Anton Merkurov <noreply@resend.dev>',
       to: [adminUser.email],
       subject: `[ТЕСТ] ${title}`,
       html: emailHtml,

@@ -310,14 +310,15 @@ export async function subscribeToNewsletter(prevState, formData) {
     return { status: 'error', message: 'Введите корректный email адрес.' };
   }
   try {
-    const existing = await prisma.newsletterSubscriber.findUnique({ where: { email } });
+    const existing = await prisma.subscriber.findUnique({ where: { email } });
     if (existing) {
       return { status: 'error', message: 'Этот email уже подписан на рассылку.' };
     }
-    await prisma.newsletterSubscriber.create({ 
+    await prisma.subscriber.create({ 
       data: { 
         id: createId(),
-        email 
+        email,
+        isActive: true
       } 
     });
     return { status: 'success', message: 'Спасибо за подписку! Проверьте почту.' };
@@ -568,7 +569,7 @@ export async function sendLetter(prevState, formData) {
     
     // Отправляем письмо
     const { data, error } = await resend.emails.send({
-      from: 'Anton Merkurov <letters@merkurov.com>',
+      from: 'Anton Merkurov <noreply@resend.dev>',
       to: subscribers.map(s => s.email),
       subject: letter.title,
       html: emailHtml,
