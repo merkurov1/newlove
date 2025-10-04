@@ -110,134 +110,134 @@ export default async function HomePage() {
       {/* Smart Welcome Banner */}
       <WelcomeBanner />
 
-      {/* Flow Section */}
-      <section aria-labelledby="flow-heading" className="bg-gray-50 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-        <div className="max-w-4xl mx-auto">
+      {/* Two-column layout: Articles + Flow */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
+        
+        {/* Articles Section - Left column (2/3 width on desktop) */}
+        <div className="lg:col-span-2">
           <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 id="flow-heading" className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-                🌊 Flow
-              </h2>
-              <p className="text-gray-600">
-                Последние публикации из всех платформ в едином потоке
-              </p>
-            </div>
+            <div className="flex-1"></div>
             <Link 
-              href="/lab"
-              className="text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-              aria-label="Перейти в лабораторию"
+              href="/articles" 
+              className="text-blue-600 hover:text-blue-700 font-medium"
+              aria-label="Посмотреть все статьи"
             >
-              Лаборатория
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
+              Все статьи →
             </Link>
           </div>
           
           <FadeInSection>
-            <FlowFeed limit={7} />
-          </FadeInSection>
-        </div>
-      </section>
-
-      {/* Articles Section */}
-      <section aria-labelledby="articles-heading">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex-1"></div>
-          <Link 
-            href="/articles" 
-            className="text-blue-600 hover:text-blue-700 font-medium"
-            aria-label="Посмотреть все статьи"
-          >
-            Все статьи →
-          </Link>
-        </div>
-        
-        <FadeInSection>
-          <div className="grid gap-4 sm:gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" role="list">
-            {articles && articles.length > 0 ? (
-              articles.map((article) => (
-                <article
-                  key={article.id}
-                  className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden p-3 sm:p-6"
-                  role="listitem"
-                >
-                  <Link 
-                    href={`/${article.slug}`} 
-                    className="block relative w-full h-48 mb-4"
-                    aria-label={`Читать статью: ${article.title}`}
+            <div className="grid gap-4 sm:gap-8 grid-cols-1 sm:grid-cols-2 xl:grid-cols-2" role="list">
+              {articles && articles.length > 0 ? (
+                articles.map((article) => (
+                  <article
+                    key={article.id}
+                    className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden p-3 sm:p-6"
+                    role="listitem"
                   >
-                    {article.previewImage ? (
-                      <SafeImage
-                        src={article.previewImage}
-                        alt={`Изображение к статье: ${article.title}`}
-                        fill
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        className="object-cover group-hover:scale-105 transition-transform duration-300 rounded-lg"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center rounded-lg">
-                        <div className="text-center">
-                          <div className="text-4xl text-gray-300 mb-2">📄</div>
-                          <div className="text-sm text-gray-400">Без изображения</div>
+                    <Link 
+                      href={`/${article.slug}`} 
+                      className="block relative w-full h-48 mb-4"
+                      aria-label={`Читать статью: ${article.title}`}
+                    >
+                      {article.previewImage ? (
+                        <SafeImage
+                          src={article.previewImage}
+                          alt={`Изображение к статье: ${article.title}`}
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          className="object-cover group-hover:scale-105 transition-transform duration-300 rounded-lg"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center rounded-lg">
+                          <div className="text-center">
+                            <div className="text-4xl text-gray-300 mb-2">📄</div>
+                            <div className="text-sm text-gray-400">Без изображения</div>
+                          </div>
                         </div>
+                      )}
+                    </Link>
+                  <div className="flex-grow flex flex-col">
+                    <Link href={`/${article.slug}`}>
+                      <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
+                        {article.title}
+                      </h3>
+                    </Link>
+                    {article.publishedAt && (
+                      <time 
+                        className="text-sm text-gray-500 mb-4"
+                        dateTime={article.publishedAt}
+                      >
+                        {new Date(article.publishedAt).toLocaleDateString('ru-RU', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })}
+                      </time>
+                    )}
+                    {/* Описание/контент убран по требованию — только заголовок и картинка */}
+                    {article.tags && article.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-4" role="list">
+                        {article.tags.map(tag => (
+                          <Link
+                            key={tag.id}
+                            href={`/tags/${tag.slug}`}
+                            className="bg-gray-100 text-gray-600 text-xs sm:text-xs font-medium px-3 py-2 rounded-full hover:bg-gray-200 min-h-[36px] min-w-[44px] flex items-center justify-center"
+                            role="listitem"
+                            aria-label={`Статьи с тегом ${tag.name}`}
+                          >
+                            {tag.name}
+                          </Link>
+                        ))}
                       </div>
                     )}
-                  </Link>
-                <div className="flex-grow flex flex-col">
-                  <Link href={`/${article.slug}`}>
-                    <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
-                      {article.title}
-                    </h3>
-                  </Link>
-                  {article.publishedAt && (
-                    <time 
-                      className="text-sm text-gray-500 mb-4"
-                      dateTime={article.publishedAt}
-                    >
-                      {new Date(article.publishedAt).toLocaleDateString('ru-RU', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
-                    </time>
-                  )}
-                  {/* Описание/контент убран по требованию — только заголовок и картинка */}
-                  {article.tags && article.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-4" role="list">
-                      {article.tags.map(tag => (
-                        <Link
-                          key={tag.id}
-                          href={`/tags/${tag.slug}`}
-                          className="bg-gray-100 text-gray-600 text-xs sm:text-xs font-medium px-3 py-2 rounded-full hover:bg-gray-200 min-h-[36px] min-w-[44px] flex items-center justify-center"
-                          role="listitem"
-                          aria-label={`Статьи с тегом ${tag.name}`}
-                        >
-                          {tag.name}
-                        </Link>
-                      ))}
+                    <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-100">
+                      {article.author.image && (
+                        <SafeImage 
+                          src={article.author.image} 
+                          alt={`Фото автора ${article.author.name}`} 
+                          width={32} 
+                          height={32} 
+                          className="rounded-full" 
+                        />
+                      )}
+                      <span className="text-sm font-medium text-gray-600">{article.author.name}</span>
                     </div>
-                  )}
-                  <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-100">
-                    {article.author.image && (
-                      <SafeImage 
-                        src={article.author.image} 
-                        alt={`Фото автора ${article.author.name}`} 
-                        width={32} 
-                        height={32} 
-                        className="rounded-full" 
-                      />
-                    )}
-                    <span className="text-sm font-medium text-gray-600">{article.author.name}</span>
                   </div>
-                </div>
-                </article>
-              ))
-            ) : (
-              <p className="text-center text-gray-500 col-span-full">Здесь пока нет опубликованных статей. Самое время написать первую!</p>
-            )}
+                  </article>
+                ))
+              ) : (
+                <p className="text-center text-gray-500 col-span-full">Здесь пока нет опубликованных статей. Самое время написать первую!</p>
+              )}
+            </div>
+          </FadeInSection>
+        </div>
+
+        {/* Flow Section - Right column (1/3 width on desktop) */}
+        <div className="lg:col-span-1">
+          <div className="bg-gray-50 rounded-xl p-6 lg:sticky lg:top-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">
+                🌊 Flow
+              </h2>
+              <Link 
+                href="/lab"
+                className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"
+                aria-label="Перейти в лабораторию"
+              >
+                Лаборатория
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+            
+            <FadeInSection>
+              <FlowFeed limit={5} />
+            </FadeInSection>
           </div>
-        </FadeInSection>
+        </div>
+
       </section>
       
       {/* SEO Structured Data */}
