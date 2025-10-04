@@ -104,10 +104,27 @@ async function getMediumData() {
         return `${minutes} мин чтения`;
       };
 
-      // Извлекаем изображение превью из content
+      // Улучшенное извлечение изображения превью из content
       const extractImageFromContent = (htmlContent: string) => {
+        // Сначала ищем <img> теги
         const imgMatch = htmlContent.match(/<img[^>]+src="([^"]+)"[^>]*>/i);
-        return imgMatch ? imgMatch[1] : null;
+        if (imgMatch) {
+          return imgMatch[1];
+        }
+        
+        // Ищем Medium CDN изображения в тексте
+        const mediumCdnMatch = htmlContent.match(/https:\/\/(?:cdn-images-1\.medium\.com|miro\.medium\.com)\/[^\s"<>]+/i);
+        if (mediumCdnMatch) {
+          return mediumCdnMatch[0];
+        }
+        
+        // Ищем любые другие изображения
+        const anyImageMatch = htmlContent.match(/https?:\/\/[^\s"<>]+\.(?:jpg|jpeg|png|gif|webp)/i);
+        if (anyImageMatch) {
+          return anyImageMatch[0];
+        }
+        
+        return null;
       };
 
       return {
@@ -119,7 +136,10 @@ async function getMediumData() {
         categories: item.categories || [],
         id: item.guid || item.link,
         readingTime: estimateReadTime(textContent),
-        thumbnail: item.enclosure?.url || extractImageFromContent(content)
+        thumbnail: item.enclosure?.url || 
+                  extractImageFromContent(content) || 
+                  extractImageFromContent(item.contentSnippet || '') ||
+                  (item['media:thumbnail'] ? item['media:thumbnail'].$.url : null)
       };
     });
 
