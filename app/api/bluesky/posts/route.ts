@@ -54,28 +54,51 @@ export async function GET(request: NextRequest) {
       throw new Error('Failed to fetch posts');
     }
 
-    // Форматируем данные для фронтенда
-    const posts = response.data.feed.map(item => ({
-      uri: item.post.uri,
-      cid: item.post.cid,
-      author: {
-        did: item.post.author.did,
-        handle: item.post.author.handle,
-        displayName: item.post.author.displayName || item.post.author.handle,
-        avatar: item.post.author.avatar,
-      },
-      record: item.post.record,
-      replyCount: item.post.replyCount || 0,
-      repostCount: item.post.repostCount || 0,
-      likeCount: item.post.likeCount || 0,
-      indexedAt: item.post.indexedAt,
-      createdAt: (item.post.record as any)?.createdAt,
-      text: (item.post.record as any)?.text || '',
-      embed: item.post.embed,
-      // Дополнительные поля если есть
-      reason: item.reason,
-      reply: item.reply,
-    }));
+    // Фильтруем реплаи и форматируем данные для фронтенда
+    const posts = response.data.feed
+      .filter(item => !item.reply) // Исключаем реплаи
+      .map(item => {
+        const record = item.post.record as any;
+        const embed = item.post.embed;
+        
+        // Обрабатываем изображения из embed
+        let images: Array<{url: string, alt?: string}> = [];
+        if (embed) {
+          const embedData = embed as any; // Приводим к any для работы с различными типами embed
+          if (embedData.$type === 'app.bsky.embed.images#view' && embedData.images) {
+            images = embedData.images.map((img: any) => ({
+              url: img.fullsize || img.thumb,
+              alt: img.alt || ''
+            }));
+          } else if (embedData.$type === 'app.bsky.embed.recordWithMedia#view' && embedData.media?.images) {
+            images = embedData.media.images.map((img: any) => ({
+              url: img.fullsize || img.thumb,
+              alt: img.alt || ''
+            }));
+          }
+        }
+        
+        return {
+          uri: item.post.uri,
+          cid: item.post.cid,
+          author: {
+            did: item.post.author.did,
+            handle: item.post.author.handle,
+            displayName: item.post.author.displayName || item.post.author.handle,
+            avatar: item.post.author.avatar,
+          },
+          record: {
+            text: record?.text || '',
+            createdAt: record?.createdAt || item.post.indexedAt,
+            langs: record?.langs
+          },
+          replyCount: item.post.replyCount || 0,
+          repostCount: item.post.repostCount || 0,
+          likeCount: item.post.likeCount || 0,
+          images, // Добавляем изображения
+          embed: embed // Сохраняем полный embed для отладки
+        };
+      });
 
     return NextResponse.json({
       posts,
