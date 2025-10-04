@@ -41,6 +41,7 @@ model User {
   projects      Project[]
   subscription  Subscriber?
   letters       Letter[]
+  postcardOrders PostcardOrder[]
 }
 
 model Account {
@@ -165,6 +166,63 @@ model Tag {
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+}
+
+// --- МОДЕЛИ ДЛЯ ФИЗИЧЕСКИХ ОТКРЫТОК ---
+model Postcard {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  image       String   // URL изображения открытки
+  price       Int      // Цена в копейках
+  available   Boolean  @default(true)
+  featured    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  orders      PostcardOrder[]
+  
+  @@map("postcards")
+}
+
+model PostcardOrder {
+  id            String   @id @default(cuid())
+  postcardId    String
+  postcard      Postcard @relation(fields: [postcardId], references: [id])
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  
+  // Контактная информация
+  recipientName String
+  address       String   @db.Text
+  city          String
+  postalCode    String
+  country       String   @default("Russia")
+  phone         String?
+  
+  // Персонализация
+  customMessage String?  @db.Text
+  
+  // Оплата и статус
+  status        PostcardOrderStatus @default(PENDING)
+  stripePaymentIntentId String?
+  amount        Int      // Цена на момент заказа
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  shippedAt     DateTime?
+  deliveredAt   DateTime?
+  
+  @@map("postcard_orders")
+}
+
+enum PostcardOrderStatus {
+  PENDING    // Ожидает оплаты
+  PAID       // Оплачен
+  PROCESSING // В обработке
+  SHIPPED    // Отправлен
+  DELIVERED  // Доставлен
+  CANCELLED  // Отменен
 }
 
 // --- МОДЕЛЬ ПРОДУКТОВ УДАЛЕНА ---

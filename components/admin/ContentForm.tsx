@@ -91,6 +91,44 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     return true;
   }
 
+  // Функция для отправки тестового письма
+  async function handleTestSend() {
+    if (!session?.user?.email) {
+      setError('Не удалось определить ваш email для тестовой отправки');
+      return;
+    }
+
+    if (!title || !content.length) {
+      setError('Заполните название и содержание письма для тестовой отправки');
+      return;
+    }
+
+    try {
+      setError('Отправляем тестовое письмо...');
+      
+      const response = await fetch('/api/admin/letters/test-send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title,
+          content,
+          recipientEmail: session.user.email,
+        }),
+      });
+
+      if (response.ok) {
+        setError(`✅ Тестовое письмо отправлено на ${session.user.email}`);
+      } else {
+        const data = await response.json();
+        setError(`❌ Ошибка отправки: ${data.error || 'Неизвестная ошибка'}`);
+      }
+    } catch (err) {
+      setError('❌ Ошибка при отправке тестового письма');
+    }
+  }
+
 
 
   return (
@@ -143,10 +181,22 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
         />
         <label htmlFor="published" className="ml-3 block text-base text-gray-900">Опубликовано</label>
       </div>
-      <div className="mt-4">
+      <div className="mt-4 space-y-3">
         <button type="submit" className="w-full flex justify-center py-3 px-4 border rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 min-h-[44px]">
           {isEditing ? 'Сохранить изменения' : `Создать ${type}`}
         </button>
+        
+        {/* Кнопка тестовой отправки только для писем */}
+        {type === 'выпуск' && (
+          <button 
+            type="button" 
+            onClick={handleTestSend}
+            disabled={!title || !content.length}
+            className="w-full flex justify-center py-3 px-4 border border-orange-500 rounded-md shadow-sm text-base font-medium text-orange-600 bg-white hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+          >
+            📧 Отправить себе на тест
+          </button>
+        )}
       </div>
     </form>
   );
