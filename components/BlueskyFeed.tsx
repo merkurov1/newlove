@@ -15,6 +15,11 @@ interface BlueskyRecord {
   langs?: string[];
 }
 
+interface BlueskyImage {
+  url: string;
+  alt?: string;
+}
+
 interface BlueskyPost {
   uri: string;
   cid: string;
@@ -23,6 +28,7 @@ interface BlueskyPost {
   replyCount: number;
   repostCount: number;
   likeCount: number;
+  images?: BlueskyImage[];
 }
 
 interface BlueskyFeedProps {
@@ -131,6 +137,34 @@ export default function BlueskyFeed({ limit = 10 }: BlueskyFeedProps) {
           <div className="mb-3">
             <p className="text-gray-800 whitespace-pre-wrap">{post.record.text}</p>
           </div>
+
+          {/* Изображения */}
+          {post.images && post.images.length > 0 && (
+            <div className="mb-3">
+              <div className={`grid gap-2 ${
+                post.images.length === 1 ? 'grid-cols-1' :
+                post.images.length === 2 ? 'grid-cols-2' :
+                post.images.length === 3 ? 'grid-cols-2' :
+                'grid-cols-2'
+              }`}>
+                {post.images.map((image, index) => (
+                  <div 
+                    key={index} 
+                    className={`relative overflow-hidden rounded-lg ${
+                      post.images!.length === 3 && index === 0 ? 'col-span-2' : ''
+                    }`}
+                  >
+                    <img 
+                      src={image.url} 
+                      alt={image.alt || `Изображение ${index + 1}`}
+                      className="w-full h-auto max-h-96 object-cover hover:scale-105 transition-transform cursor-pointer"
+                      onClick={() => window.open(image.url, '_blank')}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-between items-center text-sm text-gray-500 border-t pt-3">
             <div className="flex space-x-4">
