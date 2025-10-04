@@ -58,11 +58,11 @@ async function getBlueskyData() {
         if (item.post.embed) {
           if (item.post.embed.$type === 'app.bsky.embed.images#view') {
             const embed = item.post.embed as any;
-            images.push(...embed.images.map((img: any) => img.fullsize));
+            images.push(...embed.images.map((img: any) => img.fullsize || img.thumb));
           } else if (item.post.embed.$type === 'app.bsky.embed.recordWithMedia#view') {
             const embed = item.post.embed as any;
             if (embed.media?.$type === 'app.bsky.embed.images#view') {
-              images.push(...embed.media.images.map((img: any) => img.fullsize));
+              images.push(...embed.media.images.map((img: any) => img.fullsize || img.thumb));
             }
           }
         }
@@ -104,6 +104,12 @@ async function getMediumData() {
         return `${minutes} мин чтения`;
       };
 
+      // Извлекаем изображение превью из content
+      const extractImageFromContent = (htmlContent: string) => {
+        const imgMatch = htmlContent.match(/<img[^>]+src="([^"]+)"[^>]*>/i);
+        return imgMatch ? imgMatch[1] : null;
+      };
+
       return {
         title: item.title || '',
         link: item.link || '',
@@ -112,7 +118,8 @@ async function getMediumData() {
         excerpt: textContent + (content.length > 300 ? '...' : ''),
         categories: item.categories || [],
         id: item.guid || item.link,
-        readingTime: estimateReadTime(textContent)
+        readingTime: estimateReadTime(textContent),
+        thumbnail: item.enclosure?.url || extractImageFromContent(content)
       };
     });
 
@@ -175,7 +182,7 @@ async function getYouTubeData() {
         id: video.id,
         title: video.snippet.title,
         description: video.snippet.description,
-        thumbnail: video.snippet.thumbnails.high.url,
+        thumbnail: video.snippet.thumbnails.maxres?.url || video.snippet.thumbnails.high?.url || video.snippet.thumbnails.medium?.url,
         publishedAt: video.snippet.publishedAt,
         duration: video.contentDetails.duration,
         viewCount: parseInt(video.statistics.viewCount || '0'),
@@ -244,7 +251,8 @@ export async function GET() {
         publishedAt: article.publishedAt,
         timestamp: new Date(article.publishedAt).getTime(),
         readingTime: article.readingTime,
-        categories: article.categories || []
+        categories: article.categories || [],
+        thumbnail: article.thumbnail
       });
     });
 

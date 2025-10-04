@@ -249,6 +249,20 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
               </div>
             )}
 
+            {/* Превью для Medium */}
+            {item.type === 'medium' && item.thumbnail && (
+              <div className="relative aspect-[16/9] rounded-lg overflow-hidden mb-4">
+                <Image
+                  src={item.thumbnail}
+                  alt={item.title}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+              </div>
+            )}
+
             {/* Метаданные для Medium */}
             {item.type === 'medium' && (
               <div className="flex items-center gap-3 mb-4">
