@@ -21,8 +21,10 @@ interface PostcardOrderFormProps {
 
 interface FormData {
   recipientName: string;
-  address: string;
+  streetAddress: string;
+  addressLine2: string;
   city: string;
+  stateProvince: string;
   postalCode: string;
   country: string;
   phone: string;
@@ -33,18 +35,20 @@ export default function PostcardOrderForm({ postcard, onBack }: PostcardOrderFor
   const { data: session } = useSession();
   const [formData, setFormData] = useState<FormData>({
     recipientName: session?.user?.name || '',
-    address: '',
+    streetAddress: '',
+    addressLine2: '',
     city: '',
+    stateProvince: '',
     postalCode: '',
-    country: 'Russia',
+    country: 'United Kingdom',
     phone: '',
     customMessage: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const formatPrice = (priceInCopecks: number) => {
-    return `${(priceInCopecks / 100).toFixed(0)} ₽`;
+  const formatPrice = (priceInPence: number) => {
+    return `£${(priceInPence / 100).toFixed(0)}`;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -53,7 +57,7 @@ export default function PostcardOrderForm({ postcard, onBack }: PostcardOrderFor
   };
 
   const validateForm = () => {
-    const required = ['recipientName', 'address', 'city', 'postalCode'];
+    const required = ['recipientName', 'streetAddress', 'city', 'postalCode', 'country'];
     for (const field of required) {
       if (!formData[field as keyof FormData].trim()) {
         setError(`Поле "${getFieldLabel(field)}" обязательно для заполнения`);
@@ -66,9 +70,11 @@ export default function PostcardOrderForm({ postcard, onBack }: PostcardOrderFor
   const getFieldLabel = (field: string) => {
     const labels: Record<string, string> = {
       recipientName: 'Имя получателя',
-      address: 'Адрес',
+      streetAddress: 'Адрес',
       city: 'Город',
-      postalCode: 'Почтовый индекс'
+      stateProvince: 'Регион/Штат',
+      postalCode: 'Почтовый индекс',
+      country: 'Страна'
     };
     return labels[field] || field;
   };
@@ -167,20 +173,36 @@ export default function PostcardOrderForm({ postcard, onBack }: PostcardOrderFor
             />
           </div>
 
-          {/* Адрес */}
+          {/* Адрес строка 1 */}
           <div className="sm:col-span-2">
-            <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
-              Полный адрес *
+            <label htmlFor="streetAddress" className="block text-sm font-medium text-gray-700 mb-2">
+              Адрес (строка 1) *
             </label>
             <input
               type="text"
-              id="address"
-              name="address"
-              value={formData.address}
+              id="streetAddress"
+              name="streetAddress"
+              value={formData.streetAddress}
               onChange={handleInputChange}
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               placeholder="Улица, дом, квартира"
+            />
+          </div>
+
+          {/* Адрес строка 2 */}
+          <div className="sm:col-span-2">
+            <label htmlFor="addressLine2" className="block text-sm font-medium text-gray-700 mb-2">
+              Адрес (строка 2)
+            </label>
+            <input
+              type="text"
+              id="addressLine2"
+              name="addressLine2"
+              value={formData.addressLine2}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              placeholder="Район, комплекс, корпус (опционально)"
             />
           </div>
 
@@ -200,6 +222,22 @@ export default function PostcardOrderForm({ postcard, onBack }: PostcardOrderFor
             />
           </div>
 
+          {/* Регион/Штат */}
+          <div>
+            <label htmlFor="stateProvince" className="block text-sm font-medium text-gray-700 mb-2">
+              Регион/Штат/Область
+            </label>
+            <input
+              type="text"
+              id="stateProvince"
+              name="stateProvince"
+              value={formData.stateProvince}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              placeholder="Для США, Канады, Индии и др."
+            />
+          </div>
+
           {/* Почтовый индекс */}
           <div>
             <label htmlFor="postalCode" className="block text-sm font-medium text-gray-700 mb-2">
@@ -212,28 +250,50 @@ export default function PostcardOrderForm({ postcard, onBack }: PostcardOrderFor
               value={formData.postalCode}
               onChange={handleInputChange}
               required
-              pattern="[0-9]{6}"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-              placeholder="123456"
+              placeholder="Формат зависит от страны"
             />
           </div>
 
           {/* Страна */}
           <div>
             <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-2">
-              Страна
+              Страна *
             </label>
             <select
               id="country"
               name="country"
               value={formData.country}
               onChange={handleInputChange}
+              required
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             >
-              <option value="Russia">Россия</option>
-              <option value="Belarus">Беларусь</option>
-              <option value="Kazakhstan">Казахстан</option>
-              <option value="Other">Другая</option>
+              <option value="United Kingdom">🇬🇧 United Kingdom</option>
+              <option value="United States">🇺🇸 United States</option>
+              <option value="Canada">🇨🇦 Canada</option>
+              <option value="Australia">🇦🇺 Australia</option>
+              <option value="Germany">🇩🇪 Germany</option>
+              <option value="France">🇫🇷 France</option>
+              <option value="Italy">🇮🇹 Italy</option>
+              <option value="Spain">🇪🇸 Spain</option>
+              <option value="Netherlands">🇳🇱 Netherlands</option>
+              <option value="Belgium">🇧🇪 Belgium</option>
+              <option value="Switzerland">🇨🇭 Switzerland</option>
+              <option value="Austria">🇦🇹 Austria</option>
+              <option value="Sweden">🇸🇪 Sweden</option>
+              <option value="Norway">🇳🇴 Norway</option>
+              <option value="Denmark">🇩🇰 Denmark</option>
+              <option value="Finland">🇫🇮 Finland</option>
+              <option value="Japan">🇯🇵 Japan</option>
+              <option value="South Korea">🇰🇷 South Korea</option>
+              <option value="Singapore">🇸🇬 Singapore</option>
+              <option value="New Zealand">🇳🇿 New Zealand</option>
+              <option value="Russia">🇷🇺 Russia</option>
+              <option value="Poland">🇵🇱 Poland</option>
+              <option value="Czech Republic">🇨🇿 Czech Republic</option>
+              <option value="Ireland">🇮🇪 Ireland</option>
+              <option value="Portugal">🇵🇹 Portugal</option>
+              <option value="Other">🌍 Other</option>
             </select>
           </div>
 

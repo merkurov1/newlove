@@ -65,8 +65,8 @@ CREATE INDEX "postcards_featured_idx" ON "postcards"("featured");
 
 -- 6. Добавление тестовых открыток (опционально)
 INSERT INTO "postcards" ("id", "title", "description", "image", "price", "available", "featured", "updatedAt") VALUES
-  ('postcard_1', 'Авторская открытка "Закат"', 'Уникальная открытка с авторским рисунком заката над городом', 'https://example.com/postcard1.jpg', 50000, true, true, CURRENT_TIMESTAMP),
-  ('postcard_2', 'Открытка "Минимализм"', 'Стильная минималистичная открытка в черно-белых тонах', 'https://example.com/postcard2.jpg', 35000, true, false, CURRENT_TIMESTAMP);
+  ('postcard_1', 'Авторская открытка "Закат"', 'Уникальная открытка с авторским рисунком заката над городом', 'https://example.com/postcard1.jpg', 2900, true, true, CURRENT_TIMESTAMP),
+  ('postcard_2', 'Открытка "Минимализм"', 'Стильная минималистичная открытка в черно-белых тонах', 'https://example.com/postcard2.jpg', 2900, true, false, CURRENT_TIMESTAMP);
 
 -- Готово! После выполнения этой миграции обновите Prisma schema командой:
 -- npx prisma db pull

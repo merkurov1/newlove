@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
-import prisma from '@/lib/prisma';
+// import prisma from '@/lib/prisma';
 
 export async function GET() {
   try {
@@ -11,22 +11,27 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Получаем доступные открытки, сначала рекомендуемые
-    const postcards = await prisma.postcard.findMany({
-      orderBy: [
-        { featured: 'desc' },
-        { createdAt: 'desc' }
-      ],
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        image: true,
-        price: true,
+    // Временно используем моковые данные до обновления базы
+    const postcards = [
+      {
+        id: 'postcard_1',
+        title: 'Авторская открытка "Закат"',
+        description: 'Уникальная открытка с авторским рисунком заката над городом',
+        image: '/images/postcard-placeholder.jpg',
+        price: 2900, // £29.00 в пенсах
         available: true,
         featured: true
+      },
+      {
+        id: 'postcard_2',
+        title: 'Открытка "Минимализм"',
+        description: 'Стильная минималистичная открытка в черно-белых тонах',
+        image: '/images/postcard-placeholder.jpg',
+        price: 2900, // £29.00 в пенсах
+        available: true,
+        featured: false
       }
-    });
+    ];
 
     return NextResponse.json({ postcards });
   } catch (error) {
