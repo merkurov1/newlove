@@ -9,7 +9,6 @@ export default async function UsersPage() {
       name: true,
       email: true,
       image: true,
-      createdAt: true,
       _count: {
         select: {
           articles: true,
