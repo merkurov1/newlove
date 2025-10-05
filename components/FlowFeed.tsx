@@ -172,9 +172,9 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
 
           {/* Контент */}
           <div className="px-6 pb-6">
-            <h3 className="font-semibold text-gray-900 mb-3 group-hover:text-blue-600 transition-colors">
-              {item.title}
-            </h3>
+//            <h3 className="font-semibold text-gray-900 mb-3 group-hover:text-blue-600 transition-colors">
+//              {item.title}
+//            </h3>
 
             <div className="text-gray-700 text-sm leading-relaxed mb-4">
               {item.content}
