@@ -1,4 +1,4 @@
-
+"use client";
 import { Role } from '@/types/next-auth.d';
 import { getRoleEmoji, getRoleName, getRoleDescription } from '@/lib/roles';
 import { AnimatePresence, motion } from 'framer-motion';
