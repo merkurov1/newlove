@@ -10,9 +10,7 @@ import { getFirstImage } from '@/lib/contentUtils';
 import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
 import WelcomeBanner from '@/components/WelcomeBanner';
 import FlowFeed from '@/components/FlowFeed';
-import { AnimatePresence, motion } from 'framer-motion';
-
-const FadeInSection = importDynamic(() => import('@/components/FadeInSection'), { ssr: false });
+// Удалены Framer Motion и FadeInSection для server component совместимости
 
 // --- БЛОК МЕТАДАННЫХ ---
 export const metadata = {
@@ -108,21 +106,12 @@ export default async function HomePage() {
   );
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key="main-page"
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -30 }}
-        transition={{ duration: 0.6, ease: 'easeInOut' }}
-        className="space-y-12"
-      >
+    <>
       {/* Smart Welcome Banner */}
       <WelcomeBanner />
 
       {/* Two-column layout: Articles + Flow */}
       <section className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12">
-        
         {/* Articles Section - Left column (3/5 width on desktop) */}
         <div className="lg:col-span-3">
           <div className="flex items-center justify-between mb-8">
@@ -135,38 +124,36 @@ export default async function HomePage() {
               Все статьи →
             </Link>
           </div>
-          
-          <FadeInSection>
-            <div className="grid gap-4 sm:gap-8 grid-cols-1 sm:grid-cols-2 xl:grid-cols-2" role="list">
-              {articles && articles.length > 0 ? (
-                articles.map((article) => (
-                  <article
-                    key={article.id}
-                    className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden p-3 sm:p-6"
-                    role="listitem"
+          <div className="grid gap-4 sm:gap-8 grid-cols-1 sm:grid-cols-2 xl:grid-cols-2" role="list">
+            {articles && articles.length > 0 ? (
+              articles.map((article) => (
+                <article
+                  key={article.id}
+                  className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden p-3 sm:p-6"
+                  role="listitem"
+                >
+                  <Link 
+                    href={`/${article.slug}`} 
+                    className="block relative w-full h-48 mb-4"
+                    aria-label={`Читать статью: ${article.title}`}
                   >
-                    <Link 
-                      href={`/${article.slug}`} 
-                      className="block relative w-full h-48 mb-4"
-                      aria-label={`Читать статью: ${article.title}`}
-                    >
-                      {article.previewImage ? (
-                        <SafeImage
-                          src={article.previewImage}
-                          alt={`Изображение к статье: ${article.title}`}
-                          fill
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                          className="object-cover group-hover:scale-105 transition-transform duration-300 rounded-lg"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center rounded-lg">
-                          <div className="text-center">
-                            <div className="text-4xl text-gray-300 mb-2">📄</div>
-                            <div className="text-sm text-gray-400">Без изображения</div>
-                          </div>
+                    {article.previewImage ? (
+                      <SafeImage
+                        src={article.previewImage}
+                        alt={`Изображение к статье: ${article.title}`}
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        className="object-cover group-hover:scale-105 transition-transform duration-300 rounded-lg"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center rounded-lg">
+                        <div className="text-center">
+                          <div className="text-4xl text-gray-300 mb-2">📄</div>
+                          <div className="text-sm text-gray-400">Без изображения</div>
                         </div>
-                      )}
-                    </Link>
+                      </div>
+                    )}
+                  </Link>
                   <div className="flex-grow flex flex-col">
                     <Link href={`/${article.slug}`}>
                       <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
@@ -214,15 +201,13 @@ export default async function HomePage() {
                       <span className="text-sm font-medium text-gray-600">{article.author.name}</span>
                     </div>
                   </div>
-                  </article>
-                ))
-              ) : (
-                <p className="text-center text-gray-500 col-span-full">Здесь пока нет опубликованных статей. Самое время написать первую!</p>
-              )}
-            </div>
-          </FadeInSection>
+                </article>
+              ))
+            ) : (
+              <p className="text-center text-gray-500 col-span-full">Здесь пока нет опубликованных статей. Самое время написать первую!</p>
+            )}
+          </div>
         </div>
-
         {/* Flow Section - Right column (2/5 width on desktop) */}
         <div className="lg:col-span-2">
           <div className="bg-gray-50 rounded-xl p-6 lg:sticky lg:top-8">
@@ -241,15 +226,10 @@ export default async function HomePage() {
                 </svg>
               </Link>
             </div>
-            
-            <FadeInSection>
-              <FlowFeed limit={5} />
-            </FadeInSection>
+            <FlowFeed limit={5} />
           </div>
         </div>
-
       </section>
-      
       {/* SEO Structured Data */}
       <PersonSchema
         name="Anton Merkurov"
@@ -263,21 +243,18 @@ export default async function HomePage() {
           "https://instagram.com/merkurov"
         ]}
       />
-      
       <WebsiteSchema
         name="Anton Merkurov"
         url="https://merkurov.love"
         description="Персональный сайт и блог Антона Меркурова о медиа, технологиях и современном искусстве"
         author="Anton Merkurov"
       />
-      
       <BlogSchema
         name="Anton Merkurov Blog"
         url="https://merkurov.love"
         description="Блог о медиа, технологиях, digital-маркетинге и современном искусстве"
         author="Anton Merkurov"
       />
-      </motion.div>
-    </AnimatePresence>
+    </>
   );
 }
