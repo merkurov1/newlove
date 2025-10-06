@@ -1,3 +1,5 @@
+
+"use client";
 // app/lab/page.tsx
 
 import AuthGuard from '@/components/AuthGuard';

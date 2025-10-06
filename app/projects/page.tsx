@@ -1,3 +1,5 @@
+
+"use client";
 // app/projects/page.tsx
 
 import Link from 'next/link';
