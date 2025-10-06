@@ -52,16 +52,16 @@ export default async function TagPage({ params }) {
     return match ? match[1] : null;
   }
 
-  return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="mb-12">
-        <p className="text-lg text-gray-500">Материалы по тегу</p>
-        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-gray-900"># {tag.name}</h1>
-      </div>
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-100 py-12 px-4">
+        <div className="max-w-4xl mx-auto mb-12">
+          <p className="text-lg text-gray-500 mb-2">Материалы по тегу</p>
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-500 to-pink-400 bg-clip-text text-transparent"># {tag.name}</h1>
+        </div>
 
       {/* --- СЕТКА СТАТЕЙ (аналогично главной странице) --- */}
       {articles.length > 0 ? (
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-2">
           {articles.map((article) => {
             const previewImage = getFirstImage(article.content);
             return (
