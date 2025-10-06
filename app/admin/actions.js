@@ -310,11 +310,11 @@ export async function subscribeToNewsletter(prevState, formData) {
     return { status: 'error', message: 'Введите корректный email адрес.' };
   }
   try {
-    const existing = await prisma.subscriber.findUnique({ where: { email } });
+    const existing = await prisma.Subscriber.findUnique({ where: { email } });
     if (existing) {
       return { status: 'error', message: 'Этот email уже подписан на рассылку.' };
     }
-    await prisma.subscriber.create({ 
+    await prisma.Subscriber.create({ 
       data: { 
         id: createId(),
         email,

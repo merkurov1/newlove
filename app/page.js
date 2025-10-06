@@ -131,7 +131,7 @@ export default async function HomePage() {
               articles.map((article) => (
                 <article
                   key={article.id}
-                  className="bg-white/80 backdrop-blur rounded-2xl shadow-lg hover:shadow-2xl transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden p-4 sm:p-6 hover:-translate-y-1 hover:scale-[1.02] transition-transform"
+                  className="bg-white/80 backdrop-blur rounded-2xl shadow-lg hover:shadow-2xl transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden p-4 sm:p-6"
                   role="listitem"
                 >
                   <Link 
