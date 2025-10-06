@@ -1,6 +1,7 @@
 // app/page.js
 
 
+
 import prisma from '../lib/prisma';
 import Link from 'next/link';
 import SafeImage from '@/components/SafeImage';
@@ -9,6 +10,7 @@ import { getFirstImage } from '@/lib/contentUtils';
 import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
 import WelcomeBanner from '@/components/WelcomeBanner';
 import FlowFeed from '@/components/FlowFeed';
+import { AnimatePresence, motion } from 'framer-motion';
 
 const FadeInSection = importDynamic(() => import('@/components/FadeInSection'), { ssr: false });
 
@@ -106,7 +108,15 @@ export default async function HomePage() {
   );
 
   return (
-    <div className="space-y-12">
+    <AnimatePresence mode="wait">
+      <motion.div
+        key="main-page"
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -30 }}
+        transition={{ duration: 0.6, ease: 'easeInOut' }}
+        className="space-y-12"
+      >
       {/* Smart Welcome Banner */}
       <WelcomeBanner />
 
@@ -267,6 +277,7 @@ export default async function HomePage() {
         description="Блог о медиа, технологиях, digital-маркетинге и современном искусстве"
         author="Anton Merkurov"
       />
-    </div>
+      </motion.div>
+    </AnimatePresence>
   );
 }
