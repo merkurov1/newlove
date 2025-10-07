@@ -1,23 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+# merkurov.love — Современный блог/портал с интеграциями
 
-First, run the development server:
+Многофункциональный сайт на Next.js 14 с поддержкой:
+- 🦋 Bluesky (AT Protocol) интеграции
+- Medium RSS-ленты
+- YouTube Shorts
+- Проектов с Editor.js (Notion-style)
+- Адаптивного дизайна на TailwindCSS
+- Supabase Auth, Prisma ORM, Sentry, Supabase Storage
+
+## 🚀 Быстрый старт
 
 ```bash
+git clone https://github.com/merkurov1/newlove.git
+cd newlove
+npm install
+cp .env.example .env.local # настройте переменные окружения
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-
-
 ```
 
-цйуц
+Откройте [http://localhost:3000](http://localhost:3000)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🗂️ Структура проекта
+
+```
+├── app/                # Next.js App Router, страницы и API
+│   ├── api/            # Серверные endpoints (Bluesky, Medium, YouTube, проекты, статьи)
+│   ├── admin/          # Админка (редактирование, проекты, письма)
+│   ├── projects/       # Публичные проекты
+│   ├── articles/       # Статьи
+│   ├── profile/        # Профиль пользователя
+│   └── ...
+├── components/         # UI-компоненты (Feed, Editor, Auth, BlockRenderer и др.)
+├── lib/                # Утилиты, API, Prisma, Supabase
+├── prisma/             # Prisma schema и миграции
+├── public/             # Статика и загруженные файлы
+├── scripts/            # Скрипты миграций и вспомогательные
+├── types/              # Типы TypeScript
+├── docs/               # Документация по интеграциям
+├── ...
+```
+
+## 🛠️ Технологии
+
+- **Next.js 14** (App Router, SSR, API routes)
+- **Prisma ORM** + PostgreSQL
+- **Supabase** (Auth, Storage)
+- **TailwindCSS** (адаптивный дизайн)
+- **Editor.js** (блоковый редактор для проектов)
+- **Sentry** (мониторинг)
+- **node-fetch**, **rss-parser** (OG preview, Medium)
+- **@atproto/api** (Bluesky)
+
+## 📦 Основные фичи
+
+- Универсальная лента (Flow): Bluesky, Medium, YouTube — с OG превью
+- Проекты с Editor.js (Notion-style)
+- Аутентификация через Supabase
+- Адаптивный UI (Tailwind)
+- Админка для управления контентом
+- Загрузка изображений (Supabase Storage или локально)
+- Интеграция Sentry для мониторинга
+
+## 🦋 Bluesky интеграция
+- Получение и публикация постов через AT Protocol
+- OG preview для ссылок в постах
+- Демо: `/lab/bluesky`
+
+## 📝 Medium интеграция
+- RSS-парсинг, превью, категории, время чтения
+- Демо: `/lab/medium`
+
+## 🎬 YouTube Shorts интеграция
+- Получение последних Shorts, превью, статистика
+- Демо: `/lab/youtube`
+
+## 🏗️ Проекты с Editor.js
+- Блоковый редактор (текст, списки, изображения, код)
+- Публичные страницы `/projects/[slug]`
+- Админка `/admin/projects/edit/[id]`
+
+## ⚙️ Миграции и деплой
+- Prisma миграции: `npx prisma migrate dev` (локально), `npx prisma migrate deploy` (Vercel)
+- Все переменные окружения — в `.env.local`
+
+## 📄 Документация
+- [Bluesky интеграция](docs/BLUESKY-INTEGRATION-COMPLETE.md)
+- [Medium интеграция](docs/MEDIUM-INTEGRATION-COMPLETE.md)
+- [Архитектура Edit Button](docs/EDIT-BUTTON-ARCHITECTURE.md)
+- [Миграции на Vercel](VERCEL_PRISMA_MIGRATION.md)
+
+---
+
+**Автор:** [@merkurov](https://merkurov.love) — Fork, contribute, enjoy!
+
 
 
 ## Projects Block Editor (Notion-style)

@@ -184,25 +184,23 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
                 <div className="text-gray-700 text-sm leading-relaxed mb-4 whitespace-pre-line">
                   {item.content}
                 </div>
-                {/* OG preview для Bluesky ссылок */}
-                {item.linkPreview && (
+                {/* OG preview для Bluesky ссылок — только если есть image */}
+                {item.linkPreview?.image && (
                   <a
                     href={item.linkPreview.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block border rounded-lg overflow-hidden mb-4 hover:shadow-lg transition-all bg-gray-50 group"
                   >
-                    {item.linkPreview.image && (
-                      <div className="relative w-full aspect-video bg-gray-200">
-                        <Image
-                          src={item.linkPreview.image}
-                          alt={item.linkPreview.title || 'Link preview'}
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                        />
-                      </div>
-                    )}
+                    <div className="relative w-full aspect-video bg-gray-200">
+                      <Image
+                        src={item.linkPreview.image}
+                        alt={item.linkPreview.title || 'Link preview'}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      />
+                    </div>
                     <div className="p-4">
                       <div className="font-semibold text-gray-900 text-base mb-1 truncate">
                         {item.linkPreview.title || item.linkPreview.url}
