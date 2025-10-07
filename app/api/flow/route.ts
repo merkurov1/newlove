@@ -294,49 +294,66 @@ export async function GET() {
       }
     }
 
-    // Добавляем Medium статьи
-    mediumData.articles?.forEach((article: any) => {
-      flowItems.push({
-        id: `medium-${article.link}`,
-        type: 'medium',
-        platform: 'Medium',
-        platformIcon: '📝',
-        platformColor: 'bg-green-600',
-        title: article.title,
-        content: article.excerpt,
-        url: article.link,
-        author: 'Merkurov',
-        publishedAt: article.publishedAt,
-        timestamp: new Date(article.publishedAt).getTime(),
-        readingTime: article.readingTime,
-        categories: article.categories || [],
-        thumbnail: article.thumbnail
-      });
-    });
 
-    // Добавляем YouTube Shorts
-    youtubeData.videos?.forEach((video: any) => {
-      flowItems.push({
-        id: `youtube-${video.id}`,
-        type: 'youtube',
-        platform: 'YouTube Shorts',
-        platformIcon: '🎬',
-        platformColor: 'bg-red-600',
-        title: video.title,
-        content: video.description,
-        url: `https://www.youtube.com/watch?v=${video.id}`,
-        author: 'Merkurov',
-        publishedAt: video.publishedAt,
-        timestamp: new Date(video.publishedAt).getTime(),
-        thumbnail: video.thumbnail,
-        duration: video.duration,
-        stats: {
-          views: video.viewCount || 0,
-          likes: video.likeCount || 0,
-          comments: video.commentCount || 0
+    if (mediumData.articles) {
+      for (const article of mediumData.articles) {
+        let linkPreview = null;
+        try {
+          linkPreview = await fetchLinkPreview(article.link);
+        } catch (e) {
+          linkPreview = null;
         }
-      });
-    });
+        flowItems.push({
+          id: `medium-${article.link}`,
+          type: 'medium',
+          platform: 'Medium',
+          platformIcon: '📝',
+          platformColor: 'bg-green-600',
+          title: article.title,
+          content: article.excerpt,
+          url: article.link,
+          author: 'Merkurov',
+          publishedAt: article.publishedAt,
+          timestamp: new Date(article.publishedAt).getTime(),
+          readingTime: article.readingTime,
+          categories: article.categories || [],
+          thumbnail: article.thumbnail,
+          linkPreview
+        });
+      }
+    }
+
+    if (youtubeData.videos) {
+      for (const video of youtubeData.videos) {
+        let linkPreview = null;
+        try {
+          linkPreview = await fetchLinkPreview(`https://www.youtube.com/watch?v=${video.id}`);
+        } catch (e) {
+          linkPreview = null;
+        }
+        flowItems.push({
+          id: `youtube-${video.id}`,
+          type: 'youtube',
+          platform: 'YouTube Shorts',
+          platformIcon: '🎬',
+          platformColor: 'bg-red-600',
+          title: video.title,
+          content: video.description,
+          url: `https://www.youtube.com/watch?v=${video.id}`,
+          author: 'Merkurov',
+          publishedAt: video.publishedAt,
+          timestamp: new Date(video.publishedAt).getTime(),
+          thumbnail: video.thumbnail,
+          duration: video.duration,
+          stats: {
+            views: video.viewCount || 0,
+            likes: video.likeCount || 0,
+            comments: video.commentCount || 0
+          },
+          linkPreview
+        });
+      }
+    }
 
     // Сортируем по дате (новые сначала) и берем только 7 записей
     const sortedItems = flowItems
