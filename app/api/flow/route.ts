@@ -233,14 +233,38 @@ export async function GET() {
 
     // Добавляем Bluesky посты
     blueskyData.posts?.forEach((post: any) => {
+      // Извлекаем ссылку из embed, если есть
+      let embedUrl = '';
+      if (post.embed) {
+        const embed = post.embed;
+        // Ссылка на внешний ресурс (например, видео, статья)
+        if (embed.$type === 'app.bsky.embed.external#view' && embed.external?.uri) {
+          embedUrl = embed.external.uri;
+        } else if (embed.$type === 'app.bsky.embed.record#view' && embed.record?.uri) {
+          embedUrl = embed.record.uri;
+        } else if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.record?.uri) {
+          embedUrl = embed.record.uri;
+        }
+      }
+
+      // Формируем контент: если есть текст и ссылка — объединяем, если только ссылка — показываем ссылку
+      let content = post.record.text || '';
+      if (embedUrl) {
+        if (content) {
+          content += `\n${embedUrl}`;
+        } else {
+          content = embedUrl;
+        }
+      }
+
       flowItems.push({
         id: `bluesky-${post.uri}`,
         type: 'bluesky',
         platform: 'Bluesky',
         platformIcon: '🦋',
         platformColor: 'bg-blue-500',
-        title: post.record.text.length > 100 ? post.record.text.substring(0, 100) + '...' : post.record.text,
-        content: post.record.text,
+        title: content.length > 100 ? content.substring(0, 100) + '...' : content,
+        content,
         url: `https://bsky.app/profile/${post.author.handle}/post/${post.uri.split('/').pop()}`,
         author: post.author.displayName || post.author.handle,
         authorHandle: post.author.handle,
