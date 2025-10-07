@@ -5,13 +5,12 @@
 import prisma from '../lib/prisma';
 import Link from 'next/link';
 import SafeImage from '@/components/SafeImage';
-import importDynamic from 'next/dynamic';
 import { getFirstImage } from '@/lib/contentUtils';
 import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 
 // SSR-friendly динамический импорт HeroHearts (только на клиенте)
-const HeroHearts = dynamic(() => import('@/components/HeroHearts'), { ssr: false });
+const HeroHearts = nextDynamic(() => import('@/components/HeroHearts'), { ssr: false });
 import FlowFeed from '@/components/FlowFeed';
 // Удалены Framer Motion и FadeInSection для server component совместимости
 
