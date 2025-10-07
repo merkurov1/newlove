@@ -2,7 +2,9 @@
 import { NextResponse } from 'next/server';
 import { BskyAgent } from '@atproto/api';
 import Parser from 'rss-parser';
+import { fetchLinkPreview } from '@/lib/linkPreview';
 
+import type { LinkPreview } from '@/lib/linkPreview';
 interface FlowItem {
   id: string;
   type: 'bluesky' | 'medium' | 'youtube';
@@ -29,6 +31,7 @@ interface FlowItem {
     views?: number;
     comments?: number;
   };
+  linkPreview?: LinkPreview | null;
 }
 
 // Функция для получения данных Bluesky
@@ -232,53 +235,64 @@ export async function GET() {
     const flowItems: FlowItem[] = [];
 
     // Добавляем Bluesky посты
-    blueskyData.posts?.forEach((post: any) => {
-      // Извлекаем ссылку из embed, если есть
-      let embedUrl = '';
-      if (post.embed) {
-        const embed = post.embed;
-        // Ссылка на внешний ресурс (например, видео, статья)
-        if (embed.$type === 'app.bsky.embed.external#view' && embed.external?.uri) {
-          embedUrl = embed.external.uri;
-        } else if (embed.$type === 'app.bsky.embed.record#view' && embed.record?.uri) {
-          embedUrl = embed.record.uri;
-        } else if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.record?.uri) {
-          embedUrl = embed.record.uri;
+    if (blueskyData.posts) {
+      for (const post of blueskyData.posts) {
+        // Извлекаем ссылку из embed, если есть
+        let embedUrl = '';
+        if (post.embed) {
+          const embed: any = post.embed;
+          if (embed.$type === 'app.bsky.embed.external#view' && embed.external?.uri) {
+            embedUrl = embed.external.uri;
+          } else if (embed.$type === 'app.bsky.embed.record#view' && embed.record?.uri) {
+            embedUrl = embed.record.uri;
+          } else if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.record?.uri) {
+            embedUrl = embed.record.uri;
+          }
         }
-      }
 
-      // Формируем контент: если есть текст и ссылка — объединяем, если только ссылка — показываем ссылку
-      let content = post.record.text || '';
-      if (embedUrl) {
-        if (content) {
-          content += `\n${embedUrl}`;
-        } else {
-          content = embedUrl;
+        // Формируем контент: если есть текст и ссылка — объединяем, если только ссылка — показываем ссылку
+        const record: any = post.record;
+        let content: string = typeof record.text === 'string' ? record.text : '';
+        if (embedUrl) {
+          if (content) {
+            content += `\n${embedUrl}`;
+          } else {
+            content = embedUrl;
+          }
         }
-      }
 
-      flowItems.push({
-        id: `bluesky-${post.uri}`,
-        type: 'bluesky',
-        platform: 'Bluesky',
-        platformIcon: '🦋',
-        platformColor: 'bg-blue-500',
-        title: content.length > 100 ? content.substring(0, 100) + '...' : content,
-        content,
-        url: `https://bsky.app/profile/${post.author.handle}/post/${post.uri.split('/').pop()}`,
-        author: post.author.displayName || post.author.handle,
-        authorHandle: post.author.handle,
-        authorAvatar: post.author.avatar,
-        publishedAt: post.record.createdAt,
-        timestamp: new Date(post.record.createdAt).getTime(),
-        images: post.images || [],
-        stats: {
-          likes: post.likeCount || 0,
-          reposts: post.repostCount || 0,
-          replies: post.replyCount || 0
+        // Получаем превью для ссылки (если есть)
+        let linkPreview = null;
+        if (embedUrl) {
+          linkPreview = await fetchLinkPreview(embedUrl);
         }
-      });
-    });
+
+        const createdAt = typeof record.createdAt === 'string' ? record.createdAt : '';
+
+        flowItems.push({
+          id: `bluesky-${post.uri}`,
+          type: 'bluesky',
+          platform: 'Bluesky',
+          platformIcon: '🦋',
+          platformColor: 'bg-blue-500',
+          title: content.length > 100 ? content.substring(0, 100) + '...' : content,
+          content,
+          url: `https://bsky.app/profile/${post.author.handle}/post/${post.uri.split('/').pop()}`,
+          author: post.author.displayName || post.author.handle,
+          authorHandle: post.author.handle,
+          authorAvatar: post.author.avatar,
+          publishedAt: createdAt,
+          timestamp: createdAt ? new Date(createdAt).getTime() : 0,
+          images: post.images || [],
+          stats: {
+            likes: post.likeCount || 0,
+            reposts: post.repostCount || 0,
+            replies: post.replyCount || 0
+          },
+          linkPreview
+        });
+      }
+    }
 
     // Добавляем Medium статьи
     mediumData.articles?.forEach((article: any) => {
