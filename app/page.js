@@ -8,7 +8,10 @@ import SafeImage from '@/components/SafeImage';
 import importDynamic from 'next/dynamic';
 import { getFirstImage } from '@/lib/contentUtils';
 import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
-import WelcomeBanner from '@/components/WelcomeBanner';
+import dynamic from 'next/dynamic';
+
+// SSR-friendly динамический импорт HeroHearts (только на клиенте)
+const HeroHearts = dynamic(() => import('@/components/HeroHearts'), { ssr: false });
 import FlowFeed from '@/components/FlowFeed';
 // Удалены Framer Motion и FadeInSection для server component совместимости
 
@@ -106,10 +109,10 @@ export default async function HomePage() {
   );
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-100 pb-16">
-      {/* Smart Welcome Banner */}
+    <div className="relative min-h-screen bg-gradient-to-br from-pink-50 via-white to-pink-100 pb-16">
+      {/* Новый HeroHearts */}
       <div className="max-w-5xl mx-auto pt-8 px-4">
-        <WelcomeBanner />
+        <HeroHearts />
       </div>
 
       {/* Two-column layout: Articles + Flow */}
