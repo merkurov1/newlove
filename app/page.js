@@ -121,13 +121,6 @@ export default async function HomePage() {
           {/* ARTICLES SECTION */}
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-sm uppercase tracking-wide text-gray-400 font-semibold">Articles</h2>
-            <Link
-              href="/articles"
-              className="rounded-full bg-white/90 backdrop-blur-sm border border-pink-200 text-pink-500 px-8 py-3 text-sm font-medium hover:bg-pink-50 hover:border-pink-300 transition-all duration-300"
-              aria-label="Посмотреть все статьи"
-            >
-              Load more articles
-            </Link>
           </div>
           <div className="grid gap-6 sm:gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-2">
             {articles && articles.length > 0 ? (
@@ -141,7 +134,7 @@ export default async function HomePage() {
                   {/* Время публикации */}
                   {article.publishedAt && (
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm text-gray-400">
+                      <span className="text-xs text-gray-400">
                         {(() => {
                           const diff = Math.floor((Date.now() - new Date(article.publishedAt).getTime()) / 1000);
                           if (diff < 60) return `${diff} sec ago`;
@@ -169,23 +162,19 @@ export default async function HomePage() {
                         style={{ minHeight: '120px' }}
                       />
                     ) : (
-                      <div className="w-full h-full min-h-[120px] bg-gradient-to-br from-pink-100 to-rose-100 flex items-center justify-center rounded-xl">
+                      <div className="w-full h-full min-h-[120px] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center rounded-xl">
                         <div className="text-center">
-                          <div className="text-4xl text-gray-300 mb-2">�</div>
+                          <div className="text-4xl text-gray-300 mb-2">📰</div>
                           <div className="text-sm text-gray-400">No image</div>
                         </div>
                       </div>
                     )}
                   </Link>
-                  {/* Заголовок и описание */}
+                  {/* Заголовок */}
                   <div className="flex-grow flex flex-col">
                     <Link href={`/${article.slug}`}> 
-                      <h3 className="text-xl md:text-2xl font-semibold text-gray-900 mb-2 line-clamp-2">{article.title}</h3>
+                      <h3 className="text-lg md:text-xl font-medium text-gray-900 mb-2 line-clamp-2">{article.title}</h3>
                     </Link>
-                    {/* Краткое описание (excerpt) */}
-                    {article.content && (
-                      <div className="text-base leading-relaxed text-gray-600 line-clamp-2 mb-4">{article.content.replace(/<[^>]+>/g, '').slice(0, 160)}</div>
-                    )}
                   </div>
                   {/* Read more кнопка убрана по финальному ТЗ */}
                 </article>
