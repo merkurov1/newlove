@@ -174,33 +174,7 @@ export default async function HomePage() {
                         })}
                       </time>
                     )}
-                    {article.tags && article.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-3" role="list">
-                        {article.tags.map(tag => (
-                          <Link
-                            key={tag.id}
-                            href={`/tags/${tag.slug}`}
-                            className="bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 text-xs font-medium px-3 py-1 rounded-full hover:bg-blue-200 hover:text-blue-900 transition-colors"
-                            role="listitem"
-                            aria-label={`Статьи с тегом ${tag.name}`}
-                          >
-                            {tag.name}
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-3 mt-auto pt-4 border-t border-gray-100">
-                      {article.author.image && (
-                        <SafeImage 
-                          src={article.author.image} 
-                          alt={`Фото автора ${article.author.name}`} 
-                          width={32} 
-                          height={32} 
-                          className="rounded-full border border-blue-200 shadow-sm" 
-                        />
-                      )}
-                      <span className="text-sm font-medium text-gray-700">{article.author.name}</span>
-                    </div>
+                    {/* Имя автора и теги убраны по запросу — только дата публикации */}
                   </div>
                 </article>
               ))
