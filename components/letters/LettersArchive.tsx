@@ -88,14 +88,14 @@ export default function LettersArchive() {
       {letters.map((letter) => (
         <article 
           key={letter.id}
-          className="group border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-sm transition-all duration-200"
+          className="group border border-blue-50 rounded-xl p-4 bg-white/90 hover:border-blue-200 hover:shadow transition-all duration-200"
         >
           <Link href={`/letters/${letter.slug}`} className="block">
-            <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors mb-2">
+            <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors mb-1 line-clamp-2">
               {letter.title}
             </h3>
-            <div className="flex items-center justify-between text-sm text-gray-500">
-              <span>✍️ {letter.author.name}</span>
+            <div className="flex items-center justify-between text-xs text-gray-400">
+              <span>{letter.author.name}</span>
               <time dateTime={letter.publishedAt || letter.createdAt}>
                 {formatDate(letter.publishedAt || letter.createdAt)}
               </time>

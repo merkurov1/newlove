@@ -101,10 +101,10 @@ export default function PostcardShop() {
       {postcards.map((postcard) => (
         <div 
           key={postcard.id}
-          className={`border rounded-lg overflow-hidden transition-all duration-200 ${
+          className={`border rounded-xl overflow-hidden transition-all duration-200 bg-white/90 backdrop-blur-sm ${
             postcard.featured 
-              ? 'border-orange-300 shadow-md' 
-              : 'border-gray-200 hover:border-gray-300'
+              ? 'border-orange-200 shadow' 
+              : 'border-gray-100 hover:border-orange-100'
           }`}
         >
           {/* Изображение открытки */}
@@ -137,18 +137,11 @@ export default function PostcardShop() {
 
           {/* Информация о открытке */}
           <div className="p-4">
-            <h3 className="font-semibold text-gray-900 mb-2">{postcard.title}</h3>
-            {postcard.description && (
-              <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                {postcard.description}
-              </p>
-            )}
-            
+            <h3 className="font-medium text-gray-900 mb-2 line-clamp-2">{postcard.title}</h3>
             <div className="flex items-center justify-between">
-              <div className="text-xl font-bold text-orange-600">
+              <div className="text-lg font-semibold text-orange-600">
                 {formatPrice(postcard.price)}
               </div>
-              
               <button
                 onClick={() => handleOrderClick(postcard)}
                 disabled={!postcard.available}
