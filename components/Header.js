@@ -3,16 +3,42 @@
 import Link from "next/link";
 import SafeImage from '@/components/SafeImage';
 import { useSession, signIn, signOut } from 'next-auth/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Header({ projects, settings }) {
   const { data: session, status } = useSession();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [hideOnScroll, setHideOnScroll] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const lastScrollY = useRef(0);
 
   const site_name = settings?.site_name || 'Anton Merkurov';
   const slogan = settings?.slogan || 'Art x Love x Money';
   // Простая и чистая логика: settings (правильный URL) -> локальный fallback
   const logoUrl = settings?.logo_url || '/images/logo.svg';
+
+  // Умный скролл
+  useEffect(() => {
+    let ticking = false;
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      setScrolled(currentY > 0);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          if (currentY > lastScrollY.current && currentY > 100) {
+            setHideOnScroll(true);
+          } else {
+            setHideOnScroll(false);
+          }
+          lastScrollY.current = currentY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -26,9 +52,11 @@ export default function Header({ projects, settings }) {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/80 backdrop-blur-sm">
+      <header
+        className={`sticky top-0 z-50 w-full backdrop-blur-md bg-white/80 transition-transform duration-400 ease-in-out ${hideOnScroll ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'shadow-sm' : ''}`}
+        style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}
+      >
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
-          
           <Link href="/" className="group flex items-center space-x-4">
             <SafeImage 
               src={logoUrl} 
@@ -49,9 +77,9 @@ export default function Header({ projects, settings }) {
               {/* Магазин временно убран - будет добавлен позже */}
               {Array.isArray(projects) && projects.map((project) => (
                 <li key={project.id}>
-                  <Link href={`/${project.slug}`} className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                  <Link href={`/${project.slug}`} className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
                     {project.title}
-                    <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
+                    <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
                   </Link>
                 </li>
               ))}
@@ -59,27 +87,27 @@ export default function Header({ projects, settings }) {
               {status === 'authenticated' && (
                 <>
                   <li>
-                    <Link href="/talks" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                    <Link href="/talks" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
                       Talks
-                      <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
+                      <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
                     </Link>
                   </li>
                   <li>
-                    <Link href="/lab" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                    <Link href="/lab" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
                       Lab
-                      <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
+                      <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
                     </Link>
                   </li>
                   <li>
-                    <Link href="/kit" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                    <Link href="/kit" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
                       Kit
-                      <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
+                      <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
                     </Link>
                   </li>
                   <li>
-                    <Link href="/letters" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900">
+                    <Link href="/letters" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
                       Letters
-                      <span className="block h-px max-w-full scale-x-0 bg-gray-900 transition-all duration-300 group-hover:scale-x-100"></span>
+                      <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
                     </Link>
                   </li>
                 </>
@@ -121,9 +149,13 @@ export default function Header({ projects, settings }) {
             </button>
           </div>
         </div>
+        {/* Animated gradient line */}
+        <div className="h-[2.5px] w-full overflow-hidden">
+          <div className="h-full w-full animate-gradient-x bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 bg-[length:200%_100%]" style={{backgroundSize:'200% 100%'}}></div>
+        </div>
       </header>
       
-      <div className={`fixed inset-0 z-40 transform bg-white pt-24 transition-transform duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+  <div className={`fixed inset-0 z-40 transform bg-white/90 backdrop-blur-md pt-24 transition-transform duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`} style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}>
         <nav className="container mx-auto px-4">
           <ul className="list-none flex flex-col items-center gap-6 text-sm font-semibold uppercase tracking-[0.2em]">
             {/* Магазин временно убран - будет добавлен позже */}
