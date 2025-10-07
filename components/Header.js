@@ -53,8 +53,8 @@ export default function Header({ projects, settings }) {
   return (
     <>
       <header
-        className={`sticky top-0 z-50 w-full backdrop-blur-md bg-white/80 transition-transform duration-400 ease-in-out ${hideOnScroll ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'shadow-sm' : ''}`}
-        style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}
+  className={`sticky top-0 z-50 w-full backdrop-blur-md bg-gradient-to-b from-pink-50 via-white/90 to-white transition-transform duration-400 ease-in-out ${hideOnScroll ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'shadow-sm' : ''}`}
+  style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}
       >
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
           <Link href="/" className="group flex items-center space-x-4">
@@ -149,10 +149,7 @@ export default function Header({ projects, settings }) {
             </button>
           </div>
         </div>
-        {/* Animated gradient line */}
-        <div className="h-[2.5px] w-full overflow-hidden">
-          <div className="h-full w-full animate-gradient-x bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 bg-[length:200%_100%]" style={{backgroundSize:'200% 100%'}}></div>
-        </div>
+        {/* Animated gradient line убрана по финальному ТЗ */}
       </header>
       
   <div className={`fixed inset-0 z-40 transform bg-white/90 backdrop-blur-md pt-24 transition-transform duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`} style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}>
