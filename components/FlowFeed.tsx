@@ -250,41 +250,53 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
               </div>
             )}
 
-            {/* Превью для YouTube */}
-            {item.type === 'youtube' && item.thumbnail && (
-              <div className="relative aspect-video rounded-lg overflow-hidden mb-4">
-                <Image
-                  src={item.thumbnail}
-                  alt={item.title}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                />
-                <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/10 transition-colors">
-                  <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center text-white text-2xl">
-                    ▶️
-                  </div>
+            {/* Превью для Medium и YouTube: приоритет linkPreview.image, fallback thumbnail */}
+            {(item.type === 'medium' || item.type === 'youtube') && (item.linkPreview?.image || item.thumbnail) && (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block border rounded-lg overflow-hidden mb-4 hover:shadow-lg transition-all bg-gray-50 group"
+              >
+                <div className={`relative ${item.type === 'medium' ? 'aspect-[16/9]' : 'aspect-video'} bg-gray-200`}>
+                  <Image
+                    src={item.linkPreview?.image || item.thumbnail!}
+                    alt={item.title}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  />
+                  {item.type === 'youtube' && (
+                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/10 transition-colors">
+                      <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center text-white text-2xl">
+                        ▶️
+                      </div>
+                    </div>
+                  )}
+                  {item.type === 'youtube' && item.duration && (
+                    <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
+                      {item.duration}
+                    </div>
+                  )}
+                  {item.type === 'medium' && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                  )}
                 </div>
-                {item.duration && (
-                  <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
-                    {item.duration}
+                {/* OG preview-карточка для Medium/YouTube, если есть linkPreview */}
+                {item.linkPreview && (
+                  <div className="p-4">
+                    <div className="font-semibold text-gray-900 text-base mb-1 truncate">
+                      {item.linkPreview.title || item.title}
+                    </div>
+                    {item.linkPreview.description && (
+                      <div className="text-gray-600 text-sm line-clamp-2 mb-1">
+                        {item.linkPreview.description}
+                      </div>
+                    )}
+                    <div className="text-blue-600 text-xs truncate">{item.linkPreview.url}</div>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Превью для Medium */}
-            {item.type === 'medium' && item.thumbnail && (
-              <div className="relative aspect-[16/9] rounded-lg overflow-hidden mb-4">
-                <Image
-                  src={item.thumbnail}
-                  alt={item.title}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-              </div>
+              </a>
             )}
 
             {/* Футер с ограниченным контентом */}
