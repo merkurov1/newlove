@@ -118,27 +118,45 @@ export default async function HomePage() {
       <section className="max-w-7xl mx-auto mt-8 px-4 grid grid-cols-1 lg:grid-cols-5 gap-10 lg:gap-16">
         {/* Articles Section - Left column (3/5 width on desktop) */}
         <div className="lg:col-span-3">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight bg-gradient-to-r from-blue-600 via-purple-500 to-pink-400 bg-clip-text text-transparent">Последние статьи</h2>
-            <Link 
-              href="/articles" 
-              className="inline-block rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold px-6 py-2 shadow-md hover:from-blue-600 hover:to-purple-600 transition-all duration-200"
+          {/* ARTICLES SECTION */}
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-sm uppercase tracking-wide text-gray-400 font-semibold">Articles</h2>
+            <Link
+              href="/articles"
+              className="rounded-full bg-white/90 backdrop-blur-sm border border-pink-200 text-pink-500 px-8 py-3 text-sm font-medium hover:bg-pink-50 hover:border-pink-300 transition-all duration-300"
               aria-label="Посмотреть все статьи"
             >
-              Все статьи
+              Load more articles
             </Link>
           </div>
-          <div className="grid gap-6 sm:gap-8 grid-cols-1 sm:grid-cols-2 xl:grid-cols-2" role="list">
+          <div className="grid gap-6 sm:gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-2">
             {articles && articles.length > 0 ? (
-              articles.map((article) => (
+              articles.map((article, idx) => (
                 <article
                   key={article.id}
-                  className="bg-white/80 backdrop-blur rounded-2xl shadow-lg hover:shadow-2xl transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden p-4 sm:p-6"
+                  className="bg-white/90 backdrop-blur-sm border border-pink-50 rounded-2xl shadow-sm hover:shadow-lg p-6 flex flex-col group overflow-hidden transition-all duration-300 hover:scale-[1.02] animate-fade-in-up"
+                  style={{ animationDelay: `${idx * 100}ms`, animationFillMode: 'both' }}
                   role="listitem"
                 >
-                  <Link 
-                    href={`/${article.slug}`} 
-                    className="block relative w-full h-48 mb-4 group"
+                  {/* Время публикации */}
+                  {article.publishedAt && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm text-gray-400">
+                        {(() => {
+                          const diff = Math.floor((Date.now() - new Date(article.publishedAt).getTime()) / 1000);
+                          if (diff < 60) return `${diff} sec ago`;
+                          if (diff < 3600) return `${Math.floor(diff/60)} min ago`;
+                          if (diff < 86400) return `${Math.floor(diff/3600)} hours ago`;
+                          return new Date(article.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        })()}
+                      </span>
+                    </div>
+                  )}
+                  {/* Розовая линия убрана по финальному ТЗ */}
+                  {/* Изображение */}
+                  <Link
+                    href={`/${article.slug}`}
+                    className="block relative w-full aspect-[16/9] mb-4 group"
                     aria-label={`Читать статью: ${article.title}`}
                   >
                     {article.previewImage ? (
@@ -147,37 +165,29 @@ export default async function HomePage() {
                         alt={`Изображение к статье: ${article.title}`}
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        className="object-cover group-hover:scale-105 transition-transform duration-300 rounded-xl"
+                        className="object-cover rounded-xl transition-transform duration-300 group-hover:scale-105"
+                        style={{ minHeight: '120px' }}
                       />
                     ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center rounded-xl">
+                      <div className="w-full h-full min-h-[120px] bg-gradient-to-br from-pink-100 to-rose-100 flex items-center justify-center rounded-xl">
                         <div className="text-center">
-                          <div className="text-4xl text-gray-300 mb-2">📄</div>
-                          <div className="text-sm text-gray-400">Без изображения</div>
+                          <div className="text-4xl text-gray-300 mb-2">�</div>
+                          <div className="text-sm text-gray-400">No image</div>
                         </div>
                       </div>
                     )}
                   </Link>
+                  {/* Заголовок и описание */}
                   <div className="flex-grow flex flex-col">
-                    <Link href={`/${article.slug}`}>
-                      <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
-                        {article.title}
-                      </h3>
+                    <Link href={`/${article.slug}`}> 
+                      <h3 className="text-xl md:text-2xl font-semibold text-gray-900 mb-2 line-clamp-2">{article.title}</h3>
                     </Link>
-                    {article.publishedAt && (
-                      <time 
-                        className="text-xs text-gray-500 mb-3"
-                        dateTime={article.publishedAt}
-                      >
-                        {new Date(article.publishedAt).toLocaleDateString('ru-RU', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}
-                      </time>
+                    {/* Краткое описание (excerpt) */}
+                    {article.content && (
+                      <div className="text-base leading-relaxed text-gray-600 line-clamp-2 mb-4">{article.content.replace(/<[^>]+>/g, '').slice(0, 160)}</div>
                     )}
-                    {/* Имя автора и теги убраны по запросу — только дата публикации */}
                   </div>
+                  {/* Read more кнопка убрана по финальному ТЗ */}
                 </article>
               ))
             ) : (
@@ -185,23 +195,26 @@ export default async function HomePage() {
             )}
           </div>
         </div>
-        {/* Flow Section - Right column (2/5 width on desktop) */}
-        <div className="lg:col-span-2">
-          <div className="bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl p-6 lg:sticky lg:top-8 shadow-md border border-blue-50">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">🌊 Flow</h2>
-              <Link 
-                href="/lab"
-                className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-blue-400 to-purple-400 text-white font-semibold px-4 py-1.5 shadow hover:from-blue-500 hover:to-purple-500 transition-all text-sm"
-                aria-label="Перейти в лабораторию"
-              >
-                Лаборатория
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-            </div>
-            <FlowFeed limit={5} />
+        {/* SOCIAL SECTION */}
+        <div className="lg:col-span-2 mt-20">
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-sm uppercase tracking-wide text-gray-400 font-semibold">Social</h2>
+            <Link
+              href="/lab"
+              className="rounded-full bg-white/90 backdrop-blur-sm border border-pink-200 text-pink-500 px-8 py-3 text-sm font-medium hover:bg-pink-50 hover:border-pink-300 transition-all duration-300"
+              aria-label="Перейти в лабораторию"
+            >
+              View all posts
+            </Link>
+          </div>
+          <FlowFeed limit={6} />
+          <div className="flex justify-center mt-8">
+            <button
+              className="rounded-full bg-white/90 backdrop-blur-sm border border-pink-200 text-pink-500 px-8 py-3 text-sm font-medium hover:bg-pink-50 hover:border-pink-300 transition-all duration-300"
+              // TODO: добавить обработчик загрузки постов
+            >
+              Load more posts
+            </button>
           </div>
         </div>
       </section>
