@@ -115,19 +115,19 @@ export default async function HomePage() {
       </div>
 
       {/* Two-column layout: Articles + Flow */}
-      <section className="max-w-7xl mx-auto mt-8 px-4 grid grid-cols-1 lg:grid-cols-5 gap-10 lg:gap-16">
+  <section className="max-w-7xl mx-auto mt-8 px-4 grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-10">
         {/* Articles Section - Left column (3/5 width on desktop) */}
-        <div className="lg:col-span-3">
+  <div className="lg:col-span-3 min-w-0">
           {/* ARTICLES SECTION */}
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-sm uppercase tracking-wide text-gray-400 font-semibold">Articles</h2>
           </div>
-          <div className="grid gap-6 sm:gap-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-2">
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-2">
             {articles && articles.length > 0 ? (
               articles.map((article, idx) => (
                 <article
                   key={article.id}
-                  className="bg-white/70 rounded-lg flex flex-col group overflow-hidden transition-all duration-200 hover:bg-pink-50 p-2 sm:p-3 md:p-3 animate-fade-in-up border border-pink-100"
+                  className="bg-white/70 rounded-lg flex flex-col group overflow-hidden transition-all duration-200 hover:bg-pink-50 p-2 sm:p-3 md:p-3 animate-fade-in-up border border-pink-100 min-w-0 max-w-full"
                   style={{ animationDelay: `${idx * 100}ms`, animationFillMode: 'both' }}
                   role="listitem"
                 >
@@ -148,7 +148,7 @@ export default async function HomePage() {
                   {/* Изображение */}
                   <Link
                     href={`/${article.slug}`}
-                    className="block relative w-full aspect-[4/3] mb-1 group"
+                    className="block relative w-full aspect-[4/3] mb-1 group min-w-0"
                     aria-label={`Читать статью: ${article.title}`}
                   >
                     {article.previewImage ? (
