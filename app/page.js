@@ -110,24 +110,24 @@ export default async function HomePage() {
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-pink-50 via-white to-pink-100 pb-16">
       {/* Новый HeroHearts */}
-      <div className="max-w-5xl mx-auto pt-8 px-4">
+      <div className="max-w-5xl mx-auto pt-8 px-6 md:px-4">
         <HeroHearts />
       </div>
 
-      {/* Two-column layout: Articles + Flow */}
-  <section className="max-w-7xl mx-auto mt-8 px-4 grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-10">
+    {/* Two-column layout: Articles + Flow */}
+  <section className="max-w-7xl mx-auto mt-12 px-6 md:px-4 grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
         {/* Articles Section - Left column (3/5 width on desktop) */}
   <div className="lg:col-span-3 min-w-0">
           {/* ARTICLES SECTION */}
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-sm uppercase tracking-wide text-gray-400 font-semibold">Articles</h2>
           </div>
-          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-2">
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-2">
             {articles && articles.length > 0 ? (
               articles.map((article, idx) => (
                 <article
                   key={article.id}
-                  className="bg-white/70 rounded-lg flex flex-col group overflow-hidden transition-all duration-200 hover:bg-pink-50 p-2 sm:p-3 md:p-3 animate-fade-in-up border border-pink-100 min-w-0 max-w-full"
+                  className="bg-white/70 rounded-lg flex flex-col group overflow-hidden transition-all duration-200 hover:bg-pink-50 p-4 animate-fade-in-up border border-pink-100 min-w-0 max-w-full"
                   style={{ animationDelay: `${idx * 100}ms`, animationFillMode: 'both' }}
                   role="listitem"
                 >
@@ -148,7 +148,7 @@ export default async function HomePage() {
                   {/* Изображение */}
                   <Link
                     href={`/${article.slug}`}
-                    className="block relative w-full aspect-[4/3] mb-1 group min-w-0"
+                    className="block relative w-full aspect-[4/3] mb-3 group min-w-0"
                     aria-label={`Читать статью: ${article.title}`}
                   >
                     {article.previewImage ? (
@@ -171,9 +171,13 @@ export default async function HomePage() {
                   </Link>
                   {/* Заголовок */}
                   <div className="flex-grow flex flex-col">
-                    <Link href={`/${article.slug}`}> 
-                      <h3 className="text-xl font-semibold text-gray-900 mb-0.5 line-clamp-2">{article.title}</h3>
+                    <Link href={`/${article.slug}`}>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1 line-clamp-2">{article.title}</h3>
                     </Link>
+                    {/* Описание, если есть */}
+                    {article.description && (
+                      <p className="text-gray-500 text-sm line-clamp-2 mt-1">{article.description}</p>
+                    )}
                   </div>
                 </article>
               ))
