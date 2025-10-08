@@ -305,6 +305,10 @@ export async function updateProfile(prevState, formData) {
 
 // --- РАССЫЛКИ И ПОДПИСКИ ---
 export async function subscribeToNewsletter(prevState, formData) {
+// --- ОТПРАВКА РАССЫЛКИ С УНИКАЛЬНОЙ ССЫЛКОЙ ДЛЯ ОТПИСКИ ---
+
+
+
   const email = formData.get('email')?.toString().trim();
   if (!email || !/\S+@\S+\.\S+/.test(email)) {
     return { status: 'error', message: 'Введите корректный email адрес.' };
@@ -327,17 +331,45 @@ export async function subscribeToNewsletter(prevState, formData) {
       }
     });
     if (existing) {
-      return { status: 'success', message: 'Вы уже подписаны на рассылку.' };
+      if (existing.isActive) {
+        return { status: 'success', message: 'Вы уже подписаны на рассылку.' };
+      } else {
+        return { status: 'success', message: 'Подтвердите подписку по ссылке в письме.' };
+      }
     }
-    await prisma.subscriber.create({
+    // Создаём подписчика
+    const subscriber = await prisma.subscriber.create({
       data: {
         id: createId(),
         email,
-        isActive: true,
         userId: userId || undefined
       }
     });
-    return { status: 'success', message: 'Спасибо за подписку! Проверьте почту.' };
+    // Генерируем токен для double opt-in
+    const confirmationToken = createId();
+    await prisma.subscriber_tokens.create({
+      data: {
+        subscriber_id: subscriber.id,
+        type: 'confirm',
+        token: confirmationToken
+      }
+    });
+    // Отправляем письмо с подтверждением
+    const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-confirm?token=${confirmationToken}`;
+    try {
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      await resend.emails.send({
+        from: 'noreply@merkurov.love',
+        to: email,
+        subject: 'Подтвердите подписку на рассылку',
+        html: `<p>Пожалуйста, подтвердите подписку, перейдя по ссылке:<br><a href=\"${confirmUrl}\">${confirmUrl}</a></p>`
+      });
+    } catch (mailErr) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Ошибка отправки письма подтверждения:', mailErr);
+      }
+    }
+    return { status: 'success', message: 'Почти готово! Проверьте почту и подтвердите подписку.' };
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
       console.error('Ошибка при подписке:', error);

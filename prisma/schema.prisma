@@ -1,3 +1,13 @@
+model SubscriberToken {
+  id           String   @id @default(cuid())
+  subscriber   Subscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  subscriberId String
+  type         String   // 'confirm' | 'unsubscribe'
+  token        String   @unique
+  used         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  @@map("subscriber_tokens")
+}
 
 // prisma/schema.prisma
 
@@ -137,6 +147,7 @@ model Subscriber {
   createdAt DateTime @default(now())
   userId    String?  @unique
   user      User?    @relation(fields: [userId], references: [id])
+  tokens    SubscriberToken[]
   @@map("subscribers")
 }
 
