@@ -63,19 +63,26 @@ const NewsletterEmail = ({ title = 'Тема письма', content = '', unsubs
       <Preview>{title}</Preview>
       <Body style={main}>
         <Container style={container}>
+          {/* Шапка письма — как в хедере сайта */}
+          <Section style={{ textAlign: 'center', marginBottom: 24 }}>
+            <img src="https://merkurov.love/logo-email.png" alt="Anton Merkurov" style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 8px' }} />
+            <div style={{ fontWeight: 700, fontSize: 28, letterSpacing: 1, color: '#222', marginBottom: 2, textTransform: 'uppercase' }}>Anton Merkurov</div>
+            <div style={{ fontSize: 16, color: '#888', letterSpacing: 2, fontWeight: 600, marginTop: 2, textTransform: 'uppercase' }}>ART X LOVE X MONEY</div>
+          </Section>
           <Section>
             <Heading style={heading}>{title}</Heading>
             <div dangerouslySetInnerHTML={{ __html: contentHtml }} />
             <Hr style={hr} />
             <Text style={footer}>
               Anton Merkurov | Вы получили это письмо, потому что подписались на рассылку на сайте new.merkurov.love
-              <br />
-              {unsubscribeUrl && (
-                <a href={unsubscribeUrl} style={{ color: '#888', textDecoration: 'underline', fontSize: '12px' }}>
+            </Text>
+            {unsubscribeUrl && (
+              <div style={{ textAlign: 'center', marginTop: 16 }}>
+                <a href={unsubscribeUrl} style={{ color: '#007cba', textDecoration: 'underline', fontSize: '14px', fontWeight: 500 }}>
                   Отписаться от рассылки
                 </a>
-              )}
-            </Text>
+              </div>
+            )}
           </Section>
         </Container>
       </Body>
