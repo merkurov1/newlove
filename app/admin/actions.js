@@ -319,7 +319,9 @@ export async function subscribeToNewsletter(prevState, formData) {
     try {
       const session = await getServerSession(authOptions);
       if (session?.user?.id) userId = session.user.id;
-    } catch {}
+    } catch (e) {
+      console.error('Ошибка получения сессии:', e);
+    }
 
     // Проверяем, есть ли уже подписчик с этим email или userId
     const existing = await prisma.subscriber.findFirst({
@@ -365,16 +367,13 @@ export async function subscribeToNewsletter(prevState, formData) {
         html: `<p>Пожалуйста, подтвердите подписку, перейдя по ссылке:<br><a href=\"${confirmUrl}\">${confirmUrl}</a></p>`
       });
     } catch (mailErr) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Ошибка отправки письма подтверждения:', mailErr);
-      }
+      console.error('Ошибка отправки письма подтверждения:', mailErr);
+      return { status: 'error', message: 'Ошибка отправки письма: ' + (mailErr?.message || mailErr) };
     }
     return { status: 'success', message: 'Почти готово! Проверьте почту и подтвердите подписку.' };
   } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Ошибка при подписке:', error);
-    }
-    return { status: 'error', message: 'Произошла ошибка при подписке. Попробуйте позже.' };
+    console.error('Ошибка при подписке:', error);
+    return { status: 'error', message: 'Ошибка при подписке: ' + (error?.message || error) };
   }
 }
 
