@@ -6,27 +6,30 @@ import * as Sentry from "@sentry/nextjs";
 
 Sentry.init({
   dsn: "https://6ce114062f8188107b85b2255f4305dc@o4510107334606848.ingest.de.sentry.io/4510107337359440",
-
-  // Add optional integrations for additional features
   integrations: [
     Sentry.replayIntegration(),
   ],
-
-  // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: 1,
-  // Enable logs to be sent to Sentry
   enableLogs: true,
-
-  // Define how likely Replay events are sampled.
-  // This sets the sample rate to be 10%. You may want this to be 100% while
-  // in development and sample at a lower rate in production
   replaysSessionSampleRate: 0.1,
-
-  // Define how likely Replay events are sampled when an error occurs.
   replaysOnErrorSampleRate: 1.0,
-
-  // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
+  // Фильтрация ошибок расширений браузера (перенесено из sentry.client.config.ts)
+  beforeSend(event) {
+    if (
+      event.exception?.values?.[0]?.value?.includes('runtime.sendMessage') ||
+      event.exception?.values?.[0]?.value?.includes('Extension context invalidated') ||
+      event.exception?.values?.[0]?.value?.includes('Tab not found') ||
+      event.exception?.values?.[0]?.stacktrace?.frames?.some(frame => 
+        frame.filename?.includes('chrome-extension://') ||
+        frame.filename?.includes('safari-extension://') ||
+        frame.filename?.includes('moz-extension://')
+      )
+    ) {
+      return null;
+    }
+    return event;
+  },
 });
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
