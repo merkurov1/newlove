@@ -310,19 +310,38 @@ export async function subscribeToNewsletter(prevState, formData) {
     return { status: 'error', message: 'Введите корректный email адрес.' };
   }
   try {
-    const existing = await prisma.Subscriber.findUnique({ where: { email } });
+    // Получаем userId если пользователь залогинен
+    let userId = null;
+    try {
+      const session = await getServerSession(authOptions);
+      if (session?.user?.id) userId = session.user.id;
+    } catch {}
+
+    // Проверяем, есть ли уже подписчик с этим email или userId
+    const existing = await prisma.subscriber.findFirst({
+      where: {
+        OR: [
+          { email },
+          userId ? { userId } : undefined
+        ].filter(Boolean)
+      }
+    });
     if (existing) {
-      return { status: 'error', message: 'Этот email уже подписан на рассылку.' };
+      return { status: 'success', message: 'Вы уже подписаны на рассылку.' };
     }
-    await prisma.Subscriber.create({ 
-      data: { 
+    await prisma.subscriber.create({
+      data: {
         id: createId(),
         email,
-        isActive: true
-      } 
+        isActive: true,
+        userId: userId || undefined
+      }
     });
     return { status: 'success', message: 'Спасибо за подписку! Проверьте почту.' };
   } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Ошибка при подписке:', error);
+    }
     return { status: 'error', message: 'Произошла ошибка при подписке. Попробуйте позже.' };
   }
 }
