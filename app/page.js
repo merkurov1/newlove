@@ -127,13 +127,13 @@ export default async function HomePage() {
               articles.map((article, idx) => (
                 <article
                   key={article.id}
-                  className="bg-white/70 rounded-xl flex flex-col group overflow-hidden transition-all duration-200 hover:bg-pink-50 p-3 sm:p-4 md:p-5 animate-fade-in-up border border-pink-100"
+                  className="bg-white/70 rounded-lg flex flex-col group overflow-hidden transition-all duration-200 hover:bg-pink-50 p-2 sm:p-3 md:p-3 animate-fade-in-up border border-pink-100"
                   style={{ animationDelay: `${idx * 100}ms`, animationFillMode: 'both' }}
                   role="listitem"
                 >
                   {/* Время публикации */}
                   {article.publishedAt && (
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-0.5">
                       <span className="text-xs text-gray-400">
                         {(() => {
                           const diff = Math.floor((Date.now() - new Date(article.publishedAt).getTime()) / 1000);
@@ -148,7 +148,7 @@ export default async function HomePage() {
                   {/* Изображение */}
                   <Link
                     href={`/${article.slug}`}
-                    className="block relative w-full aspect-[3/2] mb-2 group"
+                    className="block relative w-full aspect-[4/3] mb-1 group"
                     aria-label={`Читать статью: ${article.title}`}
                   >
                     {article.previewImage ? (
@@ -157,11 +157,11 @@ export default async function HomePage() {
                         alt={`Изображение к статье: ${article.title}`}
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        className="object-cover rounded-lg transition-transform duration-200 group-hover:scale-105"
-                        style={{ minHeight: '180px' }}
+                        className="object-cover rounded-md transition-transform duration-200 group-hover:scale-105"
+                        style={{ minHeight: '220px' }}
                       />
                     ) : (
-                      <div className="w-full h-full min-h-[180px] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center rounded-lg">
+                      <div className="w-full h-full min-h-[220px] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center rounded-md">
                         <div className="text-center">
                           <div className="text-4xl text-gray-300 mb-2">📰</div>
                           <div className="text-sm text-gray-400">No image</div>
@@ -172,7 +172,7 @@ export default async function HomePage() {
                   {/* Заголовок */}
                   <div className="flex-grow flex flex-col">
                     <Link href={`/${article.slug}`}> 
-                      <h3 className="text-xl font-semibold text-gray-900 mb-1 line-clamp-2">{article.title}</h3>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-0.5 line-clamp-2">{article.title}</h3>
                     </Link>
                   </div>
                 </article>
