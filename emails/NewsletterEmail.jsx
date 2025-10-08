@@ -53,7 +53,7 @@ function blocksToHtml(blocks) {
 }
 
 // Эта обертка нужна, чтобы наш компонент мог работать на сервере
-const NewsletterEmail = ({ title = 'Тема письма', content = '' }) => {
+const NewsletterEmail = ({ title = 'Тема письма', content = '', unsubscribeUrl }) => {
   // Конвертируем блочный контент в HTML
   const contentHtml = blocksToHtml(content);
 
@@ -69,6 +69,12 @@ const NewsletterEmail = ({ title = 'Тема письма', content = '' }) => {
             <Hr style={hr} />
             <Text style={footer}>
               Anton Merkurov | Вы получили это письмо, потому что подписались на рассылку на сайте new.merkurov.love
+              <br />
+              {unsubscribeUrl && (
+                <a href={unsubscribeUrl} style={{ color: '#888', textDecoration: 'underline', fontSize: '12px' }}>
+                  Отписаться от рассылки
+                </a>
+              )}
             </Text>
           </Section>
         </Container>
@@ -80,10 +86,12 @@ const NewsletterEmail = ({ title = 'Тема письма', content = '' }) => {
 export default NewsletterEmail;
 
 // Функция для рендеринга, которую мы будем вызывать в Server Action
-export const renderNewsletterEmail = (letter) => {
+// Теперь принимает unsubscribeUrl
+export const renderNewsletterEmail = (letter, unsubscribeUrl) => {
   return render(<NewsletterEmail 
     title={letter.title} 
     content={letter.content} 
+    unsubscribeUrl={unsubscribeUrl}
   />);
 };
 
