@@ -148,7 +148,7 @@ export default async function HomePage() {
                   {/* Изображение */}
                   <Link
                     href={`/${article.slug}`}
-                    className="block relative w-full aspect-[4/3] mb-3 group min-w-0"
+                    className="block relative w-full aspect-[4/3] mb-3 group min-w-0 overflow-hidden"
                     aria-label={`Читать статью: ${article.title}`}
                   >
                     {article.previewImage ? (
@@ -158,10 +158,10 @@ export default async function HomePage() {
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="object-cover rounded-md transition-transform duration-200 group-hover:scale-105"
-                        style={{ minHeight: '220px' }}
+                        style={{ minHeight: 0, minWidth: 0 }}
                       />
                     ) : (
-                      <div className="w-full h-full min-h-[220px] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center rounded-md">
+                      <div className="w-full h-full aspect-[4/3] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center rounded-md">
                         <div className="text-center">
                           <div className="text-4xl text-gray-300 mb-2">📰</div>
                           <div className="text-sm text-gray-400">No image</div>
@@ -170,13 +170,13 @@ export default async function HomePage() {
                     )}
                   </Link>
                   {/* Заголовок */}
-                  <div className="flex-grow flex flex-col">
+                  <div className="flex-grow flex flex-col min-h-0">
                     <Link href={`/${article.slug}`}>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1 line-clamp-2">{article.title}</h3>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full">{article.title}</h3>
                     </Link>
                     {/* Описание, если есть */}
                     {article.description && (
-                      <p className="text-gray-500 text-sm line-clamp-2 mt-1">{article.description}</p>
+                      <p className="text-gray-500 text-sm line-clamp-2 mt-1 break-words max-w-full">{article.description}</p>
                     )}
                   </div>
                 </article>
