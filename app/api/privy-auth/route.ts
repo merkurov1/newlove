@@ -5,9 +5,11 @@ import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
 import prisma from '@/lib/prisma';
 
+export async function POST(req: NextRequest) {
   const debug: any = {};
+  let authToken;
   try {
-    const { authToken } = await req.json();
+    ({ authToken } = await req.json());
     debug.step = 'parse authToken';
   } catch (e) {
     return NextResponse.json({ error: 'Failed to parse authToken', details: String(e), debug }, { status: 500 });
