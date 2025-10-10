@@ -13,8 +13,18 @@ function blocksToHtml(blocks) {
 
   return blocks.map((block, index) => {
     switch (block.type) {
-      case 'richText':
-        return block.data?.html || '';
+      case 'richText': {
+        let html = block.data?.html || '';
+        // Добавляем параметры ресайза к supabase <img>
+        html = html.replace(/<img([^>]+src=["'])(https:\/\/[^"'>]*supabase\.co\/storage[^"'>]*)(["'][^>]*)>/g, (match, before, url, after) => {
+          let newUrl = url;
+          if (!url.match(/[?&]width=\d+/)) {
+            newUrl += (url.includes('?') ? '&' : '?') + 'width=600&quality=70';
+          }
+          return `<img${before}${newUrl}${after}>`;
+        });
+        return html;
+      }
       
       case 'image': {
         let url = block.data?.url || '';
