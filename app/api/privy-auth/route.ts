@@ -59,27 +59,33 @@ export async function POST(req: NextRequest) {
     debug.step = 'getUser from privy failed';
     return NextResponse.json({ error: 'Failed to get privy user', details: String(e), debug }, { status: 500 });
   }
-  const wallet = privyUser.wallet?.address?.toLowerCase();
+  const wallet_address = privyUser.wallet?.address?.toLowerCase() || null;
   const email = privyUser.email?.address?.toLowerCase() || null;
-  const privyDid = privyUser.id;
   // --- PRISMA ONLY ---
   let prismaUser = null;
   try {
     debug.step = 'find or create prisma user';
-    const emailForPrisma = email || undefined;
-    prismaUser = await prisma.user.findUnique({ where: { email: emailForPrisma } });
+    // Determine unique field for lookup
+    let where: any = {};
+    if (email) {
+      where.email = email;
+    } else if (wallet_address) {
+      where.wallet_address = wallet_address;
+    } else {
+      debug.noUniqueField = true;
+      return NextResponse.json({ error: 'No unique identifier (email, wallet_address) for user', debug }, { status: 400 });
+    }
+    prismaUser = await prisma.user.findUnique({ where });
     // Only use fields that exist in your Prisma schema
-    const userData: any = {
-      email: emailForPrisma,
-      privyDid,
-    };
-    // Optionally add name/image if your schema supports it
+    const userData: any = {};
+    if (email) userData.email = email;
+    if (wallet_address) userData.wallet_address = wallet_address;
     if (privyUser && 'name' in privyUser) userData.name = (privyUser as any).name;
     if (privyUser && 'profilePictureUrl' in privyUser) userData.image = (privyUser as any).profilePictureUrl;
     if (!prismaUser) {
       prismaUser = await prisma.user.create({ data: userData });
     } else {
-      prismaUser = await prisma.user.update({ where: { email: emailForPrisma }, data: userData });
+      prismaUser = await prisma.user.update({ where, data: userData });
     }
     debug.prismaUser = prismaUser;
   } catch (e) {
