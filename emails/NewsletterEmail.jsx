@@ -9,12 +9,21 @@ function addResizeToSupabaseImages(html, width = 600, quality = 70) {
     // Используем DOMParser через JSDOM-like API (или fallback на regex)
     // В среде node/email можно использовать regexp, но делаем максимально устойчиво
   return html.replace(/<img([^>]+src=["'])(https:\/\/[^"'>]*supabase\.co\/+storage[^"'>]*)(["'][^>]*)>/g, (match, before, url, after) => {
-      let newUrl = url;
-      if (!url.match(/[?&]width=\d+/)) {
-        newUrl += (url.includes('?') ? '&' : '?') + `width=${width}&quality=${quality}`;
-      }
-      return `<img${before}${newUrl}${after}>`;
-    });
+    // Добавляем/заменяем style на max-width:600px;height:auto;
+    let styleAttr = '';
+    if (/style=["'][^"']*["']/.test(after)) {
+      // Уже есть style — заменяем max-width и height
+      after = after.replace(/style=["'][^"']*["']/, (styleMatch) => {
+        let style = styleMatch.slice(7, -1);
+        style = style.replace(/max-width:[^;]+;?/g, '').replace(/height:[^;]+;?/g, '');
+        style = `max-width:${width}px;height:auto;` + style;
+        return `style="${style}"`;
+      });
+    } else {
+      styleAttr = ` style=\"max-width:${width}px;height:auto;\"`;
+    }
+    return `<img${before}${url}"${styleAttr}${after.replace(/^["']/, '')}>`;
+  });
   } catch {
     return html;
   }
@@ -43,19 +52,14 @@ function blocksToHtml(blocks) {
       }
       case 'image': {
         let url = block.data?.url || '';
-        if (url.includes('supabase.co/storage')) {
-          url += (url.includes('?') ? '&' : '?') + 'width=600&quality=70';
-        }
-        return `<img src="${url}" alt="${block.data?.caption || ''}" style="max-width: 100%; max-height: 400px; height: auto; display: block; margin: 20px auto;" />`;
+        // Просто ограничиваем style, не добавляем параметры
+        return `<img src="${url}" alt="${block.data?.caption || ''}" style="max-width:600px;height:auto;display:block;margin:20px auto;" />`;
       }
       case 'gallery':
         if (block.data?.images && Array.isArray(block.data.images)) {
           return block.data.images.map(img => {
             let url = img.url || '';
-            if (url.includes('supabase.co/storage')) {
-              url += (url.includes('?') ? '&' : '?') + 'width=600&quality=70';
-            }
-            return `<img src="${url}" alt="${img.caption || ''}" style="max-width: 100%; max-height: 400px; height: auto; display: block; margin: 10px auto;" />`;
+            return `<img src="${url}" alt="${img.caption || ''}" style="max-width:600px;height:auto;display:block;margin:10px auto;" />`;
           }).join('');
         }
         return '';
