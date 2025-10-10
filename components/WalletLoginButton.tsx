@@ -1,11 +1,10 @@
 "use client";
 
-import { usePrivy, useAuth } from '@privy-io/react-auth';
+import { usePrivy } from '@privy-io/react-auth';
 import { useState } from 'react';
 
 export default function WalletLoginButton() {
-  const { login, ready, authenticated } = usePrivy();
-  const { getAccessToken } = useAuth();
+  const { login, ready, authenticated, getAccessToken } = usePrivy();
   const [loading, setLoading] = useState(false);
 
   const handleWalletLogin = async () => {
