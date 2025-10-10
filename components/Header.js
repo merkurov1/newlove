@@ -1,9 +1,13 @@
 "use client";
 
+
 import Link from "next/link";
 import SafeImage from '@/components/SafeImage';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { useState, useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
+
+const WalletLoginButton = dynamic(() => import('./WalletLoginButton'), { ssr: false });
 
 export default function Header({ projects, settings }) {
   const { data: session, status } = useSession();
@@ -128,11 +132,15 @@ export default function Header({ projects, settings }) {
             </a>
             {status === 'loading' && <div className="h-8 w-24 animate-pulse rounded-md bg-gray-200" />}
             {status === 'unauthenticated' && (
-              <button onClick={() => signIn('google')} className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700">Sign In</button>
+              <>
+                <button onClick={() => signIn('google')} className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700 mr-2">Sign In</button>
+                <WalletLoginButton />
+              </>
             )}
             {status === 'authenticated' && (
               <div className="flex items-center gap-4">
                 <button onClick={() => signOut()} className="text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900">Sign out</button>
+                <WalletLoginButton />
               </div>
             )}
           </div>
@@ -212,7 +220,10 @@ export default function Header({ projects, settings }) {
             </a>
             {status === 'loading' && <div className="h-8 w-24 animate-pulse rounded-md bg-gray-200" />}
             {status === 'unauthenticated' && (
-              <button onClick={() => { signIn('google'); setIsMenuOpen(false); }} className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700">Sign In</button>
+              <>
+                <button onClick={() => { signIn('google'); setIsMenuOpen(false); }} className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700 mr-2">Sign In</button>
+                <WalletLoginButton />
+              </>
             )}
             {status === 'authenticated' && (
               <div className="flex flex-col items-center gap-4">
@@ -224,10 +235,13 @@ export default function Header({ projects, settings }) {
                    <span className="text-sm font-medium text-gray-700">{session.user.name}</span>
                 </div>
                 <button onClick={() => { signOut(); setIsMenuOpen(false); }} className="mt-2 text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900">Sign out</button>
+                <div className="mt-2">
+                  <WalletLoginButton />
+                </div>
               </div>
             )}
           </div>
-        </div>
+  </div>
       </div>
     </>
   );
