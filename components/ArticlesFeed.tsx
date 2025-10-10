@@ -24,7 +24,7 @@ const PAGE_SIZE = 15;
 export default function ArticlesFeed({ initialArticles }: { initialArticles: Article[] }) {
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(initialArticles.length === PAGE_SIZE);
+  const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(initialArticles.length);
   const loaderRef = useRef<HTMLDivElement>(null);
   const [infiniteDone, setInfiniteDone] = useState(false);
@@ -44,7 +44,7 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
             setOffset((prev) => prev + data.length);
             setLoading(false);
             if (offset + data.length >= PAGE_SIZE) setInfiniteDone(true);
-            if (data.length < PAGE_SIZE - offset) setHasMore(false);
+            if (data.length === 0) setHasMore(false);
           });
       }
     };
@@ -60,7 +60,12 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
     setArticles((prev) => [...prev, ...data]);
     setOffset((prev) => prev + data.length);
     setLoading(false);
-    if (data.length < PAGE_SIZE) setHasMore(false);
+    if (data.length === 0) setHasMore(false);
+    // Плавный скролл к следующей порции
+    setTimeout(() => {
+      const last = document.querySelector('[data-last-article]');
+      if (last) last.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 100);
   };
 
   return (
@@ -69,6 +74,7 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
         {articles.map((article, idx) => (
           <article
             key={article.id}
+            data-last-article={idx === articles.length - 1 ? true : undefined}
             className="bg-white/70 rounded-lg flex flex-col group overflow-hidden transition-all duration-200 hover:bg-pink-50 p-4 animate-fade-in-up border border-pink-100 min-w-0 max-w-full"
             style={{ animationDelay: `${idx * 100}ms`, animationFillMode: "both" }}
             role="listitem"
@@ -114,7 +120,9 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
             {/* Заголовок */}
             <div className="flex-grow flex flex-col min-h-0">
               <Link href={`/${article.slug}`}>
-                <h3 className="text-lg font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full">{article.title}</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full transition-colors duration-150 group-hover:text-pink-500 group-hover:underline">
+                  {article.title}
+                </h3>
               </Link>
               {/* Описание, если есть */}
               {article.description && (
@@ -133,13 +141,17 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
             className="rounded-full bg-white/90 backdrop-blur-sm border border-pink-200 text-pink-500 px-8 py-3 text-sm font-medium hover:bg-pink-50 hover:border-pink-300 transition-all duration-300"
             onClick={handleShowMore}
             disabled={loading}
+            aria-label="Показать ещё статьи"
           >
             {loading ? "Загрузка..." : "Показать ещё"}
           </button>
         </div>
       )}
-      {!hasMore && (
-        <div className="text-center text-gray-400 mt-4">Больше статей нет</div>
+      {!hasMore && articles.length > 0 && (
+        <div className="text-center text-gray-400 mt-8 mb-4 text-base">Больше статей нет</div>
+      )}
+      {!hasMore && articles.length === 0 && (
+        <div className="text-center text-gray-400 mt-8 mb-4 text-base">Здесь пока нет опубликованных статей. Самое время написать первую!</div>
       )}
     </div>
   );

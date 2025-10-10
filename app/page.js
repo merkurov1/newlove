@@ -61,7 +61,7 @@ async function getArticles() {
     const articles = await prisma.article.findMany({
       where: { published: true },
       orderBy: { publishedAt: 'desc' },
-      take: 9,
+      take: 15,
       select: {
         id: true,
         title: true,
