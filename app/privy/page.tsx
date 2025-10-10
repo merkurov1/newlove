@@ -1,23 +1,69 @@
-import dynamic from 'next/dynamic';
-
-const Login = dynamic(() => import('@/components/Login'), { ssr: false });
-const WalletLoginButton = dynamic(() => import('@/components/WalletLoginButton'), { ssr: false });
+"use client";
+import { usePrivy } from '@privy-io/react-auth';
+import { useSession, signIn } from 'next-auth/react';
+import { useState } from 'react';
 
 export default function PrivyDebugPage() {
+  const { login, ready, authenticated, getAccessToken } = usePrivy();
+  const { data: session, status } = useSession();
+  const [loading, setLoading] = useState(false);
+  const [debug, setDebug] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleWalletLogin = async () => {
+    setLoading(true);
+    setError(null);
+    setDebug(null);
+    try {
+      await login();
+      const authToken = await getAccessToken();
+      // Проверим /api/privy-auth напрямую
+      const privyRes = await fetch('/api/privy-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken }),
+      });
+      const privyData = await privyRes.json();
+      // Теперь signIn через NextAuth
+      const signInRes = await signIn('privy', {
+        authToken,
+        redirect: false,
+        callbackUrl: '/',
+      });
+      setDebug({
+        privyAuth: privyData,
+        signInRes,
+        session,
+        status,
+        cookies: typeof document !== 'undefined' ? document.cookie : '',
+      });
+      // window.location.reload(); // не делаем reload для отладки
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={{ maxWidth: 600, margin: '40px auto', padding: 24, border: '1px solid #eee', borderRadius: 12 }}>
       <h1 style={{ fontSize: 28, marginBottom: 16 }}>Privy Debug</h1>
       <p style={{ color: '#666', marginBottom: 24 }}>
-        Здесь можно протестировать оба варианта логина через Privy и посмотреть полный ответ backend.<br />
-        <b>authToken</b> и ответ API будут выведены на экран.
+        Кнопка ниже выполняет полный цикл: login через Privy, запрос к /api/privy-auth, затем signIn('privy') через NextAuth.<br />
+        <b>Все debug-данные и ошибки будут выведены ниже.</b>
       </p>
-      <div style={{ marginBottom: 32 }}>
-        <h2 style={{ fontSize: 20, marginBottom: 8 }}>Login (authToken → /api/privy-auth)</h2>
-        <Login />
-      </div>
-      <div>
-        <h2 style={{ fontSize: 20, marginBottom: 8 }}>WalletLoginButton (прямая интеграция)</h2>
-        <WalletLoginButton />
+      <button onClick={handleWalletLogin} disabled={loading || !ready || authenticated} style={{ marginBottom: 24 }}>
+        {loading ? 'Вход...' : 'Login with Wallet (debug)'}
+      </button>
+      {error && <div style={{ color: 'red', marginBottom: 16 }}>Ошибка: {error}</div>}
+      <div style={{ fontSize: 13, color: '#333', background: '#f8f8f8', padding: 12, borderRadius: 8, marginTop: 8 }}>
+        <b>Session status:</b> {status}<br />
+        <b>Session:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(session, null, 2)}</pre>
+        <b>Cookies:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{typeof document !== 'undefined' ? document.cookie : ''}</pre>
+        {debug && <>
+          <b>signIn('privy') result:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(debug.signInRes, null, 2)}</pre>
+          <b>/api/privy-auth response:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(debug.privyAuth, null, 2)}</pre>
+        </>}
       </div>
       <div style={{ marginTop: 40, color: '#888', fontSize: 14 }}>
         <b>Debug env:</b><br />
