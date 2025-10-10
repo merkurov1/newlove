@@ -21,11 +21,16 @@ function addResizeToSupabaseImages(html, width = 600, quality = 70) {
 }
 
 function blocksToHtml(blocks) {
+  // Если это строка (html или markdown), всегда прогоняем через addResizeToSupabaseImages
+  if (typeof blocks === 'string') {
+    return addResizeToSupabaseImages(blocks);
+  }
+  // Если это не массив, пробуем распарсить как JSON
   if (!Array.isArray(blocks)) {
     try {
       blocks = JSON.parse(blocks);
     } catch {
-      return blocks || '';
+      return addResizeToSupabaseImages(blocks || '');
     }
   }
 
