@@ -18,8 +18,11 @@ export default function WalletLoginButton() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ authToken }),
       });
-      if (!res.ok) throw new Error('Auth failed');
       const data = await res.json();
+      if (!res.ok) {
+        alert('Ошибка входа через кошелек: ' + (data.error || 'Unknown error') + '\n' + (data.debug ? JSON.stringify(data.debug, null, 2) : ''));
+        return;
+      }
       // Устанавливаем сессию Supabase
       const { access_token, refresh_token } = data;
       const { createClient } = await import('@supabase/supabase-js');
@@ -30,7 +33,7 @@ export default function WalletLoginButton() {
       await supabase.auth.setSession({ access_token, refresh_token });
       window.location.reload();
     } catch (e) {
-      alert('Ошибка входа через кошелек');
+      alert('Ошибка входа через кошелек: ' + (e?.message || e));
     } finally {
       setLoading(false);
     }
