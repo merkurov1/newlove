@@ -62,122 +62,24 @@ export async function POST(req: NextRequest) {
   const wallet = privyUser.wallet?.address?.toLowerCase();
   const email = privyUser.email?.address?.toLowerCase() || null;
   const privyDid = privyUser.id;
-  let supabase;
-  try {
-    debug.step = 'init supabase';
-    supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-  } catch (e) {
-    debug.step = 'init supabase failed';
-    return NextResponse.json({ error: 'Supabase client init failed', details: String(e), debug }, { status: 500 });
-  }
-  let userByEmail = null;
-  try {
-    debug.step = 'find user by email';
-    if (email) {
-      const { data, error } = await supabase
-        .from('User')
-        .select('*')
-        .eq('email', email)
-        .maybeSingle();
-      debug.userByEmail = data;
-      debug.userByEmailError = error;
-      userByEmail = data;
-    }
-  } catch (e) {
-    debug.step = 'find user by email failed';
-    return NextResponse.json({ error: 'Supabase find user by email failed', details: String(e), debug }, { status: 500 });
-  }
-  let user = userByEmail;
-  try {
-    debug.step = 'find user by wallet';
-    if (!user && wallet) {
-      const { data, error } = await supabase
-        .from('User')
-        .select('*')
-        .contains('raw_user_meta_data', { wallet });
-      debug.userByWallet = data;
-      debug.userByWalletError = error;
-      user = data?.[0] || null;
-    }
-  } catch (e) {
-    debug.step = 'find user by wallet failed';
-    return NextResponse.json({ error: 'Supabase find user by wallet failed', details: String(e), debug }, { status: 500 });
-  }
-  try {
-    debug.step = 'create or update user in supabase';
-    if (!user) {
-      const { data: newUser, error } = await supabase.auth.admin.createUser({
-        email: email || undefined,
-        email_confirm: !!email,
-        user_metadata: {
-          wallet,
-          privyDid,
-        },
-      });
-      debug.createUser = newUser;
-      debug.createUserError = error;
-      if (error || !newUser) {
-        return NextResponse.json({ error: 'Failed to create user', debug }, { status: 500 });
-      }
-      user = newUser;
-    } else {
-      const { data, error } = await supabase.auth.admin.updateUserById(user.id, {
-        user_metadata: {
-          ...(user.user_metadata || {}),
-          wallet,
-          privyDid,
-        },
-      });
-      debug.updateUser = data;
-      debug.updateUserError = error;
-    }
-  } catch (e) {
-    debug.step = 'create or update user in supabase failed';
-    return NextResponse.json({ error: 'Supabase create/update user failed', details: String(e), debug }, { status: 500 });
-  }
-  let session, mgmtRes;
-  try {
-    debug.step = 'create supabase session';
-    const mgmtUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${user.id}/tokens`;
-    debug.mgmtUrl = mgmtUrl;
-    mgmtRes = await fetch(mgmtUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-    });
-    debug.mgmtResStatus = mgmtRes.status;
-    session = await mgmtRes.json();
-    debug.session = session;
-    if (!mgmtRes.ok) {
-      return NextResponse.json({ error: 'Failed to create session', debug }, { status: 500 });
-    }
-  } catch (e) {
-    debug.step = 'create supabase session failed';
-    return NextResponse.json({ error: 'Failed to create session', details: String(e), debug }, { status: 500 });
-  }
+  // --- PRISMA ONLY ---
   let prismaUser = null;
   try {
     debug.step = 'find or create prisma user';
-    // email must be string|undefined, not null
     const emailForPrisma = email || undefined;
     prismaUser = await prisma.user.findUnique({ where: { email: emailForPrisma } });
+    // Only use fields that exist in your Prisma schema
+    const userData: any = {
+      email: emailForPrisma,
+      privyDid,
+    };
+    // Optionally add name/image if your schema supports it
+    if (privyUser && 'name' in privyUser) userData.name = (privyUser as any).name;
+    if (privyUser && 'profilePictureUrl' in privyUser) userData.image = (privyUser as any).profilePictureUrl;
     if (!prismaUser) {
-      // privyUser may not have name/profilePictureUrl, fallback to null
-      const name = (privyUser && ('name' in privyUser)) ? (privyUser as any).name : null;
-      const image = (privyUser && ('profilePictureUrl' in privyUser)) ? (privyUser as any).profilePictureUrl : null;
-      prismaUser = await prisma.user.create({
-        data: {
-          email: emailForPrisma,
-          name,
-          image,
-        },
-      });
+      prismaUser = await prisma.user.create({ data: userData });
+    } else {
+      prismaUser = await prisma.user.update({ where: { email: emailForPrisma }, data: userData });
     }
     debug.prismaUser = prismaUser;
   } catch (e) {
@@ -187,10 +89,8 @@ export async function POST(req: NextRequest) {
   }
   debug.step = 'success';
   return NextResponse.json({
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
-    user,
     prismaUser,
     debug,
   });
+  // (all Prisma logic and response is above; remove unreachable/duplicate code below)
 }
