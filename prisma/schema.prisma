@@ -43,6 +43,7 @@ model User {
   username      String?   @unique
   bio           String?   @db.Text
   website       String?
+  walletAddress String?   @unique // Optional, unique wallet address for Privy login
 
   accounts      Account[]
   sessions      Session[]
