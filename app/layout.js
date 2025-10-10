@@ -5,6 +5,7 @@ import { Inter } from 'next/font/google';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import AuthProvider from '@/components/AuthProvider';
+import Providers from './providers';
 import GlobalErrorHandler from '@/components/GlobalErrorHandler';
 import prisma from '@/lib/prisma';
 import { Analytics } from '@vercel/analytics/react';
@@ -154,20 +155,22 @@ export default async function RootLayout({ children }) {
       </head>
       <body className="bg-white text-gray-800 min-h-screen">
         <GlobalErrorHandler />
-        <AuthProvider>
-          <div className="flex flex-col min-h-screen">
-            <Header projects={projects} settings={settings} />
-            <div className="flex flex-1 w-full container mx-auto px-4 py-8 gap-8">
-              <div className="hidden md:block">
-                <UserSidebar />
+        <Providers>
+          <AuthProvider>
+            <div className="flex flex-col min-h-screen">
+              <Header projects={projects} settings={settings} />
+              <div className="flex flex-1 w-full container mx-auto px-4 py-8 gap-8">
+                <div className="hidden md:block">
+                  <UserSidebar />
+                </div>
+                <main className="flex-grow">
+                  {children}
+                </main>
               </div>
-              <main className="flex-grow">
-                {children}
-              </main>
+              <Footer subscriberCount={subscriberCount} />
             </div>
-            <Footer subscriberCount={subscriberCount} />
-          </div>
-        </AuthProvider>
+          </AuthProvider>
+        </Providers>
   <Analytics />
   {/* Umami analytics */}
   <UmamiScript websiteId="87795d47-f53d-4ef8-8e82-3ee195ea997b" />
