@@ -55,15 +55,18 @@ export default function PrivyDebugPage() {
       <button onClick={handleWalletLogin} disabled={loading || !ready || authenticated} style={{ marginBottom: 24 }}>
         {loading ? 'Вход...' : 'Login with Wallet (debug)'}
       </button>
+      <button onClick={() => setDebug(null)} style={{ marginLeft: 8, marginBottom: 24 }}>
+        Показать только session/cookies
+      </button>
       {error && <div style={{ color: 'red', marginBottom: 16 }}>Ошибка: {error}</div>}
       <div style={{ fontSize: 13, color: '#333', background: '#f8f8f8', padding: 12, borderRadius: 8, marginTop: 8 }}>
         <b>Session status:</b> {status}<br />
         <b>Session:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(session, null, 2)}</pre>
         <b>Cookies:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{typeof document !== 'undefined' ? document.cookie : ''}</pre>
-        {debug && <>
+        {debug ? <>
           <b>signIn('privy') result:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(debug.signInRes, null, 2)}</pre>
           <b>/api/privy-auth response:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(debug.privyAuth, null, 2)}</pre>
-        </>}
+        </> : <div style={{ color: '#888', marginTop: 8 }}>Нет debug-данных. Нажмите кнопку выше для отладки Privy.</div>}
       </div>
       <div style={{ marginTop: 40, color: '#888', fontSize: 14 }}>
         <b>Debug env:</b><br />
