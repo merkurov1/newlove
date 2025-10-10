@@ -35,6 +35,11 @@ export async function POST(req: NextRequest) {
     console.log('debug.details:', String(e));
     return NextResponse.json({ error: 'Failed to parse authToken', details: String(e), debug }, { status: 500 });
   }
+  if (!authToken || typeof authToken !== 'string') {
+    debug.step = 'authToken missing or invalid';
+    debug.authToken = authToken;
+    return NextResponse.json({ error: 'authToken missing or invalid', debug }, { status: 400 });
+  }
   let claims;
   try {
     debug.step = 'verifyAuthToken';
@@ -42,6 +47,7 @@ export async function POST(req: NextRequest) {
     debug.claims = claims;
   } catch (e) {
     debug.step = 'verifyAuthToken failed';
+    debug.authToken = authToken;
     console.log('debug.step:', 'verifyAuthToken failed');
     console.log('debug.details:', String(e));
     return NextResponse.json({ error: 'Invalid Privy token', details: String(e), debug }, { status: 401 });
