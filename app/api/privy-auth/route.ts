@@ -1,4 +1,5 @@
 
+
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -7,6 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
 import prisma from '@/lib/prisma';
 
+export async function POST(req: NextRequest) {
   const debug: any = {};
   debug.env = {
     PRIVY_APP_ID: process.env.PRIVY_APP_ID,
@@ -51,7 +53,7 @@ import prisma from '@/lib/prisma';
   let privyUser;
   try {
     debug.step = 'getUser from privy';
-    privyUser = await privy.users.getUser(claims.userId);
+    privyUser = await privy.getUser(claims.userId);
     debug.privyUser = privyUser;
   } catch (e) {
     debug.step = 'getUser from privy failed';
@@ -162,13 +164,18 @@ import prisma from '@/lib/prisma';
   let prismaUser = null;
   try {
     debug.step = 'find or create prisma user';
-    prismaUser = await prisma.user.findUnique({ where: { email } });
+    // email must be string|undefined, not null
+    const emailForPrisma = email || undefined;
+    prismaUser = await prisma.user.findUnique({ where: { email: emailForPrisma } });
     if (!prismaUser) {
+      // privyUser may not have name/profilePictureUrl, fallback to null
+      const name = (privyUser && ('name' in privyUser)) ? (privyUser as any).name : null;
+      const image = (privyUser && ('profilePictureUrl' in privyUser)) ? (privyUser as any).profilePictureUrl : null;
       prismaUser = await prisma.user.create({
         data: {
-          email: email || undefined,
-          name: privyUser?.name || null,
-          image: privyUser?.profilePictureUrl || null,
+          email: emailForPrisma,
+          name,
+          image,
         },
       });
     }
