@@ -41,38 +41,25 @@ export const authOptions: NextAuthOptions = {
       id: 'privy',
       name: 'Privy',
       credentials: {
-        authToken: { label: 'Privy Auth Token', type: 'text' },
+        accessToken: { label: 'Privy Access Token', type: 'text' },
       },
       async authorize(credentials) {
+        const accessToken = credentials?.accessToken;
+        if (!accessToken) return null;
         try {
-          if (!credentials?.authToken) {
-            console.error('Privy authorize: no authToken');
-            return null;
-          }
-          const res = await fetch(`${process.env.NEXTAUTH_URL}/api/privy-auth`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ authToken: credentials.authToken }),
-          });
-          const data = await res.json();
-          if (!res.ok || !data?.prismaUser) {
-            console.error('Privy authorize: no prismaUser', { status: res.status, data });
-            return null;
-          }
-          // NextAuth ожидает user с id, email и т.д.
-          const user = {
-            id: data.prismaUser.id,
-            email: data.prismaUser.email,
-            name: data.prismaUser.name,
-            image: data.prismaUser.image,
-            role: data.prismaUser.role,
-            username: data.prismaUser.username,
-            bio: data.prismaUser.bio,
-            website: data.prismaUser.website,
-            walletAddress: data.prismaUser.walletAddress,
+          const { PrivyClient } = await import('@privy-io/server-auth');
+          const privy = new PrivyClient(
+            process.env.PRIVY_APP_ID!,
+            process.env.PRIVY_APP_SECRET!
+          );
+          const claims = await privy.verifyAuthToken(accessToken);
+          if (!claims?.userId) return null;
+          // const privyUser = await privy.getUser(claims.userId); // если нужно
+          return {
+            id: claims.userId,
+            // email: privyUser?.email?.address, // если нужно
+            // name: privyUser?.name, // если нужно
           };
-          console.log('Privy authorize: user', user);
-          return user;
         } catch (e) {
           console.error('Privy authorize error', e);
           return null;

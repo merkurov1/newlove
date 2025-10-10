@@ -7,23 +7,31 @@ import { signIn } from 'next-auth/react';
 export default function WalletLoginButton() {
   const { login, ready, authenticated, getAccessToken } = usePrivy();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleWalletLogin = async () => {
+  const handleLogin = async () => {
+    setError(null);
     setLoading(true);
     try {
       await login();
-      const authToken = await getAccessToken();
-      // Теперь используем NextAuth для полноценной сессии
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setError('Не удалось получить accessToken от Privy');
+        setLoading(false);
+        return;
+      }
       const res = await signIn('privy', {
-        authToken,
-        redirect: true,
-        callbackUrl: '/',
+        accessToken,
+        redirect: false,
       });
-      // signIn сам обработает редирект, но иногда сессия не обновляется без reload
-      window.location.reload();
-    } catch (e) {
-      const msg = (e && typeof e === 'object' && 'message' in e) ? (e as Error).message : String(e);
-      alert('Ошибка входа через кошелек: ' + msg);
+      if (res?.ok) {
+        setError(null);
+        // window.location.reload(); // если нужно
+      } else {
+        setError(res?.error || 'Ошибка входа через Privy');
+      }
+    } catch (e: any) {
+      setError(e?.message || String(e));
     } finally {
       setLoading(false);
     }
@@ -32,8 +40,9 @@ export default function WalletLoginButton() {
   if (!ready || authenticated) return null;
 
   return (
-    <button onClick={handleWalletLogin} disabled={loading}>
-      {loading ? 'Вход...' : 'Login with Wallet'}
+    <button onClick={handleLogin} disabled={loading}>
+      {loading ? 'Вход...' : 'Войти через Privy'}
+      {error && <div style={{ color: 'red' }}>{error}</div>}
     </button>
   );
 }
