@@ -21,7 +21,7 @@ export default function HeroHearts({ className = "", style }) {
       style={style}
     >
       <div className="relative z-10 flex flex-col items-center justify-center h-full text-center select-none">
-        <h1 className="text-2xl md:text-5xl font-light tracking-wide text-gray-900 mb-1 md:mb-2">
+        <h1 className="text-3xl md:text-6xl font-light tracking-wide text-gray-900 mb-1 md:mb-2 leading-tight md:leading-tight">
           {title}
         </h1>
         <div className="text-xs md:text-lg text-gray-700 mb-1 md:mb-2 max-w-xs md:max-w-2xl mx-auto">
