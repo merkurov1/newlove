@@ -69,10 +69,17 @@ export default function SafeImage(props) {
     return renderFallback();
   }
 
-  // Рендерим Image БЕЗ конфликтующих пропсов
+  // Добавляем параметры ресайза для Supabase Storage
+  let safeSrc = src;
+  if (typeof safeSrc === 'string' && safeSrc.includes('supabase.co/storage')) {
+    // Не дублируем параметры, если они уже есть
+    if (!safeSrc.match(/[?&]width=\d+/)) {
+      safeSrc += (safeSrc.includes('?') ? '&' : '?') + 'width=800&quality=75';
+    }
+  }
   return (
     <Image
-      src={src}
+      src={safeSrc}
       alt={alt}
       width={width}
       height={height}

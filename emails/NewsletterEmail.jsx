@@ -16,14 +16,23 @@ function blocksToHtml(blocks) {
       case 'richText':
         return block.data?.html || '';
       
-      case 'image':
-        return `<img src="${block.data?.url}" alt="${block.data?.caption || ''}" style="max-width: 100%; max-height: 400px; height: auto; display: block; margin: 20px auto;" />`;
+      case 'image': {
+        let url = block.data?.url || '';
+        if (url.includes('supabase.co/storage')) {
+          url += (url.includes('?') ? '&' : '?') + 'width=600&quality=70';
+        }
+        return `<img src="${url}" alt="${block.data?.caption || ''}" style="max-width: 100%; max-height: 400px; height: auto; display: block; margin: 20px auto;" />`;
+      }
       
       case 'gallery':
         if (block.data?.images && Array.isArray(block.data.images)) {
-          return block.data.images.map(img => 
-            `<img src="${img.url}" alt="${img.caption || ''}" style="max-width: 100%; max-height: 400px; height: auto; display: block; margin: 10px auto;" />`
-          ).join('');
+          return block.data.images.map(img => {
+            let url = img.url || '';
+            if (url.includes('supabase.co/storage')) {
+              url += (url.includes('?') ? '&' : '?') + 'width=600&quality=70';
+            }
+            return `<img src="${url}" alt="${img.caption || ''}" style="max-width: 100%; max-height: 400px; height: auto; display: block; margin: 10px auto;" />`;
+          }).join('');
         }
         return '';
       
