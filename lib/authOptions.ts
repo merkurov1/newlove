@@ -81,7 +81,8 @@ export const authOptions: NextAuthOptions = {
         session.user.username = user.username;
         session.user.bio = user.bio;
         session.user.website = user.website;
-        session.user.walletAddress = user.walletAddress;
+  // session.user.walletAddress = user.walletAddress; // убрано для совместимости с типами NextAuth
+  // session.walletAddress = user.walletAddress; // убрано для совместимости с типами NextAuth
         console.log('Session callback: session', session);
         return session;
       } catch (e) {
