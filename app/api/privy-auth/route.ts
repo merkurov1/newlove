@@ -1,4 +1,6 @@
 
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { PrivyClient } from 'privy';
 import { createClient } from '@supabase/supabase-js';
