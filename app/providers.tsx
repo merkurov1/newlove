@@ -12,7 +12,9 @@ export default function Providers({ children }: { children: ReactNode }) {
           theme: 'light',
         },
         embeddedWallets: {
-          createOnLogin: 'users-without-wallets',
+          ethereum: {
+            createOnLogin: 'users-without-wallets',
+          },
         },
       }}
     >
