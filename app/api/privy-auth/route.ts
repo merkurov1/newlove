@@ -2,41 +2,36 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import * as Privy from 'privy';
+import { PrivyClient } from '@privy-io/server-auth';
 import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
 import prisma from '@/lib/prisma';
 
-export async function POST(req: NextRequest) {
   const debug: any = {};
   debug.env = {
     PRIVY_APP_ID: process.env.PRIVY_APP_ID,
     PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET,
     NODE_ENV: process.env.NODE_ENV,
   };
+  const privyAppId = process.env.PRIVY_APP_ID;
+  const privyAppSecret = process.env.PRIVY_APP_SECRET;
+  if (!privyAppId || !privyAppSecret) {
+    throw new Error('Missing Privy credentials in environment variables.');
+  }
+  const privy = new PrivyClient(privyAppId, privyAppSecret);
   let authToken;
   try {
     ({ authToken } = await req.json());
     debug.step = 'parse authToken';
     console.log('Received authToken:', authToken);
     console.log('Env:', {
-      PRIVY_APP_ID: process.env.PRIVY_APP_ID,
-      PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET?.slice(0, 4) + '...'
+      PRIVY_APP_ID: privyAppId,
+      PRIVY_APP_SECRET: privyAppSecret?.slice(0, 4) + '...'
     });
   } catch (e) {
     console.log('debug.step:', 'parse authToken failed');
     console.log('debug.details:', String(e));
     return NextResponse.json({ error: 'Failed to parse authToken', details: String(e), debug }, { status: 500 });
-  }
-  let privy;
-  try {
-    debug.step = 'init privy';
-    privy = new Privy.PrivyClient(process.env.PRIVY_APP_ID!, process.env.PRIVY_APP_SECRET!);
-  } catch (e) {
-    debug.step = 'init privy failed';
-    console.log('debug.step:', 'init privy failed');
-    console.log('debug.details:', String(e));
-    return NextResponse.json({ error: 'PrivyClient init failed', details: String(e), debug }, { status: 500 });
   }
   let claims;
   try {
