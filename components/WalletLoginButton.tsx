@@ -19,7 +19,8 @@ export default function WalletLoginButton() {
         redirect: true,
         callbackUrl: '/',
       });
-      // signIn сам обработает редирект и сессию
+      // signIn сам обработает редирект, но иногда сессия не обновляется без reload
+      window.location.reload();
     } catch (e) {
       const msg = (e && typeof e === 'object' && 'message' in e) ? (e as Error).message : String(e);
       alert('Ошибка входа через кошелек: ' + msg);
