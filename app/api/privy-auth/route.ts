@@ -7,6 +7,11 @@ import prisma from '@/lib/prisma';
 
 export async function POST(req: NextRequest) {
   const debug: any = {};
+  debug.env = {
+    PRIVY_APP_ID: process.env.PRIVY_APP_ID,
+    PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET,
+    NODE_ENV: process.env.NODE_ENV,
+  };
   let authToken;
   try {
     ({ authToken } = await req.json());
