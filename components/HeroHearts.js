@@ -17,14 +17,14 @@ export default function HeroHearts({ className = "", style }) {
 
   return (
     <section
-      className={`relative w-full h-[30vh] min-h-[100px] max-h-[220px] flex flex-col items-center justify-center rounded-3xl overflow-hidden shadow-xl bg-gradient-to-br from-blue-50 via-white to-purple-100 py-12 px-4 md:px-6 text-center ${className}`}
+      className={`relative w-full h-[26vh] min-h-[80px] max-h-[180px] flex flex-col items-center justify-center rounded-2xl overflow-hidden shadow-xl bg-gradient-to-br from-blue-50 via-white to-purple-100 py-7 px-2 md:h-[30vh] md:min-h-[100px] md:max-h-[220px] md:rounded-3xl md:py-12 md:px-6 text-center ${className}`}
       style={style}
     >
       <div className="relative z-10 flex flex-col items-center justify-center h-full text-center select-none">
-        <h1 className="text-3xl md:text-5xl font-light tracking-wide text-gray-900 mb-2">
+        <h1 className="text-2xl md:text-5xl font-light tracking-wide text-gray-900 mb-1 md:mb-2">
           {title}
         </h1>
-        <div className="text-sm md:text-lg text-gray-700 mb-2 max-w-2xl mx-auto">
+        <div className="text-xs md:text-lg text-gray-700 mb-1 md:mb-2 max-w-xs md:max-w-2xl mx-auto">
           {description}
         </div>
       </div>
