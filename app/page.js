@@ -12,6 +12,9 @@ import nextDynamic from 'next/dynamic';
 // SSR-friendly динамический импорт HeroHearts (только на клиенте)
 const HeroHearts = nextDynamic(() => import('@/components/HeroHearts'), { ssr: false });
 import FlowFeed from '@/components/FlowFeed';
+import dynamic from 'next/dynamic';
+
+const ArticlesFeed = dynamic(() => import('@/components/ArticlesFeed'), { ssr: false });
 // Удалены Framer Motion и FadeInSection для server component совместимости
 
 // --- БЛОК МЕТАДАННЫХ ---
@@ -87,7 +90,6 @@ async function getArticles() {
 
 export default async function HomePage() {
   const rawArticles = await getArticles();
-  
   // Получаем previewImage для каждой статьи асинхронно
   const articles = await Promise.all(
     rawArticles.map(async (article) => {
@@ -98,7 +100,6 @@ export default async function HomePage() {
           previewImage
         };
       } catch (error) {
-        console.error('Error getting preview image for article:', article.id, error);
         return {
           ...article,
           previewImage: null
@@ -122,69 +123,7 @@ export default async function HomePage() {
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-sm uppercase tracking-wide text-gray-400 font-semibold">Articles</h2>
           </div>
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-2">
-            {articles && articles.length > 0 ? (
-              articles.map((article, idx) => (
-                <article
-                  key={article.id}
-                  className="bg-white/70 rounded-lg flex flex-col group overflow-hidden transition-all duration-200 hover:bg-pink-50 p-4 animate-fade-in-up border border-pink-100 min-w-0 max-w-full"
-                  style={{ animationDelay: `${idx * 100}ms`, animationFillMode: 'both' }}
-                  role="listitem"
-                >
-                  {/* Время публикации */}
-                  {article.publishedAt && (
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-xs text-gray-400">
-                        {(() => {
-                          const diff = Math.floor((Date.now() - new Date(article.publishedAt).getTime()) / 1000);
-                          if (diff < 60) return `${diff} sec ago`;
-                          if (diff < 3600) return `${Math.floor(diff/60)} min ago`;
-                          if (diff < 86400) return `${Math.floor(diff/3600)} hours ago`;
-                          return new Date(article.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                        })()}
-                      </span>
-                    </div>
-                  )}
-                  {/* Изображение */}
-                  <Link
-                    href={`/${article.slug}`}
-                    className="block relative w-full aspect-[4/3] mb-3 group min-w-0 overflow-hidden"
-                    aria-label={`Читать статью: ${article.title}`}
-                  >
-                    {article.previewImage ? (
-                      <SafeImage
-                        src={article.previewImage}
-                        alt={`Изображение к статье: ${article.title}`}
-                        fill
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        className="object-cover rounded-md transition-transform duration-200 group-hover:scale-105"
-                        style={{ minHeight: 0, minWidth: 0 }}
-                      />
-                    ) : (
-                      <div className="w-full h-full aspect-[4/3] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center rounded-md">
-                        <div className="text-center">
-                          <div className="text-4xl text-gray-300 mb-2">📰</div>
-                          <div className="text-sm text-gray-400">No image</div>
-                        </div>
-                      </div>
-                    )}
-                  </Link>
-                  {/* Заголовок */}
-                  <div className="flex-grow flex flex-col min-h-0">
-                    <Link href={`/${article.slug}`}>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full">{article.title}</h3>
-                    </Link>
-                    {/* Описание, если есть */}
-                    {article.description && (
-                      <p className="text-gray-500 text-sm line-clamp-2 mt-1 break-words max-w-full">{article.description}</p>
-                    )}
-                  </div>
-                </article>
-              ))
-            ) : (
-              <p className="text-center text-gray-500 col-span-full">Здесь пока нет опубликованных статей. Самое время написать первую!</p>
-            )}
-          </div>
+          <ArticlesFeed initialArticles={articles} />
         </div>
         {/* SOCIAL SECTION */}
         <div className="lg:col-span-2 mt-20">
