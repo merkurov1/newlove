@@ -45,14 +45,17 @@ export default async function AdminLettersPage() {
   }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Выпуски рассылки</h1>
-        <Link 
+    <div className="space-y-8 pb-10">
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-2 md:gap-6 mb-2">
+        <div>
+          <h1 className="text-3xl font-extrabold text-yellow-700 tracking-tight mb-1">Выпуски рассылки</h1>
+          <p className="text-gray-500 text-base">Все ваши письма и черновики.</p>
+        </div>
+        <Link
           href="/admin/letters/new"
-          className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-500 text-white font-semibold shadow hover:bg-yellow-600 transition-all"
         >
-          + Написать новый выпуск
+          💌 Новое письмо
         </Link>
       </div>
 
@@ -77,47 +80,36 @@ export default async function AdminLettersPage() {
         </div>
       )}
 
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        <ul className="divide-y divide-gray-200">
-          {letters.length === 0 ? (
-            <li className="p-4 text-center text-gray-500">Пока нет ни одного письма.</li>
-          ) : (
-            letters.map((letter) => (
-              <li key={letter.id} className="p-4 flex justify-between items-center">
-                <div className="flex-grow">
-                  <div className="flex items-center gap-3">
-                    <span className={`h-2.5 w-2.5 rounded-full ${letter.published ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                    <h3 className="text-lg font-semibold text-gray-800">{letter.title}</h3>
-                    {letter.sentAt && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        📧 Отправлено
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    /{letter.slug} &middot; Автор: {letter.author.name || 'Неизвестен'}
-                    {letter.sentAt && (
-                      <span className="ml-2">
-                        &middot; Отправлено: {new Date(letter.sentAt).toLocaleString('ru-RU')}
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <Link href={`/admin/letters/edit/${letter.id}`} className="text-blue-500 hover:underline">
-                    Редактировать
-                  </Link>
-                  <form action={deleteLetter}>
-                    <input type="hidden" name="id" value={letter.id} />
-                    <button type="submit" className="text-red-500 hover:underline">
-                      Удалить
-                    </button>
-                  </form>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {letters.length === 0 ? (
+          <div className="col-span-full p-6 text-center text-gray-400 bg-white rounded-xl border shadow-sm">Пока нет ни одного письма.</div>
+        ) : (
+          letters.map((letter) => (
+            <div key={letter.id} className="bg-white rounded-xl border shadow-sm p-5 flex flex-col gap-2 hover:shadow-md transition-shadow group">
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`h-2.5 w-2.5 rounded-full ${letter.published ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                <h3 className="text-lg font-semibold text-gray-900 truncate group-hover:text-yellow-700 transition-colors">{letter.title}</h3>
+                {letter.sentAt && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 ml-2">
+                    📧 Отправлено
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 truncate">/{letter.slug} &middot; Автор: {letter.author.name || 'Неизвестен'}{letter.sentAt && (<span className="ml-2">&middot; Отправлено: {new Date(letter.sentAt).toLocaleString('ru-RU')}</span>)}</p>
+              <div className="flex items-center gap-3 mt-2">
+                <Link href={`/admin/letters/edit/${letter.id}`} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-yellow-50 text-yellow-700 font-medium hover:bg-yellow-100 transition-all text-sm">
+                  ✏️ Редактировать
+                </Link>
+                <form action={deleteLetter} className="inline">
+                  <input type="hidden" name="id" value={letter.id} />
+                  <button type="submit" className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-red-50 text-red-600 font-medium hover:bg-red-100 transition-all text-sm">
+                    🗑️ Удалить
+                  </button>
+                </form>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

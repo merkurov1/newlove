@@ -382,11 +382,11 @@ export default function MediaPage() {
                   />
                 )
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
                   {filteredFiles.map((file) => (
-                    <div 
-                      key={file.name} 
-                      className={`bg-white border rounded-lg p-4 hover:shadow-md transition-shadow relative ${
+                    <div
+                      key={file.name}
+                      className={`bg-white rounded-xl border shadow-sm p-4 flex flex-col gap-2 hover:shadow-md transition-shadow relative ${
                         selectedFiles.includes(file.name) ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
                       }`}
                     >
@@ -399,9 +399,8 @@ export default function MediaPage() {
                           className="rounded border-gray-300 bg-white shadow"
                         />
                       </div>
-                      
                       {file.publicUrl ? (
-                        <div className="aspect-square mb-3 bg-gray-50 rounded-lg overflow-hidden">
+                        <div className="aspect-square mb-3 bg-gray-50 rounded-lg overflow-hidden flex items-center justify-center">
                           {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                             <img
                               src={file.publicUrl}
@@ -420,20 +419,17 @@ export default function MediaPage() {
                           <span className="text-red-400 text-sm">Ошибка загрузки</span>
                         </div>
                       )}
-                      
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         <h3 className="font-medium text-sm text-gray-900 truncate" title={file.name}>
                           {file.name}
                         </h3>
-                        
                         {file.metadata?.size && (
                           <p className="text-xs text-gray-500">
                             {formatFileSize(file.metadata.size)}
                           </p>
                         )}
-                        
                         {file.publicUrl && (
-                          <div className="flex space-x-1">
+                          <div className="flex flex-wrap gap-1 mt-1">
                             <Button
                               size="sm"
                               variant="secondary"

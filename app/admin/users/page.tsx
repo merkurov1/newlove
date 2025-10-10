@@ -131,14 +131,12 @@ export default function AdminUsersPage() {
   const roleOptions = Object.values(Role);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          👥 Управление пользователями
-        </h1>
-        <p className="text-gray-600">
-          Управление пользователями, ролями и подписчиками
-        </p>
+    <div className="space-y-8 pb-10">
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-2 md:gap-6 mb-2">
+        <div>
+          <h1 className="text-3xl font-extrabold text-green-800 tracking-tight mb-1">Пользователи</h1>
+          <p className="text-gray-500 text-base">Управление пользователями, ролями и подписчиками.</p>
+        </div>
       </div>
 
       {/* Табы */}
@@ -146,9 +144,9 @@ export default function AdminUsersPage() {
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('users')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 px-1 border-b-2 font-semibold text-sm transition-all ${
               activeTab === 'users'
-                ? 'border-blue-500 text-blue-600'
+                ? 'border-green-500 text-green-700'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -156,9 +154,9 @@ export default function AdminUsersPage() {
           </button>
           <button
             onClick={() => setActiveTab('subscribers')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 px-1 border-b-2 font-semibold text-sm transition-all ${
               activeTab === 'subscribers'
-                ? 'border-blue-500 text-blue-600'
+                ? 'border-green-500 text-green-700'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -167,173 +165,125 @@ export default function AdminUsersPage() {
         </nav>
       </div>
 
-      <SearchBox 
+      <SearchBox
         onSearch={setSearchQuery}
         placeholder={`Поиск ${activeTab === 'users' ? 'пользователей' : 'подписчиков'}...`}
       />
 
       {activeTab === 'users' && (
-        <Card>
-          <CardHeader title="Зарегистрированные пользователи" />
-          <CardContent>
-            {filteredUsers.length === 0 ? (
-              <EmptyState 
-                title="Пользователи не найдены" 
-                description="Попробуйте изменить критерии поиска"
-              />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Пользователь
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Роль
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Подписка
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Активность
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Действия
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredUsers.map((user) => (
-                      <tr key={user.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            {user.image && (
-                              <img 
-                                className="h-10 w-10 rounded-full mr-3" 
-                                src={user.image} 
-                                alt={user.name || 'User'} 
-                              />
-                            )}
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">
-                                {user.name || 'Без имени'}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {user.email}
-                              </div>
-                              {user.username && (
-                                <div className="text-xs text-gray-400">
-                                  @{user.username}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-lg">{getRoleEmoji(user.role)}</span>
-                            <select
-                              value={user.role}
-                              onChange={(e) => quickUpdateUserRole(user.id, e.target.value as Role)}
-                              className="text-sm border rounded px-2 py-1"
-                            >
-                              {roleOptions.map(role => (
-                                <option key={role} value={role}>
-                                  {getRoleName(role)}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {user.subscription ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              ✅ Подписан
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                              ⏸️ Не подписан
-                            </span>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 bg-white rounded-xl shadow-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Пользователь</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Роль</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Подписка</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Активность</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Действия</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredUsers.length === 0 ? (
+                <tr><td colSpan={5} className="p-6 text-center text-gray-400">Пользователи не найдены</td></tr>
+              ) : (
+                filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-green-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        {user.image && (
+                          <img
+                            className="h-10 w-10 rounded-full mr-3"
+                            src={user.image}
+                            alt={user.name || 'User'}
+                          />
+                        )}
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">{user.name || 'Без имени'}</div>
+                          <div className="text-sm text-gray-500">{user.email}</div>
+                          {user.username && (
+                            <div className="text-xs text-gray-400">@{user.username}</div>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div className="space-y-1">
-                            <div>📝 {user._count.articles} статей</div>
-                            <div>🚀 {user._count.projects} проектов</div>
-                            <div>💬 {user._count.messages} сообщений</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setEditingUser(user)}
-                          >
-                            ✏️ Редактировать
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg">{getRoleEmoji(user.role)}</span>
+                        <select
+                          value={user.role}
+                          onChange={(e) => quickUpdateUserRole(user.id, e.target.value as Role)}
+                          className="text-sm border rounded px-2 py-1"
+                        >
+                          {roleOptions.map(role => (
+                            <option key={role} value={role}>{getRoleName(role)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {user.subscription ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">✅ Подписан</span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">⏸️ Не подписан</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="space-y-1">
+                        <div>📝 {user._count.articles} статей</div>
+                        <div>🚀 {user._count.projects} проектов</div>
+                        <div>💬 {user._count.messages} сообщений</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setEditingUser(user)}
+                      >
+                        ✏️ Редактировать
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {activeTab === 'subscribers' && (
-        <Card>
-          <CardHeader title="Подписчики без аккаунта" />
-          <CardContent>
-            {filteredSubscribers.length === 0 ? (
-              <EmptyState 
-                title="Подписчики не найдены" 
-                description="Нет подписчиков без зарегистрированных аккаунтов"
-              />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Email
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Дата подписки
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Действия
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredSubscribers.map((subscriber) => (
-                      <tr key={subscriber.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {subscriber.email}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {new Date(subscriber.createdAt).toLocaleDateString('ru-RU')}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => deleteSubscriber(subscriber.id)}
-                          >
-                            🗑️ Удалить
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 bg-white rounded-xl shadow-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Дата подписки</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Действия</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredSubscribers.length === 0 ? (
+                <tr><td colSpan={3} className="p-6 text-center text-gray-400">Подписчики не найдены</td></tr>
+              ) : (
+                filteredSubscribers.map((subscriber) => (
+                  <tr key={subscriber.id} className="hover:bg-green-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{subscriber.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(subscriber.createdAt).toLocaleDateString('ru-RU')}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => deleteSubscriber(subscriber.id)}
+                      >
+                        🗑️ Удалить
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* Модальное окно редактирования */}
