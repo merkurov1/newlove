@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-// API-роут SIWE-verify очищен. Здесь может быть реализована новая логика, если потребуется.
+// API-роут SIWE-verify удалён. Файл пуст для предотвращения ошибок сборки.
 // 
 // 
 // 
