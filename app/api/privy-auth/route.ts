@@ -18,7 +18,14 @@ export async function POST(req: NextRequest) {
   try {
     ({ authToken } = await req.json());
     debug.step = 'parse authToken';
+    console.log('Received authToken:', authToken);
+    console.log('Env:', {
+      PRIVY_APP_ID: process.env.PRIVY_APP_ID,
+      PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET?.slice(0, 4) + '...'
+    });
   } catch (e) {
+    console.log('debug.step:', 'parse authToken failed');
+    console.log('debug.details:', String(e));
     return NextResponse.json({ error: 'Failed to parse authToken', details: String(e), debug }, { status: 500 });
   }
   let privy;
@@ -27,6 +34,8 @@ export async function POST(req: NextRequest) {
     privy = new PrivyClient(process.env.PRIVY_APP_ID!, process.env.PRIVY_APP_SECRET!);
   } catch (e) {
     debug.step = 'init privy failed';
+    console.log('debug.step:', 'init privy failed');
+    console.log('debug.details:', String(e));
     return NextResponse.json({ error: 'PrivyClient init failed', details: String(e), debug }, { status: 500 });
   }
   let claims;
@@ -36,6 +45,8 @@ export async function POST(req: NextRequest) {
     debug.claims = claims;
   } catch (e) {
     debug.step = 'verifyAuthToken failed';
+    console.log('debug.step:', 'verifyAuthToken failed');
+    console.log('debug.details:', String(e));
     return NextResponse.json({ error: 'Invalid Privy token', details: String(e), debug }, { status: 401 });
   }
   if (!claims?.userId) {
