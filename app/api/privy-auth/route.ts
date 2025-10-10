@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrivyClient } from 'privy';
 import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
+import prisma from '@/lib/prisma';
 
 export async function POST(req: NextRequest) {
   try {
@@ -129,11 +130,29 @@ export async function POST(req: NextRequest) {
     if (!mgmtRes.ok) {
       return NextResponse.json({ error: 'Failed to create session', debug }, { status: 500 });
     }
-    // 10. Возвращаем токены на фронт
+    // 10. Синхронизируем с таблицей User (Prisma)
+    let prismaUser = null;
+    try {
+      prismaUser = await prisma.user.findUnique({ where: { email } });
+      if (!prismaUser) {
+        prismaUser = await prisma.user.create({
+          data: {
+            email: email || undefined,
+            name: privyUser?.name || null,
+            image: privyUser?.profilePictureUrl || null,
+            // Можно добавить другие поля, если нужно
+          },
+        });
+      }
+    } catch (e) {
+      debug.prismaUserError = String(e);
+    }
+    // 11. Возвращаем токены на фронт
     return NextResponse.json({
       access_token: session.access_token,
       refresh_token: session.refresh_token,
       user,
+      prismaUser,
       debug,
     });
   } catch (e) {
