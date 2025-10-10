@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     debug.step = 'find user by email';
     if (email) {
       const { data, error } = await supabase
-        .from('auth.users')
+        .from('User')
         .select('*')
         .eq('email', email)
         .maybeSingle();
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     debug.step = 'find user by wallet';
     if (!user && wallet) {
       const { data, error } = await supabase
-        .from('auth.users')
+        .from('User')
         .select('*')
         .contains('raw_user_meta_data', { wallet });
       debug.userByWallet = data;
