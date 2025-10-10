@@ -8,6 +8,28 @@ import prisma from '@/lib/prisma';
 import { sign } from 'jsonwebtoken';
 import { Role } from '@/types/next-auth.d';
 
+// Расширяем типы NextAuth для поддержки walletAddress
+import NextAuth, { DefaultSession, DefaultUser } from 'next-auth';
+
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id: string;
+      role?: Role | undefined;
+      username?: string | null | undefined;
+      bio?: string | null | undefined;
+      website?: string | null | undefined;
+    } & DefaultSession['user'];
+  }
+  interface User extends DefaultUser {
+    role?: Role | undefined;
+    username?: string | null | undefined;
+    bio?: string | null | undefined;
+    website?: string | null | undefined;
+    walletAddress?: string | null | undefined;
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -76,13 +98,12 @@ export const authOptions: NextAuthOptions = {
           process.env.SUPABASE_JWT_SECRET!
         );
         session.supabaseAccessToken = supabaseJwt;
-        session.user.id = user.id;
-        session.user.role = user.role as Role;
-        session.user.username = user.username;
-        session.user.bio = user.bio;
-        session.user.website = user.website;
-  // session.user.walletAddress = user.walletAddress; // убрано для совместимости с типами NextAuth
-  // session.walletAddress = user.walletAddress; // убрано для совместимости с типами NextAuth
+    session.user.id = user.id;
+    session.user.role = user.role as Role;
+    session.user.username = user.username;
+    session.user.bio = user.bio;
+    session.user.website = user.website;
+  (session.user as any).walletAddress = user.walletAddress;
         console.log('Session callback: session', session);
         return session;
       } catch (e) {
