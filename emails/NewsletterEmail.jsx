@@ -8,7 +8,7 @@ function addResizeToSupabaseImages(html, width = 600, quality = 70) {
   try {
     // Используем DOMParser через JSDOM-like API (или fallback на regex)
     // В среде node/email можно использовать regexp, но делаем максимально устойчиво
-    return html.replace(/<img([^>]+src=["'])(https:\/\/[^"'>]*supabase\.co\/storage[^"'>]*)(["'][^>]*)>/g, (match, before, url, after) => {
+  return html.replace(/<img([^>]+src=["'])(https:\/\/[^"'>]*supabase\.co\/+storage[^"'>]*)(["'][^>]*)>/g, (match, before, url, after) => {
       let newUrl = url;
       if (!url.match(/[?&]width=\d+/)) {
         newUrl += (url.includes('?') ? '&' : '?') + `width=${width}&quality=${quality}`;
@@ -96,7 +96,7 @@ const NewsletterEmail = ({ title = 'Тема письма', content = '', unsubs
           {/* Шапка письма — как в хедере сайта */}
           <Section style={{ textAlign: 'center', marginBottom: 32 }}>
             <img
-              src="https://merkurov.love/images/logo.svg"
+              src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png"
               alt="Anton Merkurov"
               style={{
                 width: 64,
