@@ -33,7 +33,8 @@ export default function WalletLoginButton() {
       await supabase.auth.setSession({ access_token, refresh_token });
       window.location.reload();
     } catch (e) {
-      alert('Ошибка входа через кошелек: ' + (e?.message || e));
+      const msg = (e && typeof e === 'object' && 'message' in e) ? (e as Error).message : String(e);
+      alert('Ошибка входа через кошелек: ' + msg);
     } finally {
       setLoading(false);
     }
