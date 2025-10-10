@@ -59,33 +59,32 @@ export async function POST(req: NextRequest) {
     debug.step = 'getUser from privy failed';
     return NextResponse.json({ error: 'Failed to get privy user', details: String(e), debug }, { status: 500 });
   }
-  const wallet_address = privyUser.wallet?.address?.toLowerCase() || null;
+  const walletAddress = privyUser.wallet?.address?.toLowerCase() || null;
   const email = privyUser.email?.address?.toLowerCase() || null;
   // --- PRISMA ONLY ---
   let prismaUser = null;
   try {
     debug.step = 'find or create prisma user';
     // Determine unique field for lookup
-    let where: any = {};
-    if (email) {
-      where.email = email;
-    } else if (wallet_address) {
-      where.wallet_address = wallet_address;
-    } else {
-      debug.noUniqueField = true;
-      return NextResponse.json({ error: 'No unique identifier (email, wallet_address) for user', debug }, { status: 400 });
-    }
-    prismaUser = await prisma.user.findUnique({ where });
-    // Only use fields that exist in your Prisma schema
-    const userData: any = {};
+    let userData: any = {};
     if (email) userData.email = email;
-    if (wallet_address) userData.wallet_address = wallet_address;
+    if (walletAddress) userData.walletAddress = walletAddress;
     if (privyUser && 'name' in privyUser) userData.name = (privyUser as any).name;
     if (privyUser && 'profilePictureUrl' in privyUser) userData.image = (privyUser as any).profilePictureUrl;
+
+    // Try to find by email (unique)
+    if (email) {
+      prismaUser = await prisma.user.findUnique({ where: { email } });
+    }
+    // If not found, try to find by walletAddress (not unique, so use findFirst)
+    if (!prismaUser && walletAddress) {
+      prismaUser = await prisma.user.findFirst({ where: { walletAddress } });
+    }
+    // If not found, create new user
     if (!prismaUser) {
       prismaUser = await prisma.user.create({ data: userData });
     } else {
-      prismaUser = await prisma.user.update({ where, data: userData });
+      prismaUser = await prisma.user.update({ where: { id: prismaUser.id }, data: userData });
     }
     debug.prismaUser = prismaUser;
   } catch (e) {
