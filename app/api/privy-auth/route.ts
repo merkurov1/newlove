@@ -60,7 +60,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to get privy user', details: String(e), debug }, { status: 500 });
   }
   const walletAddress = privyUser.wallet?.address?.toLowerCase() || null;
-  const email = privyUser.email?.address?.toLowerCase() || null;
+  let email = privyUser.email?.address?.toLowerCase() || null;
+  // Если email отсутствует, генерируем виртуальный email на основе walletAddress
+  if (!email && walletAddress) {
+    email = `wallet_${walletAddress}@privy.local`;
+  }
   // --- PRISMA ONLY ---
   let prismaUser = null;
   try {
