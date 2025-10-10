@@ -17,12 +17,12 @@ function blocksToHtml(blocks) {
         return block.data?.html || '';
       
       case 'image':
-        return `<img src="${block.data?.url}" alt="${block.data?.caption || ''}" style="max-width: 100%; height: auto; margin: 20px 0;" />`;
+        return `<img src="${block.data?.url}" alt="${block.data?.caption || ''}" style="max-width: 100%; max-height: 400px; height: auto; display: block; margin: 20px auto;" />`;
       
       case 'gallery':
         if (block.data?.images && Array.isArray(block.data.images)) {
           return block.data.images.map(img => 
-            `<img src="${img.url}" alt="${img.caption || ''}" style="max-width: 100%; height: auto; margin: 10px 0;" />`
+            `<img src="${img.url}" alt="${img.caption || ''}" style="max-width: 100%; max-height: 400px; height: auto; display: block; margin: 10px auto;" />`
           ).join('');
         }
         return '';
@@ -65,7 +65,7 @@ const NewsletterEmail = ({ title = 'Тема письма', content = '', unsubs
         <Container style={container}>
           {/* Шапка письма — как в хедере сайта */}
           <Section style={{ textAlign: 'center', marginBottom: 24 }}>
-            <img src="https://merkurov.love/logo-email.png" alt="Anton Merkurov" style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 8px' }} />
+            <img src="https://merkurov.love/images/logo.svg" alt="Anton Merkurov" style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 8px' }} />
             <div style={{ fontWeight: 700, fontSize: 28, letterSpacing: 1, color: '#222', marginBottom: 2, textTransform: 'uppercase' }}>Anton Merkurov</div>
             <div style={{ fontSize: 16, color: '#888', letterSpacing: 2, fontWeight: 600, marginTop: 2, textTransform: 'uppercase' }}>ART X LOVE X MONEY</div>
           </Section>
