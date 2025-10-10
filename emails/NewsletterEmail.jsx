@@ -2,6 +2,24 @@ import { Html, Head, Preview, Body, Container, Section, Heading, Text, Hr, rende
 import * as React from 'react';
 
 // Функция для конвертации блочного контента в HTML
+// Современная функция: гарантирует ресайз Supabase-изображений в любом HTML
+function addResizeToSupabaseImages(html, width = 600, quality = 70) {
+  if (!html || typeof html !== 'string') return html;
+  try {
+    // Используем DOMParser через JSDOM-like API (или fallback на regex)
+    // В среде node/email можно использовать regexp, но делаем максимально устойчиво
+    return html.replace(/<img([^>]+src=["'])(https:\/\/[^"'>]*supabase\.co\/storage[^"'>]*)(["'][^>]*)>/g, (match, before, url, after) => {
+      let newUrl = url;
+      if (!url.match(/[?&]width=\d+/)) {
+        newUrl += (url.includes('?') ? '&' : '?') + `width=${width}&quality=${quality}`;
+      }
+      return `<img${before}${newUrl}${after}>`;
+    });
+  } catch {
+    return html;
+  }
+}
+
 function blocksToHtml(blocks) {
   if (!Array.isArray(blocks)) {
     try {
@@ -15,17 +33,9 @@ function blocksToHtml(blocks) {
     switch (block.type) {
       case 'richText': {
         let html = block.data?.html || '';
-        // Добавляем параметры ресайза к supabase <img>
-        html = html.replace(/<img([^>]+src=["'])(https:\/\/[^"'>]*supabase\.co\/storage[^"'>]*)(["'][^>]*)>/g, (match, before, url, after) => {
-          let newUrl = url;
-          if (!url.match(/[?&]width=\d+/)) {
-            newUrl += (url.includes('?') ? '&' : '?') + 'width=600&quality=70';
-          }
-          return `<img${before}${newUrl}${after}>`;
-        });
+        html = addResizeToSupabaseImages(html);
         return html;
       }
-      
       case 'image': {
         let url = block.data?.url || '';
         if (url.includes('supabase.co/storage')) {
@@ -33,7 +43,6 @@ function blocksToHtml(blocks) {
         }
         return `<img src="${url}" alt="${block.data?.caption || ''}" style="max-width: 100%; max-height: 400px; height: auto; display: block; margin: 20px auto;" />`;
       }
-      
       case 'gallery':
         if (block.data?.images && Array.isArray(block.data.images)) {
           return block.data.images.map(img => {
@@ -45,27 +54,29 @@ function blocksToHtml(blocks) {
           }).join('');
         }
         return '';
-      
-      case 'quote':
-        return `<blockquote style="border-left: 4px solid #ddd; margin: 20px 0; padding-left: 20px; font-style: italic; color: #666;">${block.data?.text || ''}</blockquote>`;
-      
-      case 'code':
-        return `<pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; margin: 20px 0;"><code>${block.data?.code || ''}</code></pre>`;
-      
       case 'columns':
         if (block.data?.columns && Array.isArray(block.data.columns)) {
           const columnWidth = Math.floor(100 / block.data.columns.length);
-          const columnsHtml = block.data.columns.map(col => 
-            `<div style="display: inline-block; width: ${columnWidth}%; vertical-align: top; padding: 0 10px;">${col.html || ''}</div>`
-          ).join('');
+          const columnsHtml = block.data.columns.map(col => {
+            // columns могут содержать html с <img>
+            let html = col.html || '';
+            html = addResizeToSupabaseImages(html);
+            return `<div style="display: inline-block; width: ${columnWidth}%; vertical-align: top; padding: 0 10px;">${html}</div>`;
+          }).join('');
           return `<div style="margin: 20px 0;">${columnsHtml}</div>`;
         }
         return '';
-      
+      case 'quote':
+        return `<blockquote style="border-left: 4px solid #ddd; margin: 20px 0; padding-left: 20px; font-style: italic; color: #666;">${block.data?.text || ''}</blockquote>`;
+      case 'code':
+        return `<pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; margin: 20px 0;"><code>${block.data?.code || ''}</code></pre>`;
       case 'video':
         return `<div style="margin: 20px 0;"><a href="${block.data?.url}" target="_blank" style="color: #007cba;">📹 Смотреть видео</a></div>`;
-      
       default:
+        // Если это html-блок или неизвестный, тоже прогоняем через addResizeToSupabaseImages
+        if (block.data?.html) {
+          return addResizeToSupabaseImages(block.data.html);
+        }
         return '';
     }
   }).join('');
@@ -83,10 +94,48 @@ const NewsletterEmail = ({ title = 'Тема письма', content = '', unsubs
       <Body style={main}>
         <Container style={container}>
           {/* Шапка письма — как в хедере сайта */}
-          <Section style={{ textAlign: 'center', marginBottom: 24 }}>
-            <img src="https://merkurov.love/images/logo.svg" alt="Anton Merkurov" style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 8px' }} />
-            <div style={{ fontWeight: 700, fontSize: 28, letterSpacing: 1, color: '#222', marginBottom: 2, textTransform: 'uppercase' }}>Anton Merkurov</div>
-            <div style={{ fontSize: 16, color: '#888', letterSpacing: 2, fontWeight: 600, marginTop: 2, textTransform: 'uppercase' }}>ART X LOVE X MONEY</div>
+          <Section style={{ textAlign: 'center', marginBottom: 32 }}>
+            <img
+              src="https://merkurov.love/images/logo.svg"
+              alt="Anton Merkurov"
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: '50%',
+                margin: '0 auto 12px',
+                boxShadow: '0 2px 12px 0 rgba(0,0,0,0.07)',
+                display: 'block',
+                background: '#fff',
+              }}
+            />
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 26,
+                letterSpacing: '0.08em',
+                color: '#23272f',
+                marginBottom: 4,
+                textTransform: 'uppercase',
+                fontFamily: 'inherit',
+                lineHeight: 1.1,
+              }}
+            >
+              Anton Merkurov
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                color: '#b08fff',
+                letterSpacing: '0.18em',
+                fontWeight: 500,
+                marginTop: 2,
+                textTransform: 'uppercase',
+                fontFamily: 'inherit',
+                lineHeight: 1.2,
+              }}
+            >
+              Art × Love × Money
+            </div>
           </Section>
           <Section>
             <Heading style={heading}>{title}</Heading>
