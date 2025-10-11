@@ -21,34 +21,44 @@ export async function POST(req: NextRequest) {
     throw new Error('Missing Privy credentials in environment variables.');
   }
   const privy = new PrivyClient(privyAppId, privyAppSecret);
-  let authToken;
+  let body;
   try {
-    ({ authToken } = await req.json());
-    debug.step = 'parse authToken';
-    console.log('Received authToken:', authToken);
-    console.log('Env:', {
-      PRIVY_APP_ID: privyAppId,
-      PRIVY_APP_SECRET: privyAppSecret?.slice(0, 4) + '...'
-    });
+    body = await req.json();
+    debug.step = 'parse body';
+    debug.bodyKeys = Object.keys(body || {});
+    console.log('Received body keys:', debug.bodyKeys);
   } catch (e) {
-    console.log('debug.step:', 'parse authToken failed');
+    console.log('debug.step:', 'parse body failed');
     console.log('debug.details:', String(e));
-    return NextResponse.json({ error: 'Failed to parse authToken', details: String(e), debug }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to parse body', details: String(e), debug }, { status: 500 });
   }
-  if (!authToken || typeof authToken !== 'string') {
-    debug.step = 'authToken missing or invalid';
+
+  const authToken = typeof body?.authToken === 'string' ? body.authToken : null;
+  const idToken = typeof body?.idToken === 'string' ? body.idToken : null;
+  if (!authToken && !idToken) {
+    debug.step = 'authToken/idToken missing or invalid';
     debug.authToken = authToken;
-    return NextResponse.json({ error: 'authToken missing or invalid', debug }, { status: 400 });
+    debug.idToken = idToken;
+    return NextResponse.json({ error: 'authToken/idToken missing or invalid', debug }, { status: 400 });
   }
+
   let claims;
   try {
-    debug.step = 'verifyAuthToken';
-    claims = await privy.verifyAuthToken(authToken);
+    debug.step = 'verify token';
+    if (authToken) {
+      claims = await privy.verifyAuthToken(authToken);
+      debug.which = 'authToken';
+    } else {
+      // try id token verification if available
+      claims = await privy.verifyAuthToken(idToken);
+      debug.which = 'idToken';
+    }
     debug.claims = claims;
   } catch (e) {
-    debug.step = 'verifyAuthToken failed';
+    debug.step = 'verify token failed';
     debug.authToken = authToken;
-    console.log('debug.step:', 'verifyAuthToken failed');
+    debug.idToken = idToken;
+    console.log('debug.step:', 'verify token failed');
     console.log('debug.details:', String(e));
     return NextResponse.json({ error: 'Invalid Privy token', details: String(e), debug }, { status: 401 });
   }
@@ -108,4 +118,15 @@ export async function POST(req: NextRequest) {
     debug,
   });
   // (all Prisma logic and response is above; remove unreachable/duplicate code below)
+}
+
+export async function GET(req: NextRequest) {
+  // Quick debug endpoint: return cookies and env info
+  const cookieHeader = req.headers.get('cookie') || '';
+  const cookieMap: Record<string,string> = {};
+  cookieHeader.split(';').forEach(c => {
+    const [k,v] = c.split('=');
+    if (k && v) cookieMap[k.trim()] = decodeURIComponent(v.trim());
+  });
+  return NextResponse.json({ env: { PRIVY_APP_ID: process.env.PRIVY_APP_ID, NODE_ENV: process.env.NODE_ENV }, cookies: cookieMap });
 }

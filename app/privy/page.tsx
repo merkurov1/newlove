@@ -4,7 +4,7 @@ import { useSession, signIn } from 'next-auth/react';
 import { useState } from 'react';
 
 export default function PrivyDebugPage() {
-  const { login, ready, authenticated, getAccessToken } = usePrivy();
+  const { login, ready, authenticated, getAccessToken, getIdToken } = usePrivy();
   const { data: session, status } = useSession();
   const [loading, setLoading] = useState(false);
   const [debug, setDebug] = useState<any>(null);
@@ -15,16 +15,19 @@ export default function PrivyDebugPage() {
     setError(null);
     setDebug(null);
     try {
-      await login();
-      const authToken = await getAccessToken();
-      // Выводим authToken в debug до отправки
-      let privyData = null;
-      let signInRes = null;
+  await login();
+  // Try id token first (if enabled), then access token
+  const idToken = typeof getIdToken === 'function' ? await getIdToken() : null;
+  const accessToken = await getAccessToken();
+  const authToken = idToken || accessToken;
+  // Выводим authToken в debug до отправки
+  let privyData = null;
+  let signInRes = null;
       try {
         const privyRes = await fetch('/api/privy-auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ authToken }),
+          body: JSON.stringify({ authToken, idToken, accessToken }),
         });
         privyData = await privyRes.json();
       } catch (e) {
@@ -32,7 +35,7 @@ export default function PrivyDebugPage() {
       }
       try {
         signInRes = await signIn('privy', {
-          authToken,
+          accessToken: authToken,
           redirect: false,
           callbackUrl: '/',
         });
@@ -41,6 +44,8 @@ export default function PrivyDebugPage() {
       }
       setDebug({
         authToken,
+        idToken,
+        accessToken,
         privyAuth: privyData,
         signInRes,
         session,

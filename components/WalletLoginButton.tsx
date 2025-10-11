@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 
 export default function WalletLoginButton() {
-  const { login, ready, authenticated, getAccessToken } = usePrivy();
+  const { login, ready, authenticated, getAccessToken, getIdToken } = usePrivy();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,15 +16,18 @@ export default function WalletLoginButton() {
     try {
       await login();
       // authenticated обновится только после login, но usePrivy не сразу триггерит rerender
+      // Try id token first (contains user data if enabled in Privy), then access token
+      const idToken = typeof getIdToken === 'function' ? await getIdToken() : null;
       const accessToken = await getAccessToken();
-      setDebug({ authenticated, accessToken });
-      if (!accessToken) {
-        setError('Не удалось получить accessToken от Privy');
+      const tokenToSend = idToken || accessToken;
+      setDebug({ authenticated, accessToken: tokenToSend });
+      if (!tokenToSend) {
+        setError('Не удалось получить токен от Privy (idToken/accessToken)');
         setLoading(false);
         return;
       }
       const res = await signIn('privy', {
-        accessToken,
+        accessToken: tokenToSend,
         redirect: false,
       });
       if (res?.ok) {

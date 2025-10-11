@@ -7,7 +7,7 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 
-const WalletLoginButton = dynamic(() => import('./WalletLoginButton'), { ssr: false });
+
 
 export default function Header({ projects, settings }) {
   const { data: session, status } = useSession();
@@ -134,13 +134,13 @@ export default function Header({ projects, settings }) {
             {status === 'unauthenticated' && (
               <>
                 <button onClick={() => signIn('google')} className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700 mr-2">Sign In</button>
-                <WalletLoginButton />
+
               </>
             )}
             {status === 'authenticated' && (
               <div className="flex items-center gap-4">
                 <button onClick={() => signOut()} className="text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900">Sign out</button>
-                <WalletLoginButton />
+
               </div>
             )}
           </div>
@@ -222,7 +222,7 @@ export default function Header({ projects, settings }) {
             {status === 'unauthenticated' && (
               <>
                 <button onClick={() => { signIn('google'); setIsMenuOpen(false); }} className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700 mr-2">Sign In</button>
-                <WalletLoginButton />
+
               </>
             )}
             {status === 'authenticated' && (
@@ -236,7 +236,7 @@ export default function Header({ projects, settings }) {
                 </div>
                 <button onClick={() => { signOut(); setIsMenuOpen(false); }} className="mt-2 text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900">Sign out</button>
                 <div className="mt-2">
-                  <WalletLoginButton />
+
                 </div>
               </div>
             )}
