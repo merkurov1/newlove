@@ -37,7 +37,14 @@ async function getArticles() {
 }
 
 export default async function Home() {
-  const articles = await getArticles();
+  const rawArticles = await getArticles();
+  // Для каждой статьи вычисляем previewImage
+  const articles = await Promise.all(
+    rawArticles.map(async (article) => {
+      const previewImage = await getFirstImage(article.content);
+      return { ...article, previewImage };
+    })
+  );
   // 1. Отбираем статьи с тегом auction (регистр не важен)
   const auctionArticles = articles.filter(a => a.tags && a.tags.some(t => t.slug?.toLowerCase() === 'auction'));
   // 2. Остальные статьи (без auction)
@@ -52,7 +59,7 @@ export default async function Home() {
       {/* Auction Slider Section */}
       {auctionArticles.length > 0 && (
         <section className="max-w-5xl mx-auto mt-10 mb-16">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6 text-center">Экономлю время, нахожу лучше</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6 text-center">Экономлю время, нахожу лучшее</h2>
           <AuctionSlider articles={auctionArticles} />
         </section>
       )}
