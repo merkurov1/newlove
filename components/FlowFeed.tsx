@@ -42,7 +42,7 @@ interface FlowFeedProps {
   limit?: number;
 }
 
-export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
+export default function FlowFeed({ limit = 8 }: FlowFeedProps) {
   const [items, setItems] = useState<FlowItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -145,14 +145,14 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
 
   return (
     <div className="w-full px-2 md:px-8 2xl:px-32">
-      <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        {items.map((item, idx) => {
+      <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+        {items.slice(0, 8).map((item, idx) => {
           const imageSrc = item.linkPreview?.image || item.thumbnail || (item.images && item.images[0]);
           return (
             <article
               key={item.id}
-              className="flex flex-col group animate-fade-in-up min-w-0 max-w-full bg-white/80 rounded-xl shadow-md border border-gray-100"
-              style={{ animationDelay: `${idx * 100}ms`, animationFillMode: "both", minHeight: '340px', minWidth: '0', maxWidth: '100%' }}
+              className="flex flex-col group min-w-0 max-w-full bg-white/80 rounded-xl shadow-md border border-gray-100"
+              style={{ minHeight: '320px', minWidth: '0', maxWidth: '100%' }}
               role="listitem"
             >
               {imageSrc && (
@@ -168,7 +168,7 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
                     alt={item.title}
                     fill
                     sizes="100vw"
-                    className="object-cover w-full h-full max-h-[340px] transition-transform duration-200 group-hover:scale-105 rounded-t-xl"
+                    className="object-cover w-full h-full max-h-[320px] transition-transform duration-200 group-hover:scale-105 rounded-t-xl"
                   />
                 </Link>
               )}

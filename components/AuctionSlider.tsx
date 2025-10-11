@@ -72,11 +72,11 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
   };
 
   return (
-  <div className="relative w-full min-h-[320px] overflow-visible bg-white max-w-screen-2xl mx-auto box-border px-2 md:px-6 overflow-x-hidden">
+  <div className="relative w-full min-h-[320px] overflow-x-hidden bg-white max-w-full mx-auto box-border px-2 md:px-6 py-2">
       <AnimatePresence initial={false} custom={direction}>
         <motion.div
           key={article.slug}
-          className="relative overflow-hidden bg-white"
+          className="relative overflow-hidden bg-white max-w-full"
           custom={direction}
           variants={variants}
           initial="enter"
@@ -129,19 +129,10 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
 
       {/* Navigation controls */}
       {articles.length > 1 && (
-        <>
-          <div className="hidden md:flex absolute inset-y-0 left-0 items-center px-4 z-20">
-            <button onClick={() => { setDirection(-1); prev(); }} aria-label="Previous" className="w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 flex items-center justify-center shadow-lg text-2xl font-bold">‹</button>
-          </div>
-          <div className="hidden md:flex absolute inset-y-0 right-0 items-center pr-2 z-20" style={{right:0}}>
-            <button onClick={() => { setDirection(1); next(); }} aria-label="Next" className="w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 flex items-center justify-center shadow-lg text-2xl font-bold">›</button>
-          </div>
-
-          <div className="flex md:hidden w-full justify-center gap-3 py-3 bg-white/90">
-            <button onClick={() => { setDirection(-1); prev(); }} aria-label="Previous" className="w-11 h-11 rounded-full bg-pink-600 text-white flex items-center justify-center text-xl font-bold">‹</button>
-            <button onClick={() => { setDirection(1); next(); }} aria-label="Next" className="w-11 h-11 rounded-full bg-pink-600 text-white flex items-center justify-center text-xl font-bold">›</button>
-          </div>
-        </>
+        <div className="flex w-full justify-between items-center mt-4 px-2 md:px-8">
+          <button onClick={() => { setDirection(-1); prev(); }} aria-label="Previous" className="w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 flex items-center justify-center shadow-lg text-2xl font-bold">‹</button>
+          <button onClick={() => { setDirection(1); next(); }} aria-label="Next" className="w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 flex items-center justify-center shadow-lg text-2xl font-bold">›</button>
+        </div>
       )}
     </div>
   );
