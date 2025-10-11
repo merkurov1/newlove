@@ -70,8 +70,8 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 md:px-10">
-      <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+    <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 md:px-10 overflow-x-hidden">
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {articles.map((article, idx) => (
           <article
             key={article.id}
