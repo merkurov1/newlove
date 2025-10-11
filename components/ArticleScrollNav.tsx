@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import BlockRenderer from '@/components/BlockRenderer';
 
 interface Article {
   id: string;
@@ -69,12 +70,32 @@ export default function ArticleScrollNav({ article, prev, next }: ArticleScrollN
     };
   }, [prev, next, loading]);
 
+  // Парсим JSON-блоки для BlockRenderer
+  let blocks: any[] = [];
+  try {
+    if (current.content) {
+      const raw = typeof current.content === 'string' ? current.content : JSON.stringify(current.content);
+      const parsed = JSON.parse(raw);
+      blocks = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+    }
+  } catch (error) {
+    blocks = [];
+  }
+
   return (
-  <div ref={containerRef} className="min-h-screen flex flex-col items-center justify-center px-2 py-10">
+    <div ref={containerRef} className="min-h-screen flex flex-col items-center justify-center px-2 py-10">
       <article className="prose prose-lg max-w-2xl w-full bg-white/80 p-8 rounded-xl shadow-xl">
         <h1 className="mb-2 text-3xl font-bold">{current.title}</h1>
         <div className="mb-6 text-xs text-gray-400">{current.publishedAt ? new Date(current.publishedAt).toLocaleDateString('ru-RU') : ''}</div>
-        <div dangerouslySetInnerHTML={{ __html: current.content }} />
+        <div className="prose prose-lg max-w-none">
+          {blocks.length > 0 ? (
+            <BlockRenderer blocks={blocks} />
+          ) : (
+            <div className="text-gray-500 italic py-8">
+              Содержимое статьи пока не добавлено.
+            </div>
+          )}
+        </div>
       </article>
       <div className="flex justify-between w-full max-w-2xl mt-8">
         {prev ? (
