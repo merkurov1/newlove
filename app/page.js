@@ -75,10 +75,12 @@ export default async function Home() {
 
       {/* ArticlesFeed — edge-to-edge, но с небольшими горизонтальными отступами */}
       <section className="w-full mt-16 px-2 md:px-6">
-        <div className="mb-8 flex items-center justify-between px-0">
-          <h2 className="text-lg uppercase tracking-widest text-gray-400 font-semibold pl-6">Articles</h2>
+        <div className="max-w-6xl mx-auto px-4 md:px-10">
+          <div className="mb-8 flex items-center justify-between">
+            <h2 className="text-lg uppercase tracking-widest text-gray-400 font-semibold">Articles</h2>
+          </div>
+          <ArticlesFeed initialArticles={feedArticles} />
         </div>
-        <ArticlesFeed initialArticles={feedArticles} />
       </section>
 
       {/* SOCIAL SECTION — Sotheby’s style, wide modern layout */}
