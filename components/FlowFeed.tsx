@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Image from 'next/image';
+import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import SafeImage from '@/components/SafeImage';
 
 interface FlowItem {
   id: string;
@@ -116,7 +117,7 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
 
   if (loading) {
     return (
-      <div className="w-full px-0">
+      <div className="w-full px-0" style={{background: 'linear-gradient(120deg, #ffe4ef 0%, #fff 100%)'}}>
         <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5" style={{width:'100vw',marginLeft:'calc(50% - 50vw)'}}>
           {[...Array(5)].map((_, i) => (
             <div key={i} className="animate-pulse bg-white/80 rounded-xl shadow-xl min-h-[320px] aspect-[2/1]" />
@@ -128,7 +129,7 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
 
   if (error) {
     return (
-      <div className="w-full px-0">
+      <div className="w-full px-0" style={{background: 'linear-gradient(120deg, #ffe4ef 0%, #fff 100%)'}}>
         <div className="text-center text-red-600 py-8">⚠️ {error}</div>
       </div>
     );
@@ -136,152 +137,64 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
 
   if (items.length === 0) {
     return (
-      <div className="w-full px-0">
+      <div className="w-full px-0" style={{background: 'linear-gradient(120deg, #ffe4ef 0%, #fff 100%)'}}>
         <div className="text-center text-gray-600 py-8">📭 Лента пуста — новый контент появится здесь</div>
       </div>
     );
   }
 
   return (
-    <div className="w-full px-0">
+    <div className="w-full px-0" style={{background: 'linear-gradient(120deg, #ffe4ef 0%, #fff 100%)'}}>
       <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5" style={{width:'100vw',marginLeft:'calc(50% - 50vw)'}}>
-        {items.map((item) => (
-          <article 
+        {items.map((item, idx) => (
+          <article
             key={item.id}
-            className="flex flex-col bg-white/80 rounded-xl shadow-xl min-h-[320px] aspect-[2/1] max-w-full"
+            className="flex flex-col group animate-fade-in-up min-w-0 max-w-full"
+            style={{ animationDelay: `${idx * 100}ms`, animationFillMode: "both" }}
+            role="listitem"
           >
-            {/* Заголовок с платформой и временем */}
-            <div className="flex items-center justify-between px-4 pt-4 pb-2">
-              <div className="flex items-center gap-3">
-                <div className={`${item.platformColor} w-8 h-8 flex items-center justify-center text-white text-sm font-medium`}>
-                  {item.platformIcon}
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900">{item.platform}</div>
-                  <div className="text-sm text-gray-500">@{item.authorHandle || item.author}</div>
-                </div>
-              </div>
-              <div className="text-sm text-gray-500">
-                {formatDate(item.publishedAt)}
-              </div>
-            </div>
-
-            {/* Контент */}
-            <div className="flex-1 flex flex-col px-4 pb-4">
-              {item.type === 'bluesky' ? (
-                <>
-                  <div className="text-gray-700 text-sm leading-relaxed mb-4 whitespace-pre-line">
-                    {item.content}
-                  </div>
-                  {item.linkPreview?.image && (
-                    <a
-                        href={item.linkPreview.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block overflow-hidden mb-4"
-                      >
-                        <div className="relative w-full aspect-[2/1] bg-gray-100 min-h-[220px]">
-                          <Image
-                            src={item.linkPreview.image}
-                            alt={item.linkPreview.title || 'Link preview'}
-                            fill
-                            className="object-contain w-full h-full max-h-[420px]"
-                            sizes="100vw"
-                          />
-                        </div>
-                        <div className="pt-3">
-                          <div className="font-semibold text-gray-900 text-base mb-1 truncate">
-                            {item.linkPreview.title || item.linkPreview.url}
-                          </div>
-                          {item.linkPreview.description && (
-                            <div className="text-gray-600 text-sm line-clamp-2 mb-1">
-                              {item.linkPreview.description}
-                            </div>
-                          )}
-                          <div className="text-blue-600 text-xs truncate">{item.linkPreview.url}</div>
-                        </div>
-                      </a>
-                  )}
-                </>
+            <Link
+              href={item.url}
+              className="block relative w-full aspect-[2/1] group min-w-0 overflow-hidden"
+              aria-label={`Открыть материал: ${item.title}`}
+              style={{background:'#fff', minHeight:320}}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {item.linkPreview?.image || item.thumbnail ? (
+                <SafeImage
+                  src={item.linkPreview?.image || item.thumbnail}
+                  alt={item.title}
+                  fill
+                  sizes="100vw"
+                  className="object-contain w-full h-full max-h-[520px] transition-transform duration-200 group-hover:scale-105"
+                  style={{ minHeight: 0, minWidth: 0 }}
+                />
               ) : (
-                <>
-                  <h3 className="font-semibold text-gray-900 mb-3 group-hover:text-blue-600 transition-colors text-lg">
-                    {item.title}
-                  </h3>
-                  <div className="text-gray-700 text-sm leading-relaxed mb-4">
-                    {item.content}
+                <div className="w-full h-full aspect-[2/1] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center min-h-[320px]">
+                  <div className="text-center">
+                    <div className="text-4xl text-gray-300 mb-2">📰</div>
+                    <div className="text-sm text-gray-400">No image</div>
                   </div>
-                </>
-              )}
-
-              {item.type === 'bluesky' && item.images && item.images.length > 0 && (
-                <div className={`grid gap-2 mb-4 ${
-                  item.images.length === 1 ? 'grid-cols-1' :
-                  item.images.length === 2 ? 'grid-cols-2' :
-                  item.images.length === 3 ? 'grid-cols-3' :
-                  'grid-cols-2'
-                }`}>
-                  {item.images.slice(0, 4).map((img, idx) => (
-                    <div key={idx} className="relative aspect-square overflow-hidden">
-                      <Image
-                        src={img}
-                        alt=""
-                        fill
-                        className="object-contain w-full h-full max-h-[420px] transition-transform duration-200"
-                        sizes="100vw"
-                      />
-                    </div>
-                  ))}
                 </div>
               )}
-
-              {(item.type === 'medium' || item.type === 'youtube') && (item.linkPreview?.image || item.thumbnail) && (
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block overflow-hidden mb-4"
-                >
-                  <div className={`relative aspect-[2/1] bg-gray-100 min-h-[220px]`}>
-                    <Image
-                      src={item.linkPreview?.image || item.thumbnail!}
-                      alt={item.title}
-                      fill
-                      className="object-contain w-full h-full max-h-[420px]"
-                      sizes="100vw"
-                    />
-                    {item.type === 'youtube' && (
-                      <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
-                        <div className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center text-white text-lg">
-                          ▶️
-                        </div>
-                      </div>
-                    )}
-                    {item.type === 'youtube' && item.duration && (
-                      <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1">
-                        {item.duration}
-                      </div>
-                    )}
-                  </div>
-                  {item.linkPreview && (
-                    <div className="pt-3">
-                      <div className="font-semibold text-gray-900 text-base mb-1 truncate">
-                        {item.linkPreview.title || item.title}
-                      </div>
-                      {item.linkPreview.description && (
-                        <div className="text-gray-600 text-sm line-clamp-2 mb-1">
-                          {item.linkPreview.description}
-                        </div>
-                      )}
-                      <div className="text-blue-600 text-xs truncate">{item.linkPreview.url}</div>
-                    </div>
-                  )}
-                </a>
+            </Link>
+            <div className="flex flex-col flex-1 px-0 pt-2 pb-4">
+              <Link href={item.url} target="_blank" rel="noopener noreferrer">
+                <h3 className="text-xl font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full group-hover:text-pink-500 group-hover:underline">
+                  {item.title}
+                </h3>
+              </Link>
+              {item.content && (
+                <p className="text-gray-700 text-base line-clamp-2 mt-1 break-words max-w-full">{item.content}</p>
               )}
-
-              <div className="flex items-center justify-between mt-auto">
-                {item.type === 'youtube' && formatStats(item)}
-              </div>
+              {item.publishedAt && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-xs text-gray-400">
+                    {formatDate(item.publishedAt)}
+                  </span>
+                </div>
+              )}
             </div>
           </article>
         ))}
