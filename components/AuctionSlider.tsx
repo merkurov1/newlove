@@ -102,18 +102,20 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
         >
           {/* Image - full width */}
           {article.previewImage ? (
-            <div className="w-full relative" style={{background:'#fff'}}>
+            <Link href={`/${article.slug}`} className="w-full block relative" style={{background:'#fff'}}>
               <Image src={article.previewImage} alt={article.title} width={1600} height={900} className="w-full h-[38vw] min-h-[220px] max-h-[520px] object-contain" style={{background:'#fff'}} />
-            </div>
+            </Link>
           ) : (
-            <div className="w-full h-[38vw] min-h-[220px] max-h-[520px] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
+            <Link href={`/${article.slug}`} className="w-full h-[38vw] min-h-[220px] max-h-[520px] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
               <div className="text-4xl text-gray-300">📰</div>
-            </div>
+            </Link>
           )}
 
           {/* Content under image */}
           <div className="px-4 py-4 sm:px-6 sm:py-6 flex flex-col items-center text-center">
-            <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2 w-full">{article.title}</h3>
+            <Link href={`/${article.slug}`} className="block w-full">
+              <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2 w-full hover:text-pink-500 transition-colors cursor-pointer">{article.title}</h3>
+            </Link>
             <p className="text-gray-600 mb-3 line-clamp-3 w-full">{article.description || ''}</p>
             <div className="flex flex-col items-center gap-2 w-full">
               <Link href={`/${article.slug}`} className="inline-block px-6 py-2 border border-gray-200 text-gray-700 rounded-md text-base hover:bg-gray-50 transition font-semibold">Подробнее</Link>
