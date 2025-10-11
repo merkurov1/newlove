@@ -2,6 +2,8 @@
 import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import Image from 'next/image';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
@@ -99,37 +101,106 @@ export async function generateMetadata({ params }) {
   }
 }
 
+
+// SSR-обёртка для передачи данных в клиентский компонент
 export default async function ContentPage({ params }) {
-  console.log('🚀 ContentPage called with params:', params);
-  
-  try {
-    const result = await getContent(params.slug);
-    
-    if (!result) {
-      console.log('❌ No result found, calling notFound()');
-      notFound();
+  const result = await getContent(params.slug);
+  if (!result) notFound();
+  const { type, content } = result;
+  if (type !== 'article') return <ProjectComponent project={content} />;
+
+  // Получаем все опубликованные статьи для навигации
+  const articles = await prisma.article.findMany({
+    where: { published: true },
+    orderBy: { publishedAt: 'desc' },
+    select: { id: true, slug: true, title: true },
+  });
+  const index = articles.findIndex((a) => a.slug === params.slug);
+  const prev = articles[index - 1] || null;
+  const next = articles[index + 1] || null;
+
+  return <ArticleScrollNav article={content} prev={prev} next={next} articles={articles} />;
+}
+
+// Клиентский компонент для плавной прокрутки между статьями
+function ArticleScrollNav({ article, prev, next, articles }) {
+  const [current, setCurrent] = useState(article);
+  const [loading, setLoading] = useState(false);
+  const [direction, setDirection] = useState(null); // 'next' | 'prev'
+  const containerRef = useRef();
+  const router = useRouter();
+
+  // Обновление URL при смене статьи
+  useEffect(() => {
+    if (current.slug !== article.slug) {
+      window.history.pushState({}, '', `/${current.slug}`);
     }
-    
-    const { type, content } = result;
-    console.log('✅ Rendering content:', { type, title: content.title });
-    
-    if (type === 'article') {
-      return <ArticleComponent article={content} />;
-    } else {
-      return <ProjectComponent project={content} />;
-    }
-  } catch (error) {
-    console.error('💥 Error in ContentPage:', error);
-    return (
-      <div className="max-w-2xl mx-auto mt-16 p-6 bg-red-50 text-red-700 rounded shadow text-center">
-        <h1 className="text-2xl font-bold mb-2">Ошибка загрузки</h1>
-        <p>Произошла ошибка при загрузке содержимого: {error.message}</p>
-        <pre className="mt-4 text-xs overflow-auto bg-red-100 p-2 rounded">
-          {error.stack}
-        </pre>
-      </div>
+  }, [current.slug]);
+
+  // IntersectionObserver для отслеживания скролла
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const topSentinel = document.createElement('div');
+    const bottomSentinel = document.createElement('div');
+    topSentinel.style.height = '1px';
+    bottomSentinel.style.height = '1px';
+    container.prepend(topSentinel);
+    container.append(bottomSentinel);
+
+    const observer = new window.IntersectionObserver(
+      async (entries) => {
+        if (loading) return;
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.target === bottomSentinel && next) {
+            setLoading(true);
+            setDirection('next');
+            const res = await fetch(`/api/article-by-slug?slug=${next.slug}`);
+            const data = await res.json();
+            setCurrent(data);
+            setLoading(false);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } else if (entry.isIntersecting && entry.target === topSentinel && prev) {
+            setLoading(true);
+            setDirection('prev');
+            const res = await fetch(`/api/article-by-slug?slug=${prev.slug}`);
+            const data = await res.json();
+            setCurrent(data);
+            setLoading(false);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }
+      },
+      { root: null, threshold: 1.0 }
     );
-  }
+    observer.observe(topSentinel);
+    observer.observe(bottomSentinel);
+    return () => {
+      observer.disconnect();
+      topSentinel.remove();
+      bottomSentinel.remove();
+    };
+  }, [prev, next, loading]);
+
+  // Рендер статьи
+  return (
+    <div ref={containerRef} className="min-h-screen flex flex-col items-center justify-center px-2 py-10">
+      <article className="prose prose-lg max-w-2xl w-full bg-white/80 p-8 rounded-xl shadow-xl">
+        <h1 className="mb-2 text-3xl font-bold">{current.title}</h1>
+        <div className="mb-6 text-xs text-gray-400">{current.publishedAt ? new Date(current.publishedAt).toLocaleDateString('ru-RU') : ''}</div>
+        <div dangerouslySetInnerHTML={{ __html: current.content }} />
+      </article>
+      <div className="flex justify-between w-full max-w-2xl mt-8">
+        {prev ? (
+          <span className="text-blue-500">← {prev.title}</span>
+        ) : <span />}
+        {next ? (
+          <span className="text-blue-500">{next.title} →</span>
+        ) : <span />}
+      </div>
+      {loading && <div className="mt-4 text-gray-400">Загрузка...</div>}
+    </div>
+  );
 }
 
 function ArticleComponent({ article }) {
