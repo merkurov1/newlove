@@ -7,6 +7,13 @@ export async function GET(request) {
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const limit = parseInt(searchParams.get('limit') || '15', 10);
 
+    // Если limit <= 0, возвращаем пустой массив
+    if (limit <= 0) {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     const articles = await prisma.article.findMany({
       where: { published: true },
       select: {

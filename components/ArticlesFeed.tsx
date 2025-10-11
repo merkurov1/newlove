@@ -20,47 +20,48 @@ interface Article {
 }
 
 const PAGE_SIZE = 15;
+const API_PAGE_SIZE = 15;
 
 export default function ArticlesFeed({ initialArticles }: { initialArticles: Article[] }) {
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(initialArticles.length === PAGE_SIZE);
   const [offset, setOffset] = useState(initialArticles.length);
   const loaderRef = useRef<HTMLDivElement>(null);
   const [infiniteDone, setInfiniteDone] = useState(false);
 
   // Инфинити-скролл только до 15-й статьи
   useEffect(() => {
-    if (infiniteDone || articles.length < PAGE_SIZE) return;
+    if (infiniteDone || !hasMore) return;
     const handleScroll = () => {
       if (!loaderRef.current) return;
       const rect = loaderRef.current.getBoundingClientRect();
       if (rect.top < window.innerHeight && !loading) {
         setLoading(true);
-        fetch(`/api/articles?offset=${offset}&limit=${PAGE_SIZE - offset}`)
+        fetch(`/api/articles?offset=${offset}&limit=${API_PAGE_SIZE}`)
           .then((res) => res.json())
           .then((data) => {
             setArticles((prev) => [...prev, ...data]);
             setOffset((prev) => prev + data.length);
             setLoading(false);
-            if (offset + data.length >= PAGE_SIZE) setInfiniteDone(true);
-            if (data.length === 0) setHasMore(false);
+            if (data.length < API_PAGE_SIZE) setHasMore(false);
+            if (data.length === 0) setInfiniteDone(true);
           });
       }
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [offset, loading, infiniteDone, articles.length]);
+  }, [offset, loading, infiniteDone, hasMore]);
 
   // Кнопка "Показать ещё" после 15 статей
   const handleShowMore = async () => {
     setLoading(true);
-    const res = await fetch(`/api/articles?offset=${articles.length}&limit=${PAGE_SIZE}`);
+    const res = await fetch(`/api/articles?offset=${articles.length}&limit=${API_PAGE_SIZE}`);
     const data = await res.json();
     setArticles((prev) => [...prev, ...data]);
     setOffset((prev) => prev + data.length);
     setLoading(false);
-    if (data.length === 0) setHasMore(false);
+    if (data.length < API_PAGE_SIZE) setHasMore(false);
     // Плавный скролл к следующей порции
     setTimeout(() => {
       const last = document.querySelector('[data-last-article]');
