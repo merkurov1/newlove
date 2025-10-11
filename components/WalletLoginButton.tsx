@@ -15,6 +15,7 @@ export default function WalletLoginButton() {
     try {
       await login();
       const accessToken = await getAccessToken();
+      console.log('Privy accessToken:', accessToken);
       if (!accessToken) {
         setError('Не удалось получить accessToken от Privy');
         setLoading(false);
@@ -29,9 +30,11 @@ export default function WalletLoginButton() {
         // window.location.reload(); // если нужно
       } else {
         setError(res?.error || 'Ошибка входа через Privy');
+        console.error('signIn error:', res);
       }
     } catch (e: any) {
       setError(e?.message || String(e));
+      console.error('handleLogin error:', e);
     } finally {
       setLoading(false);
     }
