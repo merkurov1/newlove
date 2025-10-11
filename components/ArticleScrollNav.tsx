@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import BlockRenderer from '@/components/BlockRenderer';
-import { AnimatePresence, motion } from 'framer-motion';
+// import { AnimatePresence, motion } from 'framer-motion';
 
 interface Article {
   id: string;
@@ -88,29 +88,20 @@ export default function ArticleScrollNav({ article, prev, next }: ArticleScrollN
 
   return (
     <div ref={containerRef} className="min-h-screen flex flex-col items-center justify-center px-2 py-10">
-      <AnimatePresence mode="wait">
-        <motion.article
-          key={fadeKey}
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -30 }}
-          transition={{ duration: 0.45, ease: 'easeInOut' }}
-          className="prose prose-lg max-w-2xl w-full bg-white/80 p-8 rounded-xl shadow-xl"
-        >
-          <h1 className="mb-2 text-3xl font-bold">{current.title}</h1>
-          <div className="mb-6 text-xs text-gray-400">{current.publishedAt ? new Date(current.publishedAt).toLocaleDateString('ru-RU') : ''}</div>
-          <div className="prose prose-lg max-w-none">
-            {blocks.length > 0 ? (
-              <BlockRenderer blocks={blocks} />
-            ) : (
-              <div className="text-gray-500 italic py-8">
-                Содержимое статьи пока не добавлено.
-              </div>
-            )}
-          </div>
-        </motion.article>
-      </AnimatePresence>
-      <div className="flex justify-between w-full max-w-2xl mt-8">
+  <article className="prose prose-lg max-w-4xl w-full bg-white/80 p-8 rounded-xl shadow-xl">
+        <h1 className="mb-2 text-3xl font-bold">{current.title}</h1>
+        <div className="mb-6 text-xs text-gray-400">{current.publishedAt ? new Date(current.publishedAt).toLocaleDateString('ru-RU') : ''}</div>
+        <div className="prose prose-lg max-w-none">
+          {blocks.length > 0 ? (
+            <BlockRenderer blocks={blocks} />
+          ) : (
+            <div className="text-gray-500 italic py-8">
+              Содержимое статьи пока не добавлено.
+            </div>
+          )}
+        </div>
+      </article>
+  <div className="flex justify-between w-full max-w-4xl mt-8">
         {prev ? (
           <span className="text-blue-500">← {prev.title}</span>
         ) : <span />}
