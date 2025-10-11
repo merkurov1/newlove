@@ -1,15 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/authOptions';
 import prisma from '@/lib/prisma';
 
 export async function GET() {
   try {
-    // Проверка аутентификации - только для залогиненных пользователей
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Открытки теперь публичные — авторизация не требуется
 
     // Получаем открытки из базы данных
     const postcards = await prisma.postcard.findMany({
