@@ -15,6 +15,7 @@ import nextDynamic from 'next/dynamic';
 const HeroHearts = nextDynamic(() => import('@/components/HeroHearts'), { ssr: false });
 const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
 const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ssr: false });
+const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 
 
 // Получить статьи с тегами
