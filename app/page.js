@@ -61,7 +61,9 @@ export default async function Home() {
       {/* Auction Slider Section — edge-to-edge, no max-w, no border-radius */}
       {auctionArticles.length > 0 && (
         <section className="w-full mt-0 mb-0">
-          <h2 className="text-3xl font-bold text-gray-900 mb-6 text-center tracking-tight" style={{letterSpacing:'-0.01em'}}>Экономлю время, нахожу лучшее</h2>
+          <div className="flex flex-col items-center justify-center w-full">
+            <h2 className="text-3xl font-bold text-gray-900 mb-6 text-center tracking-tight" style={{letterSpacing:'-0.01em'}}>Экономлю время, нахожу лучшее</h2>
+          </div>
           <AuctionSlider articles={auctionArticles} />
         </section>
       )}
@@ -69,10 +71,10 @@ export default async function Home() {
   {/* Spacer between auction and articles */}
   <div style={{height: 48}} />
 
-      {/* ArticlesFeed — edge-to-edge, no cards, gallery style */}
-      <section className="w-full mt-12">
-        <div className="mb-8 flex items-center justify-between px-4">
-          <h2 className="text-lg uppercase tracking-widest text-gray-400 font-semibold">Articles</h2>
+      {/* ArticlesFeed — edge-to-edge, no cards, gallery style, full-bleed */}
+      <section className="w-full mt-16">
+        <div className="mb-8 flex items-center justify-between px-0">
+          <h2 className="text-lg uppercase tracking-widest text-gray-400 font-semibold pl-6">Articles</h2>
         </div>
         <ArticlesFeed initialArticles={feedArticles} />
       </section>
