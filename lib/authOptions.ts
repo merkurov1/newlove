@@ -44,45 +44,92 @@ export const authOptions: NextAuthOptions = {
         accessToken: { label: 'Privy Access Token', type: 'text' },
       },
       async authorize(credentials) {
+          // DEBUG: выводим структуру privyUser для анализа
+          console.log('Privy authorize: privyUser =', privyUser);
         if (!credentials?.accessToken) {
           console.error('Privy authorize: No access token provided');
           return null;
         }
-
         try {
-          // 1. Инициализируем клиент Privy и верифицируем токен
           const { PrivyClient } = await import('@privy-io/server-auth');
           const privy = new PrivyClient(
             process.env.PRIVY_APP_ID!,
             process.env.PRIVY_APP_SECRET!
           );
           const claims = await privy.verifyAuthToken(credentials.accessToken);
-          const userId = claims.userId; // Это DID пользователя от Privy
-
+          const userId = claims.userId;
           if (!userId) {
             console.error('Privy authorize: Token verification failed, no userId');
             return null;
           }
-
-          // 2. Ищем пользователя в базе по его Privy DID
-          let user = await prisma.user.findUnique({
-            where: { id: userId },
-          });
-
-          // 3. Если пользователь не найден, СОЗДАЕМ его
-          if (!user) {
-            console.log(`User with Privy DID ${userId} not found. Creating new user...`);
-            user = await prisma.user.create({
-              data: {
-                id: userId,
-                // Можно добавить дополнительные поля, если нужно
-              },
-            });
+          // Получаем профиль пользователя из Privy
+          let privyUser;
+          try {
+            privyUser = await privy.getUser(userId);
+          } catch (e) {
+            console.error('Privy authorize: getUser failed', e);
+            return null;
           }
-
-          // 4. Возвращаем пользователя из базы
-          return { ...user, role: user.role as Role | undefined };
-
+          const walletAddress = privyUser?.wallet?.address?.toLowerCase() || null;
+          let email = privyUser?.email?.address?.toLowerCase() || null;
+          if (!email && walletAddress) {
+            email = `wallet_${walletAddress}@privy.local`;
+          }
+          // Собираем данные для создания/обновления пользователя
+          // Корректно получаем имя и аватарку из privyUser
+          let userData = {
+            id: userId,
+            email,
+            walletAddress,
+            // name и image будут добавлены после уточнения структуры privyUser
+          };
+          // 1. Пытаемся найти пользователя по DID
+          let user = await prisma.user.findUnique({ where: { id: userId } });
+          // 2. Если не найден — ищем по email (если есть)
+          if (!user && email) {
+            user = await prisma.user.findUnique({ where: { email } });
+            // Если найден по email, обновляем его DID и walletAddress
+            if (user) {
+              user = await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                  id: userId,
+                  walletAddress,
+                  // name и image будут добавлены после уточнения структуры privyUser
+                },
+              });
+            }
+          }
+          // 3. Если не найден — ищем по walletAddress (если есть)
+          if (!user && walletAddress) {
+            user = await prisma.user.findFirst({ where: { walletAddress } });
+            if (user) {
+              user = await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                  id: userId,
+                  email,
+                  // name и image будут добавлены после уточнения структуры privyUser
+                },
+              });
+            }
+          }
+          // 4. Если не найден — создаём нового
+          if (!user) {
+            user = await prisma.user.create({ data: userData });
+          }
+          // 5. Возвращаем только нужные поля
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            image: user.image,
+            role: user.role as Role | undefined,
+            username: user.username,
+            bio: user.bio,
+            website: user.website,
+            walletAddress: user.walletAddress,
+          };
         } catch (error) {
           console.error('Privy authorize error:', error);
           return null;
