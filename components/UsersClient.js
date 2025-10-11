@@ -19,7 +19,7 @@ export default function UsersClient({ users: initialUsers }) {
   const [filteredUsers, setFilteredUsers] = useState(initialUsers);
 
   return (
-    <div>
+    <div className="max-w-7xl mx-auto px-2 md:px-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">👥 Пользователи</h1>
         <p className="text-gray-600">
