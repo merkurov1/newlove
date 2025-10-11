@@ -53,10 +53,13 @@ export default async function Home() {
   const feedArticles = otherArticles;
   return (
     <div className="relative min-h-screen bg-white pb-0">
+
       {/* Новый HeroHearts — edge-to-edge */}
       <div className="w-full pt-0 pb-0">
         <HeroHearts />
       </div>
+      {/* Отступ после hero */}
+      <div style={{height: 64}} />
 
       {/* Auction Slider Section — edge-to-edge, no max-w, no border-radius */}
       {auctionArticles.length > 0 && (
