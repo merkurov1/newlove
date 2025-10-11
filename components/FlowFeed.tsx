@@ -144,60 +144,62 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
   }
 
   return (
-    <div className="w-full px-0" style={{background: 'linear-gradient(120deg, #ffe4ef 0%, #fff 100%)'}}>
-      <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5" style={{width:'100vw',marginLeft:'calc(50% - 50vw)'}}>
-        {items.map((item, idx) => (
-          <article
-            key={item.id}
-            className="flex flex-col group animate-fade-in-up min-w-0 max-w-full"
-            style={{ animationDelay: `${idx * 100}ms`, animationFillMode: "both" }}
-            role="listitem"
-          >
-            <Link
-              href={item.url}
-              className="block relative w-full aspect-[2/1] group min-w-0 overflow-hidden"
-              aria-label={`Открыть материал: ${item.title}`}
-              style={{background:'#fff', minHeight:320}}
-              target="_blank"
-              rel="noopener noreferrer"
+    <div className="w-full px-2 md:px-6" style={{background: 'linear-gradient(120deg, #ffe4ef 0%, #fff 100%)'}}>
+      <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        {items.map((item, idx) => {
+          // Определяем, есть ли картинка
+          const imageSrc = item.linkPreview?.image || item.thumbnail || (item.images && item.images[0]);
+          return (
+            <article
+              key={item.id}
+              className="flex flex-col group animate-fade-in-up min-w-0 max-w-full"
+              style={{ animationDelay: `${idx * 100}ms`, animationFillMode: "both" }}
+              role="listitem"
             >
-              {item.linkPreview?.image || item.thumbnail ? (
-                <SafeImage
-                  src={item.linkPreview?.image || item.thumbnail}
-                  alt={item.title}
-                  fill
-                  sizes="100vw"
-                  className="object-contain w-full h-full max-h-[520px] transition-transform duration-200 group-hover:scale-105"
-                  style={{ minHeight: 0, minWidth: 0 }}
-                />
-              ) : (
-                <div className="w-full h-full aspect-[2/1] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center min-h-[320px]">
-                  <div className="text-center">
-                    <div className="text-4xl text-gray-300 mb-2">📰</div>
-                    <div className="text-sm text-gray-400">No image</div>
+              {imageSrc && (
+                <Link
+                  href={item.url}
+                  className="block relative w-full aspect-[2/1] group min-w-0 overflow-hidden"
+                  aria-label={`Открыть материал: ${item.title}`}
+                  style={{background:'#fff', minHeight:320}}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <SafeImage
+                    src={imageSrc}
+                    alt={item.title}
+                    fill
+                    sizes="100vw"
+                    className="object-contain w-full h-full max-h-[520px] transition-transform duration-200 group-hover:scale-105"
+                    style={{ minHeight: 0, minWidth: 0 }}
+                  />
+                </Link>
+              )}
+              {!imageSrc && (
+                <div className="w-full h-[60px] flex items-center justify-center bg-gradient-to-br from-blue-50 to-pink-50 rounded-t-xl">
+                  <span className="text-2xl text-gray-300">📰</span>
+                </div>
+              )}
+              <div className="flex flex-col flex-1 px-0 pt-2 pb-4">
+                <Link href={item.url} target="_blank" rel="noopener noreferrer">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full group-hover:text-pink-500 group-hover:underline">
+                    {item.title}
+                  </h3>
+                </Link>
+                {item.content && (
+                  <p className="text-gray-700 text-base line-clamp-2 mt-1 break-words max-w-full">{item.content}</p>
+                )}
+                {item.publishedAt && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-xs text-gray-400">
+                      {formatDate(item.publishedAt)}
+                    </span>
                   </div>
-                </div>
-              )}
-            </Link>
-            <div className="flex flex-col flex-1 px-0 pt-2 pb-4">
-              <Link href={item.url} target="_blank" rel="noopener noreferrer">
-                <h3 className="text-xl font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full group-hover:text-pink-500 group-hover:underline">
-                  {item.title}
-                </h3>
-              </Link>
-              {item.content && (
-                <p className="text-gray-700 text-base line-clamp-2 mt-1 break-words max-w-full">{item.content}</p>
-              )}
-              {item.publishedAt && (
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-xs text-gray-400">
-                    {formatDate(item.publishedAt)}
-                  </span>
-                </div>
-              )}
-            </div>
-          </article>
-        ))}
+                )}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
