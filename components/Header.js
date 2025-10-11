@@ -175,12 +175,12 @@ export default function Header({ projects, settings }) {
                   <Link href="/lab" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Lab</Link>
                 </li>
                 {/* Kit удалён */}
-                {/* Letters теперь виден всем */}
-                <li>
-                  <Link href="/letters" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Letters</Link>
-                </li>
               </>
             )}
+            {/* Letters теперь виден всем */}
+            <li>
+              <Link href="/letters" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Letters</Link>
+            </li>
             {/* Ссылки из UserSidebar перенесены сюда */}
             {status === 'authenticated' && (
               (() => {

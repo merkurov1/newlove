@@ -49,9 +49,8 @@ export default async function Home() {
   const auctionArticles = articles.filter(a => a.tags && a.tags.some(t => t.slug?.toLowerCase() === 'auction'));
   // 2. Остальные статьи (без auction)
   const otherArticles = articles.filter(a => !(a.tags && a.tags.some(t => t.slug?.toLowerCase() === 'auction')));
-  // Hero-article: первый article из otherArticles
-  const heroArticle = otherArticles[0];
-  const feedArticles = otherArticles.slice(1);
+  // Все статьи без auction
+  const feedArticles = otherArticles;
   return (
     <div className="relative min-h-screen bg-white pb-0">
       {/* Новый HeroHearts — edge-to-edge */}
@@ -67,23 +66,8 @@ export default async function Home() {
         </section>
       )}
 
-      {/* Hero Article Section — edge-to-edge, no rounded, no card */}
-      {heroArticle && (
-        <section className="w-full mb-0">
-          <article className="w-full flex flex-col items-center">
-            {heroArticle.previewImage && (
-              <div className="w-full aspect-[4/2] relative overflow-hidden mb-4">
-                <SafeImage src={heroArticle.previewImage} alt={heroArticle.title} fill className="object-cover w-full h-full" />
-              </div>
-            )}
-            <h2 className="text-3xl font-bold text-gray-900 mb-2 text-center max-w-3xl tracking-tight" style={{letterSpacing:'-0.01em'}}>{heroArticle.title}</h2>
-            {heroArticle.description && (
-              <p className="text-gray-700 mb-4 text-center max-w-2xl text-lg">{heroArticle.description}</p>
-            )}
-            <Link href={`/${heroArticle.slug}`} className="inline-block mt-2 px-8 py-3 border border-gray-300 text-gray-800 font-medium rounded-none hover:bg-gray-100 transition text-base">Подробнее</Link>
-          </article>
-        </section>
-      )}
+  {/* Spacer between auction and articles */}
+  <div style={{height: 48}} />
 
       {/* ArticlesFeed — edge-to-edge, no cards, gallery style */}
       <section className="w-full mt-12">
@@ -93,14 +77,14 @@ export default async function Home() {
         <ArticlesFeed initialArticles={feedArticles} />
       </section>
 
-      {/* SOCIAL SECTION (оставим как есть, если нужно — уберём фон/карточки отдельно) */}
-      <section className="max-w-7xl mx-auto mt-20 px-6 md:px-4 grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
+      {/* SOCIAL SECTION — Sotheby’s style, no rounded buttons or backgrounds */}
+      <section className="w-full mt-20 px-0 grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
         <div className="lg:col-span-2 mt-0">
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-6 flex items-center justify-between px-4">
             <h2 className="text-sm uppercase tracking-wide text-gray-400 font-semibold">Social</h2>
             <Link
               href="/lab"
-              className="rounded-full bg-white/90 backdrop-blur-sm border border-pink-200 text-pink-500 px-8 py-3 text-sm font-medium hover:bg-pink-50 hover:border-pink-300 transition-all duration-300"
+              className="px-6 py-2 border border-gray-300 text-gray-800 font-medium rounded-none hover:bg-gray-100 transition text-sm"
               aria-label="Перейти в лабораторию"
             >
               View all posts
@@ -109,7 +93,7 @@ export default async function Home() {
           <FlowFeed limit={6} />
           <div className="flex justify-center mt-8">
             <button
-              className="rounded-full bg-white/90 backdrop-blur-sm border border-pink-200 text-pink-500 px-8 py-3 text-sm font-medium hover:bg-pink-50 hover:border-pink-300 transition-all duration-300"
+              className="px-6 py-2 border border-gray-300 text-gray-800 font-medium rounded-none hover:bg-gray-100 transition text-sm"
               // TODO: добавить обработчик загрузки постов
             >
               Load more posts

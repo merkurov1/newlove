@@ -72,11 +72,11 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
   };
 
   return (
-    <div className="relative w-full mx-auto rounded-2xl overflow-visible bg-white/90 border border-blue-100 shadow-lg min-h-[320px]">
+  <div className="relative w-full min-h-[320px] overflow-visible bg-white">
       <AnimatePresence initial={false} custom={direction}>
         <motion.div
           key={article.slug}
-          className="relative rounded-2xl overflow-hidden bg-white"
+          className="relative overflow-hidden bg-white"
           custom={direction}
           variants={variants}
           initial="enter"
@@ -102,11 +102,11 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
         >
           {/* Image - full width */}
           {article.previewImage ? (
-            <div className="w-full relative">
-              <Image src={article.previewImage} alt={article.title} width={1200} height={700} className="w-full h-56 sm:h-72 md:h-80 lg:h-96 object-cover" />
+            <div className="w-full relative" style={{background:'#fff'}}>
+              <Image src={article.previewImage} alt={article.title} width={1600} height={900} className="w-full h-[38vw] min-h-[220px] max-h-[520px] object-contain" style={{background:'#fff'}} />
             </div>
           ) : (
-            <div className="w-full h-56 sm:h-72 md:h-80 lg:h-96 bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
+            <div className="w-full h-[38vw] min-h-[220px] max-h-[520px] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
               <div className="text-4xl text-gray-300">📰</div>
             </div>
           )}
