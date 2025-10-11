@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/messages/route.ts
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
