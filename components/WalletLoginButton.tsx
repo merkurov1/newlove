@@ -9,13 +9,15 @@ export default function WalletLoginButton() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [debug, setDebug] = useState<{ authenticated: boolean; accessToken: string | null }>({ authenticated: false, accessToken: null });
   const handleLogin = async () => {
     setError(null);
     setLoading(true);
     try {
       await login();
+      // authenticated обновится только после login, но usePrivy не сразу триггерит rerender
       const accessToken = await getAccessToken();
-      console.log('Privy accessToken:', accessToken);
+      setDebug({ authenticated, accessToken });
       if (!accessToken) {
         setError('Не удалось получить accessToken от Privy');
         setLoading(false);
@@ -30,11 +32,9 @@ export default function WalletLoginButton() {
         // window.location.reload(); // если нужно
       } else {
         setError(res?.error || 'Ошибка входа через Privy');
-        console.error('signIn error:', res);
       }
     } catch (e: any) {
       setError(e?.message || String(e));
-      console.error('handleLogin error:', e);
     } finally {
       setLoading(false);
     }
@@ -43,9 +43,15 @@ export default function WalletLoginButton() {
   if (!ready || authenticated) return null;
 
   return (
-    <button onClick={handleLogin} disabled={loading}>
-      {loading ? 'Вход...' : 'Войти через Privy'}
+    <div>
+      <button onClick={handleLogin} disabled={loading}>
+        {loading ? 'Вход...' : 'Войти через Privy'}
+      </button>
       {error && <div style={{ color: 'red' }}>{error}</div>}
-    </button>
+      <div style={{ fontSize: 12, marginTop: 8, color: '#888' }}>
+        <div>Privy authenticated: <b>{String(debug.authenticated)}</b></div>
+        <div>Privy accessToken: <b style={{ wordBreak: 'break-all' }}>{debug.accessToken || 'null'}</b></div>
+      </div>
+    </div>
   );
 }
