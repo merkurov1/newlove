@@ -70,8 +70,8 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
   };
 
   return (
-    <div className="w-full">
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <div className="w-full px-0">
+      <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5" style={{width:'100vw',marginLeft:'calc(50% - 50vw)'}}>
         {articles.map((article, idx) => (
           <article
             key={article.id}
@@ -82,9 +82,9 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
           >
             <Link
               href={`/${article.slug}`}
-              className="block relative w-full aspect-[16/9] group min-w-0 overflow-hidden"
+              className="block relative w-full aspect-[2/1] group min-w-0 overflow-hidden"
               aria-label={`Читать статью: ${article.title}`}
-              style={{background:'#fff'}}
+              style={{background:'#fff', minHeight:320}}
             >
               {article.previewImage ? (
                 <SafeImage
@@ -92,11 +92,11 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
                   alt={`Изображение к статье: ${article.title}`}
                   fill
                   sizes="100vw"
-                  className="object-contain w-full h-full max-h-[420px] transition-transform duration-200 group-hover:scale-105"
+                  className="object-contain w-full h-full max-h-[520px] transition-transform duration-200 group-hover:scale-105"
                   style={{ minHeight: 0, minWidth: 0 }}
                 />
               ) : (
-                <div className="w-full h-full aspect-[16/9] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
+                <div className="w-full h-full aspect-[2/1] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center min-h-[320px]">
                   <div className="text-center">
                     <div className="text-4xl text-gray-300 mb-2">📰</div>
                     <div className="text-sm text-gray-400">No image</div>
@@ -106,7 +106,7 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
             </Link>
             <div className="flex flex-col flex-1 px-0 pt-2 pb-4">
               <Link href={`/${article.slug}`}>
-                <h3 className="text-lg font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full group-hover:text-pink-500 group-hover:underline">
+                <h3 className="text-xl font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full group-hover:text-pink-500 group-hover:underline">
                   {article.title}
                 </h3>
               </Link>
