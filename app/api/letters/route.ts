@@ -5,11 +5,7 @@ import prisma from '@/lib/prisma';
 
 export async function GET() {
   try {
-    // Проверка аутентификации - только для залогиненных пользователей
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Архив писем теперь публичный — авторизация не требуется
 
     // Получаем опубликованные письма из базы данных
     const letters = await prisma.letter.findMany({

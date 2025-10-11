@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
-import { Suspense } from 'react';
-import AuthGuard from '@/components/AuthGuard';
 import Link from 'next/link';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/authOptions';
 
 interface Letter {
   id: string;
@@ -191,11 +191,21 @@ async function getLetter(slug: string): Promise<Letter | null> {
   }
 }
 
+// Основной компонент страницы
 export default async function LetterPage({ params }: { params: { slug: string } }) {
   const letter = await getLetter(params.slug);
+  if (!letter) notFound();
 
-  if (!letter) {
-    notFound();
+  // Получаем сессию пользователя
+  const session = await getServerSession(authOptions);
+  let isAllowed = false;
+  let userEmail = session?.user?.email;
+  if (userEmail) {
+    // Проверяем: есть ли пользователь в User или подписчик в Subscriber
+    const prisma = (await import('@/lib/prisma')).default;
+    const user = await prisma.user.findUnique({ where: { email: userEmail } });
+    const subscriber = await prisma.subscriber.findUnique({ where: { email: userEmail } });
+    isAllowed = !!user || !!subscriber;
   }
 
   const formatDate = (dateString: string) => {
@@ -210,75 +220,82 @@ export default async function LetterPage({ params }: { params: { slug: string } 
   };
 
   return (
-    <AuthGuard>
-      <div className="min-h-screen bg-gray-50">
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-4xl mx-auto">
-            {/* Навигация */}
-            <nav className="mb-8">
-              <Link 
-                href="/letters" 
-                className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
-              >
-                ← Вернуться к письмам
-              </Link>
-            </nav>
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          {/* Навигация */}
+          <nav className="mb-8">
+            <Link 
+              href="/letters" 
+              className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
+            >
+              ← Вернуться к письмам
+            </Link>
+          </nav>
 
-            {/* Содержимое письма */}
-            <article className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              {/* Заголовок */}
-              <header className="px-6 py-8 border-b border-gray-200">
-                <h1 className="text-3xl font-bold text-gray-900 mb-4">
-                  {letter.title}
-                </h1>
-                <div className="flex items-center justify-between text-sm text-gray-600">
-                  <div className="flex items-center gap-4">
-                    <span>✍️ {letter.author.name}</span>
-                  </div>
-                  <time dateTime={letter.publishedAt || letter.createdAt}>
-                    {formatDate(letter.publishedAt || letter.createdAt)}
-                  </time>
+          {/* Содержимое письма */}
+          <article className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            {/* Заголовок */}
+            <header className="px-6 py-8 border-b border-gray-200">
+              <h1 className="text-3xl font-bold text-gray-900 mb-4">
+                {letter.title}
+              </h1>
+              <div className="flex items-center justify-between text-sm text-gray-600">
+                <div className="flex items-center gap-4">
+                  <span>✍️ {letter.author.name}</span>
                 </div>
-              </header>
+                <time dateTime={letter.publishedAt || letter.createdAt}>
+                  {formatDate(letter.publishedAt || letter.createdAt)}
+                </time>
+              </div>
+            </header>
 
-              {/* Основной контент */}
-              <div className="px-6 py-8">
+            {/* Основной контент */}
+            <div className="px-6 py-8">
+              {isAllowed ? (
                 <div 
                   className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-ul:text-gray-700 prose-strong:text-gray-900"
                   dangerouslySetInnerHTML={{ __html: letter.content }}
                 />
-              </div>
-
-              {/* Подвал */}
-              <footer className="px-6 py-6 bg-gray-50 border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-600">
-                    Понравилось письмо? Поделитесь с друзьями!
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm">
-                      Поделиться
-                    </button>
+              ) : (
+                <div className="text-center text-gray-500 text-lg py-12">
+                  <div>Содержимое письма доступно только зарегистрированным и подписанным пользователям.</div>
+                  <div className="mt-4">
+                    <Link href="/auth/signin" className="text-blue-600 hover:underline">Войти или подписаться</Link>
                   </div>
                 </div>
-              </footer>
-            </article>
-
-            {/* Навигация по соседним письмам */}
-            <div className="mt-8 flex justify-between">
-              <div className="text-sm text-gray-500">
-                {/* TODO: Добавить навигацию к предыдущему/следующему письму */}
-              </div>
-              <Link 
-                href="/letters" 
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
-              >
-                Все письма
-              </Link>
+              )}
             </div>
+
+            {/* Подвал */}
+            <footer className="px-6 py-6 bg-gray-50 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Понравилось письмо? Поделитесь с друзьями!
+                </div>
+                <div className="flex gap-2">
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm">
+                    Поделиться
+                  </button>
+                </div>
+              </div>
+            </footer>
+          </article>
+
+          {/* Навигация по соседним письмам */}
+          <div className="mt-8 flex justify-between">
+            <div className="text-sm text-gray-500">
+              {/* TODO: Добавить навигацию к предыдущему/следующему письму */}
+            </div>
+            <Link 
+              href="/letters" 
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
+            >
+              Все письма
+            </Link>
           </div>
         </div>
       </div>
-    </AuthGuard>
+    </div>
   );
 }
