@@ -61,9 +61,10 @@ export default async function Home() {
       {/* Отступ после hero */}
       <div style={{height: 64}} />
 
-      {/* Auction Slider Section — edge-to-edge, no max-w, no border-radius */}
+
+      {/* Auction Slider Section — edge-to-edge, but with small horizontal padding to prevent overflow */}
       {auctionArticles.length > 0 && (
-        <section className="w-full mt-0 mb-0">
+        <section className="w-full mt-0 mb-0 px-2 md:px-6">
           <div className="flex flex-col items-center justify-center w-full">
             <h2 className="text-3xl font-bold text-gray-900 mb-6 text-center tracking-tight" style={{letterSpacing:'-0.01em'}}>Экономлю время, нахожу лучшее</h2>
           </div>
