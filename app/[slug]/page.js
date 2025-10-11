@@ -2,8 +2,7 @@
 import prisma from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 
 import Image from 'next/image';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
@@ -102,7 +101,9 @@ export async function generateMetadata({ params }) {
 }
 
 
-// SSR-обёртка для передачи данных в клиентский компонент
+// Динамический импорт клиентского компонента
+const ArticleScrollNav = dynamic(() => import('@/components/ArticleScrollNav'), { ssr: false });
+
 export default async function ContentPage({ params }) {
   const result = await getContent(params.slug);
   if (!result) notFound();
@@ -113,13 +114,13 @@ export default async function ContentPage({ params }) {
   const articles = await prisma.article.findMany({
     where: { published: true },
     orderBy: { publishedAt: 'desc' },
-    select: { id: true, slug: true, title: true },
+    select: { id: true, slug: true, title: true, content: true, publishedAt: true },
   });
   const index = articles.findIndex((a) => a.slug === params.slug);
-  const prev = articles[index - 1] || null;
-  const next = articles[index + 1] || null;
+  const prev = index > 0 ? articles[index - 1] : null;
+  const next = index < articles.length - 1 ? articles[index + 1] : null;
 
-  return <ArticleScrollNav article={content} prev={prev} next={next} articles={articles} />;
+  return <ArticleScrollNav article={content} prev={prev} next={next} />;
 }
 
 // Клиентский компонент для плавной прокрутки между статьями
