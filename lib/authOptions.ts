@@ -44,24 +44,47 @@ export const authOptions: NextAuthOptions = {
         accessToken: { label: 'Privy Access Token', type: 'text' },
       },
       async authorize(credentials) {
-        const accessToken = credentials?.accessToken;
-        if (!accessToken) return null;
+        if (!credentials?.accessToken) {
+          console.error('Privy authorize: No access token provided');
+          return null;
+        }
+
         try {
+          // 1. Инициализируем клиент Privy и верифицируем токен
           const { PrivyClient } = await import('@privy-io/server-auth');
           const privy = new PrivyClient(
             process.env.PRIVY_APP_ID!,
             process.env.PRIVY_APP_SECRET!
           );
-          const claims = await privy.verifyAuthToken(accessToken);
-          if (!claims?.userId) return null;
-          // const privyUser = await privy.getUser(claims.userId); // если нужно
-          return {
-            id: claims.userId,
-            // email: privyUser?.email?.address, // если нужно
-            // name: privyUser?.name, // если нужно
-          };
-        } catch (e) {
-          console.error('Privy authorize error', e);
+          const claims = await privy.verifyAuthToken(credentials.accessToken);
+          const userId = claims.userId; // Это DID пользователя от Privy
+
+          if (!userId) {
+            console.error('Privy authorize: Token verification failed, no userId');
+            return null;
+          }
+
+          // 2. Ищем пользователя в базе по его Privy DID
+          let user = await prisma.user.findUnique({
+            where: { id: userId },
+          });
+
+          // 3. Если пользователь не найден, СОЗДАЕМ его
+          if (!user) {
+            console.log(`User with Privy DID ${userId} not found. Creating new user...`);
+            user = await prisma.user.create({
+              data: {
+                id: userId,
+                // Можно добавить дополнительные поля, если нужно
+              },
+            });
+          }
+
+          // 4. Возвращаем пользователя из базы
+          return { ...user, role: user.role as Role | undefined };
+
+        } catch (error) {
+          console.error('Privy authorize error:', error);
           return null;
         }
       },
