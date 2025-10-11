@@ -78,7 +78,7 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
       tabIndex={0}
       onKeyDown={onKeyDown}
     >
-      <div className="relative w-full aspect-[16/9] min-h-[220px] max-h-[520px] flex items-center justify-center">
+  <div className="relative w-full aspect-[16/7] min-h-[286px] max-h-[676px] flex items-center justify-center">
         <AnimatePresence initial={false} custom={direction}>
           <motion.div
             key={article.slug}
