@@ -16,6 +16,7 @@ export default function Providers({ children }: { children: ReactNode }) {
             createOnLogin: 'users-without-wallets',
           },
         },
+        oauthProviders: ['google'],
       }}
     >
       {children}
