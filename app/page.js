@@ -83,9 +83,9 @@ export default async function Home() {
         <ArticlesFeed initialArticles={feedArticles} />
       </section>
 
-      {/* SOCIAL SECTION — Sotheby’s style, no rounded buttons or backgrounds */}
-      <section className="w-full mt-20 px-0 grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
-        <div className="lg:col-span-2 mt-0">
+      {/* SOCIAL SECTION — Sotheby’s style, wide modern layout */}
+      <section className="w-full mt-20 px-0">
+        <div className="max-w-4xl mx-auto">
           <div className="mb-6 flex items-center justify-between px-4">
             <h2 className="text-sm uppercase tracking-wide text-gray-400 font-semibold">Social</h2>
             <Link
