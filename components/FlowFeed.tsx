@@ -144,24 +144,22 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
   }
 
   return (
-    <div className="w-full px-2 md:px-6" style={{background: 'linear-gradient(120deg, #ffe4ef 0%, #fff 100%)'}}>
+    <div className="w-full px-2 md:px-6">
       <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {items.map((item, idx) => {
-          // Определяем, есть ли картинка
           const imageSrc = item.linkPreview?.image || item.thumbnail || (item.images && item.images[0]);
           return (
             <article
               key={item.id}
-              className="flex flex-col group animate-fade-in-up min-w-0 max-w-full"
+              className="flex flex-col group animate-fade-in-up min-w-0 max-w-full bg-white/80 rounded-xl shadow-md border border-gray-100"
               style={{ animationDelay: `${idx * 100}ms`, animationFillMode: "both" }}
               role="listitem"
             >
               {imageSrc && (
                 <Link
                   href={item.url}
-                  className="block relative w-full aspect-[2/1] group min-w-0 overflow-hidden"
+                  className="block relative w-full aspect-[2/1] group min-w-0 overflow-hidden rounded-t-xl"
                   aria-label={`Открыть материал: ${item.title}`}
-                  style={{background:'#fff', minHeight:320}}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -170,19 +168,13 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
                     alt={item.title}
                     fill
                     sizes="100vw"
-                    className="object-contain w-full h-full max-h-[520px] transition-transform duration-200 group-hover:scale-105"
-                    style={{ minHeight: 0, minWidth: 0 }}
+                    className="object-cover w-full h-full max-h-[320px] transition-transform duration-200 group-hover:scale-105 rounded-t-xl"
                   />
                 </Link>
               )}
-              {!imageSrc && (
-                <div className="w-full h-[60px] flex items-center justify-center bg-gradient-to-br from-blue-50 to-pink-50 rounded-t-xl">
-                  <span className="text-2xl text-gray-300">📰</span>
-                </div>
-              )}
-              <div className="flex flex-col flex-1 px-0 pt-2 pb-4">
+              <div className="flex flex-col flex-1 px-4 pt-3 pb-4">
                 <Link href={item.url} target="_blank" rel="noopener noreferrer">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full group-hover:text-pink-500 group-hover:underline">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full group-hover:text-pink-500 group-hover:underline">
                     {item.title}
                   </h3>
                 </Link>

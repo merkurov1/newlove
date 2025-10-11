@@ -52,7 +52,7 @@ export default async function Home() {
   // Все статьи без auction
   const feedArticles = otherArticles;
   return (
-    <div className="relative min-h-screen bg-white pb-0">
+  <div className="relative min-h-screen bg-white pb-0 overflow-x-hidden">
 
       {/* Новый HeroHearts — edge-to-edge */}
       <div className="w-full pt-0 pb-0">

@@ -102,25 +102,14 @@ export async function generateMetadata({ params }) {
 
 
 // Динамический импорт клиентского компонента
-const ArticleScrollNav = dynamic(() => import('@/components/ArticleScrollNav'), { ssr: false });
+
 
 export default async function ContentPage({ params }) {
   const result = await getContent(params.slug);
   if (!result) notFound();
   const { type, content } = result;
   if (type !== 'article') return <ProjectComponent project={content} />;
-
-  // Получаем все опубликованные статьи для навигации
-  const articles = await prisma.article.findMany({
-    where: { published: true },
-    orderBy: { publishedAt: 'desc' },
-    select: { id: true, slug: true, title: true, content: true, publishedAt: true },
-  });
-  const index = articles.findIndex((a) => a.slug === params.slug);
-  const prev = index > 0 ? articles[index - 1] : null;
-  const next = index < articles.length - 1 ? articles[index + 1] : null;
-
-  return <ArticleScrollNav article={content} prev={prev} next={next} />;
+  return <ArticleComponent article={content} />;
 }
 
 
