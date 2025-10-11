@@ -39,10 +39,14 @@ function blocksToHtml(blocks) {
     try {
       blocks = JSON.parse(blocks);
     } catch {
-      return addResizeToSupabaseImages(blocks || '');
+      // Если не парсится — возвращаем пустую строку (или можно вернуть addResizeToSupabaseImages(blocks || ''))
+      return '';
     }
   }
-
+  // Если после парсинга это не массив — возвращаем пустую строку
+  if (!Array.isArray(blocks)) {
+    return '';
+  }
   return blocks.map((block, index) => {
     switch (block.type) {
       case 'richText': {
