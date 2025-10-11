@@ -72,8 +72,6 @@ export default async function Home() {
         </section>
       )}
 
-  {/* Spacer between auction and articles */}
-  <div style={{height: 48}} />
 
       {/* ArticlesFeed — edge-to-edge, но с небольшими горизонтальными отступами */}
       <section className="w-full mt-16 px-2 md:px-6">
