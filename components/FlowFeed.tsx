@@ -120,15 +120,14 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
     return (
       <div className="space-y-4">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 bg-gray-200 rounded-lg"></div>
-              <div className="h-4 bg-gray-200 rounded w-24"></div>
-              <div className="h-3 bg-gray-200 rounded w-16 ml-auto"></div>
+          <div key={i} className="p-4 animate-pulse">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 bg-gray-200"></div>
+              <div className="h-4 bg-gray-200 w-32"></div>
+              <div className="h-3 bg-gray-200 w-20 ml-auto"></div>
             </div>
-            <div className="h-5 bg-gray-200 rounded w-3/4 mb-3"></div>
-            <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-            <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+            <div className="h-5 bg-gray-200 w-3/4 mb-2"></div>
+            <div className="h-4 bg-gray-200 w-full"></div>
           </div>
         ))}
       </div>
@@ -137,33 +136,27 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-        <div className="text-red-600 mb-2">⚠️ Ошибка загрузки</div>
-        <div className="text-sm text-red-500">{error}</div>
-      </div>
+      <div className="p-4 text-center text-red-600">⚠️ {error}</div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
-        <div className="text-gray-600 mb-2">📭 Лента пуста</div>
-        <div className="text-sm text-gray-500">Новый контент появится здесь</div>
-      </div>
+      <div className="p-4 text-center text-gray-600">📭 Лента пуста — новый контент появится здесь</div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {items.map((item) => (
         <article 
           key={item.id}
-          className="bg-white rounded-xl border border-gray-200 hover:shadow-lg transition-all duration-200 overflow-hidden group"
+          className="border-t border-gray-200 last:border-b-0"
         >
           {/* Заголовок с платформой и временем */}
-          <div className="flex items-center justify-between p-6 pb-4">
+          <div className="flex items-center justify-between p-4">
             <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 ${item.platformColor} rounded-lg flex items-center justify-center text-white text-sm font-medium`}>
+              <div className={`${item.platformColor} w-8 h-8 flex items-center justify-center text-white text-sm font-medium`}>
                 {item.platformIcon}
               </div>
               <div>
@@ -177,7 +170,7 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
           </div>
 
           {/* Контент */}
-          <div className="px-6 pb-6">
+          <div className="px-4 pb-4">
             {/* Для Bluesky убираем дублирование: только обычный текст */}
             {item.type === 'bluesky' ? (
               <>
@@ -187,32 +180,32 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
                 {/* OG preview для Bluesky ссылок — только если есть image */}
                 {item.linkPreview?.image && (
                   <a
-                    href={item.linkPreview.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block border rounded-lg overflow-hidden mb-4 hover:shadow-lg transition-all bg-gray-50 group"
-                  >
-                    <div className="relative w-full aspect-video bg-gray-200">
-                      <Image
-                        src={item.linkPreview.image}
-                        alt={item.linkPreview.title || 'Link preview'}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      />
-                    </div>
-                    <div className="p-4">
-                      <div className="font-semibold text-gray-900 text-base mb-1 truncate">
-                        {item.linkPreview.title || item.linkPreview.url}
+                      href={item.linkPreview.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block overflow-hidden mb-4"
+                    >
+                      <div className="relative w-full aspect-video bg-gray-100">
+                        <Image
+                          src={item.linkPreview.image}
+                          alt={item.linkPreview.title || 'Link preview'}
+                          fill
+                          className="object-contain"
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        />
                       </div>
-                      {item.linkPreview.description && (
-                        <div className="text-gray-600 text-sm line-clamp-2 mb-1">
-                          {item.linkPreview.description}
+                      <div className="pt-3">
+                        <div className="font-semibold text-gray-900 text-base mb-1 truncate">
+                          {item.linkPreview.title || item.linkPreview.url}
                         </div>
-                      )}
-                      <div className="text-blue-600 text-xs truncate">{item.linkPreview.url}</div>
-                    </div>
-                  </a>
+                        {item.linkPreview.description && (
+                          <div className="text-gray-600 text-sm line-clamp-2 mb-1">
+                            {item.linkPreview.description}
+                          </div>
+                        )}
+                        <div className="text-blue-600 text-xs truncate">{item.linkPreview.url}</div>
+                      </div>
+                    </a>
                 )}
               </>
             ) : (
@@ -235,12 +228,12 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
                 'grid-cols-2'
               }`}>
                 {item.images.slice(0, 4).map((img, idx) => (
-                  <div key={idx} className="relative aspect-square rounded-lg overflow-hidden">
+                  <div key={idx} className="relative aspect-square overflow-hidden">
                     <Image
                       src={img}
                       alt=""
                       fill
-                      className="object-cover hover:scale-105 transition-transform duration-200"
+                      className="object-contain transition-transform duration-200"
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
                   </div>
@@ -254,35 +247,31 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
                 href={item.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block border rounded-lg overflow-hidden mb-4 hover:shadow-lg transition-all bg-gray-50 group"
+                className="block overflow-hidden mb-4"
               >
-                <div className={`relative ${item.type === 'medium' ? 'aspect-[16/9]' : 'aspect-video'} bg-gray-200`}>
+                <div className={`relative ${item.type === 'medium' ? 'aspect-[16/9]' : 'aspect-video'} bg-gray-100`}>
                   <Image
                     src={item.linkPreview?.image || item.thumbnail!}
                     alt={item.title}
                     fill
-                    className="object-cover"
+                    className="object-contain"
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
                   {item.type === 'youtube' && (
-                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/10 transition-colors">
-                      <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center text-white text-2xl">
+                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+                      <div className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center text-white text-lg">
                         ▶️
                       </div>
                     </div>
                   )}
                   {item.type === 'youtube' && item.duration && (
-                    <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
+                    <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1">
                       {item.duration}
                     </div>
                   )}
-                  {item.type === 'medium' && (
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-                  )}
                 </div>
-                {/* OG preview-карточка для Medium/YouTube, если есть linkPreview */}
                 {item.linkPreview && (
-                  <div className="p-4">
+                  <div className="pt-3">
                     <div className="font-semibold text-gray-900 text-base mb-1 truncate">
                       {item.linkPreview.title || item.title}
                     </div>
@@ -299,11 +288,7 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
 
             {/* Футер с ограниченным контентом */}
             <div className="flex items-center justify-between">
-              {/* Показываем статистику только для YouTube */}
               {item.type === 'youtube' && formatStats(item)}
-              
-              {/* Показываем ссылку только для YouTube */}
-              {/* Кнопка View убрана по финальному ТЗ */}
             </div>
           </div>
         </article>
