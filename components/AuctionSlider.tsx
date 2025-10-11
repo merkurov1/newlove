@@ -72,7 +72,7 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
   };
 
   return (
-  <div className="relative w-full min-h-[320px] overflow-x-hidden bg-white max-w-full mx-auto box-border px-2 md:px-6 py-2">
+  <div className="relative w-full max-w-3xl mx-auto min-h-[320px] overflow-hidden bg-white box-border px-2 md:px-6 py-0">
       <AnimatePresence initial={false} custom={direction}>
         <motion.div
           key={article.slug}
@@ -103,7 +103,7 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
           {/* Image - full width */}
           {article.previewImage ? (
             <Link href={`/${article.slug}`} className="w-full block relative" style={{background:'#fff'}}>
-              <div className="relative w-full h-[38vw] min-h-[220px] max-h-[520px]">
+              <div className="relative w-full aspect-[16/9] min-h-[220px] max-h-[520px]">
                 <Image src={article.previewImage} alt={article.title} fill sizes="100vw" className="object-contain w-full h-full transition-transform duration-200 group-hover:scale-105" style={{background:'#fff'}} />
               </div>
             </Link>
@@ -129,10 +129,24 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
 
       {/* Navigation controls */}
       {articles.length > 1 && (
-        <div className="flex w-full justify-between items-center mt-4 px-2 md:px-8">
-          <button onClick={() => { setDirection(-1); prev(); }} aria-label="Previous" className="w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 flex items-center justify-center shadow-lg text-2xl font-bold">‹</button>
-          <button onClick={() => { setDirection(1); next(); }} aria-label="Next" className="w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 flex items-center justify-center shadow-lg text-2xl font-bold">›</button>
-        </div>
+        <>
+          <button
+            onClick={() => { setDirection(-1); prev(); }}
+            aria-label="Previous"
+            className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 items-center justify-center shadow-lg text-2xl font-bold z-20"
+            style={{margin:0,padding:0}}
+          >‹</button>
+          <button
+            onClick={() => { setDirection(1); next(); }}
+            aria-label="Next"
+            className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 items-center justify-center shadow-lg text-2xl font-bold z-20"
+            style={{margin:0,padding:0}}
+          >›</button>
+          <div className="flex md:hidden w-full justify-between items-center mt-2 px-2">
+            <button onClick={() => { setDirection(-1); prev(); }} aria-label="Previous" className="w-11 h-11 rounded-full bg-pink-600 text-white flex items-center justify-center text-xl font-bold">‹</button>
+            <button onClick={() => { setDirection(1); next(); }} aria-label="Next" className="w-11 h-11 rounded-full bg-pink-600 text-white flex items-center justify-center text-xl font-bold">›</button>
+          </div>
+        </>
       )}
     </div>
   );
