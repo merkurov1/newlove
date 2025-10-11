@@ -11,8 +11,10 @@ import nextDynamic from 'next/dynamic';
 
 
 // SSR-friendly динамический импорт HeroHearts (только на клиенте)
+
 const HeroHearts = nextDynamic(() => import('@/components/HeroHearts'), { ssr: false });
 const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
+const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ssr: false });
 
 
 // Получить статьи с тегами
