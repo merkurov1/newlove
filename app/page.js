@@ -75,8 +75,8 @@ export default async function Home() {
   {/* Spacer between auction and articles */}
   <div style={{height: 48}} />
 
-      {/* ArticlesFeed — edge-to-edge, no cards, gallery style, full-bleed */}
-      <section className="w-full mt-16">
+      {/* ArticlesFeed — edge-to-edge, но с небольшими горизонтальными отступами */}
+      <section className="w-full mt-16 px-2 md:px-6">
         <div className="mb-8 flex items-center justify-between px-0">
           <h2 className="text-lg uppercase tracking-widest text-gray-400 font-semibold pl-6">Articles</h2>
         </div>
