@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/flow/route.ts
 import { NextResponse } from 'next/server';
 import { BskyAgent } from '@atproto/api';
