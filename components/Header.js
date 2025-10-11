@@ -87,7 +87,7 @@ export default function Header({ projects, settings }) {
                   </Link>
                 </li>
               ))}
-              {/* Защищенные разделы только для авторизованных */}
+              {/* Защищённые разделы только для авторизованных, кроме Letters */}
               {status === 'authenticated' && (
                 <>
                   <li>
@@ -102,20 +102,16 @@ export default function Header({ projects, settings }) {
                       <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
                     </Link>
                   </li>
-                  <li>
-                    <Link href="/kit" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
-                      Kit
-                      <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
-                    </Link>
-                  </li>
-                  <li>
-                    <Link href="/letters" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
-                      Letters
-                      <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
-                    </Link>
-                  </li>
+                  {/* Kit удалён */}
                 </>
               )}
+              {/* Letters теперь виден всем */}
+              <li>
+                <Link href="/letters" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
+                  Letters
+                  <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
+                </Link>
+              </li>
             </ul>
           </nav>
 
@@ -178,9 +174,8 @@ export default function Header({ projects, settings }) {
                 <li>
                   <Link href="/lab" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Lab</Link>
                 </li>
-                <li>
-                  <Link href="/kit" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Kit</Link>
-                </li>
+                {/* Kit удалён */}
+                {/* Letters теперь виден всем */}
                 <li>
                   <Link href="/letters" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Letters</Link>
                 </li>
