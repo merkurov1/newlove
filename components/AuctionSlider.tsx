@@ -154,10 +154,6 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
           <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2 w-full hover:text-pink-500 transition-colors cursor-pointer line-clamp-2">{article.title}</h3>
         </Link>
         <p className="text-gray-600 mb-3 line-clamp-3 w-full min-h-[2.5em]">{article.description || ''}</p>
-        <div className="flex flex-col items-center gap-2 w-full">
-          <Link href={`/${article.slug}`} className="inline-block px-6 py-2 border border-gray-200 text-gray-700 rounded-md text-base hover:bg-gray-50 transition font-semibold">Подробнее</Link>
-          <div className="text-sm text-gray-400">{articles.length > 1 ? `${current + 1} / ${articles.length}` : null}</div>
-        </div>
       </div>
     </section>
   );
