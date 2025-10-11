@@ -147,14 +147,14 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="w-full flex flex-col gap-8">
       {items.map((item) => (
         <article 
           key={item.id}
-          className="border-t border-gray-200 last:border-b-0"
+          className="w-full"
         >
           {/* Заголовок с платформой и временем */}
-          <div className="flex items-center justify-between p-4">
+          <div className="flex items-center justify-between px-0 pb-2">
             <div className="flex items-center gap-3">
               <div className={`${item.platformColor} w-8 h-8 flex items-center justify-center text-white text-sm font-medium`}>
                 {item.platformIcon}
@@ -170,7 +170,7 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
           </div>
 
           {/* Контент */}
-          <div className="px-4 pb-4">
+          <div className="px-0 pb-4">
             {/* Для Bluesky убираем дублирование: только обычный текст */}
             {item.type === 'bluesky' ? (
               <>
@@ -190,8 +190,8 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
                           src={item.linkPreview.image}
                           alt={item.linkPreview.title || 'Link preview'}
                           fill
-                          className="object-contain"
-                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          className="object-contain w-full h-full max-h-[420px]"
+                          sizes="100vw"
                         />
                       </div>
                       <div className="pt-3">
@@ -233,8 +233,8 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
                       src={img}
                       alt=""
                       fill
-                      className="object-contain transition-transform duration-200"
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      className="object-contain w-full h-full max-h-[420px] transition-transform duration-200"
+                      sizes="100vw"
                     />
                   </div>
                 ))}
@@ -254,8 +254,8 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
                     src={item.linkPreview?.image || item.thumbnail!}
                     alt={item.title}
                     fill
-                    className="object-contain"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    className="object-contain w-full h-full max-h-[420px]"
+                    sizes="100vw"
                   />
                   {item.type === 'youtube' && (
                     <div className="absolute inset-0 bg-black/10 flex items-center justify-center">

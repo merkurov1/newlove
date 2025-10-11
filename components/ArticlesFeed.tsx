@@ -71,7 +71,7 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
 
   return (
     <div className="w-full">
-      <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {articles.map((article, idx) => (
           <article
             key={article.id}
@@ -82,7 +82,7 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
           >
             <Link
               href={`/${article.slug}`}
-              className="block relative w-full aspect-[4/3] group min-w-0 overflow-hidden"
+              className="block relative w-full aspect-[16/9] group min-w-0 overflow-hidden"
               aria-label={`Читать статью: ${article.title}`}
               style={{background:'#fff'}}
             >
@@ -91,12 +91,12 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
                   src={article.previewImage}
                   alt={`Изображение к статье: ${article.title}`}
                   fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="object-contain w-full h-full max-h-[340px] transition-transform duration-200 group-hover:scale-105"
+                  sizes="100vw"
+                  className="object-contain w-full h-full max-h-[420px] transition-transform duration-200 group-hover:scale-105"
                   style={{ minHeight: 0, minWidth: 0 }}
                 />
               ) : (
-                <div className="w-full h-full aspect-[4/3] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
+                <div className="w-full h-full aspect-[16/9] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
                   <div className="text-center">
                     <div className="text-4xl text-gray-300 mb-2">📰</div>
                     <div className="text-sm text-gray-400">No image</div>

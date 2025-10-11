@@ -127,15 +127,15 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
       {articles.length > 1 && (
         <>
           <div className="hidden md:flex absolute inset-y-0 left-0 items-center px-4 z-20">
-            <button onClick={() => { setDirection(-1); prev(); }} aria-label="Previous" className="w-10 h-10 rounded-full bg-white/80 text-gray-700 hover:bg-white flex items-center justify-center shadow">‹</button>
+            <button onClick={() => { setDirection(-1); prev(); }} aria-label="Previous" className="w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 flex items-center justify-center shadow-lg text-2xl font-bold">‹</button>
           </div>
           <div className="hidden md:flex absolute inset-y-0 right-0 items-center pr-4 z-20">
-            <button onClick={() => { setDirection(1); next(); }} aria-label="Next" className="w-10 h-10 rounded-full bg-white/80 text-gray-700 hover:bg-white flex items-center justify-center shadow">›</button>
+            <button onClick={() => { setDirection(1); next(); }} aria-label="Next" className="w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 flex items-center justify-center shadow-lg text-2xl font-bold">›</button>
           </div>
 
           <div className="flex md:hidden w-full justify-center gap-3 py-3 bg-white/90">
-            <button onClick={() => { setDirection(-1); prev(); }} aria-label="Previous" className="w-9 h-9 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center">‹</button>
-            <button onClick={() => { setDirection(1); next(); }} aria-label="Next" className="w-9 h-9 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center">›</button>
+            <button onClick={() => { setDirection(-1); prev(); }} aria-label="Previous" className="w-11 h-11 rounded-full bg-pink-600 text-white flex items-center justify-center text-xl font-bold">‹</button>
+            <button onClick={() => { setDirection(1); next(); }} aria-label="Next" className="w-11 h-11 rounded-full bg-pink-600 text-white flex items-center justify-center text-xl font-bold">›</button>
           </div>
         </>
       )}
