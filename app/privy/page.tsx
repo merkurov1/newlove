@@ -17,20 +17,30 @@ export default function PrivyDebugPage() {
     try {
       await login();
       const authToken = await getAccessToken();
-      // Проверим /api/privy-auth напрямую
-      const privyRes = await fetch('/api/privy-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authToken }),
-      });
-      const privyData = await privyRes.json();
-      // Теперь signIn через NextAuth
-      const signInRes = await signIn('privy', {
-        authToken,
-        redirect: false,
-        callbackUrl: '/',
-      });
+      // Выводим authToken в debug до отправки
+      let privyData = null;
+      let signInRes = null;
+      try {
+        const privyRes = await fetch('/api/privy-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ authToken }),
+        });
+        privyData = await privyRes.json();
+      } catch (e) {
+        privyData = { error: 'fetch failed', details: String(e) };
+      }
+      try {
+        signInRes = await signIn('privy', {
+          authToken,
+          redirect: false,
+          callbackUrl: '/',
+        });
+      } catch (e) {
+        signInRes = { error: 'signIn failed', details: String(e) };
+      }
       setDebug({
+        authToken,
         privyAuth: privyData,
         signInRes,
         session,
@@ -64,6 +74,7 @@ export default function PrivyDebugPage() {
         <b>Session:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(session, null, 2)}</pre>
         <b>Cookies:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{typeof document !== 'undefined' ? document.cookie : ''}</pre>
         {debug ? <>
+          <b>authToken (client):</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(debug.authToken, null, 2)}</pre>
           <b>signIn('privy') result:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(debug.signInRes, null, 2)}</pre>
           <b>/api/privy-auth response:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(debug.privyAuth, null, 2)}</pre>
         </> : <div style={{ color: '#888', marginTop: 8 }}>Нет debug-данных. Нажмите кнопку выше для отладки Privy.</div>}
