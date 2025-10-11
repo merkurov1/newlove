@@ -72,82 +72,93 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
   };
 
   return (
-  <div className="relative w-full max-w-3xl mx-auto min-h-[320px] overflow-hidden bg-white box-border px-2 md:px-6 py-0">
-      <AnimatePresence initial={false} custom={direction}>
-        <motion.div
-          key={article.slug}
-          className="relative overflow-hidden bg-white max-w-full"
-          custom={direction}
-          variants={variants}
-          initial="enter"
-          animate="center"
-          exit="exit"
-          transition={{ x: { type: 'spring', stiffness: 300, damping: 30 }, opacity: { duration: 0.2 } }}
-          drag="x"
-          dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.2}
-          onDragEnd={(e, info) => {
-            const velocity = info.velocity.x;
-            const offset = info.offset.x;
-            const swipe = Math.abs(offset) > 100 || Math.abs(velocity) > 500;
-            if (!swipe) return;
-            if (offset < 0) {
-              setDirection(1);
-              next();
-            } else {
-              setDirection(-1);
-              prev();
-            }
-          }}
-        >
-          {/* Image - full width */}
-          {article.previewImage ? (
-            <Link href={`/${article.slug}`} className="w-full block relative" style={{background:'#fff'}}>
-              <div className="relative w-full aspect-[16/9] min-h-[220px] max-h-[520px]">
-                <Image src={article.previewImage} alt={article.title} fill sizes="100vw" className="object-contain w-full h-full transition-transform duration-200 group-hover:scale-105" style={{background:'#fff'}} />
-              </div>
-            </Link>
-          ) : (
-            <Link href={`/${article.slug}`} className="w-full h-[38vw] min-h-[220px] max-h-[520px] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
-              <div className="text-4xl text-gray-300">📰</div>
-            </Link>
-          )}
-
-          {/* Content under image */}
-          <div className="px-4 py-4 sm:px-6 sm:py-6 flex flex-col items-center text-center">
-            <Link href={`/${article.slug}`} className="block w-full">
-              <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2 w-full hover:text-pink-500 transition-colors cursor-pointer">{article.title}</h3>
-            </Link>
-            <p className="text-gray-600 mb-3 line-clamp-3 w-full">{article.description || ''}</p>
-            <div className="flex flex-col items-center gap-2 w-full">
-              <Link href={`/${article.slug}`} className="inline-block px-6 py-2 border border-gray-200 text-gray-700 rounded-md text-base hover:bg-gray-50 transition font-semibold">Подробнее</Link>
-              <div className="text-sm text-gray-400">{articles.length > 1 ? `${current + 1} / ${articles.length}` : null}</div>
+    <section
+      className="relative w-full max-w-3xl mx-auto overflow-hidden bg-white box-border px-2 md:px-6 py-0"
+      aria-label="Аукционные статьи"
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+    >
+      <div className="relative w-full aspect-[16/9] min-h-[220px] max-h-[520px] flex items-center justify-center">
+        <AnimatePresence initial={false} custom={direction}>
+          <motion.div
+            key={article.slug}
+            className="absolute inset-0 flex flex-col w-full h-full"
+            custom={direction}
+            variants={variants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ x: { type: 'spring', stiffness: 300, damping: 30 }, opacity: { duration: 0.2 } }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.2}
+            onDragEnd={(e, info) => {
+              const velocity = info.velocity.x;
+              const offset = info.offset.x;
+              const swipe = Math.abs(offset) > 100 || Math.abs(velocity) > 500;
+              if (!swipe) return;
+              if (offset < 0) {
+                setDirection(1);
+                next();
+              } else {
+                setDirection(-1);
+                prev();
+              }
+            }}
+            style={{ zIndex: 2 }}
+          >
+            {article.previewImage ? (
+              <Link href={`/${article.slug}`} className="block w-full h-full" tabIndex={-1}>
+                <Image
+                  src={article.previewImage}
+                  alt={article.title}
+                  fill
+                  sizes="100vw"
+                  className="object-contain w-full h-full transition-transform duration-200 group-hover:scale-105 bg-white"
+                  priority
+                  draggable={false}
+                />
+              </Link>
+            ) : (
+              <Link href={`/${article.slug}`} className="w-full h-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center" tabIndex={-1}>
+                <div className="text-4xl text-gray-300">📰</div>
+              </Link>
+            )}
+          </motion.div>
+        </AnimatePresence>
+        {/* Controls (absolute, overlay) */}
+        {articles.length > 1 && (
+          <>
+            <button
+              onClick={() => { setDirection(-1); prev(); }}
+              aria-label="Предыдущий"
+              className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 items-center justify-center shadow-lg text-2xl font-bold z-30"
+              tabIndex={0}
+            >‹</button>
+            <button
+              onClick={() => { setDirection(1); next(); }}
+              aria-label="Следующий"
+              className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 items-center justify-center shadow-lg text-2xl font-bold z-30"
+              tabIndex={0}
+            >›</button>
+            <div className="flex md:hidden w-full justify-between items-center absolute bottom-2 left-0 px-2 z-30">
+              <button onClick={() => { setDirection(-1); prev(); }} aria-label="Предыдущий" className="w-11 h-11 rounded-full bg-pink-600 text-white flex items-center justify-center text-xl font-bold">‹</button>
+              <button onClick={() => { setDirection(1); next(); }} aria-label="Следующий" className="w-11 h-11 rounded-full bg-pink-600 text-white flex items-center justify-center text-xl font-bold">›</button>
             </div>
-          </div>
-        </motion.div>
-      </AnimatePresence>
-
-      {/* Navigation controls */}
-      {articles.length > 1 && (
-        <>
-          <button
-            onClick={() => { setDirection(-1); prev(); }}
-            aria-label="Previous"
-            className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 items-center justify-center shadow-lg text-2xl font-bold z-20"
-            style={{margin:0,padding:0}}
-          >‹</button>
-          <button
-            onClick={() => { setDirection(1); next(); }}
-            aria-label="Next"
-            className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-pink-600 text-white hover:bg-pink-700 items-center justify-center shadow-lg text-2xl font-bold z-20"
-            style={{margin:0,padding:0}}
-          >›</button>
-          <div className="flex md:hidden w-full justify-between items-center mt-2 px-2">
-            <button onClick={() => { setDirection(-1); prev(); }} aria-label="Previous" className="w-11 h-11 rounded-full bg-pink-600 text-white flex items-center justify-center text-xl font-bold">‹</button>
-            <button onClick={() => { setDirection(1); next(); }} aria-label="Next" className="w-11 h-11 rounded-full bg-pink-600 text-white flex items-center justify-center text-xl font-bold">›</button>
-          </div>
-        </>
-      )}
-    </div>
+          </>
+        )}
+      </div>
+      {/* Content under image, always fixed height for no shift */}
+      <div className="w-full px-4 py-4 sm:px-6 sm:py-6 flex flex-col items-center text-center min-h-[140px] max-h-[220px]">
+        <Link href={`/${article.slug}`} className="block w-full">
+          <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2 w-full hover:text-pink-500 transition-colors cursor-pointer line-clamp-2">{article.title}</h3>
+        </Link>
+        <p className="text-gray-600 mb-3 line-clamp-3 w-full min-h-[2.5em]">{article.description || ''}</p>
+        <div className="flex flex-col items-center gap-2 w-full">
+          <Link href={`/${article.slug}`} className="inline-block px-6 py-2 border border-gray-200 text-gray-700 rounded-md text-base hover:bg-gray-50 transition font-semibold">Подробнее</Link>
+          <div className="text-sm text-gray-400">{articles.length > 1 ? `${current + 1} / ${articles.length}` : null}</div>
+        </div>
+      </div>
+    </section>
   );
 }
