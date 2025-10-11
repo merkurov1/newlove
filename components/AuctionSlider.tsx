@@ -20,23 +20,32 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
 
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
+  const [touching, setTouching] = useState(false);
 
   const next = () => setCurrent((c) => (c + 1) % articles.length);
   const prev = () => setCurrent((c) => (c - 1 + articles.length) % articles.length);
 
+  // Pointer/touch events for mobile swipe — use pointer to handle both mouse and touch consistently
   const onPointerDown = (e: React.PointerEvent) => {
+    setTouching(true);
     touchStartX.current = e.clientX;
   };
-
-  const onPointerUp = (e: React.PointerEvent) => {
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!touching) return;
     touchEndX.current = e.clientX;
-    if (touchStartX.current === null || touchEndX.current === null) return;
+  };
+  const onPointerUp = () => {
+    if (touchStartX.current === null || touchEndX.current === null) {
+      setTouching(false);
+      return;
+    }
     const dx = touchEndX.current - touchStartX.current;
-    const threshold = 40; // pixels
+    const threshold = 40;
     if (dx > threshold) prev();
     else if (dx < -threshold) next();
     touchStartX.current = null;
     touchEndX.current = null;
+    setTouching(false);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -47,31 +56,53 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
   const article = articles[current];
   return (
     <div
-      className="relative w-full max-w-5xl mx-auto rounded-3xl overflow-hidden bg-white/90 border border-blue-100 shadow-lg min-h-[340px] flex flex-col justify-center"
+      className="relative w-full mx-auto rounded-2xl overflow-hidden bg-white/90 border border-blue-100 shadow-lg min-h-[320px]"
       role="region"
       aria-roledescription="carousel"
       tabIndex={0}
       onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      <div className="flex flex-col md:flex-row items-center gap-8 p-8">
-        {article.previewImage && (
-          <div className="w-full md:w-1/2 flex-shrink-0">
-            <Image src={article.previewImage} alt={article.title} width={600} height={340} className="rounded-2xl object-cover w-full h-64 md:h-80" />
-          </div>
-        )}
-        <div className="flex-1 flex flex-col justify-center">
-          <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">{article.title}</h3>
-          <p className="text-gray-600 mb-4 line-clamp-4">{article.description || ''}</p>
-          <Link href={`/${article.slug}`} className="inline-block mt-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition">Подробнее</Link>
+      {/* Image - full width, matches hero section width when used inside same container */}
+      {article.previewImage ? (
+        <div className="w-full relative">
+          <Image src={article.previewImage} alt={article.title} width={1200} height={700} className="w-full h-56 sm:h-72 md:h-80 lg:h-96 object-cover" />
+        </div>
+      ) : (
+        <div className="w-full h-56 sm:h-72 md:h-80 lg:h-96 bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
+          <div className="text-4xl text-gray-300">📰</div>
+        </div>
+      )}
+
+      {/* Content under image */}
+      <div className="px-4 py-4 sm:px-6 sm:py-6">
+        <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">{article.title}</h3>
+        <p className="text-gray-600 mb-3 line-clamp-3">{article.description || ''}</p>
+        <div className="flex items-center gap-3">
+          <Link href={`/${article.slug}`} className="inline-block px-4 py-2 border border-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition">Подробнее</Link>
+          <div className="text-sm text-gray-400">{articles.length > 1 ? `${current + 1} / ${articles.length}` : null}</div>
         </div>
       </div>
+
+      {/* Navigation controls: desktop overlay arrows, mobile small controls below image to avoid overlap */}
       {articles.length > 1 && (
-        <div className="absolute inset-x-0 bottom-4 flex justify-center gap-4">
-          <button onClick={prev} aria-label="Previous" className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 flex items-center justify-center font-bold text-xl">←</button>
-          <button onClick={next} aria-label="Next" className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 flex items-center justify-center font-bold text-xl">→</button>
-        </div>
+        <>
+          {/* Desktop overlay arrows on sides */}
+          <div className="hidden md:flex absolute inset-y-0 left-0 items-center px-4 z-20">
+            <button onClick={prev} aria-label="Previous" className="w-10 h-10 rounded-full bg-white/80 text-gray-700 hover:bg-white flex items-center justify-center shadow">‹</button>
+          </div>
+          <div className="hidden md:flex absolute inset-y-0 right-0 items-center pr-4 z-20">
+            <button onClick={next} aria-label="Next" className="w-10 h-10 rounded-full bg-white/80 text-gray-700 hover:bg-white flex items-center justify-center shadow">›</button>
+          </div>
+
+          {/* Mobile controls below */}
+          <div className="flex md:hidden w-full justify-center gap-3 py-3 bg-white/90">
+            <button onClick={prev} aria-label="Previous" className="w-9 h-9 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center">‹</button>
+            <button onClick={next} aria-label="Next" className="w-9 h-9 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center">›</button>
+          </div>
+        </>
       )}
     </div>
   );
