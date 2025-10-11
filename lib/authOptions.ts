@@ -44,8 +44,7 @@ export const authOptions: NextAuthOptions = {
         accessToken: { label: 'Privy Access Token', type: 'text' },
       },
       async authorize(credentials) {
-          // DEBUG: выводим структуру privyUser для анализа
-          console.log('Privy authorize: privyUser =', privyUser);
+        // ...existing code...
         if (!credentials?.accessToken) {
           console.error('Privy authorize: No access token provided');
           return null;
@@ -66,6 +65,8 @@ export const authOptions: NextAuthOptions = {
           let privyUser;
           try {
             privyUser = await privy.getUser(userId);
+            // DEBUG: выводим структуру privyUser для анализа
+            console.log('Privy authorize: privyUser =', privyUser);
           } catch (e) {
             console.error('Privy authorize: getUser failed', e);
             return null;
