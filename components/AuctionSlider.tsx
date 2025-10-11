@@ -78,54 +78,56 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
       tabIndex={0}
       onKeyDown={onKeyDown}
     >
-  <div className="relative w-full aspect-[16/7] min-h-[286px] max-h-[676px] flex items-center justify-center">
-        <AnimatePresence initial={false} custom={direction}>
-          <motion.div
-            key={article.slug}
-            className="absolute inset-0 flex flex-col w-full h-full"
-            custom={direction}
-            variants={variants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ x: { type: 'spring', stiffness: 300, damping: 30 }, opacity: { duration: 0.2 } }}
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.2}
-            onDragEnd={(e, info) => {
-              const velocity = info.velocity.x;
-              const offset = info.offset.x;
-              const swipe = Math.abs(offset) > 100 || Math.abs(velocity) > 500;
-              if (!swipe) return;
-              if (offset < 0) {
-                setDirection(1);
-                next();
-              } else {
-                setDirection(-1);
-                prev();
-              }
-            }}
-            style={{ zIndex: 2 }}
-          >
-            {article.previewImage ? (
-              <Link href={`/${article.slug}`} className="block w-full h-full" tabIndex={-1}>
-                <Image
-                  src={article.previewImage}
-                  alt={article.title}
-                  fill
-                  sizes="100vw"
-                  className="object-contain w-full h-full transition-transform duration-200 group-hover:scale-105 bg-white"
-                  priority
-                  draggable={false}
-                />
-              </Link>
-            ) : (
-              <Link href={`/${article.slug}`} className="w-full h-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center" tabIndex={-1}>
-                <div className="text-4xl text-gray-300">📰</div>
-              </Link>
-            )}
-          </motion.div>
-        </AnimatePresence>
+  <div className="relative w-full flex flex-col xl:flex-row items-center justify-center gap-0 xl:gap-8 min-h-[286px] max-h-[676px]">
+    <div className="relative w-full xl:w-1/3 max-w-full xl:max-w-[33vw] aspect-[3/1] xl:aspect-[3/4] flex-shrink-0 flex-grow-0 flex items-center justify-center">
+      <AnimatePresence initial={false} custom={direction}>
+        <motion.div
+          key={article.slug}
+          className="absolute inset-0 flex flex-col w-full h-full"
+          custom={direction}
+          variants={variants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={{ x: { type: 'spring', stiffness: 300, damping: 30 }, opacity: { duration: 0.2 } }}
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.2}
+          onDragEnd={(e, info) => {
+            const velocity = info.velocity.x;
+            const offset = info.offset.x;
+            const swipe = Math.abs(offset) > 100 || Math.abs(velocity) > 500;
+            if (!swipe) return;
+            if (offset < 0) {
+              setDirection(1);
+              next();
+            } else {
+              setDirection(-1);
+              prev();
+            }
+          }}
+          style={{ zIndex: 2 }}
+        >
+          {article.previewImage ? (
+            <Link href={`/${article.slug}`} className="block w-full h-full" tabIndex={-1}>
+              <Image
+                src={article.previewImage}
+                alt={article.title}
+                fill
+                sizes="(min-width:1280px) 33vw, 100vw"
+                className="object-contain w-full h-full transition-transform duration-200 group-hover:scale-105 bg-white"
+                priority
+                draggable={false}
+              />
+            </Link>
+          ) : (
+            <Link href={`/${article.slug}`} className="w-full h-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center" tabIndex={-1}>
+              <div className="text-4xl text-gray-300">📰</div>
+            </Link>
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </div>
         {/* Controls (absolute, overlay) */}
         {articles.length > 1 && (
           <>
