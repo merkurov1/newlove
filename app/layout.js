@@ -159,13 +159,13 @@ export default async function RootLayout({ children }) {
           <AuthProvider>
             <div className="flex flex-col min-h-screen">
               <Header projects={projects} settings={settings} />
+              <UserSidebar />
               <div className="flex flex-1 w-full px-0 py-0 gap-8">
                 <main className="flex-grow">
                   {children}
                 </main>
               </div>
               <Footer subscriberCount={subscriberCount} />
-              <UserSidebar />
             </div>
           </AuthProvider>
         </Providers>
