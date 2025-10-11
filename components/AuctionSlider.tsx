@@ -104,7 +104,7 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
           {article.previewImage ? (
             <Link href={`/${article.slug}`} className="w-full block relative" style={{background:'#fff'}}>
               <div className="relative w-full h-[38vw] min-h-[220px] max-h-[520px]">
-                <Image src={article.previewImage} alt={article.title} fill sizes="100vw" className="object-cover w-full h-full transition-transform duration-200 group-hover:scale-105" style={{background:'#fff'}} />
+                <Image src={article.previewImage} alt={article.title} fill sizes="100vw" className="object-contain w-full h-full transition-transform duration-200 group-hover:scale-105" style={{background:'#fff'}} />
               </div>
             </Link>
           ) : (
