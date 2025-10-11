@@ -6,7 +6,7 @@ import { ReactNode } from 'react';
 export default function Providers({ children }: { children: ReactNode }) {
   return (
     <PrivyProvider
-      appId="cmgkx5d51009bie0bsccdy86f"
+  appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!}
       config={{
         appearance: {
           theme: 'light',
