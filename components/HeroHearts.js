@@ -24,7 +24,9 @@ export default function HeroHearts({ className = "", style }) {
         margin: 0,
         borderRadius: 0,
         boxShadow: 'none',
-        background: 'linear-gradient(120deg, #f8f6f2 0%, #f3e9f7 100%)'
+        background: 'linear-gradient(120deg, #f8f6f2 0%, #f3e9f7 100%)',
+        maxWidth: '100vw',
+        overflowX: 'hidden',
       }}>
       <div className="w-full flex flex-col items-center justify-center select-none" style={{maxWidth:'100vw', padding:'64px 0 48px 0'}}>
         <h1

@@ -72,7 +72,7 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
   };
 
   return (
-  <div className="relative w-full min-h-[320px] overflow-visible bg-white max-w-screen-2xl mx-auto box-border">
+  <div className="relative w-full min-h-[320px] overflow-visible bg-white max-w-screen-2xl mx-auto box-border px-2 md:px-6 overflow-x-hidden">
       <AnimatePresence initial={false} custom={direction}>
         <motion.div
           key={article.slug}
@@ -103,7 +103,9 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
           {/* Image - full width */}
           {article.previewImage ? (
             <Link href={`/${article.slug}`} className="w-full block relative" style={{background:'#fff'}}>
-              <Image src={article.previewImage} alt={article.title} width={1600} height={900} className="w-full h-[38vw] min-h-[220px] max-h-[520px] object-contain" style={{background:'#fff'}} />
+              <div className="relative w-full h-[38vw] min-h-[220px] max-h-[520px]">
+                <Image src={article.previewImage} alt={article.title} fill sizes="100vw" className="object-cover w-full h-full transition-transform duration-200 group-hover:scale-105" style={{background:'#fff'}} />
+              </div>
             </Link>
           ) : (
             <Link href={`/${article.slug}`} className="w-full h-[38vw] min-h-[220px] max-h-[520px] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
