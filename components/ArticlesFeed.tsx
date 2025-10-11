@@ -70,13 +70,13 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
   };
 
   return (
-    <div>
-      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="w-full">
+      <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {articles.map((article, idx) => (
           <article
             key={article.id}
             data-last-article={idx === articles.length - 1 ? true : undefined}
-            className="bg-white/80 rounded-xl flex flex-col group overflow-hidden transition-all duration-200 hover:bg-pink-50 border border-pink-100 min-w-0 max-w-full shadow-sm animate-fade-in-up"
+            className="flex flex-col group animate-fade-in-up min-w-0 max-w-full"
             style={{ animationDelay: `${idx * 100}ms`, animationFillMode: "both" }}
             role="listitem"
           >
@@ -84,6 +84,7 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
               href={`/${article.slug}`}
               className="block relative w-full aspect-[4/3] group min-w-0 overflow-hidden"
               aria-label={`Читать статью: ${article.title}`}
+              style={{background:'#fff'}}
             >
               {article.previewImage ? (
                 <SafeImage
@@ -91,7 +92,7 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
                   alt={`Изображение к статье: ${article.title}`}
                   fill
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="object-cover w-full h-full transition-transform duration-200 group-hover:scale-105"
+                  className="object-contain w-full h-full max-h-[340px] transition-transform duration-200 group-hover:scale-105"
                   style={{ minHeight: 0, minWidth: 0 }}
                 />
               ) : (
@@ -103,14 +104,14 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
                 </div>
               )}
             </Link>
-            <div className="flex flex-col flex-1 px-3 pt-3 pb-4">
+            <div className="flex flex-col flex-1 px-0 pt-2 pb-4">
               <Link href={`/${article.slug}`}>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full transition-colors duration-150 group-hover:text-pink-500 group-hover:underline">
+                <h3 className="text-lg font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full group-hover:text-pink-500 group-hover:underline">
                   {article.title}
                 </h3>
               </Link>
               {article.description && (
-                <p className="text-gray-500 text-sm line-clamp-2 mt-1 break-words max-w-full">{article.description}</p>
+                <p className="text-gray-700 text-base line-clamp-2 mt-1 break-words max-w-full">{article.description}</p>
               )}
               {article.publishedAt && (
                 <div className="flex items-center gap-2 mt-2">

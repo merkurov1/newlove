@@ -49,33 +49,53 @@ export default async function Home() {
   const auctionArticles = articles.filter(a => a.tags && a.tags.some(t => t.slug?.toLowerCase() === 'auction'));
   // 2. Остальные статьи (без auction)
   const otherArticles = articles.filter(a => !(a.tags && a.tags.some(t => t.slug?.toLowerCase() === 'auction')));
+  // Hero-article: первый article из otherArticles
+  const heroArticle = otherArticles[0];
+  const feedArticles = otherArticles.slice(1);
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-pink-50 via-white to-pink-100 pb-16">
-      {/* Новый HeroHearts */}
-      <div className="max-w-5xl mx-auto pt-8 px-6 md:px-4">
+    <div className="relative min-h-screen bg-white pb-0">
+      {/* Новый HeroHearts — edge-to-edge */}
+      <div className="w-full pt-0 pb-0">
         <HeroHearts />
       </div>
 
-      {/* Auction Slider Section */}
+      {/* Auction Slider Section — edge-to-edge, no max-w, no border-radius */}
       {auctionArticles.length > 0 && (
-        <section className="max-w-5xl mx-auto mt-10 mb-16">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6 text-center">Экономлю время, нахожу лучшее</h2>
+        <section className="w-full mt-0 mb-0">
+          <h2 className="text-3xl font-bold text-gray-900 mb-6 text-center tracking-tight" style={{letterSpacing:'-0.01em'}}>Экономлю время, нахожу лучшее</h2>
           <AuctionSlider articles={auctionArticles} />
         </section>
       )}
 
-      {/* Two-column layout: Articles + Flow */}
-      <section className="max-w-7xl mx-auto mt-12 px-6 md:px-4 grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
-        {/* Articles Section - Left column (3/5 width on desktop) */}
-        <div className="lg:col-span-3 min-w-0">
-          {/* ARTICLES SECTION */}
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-sm uppercase tracking-wide text-gray-400 font-semibold">Articles</h2>
-          </div>
-          <ArticlesFeed initialArticles={otherArticles} />
+      {/* Hero Article Section — edge-to-edge, no rounded, no card */}
+      {heroArticle && (
+        <section className="w-full mb-0">
+          <article className="w-full flex flex-col items-center">
+            {heroArticle.previewImage && (
+              <div className="w-full aspect-[4/2] relative overflow-hidden mb-4">
+                <SafeImage src={heroArticle.previewImage} alt={heroArticle.title} fill className="object-cover w-full h-full" />
+              </div>
+            )}
+            <h2 className="text-3xl font-bold text-gray-900 mb-2 text-center max-w-3xl tracking-tight" style={{letterSpacing:'-0.01em'}}>{heroArticle.title}</h2>
+            {heroArticle.description && (
+              <p className="text-gray-700 mb-4 text-center max-w-2xl text-lg">{heroArticle.description}</p>
+            )}
+            <Link href={`/${heroArticle.slug}`} className="inline-block mt-2 px-8 py-3 border border-gray-300 text-gray-800 font-medium rounded-none hover:bg-gray-100 transition text-base">Подробнее</Link>
+          </article>
+        </section>
+      )}
+
+      {/* ArticlesFeed — edge-to-edge, no cards, gallery style */}
+      <section className="w-full mt-12">
+        <div className="mb-8 flex items-center justify-between px-4">
+          <h2 className="text-lg uppercase tracking-widest text-gray-400 font-semibold">Articles</h2>
         </div>
-        {/* SOCIAL SECTION */}
-        <div className="lg:col-span-2 mt-20">
+        <ArticlesFeed initialArticles={feedArticles} />
+      </section>
+
+      {/* SOCIAL SECTION (оставим как есть, если нужно — уберём фон/карточки отдельно) */}
+      <section className="max-w-7xl mx-auto mt-20 px-6 md:px-4 grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
+        <div className="lg:col-span-2 mt-0">
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-sm uppercase tracking-wide text-gray-400 font-semibold">Social</h2>
             <Link
