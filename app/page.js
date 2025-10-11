@@ -11,102 +11,32 @@ import nextDynamic from 'next/dynamic';
 
 // SSR-friendly динамический импорт HeroHearts (только на клиенте)
 const HeroHearts = nextDynamic(() => import('@/components/HeroHearts'), { ssr: false });
-import FlowFeed from '@/components/FlowFeed';
-import dynamic from 'next/dynamic';
-
-const ArticlesFeed = dynamic(() => import('@/components/ArticlesFeed'), { ssr: false });
-// Удалены Framer Motion и FadeInSection для server component совместимости
-
-// --- БЛОК МЕТАДАННЫХ ---
-export const metadata = {
-  title: 'Anton Merkurov | Art x Love x Money - Медиа, технологии и искусство',
-  description: 'Персональный сайт и блог Антона Меркурова. Последние публикации о медиа, технологиях, digital-маркетинге и современном искусстве.',
-  keywords: ['Антон Меркуров', 'медиа', 'технологии', 'digital', 'искусство', 'блог', 'статьи', 'маркетинг'],
-  authors: [{ name: 'Anton Merkurov', url: 'https://merkurov.love' }],
-  creator: 'Anton Merkurov',
-  publisher: 'Anton Merkurov',
-  alternates: {
-    canonical: 'https://merkurov.love',
-    types: {
-      'application/rss+xml': 'https://merkurov.love/rss.xml'
-    }
-  },
-  openGraph: {
-    title: 'Anton Merkurov | Art x Love x Money',
-    description: 'Персональный сайт и блог о медиа, технологиях и современном искусстве.',
-    url: 'https://merkurov.love',
-    siteName: 'Anton Merkurov',
-    locale: 'ru_RU',
-    type: 'website',
-    images: [{
-      url: 'https://nzasvblckrwsnlxsqfma.supabase.co/storage/v1/object/public/media/og-home.png',
-      width: 1200,
-      height: 630,
-      alt: 'Anton Merkurov - Медиа, технологии и искусство'
-    }]
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Anton Merkurov | Art x Love x Money',
-    description: 'Медиа, технологии и современное искусство',
-    images: ['https://nzasvblckrwsnlxsqfma.supabase.co/storage/v1/object/public/media/og-home.png']
-  }
-};
 
 
-
-
+// Получить статьи с тегами
 async function getArticles() {
-  try {
-    const articles = await prisma.article.findMany({
-      where: { published: true },
-      orderBy: { publishedAt: 'desc' },
-      take: 15,
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-        content: true,
-        publishedAt: true,
-        author: {
-          select: {
-            name: true,
-            image: true,
-          },
-        },
-        tags: true,
-      },
-    });
-    return articles;
-  } catch (error) {
-    // Логируем только в development
-    if (process.env.NODE_ENV === 'development') {
-      console.error("!!! Ошибка при загрузке статей для главной страницы:", error);
-    }
-    return [];
-  }
+  return prisma.article.findMany({
+    where: { published: true },
+    orderBy: { publishedAt: 'desc' },
+    take: 15,
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      content: true,
+      publishedAt: true,
+      tags: { select: { slug: true, name: true } },
+      author: { select: { name: true } },
+    },
+  });
 }
 
-export default async function HomePage() {
-  const rawArticles = await getArticles();
-  // Получаем previewImage для каждой статьи асинхронно
-  const articles = await Promise.all(
-    rawArticles.map(async (article) => {
-      try {
-        const previewImage = await getFirstImage(article.content);
-        return {
-          ...article,
-          previewImage
-        };
-      } catch (error) {
-        return {
-          ...article,
-          previewImage: null
-        };
-      }
-    })
-  );
-
+export default async function Home() {
+  const articles = await getArticles();
+  // 1. Отбираем статьи с тегом auction (регистр не важен)
+  const auctionArticles = articles.filter(a => a.tags && a.tags.some(t => t.slug?.toLowerCase() === 'auction'));
+  // 2. Остальные статьи (без auction)
+  const otherArticles = articles.filter(a => !(a.tags && a.tags.some(t => t.slug?.toLowerCase() === 'auction')));
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-pink-50 via-white to-pink-100 pb-16">
       {/* Новый HeroHearts */}
@@ -114,15 +44,23 @@ export default async function HomePage() {
         <HeroHearts />
       </div>
 
-    {/* Two-column layout: Articles + Flow */}
-  <section className="max-w-7xl mx-auto mt-12 px-6 md:px-4 grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
+      {/* Auction Slider Section */}
+      {auctionArticles.length > 0 && (
+        <section className="max-w-5xl mx-auto mt-10 mb-16">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6 text-center">Экономлю время, нахожу лучше</h2>
+          <AuctionSlider articles={auctionArticles} />
+        </section>
+      )}
+
+      {/* Two-column layout: Articles + Flow */}
+      <section className="max-w-7xl mx-auto mt-12 px-6 md:px-4 grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
         {/* Articles Section - Left column (3/5 width on desktop) */}
-  <div className="lg:col-span-3 min-w-0">
+        <div className="lg:col-span-3 min-w-0">
           {/* ARTICLES SECTION */}
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-sm uppercase tracking-wide text-gray-400 font-semibold">Articles</h2>
           </div>
-          <ArticlesFeed initialArticles={articles} />
+          <ArticlesFeed initialArticles={otherArticles} />
         </div>
         {/* SOCIAL SECTION */}
         <div className="lg:col-span-2 mt-20">
@@ -155,11 +93,7 @@ export default async function HomePage() {
           image="https://nzasvblckrwsnlxsqfma.supabase.co/storage/v1/object/public/media/anton-photo.jpg"
           jobTitle="Digital Strategist & Media Expert"
           description="Эксперт по медиа, технологиям и цифровым стратегиям. Автор блога о современном искусстве и digital-трендах."
-          sameAs={[
-            "https://t.me/merkurov_channel",
-            "https://twitter.com/merkurov",
-            "https://instagram.com/merkurov"
-          ]}
+          sameAs={["https://t.me/merkurov_channel","https://twitter.com/merkurov","https://instagram.com/merkurov"]}
         />
         <WebsiteSchema
           name="Anton Merkurov"

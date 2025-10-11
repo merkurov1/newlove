@@ -8,8 +8,9 @@ import SafeImage from '@/components/SafeImage';
 // --- 1. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ---
 // Находит тег по его slug и подгружает все связанные с ним статьи
 async function getTagData(slug) {
-  const tag = await prisma.tag.findUnique({
-    where: { slug },
+  // Делаем поиск по slug регистронезависимым
+  const tag = await prisma.tag.findFirst({
+    where: { slug: { equals: slug, mode: 'insensitive' } },
     include: {
       articles: {
         where: { published: true },
