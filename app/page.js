@@ -95,14 +95,6 @@ export default async function Home() {
             </Link>
           </div>
           <FlowFeed limit={6} />
-          <div className="flex justify-center mt-8">
-            <button
-              className="px-6 py-2 border border-gray-300 text-gray-800 font-medium rounded-none hover:bg-gray-100 transition text-sm"
-              // TODO: добавить обработчик загрузки постов
-            >
-              Load more posts
-            </button>
-          </div>
         </div>
       </section>
       {/* SEO Structured Data */}
