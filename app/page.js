@@ -9,8 +9,10 @@ import { getFirstImage } from '@/lib/contentUtils';
 import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
 import nextDynamic from 'next/dynamic';
 
+
 // SSR-friendly динамический импорт HeroHearts (только на клиенте)
 const HeroHearts = nextDynamic(() => import('@/components/HeroHearts'), { ssr: false });
+const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
 
 
 // Получить статьи с тегами
