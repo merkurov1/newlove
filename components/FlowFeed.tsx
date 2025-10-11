@@ -117,10 +117,10 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
 
   if (loading) {
     return (
-      <div className="w-full px-0" style={{background: 'linear-gradient(120deg, #ffe4ef 0%, #fff 100%)'}}>
-        <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5" style={{width:'100vw',marginLeft:'calc(50% - 50vw)'}}>
+      <div className="w-full px-2 md:px-8 2xl:px-32" style={{background: 'linear-gradient(120deg, #ffe4ef 0%, #fff 100%)'}}>
+        <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="animate-pulse bg-white/80 rounded-xl shadow-xl min-h-[320px] aspect-[2/1]" />
+            <div key={i} className="animate-pulse bg-white/80 rounded-xl shadow-xl min-h-[340px] aspect-[16/9]" />
           ))}
         </div>
       </div>
@@ -144,7 +144,7 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
   }
 
   return (
-    <div className="w-full px-2 md:px-6">
+    <div className="w-full px-2 md:px-8 2xl:px-32">
       <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {items.map((item, idx) => {
           const imageSrc = item.linkPreview?.image || item.thumbnail || (item.images && item.images[0]);
@@ -152,13 +152,13 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
             <article
               key={item.id}
               className="flex flex-col group animate-fade-in-up min-w-0 max-w-full bg-white/80 rounded-xl shadow-md border border-gray-100"
-              style={{ animationDelay: `${idx * 100}ms`, animationFillMode: "both" }}
+              style={{ animationDelay: `${idx * 100}ms`, animationFillMode: "both", minHeight: '340px', minWidth: '0', maxWidth: '100%' }}
               role="listitem"
             >
               {imageSrc && (
                 <Link
                   href={item.url}
-                  className="block relative w-full aspect-[2/1] group min-w-0 overflow-hidden rounded-t-xl"
+                  className="block relative w-full aspect-[16/9] group min-w-0 overflow-hidden rounded-t-xl"
                   aria-label={`Открыть материал: ${item.title}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -168,22 +168,22 @@ export default function FlowFeed({ limit = 7 }: FlowFeedProps) {
                     alt={item.title}
                     fill
                     sizes="100vw"
-                    className="object-cover w-full h-full max-h-[320px] transition-transform duration-200 group-hover:scale-105 rounded-t-xl"
+                    className="object-cover w-full h-full max-h-[340px] transition-transform duration-200 group-hover:scale-105 rounded-t-xl"
                   />
                 </Link>
               )}
-              <div className="flex flex-col flex-1 px-4 pt-3 pb-4">
+              <div className="flex flex-col flex-1 px-6 pt-5 pb-6">
                 <Link href={item.url} target="_blank" rel="noopener noreferrer">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1 line-clamp-2 break-words leading-snug max-w-full group-hover:text-pink-500 group-hover:underline">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2 line-clamp-2 break-words leading-snug max-w-full group-hover:text-pink-500 group-hover:underline">
                     {item.title}
                   </h3>
                 </Link>
                 {item.content && (
-                  <p className="text-gray-700 text-base line-clamp-2 mt-1 break-words max-w-full">{item.content}</p>
+                  <p className="text-gray-700 text-lg line-clamp-2 mt-1 break-words max-w-full">{item.content}</p>
                 )}
                 {item.publishedAt && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-xs text-gray-400">
+                  <div className="flex items-center gap-2 mt-3">
+                    <span className="text-sm text-gray-400">
                       {formatDate(item.publishedAt)}
                     </span>
                   </div>

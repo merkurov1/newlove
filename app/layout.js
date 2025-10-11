@@ -153,7 +153,7 @@ export default async function RootLayout({ children }) {
         <link rel="dns-prefetch" href="//fonts.googleapis.com" />
         <link rel="dns-prefetch" href="//vercel.com" />
       </head>
-      <body className="bg-white text-gray-800 min-h-screen">
+  <body className="bg-white text-gray-800 min-h-screen overflow-x-hidden">
         <GlobalErrorHandler />
         <Providers>
           <AuthProvider>
