@@ -53,11 +53,7 @@ export default function OnboardLoginPage() {
     // Формируем SIWE message по стандарту EIP-4361 (6+ строк, все обязательные поля)
     const domain = window.location.host;
       // Поддержка двух разрешённых URI
-      const allowedUris = ["https://www.merkurov.love", "https://merkurov.love"];
-      let uri = window.location.origin;
-      if (!allowedUris.includes(uri)) {
-        uri = allowedUris[0]; // fallback на основной
-      }
+      const uri = "https://www.merkurov.love";
     const version = '1';
     const chainId = '1';
     const nonce = Math.floor(Math.random() * 1e16).toString();
