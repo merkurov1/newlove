@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { createClient } from '@supabase/supabase-js';
 import TagInput from '@/components/admin/TagInput';
 import BlockEditor from '@/components/admin/BlockEditor';
 import { createSeoSlug } from '@/lib/slugUtils';
@@ -37,7 +37,22 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   const [error, setError] = useState('');
   const [slugError, setSlugError] = useState('');
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
-  const { data: session, status } = useSession();
+  const [user, setUser] = useState<any>(null);
+  const [role, setRole] = useState<string | null>(null);
+  useEffect(() => {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+      setRole(data.user?.user_metadata?.role || null);
+    };
+    getUser();
+    const { data: listener } = supabase.auth.onAuthStateChange(() => getUser());
+    return () => { listener?.subscription.unsubscribe(); };
+  }, []);
   const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
 
   // Функция проверки уникальности slug
@@ -111,9 +126,9 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   }
 
   async function handleSubmit(e: React.FormEvent) {
-    if (status !== 'authenticated') {
+    if (!user || role !== 'ADMIN') {
       e.preventDefault();
-      setError('Ошибка: не определён автор. Войдите в систему.');
+      setError('Ошибка: нет прав администратора. Войдите как админ.');
       return false;
     }
     if (!validateBlocks(content)) {

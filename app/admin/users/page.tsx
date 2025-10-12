@@ -8,6 +8,7 @@ import LoadingSpinner from '@/components/admin/LoadingSpinner';
 import { getRoleEmoji, getRoleName } from '@/lib/roles';
 import { Role } from '@/types/next-auth.d';
 import UserEditModal from '@/components/admin/UserEditModal';
+import { createClient } from '@supabase/supabase-js';
 
 interface User {
   id: string;
@@ -73,12 +74,32 @@ export default function AdminUsersPage() {
     }
   }, [data, searchQuery]);
 
+  // Supabase client for browser
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/users');
-      const result = await response.json();
-      setData(result);
+      // Fetch users from Supabase Auth admin API
+      const { data: userList, error } = await supabase.auth.admin.listUsers();
+      if (error) throw error;
+      // Map users to local User type
+      const users = (userList?.users || []).map(u => ({
+        id: u.id,
+        name: u.user_metadata?.name ?? null,
+        username: u.user_metadata?.username ?? null,
+        email: u.email ?? null,
+        role: u.user_metadata?.role || 'USER',
+        image: u.user_metadata?.image ?? null,
+        bio: u.user_metadata?.bio ?? null,
+        website: u.user_metadata?.website ?? null,
+        subscription: null, // TODO: fetch if needed
+        _count: { articles: 0, projects: 0, messages: 0 }, // TODO: fetch if needed
+      }));
+      setData({ users, orphanSubscribers: [] }); // TODO: fetch orphanSubscribers if needed
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -86,19 +107,16 @@ export default function AdminUsersPage() {
     }
   };
 
+  // Update user role in Supabase
   const updateUser = async (userId: string, updateData: Partial<User>) => {
     try {
-      const response = await fetch(`/api/admin/users/${userId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData),
-      });
-
-      if (response.ok) {
-        await fetchData(); // Перезагружаем данные
-      } else {
-        const error = await response.json();
-        alert(error.error || 'Ошибка обновления пользователя');
+      // Only allow updating role for now
+      if (updateData.role) {
+        const { error } = await supabase.auth.admin.updateUserById(userId, {
+          user_metadata: { role: updateData.role },
+        });
+        if (error) throw error;
+        await fetchData();
       }
     } catch (error) {
       console.error('Error updating user:', error);
@@ -110,20 +128,9 @@ export default function AdminUsersPage() {
     await updateUser(userId, { role: newRole });
   };
 
+  // TODO: Implement deleteSubscriber if orphanSubscribers are managed in Supabase
   const deleteSubscriber = async (subscriberId: string) => {
-    if (!confirm('Удалить подписчика?')) return;
-
-    try {
-      const response = await fetch(`/api/subscribers/${subscriberId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        await fetchData();
-      }
-    } catch (error) {
-      console.error('Error deleting subscriber:', error);
-    }
+    alert('Удаление подписчиков пока не реализовано.');
   };
 
   if (loading) return <LoadingSpinner />;

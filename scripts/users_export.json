@@ -1,0 +1,40 @@
+[
+  {
+    "id": "cmg3a1nw400009h9arn2nhaae",
+    "name": "Anton Merkurov",
+    "email": "merkurov@gmail.com",
+    "image": "https://lh3.googleusercontent.com/a/ACg8ocLQGn-Ew6LOUfGHutaDfHA-FZNGgjs2vsz3SRWlydQ1nay2XxFp8A=s96-c",
+    "username": "merkurov",
+    "bio": "Artist, art-dealer",
+    "website": "https://merkurov.love",
+    "role": "ADMIN"
+  },
+  {
+    "id": "cmg3gc2pt0000pwyj2wfbp9gj",
+    "name": "Tatiana Manouukovski",
+    "email": "tatiana@manoukovski.com",
+    "image": "https://lh3.googleusercontent.com/a/ACg8ocLqNpXp7cOenpTMk7AnsgAnE5_uDuFJYrJ0dExUxR7ZKL2QvQs=s96-c",
+    "role": "SPONSOR"
+  },
+  {
+    "id": "cmg45ynr000007glp0khj22m0",
+    "name": "Roman Tcherpak",
+    "email": "romaninvenice@gmail.com",
+    "image": "https://lh3.googleusercontent.com/a/ACg8ocJDJeSfElr1oeQpTtXhScexKag__T1RR5D12F4UgOKfkWSuCCs=s96-c",
+    "role": "USER"
+  },
+  {
+    "id": "cmg4b7zwg0000144qci4j7kyc",
+    "name": "Yuri Rashkin",
+    "email": "yrashkin@gmail.com",
+    "image": "https://lh3.googleusercontent.com/a/ACg8ocLEnMEYqozcrtr0eaTAN1v2CIjJhIMjhANNCefebXqY5zq7vglv=s96-c",
+    "role": "PATRON"
+  },
+  {
+    "id": "cmgc7silp00008cm41cezae8o",
+    "name": "Alexander Yellin",
+    "email": "ayellin@gmail.com",
+    "image": "https://lh3.googleusercontent.com/a/ACg8ocLM7sJIZbaKneUnM5lNFLKCqBukYnalPImmfkUHXUgzHTXuQwAs=s96-c",
+    "role": "USER"
+  }
+]

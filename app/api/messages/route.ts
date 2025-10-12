@@ -1,15 +1,15 @@
 export const dynamic = 'force-dynamic';
 // app/api/messages/route.ts
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/authOptions';
+import { requireUser } from '@/lib/serverAuth';
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+
 
 export async function POST(req: Request) {
-  // Используем новый метод для получения сессии
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user?.id) {
+  // Получаем текущего пользователя через Supabase
+  let user;
+  try {
+    user = await requireUser();
+  } catch (e) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
@@ -19,12 +19,9 @@ export async function POST(req: Request) {
     return new NextResponse('Missing content', { status: 400 });
   }
 
-  const message = await prisma.message.create({
-    data: {
-      content,
-      userId: session.user.id,
-    },
-  });
-
+  // TODO: Replace with Supabase insert or other storage
+  // Example: const { data: message, error } = await supabase.from('messages').insert([{ content, user_id: user.id }]).select().single();
+  // For now, return a mock message
+  const message = { id: 'mock', content, userId: user.id, createdAt: new Date().toISOString() };
   return NextResponse.json(message);
 }

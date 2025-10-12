@@ -1,11 +1,11 @@
-'use client';
+ 'use client';
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase-client';
-import { useSession } from 'next-auth/react';
+import useSupabaseSession from '@/hooks/useSupabaseSession';
 
 export default function ImageUploader({ onUploadSuccess }) {
-  const { data: session } = useSession();
+  const { session } = useSupabaseSession();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
 

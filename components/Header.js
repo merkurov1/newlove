@@ -3,14 +3,16 @@
 
 import Link from "next/link";
 import SafeImage from '@/components/SafeImage';
-import { useSession, signIn, signOut } from 'next-auth/react';
+import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { createClient } from '@/lib/supabase-browser';
+import { signOut as supabaseSignOut } from '@/lib/supabase-client';
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 
 
 
 export default function Header({ projects, settings }) {
-  const { data: session, status } = useSession();
+  const { session, status } = useSupabaseSession();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [hideOnScroll, setHideOnScroll] = useState(false);
   const [scrolled, setScrolled] = useState(false);
