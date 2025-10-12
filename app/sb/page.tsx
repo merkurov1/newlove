@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { createClient } from '@supabase/supabase-js';
+import { signIn } from 'next-auth/react';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -26,8 +27,18 @@ export default function SupabaseAuthPage() {
     setLoading(true);
     setError("");
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError(error.message);
-    else setUser(data.user);
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+    setUser(data.user);
+    // Синхронизируем сессию NextAuth (если есть CredentialsProvider для email)
+    try {
+      await signIn('credentials', { email, password, redirect: false });
+    } catch (e) {
+      // ignore
+    }
     setLoading(false);
   }
 
