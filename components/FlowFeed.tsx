@@ -132,8 +132,8 @@ export default function FlowFeed({ limit = 8 }: FlowFeedProps) {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto overflow-x-hidden">
-      <div className="grid gap-4 sm:gap-6" style={{gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))'}}>
+    <div className="w-full max-w-4xl mx-auto">
+      <div className="grid gap-4 sm:gap-6 overflow-x-hidden" style={{gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))'}}>
         {items.slice(0, Math.min(8, items.length)).map((item) => {
           const imageSrc = item.linkPreview?.image || item.thumbnail || (item.images && item.images[0]);
           return (
