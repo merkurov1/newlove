@@ -1,3 +1,4 @@
+
 import { usePrivy } from '@privy-io/react-auth';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -9,45 +10,38 @@ function getCookie(name: string): string | null {
 }
 
 export function usePrivyAuth() {
-  const { login, logout, ready, authenticated, getAccessToken, getIdToken, user } = usePrivy();
-  const { data: session, status } = useSession();
+  const { login, logout, ready, authenticated, getAccessToken, user } = usePrivy();
+  const { data: session, status, update } = useSession();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [debug, setDebug] = useState<any>(null);
-  const retryRef = useRef(0);
+  const [fallbackTried, setFallbackTried] = useState(false);
+  const loginInProgress = useRef(false);
 
-  // Получить токен с fallback: SDK -> cookie -> retry
+  // Получить токен с fallback: SDK -> cookie
   const getAuthToken = useCallback(async () => {
     let token = null;
     try {
       token = await getAccessToken();
       if (token) return token;
-      token = await getIdToken?.();
-      if (token) return token;
     } catch {}
-    // Fallback: cookie
     token = getCookie('privy-token') || getCookie('privy-id-token');
-    if (token) return token;
-    // Retry через 1 сек
-    if (retryRef.current < 2) {
-      retryRef.current++;
-      await new Promise(res => setTimeout(res, 1000));
-      return getAuthToken();
-    }
-    return null;
-  }, [getAccessToken, getIdToken]);
+    return token;
+  }, [getAccessToken]);
 
-  // Основная функция логина
+  // Основная функция логина через Privy
   const handleLogin = useCallback(async () => {
+    if (loginInProgress.current) return;
+    loginInProgress.current = true;
     setIsLoading(true);
     setError(null);
     setDebug(null);
     try {
       await login();
-      await new Promise(res => setTimeout(res, 1500));
+      await new Promise(res => setTimeout(res, 1200));
       const authToken = await getAuthToken();
       if (!authToken) throw new Error('🔐 Не удалось получить токен Privy');
-      // POST на сервер для создания сессии
+      // POST на сервер для создания юзера
       const res = await fetch('/api/auth/privy-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -55,7 +49,7 @@ export function usePrivyAuth() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '❌ Ошибка сервера при создании сессии');
-      // signIn через NextAuth
+      // signIn через NextAuth (без redirect)
       const signInRes = await signIn('privy', {
         accessToken: authToken,
         redirect: false,
@@ -63,54 +57,37 @@ export function usePrivyAuth() {
       });
       setDebug({ authToken, server: data, signInRes });
       if (signInRes?.error) throw new Error('❌ Ошибка NextAuth: ' + signInRes.error);
-      // Если signIn успешен, сохраняем токен во временное sessionStorage и делаем reload
-      if (signInRes?.ok && typeof window !== 'undefined') {
-        try {
-          sessionStorage.setItem('privy-recovery-token', authToken);
-          sessionStorage.setItem('privy-recovery-ts', String(Date.now()));
-        } catch (e) {
-          // ignore storage errors
+      // Ждём появления session (до 2 сек)
+      let waited = 0;
+      while (waited < 2000) {
+        await new Promise(res => setTimeout(res, 200));
+        await update?.();
+        if (typeof window !== 'undefined') {
+          const s = window.localStorage.getItem('nextauth.message');
+          if (s && s.includes('session')) break;
         }
-        window.location.reload();
+        waited += 200;
+      }
+      // Если session не появилась — fallback signIn с redirect (один раз)
+      if (!session && !fallbackTried) {
+        setFallbackTried(true);
+        await signIn('privy', { accessToken: authToken, redirect: true, callbackUrl: '/' });
       }
     } catch (e: any) {
       setError(e?.message || String(e));
     } finally {
       setIsLoading(false);
+      loginInProgress.current = false;
     }
-  }, [login, getAuthToken]);
+  }, [login, getAuthToken, session, fallbackTried, update]);
 
-  // Auto-recovery: если есть Privy auth, но нет NextAuth session
+  // Автоматический login recovery: если есть Privy auth, но нет NextAuth session
   useEffect(() => {
-    if (authenticated && status === 'unauthenticated' && !isLoading) {
+    if (authenticated && status === 'unauthenticated' && !isLoading && !loginInProgress.current) {
       handleLogin();
     }
     // eslint-disable-next-line
   }, [authenticated, status]);
-
-  // После reload: проверить, есть ли privy-recovery-token в sessionStorage и выполнить signIn redirect если нужно
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const token = sessionStorage.getItem('privy-recovery-token');
-      const ts = sessionStorage.getItem('privy-recovery-ts');
-      const done = sessionStorage.getItem('privy-recovery-done');
-      if (token && ts && !done) {
-        // если прошло менее 10 секунд с момента записи — пытаемся signIn с redirect
-        const age = Date.now() - Number(ts || 0);
-        if (age < 10000) {
-          sessionStorage.setItem('privy-recovery-done', '1');
-          signIn('privy', { accessToken: token, redirect: true, callbackUrl: '/' });
-        } else {
-          // устаревший токен — очистим
-          sessionStorage.removeItem('privy-recovery-token');
-          sessionStorage.removeItem('privy-recovery-ts');
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-  }, []);
 
   return {
     ready,
