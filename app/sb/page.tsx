@@ -63,11 +63,11 @@ export default function SupabaseAuthPage() {
     setLoading(false);
   }
 
-  // Вход через WebAuthn (универсальный Web3/FIDO2)
-  async function handleWebAuthnSignIn() {
+  // Вход через Web3 (универсальный Web3/FIDO2)
+  async function handleWeb3SignIn() {
     setLoading(true);
     setError("");
-    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'webauthn' as any });
+    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'web3' as any });
     if (error) setError(error.message);
     setLoading(false);
   }
@@ -98,9 +98,12 @@ export default function SupabaseAuthPage() {
       <button onClick={handleGoogleSignIn} disabled={loading} style={{ width: "100%", padding: 10, marginBottom: 8, background: '#4285F4', color: '#fff', fontWeight: 600 }}>
         {loading ? "Вход через Google..." : "Войти через Google"}
       </button>
-      <button onClick={handleWebAuthnSignIn} disabled={loading} style={{ width: "100%", padding: 10, marginBottom: 8, background: '#222', color: '#fff', fontWeight: 600 }}>
-        {loading ? "Вход через WebAuthn..." : "Войти через WebAuthn (Web3/FIDO2)"}
+      <button onClick={handleWeb3SignIn} disabled={loading} style={{ width: "100%", padding: 10, marginBottom: 8, background: '#222', color: '#fff', fontWeight: 600 }}>
+        {loading ? "Вход через Web3..." : "Войти через Web3 (универсальный)"}
       </button>
+      <a href="/sb/secret/" target="_blank" rel="noopener noreferrer" style={{ display: 'block', margin: '16px 0', color: '#2979FF', textAlign: 'center', textDecoration: 'underline', fontWeight: 600 }}>
+        Перейти к /sb/secret/ (тест в приватной вкладке)
+      </a>
       <button onClick={checkSession} style={{ width: "100%", padding: 10, marginBottom: 8 }}>
         Проверить сессию
       </button>
