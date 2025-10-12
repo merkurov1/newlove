@@ -20,6 +20,8 @@ export default function PrivyDebugPage() {
         <b>Session status:</b> {status}<br />
         <b>Session:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(session, null, 2)}</pre>
         <b>Cookies:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{typeof document !== 'undefined' ? document.cookie : ''}</pre>
+        <b>LocalStorage:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{typeof window !== 'undefined' ? JSON.stringify(window.localStorage, null, 2) : ''}</pre>
+        <b>SessionStorage:</b> <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{typeof window !== 'undefined' ? JSON.stringify(window.sessionStorage, null, 2) : ''}</pre>
         {debug ? <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(debug, null, 2)}</pre> : <div style={{ color: '#888', marginTop: 8 }}>Нет debug-данных. Нажмите кнопку выше для отладки Privy.</div>}
       </div>
       <div style={{ marginTop: 40, color: '#888', fontSize: 14 }}>

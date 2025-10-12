@@ -63,19 +63,15 @@ export function usePrivyAuth() {
       });
       setDebug({ authToken, server: data, signInRes });
       if (signInRes?.error) throw new Error('❌ Ошибка NextAuth: ' + signInRes.error);
-      // Если signIn успешен, делаем reload для обновления session
+      // Если signIn успешен, сохраняем токен во временное sessionStorage и делаем reload
       if (signInRes?.ok && typeof window !== 'undefined') {
-        // Сначала reload
+        try {
+          sessionStorage.setItem('privy-recovery-token', authToken);
+          sessionStorage.setItem('privy-recovery-ts', String(Date.now()));
+        } catch (e) {
+          // ignore storage errors
+        }
         window.location.reload();
-        // Через 1.5 сек, если session не появилась, делаем signIn с redirect: true
-        setTimeout(() => {
-          if (!window.localStorage.getItem('privy-session-checked')) {
-            window.localStorage.setItem('privy-session-checked', '1');
-            signIn('privy', { accessToken: authToken, redirect: true, callbackUrl: '/' });
-          } else {
-            window.localStorage.removeItem('privy-session-checked');
-          }
-        }, 1500);
       }
     } catch (e: any) {
       setError(e?.message || String(e));
@@ -91,6 +87,30 @@ export function usePrivyAuth() {
     }
     // eslint-disable-next-line
   }, [authenticated, status]);
+
+  // После reload: проверить, есть ли privy-recovery-token в sessionStorage и выполнить signIn redirect если нужно
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const token = sessionStorage.getItem('privy-recovery-token');
+      const ts = sessionStorage.getItem('privy-recovery-ts');
+      const done = sessionStorage.getItem('privy-recovery-done');
+      if (token && ts && !done) {
+        // если прошло менее 10 секунд с момента записи — пытаемся signIn с redirect
+        const age = Date.now() - Number(ts || 0);
+        if (age < 10000) {
+          sessionStorage.setItem('privy-recovery-done', '1');
+          signIn('privy', { accessToken: token, redirect: true, callbackUrl: '/' });
+        } else {
+          // устаревший токен — очистим
+          sessionStorage.removeItem('privy-recovery-token');
+          sessionStorage.removeItem('privy-recovery-ts');
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
 
   return {
     ready,
