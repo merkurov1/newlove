@@ -17,6 +17,7 @@ export function usePrivyAuth() {
   const [debug, setDebug] = useState<any>(null);
   const [fallbackTried, setFallbackTried] = useState(false);
   const loginInProgress = useRef(false);
+  const [autoTried, setAutoTried] = useState(false);
 
   // Получить токен с fallback: SDK -> cookie
   const getAuthToken = useCallback(async () => {
@@ -81,20 +82,34 @@ export function usePrivyAuth() {
     }
   }, [login, getAuthToken, session, fallbackTried, update]);
 
-  // Автоматический login recovery: если есть Privy auth, но нет NextAuth session
+
+  // Автоматический login recovery: только если authenticated, ready, нет session, и токен реально доступен
   useEffect(() => {
-    if (authenticated && status === 'unauthenticated' && !isLoading && !loginInProgress.current) {
-      handleLogin();
+    let cancelled = false;
+    async function tryAutoLogin() {
+      if (authenticated && ready && status === 'unauthenticated' && !isLoading && !loginInProgress.current && !autoTried) {
+        setAutoTried(true);
+        // Проверяем, есть ли токен
+        const token = await getAuthToken();
+        if (token) {
+          await handleLogin();
+        }
+      }
     }
+    tryAutoLogin();
+    return () => { cancelled = true; };
     // eslint-disable-next-line
-  }, [authenticated, status]);
+  }, [authenticated, ready, status]);
+
+  // Показывать ошибку только если была ручная попытка login
+  const showError = isLoading || autoTried ? error : null;
 
   return {
     ready,
     authenticated,
     user,
     isLoading,
-    error,
+    error: showError,
     login: handleLogin,
     logout,
     getAuthToken,
