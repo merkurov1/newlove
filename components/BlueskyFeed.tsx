@@ -120,7 +120,7 @@ export default function BlueskyFeed({ limit = 10 }: BlueskyFeedProps) {
             {post.author.avatar && (
               <img 
                 src={post.author.avatar} 
-                alt={post.author.displayName || post.author.handle}
+                alt={post.author.displayName ? `Аватар: ${post.author.displayName}` : post.author.handle ? `Аватар: ${post.author.handle}` : 'Аватар пользователя'}
                 className="w-10 h-10 rounded-full mr-3"
               />
             )}
@@ -156,7 +156,7 @@ export default function BlueskyFeed({ limit = 10 }: BlueskyFeedProps) {
                   >
                     <img 
                       src={image.url} 
-                      alt={image.alt || `Изображение ${index + 1}`}
+                      alt={image.alt ? `Bluesky: ${image.alt}` : `Bluesky изображение ${index + 1}`}
                       className="w-full h-auto max-h-96 object-cover hover:scale-105 transition-transform cursor-pointer"
                       onClick={() => window.open(image.url, '_blank')}
                     />

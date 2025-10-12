@@ -63,16 +63,36 @@ export async function generateMetadata({ params }) {
   try {
     const result = await getContent(params.slug);
     if (!result) {
-      console.log('❌ No metadata result found');
       return { title: 'Не найдено' };
     }
-    
     const { type, content } = result;
-    console.log('✅ Generating metadata for:', { type, title: content.title });
-    
     const previewImage = content.content ? await getFirstImage(content.content) : null;
     const description = content.content ? generateDescription(content.content) : (content.title || 'Описание недоступно');
     const baseUrl = 'https://merkurov.love';
+
+    // JSON-LD для Article
+    let jsonLd = null;
+    if (type === 'article') {
+      jsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        'headline': content.title,
+        'author': { '@type': 'Person', 'name': content.author?.name || 'Anton Merkurov' },
+        'datePublished': content.publishedAt,
+        'dateModified': content.updatedAt || content.publishedAt,
+        'image': previewImage ? [previewImage] : [],
+        'description': description,
+        'mainEntityOfPage': `${baseUrl}/${content.slug}`,
+        'publisher': {
+          '@type': 'Organization',
+          'name': 'Anton Merkurov',
+          'logo': {
+            '@type': 'ImageObject',
+            'url': 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png'
+          }
+        }
+      };
+    }
 
     return {
       title: content.title,
@@ -90,9 +110,13 @@ export async function generateMetadata({ params }) {
         description: description,
         images: previewImage ? [previewImage] : [],
       },
+      ...(jsonLd && {
+        other: {
+          'application/ld+json': JSON.stringify(jsonLd)
+        }
+      })
     };
   } catch (error) {
-    console.error('💥 Error in generateMetadata:', error);
     return { 
       title: 'Ошибка загрузки',
       description: 'Произошла ошибка при загрузке метаданных'
