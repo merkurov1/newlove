@@ -63,29 +63,11 @@ export default function SupabaseAuthPage() {
     setLoading(false);
   }
 
-  // Вход через Ethereum (официально поддерживаемый типом)
-  async function handleEthereumSignIn() {
+  // Вход через WebAuthn (универсальный Web3/FIDO2)
+  async function handleWebAuthnSignIn() {
     setLoading(true);
     setError("");
-    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'ethereum' as any });
-    if (error) setError(error.message);
-    setLoading(false);
-  }
-
-  // Вход через Metamask (тип any для совместимости)
-  async function handleMetamaskSignIn() {
-    setLoading(true);
-    setError("");
-    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'metamask' as any });
-    if (error) setError(error.message);
-    setLoading(false);
-  }
-
-  // Вход через Trust Wallet (тип any для совместимости)
-  async function handleTrustSignIn() {
-    setLoading(true);
-    setError("");
-    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'trust' as any });
+    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'webauthn' as any });
     if (error) setError(error.message);
     setLoading(false);
   }
@@ -116,14 +98,8 @@ export default function SupabaseAuthPage() {
       <button onClick={handleGoogleSignIn} disabled={loading} style={{ width: "100%", padding: 10, marginBottom: 8, background: '#4285F4', color: '#fff', fontWeight: 600 }}>
         {loading ? "Вход через Google..." : "Войти через Google"}
       </button>
-      <button onClick={handleEthereumSignIn} disabled={loading} style={{ width: "100%", padding: 10, marginBottom: 8, background: '#222', color: '#fff', fontWeight: 600 }}>
-        {loading ? "Вход через Ethereum..." : "Войти через Ethereum"}
-      </button>
-      <button onClick={handleMetamaskSignIn} disabled={loading} style={{ width: "100%", padding: 10, marginBottom: 8, background: '#333', color: '#fff', fontWeight: 600 }}>
-        {loading ? "Вход через Metamask..." : "Войти через Metamask"}
-      </button>
-      <button onClick={handleTrustSignIn} disabled={loading} style={{ width: "100%", padding: 10, marginBottom: 8, background: '#2979FF', color: '#fff', fontWeight: 600 }}>
-        {loading ? "Вход через Trust..." : "Войти через Trust Wallet"}
+      <button onClick={handleWebAuthnSignIn} disabled={loading} style={{ width: "100%", padding: 10, marginBottom: 8, background: '#222', color: '#fff', fontWeight: 600 }}>
+        {loading ? "Вход через WebAuthn..." : "Войти через WebAuthn (Web3/FIDO2)"}
       </button>
       <button onClick={checkSession} style={{ width: "100%", padding: 10, marginBottom: 8 }}>
         Проверить сессию
