@@ -47,11 +47,13 @@ export default function OnboardLoginPage() {
         return;
       }
       const wallet = wallets[0];
-      const address = wallet.accounts[0].address;
-      const ethersProvider = new ethers.BrowserProvider(wallet.provider, 'any');
-      const signer = await ethersProvider.getSigner();
-      const message = `\nВход в newlove!\n\nПодпишите это сообщение для входа.\n\nАдрес: ${address}`;
-      const signature = await signer.signMessage(message);
+  const address = wallet.accounts[0].address;
+  const ethersProvider = new ethers.BrowserProvider(wallet.provider, 'any');
+  const signer = await ethersProvider.getSigner();
+  // Формируем SIWE message по стандарту EIP-4361
+  const domain = window.location.host;
+  const message = `${domain} wants you to sign in with your Ethereum account:\n${address}`;
+  const signature = await signer.signMessage(message);
       const { data, error } = await supabase.auth.signInWithWeb3({
         chain: 'ethereum',
         message,
