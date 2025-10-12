@@ -63,6 +63,20 @@ export function usePrivyAuth() {
       });
       setDebug({ authToken, server: data, signInRes });
       if (signInRes?.error) throw new Error('❌ Ошибка NextAuth: ' + signInRes.error);
+      // Если signIn успешен, делаем reload для обновления session
+      if (signInRes?.ok && typeof window !== 'undefined') {
+        // Сначала reload
+        window.location.reload();
+        // Через 1.5 сек, если session не появилась, делаем signIn с redirect: true
+        setTimeout(() => {
+          if (!window.localStorage.getItem('privy-session-checked')) {
+            window.localStorage.setItem('privy-session-checked', '1');
+            signIn('privy', { accessToken: authToken, redirect: true, callbackUrl: '/' });
+          } else {
+            window.localStorage.removeItem('privy-session-checked');
+          }
+        }, 1500);
+      }
     } catch (e: any) {
       setError(e?.message || String(e));
     } finally {
