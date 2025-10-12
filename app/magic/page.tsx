@@ -18,15 +18,8 @@ export default function MagicLoginPage() {
       await magic.auth.loginWithEmailOTP({ email });
       const didToken = await magic.user.getIdToken();
       // NextAuth signIn
-      const res = await signIn("magic", { didToken, redirect: false });
-      if (res?.error) throw new Error(res.error);
-      // Ждём появления session
-      let waited = 0;
-      while (waited < 2000) {
-        await new Promise(res => setTimeout(res, 200));
-        window.dispatchEvent(new Event('visibilitychange'));
-        waited += 200;
-      }
+      const res = await signIn("magic", { didToken, redirect: true, callbackUrl: "/" });
+      // После редиректа session появится автоматически
       const metadata = await magic.user.getInfo();
       setUser(metadata);
     } catch (e: any) {

@@ -53,7 +53,7 @@ export function usePrivyAuth() {
       // signIn через NextAuth (без redirect)
       const signInRes = await signIn('privy', {
         accessToken: authToken,
-        redirect: false,
+        redirect: true,
         callbackUrl: '/',
       });
       setDebug({ authToken, server: data, signInRes });
