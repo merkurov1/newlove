@@ -121,47 +121,56 @@ const authOptions = {
 												}
 												if (!user) return null;
 												// Создать Account, если его нет (как делает Google)
-												let providerAccountId: string = metadata.issuer || fallbackEmail || 'magic-unknown';
-												const existingAccount = await prisma.account.findUnique({
-													where: {
-														provider_providerAccountId: {
-															provider: 'magic',
-															providerAccountId,
-														},
-													},
-												});
-												if (!existingAccount) {
-													await prisma.account.create({
-														data: {
-															userId: user.id,
-															type: 'credentials',
-															provider: 'magic',
-															providerAccountId,
-														},
-													});
-												}
-									return {
-										id: user.id,
-										email: user.email,
-										role: user.role as any,
-										username: user.username,
-										bio: user.bio,
-										website: user.website,
-										walletAddress: user.walletAddress,
-										debug: { metadata },
-									};
+															let providerAccountId: string = metadata.issuer || fallbackEmail || 'magic-unknown';
+															const existingAccount = await prisma.account.findUnique({
+																where: {
+																	provider_providerAccountId: {
+																		provider: 'magic',
+																		providerAccountId,
+																	},
+																},
+															});
+															if (!existingAccount) {
+																await prisma.account.create({
+																	data: {
+																		userId: user.id,
+																		type: 'credentials',
+																		provider: 'magic',
+																		providerAccountId,
+																	},
+																});
+															}
+															return {
+																id: user.id,
+																email: user.email,
+																name: user.name,
+																provider: 'magic',
+																providerAccountId,
+																sub: providerAccountId,
+																role: user.role as any,
+																username: user.username,
+																bio: user.bio,
+																website: user.website,
+																walletAddress: user.walletAddress,
+																debug: { metadata },
+															};
 					} catch (e) {
 						return null;
 					}
 				},
 			}),
 	],
-	callbacks: {
+		callbacks: {
 			async session({ session, user }: { session: any, user: any }) {
 				if (user) {
 					session.user = {
 						...session.user,
 						id: user.id,
+						email: user.email,
+						name: user.name,
+						provider: user.provider,
+						providerAccountId: user.providerAccountId,
+						sub: user.sub,
 						role: user.role as any,
 						username: user.username,
 						bio: user.bio,
@@ -171,7 +180,7 @@ const authOptions = {
 				}
 				return session;
 			},
-	},
+		},
 	pages: {
 		signIn: '/auth/signin',
 		error: '/auth/error',
