@@ -2,6 +2,7 @@
 "use client";
 import { usePrivyAuth } from '@/hooks/usePrivyAuth';
 
+export default function PrivyDebugPage() {
   const { login, ready, authenticated, isLoading, error, session, status, debug } = usePrivyAuth();
 
   return (
