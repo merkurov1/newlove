@@ -3,6 +3,13 @@ import { usePrivy } from '@privy-io/react-auth';
 import { useSession, signIn } from 'next-auth/react';
 import { useState } from 'react';
 
+// Вспомогательная функция для получения значения cookie по имени
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
 export default function PrivyDebugPage() {
   const { login, ready, authenticated, getAccessToken, getIdToken } = usePrivy();
   const { data: session, status } = useSession();
@@ -15,14 +22,18 @@ export default function PrivyDebugPage() {
     setError(null);
     setDebug(null);
     try {
-  await login();
-  // Try id token first (if enabled), then access token
-  const idToken = typeof getIdToken === 'function' ? await getIdToken() : null;
-  const accessToken = await getAccessToken();
-  const authToken = idToken || accessToken;
-  // Выводим authToken в debug до отправки
-  let privyData = null;
-  let signInRes = null;
+      await login();
+      // Try id token first (if enabled), then access token
+      const idToken = typeof getIdToken === 'function' ? await getIdToken() : null;
+      const accessToken = await getAccessToken();
+      const authToken = idToken || accessToken;
+      // Получаем токены из cookies (для Safari/iPad)
+      const privyToken = getCookie('privy-token');
+      const privyIdToken = getCookie('privy-id-token');
+      // Выводим authToken и cookie-токены в debug до отправки
+      let privyData = null;
+      let signInRes = null;
+      let cookieTokenCheck = null;
       try {
         const privyRes = await fetch('/api/privy-auth', {
           method: 'POST',
@@ -32,6 +43,19 @@ export default function PrivyDebugPage() {
         privyData = await privyRes.json();
       } catch (e) {
         privyData = { error: 'fetch failed', details: String(e) };
+      }
+      // Новый debug: пробуем отправить токены из cookie на сервер для проверки
+      if (privyToken || privyIdToken) {
+        try {
+          const cookieRes = await fetch('/api/privy-cookie-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ privyToken, privyIdToken }),
+          });
+          cookieTokenCheck = await cookieRes.json();
+        } catch (e) {
+          cookieTokenCheck = { error: 'cookie check failed', details: String(e) };
+        }
       }
       try {
         signInRes = await signIn('privy', {
@@ -46,8 +70,11 @@ export default function PrivyDebugPage() {
         authToken,
         idToken,
         accessToken,
+        privyToken,
+        privyIdToken,
         privyAuth: privyData,
         signInRes,
+        cookieTokenCheck,
         session,
         status,
         cookies: typeof document !== 'undefined' ? document.cookie : '',
