@@ -47,13 +47,19 @@ export default function OnboardLoginPage() {
         return;
       }
       const wallet = wallets[0];
-  const address = wallet.accounts[0].address;
-  const ethersProvider = new ethers.BrowserProvider(wallet.provider, 'any');
-  const signer = await ethersProvider.getSigner();
-  // Формируем SIWE message по стандарту EIP-4361
-  const domain = window.location.host;
-  const message = `${domain} wants you to sign in with your Ethereum account:\n${address}`;
-  const signature = await signer.signMessage(message);
+    const address = wallet.accounts[0].address;
+    const ethersProvider = new ethers.BrowserProvider(wallet.provider, 'any');
+    const signer = await ethersProvider.getSigner();
+    // Формируем SIWE message по стандарту EIP-4361 (6+ строк, все обязательные поля)
+    const domain = window.location.host;
+    const uri = window.location.origin;
+    const version = '1';
+    const chainId = '1';
+    const nonce = Math.floor(Math.random() * 1e16).toString();
+    const issuedAt = new Date().toISOString();
+    const statement = 'Sign in with Ethereum to the app.';
+    const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\n${statement}\n\nURI: ${uri}\nVersion: ${version}\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
+    const signature = await signer.signMessage(message);
       const { data, error } = await supabase.auth.signInWithWeb3({
         chain: 'ethereum',
         message,
