@@ -1,12 +1,10 @@
 "use client";
 import { motion, AnimatePresence } from 'framer-motion';
-// components/LoungeInterface.js
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase-browser';
-import { signIn } from 'next-auth/react';
 import Image from 'next/image';
-import type { Session } from 'next-auth';
 import LinkPreview from './LinkPreview';
+import useSupabaseSession from '@/hooks/useSupabaseSession';
 
 // Типы не изменились
 type InitialMessage = {
@@ -19,7 +17,6 @@ type InitialMessage = {
 
 type Props = {
   initialMessages: InitialMessage[];
-  session: Session | null;
 };
 
 // --- НОВЫЙ ТИП ДЛЯ ПЕЧАТАЮЩИХ ПОЛЬЗОВАТЕЛЕЙ ---
@@ -28,7 +25,8 @@ type TypingUser = {
   image: string;
 };
 
-export default function LoungeInterface({ initialMessages, session }: Props) {
+export default function LoungeInterface({ initialMessages }: Props) {
+  const { session } = useSupabaseSession();
   const supabase = createClient();
   const [messages, setMessages] = useState(initialMessages);
   const [newMessage, setNewMessage] = useState('');
@@ -164,7 +162,7 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
       <div className="flex flex-col items-center justify-center h-[calc(100vh-10rem)] text-center">
         <h2 className="text-2xl font-semibold mb-4">Присоединяйтесь к обсуждению</h2>
         <p className="mb-6 text-gray-600">Чтобы отправлять сообщения, пожалуйста, войдите.</p>
-        <button onClick={() => signIn('google')} className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-700">Войти через Google</button>
+  <button className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-700">Войти</button>
       </div>
     );
   }

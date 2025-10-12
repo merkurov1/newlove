@@ -1,6 +1,6 @@
 'use client';
 
-import { useSession } from 'next-auth/react';
+import useSupabaseSession from '@/hooks/useSupabaseSession';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -33,7 +33,7 @@ export default function EditButton({
   variant = 'floating',
   className = ''
 }: EditButtonProps) {
-  const { data: session } = useSession();
+  const { session } = useSupabaseSession();
   const pathname = usePathname();
   const router = useRouter();
   const [isHovered, setIsHovered] = useState(false);

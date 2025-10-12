@@ -1,34 +1,55 @@
 // components/LoginButton.tsx
 
-"use client";
 
-import { useSession, signIn, signOut } from "next-auth/react";
+"use client";
+import { useState, useEffect } from "react";
+import ModernLoginModal from "./ModernLoginModal";
+import { createClient } from "@supabase/supabase-js";
 import Image from "next/image";
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 export default function LoginButton() {
-  const { data: session, status } = useSession();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
-  if (status === "loading") {
-    return <p>Loading...</p>;
-  }
+  useEffect(() => {
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+    };
+    getUser();
+    const { data: listener } = supabase.auth.onAuthStateChange(() => getUser());
+    return () => { listener?.subscription.unsubscribe(); };
+  }, []);
 
-  if (session) {
+  if (user) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-        {session.user?.image && (
+        {user.user_metadata?.image && (
           <Image
-            src={session.user.image}
-            alt={session.user.name || "User avatar"}
+            src={user.user_metadata.image}
+            alt={user.user_metadata.name || "User avatar"}
             width={32}
             height={32}
             style={{ borderRadius: "50%" }}
           />
         )}
-        <span>{session.user?.name}</span>
-        <button onClick={() => signOut()}>Sign out</button>
+        <span>{user.user_metadata?.name || user.email}</span>
+        <button onClick={async () => { await supabase.auth.signOut(); setUser(null); }}>Выйти</button>
       </div>
     );
   }
 
-  return <button onClick={() => signIn("google")}>Sign in with Google</button>;
+  return (
+    <>
+      <button onClick={() => setModalOpen(true)} style={{ padding: 10, borderRadius: 8, fontWeight: 600, fontSize: 16 }}>
+        Войти
+      </button>
+      <ModernLoginModal open={modalOpen} onClose={() => setModalOpen(false)} />
+    </>
+  );
 }

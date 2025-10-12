@@ -1,6 +1,6 @@
 'use client';
 
-import { useSession, signIn } from 'next-auth/react';
+import useSupabaseSession from '@/hooks/useSupabaseSession';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -59,7 +59,7 @@ const BANNER_CONFIGS: Record<string, BannerConfig> = {
  * - Современный дизайн с градиентами и закругленными углами
  */
 export default function WelcomeBanner({ onClose, variant, forceShow = false }: WelcomeBannerProps) {
-  const { data: session, status } = useSession();
+  const { session, status } = useSupabaseSession();
   const [isVisible, setIsVisible] = useState(false);
   const [bannerConfig, setBannerConfig] = useState<BannerConfig | null>(null);
   const { isLoaded, shouldShowBanner, markBannerShown, dismissBanner } = useBannerSettings();
@@ -147,10 +147,10 @@ export default function WelcomeBanner({ onClose, variant, forceShow = false }: W
             {getBannerVariant() === 'public' && (
               <div className="mt-6 flex flex-col sm:flex-row gap-3">
                 <button 
-                  onClick={() => signIn('google')}
+                  onClick={() => alert('Use the login button above or wallet login below.')}
                   className="bg-gray-900 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors"
                 >
-                  Войти через Google
+                  Войти
                 </button>
                 <button 
                   onClick={() => handleClose('week')}

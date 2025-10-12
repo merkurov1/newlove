@@ -1,8 +1,8 @@
 "use client";
-import { useSession } from 'next-auth/react';
+import useSupabaseSession from '@/hooks/useSupabaseSession';
 
 export default function HeroHearts({ className = "", style }) {
-  const { data: session, status } = useSession();
+  const { session, status } = useSupabaseSession();
 
   // Определяем вариант hero
   let title = 'Добро пожаловать в мир медиа и технологий';
