@@ -1,3 +1,4 @@
+"use client";
 import { usePrivyAuth } from '@/hooks/usePrivyAuth';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
