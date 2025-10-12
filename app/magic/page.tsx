@@ -1,12 +1,12 @@
 "use client";
 import { useState } from "react";
 import { Magic } from "magic-sdk";
-import { signIn, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 export default function MagicLoginPage() {
   const [email, setEmail] = useState("");
   const [user, setUser] = useState<any>(null);
-  const { data: session, status } = useSession();
+  const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -17,11 +17,17 @@ export default function MagicLoginPage() {
       const magic = new Magic("pk_live_355ECE579B16040C");
       await magic.auth.loginWithEmailOTP({ email });
       const didToken = await magic.user.getIdToken();
-      // NextAuth signIn
-      const res = await signIn("magic", { didToken, redirect: true, callbackUrl: "/" });
-      // После редиректа session появится автоматически
-      const metadata = await magic.user.getInfo();
-      setUser(metadata);
+      // Отправляем DID Token на API-роут
+      const res = await fetch("/api/magic-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ didToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка логина");
+      setUser(data.user);
+      // Редирект на главную или защищённую страницу
+      router.push("/");
     } catch (e: any) {
       setError(e && typeof e === 'object' && 'message' in e ? (e as any).message : String(e));
     } finally {
@@ -50,12 +56,7 @@ export default function MagicLoginPage() {
       {user && (
         <pre style={{ marginTop: 24, background: "#f8f8f8", padding: 12, borderRadius: 8 }}>{JSON.stringify(user, null, 2)}</pre>
       )}
-      {session && (
-        <div style={{ marginTop: 24, color: '#2a2', fontWeight: 600 }}>
-          <div>✅ NextAuth session active</div>
-          <pre style={{ background: '#f8f8f8', padding: 8, borderRadius: 8 }}>{JSON.stringify(session, null, 2)}</pre>
-        </div>
-      )}
+      {/* После логина пользователь будет редиректнут */}
     </div>
   );
 }
