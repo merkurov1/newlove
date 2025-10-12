@@ -27,8 +27,8 @@ export default function LinkPreview({ url }) {
   if (!meta) return null;
 
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="block border rounded-lg p-3 mt-2 bg-gray-50 hover:bg-gray-100 transition">
-      {meta.image && <img src={meta.image} alt={meta.title} className="w-full h-32 object-cover rounded mb-2" />}
+  <a href={url} target="_blank" rel="noopener noreferrer" className="block border rounded-lg p-3 mt-2 bg-gray-50 hover:bg-gray-100 transition" aria-label={`Внешняя ссылка: ${meta.title || url}`}> 
+      {meta.image && <img src={meta.image} alt={meta.title ? `Превью: ${meta.title}` : 'Превью'} className="w-full h-32 object-cover rounded mb-2" />}
       <div className="font-semibold text-gray-900 mb-1">{meta.title}</div>
       <div className="text-xs text-gray-500 mb-1">{meta.siteName}</div>
       <div className="text-sm text-gray-700 line-clamp-2">{meta.description}</div>

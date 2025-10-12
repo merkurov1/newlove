@@ -178,7 +178,7 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
             <span className="text-xs text-gray-500 mr-2 whitespace-nowrap">Онлайн:</span>
             {onlineUsers.map((u, i) => (
               <span key={u.name + i} className="flex items-center gap-1 mr-2 whitespace-nowrap max-w-[80px]">
-                <img src={u.image || '/default-avatar.png'} alt={u.name || 'user'} className="w-7 h-7 rounded-full border" />
+                <img src={u.image || '/default-avatar.png'} alt={u.name ? `Аватар пользователя: ${u.name}` : 'Аватар пользователя'} className="w-7 h-7 rounded-full border" />
                 <span className="text-xs text-gray-700 hidden xs:inline truncate max-w-[48px]">{u.name}</span>
               </span>
             ))}
