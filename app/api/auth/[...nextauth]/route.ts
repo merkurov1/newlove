@@ -88,48 +88,73 @@ const authOptions = {
 				}
 			},
 		}),
-		CredentialsProvider({
-			id: 'magic',
-			name: 'Magic',
-			credentials: {
-				didToken: { label: 'Magic DID Token', type: 'text' },
-			},
-			async authorize(credentials, req) {
-				const didToken = credentials?.didToken;
-				if (!didToken) return null;
-				try {
-					const { Magic } = await import('@magic-sdk/admin');
-					const magic = new Magic(process.env.MAGIC_SECRET_KEY!);
-					magic.token.validate(didToken);
-					const metadata = await magic.users.getMetadataByToken(didToken);
-					let email = metadata.email?.toLowerCase() || null;
-					let user = null;
-					if (email) {
-						user = await prisma.user.findUnique({ where: { email } });
+			CredentialsProvider({
+				id: 'magic',
+				name: 'Magic',
+				credentials: {
+					didToken: { label: 'Magic DID Token', type: 'text' },
+				},
+				async authorize(credentials, req) {
+					const didToken = credentials?.didToken;
+					if (!didToken) return null;
+					try {
+						const { Magic } = await import('@magic-sdk/admin');
+						const magic = new Magic(process.env.MAGIC_SECRET_KEY!);
+						magic.token.validate(didToken);
+						const metadata = await magic.users.getMetadataByToken(didToken);
+						let email = metadata.email?.toLowerCase() || null;
+						let user = null;
+									if (email) {
+										user = await prisma.user.findUnique({ where: { email } });
+									}
+									// Если нет email, используем issuer как уникальный id/email
+												let fallbackEmail = email;
+												if (!user && metadata.issuer) {
+													fallbackEmail = email || `magic_${metadata.issuer.replace(/[^a-zA-Z0-9]/g, '')}@magic.local`;
+													user = await prisma.user.create({
+														data: {
+															email: fallbackEmail,
+															name: metadata.issuer?.slice(0, 12) || 'Magic User',
+															image: null,
+														},
+													});
+												}
+												if (!user) return null;
+												// Создать Account, если его нет (как делает Google)
+												let providerAccountId: string = metadata.issuer || fallbackEmail || 'magic-unknown';
+												const existingAccount = await prisma.account.findUnique({
+													where: {
+														provider_providerAccountId: {
+															provider: 'magic',
+															providerAccountId,
+														},
+													},
+												});
+												if (!existingAccount) {
+													await prisma.account.create({
+														data: {
+															userId: user.id,
+															type: 'credentials',
+															provider: 'magic',
+															providerAccountId,
+														},
+													});
+												}
+									return {
+										id: user.id,
+										email: user.email,
+										role: user.role as any,
+										username: user.username,
+										bio: user.bio,
+										website: user.website,
+										walletAddress: user.walletAddress,
+										debug: { metadata },
+									};
+					} catch (e) {
+						return null;
 					}
-					if (!user) {
-						user = await prisma.user.create({
-							data: {
-								email,
-								name: metadata.issuer?.slice(0, 12) || 'Magic User',
-								image: null,
-							},
-						});
-					}
-					return {
-						id: user.id,
-						email: user.email,
-						role: user.role as any,
-						username: user.username,
-						bio: user.bio,
-						website: user.website,
-						walletAddress: user.walletAddress,
-					};
-				} catch (e) {
-					return null;
-				}
-			},
-		}),
+				},
+			}),
 	],
 	callbacks: {
 			async session({ session, user }: { session: any, user: any }) {

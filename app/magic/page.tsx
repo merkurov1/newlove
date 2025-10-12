@@ -20,6 +20,13 @@ export default function MagicLoginPage() {
       // NextAuth signIn
       const res = await signIn("magic", { didToken, redirect: false });
       if (res?.error) throw new Error(res.error);
+      // Ждём появления session
+      let waited = 0;
+      while (waited < 2000) {
+        await new Promise(res => setTimeout(res, 200));
+        window.dispatchEvent(new Event('visibilitychange'));
+        waited += 200;
+      }
       const metadata = await magic.user.getInfo();
       setUser(metadata);
     } catch (e: any) {
