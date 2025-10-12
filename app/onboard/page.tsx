@@ -52,7 +52,12 @@ export default function OnboardLoginPage() {
     const signer = await ethersProvider.getSigner();
     // Формируем SIWE message по стандарту EIP-4361 (6+ строк, все обязательные поля)
     const domain = window.location.host;
-    const uri = window.location.origin;
+      // Поддержка двух разрешённых URI
+      const allowedUris = ["https://www.merkurov.love", "https://merkurov.love"];
+      let uri = window.location.origin;
+      if (!allowedUris.includes(uri)) {
+        uri = allowedUris[0]; // fallback на основной
+      }
     const version = '1';
     const chainId = '1';
     const nonce = Math.floor(Math.random() * 1e16).toString();
