@@ -22,7 +22,7 @@ const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false
 async function getArticles() {
   return prisma.article.findMany({
     where: { published: true },
-    orderBy: { publishedAt: 'desc' },
+    orderBy: { updatedAt: 'desc' },
     take: 15,
     select: {
       id: true,
@@ -30,6 +30,7 @@ async function getArticles() {
       slug: true,
       content: true,
       publishedAt: true,
+      updatedAt: true,
       tags: { select: { slug: true, name: true } },
       author: { select: { name: true } },
     },
