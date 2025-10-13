@@ -15,7 +15,7 @@ Important: do not paste secret keys into public places. Use `.env` for local run
 Local `.env` example (do NOT commit real secrets):
 
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciO...
+SUPABASE_SERVICE_ROLE_KEY="<your-service-role-key>"
 RESEND_API_KEY=re_xxx
 NEXT_PUBLIC_SUPABASE_ANON_KEY=pk.xxxx
 ADMIN_API_SECRET=your-admin-secret

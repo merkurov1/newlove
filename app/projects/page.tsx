@@ -22,13 +22,12 @@ interface ProjectPreview {
 
 export default async function ProjectsPage() {
   // Запрашиваем только опубликованные проекты через Supabase
-  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  // Use server client for public project listing to avoid cookie-bound client
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const serverSupabase = getServerSupabaseClient();
   let projects: any[] = [];
-    if (supabase) {
-    const { data, error } = await supabase.from('project').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
+  if (serverSupabase) {
+    const { data, error } = await serverSupabase.from('project').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
     if (error) console.error('Supabase fetch projects error', error);
     projects = safeData(data || []);
   }

@@ -5,9 +5,8 @@ import { NextResponse } from 'next/server';
 // Эта функция будет вызываться по GET запросу на /api/articles/[id]
 export async function GET(request, { params }) {
   try {
-    const mod = await import('@/lib/supabase-server');
-    const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
-    const { supabase } = await getUserAndSupabaseFromRequest(request);
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient();
     const articleId = params.id;
     if (!supabase) return NextResponse.json({ error: 'Article not found' }, { status: 404 });
 

@@ -12,19 +12,20 @@ async function getTagData(slug) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
   const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
-  if (!supabase) notFound();
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const serverSupabase = getServerSupabaseClient();
+    if (!serverSupabase) notFound();
   // Поиск тега по slug (регистр игнорируем вручную)
-  const { data: tags } = await supabase.from('Tag').select('*').ilike('slug', slug).limit(1);
+    const { data: tags } = await serverSupabase.from('Tag').select('*').ilike('slug', slug).limit(1);
   const tag = (tags && tags[0]) || null;
   if (!tag) notFound();
   // Получаем связанные статьи через junction _ArticleToTag
-  const { data: articles } = await supabase.rpc('get_articles_by_tag', { tag_slug: tag.slug }).catch(async () => {
+    const { data: articles } = await serverSupabase.rpc('get_articles_by_tag', { tag_slug: tag.slug }).catch(async () => {
     // fallback: query articles by checking tags relation manually if rpc not present
-    const { data: rels } = await supabase.from('_ArticleToTag').select('A').eq('B', tag.id);
+      const { data: rels } = await serverSupabase.from('_ArticleToTag').select('A').eq('B', tag.id);
     const ids = (rels || []).map(r => r.A);
     if (ids.length === 0) return { data: [] };
-    const { data: arts } = await supabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
+      const { data: arts } = await serverSupabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
     return { data: arts };
   });
   tag.articles = (articles && articles.data) || (articles || []);

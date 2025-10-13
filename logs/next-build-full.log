@@ -1,0 +1,168 @@
+
+> newlove@0.1.1 build
+> next build
+
+  ▲ Next.js 14.2.5
+  - Environments: .env.local, .env
+
+   Creating an optimized production build ...
+ ⚠ Compiled with warnings
+
+./components/Header.js
+Attempted import error: 'signOut' is not exported from '@/lib/supabase-client' (imported as 'supabaseSignOut').
+
+Import trace for requested module:
+./components/Header.js
+
+./node_modules/@prisma/instrumentation/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@prisma/instrumentation/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@prisma/instrumentation/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@prisma/instrumentation/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@prisma/instrumentation/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@prisma/instrumentation/dist/index.js
+./node_modules/@sentry/node/build/cjs/integrations/tracing/prisma.js
+./node_modules/@sentry/node/build/cjs/index.js
+./node_modules/@sentry/nextjs/build/cjs/index.server.js
+./app/global-error.tsx
+
+./node_modules/require-in-the-middle/index.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/require-in-the-middle/index.js
+./node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+./node_modules/@sentry/node/build/cjs/index.js
+./node_modules/@sentry/nextjs/build/cjs/index.server.js
+./app/global-error.tsx
+
+ ⚠ Compiled with warnings
+
+./components/Header.js
+Attempted import error: 'signOut' is not exported from '@/lib/supabase-client' (imported as 'supabaseSignOut').
+
+Import trace for requested module:
+./components/Header.js
+
+ ✓ Compiled successfully
+   Skipping linting
+   Checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/48) ...
+Error fetching postcards from Supabase (falling back to empty): Could not find the table 'public.postcard' in the schema cache
+Supabase fetch articles for RSS (falling back to empty feed): Could not find the table 'public.article' in the schema cache
+   Generating static pages (12/48) 
+   Generating static pages (24/48) 
+   Generating static pages (36/48) 
+ ✓ Generating static pages (48/48)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                               Size     First Load JS
+┌ ƒ /                                     8.73 kB         196 kB
+├ ƒ /_not-found                           166 B          89.6 kB
+├ ƒ /[slug]                               4.08 kB         165 kB
+├ ƒ /admin                                167 B          89.6 kB
+├ ƒ /admin/articles                       193 B          96.4 kB
+├ ƒ /admin/articles/edit/[id]             203 B           260 kB
+├ ƒ /admin/articles/new                   203 B           260 kB
+├ ƒ /admin/banners                        5.32 kB         188 kB
+├ ƒ /admin/letters                        195 B          96.4 kB
+├ ƒ /admin/letters/edit/[id]              1.89 kB         262 kB
+├ ƒ /admin/letters/new                    203 B           260 kB
+├ ƒ /admin/media                          9.29 kB         155 kB
+├ ƒ /admin/orders                         166 B          89.6 kB
+├ ƒ /admin/postcards                      3.52 kB         105 kB
+├ ƒ /admin/projects                       193 B          96.4 kB
+├ ƒ /admin/projects/edit/[id]             1.42 kB         261 kB
+├ ƒ /admin/projects/new                   1.01 kB         261 kB
+├ ƒ /admin/subscribers-old                931 B          90.3 kB
+├ ƒ /admin/users                          4.44 kB         154 kB
+├ ƒ /admin/users-old                      3.59 kB         105 kB
+├ ƒ /api/admin/letters/test-render        0 B                0 B
+├ ƒ /api/admin/letters/test-send          0 B                0 B
+├ ƒ /api/admin/users                      0 B                0 B
+├ ƒ /api/admin/users/[id]                 0 B                0 B
+├ ƒ /api/admin/validate-slug              0 B                0 B
+├ ƒ /api/article-by-slug                  0 B                0 B
+├ ƒ /api/articles                         0 B                0 B
+├ ƒ /api/articles/[id]                    0 B                0 B
+├ ƒ /api/bluesky/posts                    0 B                0 B
+├ ƒ /api/cron                             0 B                0 B
+├ ƒ /api/flow                             0 B                0 B
+├ ƒ /api/letters                          0 B                0 B
+├ ƒ /api/media                            0 B                0 B
+├ ƒ /api/media/delete                     0 B                0 B
+├ ƒ /api/media/upload                     0 B                0 B
+├ ƒ /api/medium/posts                     0 B                0 B
+├ ƒ /api/messages                         0 B                0 B
+├ ƒ /api/messages/[id]                    0 B                0 B
+├ ƒ /api/newsletter-confirm               0 B                0 B
+├ ƒ /api/newsletter-unsubscribe           0 B                0 B
+├ ○ /api/postcards                        0 B                0 B
+├ ƒ /api/postcards/order                  0 B                0 B
+├ ƒ /api/postcards/order-success          0 B                0 B
+├ ƒ /api/projects                         0 B                0 B
+├ ƒ /api/projects/[id]                    0 B                0 B
+├ ƒ /api/sentry-example-api               0 B                0 B
+├ ƒ /api/stripe/checkout                  0 B                0 B
+├ ƒ /api/subscribers                      0 B                0 B
+├ ƒ /api/subscribers/[id]                 0 B                0 B
+├ ƒ /api/subscription-status              0 B                0 B
+├ ƒ /api/test-auth                        0 B                0 B
+├ ƒ /api/upload                           0 B                0 B
+├ ƒ /api/upload/editor-image              0 B                0 B
+├ ƒ /api/upload/editor-image-supabase     0 B                0 B
+├ ƒ /api/youtube/shorts                   0 B                0 B
+├ ƒ /articles                             193 B          96.4 kB
+├ ƒ /debug-auth                           167 B          89.6 kB
+├ ƒ /digest/[slug]                        1.09 kB         113 kB
+├ ƒ /kit                                  4.15 kB         142 kB
+├ ƒ /lab                                  193 B          96.4 kB
+├ ƒ /lab/bluesky                          3.19 kB         153 kB
+├ ƒ /lab/feed                             3.72 kB         153 kB
+├ ƒ /lab/integrations                     1.58 kB         146 kB
+├ ƒ /lab/medium                           3.14 kB         148 kB
+├ ƒ /lab/youtube                          4.35 kB         154 kB
+├ ƒ /letters                              5.47 kB         155 kB
+├ ƒ /letters/[slug]                       166 B          89.6 kB
+├ ƒ /letters/order-success                3.28 kB         148 kB
+├ ƒ /onboard                              247 kB          384 kB
+├ ƒ /onboard/secret                       796 B           139 kB
+├ ƒ /profile                              1.75 kB        91.2 kB
+├ ƒ /projects                             195 B           101 kB
+├ ƒ /projects/test                        166 B          89.6 kB
+├ ○ /robots.txt                           0 B                0 B
+├ ƒ /roles-demo                           1.54 kB         129 kB
+├ ○ /rss.xml                              0 B                0 B
+├ ƒ /sentry-example-page                  8.08 kB         101 kB
+├ ○ /sitemap.xml                          0 B                0 B
+├ ƒ /tags                                 166 B          89.6 kB
+├ ƒ /tags/[slug]                          195 B           101 kB
+├ ƒ /talks                                4.9 kB          186 kB
+├ ƒ /users                                2.31 kB         104 kB
+└ ƒ /you/[username]                       195 B           101 kB
++ First Load JS shared by all             89.4 kB
+  ├ chunks/7023-883025a528c97c19.js       31.7 kB
+  ├ chunks/fd9d1056-561849d384963180.js   53.7 kB
+  └ other shared chunks (total)           4.05 kB
+
+Route (pages)                             Size     First Load JS
+─ ƒ /api/link-preview                     0 B            81.9 kB
++ First Load JS shared by all             81.9 kB
+  ├ chunks/framework-c4221b8ed35c5a52.js  45.2 kB
+  ├ chunks/main-c6923ef1bbbc3ca4.js       32.7 kB
+  └ other shared chunks (total)           4.02 kB
+
+ƒ Middleware                              26.1 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+BUILD_EXIT:0

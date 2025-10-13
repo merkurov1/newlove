@@ -6,9 +6,8 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    const mod = await import('@/lib/supabase-server');
-    const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
-    const { supabase } = await getUserAndSupabaseFromRequest(request);
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient();
     const { searchParams } = new URL(request.url);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const limit = parseInt(searchParams.get('limit') || '15', 10);

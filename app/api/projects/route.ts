@@ -2,16 +2,8 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 export async function GET() {
   try {
-    let supabase;
-    try {
-  const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
-  supabase = (await getUserAndSupabaseFromRequest(new Request('http://localhost')))?.supabase;
-    } catch (e) {
-      // Fallback to server client
-      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-      try { supabase = getServerSupabaseClient(); } catch (err) { supabase = null; }
-    }
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient();
     if (!supabase) return NextResponse.json({ success: true, count: 0, projects: [] });
 
     const { data: projects, error } = await supabase.from('project').select('id,title,slug,published').order('createdAt', { ascending: false });

@@ -5,12 +5,10 @@ import ContentForm from '@/components/admin/ContentForm';
 import { updateArticle } from '../../../actions';
 
 async function getArticle(id) {
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
-  if (!supabase) notFound();
-  const { data: article, error } = await supabase.from('article').select('*, tags:tags(*)').eq('id', id).maybeSingle();
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const serverSupabase = getServerSupabaseClient();
+  if (!serverSupabase) notFound();
+  const { data: article, error } = await serverSupabase.from('article').select('*, tags:tags(*)').eq('id', id).maybeSingle();
   if (error || !article) notFound();
   return article;
 }

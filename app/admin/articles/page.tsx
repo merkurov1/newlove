@@ -6,13 +6,13 @@ import { deleteArticle } from '../actions';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminArticlesPage() {
-  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  // Use server service-role client for admin pages to avoid relying on
+  // request-bound client at render time (stable for builds and admin ops).
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const serverSupabase = getServerSupabaseClient();
   let articles: any[] = [];
-  if (supabase) {
-    const { data, error } = await supabase.from('article').select('id,title,slug,published,author:authorId(name)').order('createdAt', { ascending: false });
+  if (serverSupabase) {
+    const { data, error } = await serverSupabase.from('article').select('id,title,slug,published,author:authorId(name)').order('createdAt', { ascending: false });
     if (error) console.error('Supabase fetch admin articles error', error);
     articles = safeData(data || []);
   }

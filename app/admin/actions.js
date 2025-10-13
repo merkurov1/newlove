@@ -35,12 +35,12 @@ export async function createArticle(formData) {
 
   if (!title || !contentRaw || !slug) throw new Error('All fields are required.');
   
-  // Проверка уникальности slug
-  // Check slug uniqueness via Supabase
+  // Use the server service-role client for admin DB mutations and checks
+  const serverSupabase = getServerSupabaseClient();
+  // Also try to read the real user from the request for author attribution
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
-  if (!supabase) throw new Error('Database client not available');
-  const { data: existingSlug } = await supabase.from('article').select('id').eq('slug', slug).maybeSingle();
+  const { user: requestUser } = await loadSupabaseFromRequest(globalReq);
+  const { data: existingSlug } = await serverSupabase.from('article').select('id').eq('slug', slug).maybeSingle();
   if (existingSlug) {
     throw new Error('Статья с таким slug уже существует. Пожалуйста, выберите другой URL.');
   }
@@ -68,15 +68,16 @@ export async function createArticle(formData) {
   
   // Явно генерируем CUID для статьи
   const articleId = createId();
-  // Insert article via Supabase. Note: tag connectOrCreate not implemented here yet.
-  const { data: createdArticle, error: insertErr } = await supabase.from('article').insert({
+  // Insert article via server-side Supabase client. Use request user id for author when available.
+  const authorIdResolved = (requestUser && requestUser.id) ? requestUser.id : (authorId || process.env.ADMIN_API_DEFAULT_AUTHOR_ID || 'server');
+  const { data: createdArticle, error: insertErr } = await serverSupabase.from('article').insert({
     id: articleId,
     title,
     content: JSON.stringify(validBlocks),
     slug,
     published,
     publishedAt: published ? new Date().toISOString() : null,
-    authorId: authorId,
+    authorId: authorIdResolved,
   }).select().maybeSingle();
   if (insertErr) {
     console.error('Supabase insert article error', insertErr);
@@ -88,7 +89,7 @@ export async function createArticle(formData) {
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   if (parsedTags.length > 0) {
     try {
-  await upsertTagsAndLink(supabase, 'article', articleId, parsedTags);
+      await upsertTagsAndLink(serverSupabase, 'article', articleId, parsedTags);
     } catch (e) {
       console.error('Error linking tags for article', e);
     }
@@ -125,11 +126,12 @@ export async function updateArticle(formData) {
     b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
   );
   if (validBlocks.length === 0) throw new Error('No valid blocks');
-  // Update article via Supabase (tags handling TODO)
+  // Update article via server-side Supabase client (admin mutation)
+  const serverSupabase = getServerSupabaseClient();
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
-  if (!supabase) throw new Error('Database client not available');
-  const { error: updateErr } = await supabase.from('article').update({
+  const { user: requestUser } = await loadSupabaseFromRequest(globalReq);
+  if (!serverSupabase) throw new Error('Database client not available');
+  const { error: updateErr } = await serverSupabase.from('article').update({
     title,
     content: JSON.stringify(validBlocks),
     slug,
@@ -147,7 +149,7 @@ export async function updateArticle(formData) {
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   if (parsedTags.length > 0) {
     try {
-  await upsertTagsAndLink(supabase, 'article', id, parsedTags);
+      await upsertTagsAndLink(serverSupabase, 'article', id, parsedTags);
     } catch (e) {
       console.error('Error linking tags for article', e);
     }
@@ -158,11 +160,12 @@ export async function deleteArticle(formData) {
   await verifyAdmin();
   const id = formData.get('id')?.toString();
   if (!id) { throw new Error('Article ID is required.'); }
+  const serverSupabase = getServerSupabaseClient();
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
-  if (!supabase) throw new Error('Database client not available');
-  const { data: article } = await supabase.from('article').select('slug').eq('id', id).maybeSingle();
-  const { error: delErr } = await supabase.from('article').delete().eq('id', id);
+  const { user: requestUser } = await loadSupabaseFromRequest(globalReq);
+  if (!serverSupabase) throw new Error('Database client not available');
+  const { data: article } = await serverSupabase.from('article').select('slug').eq('id', id).maybeSingle();
+  const { error: delErr } = await serverSupabase.from('article').delete().eq('id', id);
   if (delErr) {
     console.error('Supabase delete article error', delErr);
     throw new Error('Ошибка при удалении статьи');
@@ -182,11 +185,10 @@ export async function createProject(formData) {
 
   if (!title || !contentRaw || !slug) throw new Error('All fields are required.');
 
-  // Проверка уникальности slug
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
-  if (!supabase) throw new Error('Database client not available');
-  const { data: existing } = await supabase.from('project').select('id').eq('slug', slug).maybeSingle();
+  // Use server service-role client for admin mutations and checks
+  const serverSupabase = getServerSupabaseClient();
+  if (!serverSupabase) throw new Error('Database client not available');
+  const { data: existing } = await serverSupabase.from('project').select('id').eq('slug', slug).maybeSingle();
   if (existing) {
     throw new Error('Проект с таким slug уже существует. Пожалуйста, выберите другой URL.');
   }
@@ -206,7 +208,7 @@ export async function createProject(formData) {
 
   // Явно генерируем CUID для проекта
   const projectId = createId();
-  const { data: created, error: insertErr } = await supabase.from('project').insert({
+  const { data: created, error: insertErr } = await serverSupabase.from('project').insert({
     id: projectId,
     title,
     content: JSON.stringify(validBlocks),
@@ -225,7 +227,7 @@ export async function createProject(formData) {
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   if (parsedTags.length > 0) {
     try {
-  await upsertTagsAndLink(supabase, 'project', projectId, parsedTags);
+  await upsertTagsAndLink(serverSupabase, 'project', projectId, parsedTags);
     } catch (e) {
       console.error('Error linking tags for project', e);
     }
@@ -255,10 +257,10 @@ export async function updateProject(formData) {
     b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
   );
   if (validBlocks.length === 0) throw new Error('No valid blocks');
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
-  if (!supabase) throw new Error('Database client not available');
-  const { error: updateErr } = await supabase.from('project').update({
+  // Use server service-role client for admin update
+  const serverSupabase = getServerSupabaseClient();
+  if (!serverSupabase) throw new Error('Database client not available');
+  const { error: updateErr } = await serverSupabase.from('project').update({
     title,
     content: JSON.stringify(validBlocks),
     slug,
@@ -276,7 +278,7 @@ export async function updateProject(formData) {
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   if (parsedTags.length > 0) {
     try {
-  await upsertTagsAndLink(supabase, 'project', id, parsedTags);
+  await upsertTagsAndLink(serverSupabase, 'project', id, parsedTags);
     } catch (e) {
       console.error('Error linking tags for project', e);
     }
@@ -287,11 +289,11 @@ export async function deleteProject(formData) {
   await verifyAdmin();
   const id = formData.get('id')?.toString();
   if (!id) { throw new Error('Project ID is required.'); }
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
-  if (!supabase) throw new Error('Database client not available');
-  const { data: project } = await supabase.from('project').select('slug').eq('id', id).maybeSingle();
-  const { error: delErr } = await supabase.from('project').delete().eq('id', id);
+    // Use server service-role client for admin deletion
+    const serverSupabase = getServerSupabaseClient();
+  if (!serverSupabase) throw new Error('Database client not available');
+  const { data: project } = await serverSupabase.from('project').select('slug').eq('id', id).maybeSingle();
+  const { error: delErr } = await serverSupabase.from('project').delete().eq('id', id);
   if (delErr) {
     console.error('Supabase delete project error', delErr);
     throw new Error('Ошибка при удалении проекта');
@@ -320,9 +322,11 @@ export async function updateProfile(prevState, formData) {
       return { status: 'error', message: 'Username может содержать только строчные буквы, цифры, _ и .' };
   }
   try {
-    if (!supabase) throw new Error('Supabase client not available');
+    // Use server service-role client for updating user record
+    const serverSupabase = getServerSupabaseClient();
+    if (!serverSupabase) throw new Error('Supabase client not available');
     // Попытка обновления
-    const { data: updatedUser, error } = await supabase.from('users').update({ username, name, bio, website }).eq('id', id).select('username').maybeSingle();
+    const { data: updatedUser, error } = await serverSupabase.from('users').update({ username, name, bio, website }).eq('id', id).select('username').maybeSingle();
     if (error) {
       // Unique constraint handling
       const msg = error.message || String(error);
@@ -355,14 +359,16 @@ export async function subscribeToNewsletter(prevState, formData) {
     return { status: 'error', message: 'Введите корректный email адрес.' };
   }
   try {
+
     // Получаем userId если пользователь залогинен
     let userId = null;
     const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { user, supabase } = await loadSupabaseFromRequest(globalReq);
+    const { user } = await loadSupabaseFromRequest(globalReq);
     if (user?.id) userId = user.id;
 
-    if (!supabase) {
-      // Fallback: try server-side direct DB or return error
+    // Use server service-role client for subscriber reads/writes
+    const serverSupabase = getServerSupabaseClient();
+    if (!serverSupabase) {
       console.error('Supabase client unavailable for subscribeToNewsletter');
       return { status: 'error', message: 'Сервис временно недоступен.' };
     }
@@ -370,11 +376,11 @@ export async function subscribeToNewsletter(prevState, formData) {
     // Проверяем, есть ли уже подписчик с этим email или userId
     let existing = null;
     if (userId) {
-      const { data, error } = await supabase.from('subscribers').select('*').or(`email.eq.${email},userId.eq.${userId}`).limit(1).maybeSingle();
+      const { data, error } = await serverSupabase.from('subscribers').select('*').or(`email.eq.${email},userId.eq.${userId}`).limit(1).maybeSingle();
       if (error) console.error('Supabase check subscriber error', error);
       existing = data;
     } else {
-      const { data, error } = await supabase.from('subscribers').select('*').eq('email', email).limit(1).maybeSingle();
+      const { data, error } = await serverSupabase.from('subscribers').select('*').eq('email', email).limit(1).maybeSingle();
       if (error) console.error('Supabase check subscriber error', error);
       existing = data;
     }
@@ -385,16 +391,16 @@ export async function subscribeToNewsletter(prevState, formData) {
     }
 
     // Создаём подписчика
-    const subscriberPayload = { id: createId(), email, userId: userId || null };
-    const { data: created, error: insertErr } = await supabase.from('subscribers').insert(subscriberPayload).select().maybeSingle();
+  const subscriberPayload = { id: createId(), email, userId: userId || null };
+  const { data: created, error: insertErr } = await serverSupabase.from('subscribers').insert(subscriberPayload).select().maybeSingle();
     if (insertErr) {
       console.error('Supabase insert subscriber error', insertErr);
       return { status: 'error', message: 'Ошибка при подписке.' };
     }
 
     // Генерируем токен для double opt-in
-    const confirmationToken = createId();
-    const { error: tokenErr } = await supabase.from('subscriber_tokens').insert({ subscriber_id: created.id, type: 'confirm', token: confirmationToken });
+  const confirmationToken = createId();
+  const { error: tokenErr } = await serverSupabase.from('subscriber_tokens').insert({ subscriber_id: created.id, type: 'confirm', token: confirmationToken });
     if (tokenErr) {
       console.error('Supabase insert token error', tokenErr);
     }
@@ -453,16 +459,17 @@ export async function createLetter(formData) {
 
   try {
     const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
-    if (!supabase) throw new Error('Database client not available');
+    const serverSupabase = getServerSupabaseClient();
+    const { user: requestUser } = await loadSupabaseFromRequest(globalReq);
+    if (!serverSupabase) throw new Error('Database client not available');
 
-    const { data: letter, error: insertErr } = await supabase.from('letter').insert({
+    const { data: letter, error: insertErr } = await serverSupabase.from('letter').insert({
       id: createId(),
       title,
       slug,
       content: JSON.stringify(validBlocks),
       published,
-      authorId: session.user.id,
+      authorId: session.user.id || (requestUser && requestUser.id) || 'server',
     }).select().maybeSingle();
 
     if (insertErr) {
@@ -481,7 +488,7 @@ export async function createLetter(formData) {
     const parsedTags = parseTagNames(tagsString);
     if (parsedTags.length > 0) {
       try {
-  await upsertTagsAndLink(supabase, 'letter', letter.id, parsedTags);
+  await upsertTagsAndLink(serverSupabase, 'letter', letter.id, parsedTags);
       } catch (e) {
         console.error('Error linking tags for letter', e);
       }
@@ -526,19 +533,20 @@ export async function updateLetter(formData) {
 
   try {
     const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
-    if (!supabase) throw new Error('Database client not available');
+    const serverSupabase = getServerSupabaseClient();
+    const { user: requestUser } = await loadSupabaseFromRequest(globalReq);
+    if (!serverSupabase) throw new Error('Database client not available');
 
     // Проверяем, что letter существует
-    const { data: existingLetter } = await supabase.from('letter').select('*').eq('id', id).maybeSingle();
+    const { data: existingLetter } = await serverSupabase.from('letter').select('*').eq('id', id).maybeSingle();
     if (!existingLetter) throw new Error('Письмо не найдено.');
 
     // Проверяем уникальность slug (исключаем текущее письмо)
-    const { data: existingSlugLetter } = await supabase.from('letter').select('id').eq('slug', slug).maybeSingle();
+    const { data: existingSlugLetter } = await serverSupabase.from('letter').select('id').eq('slug', slug).maybeSingle();
     if (existingSlugLetter && existingSlugLetter.id !== id) throw new Error('Письмо с таким URL уже существует. Используйте другой slug.');
 
     // Обновляем письмо
-    const { data: updatedLetter, error: updateErr } = await supabase.from('letter').update({
+    const { data: updatedLetter, error: updateErr } = await serverSupabase.from('letter').update({
       title,
       slug,
       content: JSON.stringify(validBlocks),
@@ -567,7 +575,7 @@ export async function updateLetter(formData) {
     const parsedTags = parseTagNames(tagsString);
     if (parsedTags.length > 0) {
       try {
-  await upsertTagsAndLink(supabase, 'letter', id, parsedTags);
+  await upsertTagsAndLink(serverSupabase, 'letter', id, parsedTags);
       } catch (e) {
         console.error('Error linking tags for letter', e);
       }
@@ -594,11 +602,12 @@ export async function deleteLetter(formData) {
     throw new Error('Letter ID is required.');
   }
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
-  if (!supabase) throw new Error('Database client not available');
-  const { data: letter } = await supabase.from('letter').select('slug,published').eq('id', id).maybeSingle();
+  const serverSupabase = getServerSupabaseClient();
+  const { user: requestUser } = await loadSupabaseFromRequest(globalReq);
+  if (!serverSupabase) throw new Error('Database client not available');
+  const { data: letter } = await serverSupabase.from('letter').select('slug,published').eq('id', id).maybeSingle();
   if (!letter) throw new Error('Письмо не найдено.');
-  const { error: delErr } = await supabase.from('letter').delete().eq('id', id);
+  const { error: delErr } = await serverSupabase.from('letter').delete().eq('id', id);
   if (delErr) {
     console.error('Supabase delete letter error', delErr);
     throw new Error('Ошибка при удалении письма');
@@ -616,31 +625,33 @@ export async function sendLetter(prevState, formData) {
     return { status: 'error', message: 'Не указан ID письма.' };
   }
 
-  try {
-  const { supabase } = await loadSupabaseFromRequest((globalThis && globalThis.request) || new Request('http://localhost'));
-    if (!supabase) return { status: 'error', message: 'База данных недоступна.' };
-    const { data: letter } = await supabase.from('letter').select('*').eq('id', letterId).maybeSingle();
-    if (!letter) return { status: 'error', message: 'Письмо не найдено.' };
-    if (letter.sentAt) return { status: 'error', message: 'Это письмо уже было отправлено.' };
-    if (!process.env.RESEND_API_KEY) return { status: 'error', message: 'Email сервис не настроен. Обратитесь к администратору.' };
-
-    // Получаем всех активных подписчиков (id + email) — нужно для создания unsubscribe tokens
-    let subscribers = [];
     try {
-      const { data, error } = await supabase.from('subscribers').select('id,email').eq('isActive', true);
-      if (error) throw error;
-      subscribers = data || [];
-    } catch (e) {
-      console.log('isActive field not found or error, getting all subscribers');
+      // Use server service-role client for sending letter operations
+      const serverSupabase = getServerSupabaseClient();
+      if (!serverSupabase) return { status: 'error', message: 'База данных недоступна.' };
+
+      const { data: letter } = await serverSupabase.from('letter').select('*').eq('id', letterId).maybeSingle();
+      if (!letter) return { status: 'error', message: 'Письмо не найдено.' };
+      if (letter.sentAt) return { status: 'error', message: 'Это письмо уже было отправлено.' };
+      if (!process.env.RESEND_API_KEY) return { status: 'error', message: 'Email сервис не настроен. Обратитесь к администратору.' };
+
+      // Получаем всех активных подписчиков (id + email) — нужно для создания unsubscribe tokens
+      let subscribers = [];
       try {
-        const { data, error } = await supabase.from('subscribers').select('id,email');
+        const { data, error } = await serverSupabase.from('subscribers').select('id,email').eq('isActive', true);
         if (error) throw error;
         subscribers = data || [];
-      } catch (err) {
-        console.log('No subscribers table found');
-        subscribers = [];
+      } catch (e) {
+        console.log('isActive field not found or error, getting all subscribers');
+        try {
+          const { data, error } = await serverSupabase.from('subscribers').select('id,email');
+          if (error) throw error;
+          subscribers = data || [];
+        } catch (err) {
+          console.log('No subscribers table found');
+          subscribers = [];
+        }
       }
-    }
 
     // Bulk-create unsubscribe tokens per subscriber (non-fatal)
     try {
@@ -676,8 +687,8 @@ export async function sendLetter(prevState, formData) {
       return { status: 'error', message: `Ошибка отправки: ${error.message}` };
     }
 
-    // Отмечаем письмо как отправленное
-    const { error: sentErr } = await supabase.from('letter').update({ sentAt: new Date().toISOString() }).eq('id', letterId);
+  // Отмечаем письмо как отправленное
+  const { error: sentErr } = await serverSupabase.from('letter').update({ sentAt: new Date().toISOString() }).eq('id', letterId);
     if (sentErr) console.error('Supabase mark sent error', sentErr);
 
     revalidatePath(`/admin/letters/edit/${letterId}`);
@@ -721,9 +732,9 @@ export async function createPostcard(formData) {
   }
 
   try {
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
-    if (!supabase) throw new Error('Database client not available');
+    // Use server service-role client for admin postcard mutations
+    const serverSupabase = getServerSupabaseClient();
+    if (!serverSupabase) throw new Error('Database client not available');
 
     const payload = {
       id: createId(),
@@ -734,7 +745,7 @@ export async function createPostcard(formData) {
       available,
       featured,
     };
-    const { data: postcard, error } = await supabase.from('postcard').insert(payload).select().maybeSingle();
+    const { data: postcard, error } = await serverSupabase.from('postcard').insert(payload).select().maybeSingle();
     if (error) {
       console.error('Supabase insert postcard error', error);
       throw new Error('Ошибка при создании открытки: ' + (error.message || String(error)));
@@ -763,9 +774,9 @@ export async function updatePostcard(formData) {
   }
 
   try {
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
-    if (!supabase) throw new Error('Database client not available');
+    // Use server service-role client for admin postcard update
+    const serverSupabase = getServerSupabaseClient();
+    if (!serverSupabase) throw new Error('Database client not available');
 
     const updates = {
       title,
@@ -776,7 +787,7 @@ export async function updatePostcard(formData) {
       featured,
       updatedAt: new Date().toISOString(),
     };
-    const { data: updatedPostcard, error } = await supabase.from('postcard').update(updates).eq('id', id).select().maybeSingle();
+    const { data: updatedPostcard, error } = await serverSupabase.from('postcard').update(updates).eq('id', id).select().maybeSingle();
     if (error) {
       console.error('Supabase update postcard error', error);
       throw new Error('Ошибка при обновлении открытки: ' + (error.message || String(error)));
@@ -799,14 +810,14 @@ export async function deletePostcard(formData) {
   }
 
   try {
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-    const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
-    if (!supabase) throw new Error('Database client not available');
+    // Use server service-role client for admin postcard deletion
+    const serverSupabase = getServerSupabaseClient();
+    if (!serverSupabase) throw new Error('Database client not available');
 
     // Проверяем есть ли заказы для этой открытки
     let ordersCount = 0;
     try {
-      const { data, error } = await supabase.from('postcardOrder').select('id').eq('postcardId', id);
+      const { data, error } = await serverSupabase.from('postcardOrder').select('id').eq('postcardId', id);
       if (error) throw error;
       ordersCount = (data && data.length) || 0;
     } catch (err) {
@@ -819,7 +830,7 @@ export async function deletePostcard(formData) {
       throw new Error('Нельзя удалить открытку с существующими заказами.');
     }
 
-    const { error: delErr } = await supabase.from('postcard').delete().eq('id', id);
+    const { error: delErr } = await serverSupabase.from('postcard').delete().eq('id', id);
     if (delErr) {
       console.error('Supabase delete postcard error', delErr);
       throw new Error('Ошибка при удалении открытки: ' + (delErr.message || String(delErr)));

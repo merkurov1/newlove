@@ -121,12 +121,12 @@ export default async function RootLayout({ children }) {
   // Временно отключаем запрос к базе данных до настройки DATABASE_URL
   let projects = [];
   try {
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
-    if (supabase) {
-      const { data, error } = await supabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
+    // Use the server service-role Supabase client for public reads in the layout
+    // so this code does not depend on cookies / request-bound sessions.
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const serverSupabase = getServerSupabaseClient();
+    if (serverSupabase) {
+      const { data, error } = await serverSupabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
       if (error) console.error('Supabase fetch projects error', error);
       projects = safeData(data || []);
     } else {
@@ -149,12 +149,11 @@ export default async function RootLayout({ children }) {
 
   let subscriberCount = 0;
   try {
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const mod2 = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest2 = mod2.getUserAndSupabaseFromRequest || mod2.default;
-  const { supabase } = await getUserAndSupabaseFromRequest2(globalReq);
-    if (supabase) {
-      const { data, error } = await supabase.from('subscribers').select('id');
+    // Use server service-role client for subscriber count as well.
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const serverSupabase = getServerSupabaseClient();
+    if (serverSupabase) {
+      const { data, error } = await serverSupabase.from('subscribers').select('id');
       if (!error) {
         const safe = safeData(data || []);
         subscriberCount = (safe && safe.length) || 0;
