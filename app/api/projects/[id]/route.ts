@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin, requireUser } from '@/lib/serverAuth';
+import { requireAdminFromRequest, requireUser } from '@/lib/serverAuth';
 
 // GET - Получить проект по ID (для админки)
 export async function GET(
@@ -10,7 +10,7 @@ export async function GET(
   try {
     // Только админы могут получать любые проекты (включая неопубликованные)
     try {
-      await requireAdmin();
+      await requireAdminFromRequest(request as Request);
       // TODO: fetch project by id (any status) from Supabase
       // const { data: project, error } = await supabase.from('projects').select(...)
       // For now, return a mock project
@@ -38,7 +38,7 @@ export async function PUT(
 ) {
   try {
     try {
-      await requireAdmin();
+      await requireAdminFromRequest(request as Request);
     } catch {
       return NextResponse.json({ error: 'Доступ запрещен' }, { status: 403 });
     }
@@ -84,7 +84,7 @@ export async function DELETE(
 ) {
   try {
     try {
-      await requireAdmin();
+      await requireAdminFromRequest(request as Request);
     } catch {
       return NextResponse.json({ error: 'Доступ запрещен' }, { status: 403 });
     }

@@ -1,7 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
 import roles from './roles_update.json' assert { type: 'json' };
 
-const supabase = createClient('https://txvkqcitalfbjytmnawq.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4dmtxY2l0YWxmYmp5dG1uYXdxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjEwOTY0NSwiZXhwIjoyMDcxNjg1NjQ1fQ.qyHk46Z9uwxGAUVJAD5gdujSntVkPHKsPbopyYvwvz8');
+let supabase;
+try {
+  const helper = await import('./supabase-client.js');
+  supabase = helper.getScriptSupabase();
+} catch (err) {
+  console.error('Missing supabase env for update-roles script. Set SUPABASE_SERVICE_ROLE_KEY and SUPABASE_URL');
+  process.exit(1);
+}
 
 async function updateRoles() {
   for (const entry of roles) {

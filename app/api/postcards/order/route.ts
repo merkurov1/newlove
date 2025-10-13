@@ -1,20 +1,24 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/authOptions';
-// import prisma from '@/lib/prisma';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+// Temporary: use a minimal Stripe client. In a follow-up we'll wire a server-side
+// Supabase/Onboard auth client and persist orders to the DB.
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2025-08-27.basil',
 });
 
 export async function POST(request: Request) {
   try {
-    // Проверка аутентификации
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Try Supabase session first, fall back to x-user-id header for transition
+    let userId = request.headers.get('x-user-id');
+    try {
+      const { getUserAndSupabaseFromRequest } = await import('@/lib/supabase-server');
+      const { user } = await getUserAndSupabaseFromRequest(request);
+      if (user?.id) userId = user.id;
+    } catch (e) {
+      // helper might fail — we'll rely on header fallback
     }
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
     const {
@@ -27,40 +31,32 @@ export async function POST(request: Request) {
       postalCode,
       country,
       phone,
-      customMessage
-    } = body;
+      customMessage,
+    } = body || {};
 
-    // Проверяем обязательные поля
     if (!postcardId || !recipientName || !streetAddress || !city || !postalCode || !country) {
-      return NextResponse.json({ 
-        error: 'Не заполнены обязательные поля' 
-      }, { status: 400 });
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Временно используем моковые данные до обновления базы
-    const mockPostcards: any = {
-      'postcard_1': { id: 'postcard_1', price: 2900, available: true, title: 'Авторская открытка "Закат"' },
-      'postcard_2': { id: 'postcard_2', price: 2900, available: true, title: 'Открытка "Минимализм"' }
+    // Mock postcards catalog until DB model is ready
+    const mockPostcards: Record<string, { id: string; price: number; available: boolean; title: string }> = {
+      postcard_1: { id: 'postcard_1', price: 2900, available: true, title: 'Авторская открытка "Закат"' },
+      postcard_2: { id: 'postcard_2', price: 2900, available: true, title: 'Открытка "Минимализм"' },
     };
 
     const postcard = mockPostcards[postcardId];
     if (!postcard || !postcard.available) {
-      return NextResponse.json({ 
-        error: 'Открытка не найдена или недоступна' 
-      }, { status: 404 });
+      return NextResponse.json({ error: 'Postcard not found or unavailable' }, { status: 404 });
     }
 
-    // Собираем полный адрес для Stripe
     const fullAddress = [streetAddress, addressLine2].filter(Boolean).join(', ');
-    
-    // TODO: Создаем заказ в базе данных когда модели будут готовы
-    const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Моковый заказ для демонстрации
+
+    const orderId = `order_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+
     const mockOrder = {
       id: orderId,
       postcardId,
-      userId: session.user.id,
+      userId,
       recipientName,
       address: fullAddress,
       city,
@@ -70,33 +66,34 @@ export async function POST(request: Request) {
       phone: phone || null,
       customMessage: customMessage || null,
       amount: postcard.price,
-      status: 'PENDING'
+      status: 'PENDING',
     };
 
-    // Создаем Checkout Session для более простого UX
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+
     const checkoutSession = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
-            currency: 'gbp', // Меняем на фунты стерлингов
+            currency: 'gbp',
             product_data: {
               name: postcard.title,
               description: 'Авторская открытка с международной доставкой',
               images: ['/images/postcard-placeholder.jpg'],
             },
-            unit_amount: postcard.price, // £29.00 в пенсах
+            unit_amount: postcard.price,
           },
           quantity: 1,
         },
       ],
       mode: 'payment',
-      success_url: `${process.env.NEXTAUTH_URL}/letters/order-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXTAUTH_URL}/letters`,
+      success_url: `${baseUrl}/letters/order-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/letters`,
       metadata: {
         orderId: mockOrder.id,
         postcardId: postcard.id,
-        userId: session.user.id,
+        userId,
         recipientName,
         fullAddress,
         city,
@@ -106,23 +103,16 @@ export async function POST(request: Request) {
         phone: phone || '',
         customMessage: customMessage || '',
       },
-      customer_email: session.user.email || undefined,
+      customer_email: undefined,
       shipping_address_collection: {
         allowed_countries: ['GB', 'US', 'CA', 'AU', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'CH', 'AT', 'SE', 'NO', 'DK', 'FI', 'JP', 'KR', 'SG', 'NZ', 'RU', 'PL', 'CZ', 'IE', 'PT'],
       },
       billing_address_collection: 'required',
     });
 
-    return NextResponse.json({
-      success: true,
-      orderId: mockOrder.id,
-      paymentUrl: checkoutSession.url,
-    });
-
+    return NextResponse.json({ success: true, orderId: mockOrder.id, paymentUrl: checkoutSession.url });
   } catch (error) {
     console.error('Error creating postcard order:', error);
-    return NextResponse.json({ 
-      error: 'Ошибка при создании заказа' 
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Error creating order' }, { status: 500 });
   }
 }

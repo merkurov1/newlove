@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/serverAuth';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireAdminFromRequest();
     // Prisma removed; return empty list for now or implement Supabase table lookup
     const subscribers: Array<any> = [];
     return NextResponse.json({ subscribers });

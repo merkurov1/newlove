@@ -2,13 +2,10 @@
 import UsersClient from '@/components/UsersClient';
 
 // Серверный компонент для публичного списка пользователей через Supabase
-import { createClient } from '@supabase/supabase-js';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
 
 export default async function UsersPage() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = getServerSupabaseClient();
   const { data, error } = await supabase.auth.admin.listUsers();
   if (error) throw new Error(error.message);
   // Преобразуем пользователей для UsersClient

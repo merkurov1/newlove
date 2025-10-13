@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/serverAuth';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 // Пример: сохраняет файл в /public/uploads (или интегрируйте с Supabase Storage/S3)
 import path from 'path';
@@ -11,7 +11,7 @@ const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
 export async function POST(req: NextRequest) {
   // Проверка аутентификации через Supabase
   try {
-    await requireAdmin();
+    await requireAdminFromRequest(req as Request);
   } catch (e) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }

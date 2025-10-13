@@ -1,19 +1,14 @@
 // app/rss.xml/route.js
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 
 export async function GET() {
-  const articles = await prisma.article.findMany({
-    where: { published: true },
-    orderBy: { publishedAt: 'desc' },
-    take: 30,
-    select: {
-      title: true,
-      slug: true,
-      content: true,
-      publishedAt: true,
-      author: { select: { name: true } },
-    },
-  });
+  const { supabase } = await getUserAndSupabaseFromRequest((globalThis && (globalThis).request) || new Request('http://localhost')) || {};
+  if (!supabase) return new Response('DB unavailable', { status: 500 });
+  const { data: articles, error } = await supabase.from('article').select('title,slug,content,publishedAt,author:users(name)').eq('published', true).order('publishedAt', { ascending: false }).limit(30);
+  if (error) {
+    console.error('Supabase fetch articles for RSS', error);
+    return new Response('Internal error', { status: 500 });
+  }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love';
   const feedItems = articles.map((a) => `

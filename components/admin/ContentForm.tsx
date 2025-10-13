@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@/lib/supabase-browser';
 import TagInput from '@/components/admin/TagInput';
 import BlockEditor from '@/components/admin/BlockEditor';
 import { createSeoSlug } from '@/lib/slugUtils';
@@ -40,10 +40,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<string | null>(null);
   useEffect(() => {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    const supabase = createClient();
     const getUser = async () => {
       const { data } = await supabase.auth.getUser();
       setUser(data.user);
@@ -51,12 +48,12 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     };
     getUser();
     const { data: listener } = supabase.auth.onAuthStateChange(() => getUser());
-    return () => { listener?.subscription.unsubscribe(); };
+    return () => { try { listener?.subscription?.unsubscribe?.(); } catch {} };
   }, []);
   const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
 
   // Функция проверки уникальности slug
-  const checkSlugUniqueness = async (slugToCheck: string) => {
+  const checkSlugUniqueness = useCallback(async (slugToCheck: string) => {
     if (!slugToCheck || isEditing) return; // Для редактирования не проверяем
 
     setIsCheckingSlug(true);
@@ -74,7 +71,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     } finally {
       setIsCheckingSlug(false);
     }
-  };
+  }, [isEditing, safeInitial.id]);
 
   // Автогенерация slug из title
   useEffect(() => {
@@ -86,7 +83,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
         checkSlugUniqueness(generatedSlug);
       }
     }
-  }, [title, slugManuallyEdited, isEditing]);
+  }, [title, slugManuallyEdited, isEditing, checkSlugUniqueness]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);

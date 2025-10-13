@@ -1,5 +1,5 @@
 // app/[slug]/page.js
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -25,13 +25,17 @@ async function getContent(slug) {
   try {
     console.log('📰 Searching for article with slug:', slug);
     // Сначала ищем статью
-    const article = await prisma.article.findUnique({
-      where: { slug: slug, published: true },
-      include: {
-        author: { select: { name: true, image: true } },
-        tags: true,
-      },
-    });
+    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+    const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+    let article = null;
+    if (supabase) {
+      const { data, error } = await supabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').eq('slug', slug).eq('published', true).maybeSingle();
+      if (error) {
+        console.error('Supabase fetch article error', error);
+      } else {
+        article = data;
+      }
+    }
     
     if (article) {
       console.log('✅ Found article:', article.title);
@@ -40,9 +44,12 @@ async function getContent(slug) {
     
     console.log('📁 Searching for project with slug:', slug);
     // Если статья не найдена, ищем проект
-    const project = await prisma.project.findUnique({
-      where: { slug: slug, published: true }
-    });
+    let project = null;
+    if (!article && supabase) {
+      const { data: p, error: pErr } = await supabase.from('project').select('*').eq('slug', slug).eq('published', true).maybeSingle();
+      if (pErr) console.error('Supabase fetch project error', pErr);
+      project = p;
+    }
     
     if (project) {
       console.log('✅ Found project:', project.title);

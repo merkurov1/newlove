@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { deleteLetter } from '../actions';
 
 export const dynamic = 'force-dynamic';
@@ -9,18 +9,15 @@ export default async function AdminLettersPage() {
   let error = null;
 
   try {
-    letters = await prisma.letter.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        author: {
-          select: { name: true },
-        },
-      },
-    });
+  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  if (!supabase) throw new Error('Supabase client unavailable');
+  const { data, error: lErr } = await supabase.from('letter').select('id,title,slug,published,sentAt,createdAt,author:authorId(name)').order('createdAt', { ascending: false });
+  if (lErr) throw lErr;
+  letters = data || [];
   } catch (err) {
     console.error('Error fetching letters:', err);
     error = 'База данных писем пока не настроена. Выполните миграцию migrate_letters_fix.sql';
-    
     // Используем моковые данные для демонстрации
     letters = [
       {
@@ -84,7 +81,7 @@ export default async function AdminLettersPage() {
         {letters.length === 0 ? (
           <div className="col-span-full p-6 text-center text-gray-400 bg-white rounded-xl border shadow-sm">Пока нет ни одного письма.</div>
         ) : (
-          letters.map((letter) => (
+          letters.map((letter: any) => (
             <div key={letter.id} className="bg-white rounded-xl border shadow-sm p-5 flex flex-col gap-2 hover:shadow-md transition-shadow group">
               <div className="flex items-center gap-2 mb-1">
                 <span className={`h-2.5 w-2.5 rounded-full ${letter.published ? 'bg-green-500' : 'bg-gray-400'}`}></span>

@@ -2,7 +2,7 @@
 
 
 
-import prisma from '../lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import Link from 'next/link';
 import SafeImage from '@/components/SafeImage';
 import { getFirstImage } from '@/lib/contentUtils';
@@ -20,21 +20,15 @@ const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false
 
 // Получить статьи с тегами
 async function getArticles() {
-  return prisma.article.findMany({
-    where: { published: true },
-    orderBy: { updatedAt: 'desc' },
-    take: 15,
-    select: {
-      id: true,
-      title: true,
-      slug: true,
-      content: true,
-      publishedAt: true,
-      updatedAt: true,
-      tags: { select: { slug: true, name: true } },
-      author: { select: { name: true } },
-    },
-  });
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('article').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name),tags:tags(*)').eq('published', true).order('updatedAt', { ascending: false }).limit(15);
+  if (error) {
+    console.error('Supabase fetch articles error', error);
+    return [];
+  }
+  return data || [];
 }
 
 export default async function Home() {

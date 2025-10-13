@@ -1,5 +1,5 @@
 // Это теперь чистый Серверный Компонент. Директива 'use client' здесь не нужна.
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { notFound } from 'next/navigation';
 
 import ContentForm from '@/components/admin/ContentForm';
@@ -8,11 +8,11 @@ import SendLetterForm from '@/components/admin/SendLetterForm';
 
 export default async function EditLetterPage({ params }) {
   const letterId = params.id;
-  const letter = await prisma.letter.findUnique({
-    where: { id: letterId },
-    include: { tags: true } // Включаем теги для редактирования
-  });
-  if (!letter) notFound();
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  if (!supabase) notFound();
+  const { data: letter, error } = await supabase.from('letter').select('*, tags:tags(*)').eq('id', letterId).maybeSingle();
+  if (error || !letter) notFound();
   
   return (
     <div>

@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -7,10 +7,13 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const slug = searchParams.get('slug');
   if (!slug) return NextResponse.json({ error: 'No slug' }, { status: 400 });
-  const article = await prisma.article.findUnique({
-    where: { slug, published: true },
-    select: { id: true, slug: true, title: true, content: true, publishedAt: true },
-  });
+  const { supabase } = await getUserAndSupabaseFromRequest((globalThis && (globalThis).request) || new Request('http://localhost')) || {};
+  if (!supabase) return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
+  const { data: article, error } = await supabase.from('article').select('id,slug,title,content,publishedAt').eq('slug', slug).eq('published', true).maybeSingle();
+  if (error) {
+    console.error('Supabase fetch article error', error);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+  }
   if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(article);
 }

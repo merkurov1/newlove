@@ -1,28 +1,20 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 
 export async function GET() {
   try {
-    const projects = await prisma.project.findMany({
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-        published: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const { supabase } = await getUserAndSupabaseFromRequest(new Request('http://localhost'));
+    if (!supabase) return NextResponse.json({ success: true, count: 0, projects: [] });
 
-    return NextResponse.json({ 
-      success: true, 
-      count: projects.length,
-      projects: projects
-    });
+    const { data: projects, error } = await supabase.from('project').select('id,title,slug,published').order('createdAt', { ascending: false });
+    if (error) {
+      console.error('Supabase fetch projects error', error);
+      return NextResponse.json({ success: false, error: error.message });
+    }
+
+    return NextResponse.json({ success: true, count: (projects || []).length, projects });
   } catch (error) {
-    return NextResponse.json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : String(error) 
-    });
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) });
   }
 }

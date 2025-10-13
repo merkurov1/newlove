@@ -1,7 +1,7 @@
 // app/api/cron/route.ts
 
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 
 // Вспомогательная функция для генерации URL-дружественного слага из заголовка
 // Я добавил транслитерацию для кириллических символов
@@ -40,6 +40,12 @@ export async function GET() {
     const articles: any[] = []; // Замените это на ваш реальный массив статей
     // ---- КОНЕЦ ПРИМЕРНОГО КОДА ----
 
+    const globalReq = ((globalThis && (globalThis as any).request) as Request) || new Request('http://localhost');
+    const { supabase } = await getUserAndSupabaseFromRequest(globalReq) || {};
+    if (!supabase) {
+      console.error('Supabase client unavailable for cron job');
+      return NextResponse.json({ message: 'Supabase client unavailable' }, { status: 500 });
+    }
     for (const article of articles) {
       // <<< ГЛАВНОЕ ИЗМЕНЕНИЕ: Генерируем slug из заголовка статьи
       const slug = generateSlug(article.title);
@@ -47,23 +53,21 @@ export async function GET() {
       // Если у вас не получается сгенерировать slug (например, нет заголовка), пропускаем статью
       if (!slug) continue;
 
-      await prisma.newsArticle.upsert({
-        where: { url: article.url },
-        update: {
+      // Upsert via Supabase (use onConflict=url)
+      try {
+        const payload = {
           title: article.title,
-          description: article.description || '',
-          imageUrl: article.imageUrl,
-        },
-        create: {
-          title: article.title,
-          slug: slug, // <<< ДОБАВЛЯЕМ Сгенерированный slug
+          slug: slug,
           description: article.description || '',
           url: article.url,
           imageUrl: article.imageUrl,
-          publishedAt: new Date(article.publishedAt),
-          sourceName: article.source.name,
-        },
-      });
+          publishedAt: article.publishedAt ? new Date(article.publishedAt).toISOString() : null,
+          sourceName: article.source?.name || null,
+        };
+  await supabase.from('newsArticle').upsert(payload, { onConflict: 'url' });
+      } catch (e) {
+        console.error('Supabase upsert newsArticle error', e);
+      }
     }
 
     return NextResponse.json({ message: 'News processing finished successfully.' });

@@ -1,33 +1,25 @@
 "use client";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
-import { createClient } from '@/lib/supabase-browser';
+import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 import Image from 'next/image';
+import SafeImage from '@/components/SafeImage';
 import LinkPreview from './LinkPreview';
 import useSupabaseSession from '@/hooks/useSupabaseSession';
-
-// Типы не изменились
-type InitialMessage = {
-  id: string;
-  createdAt: Date;
-  content: string;
-  userId: string;
-  user: { name: string | null; image: string | null };
-};
+import type { InitialMessage, TypingUser } from '@/types/messages';
 
 type Props = {
   initialMessages: InitialMessage[];
+  session?: any;
 };
 
 // --- НОВЫЙ ТИП ДЛЯ ПЕЧАТАЮЩИХ ПОЛЬЗОВАТЕЛЕЙ ---
-type TypingUser = {
-  name: string;
-  image: string;
-};
+// TypingUser is imported from types/messages
 
-export default function LoungeInterface({ initialMessages }: Props) {
-  const { session } = useSupabaseSession();
-  const supabase = createClient();
+export default function LoungeInterface({ initialMessages, session: propSession }: Props) {
+  const { session: hookSession } = useSupabaseSession();
+  const session = propSession ?? hookSession;
+  const supabase = createBrowserClient();
   const [messages, setMessages] = useState(initialMessages);
   const [newMessage, setNewMessage] = useState('');
   // --- НОВОЕ СОСТОЯНИЕ ДЛЯ ИНДИКАТОРА ПЕЧАТИ ---
@@ -174,9 +166,9 @@ export default function LoungeInterface({ initialMessages }: Props) {
         {onlineUsers.length > 0 ? (
           <>
             <span className="text-xs text-gray-500 mr-2 whitespace-nowrap">Онлайн:</span>
-            {onlineUsers.map((u, i) => (
+                {onlineUsers.map((u, i) => (
               <span key={u.name + i} className="flex items-center gap-1 mr-2 whitespace-nowrap max-w-[80px]">
-                <img src={u.image || '/default-avatar.png'} alt={u.name ? `Аватар пользователя: ${u.name}` : 'Аватар пользователя'} className="w-7 h-7 rounded-full border" />
+                <SafeImage src={u.image || '/default-avatar.png'} alt={u.name ? `Аватар пользователя: ${u.name}` : 'Аватар пользователя'} width={28} height={28} className="rounded-full border" unoptimized />
                 <span className="text-xs text-gray-700 hidden xs:inline truncate max-w-[48px]">{u.name}</span>
               </span>
             ))}
