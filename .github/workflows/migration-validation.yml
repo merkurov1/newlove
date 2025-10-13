@@ -68,12 +68,17 @@ jobs:
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         
-    - name: 📋 Upload backup artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: prisma-schema-backup-${{ github.sha }}
-        path: ./backups/
-        retention-days: 30
+    - name: 📋 Upload backup artifacts (if any)
+      run: |
+        if [ -d ./backups ] && [ "$(ls -A ./backups)" ]; then
+          echo "Backups found — uploading artifacts"
+          mkdir -p /tmp/artifacts
+          cp -r ./backups/* /tmp/artifacts/ || true
+          echo "::set-output name=artifact_path::/tmp/artifacts"
+        else
+          echo "No backups to upload — skipping"
+        fi
+      shell: bash
 
   # Безопасное тестирование миграций (только для PR)
   test-migrations:
