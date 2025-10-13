@@ -13,7 +13,10 @@ export default async function AdminArticlesPage() {
   let articles: any[] = [];
   if (serverSupabase) {
   const { data, error } = await serverSupabase.from('articles').select('id,title,slug,published,author:authorId(name)').order('createdAt', { ascending: false });
-    if (error) console.error('Supabase fetch admin articles error', error);
+    if (error) {
+      const { safeLogError } = await import('@/lib/safeSerialize');
+      safeLogError('Supabase fetch admin articles error', error);
+    }
     articles = safeData(data || []);
   }
 
