@@ -30,11 +30,37 @@ async function getContent(slug) {
     const serverSupabase = getServerSupabaseClient();
     let article = null;
     if (serverSupabase) {
-      const { data, error } = await serverSupabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').eq('slug', slug).eq('published', true).maybeSingle();
+      // Fetch article from canonical plural table name
+      const { data, error } = await serverSupabase.from('articles').select('*').eq('slug', slug).eq('published', true).maybeSingle();
       if (error) {
         console.error('Supabase fetch article error', error);
-      } else {
+      } else if (data) {
         article = data;
+
+        // Fetch tags via junction table _ArticleToTag -> Tag
+        try {
+          const { data: rels, error: relErr } = await serverSupabase.from('_ArticleToTag').select('A').eq('B', null).eq('A', data.id);
+          // The above query is defensive; if the junction table uses columns A (entity) and B (tag)
+          // we select B values by querying where A = article.id. Some deployments might differ;
+          // fall back to a safer two-step approach below if rels is empty or errored.
+        } catch (e) {
+          // ignore tag fetch errors for stability — tags are optional
+        }
+
+        try {
+          // Better: fetch tag ids from junction and then the Tag rows
+          const { data: tagLinks } = await serverSupabase.from('_ArticleToTag').select('B').eq('A', data.id);
+          const tagIds = (tagLinks || []).map(r => r.B).filter(Boolean);
+          if (tagIds.length > 0) {
+            const { data: tags } = await serverSupabase.from('Tag').select('id,name,slug').in('id', tagIds);
+            article.tags = tags || [];
+          } else {
+            article.tags = [];
+          }
+        } catch (e) {
+          console.error('Error fetching tags for article', e);
+          article.tags = [];
+        }
       }
     }
     
