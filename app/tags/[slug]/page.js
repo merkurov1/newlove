@@ -3,6 +3,7 @@
 // (helper loaded dynamically inside getTagData)
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
 
@@ -34,10 +35,11 @@ async function getTagData(slug) {
 // --- 2. ГЕНЕРИРУЕМ МЕТАДАННЫЕ ДЛЯ SEO ---
 export async function generateMetadata({ params }) {
   const tag = await getTagData(params.slug);
-  return {
+  const meta = {
     title: `Материалы по тегу: ${tag.name}`,
     description: `Все статьи и проекты, отмеченные тегом "${tag.name}"`,
   };
+  return sanitizeMetadata(meta);
 }
 
 // --- 3. САМ КОМПОНЕНТ СТРАНИЦЫ ---
