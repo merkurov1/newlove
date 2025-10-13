@@ -12,7 +12,6 @@ import nextDynamic from 'next/dynamic';
 
 
 // SSR-friendly динамический импорт HeroHearts (только на клиенте)
-export const dynamic = 'force-dynamic';
 
 const HeroHearts = nextDynamic(() => import('@/components/HeroHearts'), { ssr: false });
 const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
@@ -22,40 +21,17 @@ const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false
 
 // Получить статьи с тегами
 async function getArticles() {
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  const serverSupabase = getServerSupabaseClient();
-  if (!serverSupabase) return [];
-  // Fetch articles from canonical plural table
-  const { data, error } = await serverSupabase.from('articles').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)').eq('published', true).order('updatedAt', { ascending: false }).limit(15);
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod;
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('article').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name),tags:tags(*)').eq('published', true).order('updatedAt', { ascending: false }).limit(15);
   if (error) {
-    const { safeLogError } = await import('@/lib/safeSerialize');
-    safeLogError('Supabase fetch articles error', error);
+    console.error('Supabase fetch articles error', error);
     return [];
   }
-  const articles = data || [];
-
-  // Batch-fetch tags for articles via junction table to avoid relying on implicit PostgREST relationships
-  try {
-    const ids = articles.map(a => a.id).filter(Boolean);
-    if (ids.length > 0) {
-      const { data: links } = await serverSupabase.from('_ArticleToTag').select('A,B').in('A', ids);
-      const tagIds = (links || []).map(l => l.B).filter(Boolean);
-      const { data: tags } = tagIds.length > 0 ? await serverSupabase.from('Tag').select('id,name,slug').in('id', tagIds) : { data: [] };
-      const tagsById = {};
-      for (const t of tags || []) tagsById[t.id] = t;
-      const tagsByArticle = {};
-      for (const l of links || []) {
-        if (!tagsByArticle[l.A]) tagsByArticle[l.A] = [];
-        if (tagsById[l.B]) tagsByArticle[l.A].push(tagsById[l.B]);
-      }
-      for (const a of articles) a.tags = tagsByArticle[a.id] || [];
-    }
-  } catch (e) {
-  safeLogError('Error fetching article tags', e);
-    for (const a of articles) a.tags = a.tags || [];
-  }
-
-  return articles;
+  return data || [];
 }
 
 export default async function Home() {

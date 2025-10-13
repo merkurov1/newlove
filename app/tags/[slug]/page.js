@@ -11,51 +11,21 @@ import SafeImage from '@/components/SafeImage';
 async function getTagData(slug) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const serverSupabase = getServerSupabaseClient();
-    if (!serverSupabase) notFound();
+  const { getUserAndSupabaseFromRequest } = mod;
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  if (!supabase) notFound();
   // Поиск тега по slug (регистр игнорируем вручную)
-    const { data: tags } = await serverSupabase.from('Tag').select('*').ilike('slug', slug).limit(1);
+  const { data: tags } = await supabase.from('Tag').select('*').ilike('slug', slug).limit(1);
   const tag = (tags && tags[0]) || null;
   if (!tag) notFound();
   // Получаем связанные статьи через junction _ArticleToTag
-      const { data: articles } = await serverSupabase.rpc('get_articles_by_tag', { tag_slug: tag.slug }).catch(async () => {
+  const { data: articles } = await supabase.rpc('get_articles_by_tag', { tag_slug: tag.slug }).catch(async () => {
     // fallback: query articles by checking tags relation manually if rpc not present
-      const { data: rels } = await serverSupabase.from('_ArticleToTag').select('A').eq('B', tag.id);
-    const ids = (rels || []).map(r => r.A).filter(Boolean);
+    const { data: rels } = await supabase.from('_ArticleToTag').select('A').eq('B', tag.id);
+    const ids = (rels || []).map(r => r.A);
     if (ids.length === 0) return { data: [] };
-
-      // Fetch articles from canonical plural table
-      const { data: arts, error: artsErr } = await serverSupabase.from('articles').select('*, author:authorId(name,image)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
-      if (artsErr) {
-  const { safeLogError } = await import('@/lib/safeSerialize');
-  safeLogError('Error fetching articles for tag fallback', artsErr);
-        return { data: [] };
-      }
-
-      // Fetch tag links for these articles and then Tag rows
-      try {
-        const { data: links } = await serverSupabase.from('_ArticleToTag').select('A,B').in('A', ids);
-        const tagIds = Array.from(new Set((links || []).map(l => l.B).filter(Boolean)));
-        let tagsById = {};
-        if (tagIds.length > 0) {
-          const { data: tagRows } = await serverSupabase.from('Tag').select('id,name,slug').in('id', tagIds);
-          tagsById = (tagRows || []).reduce((acc, t) => { acc[t.id] = t; return acc; }, {});
-        }
-
-        // Attach tags to each article
-        const articlesWithTags = (arts || []).map(a => {
-          const related = (links || []).filter(l => l.A === a.id).map(l => tagsById[l.B]).filter(Boolean);
-          return { ...a, tags: related };
-        });
-
-        return { data: articlesWithTags };
-      } catch (e) {
-  const { safeLogError } = await import('@/lib/safeSerialize');
-  safeLogError('Error assembling tags for articles fallback', e);
-        return { data: arts || [] };
-      }
+    const { data: arts } = await supabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
+    return { data: arts };
   });
   tag.articles = (articles && articles.data) || (articles || []);
   return tag;
@@ -140,5 +110,3 @@ export default async function TagPage({ params }) {
     </div>
   );
 }
-
-export const dynamic = 'force-dynamic';

@@ -9,21 +9,12 @@ import Providers from './providers';
 import GlobalErrorHandler from '@/components/GlobalErrorHandler';
 // `getUserAndSupabaseFromRequest` is imported dynamically inside the layout to avoid
 // circular import issues during the Next.js production build.
-import { safeData, safeLogError } from '@/lib/safeSerialize';
+import { safeData } from '@/lib/safeSerialize';
+import { Analytics } from '@vercel/analytics/react';
+import { UmamiScript } from '@/lib/umami';
 import nextDynamic from 'next/dynamic';
-// Load analytics and umami as client-only dynamic components to prevent
-// Next's prerender serializer from encountering non-serializable values.
-const UserSidebar = nextDynamic(() => import('@/components/UserSidebar'), { ssr: false });
-const Analytics = nextDynamic(() => import('@vercel/analytics/react').then(m => m.Analytics), { ssr: false });
-const UmamiScript = nextDynamic(() => import('@/lib/umami').then(m => m.UmamiScript), { ssr: false });
 
-// TEMP: force the app to be dynamic to avoid Next.js prerender serialization
-// errors while we incrementally sanitize server-returned values. This will be
-// reverted to per-page `export const dynamic` entries once pages are fixed.
-// Note: dynamic rendering mode will be set per-route where needed. Removed
-// the global `dynamic = 'force-dynamic'` to allow Next to statically prerender
-// safe pages and improve performance. If serialization errors appear during
-// the build, we'll re-enable dynamic rendering on the specific failing pages.
+const UserSidebar = nextDynamic(() => import('@/components/UserSidebar'), { ssr: false });
 
 const inter = Inter({
   variable: '--font-inter', // Используем CSS переменную для большей гибкости
@@ -106,28 +97,24 @@ export const metadata = {
   },
 };
 
-// Temporarily force dynamic rendering for the whole app while we
-// incrementally sanitize server-returned values that cause Next.js
-// prerender serialization errors. We'll remove this once all pages are
-// fixed and can be safely statically prerendered.
+// Force dynamic rendering for the entire app during this migration/debug pass.
+// This avoids Next attempting to prerender/export pages which currently fail
+// due to runtime serialization of complex server values. We'll narrow this
+// later and re-enable static rendering per-route where safe.
 export const dynamic = 'force-dynamic';
-
-// NOTE: Previously we forced the whole app to be dynamic to avoid prerender
-// serialization errors during migration. Removing the global override now so
-// we can surface and fix per-page serialization problems.
 
 
 export default async function RootLayout({ children }) {
   // Временно отключаем запрос к базе данных до настройки DATABASE_URL
   let projects = [];
   try {
-    // Use the server service-role Supabase client for public reads in the layout
-    // so this code does not depend on cookies / request-bound sessions.
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const serverSupabase = getServerSupabaseClient();
-    if (serverSupabase) {
-  const { data, error } = await serverSupabase.from('projects').select('*').eq('published', true).order('createdAt', { ascending: true });
-  if (error) safeLogError('Supabase fetch projects error', error);
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod;
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+    if (supabase) {
+      const { data, error } = await supabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
+      if (error) console.error('Supabase fetch projects error', error);
       projects = safeData(data || []);
     } else {
       projects = [];
@@ -135,7 +122,7 @@ export default async function RootLayout({ children }) {
   } catch (error) {
     // Логируем только в development
     if (process.env.NODE_ENV === 'development') {
-      safeLogError('Database connection error', error);
+      console.error('Database connection error:', error.message);
     }
     // Используем пустой массив для проектов
     projects = [];
@@ -149,20 +136,21 @@ export default async function RootLayout({ children }) {
 
   let subscriberCount = 0;
   try {
-    // Use server service-role client for subscriber count as well.
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const serverSupabase = getServerSupabaseClient();
-    if (serverSupabase) {
-      const { data, error } = await serverSupabase.from('subscribers').select('id');
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const mod2 = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest: getUserAndSupabaseFromRequest2 } = mod2;
+  const { supabase } = await getUserAndSupabaseFromRequest2(globalReq);
+    if (supabase) {
+      const { data, error } = await supabase.from('subscribers').select('id');
       if (!error) {
         const safe = safeData(data || []);
         subscriberCount = (safe && safe.length) || 0;
-  } else safeLogError('Supabase count subscribers error', error);
+      } else console.error('Supabase count subscribers error', error);
     }
   } catch (error) {
     // Логируем только в development
     if (process.env.NODE_ENV === 'development') {
-      safeLogError('Ошибка при подсчёте подписчиков', error);
+      console.error('Ошибка при подсчёте подписчиков:', error);
     }
   }
 

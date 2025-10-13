@@ -24,6 +24,6 @@ jobs:
       - name: Build
         env:
           # Ensure full build runs in CI
-          SKIP_SENTRY: 1
+          SKIP_SENTRY: 0
           DISABLE_OPTIMIZE_CSS: 0
         run: npm run build
