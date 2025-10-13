@@ -42,7 +42,7 @@ export async function GET() {
 
   const globalReq = ((globalThis && (globalThis as any).request) as Request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod as any;
+  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq) || {};
     if (!supabase) {
       console.error('Supabase client unavailable for cron job');

@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminArticlesPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod as any;
+  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   let articles: any[] = [];
   if (supabase) {

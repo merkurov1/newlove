@@ -20,7 +20,10 @@ const UmamiScript = nextDynamic(() => import('@/lib/umami').then(m => m.UmamiScr
 // TEMP: force the app to be dynamic to avoid Next.js prerender serialization
 // errors while we incrementally sanitize server-returned values. This will be
 // reverted to per-page `export const dynamic` entries once pages are fixed.
-export const dynamic = 'force-dynamic';
+// Note: dynamic rendering mode will be set per-route where needed. Removed
+// the global `dynamic = 'force-dynamic'` to allow Next to statically prerender
+// safe pages and improve performance. If serialization errors appear during
+// the build, we'll re-enable dynamic rendering on the specific failing pages.
 
 const inter = Inter({
   variable: '--font-inter', // Используем CSS переменную для большей гибкости
@@ -103,6 +106,12 @@ export const metadata = {
   },
 };
 
+// Temporarily force dynamic rendering for the whole app while we
+// incrementally sanitize server-returned values that cause Next.js
+// prerender serialization errors. We'll remove this once all pages are
+// fixed and can be safely statically prerendered.
+export const dynamic = 'force-dynamic';
+
 // NOTE: Previously we forced the whole app to be dynamic to avoid prerender
 // serialization errors during migration. Removing the global override now so
 // we can surface and fix per-page serialization problems.
@@ -114,7 +123,7 @@ export default async function RootLayout({ children }) {
   try {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod;
+  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
     if (supabase) {
       const { data, error } = await supabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
@@ -142,7 +151,7 @@ export default async function RootLayout({ children }) {
   try {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const mod2 = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest: getUserAndSupabaseFromRequest2 } = mod2;
+  const getUserAndSupabaseFromRequest2 = mod2.getUserAndSupabaseFromRequest || mod2.default;
   const { supabase } = await getUserAndSupabaseFromRequest2(globalReq);
     if (supabase) {
       const { data, error } = await supabase.from('subscribers').select('id');

@@ -11,7 +11,7 @@ import SafeImage from '@/components/SafeImage';
 async function getTagData(slug) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod;
+  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) notFound();
   // Поиск тега по slug (регистр игнорируем вручную)
