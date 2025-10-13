@@ -3,10 +3,6 @@
 import { NextResponse } from 'next/server';
 // dynamic import to avoid circular/interop build issues
 
-// This route uses cookies / request-bound Supabase client and must be
-// rendered dynamically. Tell Next explicitly to avoid static prerender.
-export const dynamic = 'force-dynamic';
-
 // Вспомогательная функция для генерации URL-дружественного слага из заголовка
 // Я добавил транслитерацию для кириллических символов
 const generateSlug = (title: string): string => {
@@ -44,15 +40,14 @@ export async function GET() {
     const articles: any[] = []; // Замените это на ваш реальный массив статей
     // ---- КОНЕЦ ПРИМЕРНОГО КОДА ----
 
-  // For cron/background jobs, use the server service-role client instead of
-  // the request-bound helper (which depends on cookies). This ensures the
-  // cron job can run in environments without an incoming Request.
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  const supabase = getServerSupabaseClient();
-  if (!supabase) {
-    console.error('Supabase client unavailable for cron job');
-    return NextResponse.json({ message: 'Supabase client unavailable' }, { status: 500 });
-  }
+  const globalReq = ((globalThis && (globalThis as any).request) as Request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod as any;
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq) || {};
+    if (!supabase) {
+      console.error('Supabase client unavailable for cron job');
+      return NextResponse.json({ message: 'Supabase client unavailable' }, { status: 500 });
+    }
     for (const article of articles) {
       // <<< ГЛАВНОЕ ИЗМЕНЕНИЕ: Генерируем slug из заголовка статьи
       const slug = generateSlug(article.title);

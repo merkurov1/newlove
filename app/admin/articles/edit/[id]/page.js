@@ -5,25 +5,13 @@ import ContentForm from '@/components/admin/ContentForm';
 import { updateArticle } from '../../../actions';
 
 async function getArticle(id) {
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  const serverSupabase = getServerSupabaseClient();
-  if (!serverSupabase) notFound();
-  const { data: article, error } = await serverSupabase.from('articles').select('*').eq('id', id).maybeSingle();
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod;
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  if (!supabase) notFound();
+  const { data: article, error } = await supabase.from('article').select('*, tags:tags(*)').eq('id', id).maybeSingle();
   if (error || !article) notFound();
-  // load tags explicitly
-  try {
-    const { data: links } = await serverSupabase.from('_ArticleToTag').select('A,B').eq('A', article.id);
-    const tagIds = (links || []).map(l => l.B).filter(Boolean);
-    if (tagIds.length > 0) {
-      const { data: tags } = await serverSupabase.from('Tag').select('id,name,slug').in('id', tagIds);
-      article.tags = tags || [];
-    } else {
-      article.tags = [];
-    }
-  } catch (e) {
-    console.error('Error loading tags for admin edit article', e);
-    article.tags = [];
-  }
   return article;
 }
 

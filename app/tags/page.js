@@ -11,5 +11,3 @@ export default function TagsIndexPage() {
     </div>
   );
 }
-
-export const dynamic = 'force-dynamic';

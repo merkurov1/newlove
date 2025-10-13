@@ -1,6 +1,6 @@
 // app/[slug]/page.js
-// helper will be dynamically imported inside getContent to avoid bundler/circular issues
-import { safeData, safeLogError } from '@/lib/safeSerialize';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+import { safeData } from '@/lib/safeSerialize';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -25,43 +25,16 @@ async function getContent(slug) {
   
   try {
     console.log('📰 Searching for article with slug:', slug);
-    // Use server-side Supabase client for public content lookup
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const serverSupabase = getServerSupabaseClient();
+    // Сначала ищем статью
+    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+    const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
     let article = null;
-    if (serverSupabase) {
-      // Fetch article from canonical plural table name
-      const { data, error } = await serverSupabase.from('articles').select('*').eq('slug', slug).eq('published', true).maybeSingle();
+    if (supabase) {
+      const { data, error } = await supabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').eq('slug', slug).eq('published', true).maybeSingle();
       if (error) {
-        safeLogError('Supabase fetch article error', error);
-      } else if (data) {
+        console.error('Supabase fetch article error', error);
+      } else {
         article = data;
-
-        // Fetch tags via junction table _ArticleToTag -> Tag
-        try {
-          const { data: rels, error: relErr } = await serverSupabase.from('_ArticleToTag').select('A').eq('B', null).eq('A', data.id);
-          // The above query is defensive; if the junction table uses columns A (entity) and B (tag)
-          // we select B values by querying where A = article.id. Some deployments might differ;
-          // fall back to a safer two-step approach below if rels is empty or errored.
-        } catch (e) {
-          // ignore tag fetch errors for stability — tags are optional
-          safeLogError('Error fetching tags (first attempt)', e);
-        }
-
-        try {
-          // Better: fetch tag ids from junction and then the Tag rows
-          const { data: tagLinks } = await serverSupabase.from('_ArticleToTag').select('B').eq('A', data.id);
-          const tagIds = (tagLinks || []).map(r => r.B).filter(Boolean);
-          if (tagIds.length > 0) {
-            const { data: tags } = await serverSupabase.from('Tag').select('id,name,slug').in('id', tagIds);
-            article.tags = tags || [];
-          } else {
-            article.tags = [];
-          }
-        } catch (e) {
-          safeLogError('Error fetching tags for article', e);
-          article.tags = [];
-        }
       }
     }
     
@@ -73,9 +46,9 @@ async function getContent(slug) {
     console.log('📁 Searching for project with slug:', slug);
     // Если статья не найдена, ищем проект
     let project = null;
-    if (!article && serverSupabase) {
-  const { data: p, error: pErr } = await serverSupabase.from('projects').select('*').eq('slug', slug).eq('published', true).maybeSingle();
-  if (pErr) safeLogError('Supabase fetch project error', pErr);
+    if (!article && supabase) {
+      const { data: p, error: pErr } = await supabase.from('project').select('*').eq('slug', slug).eq('published', true).maybeSingle();
+      if (pErr) console.error('Supabase fetch project error', pErr);
       project = p;
     }
     
@@ -87,7 +60,7 @@ async function getContent(slug) {
     console.log('❌ No content found for slug:', slug);
     return null;
   } catch (error) {
-    safeLogError('💥 Error in getContent', error);
+    console.error('💥 Error in getContent:', error);
     throw error;
   }
 }
@@ -186,8 +159,8 @@ function ArticleComponent({ article }) {
       console.log('⚠️ No content found for article');
     }
   } catch (error) {
-    safeLogError('💥 Error parsing article content:', error);
-    console.log('📋 Raw content:', typeof article !== 'undefined' ? safeStringify(article.content) : '[missing]');
+    console.error('💥 Error parsing article content:', error);
+    console.log('📋 Raw content:', article.content);
     blocks = [];
   }
 
@@ -278,8 +251,8 @@ function ProjectComponent({ project }) {
       console.log('⚠️ No content found for project');
     }
   } catch (error) {
-    safeLogError('💥 Error parsing project content:', error);
-    console.log('📋 Raw content:', typeof project !== 'undefined' ? safeStringify(project.content) : '[missing]');
+    console.error('💥 Error parsing project content:', error);
+    console.log('📋 Raw content:', project.content);
     blocks = [];
   }
 

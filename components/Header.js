@@ -9,8 +9,6 @@ import { signOut as supabaseSignOut } from '@/lib/supabase-client';
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 
-const supabase = createClient();
-
 
 
 export default function Header({ projects, settings }) {
@@ -133,13 +131,13 @@ export default function Header({ projects, settings }) {
             {status === 'loading' && <div className="h-8 w-24 animate-pulse rounded-md bg-gray-200" />}
             {status === 'unauthenticated' && (
               <>
-                <button onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })} className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700 mr-2">Sign In</button>
+                <button onClick={() => signIn('google')} className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700 mr-2">Sign In</button>
 
               </>
             )}
             {status === 'authenticated' && (
               <div className="flex items-center gap-4">
-                <button onClick={() => supabaseSignOut()} className="text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900">Sign out</button>
+                <button onClick={() => signOut()} className="text-sm font-semibold text-gray-500 transition-colors hover:text-gray-900">Sign out</button>
 
               </div>
             )}

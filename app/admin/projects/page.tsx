@@ -6,11 +6,13 @@ import { deleteProject } from '../actions'; // Мы добавим эту фун
 export const dynamic = 'force-dynamic';
 
 export default async function AdminProjectsPage() {
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  const serverSupabase = getServerSupabaseClient();
+  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod as any;
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   let projects: any[] = [];
-  if (serverSupabase) {
-  const { data, error } = await serverSupabase.from('projects').select('*').order('createdAt', { ascending: false });
+  if (supabase) {
+    const { data, error } = await supabase.from('project').select('*').order('createdAt', { ascending: false });
     if (error) console.error('Supabase fetch admin projects error', error);
     projects = data || [];
   }

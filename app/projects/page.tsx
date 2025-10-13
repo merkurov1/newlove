@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 // Use a dynamic import for the Supabase request helper to avoid circular-import
 // and ESM/CJS interop issues during Next.js production builds.
-import { safeData, safeLogError } from '@/lib/safeSerialize';
+import { safeData } from '@/lib/safeSerialize';
 import { AnimatePresence, motion } from 'framer-motion';
 
 // Определяем типы для проекта, чтобы код был надежнее
@@ -22,13 +22,14 @@ interface ProjectPreview {
 
 export default async function ProjectsPage() {
   // Запрашиваем только опубликованные проекты через Supabase
-  // Use server client for public project listing to avoid cookie-bound client
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  const serverSupabase = getServerSupabaseClient();
+  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod as any;
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   let projects: any[] = [];
-  if (serverSupabase) {
-  const { data, error } = await serverSupabase.from('projects').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
-    if (error) safeLogError('Supabase fetch projects error', error);
+    if (supabase) {
+    const { data, error } = await supabase.from('project').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
+    if (error) console.error('Supabase fetch projects error', error);
     projects = safeData(data || []);
   }
 
@@ -78,5 +79,3 @@ export default async function ProjectsPage() {
     </div>
   );
 }
-
-export const dynamic = 'force-dynamic';

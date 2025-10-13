@@ -3,12 +3,11 @@
 // We'll use a dynamic import here to avoid build-time circular/interop issues
 import { redirect } from 'next/navigation';
 import ProfileForm from '@/components/profile/ProfileForm'; // Мы создадим этот компонент на след. шаге
-import { safeData } from '@/lib/safeSerialize';
 
 export default async function ProfilePage() {
   const globalReq = globalThis?.request || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
+  const { getUserAndSupabaseFromRequest } = mod;
   const { user, supabase } = await getUserAndSupabaseFromRequest(globalReq);
   // Если user не найден, редиректим
   if (!user?.id) redirect('/');
@@ -19,8 +18,7 @@ export default async function ProfilePage() {
     if (error) {
       console.error('Supabase fetch user error', error);
     } else {
-      // Ensure the object is JSON-serializable for Next prerender
-      userData = safeData(data || null);
+      userData = data;
     }
   }
 

@@ -6,8 +6,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const supabase = getServerSupabaseClient();
+    const mod = await import('@/lib/supabase-server');
+    const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
+    const { supabase } = await getUserAndSupabaseFromRequest(request);
     const { searchParams } = new URL(request.url);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const limit = parseInt(searchParams.get('limit') || '15', 10);
@@ -21,15 +22,14 @@ export async function GET(request) {
     }
 
     const { data, error } = await supabase
-      .from('articles')
+      .from('article')
       .select('id,title,slug,content,publishedAt')
       .eq('published', true)
       .order('publishedAt', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (error) {
-      const { safeLogError } = await import('@/lib/safeSerialize');
-      safeLogError('Supabase fetch articles error', error);
+      console.error('Supabase fetch articles error', error);
       return new Response(JSON.stringify({ error: 'Failed to fetch articles' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
 
