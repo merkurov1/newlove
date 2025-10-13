@@ -11,8 +11,21 @@ export default async function EditLetterPage({ params }) {
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const serverSupabase = getServerSupabaseClient();
   if (!serverSupabase) notFound();
-  const { data: letter, error } = await serverSupabase.from('letter').select('*, tags:tags(*)').eq('id', letterId).maybeSingle();
+  const { data: letter, error } = await serverSupabase.from('letters').select('*').eq('id', letterId).maybeSingle();
   if (error || !letter) notFound();
+  try {
+    const { data: links } = await serverSupabase.from('_LetterToTag').select('A,B').eq('A', letter.id);
+    const tagIds = (links || []).map(l => l.B).filter(Boolean);
+    if (tagIds.length > 0) {
+      const { data: tags } = await serverSupabase.from('Tag').select('id,name,slug').in('id', tagIds);
+      letter.tags = tags || [];
+    } else {
+      letter.tags = [];
+    }
+  } catch (e) {
+    console.error('Error loading tags for admin edit letter', e);
+    letter.tags = [];
+  }
   
   return (
     <div>

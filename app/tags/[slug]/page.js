@@ -20,13 +20,40 @@ async function getTagData(slug) {
   const tag = (tags && tags[0]) || null;
   if (!tag) notFound();
   // Получаем связанные статьи через junction _ArticleToTag
-    const { data: articles } = await serverSupabase.rpc('get_articles_by_tag', { tag_slug: tag.slug }).catch(async () => {
+      const { data: articles } = await serverSupabase.rpc('get_articles_by_tag', { tag_slug: tag.slug }).catch(async () => {
     // fallback: query articles by checking tags relation manually if rpc not present
       const { data: rels } = await serverSupabase.from('_ArticleToTag').select('A').eq('B', tag.id);
-    const ids = (rels || []).map(r => r.A);
+    const ids = (rels || []).map(r => r.A).filter(Boolean);
     if (ids.length === 0) return { data: [] };
-      const { data: arts } = await serverSupabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
-    return { data: arts };
+
+      // Fetch articles from canonical plural table
+      const { data: arts, error: artsErr } = await serverSupabase.from('articles').select('*, author:authorId(name,image)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
+      if (artsErr) {
+        console.error('Error fetching articles for tag fallback', artsErr);
+        return { data: [] };
+      }
+
+      // Fetch tag links for these articles and then Tag rows
+      try {
+        const { data: links } = await serverSupabase.from('_ArticleToTag').select('A,B').in('A', ids);
+        const tagIds = Array.from(new Set((links || []).map(l => l.B).filter(Boolean)));
+        let tagsById = {};
+        if (tagIds.length > 0) {
+          const { data: tagRows } = await serverSupabase.from('Tag').select('id,name,slug').in('id', tagIds);
+          tagsById = (tagRows || []).reduce((acc, t) => { acc[t.id] = t; return acc; }, {});
+        }
+
+        // Attach tags to each article
+        const articlesWithTags = (arts || []).map(a => {
+          const related = (links || []).filter(l => l.A === a.id).map(l => tagsById[l.B]).filter(Boolean);
+          return { ...a, tags: related };
+        });
+
+        return { data: articlesWithTags };
+      } catch (e) {
+        console.error('Error assembling tags for articles fallback', e);
+        return { data: arts || [] };
+      }
   });
   tag.articles = (articles && articles.data) || (articles || []);
   return tag;

@@ -27,8 +27,51 @@ async function getUserProfile(username) {
   const { data: users } = await supabase.from('users').select('*').eq('username', username).limit(1);
   const user = (users && users[0]) || null;
   if (!user) notFound();
-  const { data: articles } = await supabase.from('article').select('*, tags:tags(*)').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
-  const { data: projects } = await supabase.from('projects').select('*, tags:tags(*)').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  // Fetch articles from plural table and then tags via junction
+  const { data: articlesData } = await supabase.from('articles').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  const articles = articlesData || [];
+  try {
+    const ids = articles.map(a => a.id).filter(Boolean);
+    if (ids.length > 0) {
+      const { data: links } = await supabase.from('_ArticleToTag').select('A,B').in('A', ids);
+      const tagIds = (links || []).map(l => l.B).filter(Boolean);
+      const { data: tags } = tagIds.length > 0 ? await supabase.from('Tag').select('id,name,slug').in('id', tagIds) : { data: [] };
+      const tagsById = {};
+      for (const t of tags || []) tagsById[t.id] = t;
+      const tagsByArticle = {};
+      for (const l of links || []) {
+        if (!tagsByArticle[l.A]) tagsByArticle[l.A] = [];
+        if (tagsById[l.B]) tagsByArticle[l.A].push(tagsById[l.B]);
+      }
+      for (const a of articles) a.tags = tagsByArticle[a.id] || [];
+    }
+  } catch (e) {
+    console.error('Error fetching article tags for user page', e);
+    for (const a of articles) a.tags = a.tags || [];
+  }
+
+  const { data: projectsData } = await supabase.from('projects').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  const projects = projectsData || [];
+  // attach tags for projects via junction table if present
+  try {
+    const pIds = projects.map(p => p.id).filter(Boolean);
+    if (pIds.length > 0) {
+      const { data: plinks } = await supabase.from('_ProjectToTag').select('A,B').in('A', pIds);
+      const pTagIds = Array.from(new Set((plinks || []).map(l => l.B).filter(Boolean)));
+      const { data: pTags } = pTagIds.length > 0 ? await supabase.from('Tag').select('id,name,slug').in('id', pTagIds) : { data: [] };
+      const tagsById = {};
+      for (const t of pTags || []) tagsById[t.id] = t;
+      const tagsByProject = {};
+      for (const l of plinks || []) {
+        if (!tagsByProject[l.A]) tagsByProject[l.A] = [];
+        if (tagsById[l.B]) tagsByProject[l.A].push(tagsById[l.B]);
+      }
+      for (const p of projects) p.tags = tagsByProject[p.id] || [];
+    }
+  } catch (e) {
+    console.error('Error fetching project tags for user page', e);
+    for (const p of projects) p.tags = p.tags || [];
+  }
   user.articles = articles || [];
   user.projects = projects || [];
   return user;
