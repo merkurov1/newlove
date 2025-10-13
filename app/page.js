@@ -28,7 +28,8 @@ async function getArticles() {
   // Fetch articles from canonical plural table
   const { data, error } = await serverSupabase.from('articles').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)').eq('published', true).order('updatedAt', { ascending: false }).limit(15);
   if (error) {
-    console.error('Supabase fetch articles error', error);
+    const { safeLogError } = await import('@/lib/safeSerialize');
+    safeLogError('Supabase fetch articles error', error);
     return [];
   }
   const articles = data || [];
@@ -50,7 +51,7 @@ async function getArticles() {
       for (const a of articles) a.tags = tagsByArticle[a.id] || [];
     }
   } catch (e) {
-    console.error('Error fetching article tags', e);
+  safeLogError('Error fetching article tags', e);
     for (const a of articles) a.tags = a.tags || [];
   }
 
