@@ -9,3 +9,33 @@ export function safeData<T>(obj: T): T {
     return (Array.isArray(obj) ? ([] as unknown as T) : ({} as unknown as T));
   }
 }
+
+// Safe error logger: avoid passing complex objects (like React Server Components)
+// directly into console.error which can trigger serialization errors in Next.js.
+export function safeLogError(message: string, err: any) {
+  try {
+    if (!err) return console.error(message);
+    // Prefer primitive error fields
+    const out: any = { message: err.message || String(err) };
+    if (err.code) out.code = err.code;
+    if (err.digest) out.digest = err.digest;
+    return console.error(message, JSON.stringify(out));
+  } catch (e) {
+    return console.error(message, String(err));
+  }
+}
+
+export function safeStringify(obj: any) {
+  try {
+    return JSON.stringify(obj);
+  } catch (e) {
+    try {
+      // fallback: attempt to convert common errors/props
+      if (obj && obj.message) return JSON.stringify({ message: obj.message });
+      return JSON.stringify(String(obj));
+    } catch (e2) {
+      return '"[unserializable]"';
+    }
+  }
+}
+

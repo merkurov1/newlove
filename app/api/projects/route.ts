@@ -8,7 +8,8 @@ export async function GET() {
 
   const { data: projects, error } = await supabase.from('projects').select('id,title,slug,published').order('createdAt', { ascending: false });
     if (error) {
-      console.error('Supabase fetch projects error', error);
+      const { safeLogError } = await import('@/lib/safeSerialize');
+      safeLogError('Supabase fetch projects error', error);
       return NextResponse.json({ success: false, error: error.message });
     }
 
