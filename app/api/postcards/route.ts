@@ -17,7 +17,7 @@ export async function GET() {
     // selection or an aggregate subquery. We'll select the postcards and
     // include a count of related orders via the `postcard_orders` table.
     const { data: postcards, error } = await supabase
-      .from('postcard')
+      .from('postcards')
       .select('*, postcard_orders:postcard_orders(count)')
       .order('createdAt', { ascending: false });
     if (error) {
