@@ -734,7 +734,7 @@ export async function createPostcard(formData) {
       available,
       featured,
     };
-    const { data: postcard, error } = await supabase.from('postcard').insert(payload).select().maybeSingle();
+  const { data: postcard, error } = await supabase.from('postcards').insert(payload).select().maybeSingle();
     if (error) {
       console.error('Supabase insert postcard error', error);
       throw new Error('Ошибка при создании открытки: ' + (error.message || String(error)));
@@ -776,7 +776,7 @@ export async function updatePostcard(formData) {
       featured,
       updatedAt: new Date().toISOString(),
     };
-    const { data: updatedPostcard, error } = await supabase.from('postcard').update(updates).eq('id', id).select().maybeSingle();
+  const { data: updatedPostcard, error } = await supabase.from('postcards').update(updates).eq('id', id).select().maybeSingle();
     if (error) {
       console.error('Supabase update postcard error', error);
       throw new Error('Ошибка при обновлении открытки: ' + (error.message || String(error)));
@@ -820,7 +820,7 @@ export async function deletePostcard(formData) {
       throw new Error('Нельзя удалить открытку с существующими заказами.');
     }
 
-    const { error: delErr } = await supabase.from('postcard').delete().eq('id', id);
+  const { error: delErr } = await supabase.from('postcards').delete().eq('id', id);
     if (delErr) {
       console.error('Supabase delete postcard error', delErr);
       throw new Error('Ошибка при удалении открытки: ' + (delErr.message || String(delErr)));
