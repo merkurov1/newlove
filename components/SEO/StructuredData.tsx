@@ -1,5 +1,5 @@
 // components/SEO/StructuredData.tsx
-import Script from 'next/script';
+// Removed import of next/script as we are using plain <script> tags.
 
 interface PersonSchemaProps {
   name: string;
@@ -42,13 +42,9 @@ export function PersonSchema({ name, url, image, jobTitle, description, sameAs }
     ...(sameAs && sameAs.length > 0 && { "sameAs": sameAs }),
   };
 
-  return (
-    <Script
-      id="person-schema"
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-    />
-  );
+    return (
+      <script id="person-schema" type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+    );
 }
 
 export function ArticleSchema({ headline, description, datePublished, dateModified, author, image, url }: ArticleSchemaProps) {
@@ -78,13 +74,9 @@ export function ArticleSchema({ headline, description, datePublished, dateModifi
     }
   };
 
-  return (
-    <Script
-      id="article-schema"
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-    />
-  );
+    return (
+      <script id="article-schema" type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+    );
 }
 
 export function WebsiteSchema({ name, url, description, author }: WebsiteSchemaProps) {
@@ -109,13 +101,9 @@ export function WebsiteSchema({ name, url, description, author }: WebsiteSchemaP
     }
   };
 
-  return (
-    <Script
-      id="website-schema"
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-    />
-  );
+    return (
+      <script id="website-schema" type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+    );
 }
 
 export function BlogSchema({ name, url, description, author }: WebsiteSchemaProps) {
@@ -132,11 +120,7 @@ export function BlogSchema({ name, url, description, author }: WebsiteSchemaProp
     }
   };
 
-  return (
-    <Script
-      id="blog-schema"
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-    />
-  );
+    return (
+      <script id="blog-schema" type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+    );
 }
