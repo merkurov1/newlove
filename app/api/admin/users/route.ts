@@ -1,66 +1,36 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/authOptions';
-import prisma from '@/lib/prisma';
+import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    await requireAdminFromRequest(request as Request);
+    // Use centralized server client to list users
+    const supabase = getServerSupabaseClient();
+    const { data, error } = await supabase.auth.admin.listUsers();
+    if (error) throw error;
+    const users = (data.users || []).map(u => ({
+      id: u.id,
+      name: u.user_metadata?.name || null,
+      username: u.user_metadata?.username || null,
+      email: u.email || null,
+      role: u.user_metadata?.role || 'USER',
+      image: u.user_metadata?.image || null,
+      bio: u.user_metadata?.bio || null,
+      website: u.user_metadata?.website || null,
+      subscription: null,
+      _count: { articles: 0, projects: 0, messages: 0 },
+    }));
 
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // orphan subscribers: if Prisma removed, return empty list for now
+    const orphanSubscribers: Array<any> = [];
 
-    // Получаем пользователей с информацией о подписке
-    const users = await prisma.user.findMany({
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        username: true,
-        email: true,
-        role: true,
-        image: true,
-        bio: true,
-        website: true,
-        subscription: {
-          select: {
-            id: true,
-            email: true,
-            createdAt: true,
-          }
-        },
-        _count: {
-          select: {
-            articles: true,
-            projects: true,
-            messages: true,
-          }
-        }
-      },
-    });
-
-    // Также получаем подписчиков без аккаунтов
-    const orphanSubscribers = await prisma.subscriber.findMany({
-      where: { userId: null },
-      select: {
-        id: true,
-        email: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return NextResponse.json({ 
-      users, 
-      orphanSubscribers 
-    });
+    return NextResponse.json({ users, orphanSubscribers });
   } catch (error) {
     console.error('Error fetching users:', error);
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    );
+    if (String(error).includes('Unauthorized')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

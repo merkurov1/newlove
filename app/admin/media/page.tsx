@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import SafeImage from '@/components/SafeImage';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Card, CardHeader, CardContent } from '@/components/admin/Card';
 import { SearchBox } from '@/components/admin/SearchBox';
@@ -402,11 +403,13 @@ export default function MediaPage() {
                       {file.publicUrl ? (
                         <div className="aspect-square mb-3 bg-gray-50 rounded-lg overflow-hidden flex items-center justify-center">
                           {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                            <img
-                              src={file.publicUrl}
+                            <SafeImage
+                              src={file.publicUrl!}
                               alt={file.name}
+                              width={600}
+                              height={600}
                               className="w-full h-full object-cover"
-                              loading="lazy"
+                              unoptimized
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-400">

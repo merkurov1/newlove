@@ -1,0 +1,1 @@
+node: --trace-gc is not allowed in NODE_OPTIONS

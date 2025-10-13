@@ -16,18 +16,17 @@ interface AuctionSliderProps {
 }
 
 export default function AuctionSlider({ articles }: AuctionSliderProps) {
+  // Hooks must be called unconditionally
   const [current, setCurrent] = useState(0);
-  if (!articles || articles.length === 0) return null;
-
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
   const [touching, setTouching] = useState(false);
+  const [direction, setDirection] = useState(0); // track direction for animation (1 = next, -1 = prev)
+
+  if (!articles || articles.length === 0) return null;
 
   const next = () => setCurrent((c) => (c + 1) % articles.length);
   const prev = () => setCurrent((c) => (c - 1 + articles.length) % articles.length);
-
-  // track direction for animation (1 = next, -1 = prev)
-  const [direction, setDirection] = useState(0);
 
   // Pointer/touch events for mobile swipe — use pointer to handle both mouse and touch consistently
   const onPointerDown = (e: React.PointerEvent) => {
@@ -93,7 +92,9 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
           dragElastic={0.2}
-          onDragEnd={(e, info) => {
+          onDragEnd={(e: PointerEvent, info: any) => {
+            // framer-motion's PanInfo type is not always available in this repo's TS setup;
+            // using `any` for info keeps this change minimal and obvious.
             const velocity = info.velocity.x;
             const offset = info.offset.x;
             const swipe = Math.abs(offset) > 100 || Math.abs(velocity) > 500;

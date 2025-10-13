@@ -1,25 +1,11 @@
-import { PrismaClient } from '@prisma/client';
+// Minimal Prisma stub to satisfy imports during migration.
+// This does NOT implement database access. Replace with the real Prisma
+// client or Supabase queries as part of the migration.
 
-// Эта конструкция помогает TypeScript работать с глобальными переменными
-const globalForPrisma = global as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
-// Создаем или используем существующий экземпляр Prisma
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    // Включаем логирование запросов только в режиме разработки
-    log:
-      process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  });
-
-// В продакшене `globalForPrisma.prisma` не будет перезаписываться,
-// так как модуль инициализируется один раз. В разработке это
-// предотвращает создание новых подключений при каждом hot-reload.
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+const prisma: any = new Proxy({}, {
+  get() {
+    return () => { throw new Error('prisma client stub: replace with real client or remove dependency'); };
+  }
+});
 
 export default prisma;
-

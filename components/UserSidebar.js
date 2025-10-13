@@ -1,11 +1,11 @@
 // components/UserSidebar.js
-'use client';
+ 'use client';
 import Link from 'next/link';
-import { useSession } from 'next-auth/react';
+import useSupabaseSession from '@/hooks/useSupabaseSession';
 import Image from 'next/image';
 
 export default function UserSidebar() {
-  const { data: session } = useSession();
+  const { session } = useSupabaseSession();
   if (!session?.user) return null;
   // username: сначала user.username, потом user.name, иначе 'me'
   const username = session.user.username || session.user.name || 'me';

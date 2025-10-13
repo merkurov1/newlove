@@ -7,12 +7,23 @@ import Footer from '@/components/Footer';
 import AuthProvider from '@/components/AuthProvider';
 import Providers from './providers';
 import GlobalErrorHandler from '@/components/GlobalErrorHandler';
-import prisma from '@/lib/prisma';
-import { Analytics } from '@vercel/analytics/react';
-import { UmamiScript } from '@/lib/umami';
-import dynamic from 'next/dynamic';
+// `getUserAndSupabaseFromRequest` is imported dynamically inside the layout to avoid
+// circular import issues during the Next.js production build.
+import { safeData } from '@/lib/safeSerialize';
+import nextDynamic from 'next/dynamic';
+// Load analytics and umami as client-only dynamic components to prevent
+// Next's prerender serializer from encountering non-serializable values.
+const UserSidebar = nextDynamic(() => import('@/components/UserSidebar'), { ssr: false });
+const Analytics = nextDynamic(() => import('@vercel/analytics/react').then(m => m.Analytics), { ssr: false });
+const UmamiScript = nextDynamic(() => import('@/lib/umami').then(m => m.UmamiScript), { ssr: false });
 
-const UserSidebar = dynamic(() => import('@/components/UserSidebar'), { ssr: false });
+// TEMP: force the app to be dynamic to avoid Next.js prerender serialization
+// errors while we incrementally sanitize server-returned values. This will be
+// reverted to per-page `export const dynamic` entries once pages are fixed.
+// Note: dynamic rendering mode will be set per-route where needed. Removed
+// the global `dynamic = 'force-dynamic'` to allow Next to statically prerender
+// safe pages and improve performance. If serialization errors appear during
+// the build, we'll re-enable dynamic rendering on the specific failing pages.
 
 const inter = Inter({
   variable: '--font-inter', // Используем CSS переменную для большей гибкости
@@ -95,15 +106,32 @@ export const metadata = {
   },
 };
 
+// Temporarily force dynamic rendering for the whole app while we
+// incrementally sanitize server-returned values that cause Next.js
+// prerender serialization errors. We'll remove this once all pages are
+// fixed and can be safely statically prerendered.
+export const dynamic = 'force-dynamic';
+
+// NOTE: Previously we forced the whole app to be dynamic to avoid prerender
+// serialization errors during migration. Removing the global override now so
+// we can surface and fix per-page serialization problems.
+
 
 export default async function RootLayout({ children }) {
   // Временно отключаем запрос к базе данных до настройки DATABASE_URL
   let projects = [];
   try {
-    projects = await prisma.project.findMany({
-      where: { published: true },
-      orderBy: { createdAt: 'asc' },
-    });
+    // Use the server service-role Supabase client for public reads in the layout
+    // so this code does not depend on cookies / request-bound sessions.
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const serverSupabase = getServerSupabaseClient();
+    if (serverSupabase) {
+      const { data, error } = await serverSupabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
+      if (error) console.error('Supabase fetch projects error', error);
+      projects = safeData(data || []);
+    } else {
+      projects = [];
+    }
   } catch (error) {
     // Логируем только в development
     if (process.env.NODE_ENV === 'development') {
@@ -121,7 +149,16 @@ export default async function RootLayout({ children }) {
 
   let subscriberCount = 0;
   try {
-    subscriberCount = await prisma.subscriber.count();
+    // Use server service-role client for subscriber count as well.
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const serverSupabase = getServerSupabaseClient();
+    if (serverSupabase) {
+      const { data, error } = await serverSupabase.from('subscribers').select('id');
+      if (!error) {
+        const safe = safeData(data || []);
+        subscriberCount = (safe && safe.length) || 0;
+      } else console.error('Supabase count subscribers error', error);
+    }
   } catch (error) {
     // Логируем только в development
     if (process.env.NODE_ENV === 'development') {

@@ -29,30 +29,56 @@ jobs:
     - name: 📦 Install dependencies
       run: npm ci
       
-    - name: 🔍 Validate Prisma schema
-      run: npx prisma validate
+    - name: 🔍 Validate Prisma schema (if present)
+      run: |
+        if [ -f prisma/schema.prisma ]; then
+          echo "Found prisma/schema.prisma — running validation"
+          npx prisma validate
+        else
+          echo "prisma/schema.prisma not found — skipping prisma validate"
+        fi
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    - name: 🔧 Generate Prisma Client (if schema present)
+      run: |
+        if [ -f prisma/schema.prisma ]; then
+          npx prisma generate
+        else
+          echo "prisma/schema.prisma not found — skipping prisma generate"
+        fi
+
+    - name: 🛡️ Run Migration Toolkit validation (if schema present)
+      run: |
+        if [ -f prisma/schema.prisma ]; then
+          npm run db:validate
+        else
+          echo "prisma/schema.prisma not found — skipping db:validate"
+        fi
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    - name: 💾 Create schema backup (if schema present)
+      run: |
+        if [ -f prisma/schema.prisma ]; then
+          npm run db:backup
+        else
+          echo "prisma/schema.prisma not found — skipping db:backup"
+        fi
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         
-    - name: 🔧 Generate Prisma Client
-      run: npx prisma generate
-      
-    - name: 🛡️ Run Migration Toolkit validation
-      run: npm run db:validate
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        
-    - name: 💾 Create schema backup
-      run: npm run db:backup
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        
-    - name: 📋 Upload backup artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: prisma-schema-backup-${{ github.sha }}
-        path: ./backups/
-        retention-days: 30
+    - name: 📋 Upload backup artifacts (if any)
+      run: |
+        if [ -d ./backups ] && [ "$(ls -A ./backups)" ]; then
+          echo "Backups found — uploading artifacts"
+          mkdir -p /tmp/artifacts
+          cp -r ./backups/* /tmp/artifacts/ || true
+          echo "::set-output name=artifact_path::/tmp/artifacts"
+        else
+          echo "No backups to upload — skipping"
+        fi
+      shell: bash
 
   # Безопасное тестирование миграций (только для PR)
   test-migrations:

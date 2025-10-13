@@ -176,7 +176,14 @@ export default function FlowFeed({ limit = 8 }: FlowFeedProps) {
                 <div className="mt-auto flex items-center justify-between text-sm text-gray-500">
                   <div className="flex items-center gap-3">
                     {item.authorAvatar ? (
-                      <img src={item.authorAvatar} alt={item.author ? `Аватар автора: ${item.author}` : 'Аватар автора'} className="w-7 h-7 rounded-full object-cover" />
+                      <SafeImage
+                        src={item.authorAvatar}
+                        alt={item.author ? `Аватар автора: ${item.author}` : 'Аватар автора'}
+                        width={28}
+                        height={28}
+                        className="rounded-full object-cover"
+                        unoptimized
+                      />
                     ) : (
                       <div className="w-7 h-7 rounded-full bg-gray-200" />
                     )}

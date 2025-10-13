@@ -1,25 +1,27 @@
 // lib/validation/security.ts
 
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/authOptions';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
-// Проверка аутентификации
+// Minimal compatibility wrappers that forward to the Supabase-based
+// helpers implemented elsewhere in the codebase. These allow existing
+// callers to keep using requireAuth/requireAdmin signatures while we
+// finish migrating everything to Supabase.
+
 export async function requireAuth(req?: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    throw new Error('Authentication required');
-  }
-  return session;
+  if (!req) throw new Error('Request is required for requireAuth');
+  const mod = await import('@/lib/supabase-server');
+  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
+  const { user } = await getUserAndSupabaseFromRequest(req as Request);
+  if (!user || !user.id) throw new Error('Unauthorized');
+  return user;
 }
 
-// Проверка прав администратора
 export async function requireAdmin(req?: NextRequest) {
-  const session = await requireAuth(req);
-  if (session.user.role !== 'ADMIN') {
-    throw new Error('Admin rights required');
-  }
-  return session;
+  // Delegate to centralized requireAdminFromRequest which supports
+  // cookie-based sessions and ADMIN_API_SECRET fallback.
+  await requireAdminFromRequest(req as Request);
+  return { ok: true };
 }
 
 // Валидация email

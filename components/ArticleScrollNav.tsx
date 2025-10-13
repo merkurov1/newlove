@@ -28,7 +28,7 @@ export default function ArticleScrollNav({ article, prev, next }: ArticleScrollN
     if (current.slug !== article.slug) {
       window.history.pushState({}, '', `/${current.slug}`);
     }
-  }, [current.slug]);
+  }, [current.slug, article.slug]);
 
   useEffect(() => {
     const container = containerRef.current;

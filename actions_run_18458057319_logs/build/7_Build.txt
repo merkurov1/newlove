@@ -1,0 +1,314 @@
+﻿2025-10-13T07:16:16.7132091Z ##[group]Run npm run build
+2025-10-13T07:16:16.7132363Z [36;1mnpm run build[0m
+2025-10-13T07:16:16.7165162Z shell: /usr/bin/bash -e {0}
+2025-10-13T07:16:16.7165377Z env:
+2025-10-13T07:16:16.7165530Z   SKIP_SENTRY: 0
+2025-10-13T07:16:16.7165715Z   DISABLE_OPTIMIZE_CSS: 0
+2025-10-13T07:16:16.7165912Z ##[endgroup]
+2025-10-13T07:16:16.8251067Z 
+2025-10-13T07:16:16.8251396Z > newlove@0.1.1 build
+2025-10-13T07:16:16.8251699Z > next build
+2025-10-13T07:16:16.8251836Z 
+2025-10-13T07:16:17.6155697Z   ▲ Next.js 14.2.5
+2025-10-13T07:16:17.6158454Z   - Experiments (use with caution):
+2025-10-13T07:16:17.6159014Z     · optimizeCss
+2025-10-13T07:16:17.6159356Z     · instrumentationHook
+2025-10-13T07:16:17.6159549Z 
+2025-10-13T07:16:17.6764067Z    Creating an optimized production build ...
+2025-10-13T07:16:17.7607735Z  ⚠ Found lockfile missing swc dependencies, run next locally to automatically patch
+2025-10-13T07:16:18.1811260Z [@sentry/nextjs] DEPRECATION WARNING: It is recommended renaming your `sentry.client.config.ts` file, or moving its content to `instrumentation-client.ts`. When using Turbopack `sentry.client.config.ts` will no longer work. Read more about the `instrumentation-client.ts` file: https://nextjs.org/docs/app/api-reference/file-conventions/instrumentation-client
+2025-10-13T07:16:18.2715091Z [@sentry/nextjs - Node.js] Info: Sending telemetry data on issues and performance to Sentry. To disable telemetry, set `options.telemetry` to `false`.
+2025-10-13T07:17:02.9965593Z [@sentry/nextjs - Node.js] Warning: No auth token provided. Will not create release. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:02.9968350Z [@sentry/nextjs - Node.js] Warning: No auth token provided. Will not upload source maps. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:12.0013930Z [@sentry/nextjs - Edge] Info: Sending telemetry data on issues and performance to Sentry. To disable telemetry, set `options.telemetry` to `false`.
+2025-10-13T07:17:13.9640657Z [@sentry/nextjs - Edge] Warning: No auth token provided. Will not create release. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:13.9643983Z [@sentry/nextjs - Edge] Warning: No auth token provided. Will not upload source maps. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:16.3144094Z <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (185kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+2025-10-13T07:17:16.3514393Z <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (139kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+2025-10-13T07:17:16.4906468Z [@sentry/nextjs - Client] Info: Sending telemetry data on issues and performance to Sentry. To disable telemetry, set `options.telemetry` to `false`.
+2025-10-13T07:17:37.7244939Z [@sentry/nextjs - Client] Warning: No auth token provided. Will not create release. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:37.7251867Z [@sentry/nextjs - Client] Warning: No auth token provided. Will not upload source maps. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:43.9350444Z  ⚠ Compiled with warnings
+2025-10-13T07:17:43.9350825Z 
+2025-10-13T07:17:43.9351204Z ./app/api/article-by-slug/route.js
+2025-10-13T07:17:43.9352256Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9353109Z 
+2025-10-13T07:17:43.9353669Z Import trace for requested module:
+2025-10-13T07:17:43.9353985Z ./app/api/article-by-slug/route.js
+2025-10-13T07:17:43.9354167Z 
+2025-10-13T07:17:43.9354299Z ./app/api/articles/[id]/route.js
+2025-10-13T07:17:43.9355046Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9355574Z 
+2025-10-13T07:17:43.9355700Z Import trace for requested module:
+2025-10-13T07:17:43.9355972Z ./app/api/articles/[id]/route.js
+2025-10-13T07:17:43.9356119Z 
+2025-10-13T07:17:43.9356218Z ./app/api/articles/route.js
+2025-10-13T07:17:43.9356949Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9357468Z 
+2025-10-13T07:17:43.9357597Z Import trace for requested module:
+2025-10-13T07:17:43.9357842Z ./app/api/articles/route.js
+2025-10-13T07:17:43.9357983Z 
+2025-10-13T07:17:43.9358072Z ./app/api/cron/route.ts
+2025-10-13T07:17:43.9358777Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9359491Z 
+2025-10-13T07:17:43.9359616Z Import trace for requested module:
+2025-10-13T07:17:43.9359856Z ./app/api/cron/route.ts
+2025-10-13T07:17:43.9359975Z 
+2025-10-13T07:17:43.9360076Z ./app/api/media/route.ts
+2025-10-13T07:17:43.9360785Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9361315Z 
+2025-10-13T07:17:43.9361462Z Import trace for requested module:
+2025-10-13T07:17:43.9361710Z ./app/api/media/route.ts
+2025-10-13T07:17:43.9361935Z 
+2025-10-13T07:17:43.9362162Z ./app/api/newsletter-confirm/route.ts
+2025-10-13T07:17:43.9363330Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9364025Z 
+2025-10-13T07:17:43.9364238Z Import trace for requested module:
+2025-10-13T07:17:43.9364748Z ./app/api/newsletter-confirm/route.ts
+2025-10-13T07:17:43.9364911Z 
+2025-10-13T07:17:43.9365062Z ./app/api/newsletter-unsubscribe/route.ts
+2025-10-13T07:17:43.9365788Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9366292Z 
+2025-10-13T07:17:43.9366410Z Import trace for requested module:
+2025-10-13T07:17:43.9366696Z ./app/api/newsletter-unsubscribe/route.ts
+2025-10-13T07:17:43.9366864Z 
+2025-10-13T07:17:43.9366963Z ./app/api/postcards/route.ts
+2025-10-13T07:17:43.9367645Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9368163Z 
+2025-10-13T07:17:43.9368295Z Import trace for requested module:
+2025-10-13T07:17:43.9368537Z ./app/api/postcards/route.ts
+2025-10-13T07:17:43.9368682Z 
+2025-10-13T07:17:43.9368775Z ./app/api/projects/route.ts
+2025-10-13T07:17:43.9369479Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9369988Z 
+2025-10-13T07:17:43.9370112Z Import trace for requested module:
+2025-10-13T07:17:43.9370357Z ./app/api/projects/route.ts
+2025-10-13T07:17:43.9370484Z 
+2025-10-13T07:17:43.9370611Z ./app/api/subscribers/[id]/route.ts
+2025-10-13T07:17:43.9371315Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9371821Z 
+2025-10-13T07:17:43.9371939Z Import trace for requested module:
+2025-10-13T07:17:43.9372206Z ./app/api/subscribers/[id]/route.ts
+2025-10-13T07:17:43.9372352Z 
+2025-10-13T07:17:43.9372482Z ./app/api/subscription-status/route.ts
+2025-10-13T07:17:43.9373358Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9374042Z 
+2025-10-13T07:17:43.9374171Z Import trace for requested module:
+2025-10-13T07:17:43.9374448Z ./app/api/subscription-status/route.ts
+2025-10-13T07:17:43.9374617Z 
+2025-10-13T07:17:43.9374710Z ./app/api/test-auth/route.ts
+2025-10-13T07:17:43.9375403Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9375914Z 
+2025-10-13T07:17:43.9376038Z Import trace for requested module:
+2025-10-13T07:17:43.9376286Z ./app/api/test-auth/route.ts
+2025-10-13T07:17:43.9376421Z 
+2025-10-13T07:17:43.9376512Z ./app/rss.xml/route.js
+2025-10-13T07:17:43.9377175Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9377683Z 
+2025-10-13T07:17:43.9377799Z Import trace for requested module:
+2025-10-13T07:17:43.9378035Z ./app/rss.xml/route.js
+2025-10-13T07:17:43.9378147Z 
+2025-10-13T07:17:43.9378347Z ./app/[slug]/page.js
+2025-10-13T07:17:43.9379016Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9379518Z 
+2025-10-13T07:17:43.9379640Z Import trace for requested module:
+2025-10-13T07:17:43.9379863Z ./app/[slug]/page.js
+2025-10-13T07:17:43.9379977Z 
+2025-10-13T07:17:43.9380102Z ./app/admin/articles/edit/[id]/page.js
+2025-10-13T07:17:43.9380811Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9381311Z 
+2025-10-13T07:17:43.9381429Z Import trace for requested module:
+2025-10-13T07:17:43.9381694Z ./app/admin/articles/edit/[id]/page.js
+2025-10-13T07:17:43.9381851Z 
+2025-10-13T07:17:43.9381953Z ./app/admin/articles/page.tsx
+2025-10-13T07:17:43.9382819Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9383333Z 
+2025-10-13T07:17:43.9383451Z Import trace for requested module:
+2025-10-13T07:17:43.9383694Z ./app/admin/articles/page.tsx
+2025-10-13T07:17:43.9383847Z 
+2025-10-13T07:17:43.9383974Z ./app/admin/letters/edit/[id]/page.js
+2025-10-13T07:17:43.9384782Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9385283Z 
+2025-10-13T07:17:43.9385402Z Import trace for requested module:
+2025-10-13T07:17:43.9385667Z ./app/admin/letters/edit/[id]/page.js
+2025-10-13T07:17:43.9385820Z 
+2025-10-13T07:17:43.9385917Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9386621Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9387131Z 
+2025-10-13T07:17:43.9387263Z Import trace for requested module:
+2025-10-13T07:17:43.9387513Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9387654Z 
+2025-10-13T07:17:43.9387753Z ./app/admin/projects/page.tsx
+2025-10-13T07:17:43.9388447Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9388957Z 
+2025-10-13T07:17:43.9389075Z Import trace for requested module:
+2025-10-13T07:17:43.9389319Z ./app/admin/projects/page.tsx
+2025-10-13T07:17:43.9389456Z 
+2025-10-13T07:17:43.9389545Z ./app/articles/page.js
+2025-10-13T07:17:43.9390220Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9390727Z 
+2025-10-13T07:17:43.9390846Z Import trace for requested module:
+2025-10-13T07:17:43.9391091Z ./app/articles/page.js
+2025-10-13T07:17:43.9391213Z 
+2025-10-13T07:17:43.9391285Z ./app/layout.js
+2025-10-13T07:17:43.9392124Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9392846Z 
+2025-10-13T07:17:43.9392978Z Import trace for requested module:
+2025-10-13T07:17:43.9393194Z ./app/layout.js
+2025-10-13T07:17:43.9393294Z 
+2025-10-13T07:17:43.9393373Z ./app/layout.js
+2025-10-13T07:17:43.9394021Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9394534Z 
+2025-10-13T07:17:43.9394654Z Import trace for requested module:
+2025-10-13T07:17:43.9394870Z ./app/layout.js
+2025-10-13T07:17:43.9394967Z 
+2025-10-13T07:17:43.9395035Z ./app/page.js
+2025-10-13T07:17:43.9395678Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9396173Z 
+2025-10-13T07:17:43.9396293Z Import trace for requested module:
+2025-10-13T07:17:43.9396505Z ./app/page.js
+2025-10-13T07:17:43.9396739Z 
+2025-10-13T07:17:43.9396828Z ./app/profile/page.js
+2025-10-13T07:17:43.9397493Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9397990Z 
+2025-10-13T07:17:43.9398106Z Import trace for requested module:
+2025-10-13T07:17:43.9398334Z ./app/profile/page.js
+2025-10-13T07:17:43.9398447Z 
+2025-10-13T07:17:43.9398542Z ./app/projects/page.tsx
+2025-10-13T07:17:43.9399207Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9399709Z 
+2025-10-13T07:17:43.9399825Z Import trace for requested module:
+2025-10-13T07:17:43.9400064Z ./app/projects/page.tsx
+2025-10-13T07:17:43.9400184Z 
+2025-10-13T07:17:43.9400277Z ./app/tags/[slug]/page.js
+2025-10-13T07:17:43.9400952Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9401460Z 
+2025-10-13T07:17:43.9401585Z Import trace for requested module:
+2025-10-13T07:17:43.9401811Z ./app/tags/[slug]/page.js
+2025-10-13T07:17:43.9401937Z 
+2025-10-13T07:17:43.9402033Z ./app/you/[username]/page.js
+2025-10-13T07:17:43.9402879Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9403380Z 
+2025-10-13T07:17:43.9403497Z Import trace for requested module:
+2025-10-13T07:17:43.9403734Z ./app/you/[username]/page.js
+2025-10-13T07:17:43.9403865Z 
+2025-10-13T07:17:43.9403956Z ./app/admin/actions.js
+2025-10-13T07:17:43.9404616Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9405119Z 
+2025-10-13T07:17:43.9405236Z Import trace for requested module:
+2025-10-13T07:17:43.9405472Z ./app/admin/actions.js
+2025-10-13T07:17:43.9405674Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9405817Z 
+2025-10-13T07:17:43.9405901Z ./app/admin/actions.js
+2025-10-13T07:17:43.9406552Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9407054Z 
+2025-10-13T07:17:43.9407172Z Import trace for requested module:
+2025-10-13T07:17:43.9407403Z ./app/admin/actions.js
+2025-10-13T07:17:43.9407602Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9407736Z 
+2025-10-13T07:17:43.9407821Z ./app/admin/actions.js
+2025-10-13T07:17:43.9408477Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9408975Z 
+2025-10-13T07:17:43.9409094Z Import trace for requested module:
+2025-10-13T07:17:43.9409322Z ./app/admin/actions.js
+2025-10-13T07:17:43.9409523Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9409773Z 
+2025-10-13T07:17:43.9409858Z ./app/admin/actions.js
+2025-10-13T07:17:43.9410517Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9411016Z 
+2025-10-13T07:17:43.9411137Z Import trace for requested module:
+2025-10-13T07:17:43.9411360Z ./app/admin/actions.js
+2025-10-13T07:17:43.9411561Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9411690Z 
+2025-10-13T07:17:43.9411780Z ./app/admin/actions.js
+2025-10-13T07:17:43.9412434Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9413054Z 
+2025-10-13T07:17:43.9413173Z Import trace for requested module:
+2025-10-13T07:17:43.9413400Z ./app/admin/actions.js
+2025-10-13T07:17:43.9413595Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9413723Z 
+2025-10-13T07:17:43.9413811Z ./app/admin/actions.js
+2025-10-13T07:17:43.9414468Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9415093Z 
+2025-10-13T07:17:43.9415211Z Import trace for requested module:
+2025-10-13T07:17:43.9415441Z ./app/admin/actions.js
+2025-10-13T07:17:43.9415637Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9415772Z 
+2025-10-13T07:17:43.9415855Z ./app/admin/actions.js
+2025-10-13T07:17:43.9416508Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9417007Z 
+2025-10-13T07:17:43.9417123Z Import trace for requested module:
+2025-10-13T07:17:43.9417352Z ./app/admin/actions.js
+2025-10-13T07:17:43.9417555Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9417681Z 
+2025-10-13T07:17:43.9417765Z ./app/admin/actions.js
+2025-10-13T07:17:43.9418423Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9418939Z 
+2025-10-13T07:17:43.9419062Z Import trace for requested module:
+2025-10-13T07:17:43.9419288Z ./app/admin/actions.js
+2025-10-13T07:17:43.9419493Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9419622Z 
+2025-10-13T07:17:43.9419713Z ./app/admin/actions.js
+2025-10-13T07:17:43.9420374Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9420877Z 
+2025-10-13T07:17:43.9420994Z Import trace for requested module:
+2025-10-13T07:17:43.9421222Z ./app/admin/actions.js
+2025-10-13T07:17:43.9421419Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9421550Z 
+2025-10-13T07:17:43.9421637Z ./app/admin/actions.js
+2025-10-13T07:17:43.9422293Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9422911Z 
+2025-10-13T07:17:43.9423031Z Import trace for requested module:
+2025-10-13T07:17:43.9423266Z ./app/admin/actions.js
+2025-10-13T07:17:43.9423465Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9423600Z 
+2025-10-13T07:17:43.9423685Z ./app/admin/actions.js
+2025-10-13T07:17:43.9424345Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9424838Z 
+2025-10-13T07:17:43.9424960Z Import trace for requested module:
+2025-10-13T07:17:43.9425195Z ./app/admin/actions.js
+2025-10-13T07:17:43.9425401Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9425529Z 
+2025-10-13T07:17:43.9425615Z ./app/admin/actions.js
+2025-10-13T07:17:43.9426276Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9426772Z 
+2025-10-13T07:17:43.9426895Z Import trace for requested module:
+2025-10-13T07:17:43.9427279Z ./app/admin/actions.js
+2025-10-13T07:17:43.9427482Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9427614Z 
+2025-10-13T07:17:43.9427703Z ./app/admin/actions.js
+2025-10-13T07:17:43.9428361Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9428863Z 
+2025-10-13T07:17:43.9428980Z Import trace for requested module:
+2025-10-13T07:17:43.9429207Z ./app/admin/actions.js
+2025-10-13T07:17:43.9429410Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9429540Z 
+2025-10-13T07:17:43.9429633Z ./app/admin/actions.js
+2025-10-13T07:17:43.9430283Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9430779Z 
+2025-10-13T07:17:43.9430897Z Import trace for requested module:
+2025-10-13T07:17:43.9431131Z ./app/admin/actions.js
+2025-10-13T07:17:43.9431327Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9431467Z 
+2025-10-13T07:17:43.9431550Z ./app/admin/actions.js
+2025-10-13T07:17:43.9432329Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9432944Z 
+2025-10-13T07:17:43.9433063Z Import trace for requested module:
+2025-10-13T07:17:43.9433293Z ./app/admin/actions.js
+2025-10-13T07:17:43.9433494Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9433622Z 
+2025-10-13T07:17:43.9433705Z ./lib/serverAuth.ts
+2025-10-13T07:17:43.9434365Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9434864Z 
+2025-10-13T07:17:43.9434986Z Import trace for requested module:
+2025-10-13T07:17:43.9435206Z ./lib/serverAuth.ts
+2025-10-13T07:17:43.9435422Z ./app/api/subscribers/route.ts
+2025-10-13T07:17:43.9435560Z 
+2025-10-13T07:17:43.9435725Z    Skipping linting
+2025-10-13T07:17:43.9435933Z    Checking validity of types ...
+2025-10-13T07:17:55.2383455Z Failed to compile.
+2025-10-13T07:17:55.2383807Z 
+2025-10-13T07:17:55.2470581Z app/letters/[slug]/page.tsx
+2025-10-13T07:17:55.2471615Z Type error: File '/home/runner/work/newlove/newlove/app/letters/[slug]/page.tsx' is not a module.
+2025-10-13T07:17:55.2472253Z 
+2025-10-13T07:17:55.5901115Z ##[error]Process completed with exit code 1.

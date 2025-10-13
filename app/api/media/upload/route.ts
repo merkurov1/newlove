@@ -1,27 +1,20 @@
 export const dynamic = 'force-dynamic';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { createClient } from '@supabase/supabase-js';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 // Создаем клиент с service role для админских операций
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseAdmin = getServerSupabaseClient();
 
 export async function POST(request: NextRequest) {
   try {
-    // Проверяем аутентификацию
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.role || session.user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Доступ запрещен' },
-        { status: 403 }
-      );
+    // Проверяем аутентификацию через Supabase
+    try {
+      await requireAdminFromRequest(request as Request);
+    } catch (e) {
+      return NextResponse.json({ error: 'Доступ запрещен' }, { status: 403 });
     }
 
     const formData = await request.formData();
