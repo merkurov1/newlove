@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 // Use a dynamic import for the Supabase request helper to avoid circular-import
 // and ESM/CJS interop issues during Next.js production builds.
-import { safeData } from '@/lib/safeSerialize';
+import { safeData, safeLogError } from '@/lib/safeSerialize';
 import { AnimatePresence, motion } from 'framer-motion';
 
 // Определяем типы для проекта, чтобы код был надежнее
