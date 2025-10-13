@@ -24,7 +24,7 @@ export default async function ArticlesPage() {
       </div>
     </div>
   );
-  const { data: articles = [], error } = await serverSupabase.from('article').select('id,title,slug,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
+  const { data: articles = [], error } = await serverSupabase.from('articles').select('id,title,slug,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
   if (error) {
     console.error('Supabase fetch articles error', error);
   }

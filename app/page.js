@@ -25,12 +25,36 @@ async function getArticles() {
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const serverSupabase = getServerSupabaseClient();
   if (!serverSupabase) return [];
-  const { data, error } = await serverSupabase.from('article').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name),tags:tags(*)').eq('published', true).order('updatedAt', { ascending: false }).limit(15);
+  // Fetch articles from canonical plural table
+  const { data, error } = await serverSupabase.from('articles').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)').eq('published', true).order('updatedAt', { ascending: false }).limit(15);
   if (error) {
     console.error('Supabase fetch articles error', error);
     return [];
   }
-  return data || [];
+  const articles = data || [];
+
+  // Batch-fetch tags for articles via junction table to avoid relying on implicit PostgREST relationships
+  try {
+    const ids = articles.map(a => a.id).filter(Boolean);
+    if (ids.length > 0) {
+      const { data: links } = await serverSupabase.from('_ArticleToTag').select('A,B').in('A', ids);
+      const tagIds = (links || []).map(l => l.B).filter(Boolean);
+      const { data: tags } = tagIds.length > 0 ? await serverSupabase.from('Tag').select('id,name,slug').in('id', tagIds) : { data: [] };
+      const tagsById = {};
+      for (const t of tags || []) tagsById[t.id] = t;
+      const tagsByArticle = {};
+      for (const l of links || []) {
+        if (!tagsByArticle[l.A]) tagsByArticle[l.A] = [];
+        if (tagsById[l.B]) tagsByArticle[l.A].push(tagsById[l.B]);
+      }
+      for (const a of articles) a.tags = tagsByArticle[a.id] || [];
+    }
+  } catch (e) {
+    console.error('Error fetching article tags', e);
+    for (const a of articles) a.tags = a.tags || [];
+  }
+
+  return articles;
 }
 
 export default async function Home() {

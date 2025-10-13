@@ -12,7 +12,7 @@ export async function GET() {
     console.error('Unable to create server supabase client for RSS:', e);
     return new Response('DB unavailable', { status: 500 });
   }
-  const { data: articles, error } = await supabase.from('article').select('title,slug,content,publishedAt,author:users(name)').eq('published', true).order('publishedAt', { ascending: false }).limit(30);
+  const { data: articles, error } = await supabase.from('articles').select('title,slug,content,publishedAt,author:users(name)').eq('published', true).order('publishedAt', { ascending: false }).limit(30);
   if (error) {
     // If the DB/schema is not available during build, return an empty feed to avoid
     // failing the whole build. This keeps CI stable when migrations aren't applied.

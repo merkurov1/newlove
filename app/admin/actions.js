@@ -40,7 +40,7 @@ export async function createArticle(formData) {
   // Also try to read the real user from the request for author attribution
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { user: requestUser } = await loadSupabaseFromRequest(globalReq);
-  const { data: existingSlug } = await serverSupabase.from('article').select('id').eq('slug', slug).maybeSingle();
+  const { data: existingSlug } = await serverSupabase.from('articles').select('id').eq('slug', slug).maybeSingle();
   if (existingSlug) {
     throw new Error('Статья с таким slug уже существует. Пожалуйста, выберите другой URL.');
   }
@@ -70,7 +70,7 @@ export async function createArticle(formData) {
   const articleId = createId();
   // Insert article via server-side Supabase client. Use request user id for author when available.
   const authorIdResolved = (requestUser && requestUser.id) ? requestUser.id : (authorId || process.env.ADMIN_API_DEFAULT_AUTHOR_ID || 'server');
-  const { data: createdArticle, error: insertErr } = await serverSupabase.from('article').insert({
+  const { data: createdArticle, error: insertErr } = await serverSupabase.from('articles').insert({
     id: articleId,
     title,
     content: JSON.stringify(validBlocks),
@@ -133,7 +133,7 @@ export async function updateArticle(formData) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { user: requestUser } = await loadSupabaseFromRequest(globalReq);
   if (!serverSupabase) throw new Error('Database client not available');
-  const { error: updateErr } = await serverSupabase.from('article').update({
+  const { error: updateErr } = await serverSupabase.from('articles').update({
     title,
     content: JSON.stringify(validBlocks),
     slug,
@@ -168,8 +168,8 @@ export async function deleteArticle(formData) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { user: requestUser } = await loadSupabaseFromRequest(globalReq);
   if (!serverSupabase) throw new Error('Database client not available');
-  const { data: article } = await serverSupabase.from('article').select('slug').eq('id', id).maybeSingle();
-  const { error: delErr } = await serverSupabase.from('article').delete().eq('id', id);
+  const { data: article } = await serverSupabase.from('articles').select('slug').eq('id', id).maybeSingle();
+  const { error: delErr } = await serverSupabase.from('articles').delete().eq('id', id);
   if (delErr) {
     const { safeLogError } = await import('@/lib/safeSerialize');
     safeLogError('Supabase delete article error', delErr);
