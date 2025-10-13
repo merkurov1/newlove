@@ -12,13 +12,13 @@ export async function GET(request, { params }) {
 
   const { data: article, error } = await supabase.from('articles').select('*').eq('id', articleId).maybeSingle();
     if (error || !article) {
-      if (process.env.NODE_ENV === 'development') console.error('Error fetching article', error);
+  if (process.env.NODE_ENV === 'development') safeLogError('Error fetching article', error);
       return NextResponse.json({ error: 'Article not found' }, { status: 404 });
     }
     return NextResponse.json(article);
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
-      console.error('Error fetching article:', error);
+  safeLogError('Error fetching article:', error);
     }
     return new Response(JSON.stringify({ error: 'Article not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   }

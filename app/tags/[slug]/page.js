@@ -29,7 +29,8 @@ async function getTagData(slug) {
       // Fetch articles from canonical plural table
       const { data: arts, error: artsErr } = await serverSupabase.from('articles').select('*, author:authorId(name,image)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
       if (artsErr) {
-        console.error('Error fetching articles for tag fallback', artsErr);
+  const { safeLogError } = await import('@/lib/safeSerialize');
+  safeLogError('Error fetching articles for tag fallback', artsErr);
         return { data: [] };
       }
 
@@ -51,7 +52,8 @@ async function getTagData(slug) {
 
         return { data: articlesWithTags };
       } catch (e) {
-        console.error('Error assembling tags for articles fallback', e);
+  const { safeLogError } = await import('@/lib/safeSerialize');
+  safeLogError('Error assembling tags for articles fallback', e);
         return { data: arts || [] };
       }
   });

@@ -186,8 +186,8 @@ function ArticleComponent({ article }) {
       console.log('⚠️ No content found for article');
     }
   } catch (error) {
-    console.error('💥 Error parsing article content:', error);
-    console.log('📋 Raw content:', article.content);
+    safeLogError('💥 Error parsing article content:', error);
+    console.log('📋 Raw content:', typeof article !== 'undefined' ? safeStringify(article.content) : '[missing]');
     blocks = [];
   }
 
@@ -278,8 +278,8 @@ function ProjectComponent({ project }) {
       console.log('⚠️ No content found for project');
     }
   } catch (error) {
-    console.error('💥 Error parsing project content:', error);
-    console.log('📋 Raw content:', project.content);
+    safeLogError('💥 Error parsing project content:', error);
+    console.log('📋 Raw content:', typeof project !== 'undefined' ? safeStringify(project.content) : '[missing]');
     blocks = [];
   }
 
