@@ -6,7 +6,7 @@ export async function GET() {
     const supabase = getServerSupabaseClient();
     if (!supabase) return NextResponse.json({ success: true, count: 0, projects: [] });
 
-    const { data: projects, error } = await supabase.from('project').select('id,title,slug,published').order('createdAt', { ascending: false });
+  const { data: projects, error } = await supabase.from('projects').select('id,title,slug,published').order('createdAt', { ascending: false });
     if (error) {
       console.error('Supabase fetch projects error', error);
       return NextResponse.json({ success: false, error: error.message });

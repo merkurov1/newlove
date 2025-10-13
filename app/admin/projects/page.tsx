@@ -10,7 +10,7 @@ export default async function AdminProjectsPage() {
   const serverSupabase = getServerSupabaseClient();
   let projects: any[] = [];
   if (serverSupabase) {
-    const { data, error } = await serverSupabase.from('project').select('*').order('createdAt', { ascending: false });
+  const { data, error } = await serverSupabase.from('projects').select('*').order('createdAt', { ascending: false });
     if (error) console.error('Supabase fetch admin projects error', error);
     projects = data || [];
   }

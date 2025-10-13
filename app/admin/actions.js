@@ -188,7 +188,7 @@ export async function createProject(formData) {
   // Use server service-role client for admin mutations and checks
   const serverSupabase = getServerSupabaseClient();
   if (!serverSupabase) throw new Error('Database client not available');
-  const { data: existing } = await serverSupabase.from('project').select('id').eq('slug', slug).maybeSingle();
+  const { data: existing } = await serverSupabase.from('projects').select('id').eq('slug', slug).maybeSingle();
   if (existing) {
     throw new Error('Проект с таким slug уже существует. Пожалуйста, выберите другой URL.');
   }
@@ -208,7 +208,7 @@ export async function createProject(formData) {
 
   // Явно генерируем CUID для проекта
   const projectId = createId();
-  const { data: created, error: insertErr } = await serverSupabase.from('project').insert({
+  const { data: created, error: insertErr } = await serverSupabase.from('projects').insert({
     id: projectId,
     title,
     content: JSON.stringify(validBlocks),
@@ -260,7 +260,7 @@ export async function updateProject(formData) {
   // Use server service-role client for admin update
   const serverSupabase = getServerSupabaseClient();
   if (!serverSupabase) throw new Error('Database client not available');
-  const { error: updateErr } = await serverSupabase.from('project').update({
+  const { error: updateErr } = await serverSupabase.from('projects').update({
     title,
     content: JSON.stringify(validBlocks),
     slug,
@@ -292,8 +292,8 @@ export async function deleteProject(formData) {
     // Use server service-role client for admin deletion
     const serverSupabase = getServerSupabaseClient();
   if (!serverSupabase) throw new Error('Database client not available');
-  const { data: project } = await serverSupabase.from('project').select('slug').eq('id', id).maybeSingle();
-  const { error: delErr } = await serverSupabase.from('project').delete().eq('id', id);
+  const { data: project } = await serverSupabase.from('projects').select('slug').eq('id', id).maybeSingle();
+  const { error: delErr } = await serverSupabase.from('projects').delete().eq('id', id);
   if (delErr) {
     console.error('Supabase delete project error', delErr);
     throw new Error('Ошибка при удалении проекта');
