@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   try {
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod as any;
+  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
   const { supabase } = await getUserAndSupabaseFromRequest(req);
     if (!supabase) return NextResponse.json({ files: [], count: 0 });
 

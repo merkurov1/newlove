@@ -7,9 +7,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Нет токена для отписки.' }, { status: 400 });
   }
   try {
-    const mod = await import('@/lib/supabase-server');
-    const { getUserAndSupabaseFromRequest } = mod as any;
-    const { supabase } = await getUserAndSupabaseFromRequest((globalThis && (globalThis as any).request) || new Request('http://localhost')) || {};
+  const mod = await import('@/lib/supabase-server');
+  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
+  const { supabase } = await getUserAndSupabaseFromRequest((globalThis && (globalThis as any).request) || new Request('http://localhost')) || {};
     if (!supabase) return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
     const { data: tokenRow, error: tokenErr } = await supabase.from('subscriber_tokens').select('*').eq('token', token).maybeSingle();
     if (tokenErr) {

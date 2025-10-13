@@ -1,7 +1,6 @@
 // lib/validation/security.ts
 
 import { NextRequest } from 'next/server';
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 // Minimal compatibility wrappers that forward to the Supabase-based
@@ -12,7 +11,7 @@ import { requireAdminFromRequest } from '@/lib/serverAuth';
 export async function requireAuth(req?: NextRequest) {
   if (!req) throw new Error('Request is required for requireAuth');
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod as any;
+  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
   const { user } = await getUserAndSupabaseFromRequest(req as Request);
   if (!user || !user.id) throw new Error('Unauthorized');
   return user;

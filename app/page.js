@@ -24,7 +24,7 @@ const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false
 async function getArticles() {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod;
+  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) return [];
   const { data, error } = await supabase.from('article').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name),tags:tags(*)').eq('published', true).order('updatedAt', { ascending: false }).limit(15);

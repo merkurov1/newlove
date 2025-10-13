@@ -24,7 +24,7 @@ export default async function ProjectsPage() {
   // Запрашиваем только опубликованные проекты через Supabase
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod as any;
+  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   let projects: any[] = [];
     if (supabase) {
