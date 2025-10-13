@@ -1,7 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
-import users from './users_export.json' assert { type: 'json' };
+const users = require('./users_export.json');
+const { getScriptSupabase } = require('./supabase-client');
 
-const supabase = createClient('https://YOUR_PROJECT.supabase.co', 'YOUR_SERVICE_ROLE_KEY');
+let supabase;
+try {
+  supabase = getScriptSupabase();
+} catch (err) {
+  console.error('Missing supabase env for import script. Set SUPABASE_SERVICE_ROLE_KEY and SUPABASE_URL');
+  process.exit(1);
+}
 
 async function importUsers() {
   for (const user of users) {

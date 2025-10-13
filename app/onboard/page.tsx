@@ -4,11 +4,8 @@ import Onboard from '@web3-onboard/core';
 import injectedModule from '@web3-onboard/injected-wallets';
 import walletConnectModule from '@web3-onboard/walletconnect';
 import { ethers } from 'ethers';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { createClient as createBrowserClient } from '@/lib/supabase-browser';
+const supabase = createBrowserClient();
 
 export default function OnboardLoginPage() {
   const [user, setUser] = useState<any>(null);
@@ -77,8 +74,8 @@ export default function OnboardLoginPage() {
   return (
     <div style={{ maxWidth: 400, margin: "40px auto", padding: 24, border: "1px solid #eee", borderRadius: 12 }}>
       <h1 style={{ fontSize: 28, marginBottom: 16 }}>Onboard Web3 Login</h1>
-      <button onClick={handleOnboardWeb3Login} disabled={loading} style={{ width: "100%", padding: 12, fontSize: 18, background: "#00B386", color: "#fff", border: "none", borderRadius: 8 }}>
-        {loading ? "Вход через Onboard..." : "Войти через Onboard (Web3)"}
+      <button onClick={handleOnboardWeb3Login} disabled={loading} style={{ width: '100%', padding: 12, fontSize: 18, background: '#00B386', color: '#fff', border: 'none', borderRadius: 8 }}>
+        {loading ? 'Вход через Onboard...' : 'Войти через Onboard (Web3)'}
       </button>
       <a href="/onboard/secret/" target="_blank" rel="noopener noreferrer" style={{ display: 'block', margin: '16px 0', color: '#2979FF', textAlign: 'center', textDecoration: 'underline', fontWeight: 600 }}>
         Перейти к /onboard/secret/ (тест в приватной вкладке)

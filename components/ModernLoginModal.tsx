@@ -1,11 +1,7 @@
 "use client";
 import { useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { createClient as createBrowserClient } from '@/lib/supabase-browser';
+const supabase = createBrowserClient();
 
 export default function ModernLoginModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [loading, setLoading] = useState<string | null>(null);

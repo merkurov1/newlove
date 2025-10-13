@@ -1,28 +1,23 @@
 // app/profile/page.js
 
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/authOptions';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
-import prisma from '@/lib/prisma';
 import ProfileForm from '@/components/profile/ProfileForm'; // Мы создадим этот компонент на след. шаге
 
-// Эта функция загружает актуальные данные пользователя из БД
-async function getUserData(userId) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-  });
-  return user;
-}
-
 export default async function ProfilePage() {
-  const session = await getServerSession(authOptions);
+  const { user, supabase } = await getUserAndSupabaseFromRequest(globalThis?.request || new Request('http://localhost'));
+  // Если user не найден, редиректим
+  if (!user?.id) redirect('/');
 
-  // Если пользователя нет в сессии, отправляем на главную
-  if (!session?.user?.id) {
-    redirect('/');
+  let userData = null;
+  if (supabase) {
+    const { data, error } = await supabase.from('users').select('*').eq('id', user.id).maybeSingle();
+    if (error) {
+      console.error('Supabase fetch user error', error);
+    } else {
+      userData = data;
+    }
   }
-
-  const userData = await getUserData(session.user.id);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-12">

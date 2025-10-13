@@ -1,7 +1,7 @@
 'use client';
 
 import useSupabaseSession from '@/hooks/useSupabaseSession';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import useBannerSettings from '@/hooks/useBannerSettings';
@@ -64,22 +64,19 @@ export default function WelcomeBanner({ onClose, variant, forceShow = false }: W
   const [bannerConfig, setBannerConfig] = useState<BannerConfig | null>(null);
   const { isLoaded, shouldShowBanner, markBannerShown, dismissBanner } = useBannerSettings();
 
-  // Определяем вариант баннера
-  const getBannerVariant = (): string => {
+  // Определяем вариант баннера (memoized для стабильной identity в эффектах)
+  const currentVariant = useMemo(() => {
     if (variant) return variant;
-    
-    if (status === 'loading') return 'public'; // По умолчанию пока загружается
-    
+    if (status === 'loading') return 'public';
     if (session?.user?.role === 'ADMIN') return 'admin';
     if (session?.user) return 'authenticated';
     return 'public';
-  };
+  }, [variant, session, status]);
 
   // Инициализация баннера
   useEffect(() => {
     if (!isLoaded && !forceShow) return;
     
-    const currentVariant = getBannerVariant();
     const config = BANNER_CONFIGS[currentVariant];
     
     if (config && (forceShow || shouldShowBanner(config.id, config.showFrequency))) {
@@ -91,7 +88,7 @@ export default function WelcomeBanner({ onClose, variant, forceShow = false }: W
         markBannerShown(config.id);
       }
     }
-  }, [session, status, variant, forceShow, isLoaded]);
+  }, [currentVariant, forceShow, isLoaded, markBannerShown, shouldShowBanner]);
 
   // Обработка закрытия
   const handleClose = (type: 'temporary' | 'week' | 'permanent' = 'temporary') => {
@@ -144,7 +141,7 @@ export default function WelcomeBanner({ onClose, variant, forceShow = false }: W
             </p>
             
             {/* Call to Action для незарегистрированных */}
-            {getBannerVariant() === 'public' && (
+            {currentVariant === 'public' && (
               <div className="mt-6 flex flex-col sm:flex-row gap-3">
                 <button 
                   onClick={() => alert('Use the login button above or wallet login below.')}
@@ -162,7 +159,7 @@ export default function WelcomeBanner({ onClose, variant, forceShow = false }: W
             )}
             
             {/* Quick actions для аутентифицированных */}
-            {getBannerVariant() === 'authenticated' && (
+            {currentVariant === 'authenticated' && (
               <div className="mt-6 flex flex-col sm:flex-row gap-3">
                 <Link 
                   href="/profile"
@@ -180,7 +177,7 @@ export default function WelcomeBanner({ onClose, variant, forceShow = false }: W
             )}
             
             {/* Quick actions для админов */}
-            {getBannerVariant() === 'admin' && (
+            {currentVariant === 'admin' && (
               <div className="mt-6 flex flex-col sm:flex-row gap-3">
                 <Link 
                   href="/admin"
@@ -216,7 +213,7 @@ export default function WelcomeBanner({ onClose, variant, forceShow = false }: W
             </button>
             
             {/* Дополнительные опции для аутентифицированных пользователей */}
-            {getBannerVariant() !== 'public' && (
+            {currentVariant !== 'public' && (
               <div className="relative group">
                 <button 
                   className="p-2 rounded-full hover:bg-white/50 transition-colors"

@@ -1,14 +1,19 @@
 // app/admin/projects/page.tsx
 import Link from 'next/link';
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { deleteProject } from '../actions'; // Мы добавим эту функцию в actions.js
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminProjectsPage() {
-  const projects = await prisma.project.findMany({
-    orderBy: { createdAt: 'desc' },
-  });
+  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  let projects: any[] = [];
+  if (supabase) {
+    const { data, error } = await supabase.from('project').select('*').order('createdAt', { ascending: false });
+    if (error) console.error('Supabase fetch admin projects error', error);
+    projects = data || [];
+  }
 
   return (
     <div className="space-y-8 pb-10">
@@ -28,7 +33,7 @@ export default async function AdminProjectsPage() {
         {projects.length === 0 ? (
           <div className="col-span-full p-6 text-center text-gray-400 bg-white rounded-xl border shadow-sm">Пока нет ни одного проекта.</div>
         ) : (
-          projects.map((project) => (
+          projects.map((project: any) => (
             <div key={project.id} className="bg-white rounded-xl border shadow-sm p-5 flex flex-col gap-2 hover:shadow-md transition-shadow group">
               <h3 className="text-lg font-semibold text-gray-900 truncate group-hover:text-purple-700 transition-colors">{project.title}</h3>
               <p className="text-xs text-gray-500 truncate">/{project.slug}</p>

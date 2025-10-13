@@ -1,33 +1,31 @@
 // app/tags/[slug]/page.js
 
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
 
 // --- 1. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ---
 // Находит тег по его slug и подгружает все связанные с ним статьи
 async function getTagData(slug) {
-  // Делаем поиск по slug регистронезависимым
-  const tag = await prisma.tag.findFirst({
-    where: { slug: { equals: slug, mode: 'insensitive' } },
-    include: {
-      articles: {
-        where: { published: true },
-        orderBy: { publishedAt: 'desc' },
-        include: {
-          author: { select: { name: true, image: true } },
-          tags: true,
-        },
-      },
-      // В будущем можно будет добавить и проекты
-      // projects: { ... }
-    },
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  if (!supabase) notFound();
+  // Поиск тега по slug (регистр игнорируем вручную)
+  const { data: tags } = await supabase.from('Tag').select('*').ilike('slug', slug).limit(1);
+  const tag = (tags && tags[0]) || null;
+  if (!tag) notFound();
+  // Получаем связанные статьи через junction _ArticleToTag
+  const { data: articles } = await supabase.rpc('get_articles_by_tag', { tag_slug: tag.slug }).catch(async () => {
+    // fallback: query articles by checking tags relation manually if rpc not present
+    const { data: rels } = await supabase.from('_ArticleToTag').select('A').eq('B', tag.id);
+    const ids = (rels || []).map(r => r.A);
+    if (ids.length === 0) return { data: [] };
+    const { data: arts } = await supabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
+    return { data: arts };
   });
-
-  if (!tag) {
-    notFound();
-  }
+  tag.articles = (articles && articles.data) || (articles || []);
   return tag;
 }
 

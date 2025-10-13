@@ -1,7 +1,7 @@
 // app/you/[username]/page.js
 
 
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -21,25 +21,17 @@ function FallbackAvatar({ name }) {
 // --- 1. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ПРОФИЛЯ ---
 // Находит пользователя по username и подгружает его контент
 async function getUserProfile(username) {
-  const user = await prisma.user.findUnique({
-    where: { username },
-    include: {
-      articles: {
-        where: { published: true },
-        orderBy: { publishedAt: 'desc' },
-        include: { tags: true },
-      },
-      projects: {
-        where: { published: true },
-        orderBy: { publishedAt: 'desc' },
-        include: { tags: true },
-      }
-    },
-  });
-
-  if (!user) {
-    notFound();
-  }
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  if (!supabase) notFound();
+  const { data: users } = await supabase.from('users').select('*').eq('username', username).limit(1);
+  const user = (users && users[0]) || null;
+  if (!user) notFound();
+  // Fetch articles and projects separately
+  const { data: articles } = await supabase.from('article').select('*, tags:tags(*)').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  const { data: projects } = await supabase.from('project').select('*, tags:tags(*)').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  user.articles = articles || [];
+  user.projects = projects || [];
   return user;
 }
 

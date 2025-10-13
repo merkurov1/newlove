@@ -7,7 +7,7 @@ import Footer from '@/components/Footer';
 import AuthProvider from '@/components/AuthProvider';
 import Providers from './providers';
 import GlobalErrorHandler from '@/components/GlobalErrorHandler';
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { Analytics } from '@vercel/analytics/react';
 import { UmamiScript } from '@/lib/umami';
 import dynamic from 'next/dynamic';
@@ -100,10 +100,15 @@ export default async function RootLayout({ children }) {
   // Временно отключаем запрос к базе данных до настройки DATABASE_URL
   let projects = [];
   try {
-    projects = await prisma.project.findMany({
-      where: { published: true },
-      orderBy: { createdAt: 'asc' },
-    });
+    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+    const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+    if (supabase) {
+      const { data, error } = await supabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
+      if (error) console.error('Supabase fetch projects error', error);
+      projects = data || [];
+    } else {
+      projects = [];
+    }
   } catch (error) {
     // Логируем только в development
     if (process.env.NODE_ENV === 'development') {
@@ -121,7 +126,13 @@ export default async function RootLayout({ children }) {
 
   let subscriberCount = 0;
   try {
-    subscriberCount = await prisma.subscriber.count();
+    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+    const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+    if (supabase) {
+      const { data, error } = await supabase.from('subscribers').select('id');
+      if (!error) subscriberCount = (data && data.length) || 0;
+      else console.error('Supabase count subscribers error', error);
+    }
   } catch (error) {
     // Логируем только в development
     if (process.env.NODE_ENV === 'development') {

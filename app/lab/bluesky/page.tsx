@@ -95,7 +95,7 @@ export default function BlueskyLabPage() {
 
         {/* Bluesky Feed Demo */}
         <div className="bg-gray-50 rounded-xl p-8 mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">� Живая лента Bluesky</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">🟦 Живая лента Bluesky</h2>
           
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
@@ -139,7 +139,7 @@ export default function BlueskyLabPage() {
             <ul>
               <li>Backend proxy для безопасности credentials</li>
               <li>Поддержка изображений и внешних ссылок</li>
-              <li>Lazy loading с кнопкой "Загрузить ещё"</li>
+              <li>Lazy loading с кнопкой &quot;Загрузить ещё&quot;</li>
               <li>Адаптивный дизайн для мобильных устройств</li>
               <li>Обработка ошибок и loading состояний</li>
             </ul>

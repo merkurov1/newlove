@@ -1,15 +1,15 @@
 // app/admin/articles/edit/[id]/page.js
-import prisma from '@/lib/prisma';
+import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { notFound } from 'next/navigation';
 import ContentForm from '@/components/admin/ContentForm';
 import { updateArticle } from '../../../actions';
 
 async function getArticle(id) {
-  const article = await prisma.article.findUnique({
-    where: { id },
-    include: { tags: true },
-  });
-  if (!article) notFound();
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  if (!supabase) notFound();
+  const { data: article, error } = await supabase.from('article').select('*, tags:tags(*)').eq('id', id).maybeSingle();
+  if (error || !article) notFound();
   return article;
 }
 

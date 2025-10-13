@@ -4,13 +4,10 @@
 "use client";
 import { useState, useEffect } from "react";
 import ModernLoginModal from "./ModernLoginModal";
-import { createClient } from "@supabase/supabase-js";
+import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 import Image from "next/image";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = createBrowserClient();
 
 export default function LoginButton() {
   const [modalOpen, setModalOpen] = useState(false);

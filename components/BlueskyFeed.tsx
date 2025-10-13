@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 
 interface BlueskyAuthor {
   did: string;
@@ -118,10 +119,13 @@ export default function BlueskyFeed({ limit = 10 }: BlueskyFeedProps) {
         >
           <div className="flex items-center mb-3">
             {post.author.avatar && (
-              <img 
-                src={post.author.avatar} 
+              <Image
+                src={post.author.avatar}
                 alt={post.author.displayName ? `Аватар: ${post.author.displayName}` : post.author.handle ? `Аватар: ${post.author.handle}` : 'Аватар пользователя'}
-                className="w-10 h-10 rounded-full mr-3"
+                width={40}
+                height={40}
+                className="rounded-full mr-3"
+                unoptimized
               />
             )}
             <div>
@@ -154,11 +158,14 @@ export default function BlueskyFeed({ limit = 10 }: BlueskyFeedProps) {
                       post.images!.length === 3 && index === 0 ? 'col-span-2' : ''
                     }`}
                   >
-                    <img 
-                      src={image.url} 
+                    <Image
+                      src={image.url}
                       alt={image.alt ? `Bluesky: ${image.alt}` : `Bluesky изображение ${index + 1}`}
                       className="w-full h-auto max-h-96 object-cover hover:scale-105 transition-transform cursor-pointer"
-                      onClick={() => window.open(image.url, '_blank')}
+                      width={800}
+                      height={600}
+                      unoptimized
+                      onClick={() => window.open(image.url, '_blank') as any}
                     />
                   </div>
                 ))}

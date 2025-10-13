@@ -1,16 +1,12 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/serverAuth';
-import { createClient } from '@supabase/supabase-js';
+import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin();
-    // Use Supabase Admin API to list users
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    await requireAdminFromRequest(request as Request);
+    // Use centralized server client to list users
+    const supabase = getServerSupabaseClient();
     const { data, error } = await supabase.auth.admin.listUsers();
     if (error) throw error;
     const users = (data.users || []).map(u => ({
