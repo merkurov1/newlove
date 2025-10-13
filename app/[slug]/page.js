@@ -1,5 +1,12 @@
 // app/[slug]/page.js
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// Avoid static import to handle different module export shapes (named vs default)
+// and to prevent build-time import errors when the helper is implemented in .js vs .ts.
+async function getUserAndSupabaseFromRequest(req) {
+  const mod = await import('@/lib/supabase-server');
+  // support both named export and default export
+  const fn = mod.getUserAndSupabaseFromRequest || mod.default || mod;
+  return fn(req);
+}
 import { safeData } from '@/lib/safeSerialize';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
