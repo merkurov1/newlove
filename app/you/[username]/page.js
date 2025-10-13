@@ -4,6 +4,7 @@
 // Supabase helper is loaded dynamically inside getUserProfile to avoid build-time issues
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Image from 'next/image';
 import { Suspense } from 'react';
 import { getFirstImage } from '@/lib/contentUtils';
@@ -40,10 +41,11 @@ async function getUserProfile(username) {
 // --- 2. ГЕНЕРИРУЕМ МЕТАДАННЫЕ ДЛЯ SEO ---
 export async function generateMetadata({ params }) {
   const user = await getUserProfile(params.username);
-  return {
+  const meta = {
     title: `Профиль: ${user.name}`,
     description: user.bio || `Публичные статьи и проекты автора ${user.name}`,
   };
+  return sanitizeMetadata(meta);
 }
 
 // --- 3. САМ КОМПОНЕНТ СТРАНИЦЫ ---
