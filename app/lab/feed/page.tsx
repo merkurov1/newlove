@@ -8,6 +8,8 @@ export const metadata = {
   description: 'Единая хронологическая лента из всех подключенных платформ - Bluesky, Medium, YouTube',
 };
 
+export const dynamic = 'force-dynamic';
+
 export default function FeedLabPage() {
   return (
     <AuthGuard>

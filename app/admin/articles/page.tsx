@@ -1,17 +1,20 @@
 import Link from 'next/link';
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// dynamic import to avoid circular/interop build issues
+import { safeData } from '@/lib/safeSerialize';
 import { deleteArticle } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminArticlesPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod as any;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   let articles: any[] = [];
   if (supabase) {
     const { data, error } = await supabase.from('article').select('id,title,slug,published,author:authorId(name)').order('createdAt', { ascending: false });
     if (error) console.error('Supabase fetch admin articles error', error);
-    articles = data || [];
+    articles = safeData(data || []);
   }
 
   return (

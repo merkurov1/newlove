@@ -1,7 +1,7 @@
 // app/api/cron/route.ts
 
 import { NextResponse } from 'next/server';
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// dynamic import to avoid circular/interop build issues
 
 // Вспомогательная функция для генерации URL-дружественного слага из заголовка
 // Я добавил транслитерацию для кириллических символов
@@ -40,8 +40,10 @@ export async function GET() {
     const articles: any[] = []; // Замените это на ваш реальный массив статей
     // ---- КОНЕЦ ПРИМЕРНОГО КОДА ----
 
-    const globalReq = ((globalThis && (globalThis as any).request) as Request) || new Request('http://localhost');
-    const { supabase } = await getUserAndSupabaseFromRequest(globalReq) || {};
+  const globalReq = ((globalThis && (globalThis as any).request) as Request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod as any;
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq) || {};
     if (!supabase) {
       console.error('Supabase client unavailable for cron job');
       return NextResponse.json({ message: 'Supabase client unavailable' }, { status: 500 });

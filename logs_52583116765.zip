@@ -1,0 +1,495 @@
+﻿2025-10-13T07:14:55.9116332Z Current runner version: '2.328.0'
+2025-10-13T07:14:55.9140917Z ##[group]Runner Image Provisioner
+2025-10-13T07:14:55.9141814Z Hosted Compute Agent
+2025-10-13T07:14:55.9142358Z Version: 20250912.392
+2025-10-13T07:14:55.9143133Z Commit: d921fda672a98b64f4f82364647e2f10b2267d0b
+2025-10-13T07:14:55.9143867Z Build Date: 2025-09-12T15:23:14Z
+2025-10-13T07:14:55.9144479Z ##[endgroup]
+2025-10-13T07:14:55.9145015Z ##[group]Operating System
+2025-10-13T07:14:55.9145514Z Ubuntu
+2025-10-13T07:14:55.9146156Z 24.04.3
+2025-10-13T07:14:55.9146574Z LTS
+2025-10-13T07:14:55.9147001Z ##[endgroup]
+2025-10-13T07:14:55.9147551Z ##[group]Runner Image
+2025-10-13T07:14:55.9148085Z Image: ubuntu-24.04
+2025-10-13T07:14:55.9148544Z Version: 20250929.60.1
+2025-10-13T07:14:55.9149742Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20250929.60/images/ubuntu/Ubuntu2404-Readme.md
+2025-10-13T07:14:55.9151273Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20250929.60
+2025-10-13T07:14:55.9152356Z ##[endgroup]
+2025-10-13T07:14:55.9153844Z ##[group]GITHUB_TOKEN Permissions
+2025-10-13T07:14:55.9156013Z Contents: read
+2025-10-13T07:14:55.9156529Z Metadata: read
+2025-10-13T07:14:55.9157024Z Packages: read
+2025-10-13T07:14:55.9157515Z ##[endgroup]
+2025-10-13T07:14:55.9159702Z Secret source: Actions
+2025-10-13T07:14:55.9160678Z Prepare workflow directory
+2025-10-13T07:14:55.9490052Z Prepare all required actions
+2025-10-13T07:14:55.9528916Z Getting action download info
+2025-10-13T07:14:56.2994256Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
+2025-10-13T07:14:56.5020486Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2025-10-13T07:14:56.7329367Z Complete job name: build
+2025-10-13T07:14:56.7997188Z ##[group]Run actions/checkout@v4
+2025-10-13T07:14:56.7998005Z with:
+2025-10-13T07:14:56.7998397Z   repository: merkurov1/newlove
+2025-10-13T07:14:56.7998999Z   token: ***
+2025-10-13T07:14:56.7999379Z   ssh-strict: true
+2025-10-13T07:14:56.7999791Z   ssh-user: git
+2025-10-13T07:14:56.8000188Z   persist-credentials: true
+2025-10-13T07:14:56.8000620Z   clean: true
+2025-10-13T07:14:56.8001115Z   sparse-checkout-cone-mode: true
+2025-10-13T07:14:56.8001582Z   fetch-depth: 1
+2025-10-13T07:14:56.8002021Z   fetch-tags: false
+2025-10-13T07:14:56.8002414Z   show-progress: true
+2025-10-13T07:14:56.8002961Z   lfs: false
+2025-10-13T07:14:56.8003317Z   submodules: false
+2025-10-13T07:14:56.8003721Z   set-safe-directory: true
+2025-10-13T07:14:56.8004413Z ##[endgroup]
+2025-10-13T07:14:56.9064674Z Syncing repository: merkurov1/newlove
+2025-10-13T07:14:56.9066359Z ##[group]Getting Git version info
+2025-10-13T07:14:56.9067029Z Working directory is '/home/runner/work/newlove/newlove'
+2025-10-13T07:14:56.9068109Z [command]/usr/bin/git version
+2025-10-13T07:14:56.9142802Z git version 2.51.0
+2025-10-13T07:14:56.9171199Z ##[endgroup]
+2025-10-13T07:14:56.9184103Z Temporarily overriding HOME='/home/runner/work/_temp/1077202b-bd01-4427-bd67-d3b01e59ea33' before making global git config changes
+2025-10-13T07:14:56.9186439Z Adding repository directory to the temporary git global config as a safe directory
+2025-10-13T07:14:56.9190720Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/newlove/newlove
+2025-10-13T07:14:56.9232123Z Deleting the contents of '/home/runner/work/newlove/newlove'
+2025-10-13T07:14:56.9236702Z ##[group]Initializing the repository
+2025-10-13T07:14:56.9242403Z [command]/usr/bin/git init /home/runner/work/newlove/newlove
+2025-10-13T07:14:56.9347326Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-10-13T07:14:56.9348498Z hint: is subject to change. To configure the initial branch name to use in all
+2025-10-13T07:14:56.9350014Z hint: of your new repositories, which will suppress this warning, call:
+2025-10-13T07:14:56.9351143Z hint:
+2025-10-13T07:14:56.9351859Z hint: 	git config --global init.defaultBranch <name>
+2025-10-13T07:14:56.9352939Z hint:
+2025-10-13T07:14:56.9354135Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-10-13T07:14:56.9355012Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-10-13T07:14:56.9355742Z hint:
+2025-10-13T07:14:56.9356112Z hint: 	git branch -m <name>
+2025-10-13T07:14:56.9356537Z hint:
+2025-10-13T07:14:56.9357089Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-10-13T07:14:56.9358002Z Initialized empty Git repository in /home/runner/work/newlove/newlove/.git/
+2025-10-13T07:14:56.9368652Z [command]/usr/bin/git remote add origin https://github.com/merkurov1/newlove
+2025-10-13T07:14:56.9410500Z ##[endgroup]
+2025-10-13T07:14:56.9411641Z ##[group]Disabling automatic garbage collection
+2025-10-13T07:14:56.9417075Z [command]/usr/bin/git config --local gc.auto 0
+2025-10-13T07:14:56.9450481Z ##[endgroup]
+2025-10-13T07:14:56.9451224Z ##[group]Setting up auth
+2025-10-13T07:14:56.9461205Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-10-13T07:14:56.9496070Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-10-13T07:14:56.9842070Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-10-13T07:14:56.9874115Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-10-13T07:14:57.0096847Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-10-13T07:14:57.0134230Z ##[endgroup]
+2025-10-13T07:14:57.0135771Z ##[group]Fetching the repository
+2025-10-13T07:14:57.0144388Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +eef791ac2502e0bc12bc4d745e75d3b85409275c:refs/remotes/pull/18/merge
+2025-10-13T07:14:57.3472254Z From https://github.com/merkurov1/newlove
+2025-10-13T07:14:57.3474006Z  * [new ref]         eef791ac2502e0bc12bc4d745e75d3b85409275c -> pull/18/merge
+2025-10-13T07:14:57.3617868Z ##[endgroup]
+2025-10-13T07:14:57.3618668Z ##[group]Determining the checkout info
+2025-10-13T07:14:57.3619841Z ##[endgroup]
+2025-10-13T07:14:57.3624802Z [command]/usr/bin/git sparse-checkout disable
+2025-10-13T07:14:57.3666134Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-10-13T07:14:57.3694384Z ##[group]Checking out the ref
+2025-10-13T07:14:57.3698528Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/18/merge
+2025-10-13T07:14:57.3910463Z Note: switching to 'refs/remotes/pull/18/merge'.
+2025-10-13T07:14:57.3911418Z 
+2025-10-13T07:14:57.3912143Z You are in 'detached HEAD' state. You can look around, make experimental
+2025-10-13T07:14:57.3987364Z changes and commit them, and you can discard any commits you make in this
+2025-10-13T07:14:57.3991539Z state without impacting any branches by switching back to a branch.
+2025-10-13T07:14:57.3993085Z 
+2025-10-13T07:14:57.3995391Z If you want to create a new branch to retain commits you create, you may
+2025-10-13T07:14:57.3997062Z do so (now or later) by using -c with the switch command. Example:
+2025-10-13T07:14:57.3998046Z 
+2025-10-13T07:14:57.3998460Z   git switch -c <new-branch-name>
+2025-10-13T07:14:57.3999170Z 
+2025-10-13T07:14:57.3999548Z Or undo this operation with:
+2025-10-13T07:14:57.4000190Z 
+2025-10-13T07:14:57.4000466Z   git switch -
+2025-10-13T07:14:57.4000947Z 
+2025-10-13T07:14:57.4001707Z Turn off this advice by setting config variable advice.detachedHead to false
+2025-10-13T07:14:57.4003372Z 
+2025-10-13T07:14:57.4004461Z HEAD is now at eef791a Merge 148b5d15ea3712125f665a608288a3b75cc9e18a into 31c67f19e6f5c71342238914d96bedff7273c9ca
+2025-10-13T07:14:57.4008119Z ##[endgroup]
+2025-10-13T07:14:57.4010024Z [command]/usr/bin/git log -1 --format=%H
+2025-10-13T07:14:57.4012274Z eef791ac2502e0bc12bc4d745e75d3b85409275c
+2025-10-13T07:14:57.4245468Z ##[group]Run actions/setup-node@v4
+2025-10-13T07:14:57.4246325Z with:
+2025-10-13T07:14:57.4246968Z   node-version: 20
+2025-10-13T07:14:57.4247655Z   always-auth: false
+2025-10-13T07:14:57.4248331Z   check-latest: false
+2025-10-13T07:14:57.4249165Z   token: ***
+2025-10-13T07:14:57.4249811Z ##[endgroup]
+2025-10-13T07:14:57.6353242Z Found in cache @ /opt/hostedtoolcache/node/20.19.5/x64
+2025-10-13T07:14:57.6360234Z ##[group]Environment details
+2025-10-13T07:15:01.2029140Z node: v20.19.5
+2025-10-13T07:15:01.2029647Z npm: 10.8.2
+2025-10-13T07:15:01.2030016Z yarn: 1.22.22
+2025-10-13T07:15:01.2033148Z ##[endgroup]
+2025-10-13T07:15:01.2150998Z ##[group]Run npm ci
+2025-10-13T07:15:01.2151384Z [36;1mnpm ci[0m
+2025-10-13T07:15:01.2295467Z shell: /usr/bin/bash -e {0}
+2025-10-13T07:15:01.2295778Z ##[endgroup]
+2025-10-13T07:16:02.0850604Z 
+2025-10-13T07:16:02.0861027Z added 1461 packages, and audited 1462 packages in 1m
+2025-10-13T07:16:02.0861642Z 
+2025-10-13T07:16:02.0861973Z 384 packages are looking for funding
+2025-10-13T07:16:02.0862468Z   run `npm fund` for details
+2025-10-13T07:16:02.2959273Z 
+2025-10-13T07:16:02.2960231Z 40 vulnerabilities (20 low, 7 moderate, 7 high, 6 critical)
+2025-10-13T07:16:02.2960845Z 
+2025-10-13T07:16:02.2963898Z To address issues that do not require attention, run:
+2025-10-13T07:16:02.2964490Z   npm audit fix
+2025-10-13T07:16:02.2964705Z 
+2025-10-13T07:16:02.2965209Z To address all issues possible (including breaking changes), run:
+2025-10-13T07:16:02.2965856Z   npm audit fix --force
+2025-10-13T07:16:02.2966108Z 
+2025-10-13T07:16:02.2966520Z Some issues need review, and may require choosing
+2025-10-13T07:16:02.2967069Z a different dependency.
+2025-10-13T07:16:02.2967309Z 
+2025-10-13T07:16:02.2967507Z Run `npm audit` for details.
+2025-10-13T07:16:02.3798456Z ##[group]Run npx tsc --noEmit
+2025-10-13T07:16:02.3798768Z [36;1mnpx tsc --noEmit[0m
+2025-10-13T07:16:02.3832405Z shell: /usr/bin/bash -e {0}
+2025-10-13T07:16:02.3832845Z ##[endgroup]
+2025-10-13T07:16:12.5597818Z ##[group]Run npm run lint
+2025-10-13T07:16:12.5598098Z [36;1mnpm run lint[0m
+2025-10-13T07:16:12.5631837Z shell: /usr/bin/bash -e {0}
+2025-10-13T07:16:12.5632063Z ##[endgroup]
+2025-10-13T07:16:12.6770079Z 
+2025-10-13T07:16:12.6770760Z > newlove@0.1.1 lint
+2025-10-13T07:16:12.6771233Z > next lint
+2025-10-13T07:16:12.6771481Z 
+2025-10-13T07:16:16.4313062Z Attention: Next.js now collects completely anonymous telemetry regarding usage.
+2025-10-13T07:16:16.4319057Z This information is used to shape Next.js' roadmap and prioritize features.
+2025-10-13T07:16:16.4320642Z You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+2025-10-13T07:16:16.4321678Z https://nextjs.org/telemetry
+2025-10-13T07:16:16.4321963Z 
+2025-10-13T07:16:16.6066429Z ✔ No ESLint warnings or errors
+2025-10-13T07:16:16.7132104Z ##[group]Run npm run build
+2025-10-13T07:16:16.7132366Z [36;1mnpm run build[0m
+2025-10-13T07:16:16.7165168Z shell: /usr/bin/bash -e {0}
+2025-10-13T07:16:16.7165379Z env:
+2025-10-13T07:16:16.7165532Z   SKIP_SENTRY: 0
+2025-10-13T07:16:16.7165717Z   DISABLE_OPTIMIZE_CSS: 0
+2025-10-13T07:16:16.7165913Z ##[endgroup]
+2025-10-13T07:16:16.8251096Z 
+2025-10-13T07:16:16.8251400Z > newlove@0.1.1 build
+2025-10-13T07:16:16.8251703Z > next build
+2025-10-13T07:16:16.8251839Z 
+2025-10-13T07:16:17.6155737Z   ▲ Next.js 14.2.5
+2025-10-13T07:16:17.6158465Z   - Experiments (use with caution):
+2025-10-13T07:16:17.6159018Z     · optimizeCss
+2025-10-13T07:16:17.6159359Z     · instrumentationHook
+2025-10-13T07:16:17.6159553Z 
+2025-10-13T07:16:17.6764109Z    Creating an optimized production build ...
+2025-10-13T07:16:17.7607779Z  ⚠ Found lockfile missing swc dependencies, run next locally to automatically patch
+2025-10-13T07:16:18.1811372Z [@sentry/nextjs] DEPRECATION WARNING: It is recommended renaming your `sentry.client.config.ts` file, or moving its content to `instrumentation-client.ts`. When using Turbopack `sentry.client.config.ts` will no longer work. Read more about the `instrumentation-client.ts` file: https://nextjs.org/docs/app/api-reference/file-conventions/instrumentation-client
+2025-10-13T07:16:18.2715129Z [@sentry/nextjs - Node.js] Info: Sending telemetry data on issues and performance to Sentry. To disable telemetry, set `options.telemetry` to `false`.
+2025-10-13T07:17:02.9965637Z [@sentry/nextjs - Node.js] Warning: No auth token provided. Will not create release. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:02.9968355Z [@sentry/nextjs - Node.js] Warning: No auth token provided. Will not upload source maps. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:12.0014004Z [@sentry/nextjs - Edge] Info: Sending telemetry data on issues and performance to Sentry. To disable telemetry, set `options.telemetry` to `false`.
+2025-10-13T07:17:13.9640698Z [@sentry/nextjs - Edge] Warning: No auth token provided. Will not create release. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:13.9643992Z [@sentry/nextjs - Edge] Warning: No auth token provided. Will not upload source maps. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:16.3144138Z <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (185kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+2025-10-13T07:17:16.3514467Z <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (139kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+2025-10-13T07:17:16.4906514Z [@sentry/nextjs - Client] Info: Sending telemetry data on issues and performance to Sentry. To disable telemetry, set `options.telemetry` to `false`.
+2025-10-13T07:17:37.7244984Z [@sentry/nextjs - Client] Warning: No auth token provided. Will not create release. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:37.7251883Z [@sentry/nextjs - Client] Warning: No auth token provided. Will not upload source maps. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+2025-10-13T07:17:43.9350487Z  ⚠ Compiled with warnings
+2025-10-13T07:17:43.9350830Z 
+2025-10-13T07:17:43.9351208Z ./app/api/article-by-slug/route.js
+2025-10-13T07:17:43.9352264Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9353498Z 
+2025-10-13T07:17:43.9353672Z Import trace for requested module:
+2025-10-13T07:17:43.9353987Z ./app/api/article-by-slug/route.js
+2025-10-13T07:17:43.9354170Z 
+2025-10-13T07:17:43.9354301Z ./app/api/articles/[id]/route.js
+2025-10-13T07:17:43.9355049Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9355576Z 
+2025-10-13T07:17:43.9355703Z Import trace for requested module:
+2025-10-13T07:17:43.9355974Z ./app/api/articles/[id]/route.js
+2025-10-13T07:17:43.9356121Z 
+2025-10-13T07:17:43.9356220Z ./app/api/articles/route.js
+2025-10-13T07:17:43.9356952Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9357469Z 
+2025-10-13T07:17:43.9357599Z Import trace for requested module:
+2025-10-13T07:17:43.9357844Z ./app/api/articles/route.js
+2025-10-13T07:17:43.9357984Z 
+2025-10-13T07:17:43.9358080Z ./app/api/cron/route.ts
+2025-10-13T07:17:43.9358787Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9359493Z 
+2025-10-13T07:17:43.9359617Z Import trace for requested module:
+2025-10-13T07:17:43.9359858Z ./app/api/cron/route.ts
+2025-10-13T07:17:43.9359977Z 
+2025-10-13T07:17:43.9360084Z ./app/api/media/route.ts
+2025-10-13T07:17:43.9360787Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9361317Z 
+2025-10-13T07:17:43.9361464Z Import trace for requested module:
+2025-10-13T07:17:43.9361713Z ./app/api/media/route.ts
+2025-10-13T07:17:43.9361938Z 
+2025-10-13T07:17:43.9362165Z ./app/api/newsletter-confirm/route.ts
+2025-10-13T07:17:43.9363349Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9364028Z 
+2025-10-13T07:17:43.9364248Z Import trace for requested module:
+2025-10-13T07:17:43.9364751Z ./app/api/newsletter-confirm/route.ts
+2025-10-13T07:17:43.9364913Z 
+2025-10-13T07:17:43.9365064Z ./app/api/newsletter-unsubscribe/route.ts
+2025-10-13T07:17:43.9365790Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9366294Z 
+2025-10-13T07:17:43.9366412Z Import trace for requested module:
+2025-10-13T07:17:43.9366698Z ./app/api/newsletter-unsubscribe/route.ts
+2025-10-13T07:17:43.9366866Z 
+2025-10-13T07:17:43.9366965Z ./app/api/postcards/route.ts
+2025-10-13T07:17:43.9367647Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9368172Z 
+2025-10-13T07:17:43.9368297Z Import trace for requested module:
+2025-10-13T07:17:43.9368544Z ./app/api/postcards/route.ts
+2025-10-13T07:17:43.9368684Z 
+2025-10-13T07:17:43.9368777Z ./app/api/projects/route.ts
+2025-10-13T07:17:43.9369482Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9369990Z 
+2025-10-13T07:17:43.9370114Z Import trace for requested module:
+2025-10-13T07:17:43.9370359Z ./app/api/projects/route.ts
+2025-10-13T07:17:43.9370486Z 
+2025-10-13T07:17:43.9370614Z ./app/api/subscribers/[id]/route.ts
+2025-10-13T07:17:43.9371317Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9371823Z 
+2025-10-13T07:17:43.9371940Z Import trace for requested module:
+2025-10-13T07:17:43.9372208Z ./app/api/subscribers/[id]/route.ts
+2025-10-13T07:17:43.9372354Z 
+2025-10-13T07:17:43.9372484Z ./app/api/subscription-status/route.ts
+2025-10-13T07:17:43.9373523Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9374044Z 
+2025-10-13T07:17:43.9374173Z Import trace for requested module:
+2025-10-13T07:17:43.9374450Z ./app/api/subscription-status/route.ts
+2025-10-13T07:17:43.9374619Z 
+2025-10-13T07:17:43.9374713Z ./app/api/test-auth/route.ts
+2025-10-13T07:17:43.9375405Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9375916Z 
+2025-10-13T07:17:43.9376040Z Import trace for requested module:
+2025-10-13T07:17:43.9376287Z ./app/api/test-auth/route.ts
+2025-10-13T07:17:43.9376423Z 
+2025-10-13T07:17:43.9376514Z ./app/rss.xml/route.js
+2025-10-13T07:17:43.9377178Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9377685Z 
+2025-10-13T07:17:43.9377805Z Import trace for requested module:
+2025-10-13T07:17:43.9378037Z ./app/rss.xml/route.js
+2025-10-13T07:17:43.9378149Z 
+2025-10-13T07:17:43.9378349Z ./app/[slug]/page.js
+2025-10-13T07:17:43.9379018Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9379519Z 
+2025-10-13T07:17:43.9379642Z Import trace for requested module:
+2025-10-13T07:17:43.9379865Z ./app/[slug]/page.js
+2025-10-13T07:17:43.9379978Z 
+2025-10-13T07:17:43.9380104Z ./app/admin/articles/edit/[id]/page.js
+2025-10-13T07:17:43.9380813Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9381312Z 
+2025-10-13T07:17:43.9381431Z Import trace for requested module:
+2025-10-13T07:17:43.9381697Z ./app/admin/articles/edit/[id]/page.js
+2025-10-13T07:17:43.9381852Z 
+2025-10-13T07:17:43.9381955Z ./app/admin/articles/page.tsx
+2025-10-13T07:17:43.9382827Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9383335Z 
+2025-10-13T07:17:43.9383453Z Import trace for requested module:
+2025-10-13T07:17:43.9383696Z ./app/admin/articles/page.tsx
+2025-10-13T07:17:43.9383849Z 
+2025-10-13T07:17:43.9383976Z ./app/admin/letters/edit/[id]/page.js
+2025-10-13T07:17:43.9384784Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9385285Z 
+2025-10-13T07:17:43.9385404Z Import trace for requested module:
+2025-10-13T07:17:43.9385669Z ./app/admin/letters/edit/[id]/page.js
+2025-10-13T07:17:43.9385822Z 
+2025-10-13T07:17:43.9385918Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9386623Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9387137Z 
+2025-10-13T07:17:43.9387264Z Import trace for requested module:
+2025-10-13T07:17:43.9387515Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9387656Z 
+2025-10-13T07:17:43.9387754Z ./app/admin/projects/page.tsx
+2025-10-13T07:17:43.9388449Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9388959Z 
+2025-10-13T07:17:43.9389077Z Import trace for requested module:
+2025-10-13T07:17:43.9389320Z ./app/admin/projects/page.tsx
+2025-10-13T07:17:43.9389458Z 
+2025-10-13T07:17:43.9389547Z ./app/articles/page.js
+2025-10-13T07:17:43.9390222Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9390729Z 
+2025-10-13T07:17:43.9390848Z Import trace for requested module:
+2025-10-13T07:17:43.9391093Z ./app/articles/page.js
+2025-10-13T07:17:43.9391215Z 
+2025-10-13T07:17:43.9391436Z ./app/layout.js
+2025-10-13T07:17:43.9392126Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9392849Z 
+2025-10-13T07:17:43.9392980Z Import trace for requested module:
+2025-10-13T07:17:43.9393196Z ./app/layout.js
+2025-10-13T07:17:43.9393302Z 
+2025-10-13T07:17:43.9393375Z ./app/layout.js
+2025-10-13T07:17:43.9394023Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9394536Z 
+2025-10-13T07:17:43.9394657Z Import trace for requested module:
+2025-10-13T07:17:43.9394872Z ./app/layout.js
+2025-10-13T07:17:43.9394969Z 
+2025-10-13T07:17:43.9395037Z ./app/page.js
+2025-10-13T07:17:43.9395680Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9396174Z 
+2025-10-13T07:17:43.9396300Z Import trace for requested module:
+2025-10-13T07:17:43.9396507Z ./app/page.js
+2025-10-13T07:17:43.9396741Z 
+2025-10-13T07:17:43.9396831Z ./app/profile/page.js
+2025-10-13T07:17:43.9397496Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9397992Z 
+2025-10-13T07:17:43.9398108Z Import trace for requested module:
+2025-10-13T07:17:43.9398336Z ./app/profile/page.js
+2025-10-13T07:17:43.9398449Z 
+2025-10-13T07:17:43.9398544Z ./app/projects/page.tsx
+2025-10-13T07:17:43.9399209Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9399711Z 
+2025-10-13T07:17:43.9399828Z Import trace for requested module:
+2025-10-13T07:17:43.9400066Z ./app/projects/page.tsx
+2025-10-13T07:17:43.9400185Z 
+2025-10-13T07:17:43.9400279Z ./app/tags/[slug]/page.js
+2025-10-13T07:17:43.9400958Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9401462Z 
+2025-10-13T07:17:43.9401586Z Import trace for requested module:
+2025-10-13T07:17:43.9401813Z ./app/tags/[slug]/page.js
+2025-10-13T07:17:43.9401939Z 
+2025-10-13T07:17:43.9402035Z ./app/you/[username]/page.js
+2025-10-13T07:17:43.9402882Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9403381Z 
+2025-10-13T07:17:43.9403498Z Import trace for requested module:
+2025-10-13T07:17:43.9403736Z ./app/you/[username]/page.js
+2025-10-13T07:17:43.9403867Z 
+2025-10-13T07:17:43.9403958Z ./app/admin/actions.js
+2025-10-13T07:17:43.9404618Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9405121Z 
+2025-10-13T07:17:43.9405242Z Import trace for requested module:
+2025-10-13T07:17:43.9405474Z ./app/admin/actions.js
+2025-10-13T07:17:43.9405676Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9405819Z 
+2025-10-13T07:17:43.9405903Z ./app/admin/actions.js
+2025-10-13T07:17:43.9406554Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9407056Z 
+2025-10-13T07:17:43.9407174Z Import trace for requested module:
+2025-10-13T07:17:43.9407405Z ./app/admin/actions.js
+2025-10-13T07:17:43.9407604Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9407737Z 
+2025-10-13T07:17:43.9407822Z ./app/admin/actions.js
+2025-10-13T07:17:43.9408479Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9408977Z 
+2025-10-13T07:17:43.9409095Z Import trace for requested module:
+2025-10-13T07:17:43.9409323Z ./app/admin/actions.js
+2025-10-13T07:17:43.9409641Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9409775Z 
+2025-10-13T07:17:43.9409860Z ./app/admin/actions.js
+2025-10-13T07:17:43.9410520Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9411017Z 
+2025-10-13T07:17:43.9411139Z Import trace for requested module:
+2025-10-13T07:17:43.9411362Z ./app/admin/actions.js
+2025-10-13T07:17:43.9411563Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9411691Z 
+2025-10-13T07:17:43.9411781Z ./app/admin/actions.js
+2025-10-13T07:17:43.9412436Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9413056Z 
+2025-10-13T07:17:43.9413175Z Import trace for requested module:
+2025-10-13T07:17:43.9413402Z ./app/admin/actions.js
+2025-10-13T07:17:43.9413597Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9413730Z 
+2025-10-13T07:17:43.9413818Z ./app/admin/actions.js
+2025-10-13T07:17:43.9414470Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9415095Z 
+2025-10-13T07:17:43.9415213Z Import trace for requested module:
+2025-10-13T07:17:43.9415443Z ./app/admin/actions.js
+2025-10-13T07:17:43.9415639Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9415773Z 
+2025-10-13T07:17:43.9415856Z ./app/admin/actions.js
+2025-10-13T07:17:43.9416509Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9417008Z 
+2025-10-13T07:17:43.9417125Z Import trace for requested module:
+2025-10-13T07:17:43.9417354Z ./app/admin/actions.js
+2025-10-13T07:17:43.9417557Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9417683Z 
+2025-10-13T07:17:43.9417767Z ./app/admin/actions.js
+2025-10-13T07:17:43.9418429Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9418940Z 
+2025-10-13T07:17:43.9419064Z Import trace for requested module:
+2025-10-13T07:17:43.9419290Z ./app/admin/actions.js
+2025-10-13T07:17:43.9419495Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9419623Z 
+2025-10-13T07:17:43.9419715Z ./app/admin/actions.js
+2025-10-13T07:17:43.9420376Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9420878Z 
+2025-10-13T07:17:43.9420996Z Import trace for requested module:
+2025-10-13T07:17:43.9421224Z ./app/admin/actions.js
+2025-10-13T07:17:43.9421421Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9421551Z 
+2025-10-13T07:17:43.9421639Z ./app/admin/actions.js
+2025-10-13T07:17:43.9422299Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9422912Z 
+2025-10-13T07:17:43.9423033Z Import trace for requested module:
+2025-10-13T07:17:43.9423268Z ./app/admin/actions.js
+2025-10-13T07:17:43.9423467Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9423602Z 
+2025-10-13T07:17:43.9423687Z ./app/admin/actions.js
+2025-10-13T07:17:43.9424347Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9424840Z 
+2025-10-13T07:17:43.9424962Z Import trace for requested module:
+2025-10-13T07:17:43.9425198Z ./app/admin/actions.js
+2025-10-13T07:17:43.9425403Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9425531Z 
+2025-10-13T07:17:43.9425617Z ./app/admin/actions.js
+2025-10-13T07:17:43.9426278Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9426774Z 
+2025-10-13T07:17:43.9427040Z Import trace for requested module:
+2025-10-13T07:17:43.9427281Z ./app/admin/actions.js
+2025-10-13T07:17:43.9427484Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9427616Z 
+2025-10-13T07:17:43.9427705Z ./app/admin/actions.js
+2025-10-13T07:17:43.9428363Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9428865Z 
+2025-10-13T07:17:43.9428982Z Import trace for requested module:
+2025-10-13T07:17:43.9429214Z ./app/admin/actions.js
+2025-10-13T07:17:43.9429412Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9429541Z 
+2025-10-13T07:17:43.9429635Z ./app/admin/actions.js
+2025-10-13T07:17:43.9430285Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9430781Z 
+2025-10-13T07:17:43.9430899Z Import trace for requested module:
+2025-10-13T07:17:43.9431132Z ./app/admin/actions.js
+2025-10-13T07:17:43.9431332Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9431468Z 
+2025-10-13T07:17:43.9431552Z ./app/admin/actions.js
+2025-10-13T07:17:43.9432332Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9432946Z 
+2025-10-13T07:17:43.9433064Z Import trace for requested module:
+2025-10-13T07:17:43.9433295Z ./app/admin/actions.js
+2025-10-13T07:17:43.9433496Z ./app/admin/letters/page.tsx
+2025-10-13T07:17:43.9433623Z 
+2025-10-13T07:17:43.9433708Z ./lib/serverAuth.ts
+2025-10-13T07:17:43.9434367Z Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+2025-10-13T07:17:43.9434865Z 
+2025-10-13T07:17:43.9434987Z Import trace for requested module:
+2025-10-13T07:17:43.9435207Z ./lib/serverAuth.ts
+2025-10-13T07:17:43.9435424Z ./app/api/subscribers/route.ts
+2025-10-13T07:17:43.9435561Z 
+2025-10-13T07:17:43.9435727Z    Skipping linting
+2025-10-13T07:17:43.9435940Z    Checking validity of types ...
+2025-10-13T07:17:55.2383497Z Failed to compile.
+2025-10-13T07:17:55.2383813Z 
+2025-10-13T07:17:55.2470605Z app/letters/[slug]/page.tsx
+2025-10-13T07:17:55.2471625Z Type error: File '/home/runner/work/newlove/newlove/app/letters/[slug]/page.tsx' is not a module.
+2025-10-13T07:17:55.2472267Z 
+2025-10-13T07:17:55.5901142Z ##[error]Process completed with exit code 1.
+2025-10-13T07:17:55.6000867Z Post job cleanup.
+2025-10-13T07:17:55.6926443Z [command]/usr/bin/git version
+2025-10-13T07:17:55.6966792Z git version 2.51.0
+2025-10-13T07:17:55.7011351Z Temporarily overriding HOME='/home/runner/work/_temp/1befa497-cb3a-44ee-b2d5-32ab18f9ee79' before making global git config changes
+2025-10-13T07:17:55.7013075Z Adding repository directory to the temporary git global config as a safe directory
+2025-10-13T07:17:55.7024993Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/newlove/newlove
+2025-10-13T07:17:55.7061121Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-10-13T07:17:55.7093611Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-10-13T07:17:55.7316907Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-10-13T07:17:55.7336981Z http.https://github.com/.extraheader
+2025-10-13T07:17:55.7349081Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2025-10-13T07:17:55.7377899Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-10-13T07:17:55.7698466Z Cleaning up orphan processes

@@ -1,0 +1,127 @@
+﻿2025-10-13T07:15:03.6230722Z ##[group]Run npm ci
+2025-10-13T07:15:03.6231082Z [36;1mnpm ci[0m
+2025-10-13T07:15:03.6338973Z shell: /usr/bin/bash -e {0}
+2025-10-13T07:15:03.6339261Z ##[endgroup]
+2025-10-13T07:15:07.5835138Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5836201Z npm warn EBADENGINE   package: 'lru-cache@11.2.2',
+2025-10-13T07:15:07.5836997Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5837910Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5838603Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5839137Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5839836Z npm warn EBADENGINE   package: 'lru-cache@11.2.2',
+2025-10-13T07:15:07.5840618Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5841493Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5842378Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5848212Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5852391Z npm warn EBADENGINE   package: '@isaacs/balanced-match@4.0.1',
+2025-10-13T07:15:07.5853294Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5854167Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5854832Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5855389Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5856230Z npm warn EBADENGINE   package: '@isaacs/brace-expansion@5.0.0',
+2025-10-13T07:15:07.5857079Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5857956Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5858622Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5884787Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5885603Z npm warn EBADENGINE   package: 'cssstyle@5.3.1',
+2025-10-13T07:15:07.5886321Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5887233Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5887953Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5888556Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5889330Z npm warn EBADENGINE   package: 'data-urls@6.0.0',
+2025-10-13T07:15:07.5890068Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5890909Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5891526Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5892316Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5892955Z npm warn EBADENGINE   package: 'tr46@6.0.0',
+2025-10-13T07:15:07.5893642Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5894484Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5895158Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5895733Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5896506Z npm warn EBADENGINE   package: 'webidl-conversions@8.0.0',
+2025-10-13T07:15:07.5897799Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5898665Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5899311Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5899850Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5900536Z npm warn EBADENGINE   package: 'whatwg-url@15.1.0',
+2025-10-13T07:15:07.5901255Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5902292Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5902938Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5912344Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5913106Z npm warn EBADENGINE   package: 'glob@11.0.3',
+2025-10-13T07:15:07.5913868Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5914750Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5915422Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5915996Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5916695Z npm warn EBADENGINE   package: 'jackspeak@4.1.1',
+2025-10-13T07:15:07.5917914Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5918794Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5919470Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5920047Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5920755Z npm warn EBADENGINE   package: 'lru-cache@11.2.2',
+2025-10-13T07:15:07.5921530Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5922645Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5923325Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5923838Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5924502Z npm warn EBADENGINE   package: 'minimatch@10.0.3',
+2025-10-13T07:15:07.5925230Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5926118Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5926750Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5927331Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5928128Z npm warn EBADENGINE   package: 'path-scurry@2.0.0',
+2025-10-13T07:15:07.5928868Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5929684Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5930309Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5930849Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5931531Z npm warn EBADENGINE   package: 'happy-dom@18.0.1',
+2025-10-13T07:15:07.5932501Z npm warn EBADENGINE   required: { node: '>=20.0.0' },
+2025-10-13T07:15:07.5933374Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5934049Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5940719Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5941482Z npm warn EBADENGINE   package: 'jsdom@27.0.0',
+2025-10-13T07:15:07.5942443Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5943284Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5943969Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5944534Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5945220Z npm warn EBADENGINE   package: 'tr46@6.0.0',
+2025-10-13T07:15:07.5945954Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5946757Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5947378Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5947903Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5948647Z npm warn EBADENGINE   package: 'webidl-conversions@8.0.0',
+2025-10-13T07:15:07.5949407Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5950207Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5950831Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5951351Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5952572Z npm warn EBADENGINE   package: 'whatwg-url@15.1.0',
+2025-10-13T07:15:07.5953318Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5954157Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5954791Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5955364Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5956022Z npm warn EBADENGINE   package: 'marked@16.3.0',
+2025-10-13T07:15:07.5956731Z npm warn EBADENGINE   required: { node: '>= 20' },
+2025-10-13T07:15:07.5957596Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5958216Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5978715Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5979830Z npm warn EBADENGINE   package: 'rimraf@6.0.1',
+2025-10-13T07:15:07.5980816Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5981925Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5983079Z npm warn EBADENGINE }
+2025-10-13T07:16:12.5873605Z 
+2025-10-13T07:16:12.5876436Z added 1461 packages, and audited 1462 packages in 1m
+2025-10-13T07:16:12.5876744Z 
+2025-10-13T07:16:12.5876929Z 384 packages are looking for funding
+2025-10-13T07:16:12.5877228Z   run `npm fund` for details
+2025-10-13T07:16:12.8065571Z 
+2025-10-13T07:16:12.8066562Z 40 vulnerabilities (20 low, 7 moderate, 7 high, 6 critical)
+2025-10-13T07:16:12.8066941Z 
+2025-10-13T07:16:12.8067238Z To address issues that do not require attention, run:
+2025-10-13T07:16:12.8067634Z   npm audit fix
+2025-10-13T07:16:12.8067778Z 
+2025-10-13T07:16:12.8068090Z To address all issues possible (including breaking changes), run:
+2025-10-13T07:16:12.8068523Z   npm audit fix --force
+2025-10-13T07:16:12.8068709Z 
+2025-10-13T07:16:12.8068952Z Some issues need review, and may require choosing
+2025-10-13T07:16:12.8069297Z a different dependency.
+2025-10-13T07:16:12.8069434Z 
+2025-10-13T07:16:12.8069547Z Run `npm audit` for details.

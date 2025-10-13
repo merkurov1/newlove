@@ -1,10 +1,12 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// Use dynamic import to avoid ESM interop issues
 
 // Эта функция будет вызываться по GET запросу на /api/articles/[id]
 export async function GET(request, { params }) {
   try {
+    const mod = await import('@/lib/supabase-server');
+    const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
     const { supabase } = await getUserAndSupabaseFromRequest(request);
     const articleId = params.id;
     if (!supabase) return NextResponse.json({ error: 'Article not found' }, { status: 404 });

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// dynamic import to avoid circular/interop build issues
 import { deleteLetter } from '../actions';
 
 export const dynamic = 'force-dynamic';
@@ -10,6 +10,8 @@ export default async function AdminLettersPage() {
 
   try {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod as any;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) throw new Error('Supabase client unavailable');
   const { data, error: lErr } = await supabase.from('letter').select('id,title,slug,published,sentAt,createdAt,author:authorId(name)').order('createdAt', { ascending: false });

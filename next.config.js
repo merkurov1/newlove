@@ -91,10 +91,10 @@ module.exports = nextConfig;
 
 // Injected content via Sentry wizard below
 
-const { withSentryConfig } = require("@sentry/nextjs");
-
 // Wrap with Sentry only when SKIP_SENTRY is not set. This makes local troubleshooting easier.
 if (process.env.SKIP_SENTRY !== '1') {
+  // require here so SKIP_SENTRY can disable loading the package entirely
+  const { withSentryConfig } = require("@sentry/nextjs");
   module.exports = withSentryConfig(
     module.exports,
     {

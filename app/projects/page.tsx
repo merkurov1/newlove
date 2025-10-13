@@ -3,7 +3,9 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// Use a dynamic import for the Supabase request helper to avoid circular-import
+// and ESM/CJS interop issues during Next.js production builds.
+import { safeData } from '@/lib/safeSerialize';
 import { AnimatePresence, motion } from 'framer-motion';
 
 // Определяем типы для проекта, чтобы код был надежнее
@@ -21,12 +23,14 @@ interface ProjectPreview {
 export default async function ProjectsPage() {
   // Запрашиваем только опубликованные проекты через Supabase
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod as any;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   let projects: any[] = [];
-  if (supabase) {
+    if (supabase) {
     const { data, error } = await supabase.from('project').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
     if (error) console.error('Supabase fetch projects error', error);
-    projects = data || [];
+    projects = safeData(data || []);
   }
 
   if (!projects || projects.length === 0) {
@@ -75,3 +79,5 @@ export default async function ProjectsPage() {
     </div>
   );
 }
+
+export const dynamic = 'force-dynamic';

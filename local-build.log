@@ -6,3 +6,2076 @@
   - Environments: .env.local, .env
 
    Creating an optimized production build ...
+ ⚠ Found lockfile missing swc dependencies, patching...
+ ⚠ Lockfile was successfully patched, please run "npm install" to ensure @next/swc dependencies are downloaded
+ ⚠ Compiled with warnings
+
+./node_modules/@prisma/instrumentation/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./node_modules/@prisma/instrumentation/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@prisma/instrumentation/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@prisma/instrumentation/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@prisma/instrumentation/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@prisma/instrumentation/dist/index.js
+./node_modules/@sentry/node/build/cjs/integrations/tracing/prisma.js
+./node_modules/@sentry/node/build/cjs/index.js
+./node_modules/@sentry/nextjs/build/cjs/index.server.js
+./app/global-error.tsx
+
+./node_modules/require-in-the-middle/index.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/require-in-the-middle/index.js
+./node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+./node_modules/@sentry/node/build/cjs/index.js
+./node_modules/@sentry/nextjs/build/cjs/index.server.js
+./app/global-error.tsx
+
+./app/[slug]/page.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/[slug]/page.js
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/actions.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/actions.js
+./app/admin/articles/page.tsx
+
+./app/admin/articles/edit/[id]/page.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/articles/edit/[id]/page.js
+
+./app/admin/articles/page.tsx
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/articles/page.tsx
+
+./app/admin/letters/edit/[id]/page.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/letters/edit/[id]/page.js
+
+./app/admin/letters/page.tsx
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/letters/page.tsx
+
+./app/admin/projects/page.tsx
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/admin/projects/page.tsx
+
+./app/api/article-by-slug/route.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/article-by-slug/route.js
+
+./app/api/articles/[id]/route.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/articles/[id]/route.js
+
+./app/api/articles/route.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/articles/route.js
+
+./app/api/cron/route.ts
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/cron/route.ts
+
+./app/api/media/route.ts
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/media/route.ts
+
+./app/api/newsletter-confirm/route.ts
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/newsletter-confirm/route.ts
+
+./app/api/newsletter-unsubscribe/route.ts
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/newsletter-unsubscribe/route.ts
+
+./app/api/postcards/route.ts
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/postcards/route.ts
+
+./app/api/projects/route.ts
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/projects/route.ts
+
+./app/api/subscribers/[id]/route.ts
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/subscribers/[id]/route.ts
+
+./app/api/subscription-status/route.ts
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/subscription-status/route.ts
+
+./app/api/test-auth/route.ts
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/api/test-auth/route.ts
+
+./app/articles/page.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/articles/page.js
+
+./app/layout.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/layout.js
+
+./app/layout.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/layout.js
+
+./app/page.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/page.js
+
+./app/profile/page.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/profile/page.js
+
+./app/projects/page.tsx
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/projects/page.tsx
+
+./app/rss.xml/route.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/rss.xml/route.js
+
+./app/tags/[slug]/page.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/tags/[slug]/page.js
+
+./app/you/[username]/page.js
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./app/you/[username]/page.js
+
+./lib/serverAuth.ts
+Attempted import error: 'getUserAndSupabaseFromRequest' is not exported from '@/lib/supabase-server' (imported as 'getUserAndSupabaseFromRequest').
+
+Import trace for requested module:
+./lib/serverAuth.ts
+./app/api/subscribers/route.ts
+
+ ✓ Compiled successfully
+   Skipping linting
+   Checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/48) ...
+Error fetching postcards: TypeError: (0 , i.getUserAndSupabaseFromRequest) is not a function
+    at c (/workspaces/newlove/.next/server/app/api/postcards/route.js:1:1107)
+    at /workspaces/newlove/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:36264
+    at /workspaces/newlove/node_modules/next/dist/server/lib/trace/tracer.js:140:36
+    at NoopContextManager.with (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/context/NoopContextManager.js:25:19)
+    at ContextAPI.with (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/api/context.js:60:46)
+    at NoopTracer.startActiveSpan (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/trace/NoopTracer.js:65:31)
+    at ProxyTracer.startActiveSpan (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/trace/ProxyTracer.js:36:24)
+    at /workspaces/newlove/node_modules/next/dist/server/lib/trace/tracer.js:122:103
+    at NoopContextManager.with (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/context/NoopContextManager.js:25:19)
+    at ContextAPI.with (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/api/context.js:60:46)
+
+Error occurred prerendering page "/rss.xml". Read more: https://nextjs.org/docs/messages/prerender-error
+
+TypeError: (0 , a.getUserAndSupabaseFromRequest) is not a function
+    at l (/workspaces/newlove/.next/server/app/rss.xml/route.js:1:1092)
+    at /workspaces/newlove/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:6:36264
+    at /workspaces/newlove/node_modules/next/dist/server/lib/trace/tracer.js:140:36
+    at NoopContextManager.with (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/context/NoopContextManager.js:25:19)
+    at ContextAPI.with (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/api/context.js:60:46)
+    at NoopTracer.startActiveSpan (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/trace/NoopTracer.js:65:31)
+    at ProxyTracer.startActiveSpan (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/trace/ProxyTracer.js:36:24)
+    at /workspaces/newlove/node_modules/next/dist/server/lib/trace/tracer.js:122:103
+    at NoopContextManager.with (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/context/NoopContextManager.js:25:19)
+    at ContextAPI.with (/workspaces/newlove/node_modules/@opentelemetry/api/build/src/api/context.js:60:46)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/_not-found". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+   Generating static pages (12/48) 
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/admin/articles/new". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/admin/banners". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/admin/letters/new". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/admin/media". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/admin/orders". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/admin". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/admin/postcards". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/admin/projects/new". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/admin/subscribers-old". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/admin/users-old". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/debug-auth". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/admin/users". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+   Generating static pages (24/48) 
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/kit". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/onboard". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/onboard/secret". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+TypeError: (0 , l.getUserAndSupabaseFromRequest) is not a function
+    at g (/workspaces/newlove/.next/server/app/page.js:1:24134)
+    at b (/workspaces/newlove/.next/server/app/page.js:1:24449)
+    at eh (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:134786)
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:137671)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at AsyncLocalStorage.run (node:async_hooks:346:14) {
+  digest: '3251576189'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+TypeError: (0 , l.getUserAndSupabaseFromRequest) is not a function
+    at g (/workspaces/newlove/.next/server/app/page.js:1:24134)
+    at b (/workspaces/newlove/.next/server/app/page.js:1:24449)
+    at eh (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:134786)
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:137671)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475) {
+  digest: '830697211'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+TypeError: (0 , o.getUserAndSupabaseFromRequest) is not a function
+    at c (/workspaces/newlove/.next/server/app/profile/page.js:1:5594)
+    at eh (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:134786)
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:137671)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:150397) {
+  digest: '1963659203'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+TypeError: (0 , o.getUserAndSupabaseFromRequest) is not a function
+    at c (/workspaces/newlove/.next/server/app/profile/page.js:1:5594)
+    at eh (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:134786)
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:137671)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17) {
+  digest: '4084294864'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/profile". Read more: https://nextjs.org/docs/messages/prerender-error
+
+TypeError: (0 , o.getUserAndSupabaseFromRequest) is not a function
+    at c (/workspaces/newlove/.next/server/app/profile/page.js:1:5594)
+    at eh (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:134786)
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:137671)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:150397)
+TypeError: (0 , o.getUserAndSupabaseFromRequest) is not a function
+    at n (/workspaces/newlove/.next/server/app/projects/page.js:1:3046)
+    at eh (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:134786)
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:137671)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:150397) {
+  digest: '648955951'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+TypeError: (0 , o.getUserAndSupabaseFromRequest) is not a function
+    at n (/workspaces/newlove/.next/server/app/projects/page.js:1:3046)
+    at eh (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:134786)
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:137671)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17) {
+  digest: '2217352604'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/projects". Read more: https://nextjs.org/docs/messages/prerender-error
+
+TypeError: (0 , o.getUserAndSupabaseFromRequest) is not a function
+    at n (/workspaces/newlove/.next/server/app/projects/page.js:1:3046)
+    at eh (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:134786)
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:137671)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at AsyncLocalStorage.run (node:async_hooks:346:14)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:150397)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/projects/test". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/roles-demo". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/sentry-example-page". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/tags". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/users". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/lab/feed". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+   Generating static pages (36/48) 
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/lab/medium". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/lab/youtube". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/letters/order-success". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/lab/bluesky". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/talks". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/lab/integrations". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/lab". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7) {
+  digest: '369669377'
+}
+
+Error occurred prerendering page "/letters". Read more: https://nextjs.org/docs/messages/prerender-error
+
+Error: Unsupported Server Component type: {...}
+    at e (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138095)
+    at ek (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:138145)
+    at Array.toJSON (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135755)
+    at stringify (<anonymous>)
+    at eR (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142219)
+    at eE (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:142698)
+    at Timeout._onTimeout (/workspaces/newlove/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:135475)
+    at listOnTimeout (node:internal/timers:573:17)
+    at process.processTimers (node:internal/timers:514:7)
+ ✓ Generating static pages (48/48)
+
+> Export encountered errors on following paths:
+	/_not-found/page: /_not-found
+	/admin/articles/new/page: /admin/articles/new
+	/admin/banners/page: /admin/banners
+	/admin/letters/new/page: /admin/letters/new
+	/admin/media/page: /admin/media
+	/admin/orders/page: /admin/orders
+	/admin/page: /admin
+	/admin/postcards/page: /admin/postcards
+	/admin/projects/new/page: /admin/projects/new
+	/admin/subscribers-old/page: /admin/subscribers-old
+	/admin/users-old/page: /admin/users-old
+	/admin/users/page: /admin/users
+	/debug-auth/page: /debug-auth
+	/kit/page: /kit
+	/lab/bluesky/page: /lab/bluesky
+	/lab/feed/page: /lab/feed
+	/lab/integrations/page: /lab/integrations
+	/lab/medium/page: /lab/medium
+	/lab/page: /lab
+	/lab/youtube/page: /lab/youtube
+	/letters/order-success/page: /letters/order-success
+	/letters/page: /letters
+	/onboard/page: /onboard
+	/onboard/secret/page: /onboard/secret
+	/page: /
+	/profile/page: /profile
+	/projects/page: /projects
+	/projects/test/page: /projects/test
+	/roles-demo/page: /roles-demo
+	/rss.xml/route: /rss.xml
+	/sentry-example-page/page: /sentry-example-page
+	/tags/page: /tags
+	/talks/page: /talks
+	/users/page: /users

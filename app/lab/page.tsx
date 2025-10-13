@@ -111,3 +111,5 @@ export default function LabPage() {
     </div>
   );
 }
+
+export const dynamic = 'force-dynamic';

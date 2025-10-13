@@ -1,18 +1,9 @@
-import { createServerSupabaseClient } from '@supabase/auth-helpers-nextjs';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
-import type { NextApiRequest } from 'next';
 
-// Lightweight wrapper to get the current user from Next.js route handlers.
-// NOTE: In the app router, Request doesn't expose Next.js internals; we will
-// accept a Headers-like object that contains cookies. For now we expose a
-// helper that accepts a Request and returns { user, supabase }.
-
+// Lightweight helper to get the current user from an App Router Request.
+// Accepts the standard Request and reads cookies to validate the session
+// using a centralized server-side Supabase client.
 export async function getUserAndSupabaseFromRequest(req: Request) {
-  // createServerSupabaseClient expects Next.js context; we can't call it
-  // directly from the app router without adapter. As a pragmatic first step
-  // we'll look for the Supabase access token cookie (by default name is
-  // 'sb-access-token') and validate it via @supabase/supabase-js client.
-
   const cookieHeader = (req as any).headers?.get?.('cookie') || '';
   const cookies = Object.fromEntries(
     cookieHeader
@@ -27,7 +18,6 @@ export async function getUserAndSupabaseFromRequest(req: Request) {
   const accessToken = cookies['sb-access-token'] || cookies['supabase-access-token'] || '';
   if (!accessToken) return { user: null, supabase: null };
 
-  // Use centralized server client helper which reads the service role key.
   let supabase = null;
   try {
     supabase = getServerSupabaseClient();
@@ -37,7 +27,6 @@ export async function getUserAndSupabaseFromRequest(req: Request) {
   }
 
   try {
-    // Fetch user by validating the JWT
     const {
       data: { user },
       error,
@@ -53,4 +42,6 @@ export async function getUserAndSupabaseFromRequest(req: Request) {
   }
 }
 
-// (named export is provided by the function declaration above)
+// Provide a default export as well to be resilient to different import styles
+// and to help with circular-import/interop resolution in built bundles.
+export default getUserAndSupabaseFromRequest;

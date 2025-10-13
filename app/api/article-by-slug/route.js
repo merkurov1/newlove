@@ -1,4 +1,3 @@
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -7,6 +6,8 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const slug = searchParams.get('slug');
   if (!slug) return NextResponse.json({ error: 'No slug' }, { status: 400 });
+  const mod = await import('@/lib/supabase-server');
+  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
   const { supabase } = await getUserAndSupabaseFromRequest((globalThis && (globalThis).request) || new Request('http://localhost')) || {};
   if (!supabase) return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
   const { data: article, error } = await supabase.from('article').select('id,slug,title,content,publishedAt').eq('slug', slug).eq('published', true).maybeSingle();

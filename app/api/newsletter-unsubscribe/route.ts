@@ -1,7 +1,5 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
-
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const token = searchParams.get('token');
@@ -9,6 +7,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Нет токена для отписки.' }, { status: 400 });
   }
   try {
+    const mod = await import('@/lib/supabase-server');
+    const { getUserAndSupabaseFromRequest } = mod as any;
     const { supabase } = await getUserAndSupabaseFromRequest((globalThis && (globalThis as any).request) || new Request('http://localhost')) || {};
     if (!supabase) return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
     const { data: tokenRow, error: tokenErr } = await supabase.from('subscriber_tokens').select('*').eq('token', token).maybeSingle();

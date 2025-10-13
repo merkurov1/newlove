@@ -1,8 +1,13 @@
 export const dynamic = 'force-dynamic';
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+
+// Use dynamic import to avoid circular-import / ESM interop issues during build
+// (some bundles may not expose named exports reliably when circular imports exist).
+
 
 export async function GET(request) {
   try {
+    const mod = await import('@/lib/supabase-server');
+    const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
     const { supabase } = await getUserAndSupabaseFromRequest(request);
     const { searchParams } = new URL(request.url);
     const offset = parseInt(searchParams.get('offset') || '0', 10);

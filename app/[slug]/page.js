@@ -1,5 +1,6 @@
 // app/[slug]/page.js
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// helper will be dynamically imported inside getContent to avoid bundler/circular issues
+import { safeData } from '@/lib/safeSerialize';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -39,7 +40,7 @@ async function getContent(slug) {
     
     if (article) {
       console.log('✅ Found article:', article.title);
-      return { type: 'article', content: article };
+      return { type: 'article', content: safeData(article) };
     }
     
     console.log('📁 Searching for project with slug:', slug);
@@ -53,7 +54,7 @@ async function getContent(slug) {
     
     if (project) {
       console.log('✅ Found project:', project.title);
-      return { type: 'project', content: project };
+      return { type: 'project', content: safeData(project) };
     }
     
     console.log('❌ No content found for slug:', slug);

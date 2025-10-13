@@ -1,12 +1,14 @@
 // app/admin/projects/page.tsx
 import Link from 'next/link';
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// dynamic import to avoid circular/interop build issues
 import { deleteProject } from '../actions'; // Мы добавим эту функцию в actions.js
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminProjectsPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod as any;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   let projects: any[] = [];
   if (supabase) {
