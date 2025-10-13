@@ -27,7 +27,7 @@ export default async function ProjectsPage() {
   const serverSupabase = getServerSupabaseClient();
   let projects: any[] = [];
   if (serverSupabase) {
-    const { data, error } = await serverSupabase.from('project').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
+  const { data, error } = await serverSupabase.from('projects').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
     if (error) console.error('Supabase fetch projects error', error);
     projects = safeData(data || []);
   }
