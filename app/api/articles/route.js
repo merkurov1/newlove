@@ -21,14 +21,15 @@ export async function GET(request) {
     }
 
     const { data, error } = await supabase
-      .from('article')
+      .from('articles')
       .select('id,title,slug,content,publishedAt')
       .eq('published', true)
       .order('publishedAt', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (error) {
-      console.error('Supabase fetch articles error', error);
+      const { safeLogError } = await import('@/lib/safeSerialize');
+      safeLogError('Supabase fetch articles error', error);
       return new Response(JSON.stringify({ error: 'Failed to fetch articles' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
 

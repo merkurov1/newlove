@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { safeLogError } from '@/lib/safeSerialize';
 
 export async function GET() {
   try {
@@ -8,7 +9,7 @@ export async function GET() {
     try {
       supabase = getServerSupabaseClient();
     } catch (e) {
-      console.error('Unable to create server supabase client in postcards route', e);
+      safeLogError('Unable to create server supabase client in postcards route', e);
       return NextResponse.json({ postcards: [] });
     }
 
@@ -23,8 +24,8 @@ export async function GET() {
     }
 
     return NextResponse.json({ postcards: postcards || [] });
-  } catch (error) {
-    console.error('Error fetching postcards:', error);
+    } catch (error) {
+    safeLogError('Error fetching postcards', error);
     return NextResponse.json({ error: 'Ошибка при загрузке открыток' }, { status: 500 });
   }
 }

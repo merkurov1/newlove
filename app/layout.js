@@ -9,7 +9,7 @@ import Providers from './providers';
 import GlobalErrorHandler from '@/components/GlobalErrorHandler';
 // `getUserAndSupabaseFromRequest` is imported dynamically inside the layout to avoid
 // circular import issues during the Next.js production build.
-import { safeData } from '@/lib/safeSerialize';
+import { safeData, safeLogError } from '@/lib/safeSerialize';
 import nextDynamic from 'next/dynamic';
 // Load analytics and umami as client-only dynamic components to prevent
 // Next's prerender serializer from encountering non-serializable values.
@@ -127,7 +127,7 @@ export default async function RootLayout({ children }) {
     const serverSupabase = getServerSupabaseClient();
     if (serverSupabase) {
   const { data, error } = await serverSupabase.from('projects').select('*').eq('published', true).order('createdAt', { ascending: true });
-      if (error) console.error('Supabase fetch projects error', error);
+  if (error) safeLogError('Supabase fetch projects error', error);
       projects = safeData(data || []);
     } else {
       projects = [];
@@ -135,7 +135,7 @@ export default async function RootLayout({ children }) {
   } catch (error) {
     // Логируем только в development
     if (process.env.NODE_ENV === 'development') {
-      console.error('Database connection error:', error.message);
+      safeLogError('Database connection error', error);
     }
     // Используем пустой массив для проектов
     projects = [];
@@ -157,12 +157,12 @@ export default async function RootLayout({ children }) {
       if (!error) {
         const safe = safeData(data || []);
         subscriberCount = (safe && safe.length) || 0;
-      } else console.error('Supabase count subscribers error', error);
+  } else safeLogError('Supabase count subscribers error', error);
     }
   } catch (error) {
     // Логируем только в development
     if (process.env.NODE_ENV === 'development') {
-      console.error('Ошибка при подсчёте подписчиков:', error);
+      safeLogError('Ошибка при подсчёте подписчиков', error);
     }
   }
 

@@ -1,6 +1,6 @@
 // app/[slug]/page.js
 // helper will be dynamically imported inside getContent to avoid bundler/circular issues
-import { safeData } from '@/lib/safeSerialize';
+import { safeData, safeLogError } from '@/lib/safeSerialize';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -33,7 +33,7 @@ async function getContent(slug) {
       // Fetch article from canonical plural table name
       const { data, error } = await serverSupabase.from('articles').select('*').eq('slug', slug).eq('published', true).maybeSingle();
       if (error) {
-        console.error('Supabase fetch article error', error);
+        safeLogError('Supabase fetch article error', error);
       } else if (data) {
         article = data;
 
@@ -45,6 +45,7 @@ async function getContent(slug) {
           // fall back to a safer two-step approach below if rels is empty or errored.
         } catch (e) {
           // ignore tag fetch errors for stability — tags are optional
+          safeLogError('Error fetching tags (first attempt)', e);
         }
 
         try {
@@ -58,7 +59,7 @@ async function getContent(slug) {
             article.tags = [];
           }
         } catch (e) {
-          console.error('Error fetching tags for article', e);
+          safeLogError('Error fetching tags for article', e);
           article.tags = [];
         }
       }
@@ -74,7 +75,7 @@ async function getContent(slug) {
     let project = null;
     if (!article && serverSupabase) {
   const { data: p, error: pErr } = await serverSupabase.from('projects').select('*').eq('slug', slug).eq('published', true).maybeSingle();
-      if (pErr) console.error('Supabase fetch project error', pErr);
+  if (pErr) safeLogError('Supabase fetch project error', pErr);
       project = p;
     }
     
@@ -86,7 +87,7 @@ async function getContent(slug) {
     console.log('❌ No content found for slug:', slug);
     return null;
   } catch (error) {
-    console.error('💥 Error in getContent:', error);
+    safeLogError('💥 Error in getContent', error);
     throw error;
   }
 }

@@ -80,7 +80,8 @@ export async function createArticle(formData) {
     authorId: authorIdResolved,
   }).select().maybeSingle();
   if (insertErr) {
-    console.error('Supabase insert article error', insertErr);
+    const { safeLogError } = await import('@/lib/safeSerialize');
+    safeLogError('Supabase insert article error', insertErr);
     throw new Error('Ошибка при создании статьи');
   }
   revalidatePath('/admin/articles');
@@ -91,7 +92,8 @@ export async function createArticle(formData) {
     try {
       await upsertTagsAndLink(serverSupabase, 'article', articleId, parsedTags);
     } catch (e) {
-      console.error('Error linking tags for article', e);
+      const { safeLogError } = await import('@/lib/safeSerialize');
+      safeLogError('Error linking tags for article', e);
     }
   }
 }
@@ -139,7 +141,8 @@ export async function updateArticle(formData) {
     publishedAt: published ? new Date().toISOString() : null,
   }).eq('id', id);
   if (updateErr) {
-    console.error('Supabase update article error', updateErr);
+    const { safeLogError } = await import('@/lib/safeSerialize');
+    safeLogError('Supabase update article error', updateErr);
     throw new Error('Ошибка при обновлении статьи');
   }
   revalidatePath('/admin/articles');
@@ -151,7 +154,8 @@ export async function updateArticle(formData) {
     try {
       await upsertTagsAndLink(serverSupabase, 'article', id, parsedTags);
     } catch (e) {
-      console.error('Error linking tags for article', e);
+      const { safeLogError } = await import('@/lib/safeSerialize');
+      safeLogError('Error linking tags for article', e);
     }
   }
 }
@@ -167,7 +171,8 @@ export async function deleteArticle(formData) {
   const { data: article } = await serverSupabase.from('article').select('slug').eq('id', id).maybeSingle();
   const { error: delErr } = await serverSupabase.from('article').delete().eq('id', id);
   if (delErr) {
-    console.error('Supabase delete article error', delErr);
+    const { safeLogError } = await import('@/lib/safeSerialize');
+    safeLogError('Supabase delete article error', delErr);
     throw new Error('Ошибка при удалении статьи');
   }
   revalidatePath('/admin/articles');
@@ -377,7 +382,10 @@ export async function subscribeToNewsletter(prevState, formData) {
     let existing = null;
     if (userId) {
       const { data, error } = await serverSupabase.from('subscribers').select('*').or(`email.eq.${email},userId.eq.${userId}`).limit(1).maybeSingle();
-      if (error) console.error('Supabase check subscriber error', error);
+      if (error) {
+        const { safeLogError } = await import('@/lib/safeSerialize');
+        safeLogError('Supabase check subscriber error', error);
+      }
       existing = data;
     } else {
       const { data, error } = await serverSupabase.from('subscribers').select('*').eq('email', email).limit(1).maybeSingle();
@@ -394,7 +402,8 @@ export async function subscribeToNewsletter(prevState, formData) {
   const subscriberPayload = { id: createId(), email, userId: userId || null };
   const { data: created, error: insertErr } = await serverSupabase.from('subscribers').insert(subscriberPayload).select().maybeSingle();
     if (insertErr) {
-      console.error('Supabase insert subscriber error', insertErr);
+      const { safeLogError } = await import('@/lib/safeSerialize');
+      safeLogError('Supabase insert subscriber error', insertErr);
       return { status: 'error', message: 'Ошибка при подписке.' };
     }
 
@@ -402,7 +411,8 @@ export async function subscribeToNewsletter(prevState, formData) {
   const confirmationToken = createId();
   const { error: tokenErr } = await serverSupabase.from('subscriber_tokens').insert({ subscriber_id: created.id, type: 'confirm', token: confirmationToken });
     if (tokenErr) {
-      console.error('Supabase insert token error', tokenErr);
+      const { safeLogError } = await import('@/lib/safeSerialize');
+      safeLogError('Supabase insert token error', tokenErr);
     }
 
     // Отправляем письмо с подтверждением
@@ -490,7 +500,8 @@ export async function createLetter(formData) {
       try {
   await upsertTagsAndLink(serverSupabase, 'letter', letter.id, parsedTags);
       } catch (e) {
-        console.error('Error linking tags for letter', e);
+        const { safeLogError } = await import('@/lib/safeSerialize');
+        safeLogError('Error linking tags for letter', e);
       }
     }
   } catch (error) {
