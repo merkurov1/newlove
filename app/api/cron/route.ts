@@ -43,11 +43,19 @@ export async function GET() {
   const globalReq = ((globalThis && (globalThis as any).request) as Request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
   const { getUserAndSupabaseFromRequest } = mod as any;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq) || {};
-    if (!supabase) {
-      console.error('Supabase client unavailable for cron job');
+  const { supabase } = (await getUserAndSupabaseFromRequest(globalReq)) || {};
+  // If cron lacks a user session (no cookies), fall back to server-key client
+  let supabaseClient = supabase;
+  if (!supabaseClient) {
+    try {
+      const serverAuth = await import('@/lib/serverAuth');
+      // getServerSupabaseClient throws if env vars missing
+      supabaseClient = serverAuth.getServerSupabaseClient();
+    } catch (err) {
+      console.error('Supabase client unavailable for cron job', err);
       return NextResponse.json({ message: 'Supabase client unavailable' }, { status: 500 });
     }
+  }
     for (const article of articles) {
       // <<< ГЛАВНОЕ ИЗМЕНЕНИЕ: Генерируем slug из заголовка статьи
       const slug = generateSlug(article.title);
@@ -66,7 +74,7 @@ export async function GET() {
           publishedAt: article.publishedAt ? new Date(article.publishedAt).toISOString() : null,
           sourceName: article.source?.name || null,
         };
-  await supabase.from('newsArticle').upsert(payload, { onConflict: 'url' });
+  await supabaseClient.from('newsArticle').upsert(payload, { onConflict: 'url' });
       } catch (e) {
         console.error('Supabase upsert newsArticle error', e);
       }
