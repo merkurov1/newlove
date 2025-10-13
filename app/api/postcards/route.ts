@@ -12,7 +12,9 @@ export async function GET() {
       return NextResponse.json({ postcards: [] });
     }
 
-    const { data: postcards, error } = await supabase.from('postcard').select('*, orders(count)').order('createdAt', { ascending: false });
+  // Use canonical plural table name so PostgREST can detect foreign-key relationships
+  // The orders for postcards are stored in `postcard_orders` (FK postcard_orders.postcardId -> postcards.id)
+  const { data: postcards, error } = await supabase.from('postcards').select('*, postcard_orders(count)').order('createdAt', { ascending: false });
     if (error) {
       // If the postcards table/schema isn't available during build, return an empty list
       // instead of failing the build. This keeps previews and CI stable.
