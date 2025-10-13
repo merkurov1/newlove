@@ -7,7 +7,7 @@ import ProfileForm from '@/components/profile/ProfileForm'; // Мы создад
 export default async function ProfilePage() {
   const globalReq = globalThis?.request || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod;
+  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default || mod;
   const { user, supabase } = await getUserAndSupabaseFromRequest(globalReq);
   // Если user не найден, редиректим
   if (!user?.id) redirect('/');
