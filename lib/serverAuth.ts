@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
 
 export function getServerSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -36,6 +35,9 @@ export async function requireAdmin() {
 export async function requireAdminFromRequest(req?: Request | null) {
   try {
     if (req) {
+      // dynamic import to avoid circular dependency with lib/supabase-server
+      const mod = await import('@/lib/supabase-server');
+      const { getUserAndSupabaseFromRequest } = mod as any;
       const { user } = await getUserAndSupabaseFromRequest(req as Request);
       if (user?.id) {
         const role = (user.user_metadata && user.user_metadata.role) || user.role || 'USER';

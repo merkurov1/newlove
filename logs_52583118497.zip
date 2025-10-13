@@ -1,0 +1,292 @@
+﻿2025-10-13T07:14:58.6393716Z Current runner version: '2.328.0'
+2025-10-13T07:14:58.6416737Z ##[group]Runner Image Provisioner
+2025-10-13T07:14:58.6417646Z Hosted Compute Agent
+2025-10-13T07:14:58.6418197Z Version: 20250912.392
+2025-10-13T07:14:58.6418766Z Commit: d921fda672a98b64f4f82364647e2f10b2267d0b
+2025-10-13T07:14:58.6419561Z Build Date: 2025-09-12T15:23:14Z
+2025-10-13T07:14:58.6420149Z ##[endgroup]
+2025-10-13T07:14:58.6420687Z ##[group]Operating System
+2025-10-13T07:14:58.6421249Z Ubuntu
+2025-10-13T07:14:58.6421754Z 24.04.3
+2025-10-13T07:14:58.6422452Z LTS
+2025-10-13T07:14:58.6422974Z ##[endgroup]
+2025-10-13T07:14:58.6423496Z ##[group]Runner Image
+2025-10-13T07:14:58.6424054Z Image: ubuntu-24.04
+2025-10-13T07:14:58.6424601Z Version: 20250929.60.1
+2025-10-13T07:14:58.6425617Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20250929.60/images/ubuntu/Ubuntu2404-Readme.md
+2025-10-13T07:14:58.6427141Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20250929.60
+2025-10-13T07:14:58.6428198Z ##[endgroup]
+2025-10-13T07:14:58.6429220Z ##[group]GITHUB_TOKEN Permissions
+2025-10-13T07:14:58.6431082Z Contents: read
+2025-10-13T07:14:58.6431592Z Metadata: read
+2025-10-13T07:14:58.6432561Z Packages: read
+2025-10-13T07:14:58.6433185Z ##[endgroup]
+2025-10-13T07:14:58.6435255Z Secret source: Actions
+2025-10-13T07:14:58.6435928Z Prepare workflow directory
+2025-10-13T07:14:58.6768860Z Prepare all required actions
+2025-10-13T07:14:58.6809462Z Getting action download info
+2025-10-13T07:14:59.1233324Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
+2025-10-13T07:14:59.4748081Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2025-10-13T07:14:59.5624000Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2025-10-13T07:14:59.7561237Z Complete job name: 🔍 Validate Prisma Schema & Migrations
+2025-10-13T07:14:59.8263473Z ##[group]Run actions/checkout@v4
+2025-10-13T07:14:59.8264317Z with:
+2025-10-13T07:14:59.8264716Z   repository: merkurov1/newlove
+2025-10-13T07:14:59.8265340Z   token: ***
+2025-10-13T07:14:59.8265736Z   ssh-strict: true
+2025-10-13T07:14:59.8266140Z   ssh-user: git
+2025-10-13T07:14:59.8266561Z   persist-credentials: true
+2025-10-13T07:14:59.8267010Z   clean: true
+2025-10-13T07:14:59.8267407Z   sparse-checkout-cone-mode: true
+2025-10-13T07:14:59.8267896Z   fetch-depth: 1
+2025-10-13T07:14:59.8268288Z   fetch-tags: false
+2025-10-13T07:14:59.8268698Z   show-progress: true
+2025-10-13T07:14:59.8269099Z   lfs: false
+2025-10-13T07:14:59.8269477Z   submodules: false
+2025-10-13T07:14:59.8269899Z   set-safe-directory: true
+2025-10-13T07:14:59.8270548Z ##[endgroup]
+2025-10-13T07:14:59.9350210Z Syncing repository: merkurov1/newlove
+2025-10-13T07:14:59.9352419Z ##[group]Getting Git version info
+2025-10-13T07:14:59.9353153Z Working directory is '/home/runner/work/newlove/newlove'
+2025-10-13T07:14:59.9354167Z [command]/usr/bin/git version
+2025-10-13T07:14:59.9438389Z git version 2.51.0
+2025-10-13T07:14:59.9465477Z ##[endgroup]
+2025-10-13T07:14:59.9481885Z Temporarily overriding HOME='/home/runner/work/_temp/5de8c98f-93e7-40dd-b5f9-eabe4ca8c2e6' before making global git config changes
+2025-10-13T07:14:59.9484478Z Adding repository directory to the temporary git global config as a safe directory
+2025-10-13T07:14:59.9488634Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/newlove/newlove
+2025-10-13T07:14:59.9526566Z Deleting the contents of '/home/runner/work/newlove/newlove'
+2025-10-13T07:14:59.9530956Z ##[group]Initializing the repository
+2025-10-13T07:14:59.9535733Z [command]/usr/bin/git init /home/runner/work/newlove/newlove
+2025-10-13T07:14:59.9657158Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-10-13T07:14:59.9658168Z hint: is subject to change. To configure the initial branch name to use in all
+2025-10-13T07:14:59.9659118Z hint: of your new repositories, which will suppress this warning, call:
+2025-10-13T07:14:59.9660575Z hint:
+2025-10-13T07:14:59.9661337Z hint: 	git config --global init.defaultBranch <name>
+2025-10-13T07:14:59.9662453Z hint:
+2025-10-13T07:14:59.9663293Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-10-13T07:14:59.9664654Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-10-13T07:14:59.9665356Z hint:
+2025-10-13T07:14:59.9665750Z hint: 	git branch -m <name>
+2025-10-13T07:14:59.9666185Z hint:
+2025-10-13T07:14:59.9666763Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-10-13T07:14:59.9667717Z Initialized empty Git repository in /home/runner/work/newlove/newlove/.git/
+2025-10-13T07:14:59.9674949Z [command]/usr/bin/git remote add origin https://github.com/merkurov1/newlove
+2025-10-13T07:14:59.9714559Z ##[endgroup]
+2025-10-13T07:14:59.9715277Z ##[group]Disabling automatic garbage collection
+2025-10-13T07:14:59.9718657Z [command]/usr/bin/git config --local gc.auto 0
+2025-10-13T07:14:59.9747427Z ##[endgroup]
+2025-10-13T07:14:59.9748108Z ##[group]Setting up auth
+2025-10-13T07:14:59.9754487Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-10-13T07:14:59.9785030Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-10-13T07:15:00.0142922Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-10-13T07:15:00.0179037Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-10-13T07:15:00.0408174Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-10-13T07:15:00.0453870Z ##[endgroup]
+2025-10-13T07:15:00.0455226Z ##[group]Fetching the repository
+2025-10-13T07:15:00.0463224Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +eef791ac2502e0bc12bc4d745e75d3b85409275c:refs/remotes/pull/18/merge
+2025-10-13T07:15:00.6508606Z From https://github.com/merkurov1/newlove
+2025-10-13T07:15:00.6509679Z  * [new ref]         eef791ac2502e0bc12bc4d745e75d3b85409275c -> pull/18/merge
+2025-10-13T07:15:00.6545036Z ##[endgroup]
+2025-10-13T07:15:00.6546700Z ##[group]Determining the checkout info
+2025-10-13T07:15:00.6548463Z ##[endgroup]
+2025-10-13T07:15:00.6554034Z [command]/usr/bin/git sparse-checkout disable
+2025-10-13T07:15:00.6598240Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-10-13T07:15:00.6628105Z ##[group]Checking out the ref
+2025-10-13T07:15:00.6632872Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/18/merge
+2025-10-13T07:15:00.6847246Z Note: switching to 'refs/remotes/pull/18/merge'.
+2025-10-13T07:15:00.6849410Z 
+2025-10-13T07:15:00.6850251Z You are in 'detached HEAD' state. You can look around, make experimental
+2025-10-13T07:15:00.6851887Z changes and commit them, and you can discard any commits you make in this
+2025-10-13T07:15:00.6853389Z state without impacting any branches by switching back to a branch.
+2025-10-13T07:15:00.6853967Z 
+2025-10-13T07:15:00.6854354Z If you want to create a new branch to retain commits you create, you may
+2025-10-13T07:15:00.6856599Z do so (now or later) by using -c with the switch command. Example:
+2025-10-13T07:15:00.6857582Z 
+2025-10-13T07:15:00.6857948Z   git switch -c <new-branch-name>
+2025-10-13T07:15:00.6858446Z 
+2025-10-13T07:15:00.6858655Z Or undo this operation with:
+2025-10-13T07:15:00.6858978Z 
+2025-10-13T07:15:00.6859166Z   git switch -
+2025-10-13T07:15:00.6859439Z 
+2025-10-13T07:15:00.6859838Z Turn off this advice by setting config variable advice.detachedHead to false
+2025-10-13T07:15:00.6860406Z 
+2025-10-13T07:15:00.6861073Z HEAD is now at eef791a Merge 148b5d15ea3712125f665a608288a3b75cc9e18a into 31c67f19e6f5c71342238914d96bedff7273c9ca
+2025-10-13T07:15:00.6863925Z ##[endgroup]
+2025-10-13T07:15:00.6905097Z [command]/usr/bin/git log -1 --format=%H
+2025-10-13T07:15:00.6929783Z eef791ac2502e0bc12bc4d745e75d3b85409275c
+2025-10-13T07:15:00.7223195Z ##[group]Run actions/setup-node@v4
+2025-10-13T07:15:00.7223825Z with:
+2025-10-13T07:15:00.7224255Z   node-version: 18
+2025-10-13T07:15:00.7224704Z   cache: npm
+2025-10-13T07:15:00.7225128Z   always-auth: false
+2025-10-13T07:15:00.7225573Z   check-latest: false
+2025-10-13T07:15:00.7226211Z   token: ***
+2025-10-13T07:15:00.7226668Z ##[endgroup]
+2025-10-13T07:15:00.9105094Z Found in cache @ /opt/hostedtoolcache/node/18.20.8/x64
+2025-10-13T07:15:00.9112976Z ##[group]Environment details
+2025-10-13T07:15:02.9979375Z node: v18.20.8
+2025-10-13T07:15:02.9980013Z npm: 10.8.2
+2025-10-13T07:15:02.9980437Z yarn: 1.22.22
+2025-10-13T07:15:02.9982743Z ##[endgroup]
+2025-10-13T07:15:03.0006633Z [command]/opt/hostedtoolcache/node/18.20.8/x64/bin/npm config get cache
+2025-10-13T07:15:03.2944600Z /home/runner/.npm
+2025-10-13T07:15:03.6005788Z npm cache is not found
+2025-10-13T07:15:03.6230745Z ##[group]Run npm ci
+2025-10-13T07:15:03.6231087Z [36;1mnpm ci[0m
+2025-10-13T07:15:03.6338990Z shell: /usr/bin/bash -e {0}
+2025-10-13T07:15:03.6339265Z ##[endgroup]
+2025-10-13T07:15:07.5835216Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5836213Z npm warn EBADENGINE   package: 'lru-cache@11.2.2',
+2025-10-13T07:15:07.5837008Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5837927Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5838614Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5839146Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5839846Z npm warn EBADENGINE   package: 'lru-cache@11.2.2',
+2025-10-13T07:15:07.5840629Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5841504Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5842392Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5848310Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5852413Z npm warn EBADENGINE   package: '@isaacs/balanced-match@4.0.1',
+2025-10-13T07:15:07.5853307Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5854180Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5854841Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5855399Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5856243Z npm warn EBADENGINE   package: '@isaacs/brace-expansion@5.0.0',
+2025-10-13T07:15:07.5857091Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5857964Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5858629Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5884809Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5885615Z npm warn EBADENGINE   package: 'cssstyle@5.3.1',
+2025-10-13T07:15:07.5886332Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5887264Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5887964Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5888567Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5889344Z npm warn EBADENGINE   package: 'data-urls@6.0.0',
+2025-10-13T07:15:07.5890082Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5890921Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5891531Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5892333Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5892963Z npm warn EBADENGINE   package: 'tr46@6.0.0',
+2025-10-13T07:15:07.5893654Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5894498Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5895172Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5895745Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5896522Z npm warn EBADENGINE   package: 'webidl-conversions@8.0.0',
+2025-10-13T07:15:07.5897833Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5898675Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5899320Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5899858Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5900546Z npm warn EBADENGINE   package: 'whatwg-url@15.1.0',
+2025-10-13T07:15:07.5901267Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5902304Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5902947Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5912364Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5913122Z npm warn EBADENGINE   package: 'glob@11.0.3',
+2025-10-13T07:15:07.5913881Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5914765Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5915444Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5916004Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5917091Z npm warn EBADENGINE   package: 'jackspeak@4.1.1',
+2025-10-13T07:15:07.5917925Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5918808Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5919481Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5920060Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5920765Z npm warn EBADENGINE   package: 'lru-cache@11.2.2',
+2025-10-13T07:15:07.5921544Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5922662Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5923337Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5923846Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5924510Z npm warn EBADENGINE   package: 'minimatch@10.0.3',
+2025-10-13T07:15:07.5925240Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5926127Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5926769Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5927341Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5928137Z npm warn EBADENGINE   package: 'path-scurry@2.0.0',
+2025-10-13T07:15:07.5928876Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5929692Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5930320Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5930860Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5931540Z npm warn EBADENGINE   package: 'happy-dom@18.0.1',
+2025-10-13T07:15:07.5932520Z npm warn EBADENGINE   required: { node: '>=20.0.0' },
+2025-10-13T07:15:07.5933389Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5934060Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5940741Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5941491Z npm warn EBADENGINE   package: 'jsdom@27.0.0',
+2025-10-13T07:15:07.5942456Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5943308Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5943982Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5944547Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5945230Z npm warn EBADENGINE   package: 'tr46@6.0.0',
+2025-10-13T07:15:07.5945964Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5946764Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5947386Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5947912Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5948658Z npm warn EBADENGINE   package: 'webidl-conversions@8.0.0',
+2025-10-13T07:15:07.5949417Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5950216Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5950839Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5951358Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5952596Z npm warn EBADENGINE   package: 'whatwg-url@15.1.0',
+2025-10-13T07:15:07.5953328Z npm warn EBADENGINE   required: { node: '>=20' },
+2025-10-13T07:15:07.5954168Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5954801Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5955373Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5956029Z npm warn EBADENGINE   package: 'marked@16.3.0',
+2025-10-13T07:15:07.5956742Z npm warn EBADENGINE   required: { node: '>= 20' },
+2025-10-13T07:15:07.5957605Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5958227Z npm warn EBADENGINE }
+2025-10-13T07:15:07.5978736Z npm warn EBADENGINE Unsupported engine {
+2025-10-13T07:15:07.5979839Z npm warn EBADENGINE   package: 'rimraf@6.0.1',
+2025-10-13T07:15:07.5980824Z npm warn EBADENGINE   required: { node: '20 || >=22' },
+2025-10-13T07:15:07.5981933Z npm warn EBADENGINE   current: { node: 'v18.20.8', npm: '10.8.2' }
+2025-10-13T07:15:07.5983087Z npm warn EBADENGINE }
+2025-10-13T07:16:12.5874013Z 
+2025-10-13T07:16:12.5876445Z added 1461 packages, and audited 1462 packages in 1m
+2025-10-13T07:16:12.5876747Z 
+2025-10-13T07:16:12.5876932Z 384 packages are looking for funding
+2025-10-13T07:16:12.5877230Z   run `npm fund` for details
+2025-10-13T07:16:12.8065620Z 
+2025-10-13T07:16:12.8066570Z 40 vulnerabilities (20 low, 7 moderate, 7 high, 6 critical)
+2025-10-13T07:16:12.8066944Z 
+2025-10-13T07:16:12.8067241Z To address issues that do not require attention, run:
+2025-10-13T07:16:12.8067637Z   npm audit fix
+2025-10-13T07:16:12.8067780Z 
+2025-10-13T07:16:12.8068094Z To address all issues possible (including breaking changes), run:
+2025-10-13T07:16:12.8068526Z   npm audit fix --force
+2025-10-13T07:16:12.8068712Z 
+2025-10-13T07:16:12.8068956Z Some issues need review, and may require choosing
+2025-10-13T07:16:12.8069299Z a different dependency.
+2025-10-13T07:16:12.8069436Z 
+2025-10-13T07:16:12.8069550Z Run `npm audit` for details.
+2025-10-13T07:16:12.8859228Z ##[group]Run npx prisma validate
+2025-10-13T07:16:12.8859520Z [36;1mnpx prisma validate[0m
+2025-10-13T07:16:12.8893817Z shell: /usr/bin/bash -e {0}
+2025-10-13T07:16:12.8894047Z env:
+2025-10-13T07:16:12.8894208Z   DATABASE_URL: 
+2025-10-13T07:16:12.8894389Z ##[endgroup]
+2025-10-13T07:16:14.8133927Z npm warn exec The following package was not found and will be installed: prisma@6.17.1
+2025-10-13T07:16:22.3130786Z Error: Could not find Prisma Schema that is required for this command.
+2025-10-13T07:16:22.3131386Z You can either provide it with `--schema` argument,
+2025-10-13T07:16:22.3131834Z set it in your Prisma Config file (e.g., `prisma.config.ts`),
+2025-10-13T07:16:22.3132496Z set it as `prisma.schema` in your package.json,
+2025-10-13T07:16:22.3133089Z or put it into the default location (`./prisma/schema.prisma`, or `./schema.prisma`.
+2025-10-13T07:16:22.3133768Z Checked following paths:
+2025-10-13T07:16:22.3134015Z 
+2025-10-13T07:16:22.3134159Z schema.prisma: file not found
+2025-10-13T07:16:22.3134546Z prisma/schema.prisma: file not found
+2025-10-13T07:16:22.3134849Z 
+2025-10-13T07:16:22.3135176Z See also https://pris.ly/d/prisma-schema-location
+2025-10-13T07:16:22.3509636Z ##[error]Process completed with exit code 1.
+2025-10-13T07:16:22.3621262Z Post job cleanup.
+2025-10-13T07:16:22.4588141Z [command]/usr/bin/git version
+2025-10-13T07:16:22.4623635Z git version 2.51.0
+2025-10-13T07:16:22.4665946Z Temporarily overriding HOME='/home/runner/work/_temp/07001bdd-6650-4b0b-9d6b-870f9f459b30' before making global git config changes
+2025-10-13T07:16:22.4666891Z Adding repository directory to the temporary git global config as a safe directory
+2025-10-13T07:16:22.4678251Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/newlove/newlove
+2025-10-13T07:16:22.4710724Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-10-13T07:16:22.4741925Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-10-13T07:16:22.4964136Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-10-13T07:16:22.4983779Z http.https://github.com/.extraheader
+2025-10-13T07:16:22.4997250Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2025-10-13T07:16:22.5028692Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-10-13T07:16:22.5359736Z Cleaning up orphan processes

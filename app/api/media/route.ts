@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// dynamic import to avoid circular/interop build issues
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
-    const { supabase } = await getUserAndSupabaseFromRequest(req);
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod as any;
+  const { supabase } = await getUserAndSupabaseFromRequest(req);
     if (!supabase) return NextResponse.json({ files: [], count: 0 });
 
     // List objects from storage bucket 'media' (adjust bucket name if different)

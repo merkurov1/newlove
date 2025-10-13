@@ -11,6 +11,8 @@ import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export async function requireAuth(req?: NextRequest) {
   if (!req) throw new Error('Request is required for requireAuth');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod as any;
   const { user } = await getUserAndSupabaseFromRequest(req as Request);
   if (!user || !user.id) throw new Error('Unauthorized');
   return user;

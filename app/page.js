@@ -2,7 +2,8 @@
 
 
 
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// Use dynamic import for server helper to avoid circular import / interop issues
+import { safeData } from '@/lib/safeSerialize';
 import Link from 'next/link';
 import SafeImage from '@/components/SafeImage';
 import { getFirstImage } from '@/lib/contentUtils';
@@ -11,6 +12,7 @@ import nextDynamic from 'next/dynamic';
 
 
 // SSR-friendly динамический импорт HeroHearts (только на клиенте)
+export const dynamic = 'force-dynamic';
 
 const HeroHearts = nextDynamic(() => import('@/components/HeroHearts'), { ssr: false });
 const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
@@ -21,6 +23,8 @@ const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false
 // Получить статьи с тегами
 async function getArticles() {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) return [];
   const { data, error } = await supabase.from('article').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name),tags:tags(*)').eq('published', true).order('updatedAt', { ascending: false }).limit(15);
@@ -32,12 +36,12 @@ async function getArticles() {
 }
 
 export default async function Home() {
-  const rawArticles = await getArticles();
+  const rawArticles = safeData(await getArticles());
   // Для каждой статьи вычисляем previewImage
   const articles = await Promise.all(
     rawArticles.map(async (article) => {
       const previewImage = await getFirstImage(article.content);
-      return { ...article, previewImage };
+      return safeData({ ...article, previewImage });
     })
   );
   // 1. Отбираем статьи с тегом auction (регистр не важен)

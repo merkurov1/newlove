@@ -1,6 +1,6 @@
 // app/tags/[slug]/page.js
 
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// (helper loaded dynamically inside getTagData)
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -10,6 +10,8 @@ import SafeImage from '@/components/SafeImage';
 // Находит тег по его slug и подгружает все связанные с ним статьи
 async function getTagData(slug) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) notFound();
   // Поиск тега по slug (регистр игнорируем вручную)
@@ -108,3 +110,5 @@ export default async function TagPage({ params }) {
     </div>
   );
 }
+
+export const dynamic = 'force-dynamic';

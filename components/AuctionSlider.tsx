@@ -92,7 +92,9 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
           dragElastic={0.2}
-          onDragEnd={(e, info) => {
+          onDragEnd={(e: PointerEvent, info: any) => {
+            // framer-motion's PanInfo type is not always available in this repo's TS setup;
+            // using `any` for info keeps this change minimal and obvious.
             const velocity = info.velocity.x;
             const offset = info.offset.x;
             const swipe = Math.abs(offset) > 100 || Math.abs(velocity) > 500;

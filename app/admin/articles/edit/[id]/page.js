@@ -1,11 +1,13 @@
 // app/admin/articles/edit/[id]/page.js
-import { getUserAndSupabaseFromRequest } from '@/lib/supabase-server';
+// dynamic import to avoid circular/interop build issues
 import { notFound } from 'next/navigation';
 import ContentForm from '@/components/admin/ContentForm';
 import { updateArticle } from '../../../actions';
 
 async function getArticle(id) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) notFound();
   const { data: article, error } = await supabase.from('article').select('*, tags:tags(*)').eq('id', id).maybeSingle();
