@@ -28,7 +28,7 @@ async function getUserProfile(username) {
   const user = (users && users[0]) || null;
   if (!user) notFound();
   const { data: articles } = await supabase.from('article').select('*, tags:tags(*)').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
-  const { data: projects } = await supabase.from('project').select('*, tags:tags(*)').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  const { data: projects } = await supabase.from('projects').select('*, tags:tags(*)').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
   user.articles = articles || [];
   user.projects = projects || [];
   return user;

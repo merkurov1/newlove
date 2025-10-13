@@ -126,7 +126,7 @@ export default async function RootLayout({ children }) {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const serverSupabase = getServerSupabaseClient();
     if (serverSupabase) {
-      const { data, error } = await serverSupabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
+  const { data, error } = await serverSupabase.from('projects').select('*').eq('published', true).order('createdAt', { ascending: true });
       if (error) console.error('Supabase fetch projects error', error);
       projects = safeData(data || []);
     } else {
