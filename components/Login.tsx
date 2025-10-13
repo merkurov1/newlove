@@ -1,30 +1,34 @@
 "use client";
 
-import { usePrivy } from '@privy-io/react-auth';
 import { useState } from 'react';
+import { supabase } from '@/lib/supabase-client';
 
 export default function Login() {
-  const { login, authenticated, getAccessToken } = usePrivy();
+  const [email, setEmail] = useState('');
   const [result, setResult] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    await login();
-    if (authenticated) {
-      const token = await getAccessToken();
-      console.log('Token:', token); // Дебаг токена
-      const res = await fetch('/api/privy-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authToken: token }),
-      });
-      const data = await res.json();
-      setResult(JSON.stringify(data, null, 2));
-    }
+  const handleEmailLogin = async () => {
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({ email });
+    setResult(error ? error.message : 'Check your email for the login link.');
+    setLoading(false);
   };
+
+  // TODO: Add wallet login via Onboard if needed
 
   return (
     <div>
-      <button onClick={handleLogin}>Login with Privy</button>
+      <input
+        type="email"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        placeholder="Email"
+        className="border px-2 py-1 rounded mr-2"
+      />
+      <button onClick={handleEmailLogin} disabled={loading}>
+        {loading ? 'Sending...' : 'Login with Email'}
+      </button>
       {result && (
         <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', marginTop: 16 }}>{result}</pre>
       )}

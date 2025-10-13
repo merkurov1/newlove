@@ -1,15 +1,15 @@
 // app/admin/articles/edit/[id]/page.js
-import prisma from '@/lib/prisma';
+// dynamic import to avoid circular/interop build issues
 import { notFound } from 'next/navigation';
 import ContentForm from '@/components/admin/ContentForm';
 import { updateArticle } from '../../../actions';
 
 async function getArticle(id) {
-  const article = await prisma.article.findUnique({
-    where: { id },
-    include: { tags: true },
-  });
-  if (!article) notFound();
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const serverSupabase = getServerSupabaseClient();
+  if (!serverSupabase) notFound();
+  const { data: article, error } = await serverSupabase.from('article').select('*, tags:tags(*)').eq('id', id).maybeSingle();
+  if (error || !article) notFound();
   return article;
 }
 

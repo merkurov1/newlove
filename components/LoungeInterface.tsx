@@ -1,35 +1,25 @@
 "use client";
 import { motion, AnimatePresence } from 'framer-motion';
-// components/LoungeInterface.js
 import { useState, useEffect, useRef } from 'react';
-import { createClient } from '@/lib/supabase-browser';
-import { signIn } from 'next-auth/react';
+import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 import Image from 'next/image';
-import type { Session } from 'next-auth';
+import SafeImage from '@/components/SafeImage';
 import LinkPreview from './LinkPreview';
-
-// Типы не изменились
-type InitialMessage = {
-  id: string;
-  createdAt: Date;
-  content: string;
-  userId: string;
-  user: { name: string | null; image: string | null };
-};
+import useSupabaseSession from '@/hooks/useSupabaseSession';
+import type { InitialMessage, TypingUser } from '@/types/messages';
 
 type Props = {
   initialMessages: InitialMessage[];
-  session: Session | null;
+  session?: any;
 };
 
 // --- НОВЫЙ ТИП ДЛЯ ПЕЧАТАЮЩИХ ПОЛЬЗОВАТЕЛЕЙ ---
-type TypingUser = {
-  name: string;
-  image: string;
-};
+// TypingUser is imported from types/messages
 
-export default function LoungeInterface({ initialMessages, session }: Props) {
-  const supabase = createClient();
+export default function LoungeInterface({ initialMessages, session: propSession }: Props) {
+  const { session: hookSession } = useSupabaseSession();
+  const session = propSession ?? hookSession;
+  const supabase = createBrowserClient();
   const [messages, setMessages] = useState(initialMessages);
   const [newMessage, setNewMessage] = useState('');
   // --- НОВОЕ СОСТОЯНИЕ ДЛЯ ИНДИКАТОРА ПЕЧАТИ ---
@@ -164,7 +154,7 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
       <div className="flex flex-col items-center justify-center h-[calc(100vh-10rem)] text-center">
         <h2 className="text-2xl font-semibold mb-4">Присоединяйтесь к обсуждению</h2>
         <p className="mb-6 text-gray-600">Чтобы отправлять сообщения, пожалуйста, войдите.</p>
-        <button onClick={() => signIn('google')} className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-700">Войти через Google</button>
+  <button className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-700">Войти</button>
       </div>
     );
   }
@@ -176,9 +166,9 @@ export default function LoungeInterface({ initialMessages, session }: Props) {
         {onlineUsers.length > 0 ? (
           <>
             <span className="text-xs text-gray-500 mr-2 whitespace-nowrap">Онлайн:</span>
-            {onlineUsers.map((u, i) => (
+                {onlineUsers.map((u, i) => (
               <span key={u.name + i} className="flex items-center gap-1 mr-2 whitespace-nowrap max-w-[80px]">
-                <img src={u.image || '/default-avatar.png'} alt={u.name ? `Аватар пользователя: ${u.name}` : 'Аватар пользователя'} className="w-7 h-7 rounded-full border" />
+                <SafeImage src={u.image || '/default-avatar.png'} alt={u.name ? `Аватар пользователя: ${u.name}` : 'Аватар пользователя'} width={28} height={28} className="rounded-full border" unoptimized />
                 <span className="text-xs text-gray-700 hidden xs:inline truncate max-w-[48px]">{u.name}</span>
               </span>
             ))}

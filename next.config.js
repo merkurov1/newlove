@@ -6,8 +6,10 @@ const nextConfig = {
     ignoreDuringBuilds: true
   },
   // Оптимизация для Vercel
+  // Output mode (standalone helps deploying to some platforms)
   output: 'standalone',
-  experimental: {
+  // Allow disabling heavy build features locally via env to reduce memory use during builds
+  experimental: (process.env.DISABLE_OPTIMIZE_CSS === '1') ? {} : {
     // Оптимизация для production
     optimizeCss: true,
   },
@@ -89,11 +91,13 @@ module.exports = nextConfig;
 
 // Injected content via Sentry wizard below
 
-const { withSentryConfig } = require("@sentry/nextjs");
-
-module.exports = withSentryConfig(
-  module.exports,
-  {
+// Wrap with Sentry only when SKIP_SENTRY is not set. This makes local troubleshooting easier.
+if (process.env.SKIP_SENTRY !== '1') {
+  // require here so SKIP_SENTRY can disable loading the package entirely
+  const { withSentryConfig } = require("@sentry/nextjs");
+  module.exports = withSentryConfig(
+    module.exports,
+    {
     // For all available options, see:
     // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
@@ -123,5 +127,9 @@ module.exports = withSentryConfig(
     // https://docs.sentry.io/product/crons/
     // https://vercel.com/docs/cron-jobs
     automaticVercelMonitors: true,
-  }
-);
+    }
+  );
+} else {
+  // When skipping Sentry we still export the config as-is
+  module.exports = module.exports;
+}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@/lib/supabase-browser';
 import TagInput from '@/components/admin/TagInput';
 import BlockEditor from '@/components/admin/BlockEditor';
 import { createSeoSlug } from '@/lib/slugUtils';
@@ -37,11 +37,23 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   const [error, setError] = useState('');
   const [slugError, setSlugError] = useState('');
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
-  const { data: session, status } = useSession();
+  const [user, setUser] = useState<any>(null);
+  const [role, setRole] = useState<string | null>(null);
+  useEffect(() => {
+    const supabase = createClient();
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+      setRole(data.user?.user_metadata?.role || null);
+    };
+    getUser();
+    const { data: listener } = supabase.auth.onAuthStateChange(() => getUser());
+    return () => { try { listener?.subscription?.unsubscribe?.(); } catch {} };
+  }, []);
   const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
 
   // Функция проверки уникальности slug
-  const checkSlugUniqueness = async (slugToCheck: string) => {
+  const checkSlugUniqueness = useCallback(async (slugToCheck: string) => {
     if (!slugToCheck || isEditing) return; // Для редактирования не проверяем
 
     setIsCheckingSlug(true);
@@ -59,7 +71,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     } finally {
       setIsCheckingSlug(false);
     }
-  };
+  }, [isEditing, safeInitial.id]);
 
   // Автогенерация slug из title
   useEffect(() => {
@@ -71,7 +83,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
         checkSlugUniqueness(generatedSlug);
       }
     }
-  }, [title, slugManuallyEdited, isEditing]);
+  }, [title, slugManuallyEdited, isEditing, checkSlugUniqueness]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);
@@ -111,9 +123,9 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   }
 
   async function handleSubmit(e: React.FormEvent) {
-    if (status !== 'authenticated') {
+    if (!user || role !== 'ADMIN') {
       e.preventDefault();
-      setError('Ошибка: не определён автор. Войдите в систему.');
+      setError('Ошибка: нет прав администратора. Войдите как админ.');
       return false;
     }
     if (!validateBlocks(content)) {

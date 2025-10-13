@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
+import SafeImage from '@/components/SafeImage';
 import { Card, CardHeader, CardContent } from '@/components/admin/Card';
 import { SearchBox } from '@/components/admin/SearchBox';
 import { Table } from '@/components/admin/Table';
@@ -59,10 +60,13 @@ export default function AdminUsersPage() {
       render: (value: any, user: User) => (
         <div className="flex items-center gap-3">
           {user.image ? (
-            <img 
-              src={user.image} 
-              alt={user.name || user.username || ''} 
-              className="w-10 h-10 rounded-full object-cover"
+            <SafeImage
+              src={user.image}
+              alt={user.name || user.username || ''}
+              width={40}
+              height={40}
+              className="rounded-full object-cover"
+              unoptimized
             />
           ) : (
             <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">

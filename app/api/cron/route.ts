@@ -1,7 +1,11 @@
 // app/api/cron/route.ts
 
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+// dynamic import to avoid circular/interop build issues
+
+// This route uses cookies / request-bound Supabase client and must be
+// rendered dynamically. Tell Next explicitly to avoid static prerender.
+export const dynamic = 'force-dynamic';
 
 // Вспомогательная функция для генерации URL-дружественного слага из заголовка
 // Я добавил транслитерацию для кириллических символов
@@ -40,6 +44,15 @@ export async function GET() {
     const articles: any[] = []; // Замените это на ваш реальный массив статей
     // ---- КОНЕЦ ПРИМЕРНОГО КОДА ----
 
+  // For cron/background jobs, use the server service-role client instead of
+  // the request-bound helper (which depends on cookies). This ensures the
+  // cron job can run in environments without an incoming Request.
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const supabase = getServerSupabaseClient();
+  if (!supabase) {
+    console.error('Supabase client unavailable for cron job');
+    return NextResponse.json({ message: 'Supabase client unavailable' }, { status: 500 });
+  }
     for (const article of articles) {
       // <<< ГЛАВНОЕ ИЗМЕНЕНИЕ: Генерируем slug из заголовка статьи
       const slug = generateSlug(article.title);
@@ -47,23 +60,21 @@ export async function GET() {
       // Если у вас не получается сгенерировать slug (например, нет заголовка), пропускаем статью
       if (!slug) continue;
 
-      await prisma.newsArticle.upsert({
-        where: { url: article.url },
-        update: {
+      // Upsert via Supabase (use onConflict=url)
+      try {
+        const payload = {
           title: article.title,
-          description: article.description || '',
-          imageUrl: article.imageUrl,
-        },
-        create: {
-          title: article.title,
-          slug: slug, // <<< ДОБАВЛЯЕМ Сгенерированный slug
+          slug: slug,
           description: article.description || '',
           url: article.url,
           imageUrl: article.imageUrl,
-          publishedAt: new Date(article.publishedAt),
-          sourceName: article.source.name,
-        },
-      });
+          publishedAt: article.publishedAt ? new Date(article.publishedAt).toISOString() : null,
+          sourceName: article.source?.name || null,
+        };
+  await supabase.from('newsArticle').upsert(payload, { onConflict: 'url' });
+      } catch (e) {
+        console.error('Supabase upsert newsArticle error', e);
+      }
     }
 
     return NextResponse.json({ message: 'News processing finished successfully.' });

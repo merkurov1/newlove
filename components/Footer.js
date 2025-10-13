@@ -1,6 +1,6 @@
 'use client';
 
-import { useSession } from 'next-auth/react';
+import useSupabaseSession from '@/hooks/useSupabaseSession';
 import { useFormState } from 'react-dom';
 import { subscribeToNewsletter } from '@/app/admin/actions';
 import { useEffect, useRef, useState } from 'react';
@@ -19,8 +19,9 @@ function SubmitButton() {
   );
 }
 
+
 export default function Footer({ subscriberCount }) {
-  const { data: session } = useSession();
+  const { session } = useSupabaseSession();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [checkingSubscription, setCheckingSubscription] = useState(true);
   const formRef = useRef(null);
@@ -62,7 +63,6 @@ export default function Footer({ subscriberCount }) {
       <div className="container mx-auto px-4 py-10">
         <div className="flex flex-col md:flex-row md:items-start md:justify-center gap-10">
           <div className="flex-1 max-w-md mx-auto md:mx-0 flex flex-col gap-6">
-            
             {/* Показываем разный контент в зависимости от статуса подписки */}
             {checkingSubscription ? (
               <div className="animate-pulse">
@@ -149,7 +149,6 @@ export default function Footer({ subscriberCount }) {
                 </form>
               </div>
             )}
-            
             <DonateButton />
           </div>
         </div>

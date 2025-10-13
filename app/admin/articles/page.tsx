@@ -1,18 +1,21 @@
 import Link from 'next/link';
-import prisma from '@/lib/prisma';
+// dynamic import to avoid circular/interop build issues
+import { safeData } from '@/lib/safeSerialize';
 import { deleteArticle } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminArticlesPage() {
-  const articles = await prisma.article.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: {
-      author: {
-        select: { name: true },
-      },
-    },
-  });
+  // Use server service-role client for admin pages to avoid relying on
+  // request-bound client at render time (stable for builds and admin ops).
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const serverSupabase = getServerSupabaseClient();
+  let articles: any[] = [];
+  if (serverSupabase) {
+    const { data, error } = await serverSupabase.from('article').select('id,title,slug,published,author:authorId(name)').order('createdAt', { ascending: false });
+    if (error) console.error('Supabase fetch admin articles error', error);
+    articles = safeData(data || []);
+  }
 
   return (
     <div className="space-y-8 pb-10">
@@ -32,7 +35,7 @@ export default async function AdminArticlesPage() {
         {articles.length === 0 ? (
           <div className="col-span-full p-6 text-center text-gray-400 bg-white rounded-xl border shadow-sm">Пока нет ни одной публикации.</div>
         ) : (
-          articles.map((article) => (
+          articles.map((article: any) => (
             <div key={article.id} className="bg-white rounded-xl border shadow-sm p-5 flex flex-col gap-2 hover:shadow-md transition-shadow group">
               <div className="flex items-center gap-2 mb-1">
                 <span className={`h-2.5 w-2.5 rounded-full ${article.published ? 'bg-green-500' : 'bg-gray-400'}`} title={article.published ? 'Опубликовано' : 'Черновик'}></span>

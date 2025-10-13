@@ -1,37 +1,44 @@
 // components/AuthGuard.tsx (бывший PasswordGuard.tsx)
 
 "use client";
+import { useState, useEffect } from "react";
+import ModernLoginModal from "./ModernLoginModal";
+import { createClient as createBrowserClient } from '@/lib/supabase-browser';
+const supabase = createBrowserClient();
 
-import { useSession, signIn } from "next-auth/react";
-import { ReactNode } from "react";
+export default function AuthGuard({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
 
-interface Props {
-  children: ReactNode;
-}
+  useEffect(() => {
+    const getUser = async () => {
+      setLoading(true);
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+      setLoading(false);
+    };
+    getUser();
+    const { data: listener } = supabase.auth.onAuthStateChange(() => getUser());
+    return () => { listener?.subscription.unsubscribe(); };
+  }, []);
 
-export default function AuthGuard({ children }: Props) {
-  const { data: session, status } = useSession();
-
-  // Пока идет проверка сессии, можно показать загрузчик
-  if (status === "loading") {
+  if (loading) {
     return <p>Проверка доступа...</p>;
   }
 
-  // Если сессии нет, показываем предложение войти
-  if (status === "unauthenticated") {
+  if (!user) {
     return (
-      <div>
-        <h1>Доступ ограничен</h1>
-        <p>Пожалуйста, войдите, чтобы просмотреть этот контент.</p>
-        <button onClick={() => signIn("google")}>Войти через Google</button>
-      </div>
+      <>
+        <div style={{ textAlign: "center", marginTop: 48 }}>
+          <h1>Доступ ограничен</h1>
+          <p>Пожалуйста, войдите, чтобы просмотреть этот контент.</p>
+          <button onClick={() => setModalOpen(true)} style={{ padding: 10, borderRadius: 8, fontWeight: 600, fontSize: 16 }}>Войти</button>
+        </div>
+        <ModernLoginModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      </>
     );
   }
 
-  // Если пользователь авторизован, показываем контент
-  if (status === "authenticated") {
-    return <>{children}</>;
-  }
-
-  return null;
+  return <>{children}</>;
 }

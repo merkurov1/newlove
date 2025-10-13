@@ -1,10 +1,11 @@
 
-"use client";
 // app/projects/page.tsx
 
 import Link from 'next/link';
 import Image from 'next/image';
-import prisma from '@/lib/prisma';
+// Use a dynamic import for the Supabase request helper to avoid circular-import
+// and ESM/CJS interop issues during Next.js production builds.
+import { safeData } from '@/lib/safeSerialize';
 import { AnimatePresence, motion } from 'framer-motion';
 
 // Определяем типы для проекта, чтобы код был надежнее
@@ -20,18 +21,16 @@ interface ProjectPreview {
 }
 
 export default async function ProjectsPage() {
-  // Запрашиваем только опубликованные проекты через Prisma
-  const projects = await prisma.project.findMany({
-    where: { published: true },
-    select: {
-      id: true,
-      slug: true,
-      title: true,
-      previewImage: true,
-      publishedAt: true,
-    },
-    orderBy: { publishedAt: 'desc' },
-  });
+  // Запрашиваем только опубликованные проекты через Supabase
+  // Use server client for public project listing to avoid cookie-bound client
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const serverSupabase = getServerSupabaseClient();
+  let projects: any[] = [];
+  if (serverSupabase) {
+    const { data, error } = await serverSupabase.from('project').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
+    if (error) console.error('Supabase fetch projects error', error);
+    projects = safeData(data || []);
+  }
 
   if (!projects || projects.length === 0) {
     return (
@@ -53,7 +52,7 @@ export default async function ProjectsPage() {
           Проекты
         </h1>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((project) => (
+          {projects.map((project: any) => (
             <Link href={`/${project.slug}`} key={project.id} className="block group">
               <div className="flex flex-col h-full bg-white/70 rounded-xl overflow-hidden transition-colors hover:bg-pink-50">
                 <div className="relative w-full h-40 sm:h-48 bg-gray-100">
@@ -79,3 +78,5 @@ export default async function ProjectsPage() {
     </div>
   );
 }
+
+export const dynamic = 'force-dynamic';

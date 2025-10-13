@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import SafeImage from '@/components/SafeImage';
 
 interface YouTubeVideo {
   id: string;
@@ -155,10 +156,13 @@ export default function YouTubeShorts({ limit = 10 }: YouTubeShortsProps) {
       {channelInfo && (
         <div className="flex items-center mb-6 p-4 bg-gray-50 rounded-lg">
           {channelInfo.thumbnail && (
-            <img 
-              src={channelInfo.thumbnail} 
+            <SafeImage
+              src={channelInfo.thumbnail}
               alt={channelInfo.title ? `Аватар канала: ${channelInfo.title}` : 'Аватар канала'}
-              className="w-16 h-16 rounded-full mr-4"
+              width={64}
+              height={64}
+              className="rounded-full mr-4"
+              unoptimized
             />
           )}
           <div>
@@ -190,10 +194,13 @@ export default function YouTubeShorts({ limit = 10 }: YouTubeShortsProps) {
           >
             {/* Миниатюра */}
             <div className="relative aspect-[9/16] rounded-lg overflow-hidden bg-gray-200 mb-3">
-              <img 
-                src={video.thumbnail} 
+              <SafeImage
+                src={video.thumbnail}
                 alt={video.title ? `Превью видео: ${video.title}` : 'Превью видео'}
+                width={400}
+                height={711}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                unoptimized
               />
               
               {/* Overlay с информацией */}

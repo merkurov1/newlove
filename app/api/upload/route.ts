@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/authOptions';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 // Пример: сохраняет файл в /public/uploads (или интегрируйте с Supabase Storage/S3)
 import path from 'path';
@@ -10,9 +9,10 @@ import fs from 'fs/promises';
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
 
 export async function POST(req: NextRequest) {
-  // Проверка аутентификации
-  const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== 'ADMIN') {
+  // Проверка аутентификации через Supabase
+  try {
+    await requireAdminFromRequest(req as Request);
+  } catch (e) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 

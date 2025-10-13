@@ -8,22 +8,39 @@ WHERE table_name = 'articles'
 ORDER BY ordinal_position;
 
 -- 2. Если id имеет тип UUID, то изменяем его на TEXT
--- ВНИМАНИЕ: Это удалит все существующие статьи!
+-- ВНИМАНИЕ: Это может удалить существующие статьи при преобразовании типов.
+-- Мы выполняем проверку и только при необходимости приведём типы.
 
--- Удаляем связанные записи в промежуточной таблице
-DELETE FROM "_ArticleToTag";
+DO $$
+DECLARE
+	t text;
+BEGIN
+	SELECT data_type INTO t FROM information_schema.columns
+	WHERE table_name = 'articles' AND column_name = 'id';
+	IF t = 'uuid' THEN
+		RAISE NOTICE 'articles.id is uuid — attempting safe conversion to TEXT.';
 
--- Удаляем все статьи
-DELETE FROM "articles";
+		-- Only convert column type without deleting data. Conversion may fail if dependent FKs exist.
+		BEGIN
+			ALTER TABLE "articles" ALTER COLUMN "id" TYPE TEXT USING id::text;
+		EXCEPTION WHEN others THEN
+			RAISE NOTICE 'Direct TYPE conversion failed: % — consider manual migration. Skipping.', SQLERRM;
+		END;
 
--- Изменяем тип колонки id с UUID на TEXT
-ALTER TABLE "articles" ALTER COLUMN "id" TYPE TEXT;
-
--- Изменяем default значение для генерации CUID (удаляем UUID генерацию)
-ALTER TABLE "articles" ALTER COLUMN "id" DROP DEFAULT;
-
--- Убеждаемся, что authorId тоже TEXT (должен быть, если User.id это TEXT)
-ALTER TABLE "articles" ALTER COLUMN "authorId" TYPE TEXT;
+		-- Try to convert authorId as well if needed
+		BEGIN
+			SELECT data_type INTO t FROM information_schema.columns
+			WHERE table_name = 'articles' AND column_name = 'authorId';
+			IF t = 'uuid' THEN
+				ALTER TABLE "articles" ALTER COLUMN "authorId" TYPE TEXT USING authorId::text;
+			END IF;
+		EXCEPTION WHEN others THEN
+			RAISE NOTICE 'Could not convert authorId: % — manual attention required.', SQLERRM;
+		END;
+	ELSE
+		RAISE NOTICE 'articles.id is not UUID (current type: %), skipping conversion.', t;
+	END IF;
+END $$;
 
 -- 3. Проверяем результат
 SELECT column_name, data_type, is_nullable, column_default 
