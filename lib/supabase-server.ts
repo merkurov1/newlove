@@ -14,10 +14,15 @@ export async function getUserAndSupabaseFromRequest(req: Request) {
   // 'sb-access-token') and validate it via @supabase/supabase-js client.
 
   const cookieHeader = (req as any).headers?.get?.('cookie') || '';
-  const cookies = Object.fromEntries(cookieHeader.split(';').map((s: string) => {
-    const [k, ...v] = s.split('=');
-    return [k?.trim(), decodeURIComponent((v || []).join('='))];
-  }).filter(Boolean));
+  const cookies = Object.fromEntries(
+    cookieHeader
+      .split(';')
+      .map((s: string) => {
+        const [k, ...v] = s.split('=');
+        return [k?.trim(), decodeURIComponent((v || []).join('='))];
+      })
+      .filter(Boolean)
+  );
 
   const accessToken = cookies['sb-access-token'] || cookies['supabase-access-token'] || '';
   if (!accessToken) return { user: null, supabase: null };
@@ -33,7 +38,10 @@ export async function getUserAndSupabaseFromRequest(req: Request) {
 
   try {
     // Fetch user by validating the JWT
-    const { data: { user }, error } = await supabase.auth.getUser(accessToken as string) as any;
+    const {
+      data: { user },
+      error,
+    } = (await supabase.auth.getUser(accessToken as string)) as any;
     if (error) {
       console.error('Supabase getUser error', error);
       return { user: null, supabase };
