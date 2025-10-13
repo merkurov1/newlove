@@ -25,12 +25,12 @@ async function getContent(slug) {
   
   try {
     console.log('📰 Searching for article with slug:', slug);
-    // Сначала ищем статью
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-    const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+    // Use server-side Supabase client for public content lookup
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const serverSupabase = getServerSupabaseClient();
     let article = null;
-    if (supabase) {
-      const { data, error } = await supabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').eq('slug', slug).eq('published', true).maybeSingle();
+    if (serverSupabase) {
+      const { data, error } = await serverSupabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').eq('slug', slug).eq('published', true).maybeSingle();
       if (error) {
         console.error('Supabase fetch article error', error);
       } else {
@@ -46,8 +46,8 @@ async function getContent(slug) {
     console.log('📁 Searching for project with slug:', slug);
     // Если статья не найдена, ищем проект
     let project = null;
-    if (!article && supabase) {
-      const { data: p, error: pErr } = await supabase.from('project').select('*').eq('slug', slug).eq('published', true).maybeSingle();
+    if (!article && serverSupabase) {
+      const { data: p, error: pErr } = await serverSupabase.from('project').select('*').eq('slug', slug).eq('published', true).maybeSingle();
       if (pErr) console.error('Supabase fetch project error', pErr);
       project = p;
     }

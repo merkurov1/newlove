@@ -12,17 +12,14 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const { id } = params;
   // Try to perform deletion via Supabase
   try {
-    const mod = await import('@/lib/supabase-server');
-    const { getUserAndSupabaseFromRequest } = mod as any;
-    const { supabase } = await getUserAndSupabaseFromRequest(req as Request);
-    if (supabase) {
-      const { error } = await supabase.from('subscribers').delete().eq('id', id).limit(1);
-      if (error) {
-        console.error('Supabase delete error', error);
-        return NextResponse.json({ error: 'Deletion failed' }, { status: 500 });
-      }
-      return NextResponse.json({ success: true });
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const serverSupabase = getServerSupabaseClient();
+    const { error } = await serverSupabase.from('subscribers').delete().eq('id', id).limit(1);
+    if (error) {
+      console.error('Supabase delete error', error);
+      return NextResponse.json({ error: 'Deletion failed' }, { status: 500 });
     }
+    return NextResponse.json({ success: true });
   } catch (e) {
     console.error('Error deleting subscriber', e);
   }

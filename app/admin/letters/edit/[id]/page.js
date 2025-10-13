@@ -8,12 +8,10 @@ import SendLetterForm from '@/components/admin/SendLetterForm';
 
 export default async function EditLetterPage({ params }) {
   const letterId = params.id;
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
-  if (!supabase) notFound();
-  const { data: letter, error } = await supabase.from('letter').select('*, tags:tags(*)').eq('id', letterId).maybeSingle();
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const serverSupabase = getServerSupabaseClient();
+  if (!serverSupabase) notFound();
+  const { data: letter, error } = await serverSupabase.from('letter').select('*, tags:tags(*)').eq('id', letterId).maybeSingle();
   if (error || !letter) notFound();
   
   return (

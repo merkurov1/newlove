@@ -22,12 +22,10 @@ const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false
 
 // Получить статьи с тегами
 async function getArticles() {
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
-  if (!supabase) return [];
-  const { data, error } = await supabase.from('article').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name),tags:tags(*)').eq('published', true).order('updatedAt', { ascending: false }).limit(15);
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const serverSupabase = getServerSupabaseClient();
+  if (!serverSupabase) return [];
+  const { data, error } = await serverSupabase.from('article').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name),tags:tags(*)').eq('published', true).order('updatedAt', { ascending: false }).limit(15);
   if (error) {
     console.error('Supabase fetch articles error', error);
     return [];

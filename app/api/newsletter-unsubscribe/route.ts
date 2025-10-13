@@ -7,11 +7,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Нет токена для отписки.' }, { status: 400 });
   }
   try {
-  const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
-  const { supabase } = await getUserAndSupabaseFromRequest((globalThis && (globalThis as any).request) || new Request('http://localhost')) || {};
-    if (!supabase) return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
-    const { data: tokenRow, error: tokenErr } = await supabase.from('subscriber_tokens').select('*').eq('token', token).maybeSingle();
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const serverSupabase = getServerSupabaseClient();
+    if (!serverSupabase) return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
+    const { data: tokenRow, error: tokenErr } = await serverSupabase.from('subscriber_tokens').select('*').eq('token', token).maybeSingle();
     if (tokenErr) {
       console.error('Error fetching token', tokenErr);
       return NextResponse.json({ error: 'Ошибка при отписке.' }, { status: 500 });
@@ -19,10 +18,9 @@ export async function GET(req: NextRequest) {
     if (!tokenRow || tokenRow.type !== 'unsubscribe' || tokenRow.used) {
       return NextResponse.json({ error: 'Некорректный или устаревший токен.' }, { status: 404 });
     }
-    // Помечаем токен использованным
-    await supabase.from('subscriber_tokens').update({ used: true }).eq('token', token);
-    // Удаляем подписчика (или soft-delete)
-    await supabase.from('subscribers').delete().eq('id', tokenRow.subscriber_id || tokenRow.subscriberId);
+  // Помечаем токен использованным и удаляем подписчика через server client
+  await serverSupabase.from('subscriber_tokens').update({ used: true }).eq('token', token);
+  await serverSupabase.from('subscribers').delete().eq('id', tokenRow.subscriber_id || tokenRow.subscriberId);
     return NextResponse.json({ message: 'Вы успешно отписались от рассылки.' });
   } catch (error) {
     return NextResponse.json({ error: 'Ошибка при отписке.' }, { status: 500 });

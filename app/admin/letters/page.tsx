@@ -9,12 +9,10 @@ export default async function AdminLettersPage() {
   let error = null;
 
   try {
-  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = (mod as any).getUserAndSupabaseFromRequest || (mod as any).default;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
-  if (!supabase) throw new Error('Supabase client unavailable');
-  const { data, error: lErr } = await supabase.from('letter').select('id,title,slug,published,sentAt,createdAt,author:authorId(name)').order('createdAt', { ascending: false });
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const serverSupabase = getServerSupabaseClient();
+  if (!serverSupabase) throw new Error('Supabase client unavailable');
+  const { data, error: lErr } = await serverSupabase.from('letter').select('id,title,slug,published,sentAt,createdAt,author:authorId(name)').order('createdAt', { ascending: false });
   if (lErr) throw lErr;
   letters = data || [];
   } catch (err) {

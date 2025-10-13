@@ -14,18 +14,17 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function ArticlesPage() {
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
-  if (!supabase) return (
+  // Use server client for public article listing
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const serverSupabase = getServerSupabaseClient();
+  if (!serverSupabase) return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-blue-100 py-10 px-2">
       <div className="max-w-2xl mx-auto">
         <p className="text-gray-500 text-center">Сервис временно недоступен.</p>
       </div>
     </div>
   );
-  const { data: articles = [], error } = await supabase.from('article').select('id,title,slug,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
+  const { data: articles = [], error } = await serverSupabase.from('article').select('id,title,slug,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
   if (error) {
     console.error('Supabase fetch articles error', error);
   }
