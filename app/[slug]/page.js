@@ -8,6 +8,7 @@ async function getUserAndSupabaseFromRequest(req) {
   return fn(req);
 }
 import { safeData } from '@/lib/safeSerialize';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -109,7 +110,7 @@ export async function generateMetadata({ params }) {
       };
     }
 
-    return {
+    const meta = {
       title: content.title,
       description: description,
       openGraph: {
@@ -131,6 +132,9 @@ export async function generateMetadata({ params }) {
         }
       })
     };
+
+    // Ensure metadata contains only serializable values (no React elements/functions)
+    return sanitizeMetadata(meta);
   } catch (error) {
     return { 
       title: 'Ошибка загрузки',
