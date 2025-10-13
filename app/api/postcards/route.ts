@@ -12,7 +12,14 @@ export async function GET() {
       return NextResponse.json({ postcards: [] });
     }
 
-    const { data: postcards, error } = await supabase.from('postcard').select('*, orders(count)').order('createdAt', { ascending: false });
+    // The postcards -> orders relation in the DB is implemented via the
+    // `postcard_orders` table (see migrations). Use a proper relationship
+    // selection or an aggregate subquery. We'll select the postcards and
+    // include a count of related orders via the `postcard_orders` table.
+    const { data: postcards, error } = await supabase
+      .from('postcard')
+      .select('*, postcard_orders:postcard_orders(count)')
+      .order('createdAt', { ascending: false });
     if (error) {
       console.error('Error fetching postcards from Supabase', error);
       return NextResponse.json({ error: 'Ошибка при загрузке открыток' }, { status: 500 });
