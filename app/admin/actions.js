@@ -806,7 +806,8 @@ export async function deletePostcard(formData) {
     // Проверяем есть ли заказы для этой открытки
     let ordersCount = 0;
     try {
-      const { data, error } = await supabase.from('postcardOrder').select('id').eq('postcardId', id);
+  // The orders are stored in `postcard_orders` (migration name). Query that table.
+  const { data, error } = await supabase.from('postcard_orders').select('id').eq('postcardId', id);
       if (error) throw error;
       ordersCount = (data && data.length) || 0;
     } catch (err) {
