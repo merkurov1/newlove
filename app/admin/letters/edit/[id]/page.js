@@ -10,7 +10,7 @@ export default async function EditLetterPage({ params }) {
   const letterId = params.id;
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod;
+  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default || mod;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) notFound();
   const { data: letter, error } = await supabase.from('letter').select('*, tags:tags(*)').eq('id', letterId).maybeSingle();

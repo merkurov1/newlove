@@ -23,7 +23,7 @@ function FallbackAvatar({ name }) {
 async function getUserProfile(username) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod;
+  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default || mod;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) notFound();
   const { data: users } = await supabase.from('users').select('*').eq('username', username).limit(1);

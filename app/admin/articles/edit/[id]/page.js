@@ -7,7 +7,7 @@ import { updateArticle } from '../../../actions';
 async function getArticle(id) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod;
+  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default || mod;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) notFound();
   const { data: article, error } = await supabase.from('article').select('*, tags:tags(*)').eq('id', id).maybeSingle();
