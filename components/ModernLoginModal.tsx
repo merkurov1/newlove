@@ -96,9 +96,17 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
   };
 
   return (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" style={{ zIndex: 9999 }}>
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
+      onClick={(e) => {
+        // close when clicking backdrop
+        if (e.target === e.currentTarget && onClose) onClose();
+      }}
+    >
       <div
         className="bg-white rounded-2xl shadow-2xl flex flex-col gap-6 items-center justify-center mx-auto"
+        role="dialog"
+        aria-modal="true"
         style={{
           minHeight: 320,
           minWidth: 320,
