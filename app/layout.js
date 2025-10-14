@@ -112,10 +112,16 @@ export default async function RootLayout({ children }) {
     const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
     const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
     const { supabase } = await getUserAndSupabaseForRequest(globalReq);
-    if (supabase) {
+      if (supabase) {
       const { data, error } = await supabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
-      if (error) console.error('Supabase fetch projects error', error);
-      projects = safeData(data || []);
+      // Suppress permission-denied noise in production; only surface DB errors in development
+      if (error) {
+        if (process.env.NODE_ENV === 'development') console.error('Supabase fetch projects error', error);
+        // If permission denied, leave projects empty
+        projects = [];
+      } else {
+        projects = safeData(data || []);
+      }
     } else {
       projects = [];
     }
@@ -140,11 +146,20 @@ export default async function RootLayout({ children }) {
     const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
     const { supabase } = await getUserAndSupabaseForRequest(globalReq);
     if (supabase) {
-      const { data, error } = await supabase.from('subscribers').select('id');
-      if (!error) {
-        const safe = safeData(data || []);
-        subscriberCount = (safe && safe.length) || 0;
-      } else console.error('Supabase count subscribers error', error);
+      try {
+        const { data, error } = await supabase.from('subscribers').select('id');
+        if (!error) {
+          const safe = safeData(data || []);
+          subscriberCount = (safe && safe.length) || 0;
+        } else {
+          // If permission denied or other DB error, do not surface the raw error object to rendering.
+          if (process.env.NODE_ENV === 'development') console.error('Supabase count subscribers error', error);
+          subscriberCount = 0;
+        }
+      } catch (e) {
+        if (process.env.NODE_ENV === 'development') console.error('Supabase count subscribers exception', e);
+        subscriberCount = 0;
+      }
     }
   } catch (error) {
     // Логируем только в development
