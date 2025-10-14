@@ -13,7 +13,13 @@ export default async function EditLetterPage({ params }) {
   const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default || mod;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) notFound();
-  const { data: letter, error } = await supabase.from('letter').select('*, tags:tags(*)').eq('id', letterId).maybeSingle();
+  const { data: letterRaw, error } = await supabase.from('letter').select('*').eq('id', letterId).maybeSingle();
+  let letter = letterRaw;
+  if (letter) {
+    const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
+    const [l] = await attachTagsToArticles(supabase, [letter]);
+    letter = l || letter;
+  }
   if (error || !letter) notFound();
   
   return (

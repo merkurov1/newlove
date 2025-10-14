@@ -38,10 +38,13 @@ async function getArticles() {
 
   const { data, error } = await supabase
     .from('articles')
-    .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name),tags:tags(*)')
+    .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
     .eq('published', true)
     .order('updatedAt', { ascending: false })
     .limit(15);
+  // attach tags after fetch
+  const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
+  const dataWithTags = await attachTagsToArticles(supabase, data || []);
   if (error) {
     console.error('Supabase fetch articles error', error);
     return [];

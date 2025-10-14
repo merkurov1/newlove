@@ -12,7 +12,7 @@ export default async function AdminArticlesPage() {
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   let articles: any[] = [];
   if (supabase) {
-    const { data, error } = await supabase.from('article').select('id,title,slug,published,author:authorId(name)').order('createdAt', { ascending: false });
+  const { data, error } = await supabase.from('articles').select('id,title,slug,published,author:authorId(name)').order('createdAt', { ascending: false });
     if (error) console.error('Supabase fetch admin articles error', error);
     articles = safeData(data || []);
   }

@@ -40,7 +40,7 @@ export async function createArticle(formData) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { supabase } = await loadSupabaseFromRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
-  const { data: existingSlug } = await supabase.from('article').select('id').eq('slug', slug).maybeSingle();
+  const { data: existingSlug } = await supabase.from('articles').select('id').eq('slug', slug).maybeSingle();
   if (existingSlug) {
     throw new Error('Статья с таким slug уже существует. Пожалуйста, выберите другой URL.');
   }
@@ -69,7 +69,7 @@ export async function createArticle(formData) {
   // Явно генерируем CUID для статьи
   const articleId = createId();
   // Insert article via Supabase. Note: tag connectOrCreate not implemented here yet.
-  const { data: createdArticle, error: insertErr } = await supabase.from('article').insert({
+  const { data: createdArticle, error: insertErr } = await supabase.from('articles').insert({
     id: articleId,
     title,
     content: JSON.stringify(validBlocks),
@@ -129,7 +129,7 @@ export async function updateArticle(formData) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { supabase } = await loadSupabaseFromRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
-  const { error: updateErr } = await supabase.from('article').update({
+  const { error: updateErr } = await supabase.from('articles').update({
     title,
     content: JSON.stringify(validBlocks),
     slug,
@@ -161,8 +161,8 @@ export async function deleteArticle(formData) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { supabase } = await loadSupabaseFromRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
-  const { data: article } = await supabase.from('article').select('slug').eq('id', id).maybeSingle();
-  const { error: delErr } = await supabase.from('article').delete().eq('id', id);
+  const { data: article } = await supabase.from('articles').select('slug').eq('id', id).maybeSingle();
+  const { error: delErr } = await supabase.from('articles').delete().eq('id', id);
   if (delErr) {
     console.error('Supabase delete article error', delErr);
     throw new Error('Ошибка при удалении статьи');

@@ -11,7 +11,7 @@ export async function GET(request, { params }) {
     const articleId = params.id;
     if (!supabase) return NextResponse.json({ error: 'Article not found' }, { status: 404 });
 
-    const { data: article, error } = await supabase.from('article').select('*').eq('id', articleId).maybeSingle();
+  const { data: article, error } = await supabase.from('articles').select('*').eq('id', articleId).maybeSingle();
     if (error || !article) {
       if (process.env.NODE_ENV === 'development') console.error('Error fetching article', error);
       return NextResponse.json({ error: 'Article not found' }, { status: 404 });

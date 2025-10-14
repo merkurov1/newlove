@@ -11,7 +11,7 @@ export async function GET() {
     console.error('Unable to create server supabase client for RSS:', e);
     return new Response('DB unavailable', { status: 500 });
   }
-  const { data: articles, error } = await supabase.from('article').select('title,slug,content,publishedAt,author:authorId(name)').eq('published', true).order('publishedAt', { ascending: false }).limit(30);
+  const { data: articles, error } = await supabase.from('articles').select('title,slug,content,publishedAt,author:authorId(name)').eq('published', true).order('publishedAt', { ascending: false }).limit(30);
   if (error) {
     console.error('Supabase fetch articles for RSS', error);
     return new Response('Internal error', { status: 500 });

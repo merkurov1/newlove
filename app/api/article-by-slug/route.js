@@ -10,7 +10,7 @@ export async function GET(req) {
   const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default;
   const { supabase } = await getUserAndSupabaseFromRequest((globalThis && (globalThis).request) || new Request('http://localhost')) || {};
   if (!supabase) return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
-  const { data: article, error } = await supabase.from('article').select('id,slug,title,content,publishedAt').eq('slug', slug).eq('published', true).maybeSingle();
+  const { data: article, error } = await supabase.from('articles').select('id,slug,title,content,publishedAt').eq('slug', slug).eq('published', true).maybeSingle();
   if (error) {
     console.error('Supabase fetch article error', error);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
