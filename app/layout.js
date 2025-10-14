@@ -132,6 +132,8 @@ export default async function RootLayout({ children }) {
           <main>
             {children}
           </main>
+          {/* client-only sidebar shows for authenticated users */}
+          <UserSidebar />
           <Footer />
         </AuthProvider>
       </body>
