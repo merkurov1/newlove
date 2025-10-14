@@ -1,3 +1,7 @@
+export const metadata = {
+  title: 'Главная | Anton Merkurov',
+  description: 'Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.'
+};
 // app/page.js
 
 
