@@ -8,10 +8,7 @@ import Footer from '@/components/Footer';
 
 // --- ОБНОВЛЕННЫЙ БЛОК МЕТАДАННЫХ ---
 export const metadata = sanitizeMetadata({
-  title: {
-    default: 'Anton Merkurov | Art x Love x Money',
-    template: '%s | Anton Merkurov',
-  },
+  title: 'Anton Merkurov | Art x Love x Money',
   description: 'Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.',
   keywords: ['Антон Меркуров', 'медиа', 'технологии', 'digital', 'искусство', 'блог', 'статьи', 'маркетинг'],
   authors: [{ name: 'Anton Merkurov', url: 'https://merkurov.love' }],
