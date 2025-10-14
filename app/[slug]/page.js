@@ -42,9 +42,18 @@ async function getContent(slug) {
         console.error('Supabase fetch article error', error);
       } else {
         // attach tags via helper if nested relation not available
-        const withTags = data ? (Array.isArray(data) ? await attachTagsToArticles(supabase, data) : { ...data }) : null;
-        // if withTags is array when maybeSingle returned single object, try to normalize
-        article = withTags && Array.isArray(withTags) ? withTags[0] : withTags || data;
+        let withTags = null;
+        if (data) {
+          if (Array.isArray(data)) {
+            withTags = await attachTagsToArticles(supabase, data);
+            withTags = Array.isArray(withTags) ? withTags : [];
+            article = withTags[0] || null;
+          } else {
+            // single object case
+            const attached = await attachTagsToArticles(supabase, [data]);
+            article = (Array.isArray(attached) && attached[0]) ? attached[0] : { ...data };
+          }
+        }
       }
     }
     

@@ -17,8 +17,9 @@ export default async function EditLetterPage({ params }) {
   let letter = letterRaw;
   if (letter) {
     const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
-    const [l] = await attachTagsToArticles(supabase, [letter]);
-    letter = l || letter;
+    const attached = await attachTagsToArticles(supabase, [letter]);
+    const l = Array.isArray(attached) ? attached[0] : null;
+    letter = l ? JSON.parse(JSON.stringify(l)) : JSON.parse(JSON.stringify(letter));
   }
   if (error || !letter) notFound();
   

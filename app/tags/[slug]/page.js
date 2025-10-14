@@ -27,10 +27,10 @@ async function getTagData(slug) {
     const { data: arts } = await supabase.from('articles').select('*, author:authorId(name,image)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
     // attach tags via helper
     const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
-    const artsWithTags = await attachTagsToArticles(supabase, arts || []);
-    return { data: artsWithTags };
+  const artsWithTags = await attachTagsToArticles(supabase, arts || []);
+  return { data: (artsWithTags && Array.isArray(artsWithTags)) ? artsWithTags : [] };
   });
-  tag.articles = (articles && articles.data) || (articles || []);
+  tag.articles = (articles && (articles.data || articles)) || [];
   return tag;
 }
 
