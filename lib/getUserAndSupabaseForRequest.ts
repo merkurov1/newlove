@@ -22,6 +22,16 @@ export async function getUserAndSupabaseForRequest(req?: Request | null): Promis
     const supabase = srv.getServerSupabaseClient();
     return { supabase, isServer: true } as SupaRequestResult;
   } catch (e) {
+    // Emergency mock fallback to keep the site running if DB completely unavailable
+    try {
+      if (typeof process !== 'undefined' && process.env && process.env.EMERGENCY_SUPABASE_MOCK === 'true') {
+        const { createMockSupabase } = await import('./mockSupabaseClient');
+        const mock = createMockSupabase();
+        return { supabase: mock as any, isServer: false };
+      }
+    } catch (e2) {
+      // ignore
+    }
     return { supabase: null, isServer: false };
   }
 }
