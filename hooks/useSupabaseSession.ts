@@ -1,13 +1,31 @@
 "use client";
 import { useEffect, useState } from 'react';
+
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-if (!supabaseUrl || !anonKey) {
-  throw new Error('Supabase URL or anon key is not defined in environment variables');
+const serviceRoleKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrl) {
+  throw new Error('Supabase URL is not defined in environment variables');
 }
-const supabase = createClient(supabaseUrl, anonKey);
+if (!anonKey) {
+  throw new Error('Supabase anon key is not defined in environment variables');
+}
+// На клиенте всегда anon key, на сервере можно service role
+function getSupabaseClient() {
+  if (typeof window === 'undefined') {
+    if (!serviceRoleKey) {
+      throw new Error('Supabase service role key is not defined in environment variables');
+    }
+    return createClient(String(supabaseUrl), String(serviceRoleKey));
+  }
+  if (!anonKey) {
+    throw new Error('Supabase anon key is not defined in environment variables');
+  }
+  return createClient(String(supabaseUrl), String(anonKey));
+}
+
 
 export default function useSupabaseSession() {
   const [session, setSession] = useState<any | null>(null);
@@ -15,6 +33,7 @@ export default function useSupabaseSession() {
 
   useEffect(() => {
     let mounted = true;
+    const supabase = getSupabaseClient();
     const get = async () => {
       const { data } = await supabase.auth.getSession();
       const s = data.session;
