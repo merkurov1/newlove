@@ -11,9 +11,8 @@ import SafeImage from '@/components/SafeImage';
 // Находит тег по его slug и подгружает все связанные с ним статьи
 async function getTagData(slug) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default || mod;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
+  const { supabase } = await getSupabaseForRequest(globalReq) || {};
   if (!supabase) notFound();
   // Поиск тега по slug (регистр игнорируем вручную)
   const { data: tags } = await supabase.from('Tag').select('*').ilike('slug', slug).limit(1);

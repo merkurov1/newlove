@@ -16,9 +16,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function ArticlesPage() {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default || mod;
-  let { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
+  let { supabase } = await getSupabaseForRequest(globalReq) || {};
   if (!supabase) {
     try {
       const serverAuth = await import('@/lib/serverAuth');
