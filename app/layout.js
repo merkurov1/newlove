@@ -105,112 +105,16 @@ export const metadata = sanitizeMetadata({
 export const dynamic = 'force-dynamic';
 
 
-export default async function RootLayout({ children }) {
-  // Временно отключаем запрос к базе данных до настройки DATABASE_URL
-  let projects = [];
-  try {
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-    const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-    const { supabase } = await getUserAndSupabaseForRequest(globalReq);
-      if (supabase) {
-      const { data, error } = await supabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
-      // Suppress permission-denied noise in production; only surface DB errors in development
-      if (error) {
-        if (process.env.NODE_ENV === 'development') console.error('Supabase fetch projects error', error);
-        // If permission denied, leave projects empty
-        projects = [];
-      } else {
-        projects = safeData(data || []);
-      }
-    } else {
-      projects = [];
-    }
-  } catch (error) {
-    // Логируем только в development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Database connection error:', error.message);
-    }
-    // Используем пустой массив для проектов
-    projects = [];
-  }
-
-  const settings = { 
-    site_name: 'Anton Merkurov', 
-    slogan: 'Art x Love x Money', 
-    logo_url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png' 
-  };
-
-  let subscriberCount = 0;
-  try {
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-    const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-    const { supabase } = await getUserAndSupabaseForRequest(globalReq);
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from('subscribers').select('id');
-        if (!error) {
-          const safe = safeData(data || []);
-          subscriberCount = (safe && safe.length) || 0;
-        } else {
-          // If permission denied or other DB error, do not surface the raw error object to rendering.
-          if (process.env.NODE_ENV === 'development') console.error('Supabase count subscribers error', error);
-          subscriberCount = 0;
-        }
-      } catch (e) {
-        if (process.env.NODE_ENV === 'development') console.error('Supabase count subscribers exception', e);
-        subscriberCount = 0;
-      }
-    }
-  } catch (error) {
-    // Логируем только в development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Ошибка при подсчёте подписчиков:', error);
-    }
-  }
-
+export default function RootLayout({ children }) {
   return (
-    // Применяем шрифт через CSS переменную
-    <html lang="ru" className={`${inter.variable} font-sans`}>
-      <head>
-        {/* Preload critical resources */}
-        <link
-          rel="preload"
-          href={settings.logo_url}
-          as="image"
-          type="image/png"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="preload"
-          href="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png"
-          as="image"
-          type="image/png"
-          crossOrigin="anonymous"
-        />
-        {/* DNS prefetch for external domains */}
-        <link rel="dns-prefetch" href="//txvkqcitalfbjytmnawq.supabase.co" />
-        <link rel="dns-prefetch" href="//fonts.googleapis.com" />
-        <link rel="dns-prefetch" href="//vercel.com" />
-      </head>
-  <body className="bg-white text-gray-800 min-h-screen overflow-x-hidden">
-        <GlobalErrorHandler />
-        <Providers>
-          <AuthProvider>
-            <div className="flex flex-col min-h-screen">
-              <Header projects={safeData(projects)} settings={safeData(settings)} />
-              <UserSidebar />
-              <div className="flex flex-1 w-full px-0 py-0 gap-8">
-                <main className="flex-grow">
-                  {children}
-                </main>
-              </div>
-              <Footer subscriberCount={Number(subscriberCount) || 0} />
-            </div>
-          </AuthProvider>
-        </Providers>
-  <Analytics />
-  {/* Umami analytics */}
-  <UmamiScript websiteId="87795d47-f53d-4ef8-8e82-3ee195ea997b" />
+    <html lang="ru">
+      <head />
+      <body>
+        <main>
+          <h1>Anton Merkurov</h1>
+          <p>Сайт временно работает в ограниченном режиме.</p>
+          {children}
+        </main>
       </body>
     </html>
   );
