@@ -87,37 +87,23 @@ export default function ModernLoginModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-sm flex flex-col gap-4">
-        <h2 className="text-2xl font-bold mb-2">Вход</h2>
+      <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-md flex flex-col gap-6 items-center justify-center mx-auto" style={{ minHeight: 320 }}>
+        <h2 className="text-3xl font-bold mb-4 text-center">Вход</h2>
         <button
           onClick={handleGoogle}
-          className="bg-red-600 text-white rounded px-4 py-2 font-semibold hover:bg-red-700 transition"
+          className="w-full max-w-xs bg-red-600 text-white rounded-lg px-6 py-3 font-semibold text-lg hover:bg-red-700 transition mb-2 shadow"
           disabled={loading}
         >
           {loading ? 'Входим через Google...' : 'Войти через Google'}
         </button>
         <button
           onClick={handleOnboardWeb3Login}
-          className="bg-black text-white rounded px-4 py-2 font-semibold hover:bg-gray-900 transition"
+          className="w-full max-w-xs bg-black text-white rounded-lg px-6 py-3 font-semibold text-lg hover:bg-gray-900 transition shadow"
           disabled={loading}
         >
           {loading ? 'Входим через Web3...' : 'Войти через Web3'}
         </button>
-        <button
-          onClick={handleOnboardWeb3Login}
-          className="bg-black text-white rounded px-4 py-2 font-semibold hover:bg-gray-900 transition"
-          disabled={loading}
-        >
-          {loading ? 'Входим через Web3...' : 'Войти через Web3 (Onboard)'}
-        </button>
-        <button
-          onClick={handleGoogle}
-          className="bg-red-600 text-white rounded px-4 py-2 font-semibold hover:bg-red-700 transition"
-          disabled={loading}
-        >
-          {loading ? 'Входим через Google...' : 'Войти через Google'}
-        </button>
-  {(error || web3Error) && <div className="text-red-600 text-sm">{error || web3Error}</div>}
+        {(error || web3Error) && <div className="text-red-600 text-sm text-center mt-2">{error || web3Error}</div>}
       </div>
     </div>
   );
