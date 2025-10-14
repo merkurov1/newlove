@@ -1,69 +1,102 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-export function getServerSupabaseClient() {
+type ServerAuthOptions = {
+  useServiceRole?: boolean; // explicit opt-in to service role key
+};
+
+/**
+ * Create a Supabase client intended for server-only use.
+ * By default this prefers NON-service keys (SUPABASE_KEY) unless explicitly
+ * requested via options.useServiceRole. This avoids accidentally using
+ * the service_role key in runtime paths that shouldn't have elevated privileges.
+ */
+export function getServerSupabaseClient(options: ServerAuthOptions = {}): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
-  if (!supabaseUrl || !supabaseKey) throw new Error('Supabase env vars missing');
+  const preferServiceRole = !!options.useServiceRole;
+
+  const supabaseKey = preferServiceRole
+    ? process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
+    : process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL|SUPABASE_URL and SUPABASE_KEY (or SUPABASE_SERVICE_ROLE_KEY) are required');
+  }
+
   return createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 }
 
-export async function getServerUser() {
+/**
+ * Try to retrieve the server user using the server Supabase client.
+ * Returns null on any failure to avoid throwing from common server-side flows.
+ */
+export async function getServerUser(): Promise<any | null> {
   try {
     const supabase = getServerSupabaseClient();
-    const { data } = await supabase.auth.getUser();
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error('getServerUser supabase.auth.getUser error', error);
+      return null;
+    }
     return (data as any)?.user || null;
   } catch (e) {
+    console.error('getServerUser failed', e);
     return null;
   }
 }
 
-export async function requireAdmin() {
+export async function requireUser(): Promise<any> {
   const user = await getServerUser();
   if (!user) throw new Error('Unauthorized');
-  const role = ((user as any).user_metadata as any)?.role || 'USER';
+  return user;
+}
+
+export async function requireAdmin(): Promise<any> {
+  const user = await getServerUser();
+  if (!user) throw new Error('Unauthorized');
+  const role = ((user as any).user_metadata as any)?.role || (user as any)?.role || 'USER';
   if (role !== 'ADMIN') throw new Error('Unauthorized');
   return user;
 }
 
 /**
- * Require admin with preference for request-based validation.
- * If `req` is provided, try to validate the cookie-based session via
- * `getUserAndSupabaseFromRequest`. If that fails and ADMIN_API_SECRET is set,
- * accept the admin secret for server-to-server operations. Finally, fall back
- * to the server-key-based `requireAdmin`.
+ * Require admin, preferring request-based session validation if a Request
+ * object is provided. Falls back to ADMIN_API_SECRET and finally to the
+ * server-key-based check.
  */
-export async function requireAdminFromRequest(req?: Request | null) {
-  try {
-    if (req) {
-      // Use interop helper to be resilient to module export shape differences
+export async function requireAdminFromRequest(req?: Request | null): Promise<any> {
+  if (req) {
+    try {
       const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
-      try {
-        const { user } = await getUserAndSupabaseFromRequestInterop(req as Request) || {};
-        if (user?.id) {
-          const role = (user.user_metadata && user.user_metadata.role) || user.role || 'USER';
-          if (role === 'ADMIN') return user;
-          throw new Error('Not authorized');
-        }
-      } catch (e) {
-        // If the helper itself failed, treat as unauthenticated and continue to other checks
-        console.error('requireAdminFromRequest: getUserAndSupabaseFromRequest failed', e);
+      const maybe = await getUserAndSupabaseFromRequestInterop(req as Request);
+      const user = maybe?.user || null;
+      if (user?.id) {
+        const role = (user.user_metadata && user.user_metadata.role) || user.role || 'USER';
+        if (role === 'ADMIN') return user;
+        throw new Error('Not authorized');
       }
+    } catch (e) {
+      // Treat helper failures as unauthenticated and continue to other checks
+      console.error('requireAdminFromRequest: getUserAndSupabaseFromRequestInterop failed', e);
     }
-
-    // Admin API secret fallback (keeps CI/dev workflows compatible)
-    if (process.env.ADMIN_API_SECRET) {
-      return { id: 'server', role: 'ADMIN' } as any;
-    }
-
-    // Final fallback: use server-key-based check which throws if unauthorized
-    return await requireAdmin();
-  } catch (e) {
-    throw e;
   }
+
+  // Admin API secret fallback (keeps CI/dev workflows compatible)
+  if (process.env.ADMIN_API_SECRET) {
+    return { id: 'server', role: 'ADMIN' } as any;
+  }
+
+  // Final fallback: use server-key-based check which throws if unauthorized
+  return await requireAdmin();
 }
 
-export async function requireUser() {
-  const user = await getServerUser();
-  if (!user) throw new Error('Unauthorized');
-  return user;
-}
+// Provide a default export object to be resilient to different import styles
+const serverAuthDefault = {
+  getServerSupabaseClient,
+  getServerUser,
+  requireUser,
+  requireAdmin,
+  requireAdminFromRequest,
+};
+
+export default serverAuthDefault;
+
