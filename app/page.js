@@ -23,13 +23,10 @@ const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ss
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 
 
-// Получить статьи с тегами
+// Получить опубликованные статьи (без тегов)
 async function getArticles() {
-
-  // Для публичной главной всегда используем только публичный anon Supabase client (без cookies)
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient();
-
   const { data, error } = await supabase
     .from('articles')
     .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
@@ -37,20 +34,9 @@ async function getArticles() {
     .order('updatedAt', { ascending: false })
     .limit(15);
   if (error) {
-    // Если ошибка доступа к articles — вернуть ошибку
-    return { error, data: [] };
+    return [];
   }
-  // attach tags after fetch, но если ошибка — вернуть статьи без тегов
-  const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
-  const safeRows = Array.isArray(data) ? data : [];
-  try {
-    const dataWithTags = await attachTagsToArticles(supabase, safeRows);
-    return dataWithTags || [];
-  } catch (e) {
-    console.error('attachTagsToArticles failed', e);
-    // Вернуть статьи без тегов, если ошибка доступа к тегам
-    return safeRows;
-  }
+  return Array.isArray(data) ? data : [];
 }
 export default async function Home() {
   // SSR: Получаем опубликованные статьи
