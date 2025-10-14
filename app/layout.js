@@ -5,6 +5,7 @@ import './main.css';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import UserSidebar from '@/components/UserSidebar';
 
 // --- SEO: Корректный шаблон заголовка и метаданных ---
 export const metadata = sanitizeMetadata({
@@ -111,6 +112,7 @@ export default async function RootLayout({ children }) {
           <main>
             {children}
           </main>
+          <UserSidebar />
           <Footer />
         </AuthProvider>
       </body>
