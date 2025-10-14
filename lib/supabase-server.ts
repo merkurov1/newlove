@@ -35,7 +35,38 @@ export async function getUserAndSupabaseFromRequest(req: Request) {
       console.error('Supabase getUser error', error);
       return { user: null, supabase };
     }
-    return { user, supabase };
+    if (!user) return { user: null, supabase };
+
+    // SSR RBAC: Проверяем user_roles/roles для ADMIN
+    let role = user.user_metadata?.role || user.role || 'USER';
+    if (role !== 'ADMIN') {
+      try {
+        // Используем service role для доступа к user_roles
+        const serviceSupabase = getServerSupabaseClient({ useServiceRole: true });
+        const { data: rolesData, error: rolesError } = await serviceSupabase
+          .from('user_roles')
+          .select('role_id,roles(name)')
+          .eq('user_id', user.id);
+        if (!rolesError && Array.isArray(rolesData)) {
+          const hasAdmin = rolesData.some(r => {
+            const roleList: any = r.roles;
+            if (Array.isArray(roleList)) return roleList.some((roleObj: any) => roleObj.name === 'ADMIN');
+            return roleList?.name === 'ADMIN';
+          });
+          if (hasAdmin) role = 'ADMIN';
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    // Возвращаем user с корректной ролью
+    return {
+      user: {
+        ...user,
+        role,
+      },
+      supabase,
+    };
   } catch (e) {
     console.error('Error validating supabase token', e);
     return { user: null, supabase };

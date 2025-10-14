@@ -87,18 +87,19 @@ export default function ModernLoginModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-md flex flex-col gap-6 items-center justify-center mx-auto" style={{ minHeight: 320 }}>
+      <div className="bg-white rounded-2xl shadow-2xl flex flex-col gap-6 items-center justify-center mx-auto"
+        style={{ minHeight: 320, minWidth: 320, maxWidth: 400, width: '100%', padding: '2.5rem', position: 'relative', top: 0, left: 0 }}>
         <h2 className="text-3xl font-bold mb-4 text-center">Вход</h2>
         <button
           onClick={handleGoogle}
-          className="w-full max-w-xs bg-red-600 text-white rounded-lg px-6 py-3 font-semibold text-lg hover:bg-red-700 transition mb-2 shadow"
+          className="w-full bg-red-600 text-white rounded-lg px-6 py-3 font-semibold text-lg hover:bg-red-700 transition mb-2 shadow"
           disabled={loading}
         >
           {loading ? 'Входим через Google...' : 'Войти через Google'}
         </button>
         <button
           onClick={handleOnboardWeb3Login}
-          className="w-full max-w-xs bg-black text-white rounded-lg px-6 py-3 font-semibold text-lg hover:bg-gray-900 transition shadow"
+          className="w-full bg-black text-white rounded-lg px-6 py-3 font-semibold text-lg hover:bg-gray-900 transition shadow"
           disabled={loading}
         >
           {loading ? 'Входим через Web3...' : 'Войти через Web3'}
