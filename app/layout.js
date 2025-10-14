@@ -87,9 +87,16 @@ export default async function RootLayout({ children }) {
     const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
     const { supabase } = await getUserAndSupabaseForRequest(globalReq);
     if (supabase) {
-  const { data, error } = await supabase.from('projects').select('id,slug,title').eq('published', true).order('createdAt', { ascending: true });
-      if (error) console.error('Supabase fetch projects error', error);
-      projects = safeData(data || []);
+      const { data, error } = await supabase.from('projects').select('id,slug,title').eq('published', true).order('createdAt', { ascending: true });
+      if (error) {
+        // Ошибка доступа к проектам — не выводим проекты, не ломаем Header
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Supabase fetch projects error', error);
+        }
+        projects = [];
+      } else {
+        projects = safeData(data || []);
+      }
     } else {
       projects = [];
     }
