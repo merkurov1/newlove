@@ -1,5 +1,6 @@
 // app/digest/[slug]/page.js
 import { createClient } from '../../../lib/supabase-server';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import BlockRenderer from '@/components/BlockRenderer';
@@ -28,9 +29,9 @@ async function getDigestBySlug(slug) {
 // Эта функция устанавливает метаданные страницы (например, заголовок во вкладке браузера)
 export async function generateMetadata({ params }) {
   const digest = await getDigestBySlug(params.slug);
-  return {
+  return sanitizeMetadata({
     title: digest?.title || 'Дайджест не найден',
-  };
+  });
 }
 
 
