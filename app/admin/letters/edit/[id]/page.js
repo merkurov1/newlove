@@ -9,7 +9,7 @@ import SendLetterForm from '@/components/admin/SendLetterForm';
 export default async function EditLetterPage({ params }) {
   const letterId = params.id;
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { getUserAndSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!supabase) notFound();
   const { data: letterRaw, error } = await supabase.from('letter').select('*').eq('id', letterId).maybeSingle();
