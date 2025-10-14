@@ -1,0 +1,14 @@
+# Ignore local log and dump directories and other non-source files that shouldn't be uploaded
+logs/
+logs_*/
+dumps/
+actions_run_*/
+tmp/
+tests/
+docs/
+/.git
+node_modules/
+*.log
+*.zip
+*.tgz
+/.vercel

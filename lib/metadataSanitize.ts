@@ -6,8 +6,15 @@ export function sanitizeMetadata(input: any): any {
 
   function isReactElement(obj: any) {
     if (!obj || typeof obj !== 'object') return false;
-    // React elements have a $$typeof property that is a Symbol
     return Object.prototype.hasOwnProperty.call(obj, '$$typeof');
+  }
+
+  function constructorName(v: any) {
+    try {
+      return v && v.constructor && v.constructor.name ? v.constructor.name : typeof v;
+    } catch (e) {
+      return typeof v;
+    }
   }
 
   function previewValue(v: any) {
@@ -31,15 +38,34 @@ export function sanitizeMetadata(input: any): any {
     try {
       const p = path.length ? path.join('.') : '<root>';
       const preview = previewValue(value);
-      // Keep logs concise but include a stack to find the caller
+      const cname = constructorName(value);
       const stack = new Error().stack;
       // eslint-disable-next-line no-console
-      console.error(`SANITIZE DIAG: ${reason} at metadata.${p} preview=${preview}`);
+      console.error(`SANITIZE DIAG: ${reason} at metadata.${p} constructor=${cname} preview=${preview}`);
       // eslint-disable-next-line no-console
       console.error(stack);
     } catch (e) {
       // swallow
     }
+  }
+
+  function isPromiseLike(v: any) {
+    return v && (typeof v.then === 'function' || Object.prototype.toString.call(v) === '[object Promise]');
+  }
+
+  function isRequestLike(v: any) {
+    const name = constructorName(v);
+    return name === 'Request' || name === 'NextRequest' || (v && typeof v.headers === 'object' && typeof v.method === 'string');
+  }
+
+  function isResponseLike(v: any) {
+    const name = constructorName(v);
+    return name === 'Response' || name === 'NextResponse' || (v && typeof v.json === 'function' && typeof v.headers === 'object');
+  }
+
+  function isStreamLike(v: any) {
+    const name = constructorName(v);
+    return name === 'ReadableStream' || name === 'Stream' || (v && typeof v.getReader === 'function');
   }
 
   function sanitize(value: any, path: string[] = []): any {
@@ -53,11 +79,31 @@ export function sanitizeMetadata(input: any): any {
       return undefined;
     }
 
+    // Promise-like -> drop
+    if (isPromiseLike(value)) {
+      logDiag(path, value, 'promise-like');
+      return undefined;
+    }
+
     // Dates -> ISO
     if (value instanceof Date) return isNaN(value.getTime()) ? undefined : value.toISOString();
     // URLs/RegExp -> toString
     if (value instanceof URL) return value.toString();
     if (value instanceof RegExp) return value.toString();
+
+    // Request/Response/Stream/Headers detection
+    if (isRequestLike(value)) {
+      logDiag(path, value, 'request-like');
+      return undefined;
+    }
+    if (isResponseLike(value)) {
+      logDiag(path, value, 'response-like');
+      return undefined;
+    }
+    if (isStreamLike(value)) {
+      logDiag(path, value, 'stream-like');
+      return undefined;
+    }
 
     // Arrays: sanitize items and drop undefined
     if (Array.isArray(value)) {
