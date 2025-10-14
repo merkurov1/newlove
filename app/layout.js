@@ -184,14 +184,14 @@ export default async function RootLayout({ children }) {
         <Providers>
           <AuthProvider>
             <div className="flex flex-col min-h-screen">
-              <Header projects={projects} settings={settings} />
+              <Header projects={safeData(projects)} settings={safeData(settings)} />
               <UserSidebar />
               <div className="flex flex-1 w-full px-0 py-0 gap-8">
                 <main className="flex-grow">
                   {children}
                 </main>
               </div>
-              <Footer subscriberCount={subscriberCount} />
+              <Footer subscriberCount={Number(subscriberCount) || 0} />
             </div>
           </AuthProvider>
         </Providers>
