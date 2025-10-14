@@ -40,6 +40,9 @@ async function getArticles() {
     .eq('published', true)
     .order('updatedAt', { ascending: false })
     .limit(15);
+  if (error) {
+    return { error, data: [] };
+  }
   // attach tags after fetch
   const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
   const safeRows = Array.isArray(data) ? data : [];
@@ -59,7 +62,9 @@ async function getArticles() {
 }
 export default async function Home() {
   // Ensure articles are fully serializable before using them in client components
-  const rawArticles = safeData(await getArticles());
+  const articlesResult = await getArticles();
+  const rawArticles = safeData(Array.isArray(articlesResult) ? articlesResult : articlesResult.data || []);
+  const fetchError = articlesResult && articlesResult.error;
 
   // Для каждой статьи вычисляем previewImage
   const articles = await Promise.all(
@@ -79,6 +84,11 @@ export default async function Home() {
 
   return (
     <div className="relative min-h-screen bg-white pb-0 overflow-x-hidden">
+      {fetchError && (
+        <div className="bg-red-100 text-red-700 p-4 mb-4 rounded border border-red-300">
+          <b>Ошибка загрузки статей:</b> {fetchError.message}
+        </div>
+      )}
 
       {/* Новый HeroHearts — edge-to-edge */}
       <div className="w-full pt-0 pb-0">
