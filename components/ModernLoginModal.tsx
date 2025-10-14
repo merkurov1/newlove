@@ -47,9 +47,26 @@ export default function ModernLoginModal({ open, onClose }: { open: boolean; onC
         <button onClick={handleGoogle} disabled={loading === "google"} style={{ width: "100%", padding: 14, marginBottom: 12, background: "#4285F4", color: "#fff", fontWeight: 600, border: 0, borderRadius: 8, fontSize: 18 }}>
           {loading === "google" ? "Вход через Google..." : "Войти через Google"}
         </button>
-        <button onClick={handleWeb3} disabled={loading === "web3"} style={{ width: "100%", padding: 14, marginBottom: 12, background: "#222", color: "#fff", fontWeight: 600, border: 0, borderRadius: 8, fontSize: 18 }}>
-          {loading === "web3" ? "Вход через Web3..." : "Войти через Web3 (Onboard)"}
-        </button>
+        <a
+          href="/onboard"
+          style={{
+            display: 'block',
+            width: '100%',
+            padding: 14,
+            marginBottom: 12,
+            background: '#222',
+            color: '#fff',
+            fontWeight: 600,
+            border: 0,
+            borderRadius: 8,
+            fontSize: 18,
+            textAlign: 'center',
+            textDecoration: 'none',
+            cursor: 'pointer'
+          }}
+        >
+          Войти через Onboard (Web3)
+        </a>
         <form onSubmit={handleEmail} style={{ marginTop: 12 }}>
           <input name="email" type="email" placeholder="Email" required style={{ width: "100%", padding: 12, fontSize: 16, borderRadius: 8, border: "1px solid #ddd", marginBottom: 8 }} />
           <button type="submit" disabled={loading === "email"} style={{ width: "100%", padding: 12, background: "#00B386", color: "#fff", fontWeight: 600, border: 0, borderRadius: 8, fontSize: 18 }}>
