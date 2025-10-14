@@ -23,6 +23,7 @@ export default function ModernLoginModal({ open, onClose }: { open: boolean; onC
 
 
   const handleOnboardWeb3Login = async () => {
+    if (typeof onClose === 'function') onClose(); // Закрыть модалку сразу после клика
     setLoading("web3");
     setError("");
     try {
@@ -72,7 +73,6 @@ export default function ModernLoginModal({ open, onClose }: { open: boolean; onC
         signature: signature as any,
       });
       if (error) setError(error.message);
-      else if (typeof onClose === 'function') onClose(); // Закрыть модалку после успешного входа
     } catch (e) {
       setError((e as any).message || String(e));
     }
