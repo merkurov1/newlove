@@ -6,9 +6,12 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
-// --- ОБНОВЛЕННЫЙ БЛОК МЕТАДАННЫХ ---
+// --- SEO: Корректный шаблон заголовка и метаданных ---
 export const metadata = sanitizeMetadata({
-  title: 'Anton Merkurov | Art x Love x Money',
+  title: {
+    default: 'Anton Merkurov | Art x Love x Money',
+    template: '%s | Anton Merkurov',
+  },
   description: 'Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.',
   keywords: ['Антон Меркуров', 'медиа', 'технологии', 'digital', 'искусство', 'блог', 'статьи', 'маркетинг'],
   authors: [{ name: 'Anton Merkurov', url: 'https://merkurov.love' }],
@@ -102,6 +105,7 @@ export default async function RootLayout({ children }) {
   };
   return (
     <html lang="ru">
+      <head />
       <body>
         <AuthProvider>
           <Header settings={settings} projects={projects} />
