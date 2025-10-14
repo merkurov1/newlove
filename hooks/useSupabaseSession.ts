@@ -59,6 +59,18 @@ export default function useSupabaseSession() {
           } catch (e) {
             // ignore
           }
+          // Если локальная проверка не подтвердила ADMIN, запросим серверную проверку
+          if (role !== 'ADMIN' && typeof window !== 'undefined') {
+            try {
+              const res = await fetch('/api/user/role');
+              if (res.ok) {
+                const json = await res.json();
+                if (json && json.role === 'ADMIN') role = 'ADMIN';
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
         }
         setSession({
           user: {
