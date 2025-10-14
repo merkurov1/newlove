@@ -1,29 +1,8 @@
 // app/layout.js
 
-import './main.css';
-import { Inter } from 'next/font/google';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
-import AuthProvider from '@/components/AuthProvider';
-import Providers from './providers';
-import GlobalErrorHandler from '@/components/GlobalErrorHandler';
-// `getUserAndSupabaseFromRequest` is imported dynamically inside the layout to avoid
-// circular import issues during the Next.js production build.
-import { safeData } from '@/lib/safeSerialize';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { Analytics } from '@vercel/analytics/react';
-import { UmamiScript } from '@/lib/umami';
-import nextDynamic from 'next/dynamic';
-
-const UserSidebar = nextDynamic(() => import('@/components/UserSidebar'), { ssr: false });
-
-const inter = Inter({
-  variable: '--font-inter', // Используем CSS переменную для большей гибкости
-  subsets: ['latin', 'cyrillic'],
-  display: 'swap',
-});
 
 // --- ОБНОВЛЕННЫЙ БЛОК МЕТАДАННЫХ ---
 export const metadata = sanitizeMetadata({
