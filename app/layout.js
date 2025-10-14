@@ -1,3 +1,4 @@
+import AuthProvider from '@/components/AuthProvider';
 
 import './main.css';
 
@@ -99,13 +100,15 @@ export default function RootLayout({ children }) {
     <html lang="ru">
       <head />
       <body>
-        <Header settings={settings} projects={projects} />
-        <main>
-          <h1>Anton Merkurov</h1>
-          <p>Сайт временно работает в ограниченном режиме.</p>
-          {children}
-        </main>
-        <Footer />
+        <AuthProvider>
+          <Header settings={settings} projects={projects} />
+          <main>
+            <h1>Anton Merkurov</h1>
+            <p>Сайт временно работает в ограниченном режиме.</p>
+            {children}
+          </main>
+          <Footer />
+        </AuthProvider>
       </body>
     </html>
   );
