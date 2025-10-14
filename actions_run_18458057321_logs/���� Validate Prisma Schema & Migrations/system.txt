@@ -1,5 +1,0 @@
-2025-10-13T07:14:55.3780000Z Requested labels: ubuntu-latest
-2025-10-13T07:14:55.3780000Z Job defined at: merkurov1/newlove/.github/workflows/migration-validation.yml@refs/pull/18/merge
-2025-10-13T07:14:55.3780000Z Waiting for a runner to pick up this job...
-2025-10-13T07:14:55.8640000Z Job is about to start running on the hosted runner: GitHub Actions 1000000015
-2025-10-13T07:14:55.8640000Z Job is waiting for a hosted runner to come online.
