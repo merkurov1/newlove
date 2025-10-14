@@ -33,7 +33,7 @@ export async function attachTagsToArticles(supabase: SupabaseClient | any, artic
       try {
         if (relErr && (relErr.code === '42501' || relErr.status === 42501)) {
           const { getServerSupabaseClient } = await import('./serverAuth');
-          const srv = getServerSupabaseClient({ useServiceRole: true });
+          const srv = getServerSupabaseClient();
           const { data: rels2, error: relErr2 } = await srv.from('_ArticleToTag').select('A,B').in('A', articleIds);
           if (!relErr2 && rels2) {
             (relations as any) = rels2;
