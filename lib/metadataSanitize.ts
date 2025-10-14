@@ -68,6 +68,22 @@ export function sanitizeMetadata(input: any): any {
     return name === 'ReadableStream' || name === 'Stream' || (v && typeof v.getReader === 'function');
   }
 
+  function isMapLike(v: any) {
+    return v instanceof Map || Object.prototype.toString.call(v) === '[object Map]';
+  }
+
+  function isSetLike(v: any) {
+    return v instanceof Set || Object.prototype.toString.call(v) === '[object Set]';
+  }
+
+  function isArrayBufferLike(v: any) {
+    return v instanceof ArrayBuffer || ArrayBuffer.isView(v) || Object.prototype.toString.call(v).includes('ArrayBuffer') || Object.prototype.toString.call(v).includes('Uint8');
+  }
+
+  function isURLSearchParams(v: any) {
+    return Object.prototype.toString.call(v) === '[object URLSearchParams]';
+  }
+
   function sanitize(value: any, path: string[] = []): any {
     if (value == null) return value;
     const t = typeof value;
@@ -111,6 +127,56 @@ export function sanitizeMetadata(input: any): any {
       return arr;
     }
 
+    // Map -> convert to plain object with sanitized keys
+    if (isMapLike(value)) {
+      logDiag(path, value, 'map-like');
+      const out: any = {};
+      try {
+        for (const [k, v] of value.entries()) {
+          const key = typeof k === 'string' ? k : String(k);
+          const sv = sanitize(v, path.concat(String(key)));
+          if (sv !== undefined) out[key] = sv;
+        }
+        return out;
+      } catch (e) {
+        logDiag(path, value, 'map-convert-failed');
+        return undefined;
+      }
+    }
+
+    // Set -> convert to array
+    if (isSetLike(value)) {
+      logDiag(path, value, 'set-like');
+      try {
+        const arr = Array.from(value).map((it, i) => sanitize(it, path.concat(String(i)))).filter(v => v !== undefined);
+        return arr;
+      } catch (e) {
+        logDiag(path, value, 'set-convert-failed');
+        return undefined;
+      }
+    }
+
+    // ArrayBuffer / TypedArray -> convert to array of numbers
+    if (isArrayBufferLike(value)) {
+      logDiag(path, value, 'arraybuffer-like');
+      try {
+        const view = ArrayBuffer.isView(value) ? value : new Uint8Array(value);
+        return Array.from(view as any).slice(0, 10240); // cap length
+      } catch (e) {
+        logDiag(path, value, 'arraybuffer-convert-failed');
+        return undefined;
+      }
+    }
+
+    if (isURLSearchParams(value)) {
+      try {
+        return value.toString();
+      } catch (e) {
+        logDiag(path, value, 'urlsearchparams');
+        return undefined;
+      }
+    }
+
     // Objects: drop React elements and circular refs
     if (t === 'object') {
       if (isReactElement(value)) {
@@ -123,6 +189,16 @@ export function sanitizeMetadata(input: any): any {
       }
       seen.add(value);
 
+      // If this is a class instance with custom toJSON, prefer that
+      if (typeof value.toJSON === 'function' && value.constructor && value.constructor.name !== 'Object') {
+        try {
+          const j = value.toJSON();
+          return sanitize(j, path.concat('<toJSON>'));
+        } catch (e) {
+          logDiag(path, value, 'toJSON-failed');
+        }
+      }
+
       const out: any = {};
       // iterate own enumerable keys only
       for (const k of Object.keys(value)) {
@@ -133,6 +209,11 @@ export function sanitizeMetadata(input: any): any {
           // skip problematic property but log diag
           logDiag(path.concat(k), value[k], 'property-skip');
         }
+      }
+
+      // If resulting object is empty but original had non-plain constructor, log it
+      if (Object.keys(out).length === 0 && value.constructor && value.constructor.name && value.constructor.name !== 'Object') {
+        logDiag(path, value, `class-instance:${value.constructor.name}`);
       }
       return out;
     }
