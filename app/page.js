@@ -23,26 +23,45 @@ const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ss
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 
 
-// Получить опубликованные статьи только через anon key
+// Надёжный SSR-запрос опубликованных статей через anon key
 async function getArticles() {
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !anonKey) return [];
-  const supabase = createClient(supabaseUrl, anonKey);
-  const { data, error } = await supabase
-    .from('articles')
-    .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
-    .eq('published', true)
-    .order('updatedAt', { ascending: false })
-    .limit(15);
-  if (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Supabase fetch articles error', error);
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !anonKey) {
+      console.error('Supabase env vars missing');
+      return [];
     }
+    const supabase = createClient(supabaseUrl, anonKey);
+    const { data, error } = await supabase
+      .from('articles')
+      .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
+      .eq('published', true)
+      .order('updatedAt', { ascending: false })
+      .limit(15);
+    if (error) {
+      console.error('Supabase fetch articles error', error);
+      return [];
+    }
+    if (!Array.isArray(data)) {
+      console.error('Supabase articles: data is not array', data);
+      return [];
+    }
+    // Гарантируем структуру для компонента
+    return data.map(a => ({
+      id: a.id,
+      title: a.title,
+      slug: a.slug,
+      content: a.content,
+      publishedAt: a.publishedAt,
+      updatedAt: a.updatedAt,
+      author: a.author || null,
+    }));
+  } catch (e) {
+    console.error('SSR getArticles fatal error', e);
     return [];
   }
-  return Array.isArray(data) ? data : [];
 }
 export default async function Home() {
   // SSR: Получаем опубликованные статьи
