@@ -110,8 +110,9 @@ export default async function RootLayout({ children }) {
   let projects = [];
   try {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { getUserAndSupabaseFromRequestInterop } = await import('@/lib/supabaseInterop');
-  const { supabase } = await getUserAndSupabaseFromRequestInterop(globalReq);
+  const mod = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest } = mod;
+  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
     if (supabase) {
       const { data, error } = await supabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
       if (error) console.error('Supabase fetch projects error', error);
@@ -137,8 +138,9 @@ export default async function RootLayout({ children }) {
   let subscriberCount = 0;
   try {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { getUserAndSupabaseFromRequestInterop } = await import('@/lib/supabaseInterop');
-  const { supabase } = await getUserAndSupabaseFromRequestInterop(globalReq);
+  const mod2 = await import('@/lib/supabase-server');
+  const { getUserAndSupabaseFromRequest: getUserAndSupabaseFromRequest2 } = mod2;
+  const { supabase } = await getUserAndSupabaseFromRequest2(globalReq);
     if (supabase) {
       const { data, error } = await supabase.from('subscribers').select('id');
       if (!error) {
