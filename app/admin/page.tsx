@@ -13,7 +13,7 @@ export default async function AdminDashboard() {
     try {
       const [{ count: articles }, { count: projects }, { count: letters }, { count: postcards }] = await Promise.all([
         supabase.from('articles').select('id', { count: 'exact', head: true }),
-        supabase.from('project').select('id', { count: 'exact', head: true }),
+        supabase.from('projects').select('id', { count: 'exact', head: true }),
         supabase.from('letter').select('id', { count: 'exact', head: true }),
         supabase.from('postcards').select('id', { count: 'exact', head: true }),
       ]);

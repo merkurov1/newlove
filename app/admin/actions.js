@@ -180,7 +180,7 @@ export async function createProject(formData) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
-  const { data: existing } = await supabase.from('project').select('id').eq('slug', slug).maybeSingle();
+  const { data: existing } = await supabase.from('projects').select('id').eq('slug', slug).maybeSingle();
   if (existing) {
     throw new Error('Проект с таким slug уже существует. Пожалуйста, выберите другой URL.');
   }
@@ -200,7 +200,7 @@ export async function createProject(formData) {
 
   // Явно генерируем CUID для проекта
   const projectId = createId();
-  const { data: created, error: insertErr } = await supabase.from('project').insert({
+  const { data: created, error: insertErr } = await supabase.from('projects').insert({
     id: projectId,
     title,
     content: JSON.stringify(validBlocks),
@@ -252,7 +252,7 @@ export async function updateProject(formData) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
-  const { error: updateErr } = await supabase.from('project').update({
+  const { error: updateErr } = await supabase.from('projects').update({
     title,
     content: JSON.stringify(validBlocks),
     slug,
@@ -284,8 +284,8 @@ export async function deleteProject(formData) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
-  const { data: project } = await supabase.from('project').select('slug').eq('id', id).maybeSingle();
-  const { error: delErr } = await supabase.from('project').delete().eq('id', id);
+  const { data: project } = await supabase.from('projects').select('slug').eq('id', id).maybeSingle();
+  const { error: delErr } = await supabase.from('projects').delete().eq('id', id);
   if (delErr) {
     console.error('Supabase delete project error', delErr);
     throw new Error('Ошибка при удалении проекта');

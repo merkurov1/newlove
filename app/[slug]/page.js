@@ -66,7 +66,7 @@ async function getContent(slug) {
     // Если статья не найдена, ищем проект
     let project = null;
     if (!article && supabase) {
-      const { data: p, error: pErr } = await supabase.from('project').select('*').eq('slug', slug).eq('published', true).maybeSingle();
+  const { data: p, error: pErr } = await supabase.from('projects').select('*').eq('slug', slug).eq('published', true).maybeSingle();
       if (pErr) console.error('Supabase fetch project error', pErr);
       project = p;
     }
