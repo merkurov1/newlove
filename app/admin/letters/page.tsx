@@ -11,7 +11,7 @@ export default async function AdminLettersPage() {
   try {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
   // Use canonical wrapper to avoid interop issues across .js/.ts builds
-  const { getUserAndSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!supabase) throw new Error('Supabase client unavailable');
   const { data, error: lErr } = await supabase.from('letter').select('id,title,slug,published,sentAt,createdAt,author:authorId(name)').order('createdAt', { ascending: false });

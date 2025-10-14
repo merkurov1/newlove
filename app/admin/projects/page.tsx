@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function AdminProjectsPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
-  const { getUserAndSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   let projects: any[] = [];
   if (supabase) {
