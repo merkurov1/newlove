@@ -23,10 +23,13 @@ const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ss
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 
 
-// Получить опубликованные статьи (без тегов)
+// Получить опубликованные статьи только через anon key
 async function getArticles() {
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  const supabase = getServerSupabaseClient();
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !anonKey) return [];
+  const supabase = createClient(supabaseUrl, anonKey);
   const { data, error } = await supabase
     .from('articles')
     .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
@@ -34,6 +37,9 @@ async function getArticles() {
     .order('updatedAt', { ascending: false })
     .limit(15);
   if (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Supabase fetch articles error', error);
+    }
     return [];
   }
   return Array.isArray(data) ? data : [];
