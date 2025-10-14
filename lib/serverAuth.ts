@@ -10,18 +10,12 @@ type ServerAuthOptions = {
  * requested via options.useServiceRole. This avoids accidentally using
  * the service_role key in runtime paths that shouldn't have elevated privileges.
  */
-export function getServerSupabaseClient(options: ServerAuthOptions = {}): SupabaseClient {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const preferServiceRole = !!options.useServiceRole;
-
-  const supabaseKey = preferServiceRole
-    ? process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
-    : process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-
+export function getServerSupabaseClient(): SupabaseClient {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL|SUPABASE_URL and SUPABASE_KEY (or SUPABASE_SERVICE_ROLE_KEY) are required');
+    throw new Error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required');
   }
-
   return createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 }
 
