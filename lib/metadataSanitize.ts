@@ -223,5 +223,21 @@ export function sanitizeMetadata(input: any): any {
     return undefined;
   }
 
-  return sanitize(input, []);
+  const out = sanitize(input, []);
+
+  // If diagnostics are enabled, ensure anything removed is logged (already handled),
+  // but for safety we must never return undefined/null from generateMetadata.
+  if (!out || (typeof out === 'object' && Object.keys(out).length === 0)) {
+    // Provide a minimal safe metadata fallback instead of returning empty/undefined.
+    const fallback = { title: typeof input?.title === 'string' ? input.title : 'Untitled', description: typeof input?.description === 'string' ? input.description : '' };
+    if (DIAG) {
+      try {
+        // eslint-disable-next-line no-console
+        console.error('SANITIZE DIAG: metadata sanitized to empty — returning fallback metadata', JSON.stringify(fallback).slice(0, 500));
+      } catch (e) {}
+    }
+    return fallback;
+  }
+
+  return out;
 }

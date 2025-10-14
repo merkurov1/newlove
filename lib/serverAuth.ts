@@ -34,6 +34,18 @@ export async function getServerUser(): Promise<any | null> {
     const supabase = getServerSupabaseClient();
     const { data, error } = await supabase.auth.getUser();
     if (error) {
+      // Treat missing-session as an expected condition during SSR/static builds
+      // (Supabase may return AuthSessionMissingError when no cookie/token is present).
+      const msg = (error && (error.message || error.name || '')).toString();
+      if (msg.includes('Auth session missing') || msg.includes('AuthSessionMissing')) {
+        // Keep this quiet in normal runs. If diagnostics are enabled, emit a debug line.
+        if (process.env.METADATA_DIAG === 'true') {
+          // eslint-disable-next-line no-console
+          console.debug('getServerUser: no auth session present (expected during SSR):', msg);
+        }
+        return null;
+      }
+
       console.error('getServerUser supabase.auth.getUser error', error);
       return null;
     }
