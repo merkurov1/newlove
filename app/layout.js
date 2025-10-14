@@ -1,4 +1,5 @@
-// app/layout.js
+
+import './main.css';
 
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Header from '@/components/Header';
