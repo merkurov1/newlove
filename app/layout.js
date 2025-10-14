@@ -75,16 +75,16 @@ export const metadata = sanitizeMetadata({
 export const dynamic = 'force-dynamic';
 
 
+
 import { safeData } from '@/lib/safeSerialize';
+import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 
 export default async function RootLayout({ children }) {
   // Динамически получаем проекты из Supabase
   let projects = [];
   try {
     const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-    const mod = await import('@/lib/supabase-server');
-    const { getUserAndSupabaseFromRequest } = mod;
-    const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+    const { supabase } = await getUserAndSupabaseForRequest(globalReq);
     if (supabase) {
       const { data, error } = await supabase.from('project').select('id,slug,title').eq('published', true).order('createdAt', { ascending: true });
       if (error) console.error('Supabase fetch projects error', error);
