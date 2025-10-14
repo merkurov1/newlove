@@ -88,11 +88,18 @@ export const dynamic = 'force-dynamic';
 
 
 export default function RootLayout({ children }) {
+  // Минимальные дефолтные настройки для Header
+  const settings = {
+    site_name: 'Anton Merkurov',
+    slogan: 'Art x Love x Money',
+    logo_url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png'
+  };
+  const projects = [];
   return (
     <html lang="ru">
       <head />
       <body>
-        <Header />
+        <Header settings={settings} projects={projects} />
         <main>
           <h1>Anton Merkurov</h1>
           <p>Сайт временно работает в ограниченном режиме.</p>
