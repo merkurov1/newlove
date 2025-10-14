@@ -67,6 +67,16 @@ export async function upsertTagsAndLink(
 
   if (inserts.length === 0) return;
 
+  // Global emergency flag to disable junction writes if needed for testing
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.DISABLE_ARTICLE_TO_TAGS === 'true') {
+      console.warn('upsertTagsAndLink: DISABLE_ARTICLE_TO_TAGS=true -> skipping junction upserts');
+      return;
+    }
+  } catch (e) {
+    // ignore
+  }
+
   // Avoid duplicates using upsert on (A,B) if Postgres constraint exists
   // Supabase client's onConflict expects a comma-separated string in types
   const { error: insertErr } = await supabase.from(junctionTable).upsert(inserts, { onConflict: 'A,B' });

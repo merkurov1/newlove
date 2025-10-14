@@ -3,7 +3,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function attachTagsToArticles(supabase: SupabaseClient | any, articles: any[]): Promise<any[]> {
   if (!Array.isArray(articles) || articles.length === 0) return [];
-
+  // Quick global disable for the junction table (useful for emergency testing)
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.DISABLE_ARTICLE_TO_TAGS === 'true') {
+      console.warn('attachTagsToArticles: DISABLE_ARTICLE_TO_TAGS=true -> skipping junction reads and returning empty tags');
+      return JSON.parse(JSON.stringify(articles.map((a) => ({ ...a, tags: [] }))));
+    }
+  } catch (e) {
+    // ignore and continue
+  }
   try {
     if (typeof process !== 'undefined' && process.env && process.env.EMERGENCY_ATTACH_TAGS === 'true') {
       return JSON.parse(JSON.stringify(articles.map((a) => ({ ...a, tags: [] }))));

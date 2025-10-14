@@ -19,17 +19,37 @@ async function getTagData(slug) {
   const tag = (tags && tags[0]) || null;
   if (!tag) notFound();
   // Получаем связанные статьи через junction _ArticleToTag
-  const { data: articles } = await supabase.rpc('get_articles_by_tag', { tag_slug: tag.slug }).catch(async () => {
-    // fallback: query articles by checking tags relation manually if rpc not present
-    const { data: rels } = await supabase.from('_ArticleToTag').select('A').eq('B', tag.id);
-    const ids = (rels || []).map(r => r.A);
-    if (ids.length === 0) return { data: [] };
-    const { data: arts } = await supabase.from('articles').select('*, author:authorId(name,image)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
-    // attach tags via helper
-  const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
-  const artsWithTags = await attachTagsToArticles(supabase, arts || []);
-  return { data: (artsWithTags && Array.isArray(artsWithTags)) ? artsWithTags : [] };
-  });
+  // Try RPC first; if disabled or not present fall back to safe behavior
+  let articlesResp = null;
+  try {
+    articlesResp = await supabase.rpc('get_articles_by_tag', { tag_slug: tag.slug });
+  } catch (e) {
+    // rpc missing or errored - fallback
+  }
+
+  if (!articlesResp || articlesResp.error) {
+    // If global flag to disable junctions is set, skip reading _ArticleToTag and return empty list
+    if (typeof process !== 'undefined' && process.env && process.env.DISABLE_ARTICLE_TO_TAGS === 'true') {
+      const arts = [];
+      const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
+      const artsWithTags = await attachTagsToArticles(supabase, arts || []);
+      tag.articles = (artsWithTags && Array.isArray(artsWithTags)) ? artsWithTags : [];
+    } else {
+      // fallback: query articles by checking tags relation manually if rpc not present
+      const { data: rels } = await supabase.from('_ArticleToTag').select('A').eq('B', tag.id);
+      const ids = (rels || []).map(r => r.A);
+      if (ids.length === 0) {
+        tag.articles = [];
+      } else {
+        const { data: arts } = await supabase.from('articles').select('*, author:authorId(name,image)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
+        const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
+        const artsWithTags = await attachTagsToArticles(supabase, arts || []);
+        tag.articles = (artsWithTags && Array.isArray(artsWithTags)) ? artsWithTags : [];
+      }
+    }
+  } else {
+    tag.articles = (articlesResp && (articlesResp.data || articlesResp)) || [];
+  }
   tag.articles = (articles && (articles.data || articles)) || [];
   return tag;
 }
