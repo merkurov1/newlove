@@ -16,10 +16,17 @@ export default function ModernLoginModal({ open, onClose }: { open: boolean; onC
   const handleGoogle = async () => {
     setLoading("google");
     setError(null);
-    const { error, data } = await supabase.auth.signInWithOAuth({ provider: "google" });
+    // Сохраняем путь для возврата
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('login_redirect_path', window.location.pathname + window.location.search);
+    }
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
     if (error) setError(error.message);
-    // После успешного логина — reload для возврата на ту же страницу
-    if (!error) window.location.reload();
+    if (!error) {
+      // После логина возвращаем на сохранённый путь
+      const redirectPath = localStorage.getItem('login_redirect_path') || '/';
+  window.location.assign(redirectPath);
+    }
     setLoading(null);
   };
 
@@ -85,12 +92,19 @@ export default function ModernLoginModal({ open, onClose }: { open: boolean; onC
     e.preventDefault();
     setLoading("email");
     setError(null);
+    // Сохраняем путь для возврата
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('login_redirect_path', window.location.pathname + window.location.search);
+    }
     const form = e.target as HTMLFormElement;
     const email = (form.elements.namedItem("email") as HTMLInputElement).value;
     const { error } = await supabase.auth.signInWithOtp({ email });
     if (error) setError(error.message);
-    // После успешного логина — reload для возврата на ту же страницу
-    if (!error) window.location.reload();
+    if (!error) {
+      // После логина возвращаем на сохранённый путь
+      const redirectPath = localStorage.getItem('login_redirect_path') || '/';
+  window.location.assign(redirectPath);
+    }
     setLoading(null);
   };
 

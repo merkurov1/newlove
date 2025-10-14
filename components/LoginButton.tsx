@@ -42,9 +42,15 @@ export default function LoginButton() {
   }
 
   // Кнопка снова открывает модальное окно выбора способа входа
+  const handleOpen = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('login_redirect_path', window.location.pathname + window.location.search);
+    }
+    setModalOpen(true);
+  };
   return (
     <>
-      <button onClick={() => setModalOpen(true)} style={{ padding: 10, borderRadius: 8, fontWeight: 600, fontSize: 16 }}>
+      <button onClick={handleOpen} style={{ padding: 10, borderRadius: 8, fontWeight: 600, fontSize: 16 }}>
         Войти
       </button>
       <ModernLoginModal open={modalOpen} onClose={() => setModalOpen(false)} />
