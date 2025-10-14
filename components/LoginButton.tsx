@@ -41,13 +41,13 @@ export default function LoginButton() {
     );
   }
 
-  // Web3 login button (single action, no modal)
-  const handleWeb3 = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "web3" as any });
-  };
+  // Кнопка снова открывает модальное окно выбора способа входа
   return (
-    <button onClick={handleWeb3} style={{ padding: 10, borderRadius: 8, fontWeight: 600, fontSize: 16, background: '#222', color: '#fff' }}>
-      Web3
-    </button>
+    <>
+      <button onClick={() => setModalOpen(true)} style={{ padding: 10, borderRadius: 8, fontWeight: 600, fontSize: 16 }}>
+        Войти
+      </button>
+      <ModernLoginModal open={modalOpen} onClose={() => setModalOpen(false)} />
+    </>
   );
 }

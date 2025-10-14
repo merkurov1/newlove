@@ -8,27 +8,24 @@ import Footer from '@/components/Footer';
 
 // --- ОБНОВЛЕННЫЙ БЛОК МЕТАДАННЫХ ---
 export const metadata = sanitizeMetadata({
-  // Шаблон для заголовков страниц
   title: {
-    default: 'Anton Merkurov | Art x Love x Money', // Заголовок для главной страницы
-    template: '%s | Anton Merkurov', // Шаблон для дочерних страниц (напр. "Моя статья | Anton Merkurov")
+    default: 'Anton Merkurov | Art x Love x Money',
+    template: '%s | Anton Merkurov',
   },
-  description: "Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.",
+  description: 'Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.',
   keywords: ['Антон Меркуров', 'медиа', 'технологии', 'digital', 'искусство', 'блог', 'статьи', 'маркетинг'],
   authors: [{ name: 'Anton Merkurov', url: 'https://merkurov.love' }],
   creator: 'Anton Merkurov',
   publisher: 'Anton Merkurov',
   category: 'Technology',
-  // Метаданные для превью в соцсетях (Open Graph)
   openGraph: {
     title: 'Anton Merkurov | Art x Love x Money',
     description: 'Медиа, технологии и искусство.',
-    url: 'https://merkurov.love', // Убедитесь, что здесь основной домен
+    url: 'https://merkurov.love',
     siteName: 'Anton Merkurov',
     images: [
       {
-        // ВАЖНО: Укажите здесь URL на красивую картинку для превью
-        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png', // Исправлен домен
+        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
         width: 1200,
         height: 630,
         alt: 'Anton Merkurov - Art x Love x Money',
@@ -37,7 +34,6 @@ export const metadata = sanitizeMetadata({
     locale: 'ru_RU',
     type: 'website',
   },
-  // Twitter Card
   twitter: {
     card: 'summary_large_image',
     title: 'Anton Merkurov | Art x Love x Money',
@@ -46,7 +42,6 @@ export const metadata = sanitizeMetadata({
     creator: '@merkurov',
     site: '@merkurov',
   },
-  // Дополнительные метаданные
   robots: {
     index: true,
     follow: true,
@@ -58,18 +53,10 @@ export const metadata = sanitizeMetadata({
       'max-snippet': -1,
     },
   },
-  // Иконки сайта
   icons: {
     icon: '/favicon.ico',
-    // shortcut: '/shortcut-icon.png',
-    // apple: '/apple-touch-icon.png',
   },
-  // Верификация для поисковых систем
-  verification: {
-    // google: 'your-google-verification-code',
-    // yandex: 'your-yandex-verification-code',
-  },
-  // Альтернативные URL
+  verification: {},
   alternates: {
     canonical: 'https://merkurov.love',
     languages: {
