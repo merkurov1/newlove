@@ -72,7 +72,7 @@ export default function ModernLoginModal({ open, onClose }: { open: boolean; onC
         signature: signature as any,
       });
       if (error) setError(error.message);
-      // else можно закрыть модалку или обновить UI
+      else if (typeof onClose === 'function') onClose(); // Закрыть модалку после успешного входа
     } catch (e) {
       setError((e as any).message || String(e));
     }
@@ -118,7 +118,7 @@ export default function ModernLoginModal({ open, onClose }: { open: boolean; onC
             cursor: 'pointer'
           }}
         >
-          {loading === "web3" ? "Вход через Onboard..." : "Войти через Onboard (Web3)"}
+          {loading === "web3" ? "Вход через Web3..." : "Войти через Web3"}
         </button>
         <form onSubmit={handleEmail} style={{ marginTop: 12 }}>
           <input name="email" type="email" placeholder="Email" required style={{ width: "100%", padding: 12, fontSize: 16, borderRadius: 8, border: "1px solid #ddd", marginBottom: 8 }} />
