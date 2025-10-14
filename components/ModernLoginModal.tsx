@@ -16,8 +16,10 @@ export default function ModernLoginModal({ open, onClose }: { open: boolean; onC
   const handleGoogle = async () => {
     setLoading("google");
     setError(null);
-    const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+    const { error, data } = await supabase.auth.signInWithOAuth({ provider: "google" });
     if (error) setError(error.message);
+    // После успешного логина — reload для возврата на ту же страницу
+    if (!error) window.location.reload();
     setLoading(null);
   };
 
@@ -87,6 +89,8 @@ export default function ModernLoginModal({ open, onClose }: { open: boolean; onC
     const email = (form.elements.namedItem("email") as HTMLInputElement).value;
     const { error } = await supabase.auth.signInWithOtp({ email });
     if (error) setError(error.message);
+    // После успешного логина — reload для возврата на ту же страницу
+    if (!error) window.location.reload();
     setLoading(null);
   };
 
