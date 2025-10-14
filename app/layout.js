@@ -11,6 +11,8 @@ import GlobalErrorHandler from '@/components/GlobalErrorHandler';
 // circular import issues during the Next.js production build.
 import { safeData } from '@/lib/safeSerialize';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 import { Analytics } from '@vercel/analytics/react';
 import { UmamiScript } from '@/lib/umami';
 import nextDynamic from 'next/dynamic';
@@ -110,11 +112,13 @@ export default function RootLayout({ children }) {
     <html lang="ru">
       <head />
       <body>
+        <Header />
         <main>
           <h1>Anton Merkurov</h1>
           <p>Сайт временно работает в ограниченном режиме.</p>
           {children}
         </main>
+        <Footer />
       </body>
     </html>
   );
