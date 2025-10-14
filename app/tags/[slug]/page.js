@@ -11,8 +11,8 @@ import SafeImage from '@/components/SafeImage';
 // Находит тег по его slug и подгружает все связанные с ним статьи
 async function getTagData(slug) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
-  const { supabase } = await getSupabaseForRequest(globalReq) || {};
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq) || {};
   if (!supabase) notFound();
   // Поиск тега по slug (регистр игнорируем вручную)
   const { data: tags } = await supabase.from('Tag').select('*').ilike('slug', slug).limit(1);
@@ -26,7 +26,7 @@ async function getTagData(slug) {
     if (ids.length === 0) return { data: [] };
     const { data: arts } = await supabase.from('articles').select('*, author:authorId(name,image)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
     // attach tags via helper
-    const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
+  const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
   const artsWithTags = await attachTagsToArticles(supabase, arts || []);
   return { data: (artsWithTags && Array.isArray(artsWithTags)) ? artsWithTags : [] };
   });

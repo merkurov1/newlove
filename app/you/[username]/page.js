@@ -23,8 +23,8 @@ function FallbackAvatar({ name }) {
 // Находит пользователя по username и подгружает его контент
 async function getUserProfile(username) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
-  const { supabase } = await getSupabaseForRequest(globalReq) || {};
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq) || {};
   if (!supabase) notFound();
   const { data: users } = await supabase.from('users').select('*').eq('username', username).limit(1);
   const user = (users && users[0]) || null;

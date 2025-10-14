@@ -7,9 +7,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function AdminArticlesPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod as any;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   let articles: any[] = [];
   if (supabase) {
   const { data, error } = await supabase.from('articles').select('id,title,slug,published,author:authorId(name)').order('createdAt', { ascending: false });

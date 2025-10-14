@@ -4,9 +4,8 @@ export async function GET() {
   try {
     let supabase;
     try {
-      const mod = await import('@/lib/supabase-server');
-      const { getUserAndSupabaseFromRequest } = mod as any;
-      supabase = (await getUserAndSupabaseFromRequest(new Request('http://localhost')))?.supabase;
+      const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+      supabase = (await getUserAndSupabaseForRequest(new Request('http://localhost')))?.supabase;
     } catch (e) {
       // Fallback to server client
       const { getServerSupabaseClient } = await import('@/lib/serverAuth');

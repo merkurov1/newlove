@@ -2,8 +2,8 @@
 // Avoid static import to handle different module export shapes (named vs default)
 // and to prevent build-time import errors when the helper is implemented in .js vs .ts.
 async function getUserAndSupabaseFromRequest(req) {
-  const { getUserAndSupabaseFromRequestInterop } = await import('@/lib/supabaseInterop');
-  return getUserAndSupabaseFromRequestInterop(req);
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+  return getUserAndSupabaseForRequest(req);
 }
 import { safeData } from '@/lib/safeSerialize';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';

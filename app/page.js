@@ -22,8 +22,8 @@ const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false
 // Получить статьи с тегами
 async function getArticles() {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { getUserAndSupabaseFromRequestInterop } = await import('@/lib/supabaseInterop');
-  let { supabase } = await getUserAndSupabaseFromRequestInterop(globalReq);
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+  let { supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!supabase) {
     try {
       const serverAuth = await import('@/lib/serverAuth');

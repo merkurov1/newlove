@@ -11,6 +11,9 @@
     "vercel:deploy": "vercel --prod",
     "vercel:logs": "vercel logs --since 60m",
     "vercel:logs:grep": "vercel logs --since 60m | grep -E 'SANITIZE DIAG|Unsupported Server Component type|2153716801' -n -C 5"
+    ,
+    "check:metadata": "node scripts/check_metadata.js",
+    "test:attach-tags": "node scripts/test_attach_tags.js"
   },
   "dependencies": {
     "@atproto/api": "^0.17.0",

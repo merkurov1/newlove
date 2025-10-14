@@ -2,9 +2,8 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 export async function GET(req: Request) {
   try {
-    const mod = await import('@/lib/supabase-server');
-    const { getUserAndSupabaseFromRequest } = mod as any;
-    const { user, supabase } = await getUserAndSupabaseFromRequest(req as Request);
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+  const { user, supabase } = await getUserAndSupabaseForRequest(req as Request);
     if (!user) return NextResponse.json({ isSubscribed: false });
 
     // Check subscribers table in Supabase for this user

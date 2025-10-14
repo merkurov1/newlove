@@ -109,9 +109,9 @@ export default async function RootLayout({ children }) {
   // Временно отключаем запрос к базе данных до настройки DATABASE_URL
   let projects = [];
   try {
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { getUserAndSupabaseFromRequestInterop } = await import('@/lib/supabaseInterop');
-  const { supabase } = await getUserAndSupabaseFromRequestInterop(globalReq);
+    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+    const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+    const { supabase } = await getUserAndSupabaseForRequest(globalReq);
     if (supabase) {
       const { data, error } = await supabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
       if (error) console.error('Supabase fetch projects error', error);
@@ -136,9 +136,9 @@ export default async function RootLayout({ children }) {
 
   let subscriberCount = 0;
   try {
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { getUserAndSupabaseFromRequestInterop } = await import('@/lib/supabaseInterop');
-  const { supabase } = await getUserAndSupabaseFromRequestInterop(globalReq);
+    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+    const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+    const { supabase } = await getUserAndSupabaseForRequest(globalReq);
     if (supabase) {
       const { data, error } = await supabase.from('subscribers').select('id');
       if (!error) {

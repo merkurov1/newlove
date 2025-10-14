@@ -5,9 +5,8 @@ import { NextResponse } from 'next/server';
 // and whether a Supabase server client could be created from the request.
 export async function GET(req: Request) {
   try {
-    const mod = await import('@/lib/supabase-server');
-    const { getUserAndSupabaseFromRequest } = mod as any;
-    const { user, supabase } = await getUserAndSupabaseFromRequest(req as Request);
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+  const { user, supabase } = await getUserAndSupabaseForRequest(req as Request);
     const safeUser = user
       ? { id: user.id, email: user.email, role: user.user_metadata?.role || user.role || 'USER' }
       : null;

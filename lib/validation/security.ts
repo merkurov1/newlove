@@ -6,9 +6,8 @@ import { NextRequest } from 'next/server';
 // module export styles (named export vs default) and to avoid build-time import errors.
 async function getUserAndSupabaseFromRequest(req?: Request) {
   if (!req) throw new Error('Request is required');
-  const mod = await import('@/lib/supabase-server');
-  const fn: any = mod.getUserAndSupabaseFromRequest || mod.default || mod;
-  return fn(req as Request);
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+  return getUserAndSupabaseForRequest(req as Request);
 }
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
