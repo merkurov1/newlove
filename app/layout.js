@@ -88,14 +88,34 @@ export const metadata = sanitizeMetadata({
 export const dynamic = 'force-dynamic';
 
 
-export default function RootLayout({ children }) {
-  // Минимальные дефолтные настройки для Header
+import { safeData } from '@/lib/safeSerialize';
+
+export default async function RootLayout({ children }) {
+  // Динамически получаем проекты из Supabase
+  let projects = [];
+  try {
+    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+    const mod = await import('@/lib/supabase-server');
+    const { getUserAndSupabaseFromRequest } = mod;
+    const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+    if (supabase) {
+      const { data, error } = await supabase.from('project').select('id,slug,title').eq('published', true).order('createdAt', { ascending: true });
+      if (error) console.error('Supabase fetch projects error', error);
+      projects = safeData(data || []);
+    } else {
+      projects = [];
+    }
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Database connection error:', error.message);
+    }
+    projects = [];
+  }
   const settings = {
     site_name: 'Anton Merkurov',
     slogan: 'Art x Love x Money',
     logo_url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png'
   };
-  const projects = [];
   return (
     <html lang="ru">
       <head />
@@ -103,8 +123,6 @@ export default function RootLayout({ children }) {
         <AuthProvider>
           <Header settings={settings} projects={projects} />
           <main>
-            <h1>Anton Merkurov</h1>
-            <p>Сайт временно работает в ограниченном режиме.</p>
             {children}
           </main>
           <Footer />
