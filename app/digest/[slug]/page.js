@@ -1,13 +1,20 @@
 // app/digest/[slug]/page.js
-import { createClient } from '../../../lib/supabase-server';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import BlockRenderer from '@/components/BlockRenderer';
 
 // Эта функция получает данные для одного конкретного дайджеста по его slug
 async function getDigestBySlug(slug) {
-  const supabaseClient = createClient();
+  const { supabase } = await getUserAndSupabaseForRequest();
+  const supabaseClient = supabase;
+
+  if (!supabaseClient) {
+    // If we couldn't get a supabase client from the request or server fallback,
+    // avoid throwing and surface a notFound for safety in generateMetadata.
+    return null;
+  }
 
   const { data, error } = await supabaseClient
     .from('digests')

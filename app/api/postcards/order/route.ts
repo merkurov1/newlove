@@ -12,8 +12,8 @@ export async function POST(request: Request) {
     // Try Supabase session first, fall back to x-user-id header for transition
     let userId = request.headers.get('x-user-id');
     try {
-      const { getUserAndSupabaseFromRequestInterop } = await import('@/lib/supabaseInterop');
-      const { user } = await getUserAndSupabaseFromRequestInterop(request as any);
+      const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+      const { user } = await getUserAndSupabaseForRequest(request as any);
       if (user?.id) userId = user.id;
     } catch (e) {
       // helper might fail — we'll rely on header fallback

@@ -41,20 +41,27 @@ export async function GET() {
     // ---- КОНЕЦ ПРИМЕРНОГО КОДА ----
 
   const globalReq = ((globalThis && (globalThis as any).request) as Request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod as any;
-  const { supabase } = (await getUserAndSupabaseFromRequest(globalReq)) || {};
-  // If cron lacks a user session (no cookies), fall back to server-key client
-  let supabaseClient = supabase;
-  if (!supabaseClient) {
-    try {
-      const serverAuth = await import('@/lib/serverAuth');
-      // getServerSupabaseClient throws if env vars missing
-      supabaseClient = serverAuth.getServerSupabaseClient();
-    } catch (err) {
-      console.error('Supabase client unavailable for cron job', err);
-      return NextResponse.json({ message: 'Supabase client unavailable' }, { status: 500 });
+
+  // Prefer the canonical wrapper which normalizes various export shapes
+  // and provides a server fallback. Import dynamically to avoid circular
+  // dependency issues during build.
+  let supabaseClient: any = null;
+  try {
+    const mod = await import('@/lib/getUserAndSupabaseForRequest');
+    const getUserAndSupabaseForRequest = (mod && (mod.default || mod.getUserAndSupabaseForRequest)) as any;
+    if (typeof getUserAndSupabaseForRequest !== 'function') {
+      throw new Error('getUserAndSupabaseForRequest is not available');
     }
+    const result = await getUserAndSupabaseForRequest(globalReq);
+    supabaseClient = result?.supabase || null;
+  } catch (err) {
+    console.error('Error obtaining supabase client for cron job', err);
+    return NextResponse.json({ message: 'Supabase client unavailable' }, { status: 500 });
+  }
+
+  if (!supabaseClient) {
+    console.error('Supabase client unavailable for cron job (no client returned)');
+    return NextResponse.json({ message: 'Supabase client unavailable' }, { status: 500 });
   }
     for (const article of articles) {
       // <<< ГЛАВНОЕ ИЗМЕНЕНИЕ: Генерируем slug из заголовка статьи

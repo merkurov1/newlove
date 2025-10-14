@@ -12,9 +12,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const { id } = params;
   // Try to perform deletion via Supabase
   try {
-    const mod = await import('@/lib/supabase-server');
-    const { getUserAndSupabaseFromRequest } = mod as any;
-    const { supabase } = await getUserAndSupabaseFromRequest(req as Request);
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+  const { supabase } = await getUserAndSupabaseForRequest(req as Request);
     if (supabase) {
       const { error } = await supabase.from('subscribers').delete().eq('id', id).limit(1);
       if (error) {

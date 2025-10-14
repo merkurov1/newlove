@@ -4,8 +4,8 @@
 // import/ESM interop issues during Next.js production build. Use the
 // runtime loader below instead.
 async function loadSupabaseFromRequest(req) {
-  const mod = await import('@/lib/supabase-server');
-  return (mod.getUserAndSupabaseFromRequest || mod.default)(req);
+  const mod = await import('@/lib/getSupabaseForRequest');
+  return (mod.getUserAndSupabaseForRequest || mod.default)(req);
 }
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 import { revalidatePath } from 'next/cache';
