@@ -1,11 +1,12 @@
 import { Suspense } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import OrderSuccessContent from '@/components/letters/OrderSuccessContent';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Заказ успешно оформлен | Anton Merkurov',
   description: 'Ваш заказ открытки принят и будет обработан в ближайшее время',
-};
+});
 
 export default function OrderSuccessPage() {
   return (

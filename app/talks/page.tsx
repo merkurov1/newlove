@@ -1,9 +1,10 @@
 import TalksClientPage from './TalksClientPage';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Talks | Закрытое общение',
   description: 'Закрытый раздел для зарегистрированных пользователей',
-};
+});
 
 export default function TalksPage() {
   return (

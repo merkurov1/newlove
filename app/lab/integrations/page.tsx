@@ -1,11 +1,12 @@
 // app/lab/integrations/page.tsx
 import AuthGuard from '@/components/AuthGuard';
 import Link from 'next/link';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Medium & YouTube Integration | Lab',
   description: 'Интеграция с Medium и YouTube для импорта и синхронизации контента',
-};
+});
 
 export default function IntegrationsLabPage() {
   return (

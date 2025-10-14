@@ -2,11 +2,12 @@
 import AuthGuard from '@/components/AuthGuard';
 import YouTubeShorts from '@/components/YouTubeShorts';
 import Link from 'next/link';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'YouTube Shorts Integration | Lab',
   description: 'Интеграция с YouTube для отображения коротких видео @heartandangel',
-};
+});
 
 export default function YouTubeLabPage() {
   return (

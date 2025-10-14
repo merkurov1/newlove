@@ -10,6 +10,7 @@ import GlobalErrorHandler from '@/components/GlobalErrorHandler';
 // `getUserAndSupabaseFromRequest` is imported dynamically inside the layout to avoid
 // circular import issues during the Next.js production build.
 import { safeData } from '@/lib/safeSerialize';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { Analytics } from '@vercel/analytics/react';
 import { UmamiScript } from '@/lib/umami';
 import nextDynamic from 'next/dynamic';
@@ -23,7 +24,7 @@ const inter = Inter({
 });
 
 // --- ОБНОВЛЕННЫЙ БЛОК МЕТАДАННЫХ ---
-export const metadata = {
+export const metadata = sanitizeMetadata({
   // Шаблон для заголовков страниц
   title: {
     default: 'Anton Merkurov | Art x Love x Money', // Заголовок для главной страницы
@@ -95,7 +96,7 @@ export const metadata = {
       'application/rss+xml': 'https://merkurov.love/rss.xml',
     },
   },
-};
+});
 
 // Force dynamic rendering for the entire app during this migration/debug pass.
 // This avoids Next attempting to prerender/export pages which currently fail

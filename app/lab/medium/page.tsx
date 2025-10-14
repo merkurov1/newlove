@@ -2,11 +2,12 @@
 import AuthGuard from '@/components/AuthGuard';
 import MediumFeed from '@/components/MediumFeed';
 import Link from 'next/link';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Medium Integration | Lab',
   description: 'Интеграция с Medium для отображения статей @merkurov',
-};
+});
 
 export default function MediumLabPage() {
   return (

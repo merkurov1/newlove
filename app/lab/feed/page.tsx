@@ -2,11 +2,12 @@
 import AuthGuard from '@/components/AuthGuard';
 import FlowFeed from '@/components/FlowFeed';
 import Link from 'next/link';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Flow | Сводная лента',
   description: 'Единая хронологическая лента из всех подключенных платформ - Bluesky, Medium, YouTube',
-};
+});
 
 export const dynamic = 'force-dynamic';
 
