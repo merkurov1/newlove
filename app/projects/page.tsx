@@ -23,9 +23,8 @@ interface ProjectPreview {
 export default async function ProjectsPage() {
   // Запрашиваем только опубликованные проекты через Supabase
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const { getUserAndSupabaseFromRequest } = mod as any;
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
+  const { supabase } = await getSupabaseForRequest(globalReq) || {};
   let projects: any[] = [];
     if (supabase) {
     const { data, error } = await supabase.from('project').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });

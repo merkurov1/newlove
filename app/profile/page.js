@@ -6,9 +6,11 @@ import ProfileForm from '@/components/profile/ProfileForm'; // Мы создад
 
 export default async function ProfilePage() {
   const globalReq = globalThis?.request || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default || mod;
-  const { user, supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
+  const { user, supabase } = await (async () => {
+    const res = await getSupabaseForRequest(globalReq) || {};
+    return { user: res.user, supabase: res.supabase };
+  })();
   // Если user не найден, редиректим
   if (!user?.id) redirect('/');
 
