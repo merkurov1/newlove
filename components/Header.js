@@ -5,6 +5,7 @@ import Link from "next/link";
 import SafeImage from '@/components/SafeImage';
 
 import useSupabaseSession from '@/hooks/useSupabaseSession';
+import AdminAutoRedirect from './AdminAutoRedirect';
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import LoginButton from './LoginButton';
@@ -58,6 +59,7 @@ export default function Header({ projects, settings }) {
 
   return (
     <>
+      <AdminAutoRedirect />
       <header
   className={`sticky top-0 z-50 w-full backdrop-blur-md bg-gradient-to-b from-pink-50 via-white/90 to-white transition-transform duration-400 ease-in-out ${hideOnScroll ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'shadow-sm' : ''}`}
   style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}
