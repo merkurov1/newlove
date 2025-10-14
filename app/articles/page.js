@@ -2,14 +2,15 @@
 
 
 import Link from 'next/link';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 // dynamic import to avoid circular/interop build issues
 // Framer Motion удалён, только Tailwind
 
 // --- БЛОК МЕТАДАННЫХ ---
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Все публикации',
   description: 'Архив всех публикаций Антона Меркурова на темы медиа, технологий и искусства.',
-};
+});
 
 export const dynamic = 'force-dynamic';
 

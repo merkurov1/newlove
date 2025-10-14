@@ -1,10 +1,11 @@
 import LettersArchive from '@/components/letters/LettersArchive';
 import PostcardShop from '@/components/letters/PostcardShop';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Письма и открытки | Anton Merkurov',
   description: 'Архив рассылки и заказ авторских физических открыток',
-};
+});
 
 export default function LettersPage() {
   return (

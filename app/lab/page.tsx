@@ -1,10 +1,11 @@
 
 import Link from 'next/link';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Lab | Лаборатория экспериментов',
   description: 'Экспериментальный раздел для тестирования новых возможностей',
-};
+});
 
 const experiments = [
   {

@@ -2,11 +2,12 @@
 import AuthGuard from '@/components/AuthGuard';
 import BlueskyFeed from '@/components/BlueskyFeed';
 import Link from 'next/link';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Bluesky Integration | Lab',
   description: 'Экспериментальная интеграция с социальной сетью Bluesky',
-};
+});
 
 export default function BlueskyLabPage() {
   return (
