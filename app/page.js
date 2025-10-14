@@ -33,24 +33,20 @@ async function getArticles() {
     .order('updatedAt', { ascending: false })
     .limit(15);
   if (error) {
+    // Если ошибка доступа к articles — вернуть ошибку
     return { error, data: [] };
   }
-  // attach tags after fetch
+  // attach tags after fetch, но если ошибка — вернуть статьи без тегов
   const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
   const safeRows = Array.isArray(data) ? data : [];
-  let dataWithTags = safeRows;
   try {
-    dataWithTags = await attachTagsToArticles(supabase, safeRows);
+    const dataWithTags = await attachTagsToArticles(supabase, safeRows);
+    return dataWithTags || [];
   } catch (e) {
     console.error('attachTagsToArticles failed', e);
-    dataWithTags = safeRows;
+    // Вернуть статьи без тегов, если ошибка доступа к тегам
+    return safeRows;
   }
-
-  if (error) {
-    console.error('Supabase fetch articles error', error);
-    return [];
-  }
-  return dataWithTags || [];
 }
 export default async function Home() {
   // Ensure articles are fully serializable before using them in client components
