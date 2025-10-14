@@ -105,10 +105,6 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
           maxWidth: 400,
           width: '100%',
           padding: '2.5rem',
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
           boxSizing: 'border-box',
         }}
       >
