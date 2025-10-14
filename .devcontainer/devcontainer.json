@@ -1,17 +1,23 @@
 {
-  "name": "Node.js",
+  "name": "newlove - Codespace",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:0-20",
-
-  "forwardPorts": [3000],
-
-  "postCreateCommand": "npm install",
-
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:1": {}
+  },
+  "postCreateCommand": "npm ci || true",
   "customizations": {
     "vscode": {
       "extensions": [
+        "esbenp.prettier-vscode",
         "dbaeumer.vscode-eslint",
+        "ms-azuretools.vscode-docker",
         "bradlc.vscode-tailwindcss"
       ]
     }
-  }
+  },
+  "forwardPorts": [3000, 5173],
+  "remoteUser": "vscode",
+  "mounts": [
+    "source=${localWorkspaceFolder}/.git,target=/workspace/.git,type=bind,consistency=cached"
+  ]
 }

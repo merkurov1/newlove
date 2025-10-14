@@ -1,0 +1,11 @@
+*** Begin Patch
+*** Update File: app/layout.js
+@@
+-              <Header projects={projects} settings={settings} />
+-              <UserSidebar />
++              <Header projects={safeData(projects)} settings={safeData(settings)} />
++              <UserSidebar />
+@@
+-              <Footer subscriberCount={subscriberCount} />
++              <Footer subscriberCount={Number(subscriberCount) || 0} />
+*** End Patch

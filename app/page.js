@@ -22,10 +22,8 @@ const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false
 // Получить статьи с тегами
 async function getArticles() {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const mod = await import('@/lib/supabase-server');
-  // Resolver: support named export, default export, or the module itself (interop-safe)
-  const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default || mod;
-  let { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+  const { getUserAndSupabaseFromRequestInterop } = await import('@/lib/supabaseInterop');
+  let { supabase } = await getUserAndSupabaseFromRequestInterop(globalReq);
   if (!supabase) {
     try {
       const serverAuth = await import('@/lib/serverAuth');
@@ -44,12 +42,20 @@ async function getArticles() {
     .limit(15);
   // attach tags after fetch
   const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
-  const dataWithTags = await attachTagsToArticles(supabase, data || []);
+  const safeRows = Array.isArray(data) ? data : [];
+  let dataWithTags = safeRows;
+  try {
+    dataWithTags = await attachTagsToArticles(supabase, safeRows);
+  } catch (e) {
+    console.error('attachTagsToArticles failed', e);
+    dataWithTags = safeRows;
+  }
+
   if (error) {
     console.error('Supabase fetch articles error', error);
     return [];
   }
-  return data || [];
+  return dataWithTags || [];
 }
 export default async function Home() {
   const rawArticles = safeData(await getArticles());
