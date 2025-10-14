@@ -10,7 +10,13 @@ async function getArticle(id) {
   const getUserAndSupabaseFromRequest = mod.getUserAndSupabaseFromRequest || mod.default || mod;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
   if (!supabase) notFound();
-  const { data: article, error } = await supabase.from('article').select('*, tags:tags(*)').eq('id', id).maybeSingle();
+  const { data: articleRaw, error } = await supabase.from('articles').select('*').eq('id', id).maybeSingle();
+  let article = articleRaw;
+  if (article) {
+    const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
+    const [a] = await attachTagsToArticles(supabase, [article]);
+    article = a || article;
+  }
   if (error || !article) notFound();
   return article;
 }

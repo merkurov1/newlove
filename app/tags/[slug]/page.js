@@ -25,8 +25,11 @@ async function getTagData(slug) {
     const { data: rels } = await supabase.from('_ArticleToTag').select('A').eq('B', tag.id);
     const ids = (rels || []).map(r => r.A);
     if (ids.length === 0) return { data: [] };
-    const { data: arts } = await supabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
-    return { data: arts };
+    const { data: arts } = await supabase.from('articles').select('*, author:authorId(name,image)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
+    // attach tags via helper
+    const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
+    const artsWithTags = await attachTagsToArticles(supabase, arts || []);
+    return { data: artsWithTags };
   });
   tag.articles = (articles && articles.data) || (articles || []);
   return tag;

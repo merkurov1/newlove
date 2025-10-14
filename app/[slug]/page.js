@@ -15,6 +15,7 @@ import dynamic from 'next/dynamic';
 
 import Image from 'next/image';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
+import { attachTagsToArticles } from '@/lib/attachTagsToArticles';
 import BlockRenderer from '@/components/BlockRenderer';
 import SocialShare from '@/components/SocialShare';
 import EditButton from '@/components/EditButton';
@@ -38,11 +39,14 @@ async function getContent(slug) {
     const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
     let article = null;
     if (supabase) {
-      const { data, error } = await supabase.from('article').select('*, author:authorId(name,image), tags:tags(*)').eq('slug', slug).eq('published', true).maybeSingle();
+      const { data, error } = await supabase.from('articles').select('*, author:authorId(name,image)').eq('slug', slug).eq('published', true).maybeSingle();
       if (error) {
         console.error('Supabase fetch article error', error);
       } else {
-        article = data;
+        // attach tags via helper if nested relation not available
+        const withTags = data ? (Array.isArray(data) ? await attachTagsToArticles(supabase, data) : { ...data }) : null;
+        // if withTags is array when maybeSingle returned single object, try to normalize
+        article = withTags && Array.isArray(withTags) ? withTags[0] : withTags || data;
       }
     }
     

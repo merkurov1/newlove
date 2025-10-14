@@ -31,8 +31,12 @@ async function getUserProfile(username) {
   const user = (users && users[0]) || null;
   if (!user) notFound();
   // Fetch articles and projects separately
-  const { data: articles } = await supabase.from('article').select('*, tags:tags(*)').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
-  const { data: projects } = await supabase.from('project').select('*, tags:tags(*)').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  const { data: articlesRaw } = await supabase.from('articles').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  const { data: projectsRaw } = await supabase.from('project').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  // attach tags to articles and projects where needed
+  const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
+  const articles = await attachTagsToArticles(supabase, articlesRaw || []);
+  const projects = await attachTagsToArticles(supabase, projectsRaw || []);
   user.articles = articles || [];
   user.projects = projects || [];
   return user;
