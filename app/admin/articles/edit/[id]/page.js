@@ -14,8 +14,9 @@ async function getArticle(id) {
   let article = articleRaw;
   if (article) {
     const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
-    const [a] = await attachTagsToArticles(supabase, [article]);
-    article = a || article;
+    const attached = await attachTagsToArticles(supabase, [article]);
+    const a = Array.isArray(attached) ? attached[0] : null;
+    article = a ? JSON.parse(JSON.stringify(a)) : JSON.parse(JSON.stringify(article));
   }
   if (error || !article) notFound();
   return article;

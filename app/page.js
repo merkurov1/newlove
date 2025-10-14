@@ -58,12 +58,14 @@ async function getArticles() {
   return dataWithTags || [];
 }
 export default async function Home() {
+  // Ensure articles are fully serializable before using them in client components
   const rawArticles = safeData(await getArticles());
 
   // Для каждой статьи вычисляем previewImage
   const articles = await Promise.all(
     rawArticles.map(async (article) => {
       const previewImage = await getFirstImage(article.content);
+      // safeData to strip any remaining unserializable props
       return safeData({ ...article, previewImage });
     })
   );

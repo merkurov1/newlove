@@ -35,14 +35,18 @@ export async function requireAdmin() {
 export async function requireAdminFromRequest(req?: Request | null) {
   try {
     if (req) {
-      // dynamic import to avoid circular dependency with lib/supabase-server
-      const mod = await import('@/lib/supabase-server');
-      const { getUserAndSupabaseFromRequest } = mod as any;
-      const { user } = await getUserAndSupabaseFromRequest(req as Request);
-      if (user?.id) {
-        const role = (user.user_metadata && user.user_metadata.role) || user.role || 'USER';
-        if (role === 'ADMIN') return user;
-        throw new Error('Not authorized');
+      // Use interop helper to be resilient to module export shape differences
+      const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
+      try {
+        const { user } = await getUserAndSupabaseFromRequestInterop(req as Request) || {};
+        if (user?.id) {
+          const role = (user.user_metadata && user.user_metadata.role) || user.role || 'USER';
+          if (role === 'ADMIN') return user;
+          throw new Error('Not authorized');
+        }
+      } catch (e) {
+        // If the helper itself failed, treat as unauthenticated and continue to other checks
+        console.error('requireAdminFromRequest: getUserAndSupabaseFromRequest failed', e);
       }
     }
 

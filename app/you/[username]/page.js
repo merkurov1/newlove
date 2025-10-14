@@ -36,9 +36,12 @@ async function getUserProfile(username) {
   const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
   const articles = await attachTagsToArticles(supabase, articlesRaw || []);
   const projects = await attachTagsToArticles(supabase, projectsRaw || []);
-  user.articles = articles || [];
-  user.projects = projects || [];
-  return user;
+  // Do not mutate original DB object; return a safe clone with serialized arrays
+  return {
+    ...user,
+    articles: Array.isArray(articles) ? JSON.parse(JSON.stringify(articles)) : [],
+    projects: Array.isArray(projects) ? JSON.parse(JSON.stringify(projects)) : []
+  };
 }
 
 // --- 2. ГЕНЕРИРУЕМ МЕТАДАННЫЕ ДЛЯ SEO ---
