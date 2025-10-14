@@ -132,7 +132,6 @@ export default async function RootLayout({ children }) {
           <main>
             {children}
           </main>
-          <UserSidebar />
           <Footer />
         </AuthProvider>
       </body>
