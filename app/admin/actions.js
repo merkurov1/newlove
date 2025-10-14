@@ -1,12 +1,6 @@
 "use server";
 
-// Avoid static import of getUserAndSupabaseFromRequest to prevent circular
-// import/ESM interop issues during Next.js production build. Use the
-// runtime loader below instead.
-async function loadSupabaseFromRequest(req) {
-  const mod = await import('@/lib/getSupabaseForRequest');
-  return (mod.getUserAndSupabaseForRequest || mod.default)(req);
-}
+import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -38,7 +32,7 @@ export async function createArticle(formData) {
   // Проверка уникальности slug
   // Check slug uniqueness via Supabase
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
   const { data: existingSlug } = await supabase.from('articles').select('id').eq('slug', slug).maybeSingle();
   if (existingSlug) {
@@ -127,7 +121,7 @@ export async function updateArticle(formData) {
   if (validBlocks.length === 0) throw new Error('No valid blocks');
   // Update article via Supabase (tags handling TODO)
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
   const { error: updateErr } = await supabase.from('articles').update({
     title,
@@ -159,7 +153,7 @@ export async function deleteArticle(formData) {
   const id = formData.get('id')?.toString();
   if (!id) { throw new Error('Article ID is required.'); }
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
   const { data: article } = await supabase.from('articles').select('slug').eq('id', id).maybeSingle();
   const { error: delErr } = await supabase.from('articles').delete().eq('id', id);
@@ -184,7 +178,7 @@ export async function createProject(formData) {
 
   // Проверка уникальности slug
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
   const { data: existing } = await supabase.from('project').select('id').eq('slug', slug).maybeSingle();
   if (existing) {
@@ -256,7 +250,7 @@ export async function updateProject(formData) {
   );
   if (validBlocks.length === 0) throw new Error('No valid blocks');
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
   const { error: updateErr } = await supabase.from('project').update({
     title,
@@ -304,7 +298,7 @@ export async function deleteProject(formData) {
 export async function updateProfile(prevState, formData) {
   // Получаем текущего пользователя через Supabase helper
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { user, supabase } = await loadSupabaseFromRequest(globalReq);
+  const { user, supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!user?.id) {
     return { status: 'error', message: 'Вы не авторизованы.' };
   }
@@ -358,7 +352,7 @@ export async function subscribeToNewsletter(prevState, formData) {
     // Получаем userId если пользователь залогинен
     let userId = null;
     const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { user, supabase } = await loadSupabaseFromRequest(globalReq);
+    const { user, supabase } = await getUserAndSupabaseForRequest(globalReq);
     if (user?.id) userId = user.id;
 
     if (!supabase) {
@@ -453,7 +447,7 @@ export async function createLetter(formData) {
 
   try {
     const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
     if (!supabase) throw new Error('Database client not available');
 
     const { data: letter, error: insertErr } = await supabase.from('letter').insert({
@@ -526,7 +520,7 @@ export async function updateLetter(formData) {
 
   try {
     const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
     if (!supabase) throw new Error('Database client not available');
 
     // Проверяем, что letter существует
@@ -594,7 +588,7 @@ export async function deleteLetter(formData) {
     throw new Error('Letter ID is required.');
   }
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
   if (!supabase) throw new Error('Database client not available');
   const { data: letter } = await supabase.from('letter').select('slug,published').eq('id', id).maybeSingle();
   if (!letter) throw new Error('Письмо не найдено.');
@@ -617,7 +611,7 @@ export async function sendLetter(prevState, formData) {
   }
 
   try {
-  const { supabase } = await loadSupabaseFromRequest((globalThis && globalThis.request) || new Request('http://localhost'));
+  const { supabase } = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
     if (!supabase) return { status: 'error', message: 'База данных недоступна.' };
     const { data: letter } = await supabase.from('letter').select('*').eq('id', letterId).maybeSingle();
     if (!letter) return { status: 'error', message: 'Письмо не найдено.' };
@@ -722,7 +716,7 @@ export async function createPostcard(formData) {
 
   try {
     const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
     if (!supabase) throw new Error('Database client not available');
 
     const payload = {
@@ -764,7 +758,7 @@ export async function updatePostcard(formData) {
 
   try {
     const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await loadSupabaseFromRequest(globalReq);
+  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
     if (!supabase) throw new Error('Database client not available');
 
     const updates = {
