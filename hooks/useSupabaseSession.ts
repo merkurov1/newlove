@@ -1,30 +1,11 @@
 "use client";
 import { useEffect, useState } from 'react';
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const serviceRoleKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!supabaseUrl) {
-  throw new Error('Supabase URL is not defined in environment variables');
-}
-if (!anonKey) {
-  throw new Error('Supabase anon key is not defined in environment variables');
-}
-// На клиенте всегда anon key, на сервере можно service role
-function getSupabaseClient() {
-  if (typeof window === 'undefined') {
-    if (!serviceRoleKey) {
-      throw new Error('Supabase service role key is not defined in environment variables');
-    }
-    return createClient(String(supabaseUrl), String(serviceRoleKey));
-  }
-  if (!anonKey) {
-    throw new Error('Supabase anon key is not defined in environment variables');
-  }
-  return createClient(String(supabaseUrl), String(anonKey));
-}
+// Use a single browser client factory so all components share the same
+// auth state and subscriptions. Other components already import and call
+// `createBrowserClient()` from `lib/supabase-browser.js`.
 
 
 export default function useSupabaseSession() {
@@ -32,8 +13,8 @@ export default function useSupabaseSession() {
   const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
 
   useEffect(() => {
-    let mounted = true;
-    const supabase = getSupabaseClient();
+  let mounted = true;
+  const supabase = createBrowserClient();
     const get = async () => {
       const { data } = await supabase.auth.getSession();
       const s = data.session;
@@ -90,7 +71,7 @@ export default function useSupabaseSession() {
       }
     };
     get();
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, s) => {
+  const { data: listener } = supabase.auth.onAuthStateChange(async (_event, s) => {
       if (!mounted) return;
       if (s?.user) {
         const user = s.user;
@@ -144,7 +125,12 @@ export default function useSupabaseSession() {
     });
     return () => {
       mounted = false;
-      sub.subscription.unsubscribe();
+      // Defensive unsubscribe
+      try {
+        listener?.subscription?.unsubscribe?.();
+      } catch (e) {
+        // ignore
+      }
     };
   }, []);
   return { session, status };

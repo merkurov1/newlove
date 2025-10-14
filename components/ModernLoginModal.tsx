@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from 'react-dom';
 import useSupabaseSession from '@/hooks/useSupabaseSession';
 import Onboard from '@web3-onboard/core';
 import injectedModule from '@web3-onboard/injected-wallets';
@@ -13,8 +14,22 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
   const { status, error } = useSupabaseSession() as any;
   const [loading, setLoading] = useState(false);
   const [web3Error, setWeb3Error] = useState('');
+  const [mounted, setMounted] = useState(false);
+  const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
 
-  if (status === 'authenticated') return null;
+  // Mount portal only on client to avoid SSR issues and ensure fixed positioning
+  useEffect(() => {
+    setMounted(true);
+    const el = document.createElement('div');
+    el.setAttribute('data-modal-root', 'true');
+    document.body.appendChild(el);
+    setPortalEl(el);
+    return () => {
+      try { document.body.removeChild(el); } catch (e) { /* ignore */ }
+    };
+  }, []);
+
+  if (!mounted || status === 'authenticated') return null;
 
 
 
@@ -95,7 +110,7 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
     setLoading(false);
   };
 
-  return (
+  const modalContent = (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
       onClick={(e) => {
@@ -104,7 +119,7 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
       }}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl flex flex-col gap-6 items-center justify-center mx-auto"
+        className="bg-white rounded-2xl shadow-2xl flex flex-col gap-6 items-center justify-center mx-auto relative"
         role="dialog"
         aria-modal="true"
         style={{
@@ -141,4 +156,7 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
       </div>
     </div>
   );
+
+  if (portalEl) return createPortal(modalContent, portalEl);
+  return null;
 }

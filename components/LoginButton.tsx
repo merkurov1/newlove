@@ -2,41 +2,29 @@
 
 
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import ModernLoginModal from "./ModernLoginModal";
-import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 import Image from "next/image";
-
-const supabase = createBrowserClient();
+import useSupabaseSession from '@/hooks/useSupabaseSession';
 
 export default function LoginButton() {
   const [modalOpen, setModalOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const { session } = useSupabaseSession();
 
-  useEffect(() => {
-    const getUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user);
-    };
-    getUser();
-    const { data: listener } = supabase.auth.onAuthStateChange(() => getUser());
-    return () => { listener?.subscription.unsubscribe(); };
-  }, []);
-
-  if (user) {
+  if (session?.user) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-        {user.user_metadata?.image && (
+        {session.user?.image && (
           <Image
-            src={user.user_metadata.image}
-            alt={user.user_metadata.name || "User avatar"}
+            src={session.user.image}
+            alt={session.user.name || "User avatar"}
             width={32}
             height={32}
             style={{ borderRadius: "50%" }}
           />
         )}
-        <span>{user.user_metadata?.name || user.email}</span>
-        <button onClick={async () => { await supabase.auth.signOut(); setUser(null); }}>Выйти</button>
+        <span>{session.user?.name || session.user?.email}</span>
+        <button onClick={async () => { const { createClient } = await import('@/lib/supabase-browser'); const supabase = createClient(); await supabase.auth.signOut(); window.location.reload(); }}>Выйти</button>
       </div>
     );
   }
