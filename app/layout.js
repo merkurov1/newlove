@@ -78,34 +78,46 @@ export const dynamic = 'force-dynamic';
 
 
 import { safeData } from '@/lib/safeSerialize';
-import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
+
+// Надёжный SSR-запрос опубликованных проектов через anon key
+async function getPublicProjects() {
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !anonKey) {
+      console.error('Supabase env vars missing');
+      return [];
+    }
+    const supabase = createClient(supabaseUrl, anonKey);
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id,slug,title')
+      .eq('published', true)
+      .order('createdAt', { ascending: true });
+    if (error) {
+      console.error('Supabase fetch projects error', error);
+      return [];
+    }
+    if (!Array.isArray(data)) {
+      console.error('Supabase projects: data is not array', data);
+      return [];
+    }
+    // Гарантируем структуру для компонента
+    return data.map(p => ({
+      id: p.id,
+      slug: p.slug,
+      title: p.title,
+    }));
+  } catch (e) {
+    console.error('SSR getPublicProjects fatal error', e);
+    return [];
+  }
+}
 
 export default async function RootLayout({ children }) {
-  // Динамически получаем проекты из Supabase
-  let projects = [];
-  try {
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-    const { supabase } = await getUserAndSupabaseForRequest(globalReq);
-    if (supabase) {
-      const { data, error } = await supabase.from('projects').select('id,slug,title').eq('published', true).order('createdAt', { ascending: true });
-      if (error) {
-        // Ошибка доступа к проектам — не выводим проекты, не ломаем Header
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Supabase fetch projects error', error);
-        }
-        projects = [];
-      } else {
-        projects = safeData(data || []);
-      }
-    } else {
-      projects = [];
-    }
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Database connection error:', error.message);
-    }
-    projects = [];
-  }
+  // Получаем только опубликованные проекты через anon key
+  const projects = await getPublicProjects();
   const settings = {
     site_name: 'Anton Merkurov',
     slogan: 'Art x Love x Money',
