@@ -9,7 +9,7 @@ import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 
 const supabase = createBrowserClient();
 
-export default function ModernLoginModal() {
+export default function ModernLoginModal({ onClose }: { onClose?: () => void } = {}) {
   const { status, error } = useSupabaseSession() as any;
   const [loading, setLoading] = useState(false);
   const [web3Error, setWeb3Error] = useState('');
@@ -67,7 +67,17 @@ export default function ModernLoginModal() {
         message,
         signature: signature as any,
       });
-      if (error) setWeb3Error(error.message);
+      if (error) {
+        setWeb3Error(error.message);
+      } else {
+        // Успешный вход — закрыть модалку и вернуть пользователя на ту же страницу
+        if (onClose) onClose();
+        // Редирект на login_redirect_path, если есть
+        const redirect = typeof window !== 'undefined' ? localStorage.getItem('login_redirect_path') : null;
+        if (redirect && window.location.pathname + window.location.search !== redirect) {
+          window.location.href = redirect;
+        }
+      }
     } catch (e: any) {
       setWeb3Error(e.message || String(e));
     }
@@ -87,8 +97,21 @@ export default function ModernLoginModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-2xl flex flex-col gap-6 items-center justify-center mx-auto"
-        style={{ minHeight: 320, minWidth: 320, maxWidth: 400, width: '100%', padding: '2.5rem', position: 'relative', top: 0, left: 0 }}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl flex flex-col gap-6 items-center justify-center mx-auto"
+        style={{
+          minHeight: 320,
+          minWidth: 320,
+          maxWidth: 400,
+          width: '100%',
+          padding: '2.5rem',
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          boxSizing: 'border-box',
+        }}
+      >
         <h2 className="text-3xl font-bold mb-4 text-center">Вход</h2>
         <button
           onClick={handleGoogle}
@@ -105,6 +128,12 @@ export default function ModernLoginModal() {
           {loading ? 'Входим через Web3...' : 'Войти через Web3'}
         </button>
         {(error || web3Error) && <div className="text-red-600 text-sm text-center mt-2">{error || web3Error}</div>}
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl font-bold bg-transparent border-none cursor-pointer"
+          style={{ background: 'none', border: 'none', padding: 0 }}
+          aria-label="Закрыть"
+        >×</button>
       </div>
     </div>
   );

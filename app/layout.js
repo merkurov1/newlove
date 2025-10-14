@@ -5,7 +5,8 @@ import './main.css';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import UserSidebar from '@/components/UserSidebar';
+import dynamic from 'next/dynamic';
+const UserSidebar = dynamic(() => import('@/components/UserSidebar'), { ssr: false });
 
 // --- SEO: Корректный шаблон заголовка и метаданных ---
 export const metadata = sanitizeMetadata({
