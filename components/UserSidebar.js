@@ -3,12 +3,56 @@
 import Link from 'next/link';
 import useSupabaseSession from '@/hooks/useSupabaseSession';
 import Image from 'next/image';
+import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 
 export default function UserSidebar() {
   const { session, status } = useSupabaseSession();
   if (status !== 'authenticated' || !session?.user) return null;
   const { user } = session;
   const username = user.username || user.name || 'me';
+
+  const [diagLoading, setDiagLoading] = React.useState(false);
+  const [diagResult, setDiagResult] = React.useState(null);
+  const [diagError, setDiagError] = React.useState(null);
+
+  const runDiagnostics = async () => {
+    setDiagLoading(true);
+    setDiagError(null);
+    setDiagResult(null);
+    try {
+      const sb = createBrowserClient();
+      // get session and token
+      const { data: sessData } = await sb.auth.getSession();
+      const sess = (sessData || {}).session || null;
+      const token = sess?.access_token || null;
+
+      // call server role endpoint
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const roleRes = await fetch('/api/user/role', { headers });
+      const roleJson = await roleRes.json().catch(() => null);
+
+      // try anon read of user_roles via browser client
+      let anonRoles = null;
+      try {
+        const { data: rolesData, error: rolesErr } = await sb
+          .from('user_roles')
+          .select('role_id,roles(name)')
+          .eq('user_id', user.id);
+        if (rolesErr) {
+          anonRoles = { error: rolesErr.message || String(rolesErr) };
+        } else {
+          anonRoles = rolesData || [];
+        }
+      } catch (e) {
+        anonRoles = { error: e?.message || String(e) };
+      }
+
+      setDiagResult({ session: sess, roleEndpoint: roleJson, anonRoles });
+    } catch (e) {
+      setDiagError(e?.message || String(e));
+    }
+    setDiagLoading(false);
+  };
 
   const role = (user.role || '').toString();
   // Debug info panel at the left of the sidebar for troubleshooting
@@ -18,6 +62,23 @@ export default function UserSidebar() {
       <div>id: {user.id}</div>
       <div>email: {user.email || '—'}</div>
       <div>role: {role}</div>
+      <div className="mt-2">
+        <button
+          onClick={runDiagnostics}
+          className="text-xs px-2 py-1 bg-yellow-100 rounded border border-yellow-200"
+          disabled={diagLoading}
+        >
+          {diagLoading ? 'Проверка...' : 'Диагностика роли'}
+        </button>
+      </div>
+      {diagError && <div className="text-red-600 mt-2">Ошибка: {String(diagError)}</div>}
+      {diagResult && (
+        <div className="mt-2 text-xs text-gray-600">
+          <div><strong>/api/user/role:</strong> {JSON.stringify(diagResult.roleEndpoint)}</div>
+          <div className="mt-1"><strong>session.user.role / metadata:</strong> {JSON.stringify(diagResult.session?.user?.role || diagResult.session?.user?.user_metadata)}</div>
+          <div className="mt-1"><strong>anon user_roles query:</strong> {JSON.stringify(diagResult.anonRoles)}</div>
+        </div>
+      )}
     </div>
   );
 
