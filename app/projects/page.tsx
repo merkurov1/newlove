@@ -21,27 +21,19 @@ interface ProjectPreview {
 }
 
 export default async function ProjectsPage() {
-  // Запрашиваем только опубликованные проекты через Supabase
-  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
-  const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
-  const { supabase } = await getSupabaseForRequest(globalReq) || {};
+  // For public project listings always use the server service-role client.
+  // This avoids RLS "permission denied" errors for request-scoped clients
+  // in environments where anon/request roles are restricted.
   let projects: any[] = [];
-    if (supabase) {
-    const { data, error } = await supabase.from('projects').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
-    if (error) console.error('Supabase fetch projects error', error);
+  try {
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
+    const { data, error } = await serverSupabase.from('projects').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
+    if (error) console.error('Supabase fetch projects (server) error', error);
     projects = safeData(data || []);
-  } else {
-    // If no request-scoped client is available (SSR/build), use a server service-role client
-    try {
-      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-      const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
-      const { data, error } = await serverSupabase.from('projects').select('id,slug,title,previewImage,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
-      if (error) console.error('Supabase fetch projects (server) error', error);
-      projects = safeData(data || []);
-    } catch (e) {
-      console.error('Failed to fetch projects via server client', e);
-      projects = [];
-    }
+  } catch (e) {
+    console.error('Failed to fetch projects via server client', e);
+    projects = [];
   }
 
   if (!projects || projects.length === 0) {
