@@ -75,7 +75,19 @@ export default function Header({ projects, settings }) {
           <div>status: {status}</div>
           <div style={{marginTop:6}}>user: {session?.user ? `${session.user.id} ${session.user.email}` : 'null'}</div>
           <div style={{marginTop:6}}>role: {session?.user?.role || '—'}</div>
-          <div style={{marginTop:6, opacity:0.8}}>open console: window.__newloveAuth</div>
+          <div style={{marginTop:6, opacity:0.9}}>open console: window.__newloveAuth</div>
+          <div style={{marginTop:6, opacity:0.85}}>
+            <div style={{fontWeight:600}}>Recent events:</div>
+            <div style={{maxHeight:120, overflow:'auto', marginTop:6}}>
+              {typeof window !== 'undefined' && (window.__newloveAuth || {}).history ? (
+                (window.__newloveAuth.history || []).slice().reverse().map((h, i) => (
+                  <div key={i} style={{fontSize:11, opacity:0.95, paddingTop:4}}>{new Date(h.ts).toLocaleTimeString()} {h.status} {h.short ? ` — ${h.short}` : ''}</div>
+                ))
+              ) : (
+                <div style={{fontSize:11, opacity:0.7}}>no events yet</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
       <AdminAutoRedirect />
