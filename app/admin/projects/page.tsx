@@ -8,12 +8,24 @@ export const dynamic = 'force-dynamic';
 export default async function AdminProjectsPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const _ctx = await getUserAndSupabaseForRequest(globalReq);
+  let supabase = _ctx && _ctx.supabase;
   let projects: any[] = [];
   if (supabase) {
-  const { data, error } = await supabase.from('projects').select('*').order('createdAt', { ascending: false });
+    const { data, error } = await supabase.from('projects').select('*').order('createdAt', { ascending: false });
     if (error) console.error('Supabase fetch admin projects error', error);
     projects = data || [];
+  } else {
+    try {
+      const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
+      const { data, error } = await serverSupabase.from('projects').select('*').order('createdAt', { ascending: false });
+      if (error) console.error('Supabase fetch admin projects (server) error', error);
+      projects = data || [];
+    } catch (e) {
+      console.error('Failed to fetch admin projects via server client', e);
+      projects = [];
+    }
   }
 
   return (

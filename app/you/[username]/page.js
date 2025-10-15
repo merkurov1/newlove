@@ -31,7 +31,21 @@ async function getUserProfile(username) {
   if (!user) notFound();
   // Fetch articles and projects separately
   const { data: articlesRaw } = await supabase.from('articles').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
-  const { data: projectsRaw } = await supabase.from('projects').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  let projectsRaw = [];
+  if (supabase) {
+    const res = await supabase.from('projects').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+    projectsRaw = res && res.data ? res.data : [];
+  } else {
+    try {
+      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+      const srv = getServerSupabaseClient({ useServiceRole: true });
+      const res = await srv.from('projects').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+      projectsRaw = res && res.data ? res.data : [];
+    } catch (e) {
+      console.error('Failed to fetch user projects via server client', e);
+      projectsRaw = [];
+    }
+  }
   // attach tags to articles and projects where needed
   const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
   const articles = await attachTagsToArticles(supabase, articlesRaw || []);
