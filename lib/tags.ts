@@ -1,6 +1,7 @@
 // lib/tags.ts
 // Helper utilities for upserting tags and linking them to entities using Supabase.
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
 export type LinkEntity = 'article' | 'project' | 'letter';
 
@@ -26,28 +27,46 @@ export async function upsertTagsAndLink(
   if (!supabase) throw new Error('Supabase client required');
   if (!tagNames || tagNames.length === 0) return;
 
-  // Normalize tag objects
-  const normalized = tagNames.map(name => ({ name: name.trim() })).filter(t => t.name.length > 0);
+  // Normalize and dedupe tag names
+  const names = Array.from(new Set((tagNames || []).map(n => (n || '').toString().trim()).filter(Boolean)));
+  if (names.length === 0) return;
 
-  // Upsert tags by name
-  const { data: upserted, error: upsertErr } = await supabase
-    .from('Tag')
-    .upsert(normalized, { onConflict: 'name' })
-    .select('*');
-  if (upsertErr) {
-    console.error('upsertTags error', upsertErr);
-    // continue, best-effort
-  }
+  // Helper slugify
+  const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9-_]+/g, '-').replace(/^-+|-+$/g, '').replace(/--+/g, '-');
 
-  // Map tag names to ids
-  const names = normalized.map(t => t.name);
-  const { data: tagsRows, error: fetchErr } = await supabase.from('Tag').select('id,name').in('name', names);
+  // 1) fetch existing tags by name
+  const { data: existingTags = [], error: fetchErr } = await supabase.from('Tag').select('id,name,slug').in('name', names) as any;
   if (fetchErr) {
     console.error('fetch tags error', fetchErr);
     return;
   }
   const tagIdByName: Record<string, string> = {};
-  for (const r of tagsRows || []) tagIdByName[r.name] = r.id;
+  for (const r of existingTags || []) tagIdByName[r.name] = r.id;
+
+  // 2) determine missing names and insert them with generated ids/slugs
+  const missing = names.filter(n => !tagIdByName[n]);
+  if (missing.length > 0) {
+    const now = new Date().toISOString();
+    const toInsert = missing.map(n => ({ id: (typeof randomUUID === 'function' ? randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`), name: n, slug: slugify(n), createdAt: now, updatedAt: now }));
+    const { data: inserted = [], error: insertErr } = await supabase.from('Tag').insert(toInsert).select('id,name,slug') as any;
+    if (insertErr) {
+      // If insertion fails, try best-effort: continue and rely on later select
+      console.error('insert missing tags error', insertErr);
+    } else {
+      for (const r of inserted || []) tagIdByName[r.name] = r.id;
+    }
+  }
+
+  // 3) ensure we have mapping for all names by querying again for any missing
+  const missingAfterInsert = names.filter(n => !tagIdByName[n]);
+  if (missingAfterInsert.length > 0) {
+    const { data: rows = [], error: finalFetchErr } = await supabase.from('Tag').select('id,name,slug').in('name', missingAfterInsert) as any;
+    if (finalFetchErr) {
+      console.error('fetch tags after insert error', finalFetchErr);
+      return;
+    }
+    for (const r of rows || []) tagIdByName[r.name] = r.id;
+  }
 
   // Prepare junction inserts depending on entity type
   const junctionTable = {
@@ -58,12 +77,7 @@ export async function upsertTagsAndLink(
 
   if (!junctionTable) return;
 
-  const inserts = Object.keys(tagIdByName).map(name => {
-    const tagId = tagIdByName[name];
-    // Columns in the junction are A (left) and B (right) in original SQL/Prisma naming
-    // We'll try to insert as { A: entityId, B: tagId } which matches past migrations
-    return { A: entityId, B: tagId };
-  });
+  const inserts = Object.keys(tagIdByName).map(name => ({ A: entityId, B: tagIdByName[name] }));
 
   if (inserts.length === 0) return;
 
@@ -79,6 +93,10 @@ export async function upsertTagsAndLink(
 
   // Avoid duplicates using upsert on (A,B) if Postgres constraint exists
   // Supabase client's onConflict expects a comma-separated string in types
-  const { error: insertErr } = await supabase.from(junctionTable).upsert(inserts, { onConflict: 'A,B' });
-  if (insertErr) console.error('insert junction error', insertErr);
+  try {
+    const { error: insertErr } = await supabase.from(junctionTable).upsert(inserts, { onConflict: 'A,B' });
+    if (insertErr) console.error('insert junction error', insertErr);
+  } catch (e) {
+    console.error('insert junction unexpected error', e);
+  }
 }
