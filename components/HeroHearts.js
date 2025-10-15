@@ -1,5 +1,6 @@
 "use client";
 import { useAuth } from '@/components/AuthContext';
+import useServerEffectiveRole from '@/hooks/useServerEffectiveRole';
 
 export default function HeroHearts({ className = "", style }) {
   const { session, isLoading } = useAuth();
@@ -8,7 +9,8 @@ export default function HeroHearts({ className = "", style }) {
   // Определяем вариант hero
   let title = 'Добро пожаловать в мир медиа и технологий';
   let description = 'Исследуем пересечение искусства, любви и денег в цифровую эпоху. Зарегистрируйтесь, чтобы получить доступ к эксклюзивным материалам и закрытому сообществу.';
-  if (session?.user?.role === 'ADMIN') {
+  const serverRole = useServerEffectiveRole(session?.user ? session : null);
+  if ((serverRole === 'ADMIN') || session?.user?.role === 'ADMIN') {
     title = 'Панель администратора';
     description = 'Добро пожаловать в круг близких! Вам открыты все публикации, включая личные истории и творческие эксперименты. Впереди — запуск закрытого сообщества и новые проекты.';
   } else if (session?.user) {

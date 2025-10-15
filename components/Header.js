@@ -6,6 +6,7 @@ import SafeImage from '@/components/SafeImage';
 
 import { useAuth } from '@/components/AuthContext';
 import AdminAutoRedirect from './AdminAutoRedirect';
+import useServerEffectiveRole from '@/hooks/useServerEffectiveRole';
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import LoginButton from './LoginButton';
@@ -76,6 +77,7 @@ export default function Header({ projects, settings }) {
           <div>status: {status}</div>
           <div style={{marginTop:6}}>user: {session?.user ? `${session.user.id} ${session.user.email}` : 'null'}</div>
           <div style={{marginTop:6}}>role: {session?.user?.role || '—'}</div>
+    const serverRole = useServerEffectiveRole(session?.user ? session : null);
           <div style={{marginTop:6, opacity:0.9}}>open console: window.__newloveAuth</div>
           <div style={{marginTop:6, opacity:0.85}}>
             <div style={{fontWeight:600}}>Recent events:</div>
