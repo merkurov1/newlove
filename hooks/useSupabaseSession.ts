@@ -139,6 +139,24 @@ export default function useSupabaseSession() {
 
         // If no session found, set unauthenticated
         if (mounted) {
+          // Try server-side check: if cookies are present server may resolve user even
+          // when client-side session is missing (HttpOnly cookies). This helps UI update
+          // when SSR saw an authenticated user but client JS hasn't yet populated local session.
+          try {
+            const resp = await fetch('/api/auth/me');
+            if (resp.ok) {
+              const j = await resp.json();
+              if (j && j.user) {
+                // set a lightweight session object so UI can react
+                setSession({ user: { id: j.user.id, email: j.user.email, role: (j.user.role || null) }, accessToken: null });
+                setStatus('authenticated');
+                return;
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
+
           setSession(null);
           setStatus('unauthenticated');
         }
