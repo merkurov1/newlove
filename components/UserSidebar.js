@@ -27,10 +27,20 @@ export default function UserSidebar() {
       const sess = (sessData || {}).session || null;
       const token = sess?.access_token || null;
 
-      // call server role endpoint
+      // call server role endpoint (fallback) and RPC for DB-assigned roles
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const roleRes = await fetch('/api/user/role', { headers });
       const roleJson = await roleRes.json().catch(() => null);
+
+      // RPC: get roles assigned in DB (get_my_roles) — safer and returns role names
+      let rpcRoles = null;
+      try {
+        const { data: rpcData, error: rpcError } = await sb.rpc('get_my_roles');
+        if (rpcError) rpcRoles = { error: rpcError.message || String(rpcError) };
+        else rpcRoles = rpcData || [];
+      } catch (e) {
+        rpcRoles = { error: e?.message || String(e) };
+      }
 
       // try anon read of user_roles via browser client
       let anonRoles = null;
@@ -48,7 +58,7 @@ export default function UserSidebar() {
         anonRoles = { error: e?.message || String(e) };
       }
 
-      setDiagResult({ session: sess, roleEndpoint: roleJson, anonRoles });
+  setDiagResult({ session: sess, roleEndpoint: roleJson, anonRoles, rpcRoles });
     } catch (e) {
       setDiagError(e?.message || String(e));
     }
