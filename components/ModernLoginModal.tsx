@@ -106,7 +106,9 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
     if (typeof onClose === 'function') onClose();
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+      // Ensure we redirect back to the current page after OAuth completes
+  const redirectTo = typeof window !== 'undefined' ? window.location.href : undefined;
+  const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } } as any);
       if (error) setWeb3Error(error.message);
     } catch (e: any) {
       setWeb3Error(e.message || String(e));

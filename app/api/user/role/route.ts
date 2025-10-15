@@ -6,7 +6,12 @@ export async function GET(req: Request) {
     // Диагностика: логируем Authorization заголовок и результат авторизации
     try {
       const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || null;
-      console.debug('[api/user/role] Authorization header present:', Boolean(authHeader));
+      if (authHeader && typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')) {
+        const token = authHeader.slice(7).trim();
+        console.debug('[api/user/role] Authorization header present, token prefix=', token.slice(0, 8));
+      } else {
+        console.debug('[api/user/role] Authorization header present:', Boolean(authHeader));
+      }
     } catch (e) {
       console.debug('[api/user/role] cannot read authorization header', e);
     }
