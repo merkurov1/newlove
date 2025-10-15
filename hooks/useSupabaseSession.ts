@@ -59,8 +59,11 @@ export default function useSupabaseSession() {
           // resolve role via helper below
             const role = await (async (u: any) => {
               // 1) Сначала смотрим user_metadata / user.role (локально в объекте пользователя)
-              let r = (u.user_metadata?.role || u.role || 'USER');
-              const rNorm = String(r).toUpperCase();
+                let r = (u.user_metadata?.role || u.role || 'USER');
+                // Supabase may set `user.role` to the auth-level 'authenticated' which is NOT an app role.
+                // Treat such values as missing and fallback to USER so server/user_roles checks can run.
+                const rNormRaw = String(r).toUpperCase();
+                const rNorm = (rNormRaw === 'AUTHENTICATED' || rNormRaw === 'ANONYMOUS') ? 'USER' : rNormRaw;
               if (rNorm === 'ADMIN') {
                 console.debug('[useSupabaseSession] role resolved from user metadata -> ADMIN');
                 return 'ADMIN';
@@ -110,7 +113,7 @@ export default function useSupabaseSession() {
                 console.debug('[useSupabaseSession] /api/user/role fetch failed', e);
               }
               // 4) Фоллбек — возвращаем локально определённую роль (нормализованную)
-              return String(r).toUpperCase();
+              return rNorm;
             })(user);
 
           setSession({
@@ -146,7 +149,8 @@ export default function useSupabaseSession() {
           const role = await (async (u: any) => {
             // Дублируем ту же логику что и выше: сначала метаданные, затем user_roles, затем серверный fallback
             let r = (u.user_metadata?.role || u.role || 'USER');
-            const rNorm = String(r).toUpperCase();
+              const rNormRaw = String(r).toUpperCase();
+              const rNorm = (rNormRaw === 'AUTHENTICATED' || rNormRaw === 'ANONYMOUS') ? 'USER' : rNormRaw;
             if (rNorm === 'ADMIN') return 'ADMIN';
             try {
               const { data: rolesData, error: rolesErr } = await supabase
@@ -180,7 +184,7 @@ export default function useSupabaseSession() {
             } catch (e) {
               console.debug('[useSupabaseSession] /api/user/role fetch failed', e);
             }
-            return String(r).toUpperCase();
+              return rNorm;
           })(user);
           setSession({
             user: {
