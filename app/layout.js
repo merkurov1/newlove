@@ -85,11 +85,21 @@ async function getPublicProjects() {
   try {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
-    const { data, error } = await supabase
-      .from('projects')
-      .select('id,slug,title')
-      .eq('published', true)
-      .order('createdAt', { ascending: true });
+    let projects = [];
+    if (supabase) {
+      const res = await supabase.from('projects').select('id,slug,title,publishedAt').eq('published', true).order('publishedAt', { ascending: false }).limit(10);
+      projects = res && res.data ? res.data : [];
+    } else {
+      try {
+        const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+        const srv = getServerSupabaseClient({ useServiceRole: true });
+        const res = await srv.from('projects').select('id,slug,title,publishedAt').eq('published', true).order('publishedAt', { ascending: false }).limit(10);
+        projects = res && res.data ? res.data : [];
+      } catch (e) {
+        console.error('Failed to fetch projects for layout via server client', e);
+        projects = [];
+      }
+    }
     if (error) {
       console.error('Supabase fetch projects error', error);
       return [];

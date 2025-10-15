@@ -65,10 +65,24 @@ async function getContent(slug) {
     console.log('📁 Searching for project with slug:', slug);
     // Если статья не найдена, ищем проект
     let project = null;
-    if (!article && supabase) {
-  const { data: p, error: pErr } = await supabase.from('projects').select('*').eq('slug', slug).eq('published', true).maybeSingle();
-      if (pErr) console.error('Supabase fetch project error', pErr);
-      project = p;
+    if (!article) {
+      if (supabase) {
+        const { data: p, error: pErr } = await supabase.from('projects').select('*').eq('slug', slug).eq('published', true).maybeSingle();
+        if (pErr) console.error('Supabase fetch project error', pErr);
+        project = p;
+      } else {
+        // Fallback to service-role server client for project lookup when no request client
+        try {
+          const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+          const srv = getServerSupabaseClient({ useServiceRole: true });
+          const { data: p, error: pErr } = await srv.from('projects').select('*').eq('slug', slug).eq('published', true).maybeSingle();
+          if (pErr) console.error('Supabase fetch project (server) error', pErr);
+          project = p;
+        } catch (e) {
+          console.error('Failed to fetch project via server client', e);
+          project = null;
+        }
+      }
     }
     
     if (project) {

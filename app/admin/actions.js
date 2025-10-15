@@ -178,8 +178,12 @@ export async function createProject(formData) {
 
   // Проверка уникальности slug
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
-  if (!supabase) throw new Error('Database client not available');
+  const _ctx = await getUserAndSupabaseForRequest(globalReq);
+  let supabase = _ctx && _ctx.supabase;
+  // Fallback to server service-role client for server-only admin flows
+  if (!supabase) {
+    supabase = getServerSupabaseClient({ useServiceRole: true });
+  }
   const { data: existing } = await supabase.from('projects').select('id').eq('slug', slug).maybeSingle();
   if (existing) {
     throw new Error('Проект с таким slug уже существует. Пожалуйста, выберите другой URL.');
@@ -250,8 +254,11 @@ export async function updateProject(formData) {
   );
   if (validBlocks.length === 0) throw new Error('No valid blocks');
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
-  if (!supabase) throw new Error('Database client not available');
+  const _ctx2 = await getUserAndSupabaseForRequest(globalReq);
+  let supabase = _ctx2 && _ctx2.supabase;
+  if (!supabase) {
+    supabase = getServerSupabaseClient({ useServiceRole: true });
+  }
   const { error: updateErr } = await supabase.from('projects').update({
     title,
     content: JSON.stringify(validBlocks),
@@ -282,8 +289,11 @@ export async function deleteProject(formData) {
   const id = formData.get('id')?.toString();
   if (!id) { throw new Error('Project ID is required.'); }
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
-  if (!supabase) throw new Error('Database client not available');
+  const _ctx3 = await getUserAndSupabaseForRequest(globalReq);
+  let supabase = _ctx3 && _ctx3.supabase;
+  if (!supabase) {
+    supabase = getServerSupabaseClient({ useServiceRole: true });
+  }
   const { data: project } = await supabase.from('projects').select('slug').eq('id', id).maybeSingle();
   const { error: delErr } = await supabase.from('projects').delete().eq('id', id);
   if (delErr) {

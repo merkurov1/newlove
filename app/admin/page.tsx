@@ -41,6 +41,30 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
     } catch (e) {
       // ignore, fallback to zeros
     }
+  } else {
+    // Fallback to server service-role client for SSR paths without request-scoped supabase
+    try {
+      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+      const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
+      const [articlesCount, projectsCount, lettersCount, postcardsCount, articlesData, projectsData] = await Promise.all([
+        serverSupabase.from('articles').select('id', { count: 'exact', head: true }),
+        serverSupabase.from('projects').select('id', { count: 'exact', head: true }),
+        serverSupabase.from('letter').select('id', { count: 'exact', head: true }),
+        serverSupabase.from('postcards').select('id', { count: 'exact', head: true }),
+        serverSupabase.from('articles').select('id,title,slug,published,author:authorId(name),updatedAt').order('updatedAt', { ascending: false }).limit(5),
+        serverSupabase.from('projects').select('id,title,slug,published,createdAt').order('createdAt', { ascending: false }).limit(5),
+      ]);
+      stats = {
+        articles: articlesCount.count ?? 0,
+        projects: projectsCount.count ?? 0,
+        letters: lettersCount.count ?? 0,
+        postcards: postcardsCount.count ?? 0,
+      };
+      recentArticles = Array.isArray(articlesData.data) ? articlesData.data : [];
+      recentProjects = Array.isArray(projectsData.data) ? projectsData.data : [];
+    } catch (e) {
+      // ignore, fallback to zeros
+    }
   }
   return (
     <div className="p-6 space-y-8">
