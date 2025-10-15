@@ -24,25 +24,29 @@ function FallbackAvatar({ name }) {
 async function getUserProfile(username) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq) || {};
+  const ctx = await getUserAndSupabaseForRequest(globalReq) || {};
+  const supabase = ctx.supabase;
   if (!supabase) notFound();
   const { data: users } = await supabase.from('users').select('*').eq('username', username).limit(1);
   const user = (users && users[0]) || null;
   if (!user) notFound();
   // Fetch articles and projects separately
+  // Load articles via the request-scoped client (this will include tag attach later)
   const { data: articlesRaw } = await supabase.from('articles').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  // For projects prefer the server service-role client for public reads to avoid RLS blocks
   let projectsRaw = [];
-  if (supabase) {
-    const res = await supabase.from('projects').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+  try {
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const srv = getServerSupabaseClient({ useServiceRole: true });
+    const res = await srv.from('projects').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
     projectsRaw = res && res.data ? res.data : [];
-  } else {
+  } catch (e) {
+    // Fallback to request-scoped client if server client not available
     try {
-      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-      const srv = getServerSupabaseClient({ useServiceRole: true });
-      const res = await srv.from('projects').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
+      const res = await supabase.from('projects').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
       projectsRaw = res && res.data ? res.data : [];
-    } catch (e) {
-      console.error('Failed to fetch user projects via server client', e);
+    } catch (err) {
+      console.error('Failed to fetch user projects via server or request client', err);
       projectsRaw = [];
     }
   }
