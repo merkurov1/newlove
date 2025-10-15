@@ -24,6 +24,8 @@ export async function GET(req: Request) {
     let authHeaderPresent = false;
     let cookieNames: string[] = [];
     let tokenSource: 'authorization' | 'cookie' | 'none' = 'none';
+  // Debug info is collected and returned to help middleware diagnose role checks.
+  const debugInfo: Record<string, any> = { authHeaderPresent, cookieNames, tokenSource, decodedUid: null };
     try {
       const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || null;
       if (authHeader && typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')) {
@@ -91,7 +93,7 @@ export async function GET(req: Request) {
 
     // If we have a token, try to decode user id (sub) and perform a service-role RPC
     // directly. This is the safest server-side check and avoids touching request client.
-    let decodedUid: string | null = null;
+  let decodedUid: string | null = null;
     if (token) {
       try {
         const parts = token.split('.');
@@ -109,7 +111,8 @@ export async function GET(req: Request) {
       }
     }
 
-  const debugInfo: Record<string, any> = { authHeaderPresent, cookieNames, tokenSource, decodedUid };
+    // update debug with decodedUid later
+    // (debugInfo declared earlier)
 
     if (decodedUid) {
       try {
