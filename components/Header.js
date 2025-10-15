@@ -18,6 +18,7 @@ export default function Header({ projects, settings }) {
   const [hideOnScroll, setHideOnScroll] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const lastScrollY = useRef(0);
+  const [, setTick] = useState(0);
 
   const site_name = settings?.site_name || 'Anton Merkurov';
   const slogan = settings?.slogan || 'Art x Love x Money';
@@ -53,7 +54,12 @@ export default function Header({ projects, settings }) {
         setIsMenuOpen(false);
       }
     };
+    const onSessionChanged = () => {
+      // force re-render
+      try { setTick(t => t + 1); } catch (e) {}
+    };
     window.addEventListener('resize', handleResize);
+    window.addEventListener('supabase:session-changed', onSessionChanged);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 

@@ -10,6 +10,15 @@ export default function useSupabaseSession() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const emitSessionChanged = () => {
+      try {
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+          window.dispatchEvent(new Event('supabase:session-changed'));
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
     let mounted = true;
     // Subscribe to auth state changes immediately so we don't miss events that happen
     // during the redirect flow (getSessionFromUrl may trigger onAuthStateChange).
@@ -127,9 +136,10 @@ export default function useSupabaseSession() {
             }
 
             const role = await resolveRole(sess.user, accessToken);
-            if (!mounted) return;
             setSession({ user: mapUser(sess.user, role), accessToken });
             setStatus('authenticated');
+            emitSessionChanged();
+            emitSessionChanged();
             console.debug('[useSupabaseSession] initialized session from getSession', { user: sess.user.id, role });
             return;
           }
@@ -189,9 +199,9 @@ export default function useSupabaseSession() {
         if (sess && sess.user) {
           const accessToken = sess.access_token || null;
           const role = await resolveRole(sess.user, accessToken);
-          if (!mounted) return;
           setSession({ user: mapUser(sess.user, role), accessToken });
           setStatus('authenticated');
+            emitSessionChanged();
         }
       } catch (e) {
         // ignore
