@@ -1,17 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdminFromRequest } from './lib/serverAuth';
 
-// Middleware для проверки magic_user cookie
-export function middleware(request: NextRequest) {
-  const magicUser = request.cookies.get('magic_user');
-  // Если нет magic_user cookie, редирект на /magic/
-  if (!magicUser) {
-    return NextResponse.redirect(new URL('/magic/', request.url));
+// Middleware to protect /admin routes server-side.
+export async function middleware(request: NextRequest) {
+  const url = request.nextUrl.clone();
+  // Only run for admin paths
+  if (url.pathname.startsWith('/admin')) {
+    try {
+      // requireAdminFromRequest will throw if unauthorized
+      await requireAdminFromRequest(request as any as Request);
+      return NextResponse.next();
+    } catch (e) {
+      // Redirect unauthorized users to home or login
+      url.pathname = '/403';
+      return NextResponse.rewrite(url);
+    }
   }
-  // Иначе пропускаем дальше
   return NextResponse.next();
 }
 
-// Применять middleware только к защищённым роутам (пример: /protected/*)
 export const config = {
-  matcher: ['/protected/:path*'],
+  matcher: ['/admin/:path*', '/admin'],
 };
