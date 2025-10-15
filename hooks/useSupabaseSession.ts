@@ -1,357 +1,103 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { supabase } from '@/lib/supabase-browser';
 
-import { supabase, createClient as createBrowserClient } from '@/lib/supabase-browser';
+type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
-// Centralized, well-structured hook for client-side auth state.
 export default function useSupabaseSession() {
   const [session, setSession] = useState<any | null>(null);
-  const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
+  const [status, setStatus] = useState<AuthStatus>('loading');
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
-  // Expose minimal debug info for diagnosing client issues (no tokens).
-  const setGlobalDebug = (s: any, st: any, e: any) => {
+  // debug mode opt-in via URL param
+  const isDebug = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('auth_debug') === '1';
+  const pushDebug = (entry: any) => {
     try {
-      if (typeof window !== 'undefined') {
-        const prev = (window as any).__newloveAuth || { history: [] };
-        const entry = { ts: Date.now(), status: st, short: (s && s.user) ? `${s.user.id} ${s.user.email}` : null, error: e ? String(e) : null };
-        const history = (prev.history || []).concat(entry).slice(-12);
-        (window as any).__newloveAuth = { session: s ? { user: s.user ? { id: s.user.id, email: s.user.email, role: s.user.role || s.user?.user_metadata?.role || null } : null } : null, status: st, error: e || null, history };
-      }
+      if (typeof window === 'undefined') return;
+      const prev = (window as any).__newloveAuth || { history: [] };
+      const e = { ts: Date.now(), ...entry };
+      prev.history = (prev.history || []).concat(e).slice(-50);
+      (window as any).__newloveAuth = { ...prev, last: e };
+      if (isDebug) console.debug('[useSupabaseSession debug]', entry, prev.history.length);
     } catch (e) {
       // ignore
     }
   };
 
   useEffect(() => {
-    const emitSessionChanged = () => {
-      try {
-        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-          window.dispatchEvent(new Event('supabase:session-changed'));
-        }
-      } catch (e) {
-        // ignore
-      }
+    mountedRef.current = true;
+
+    const emit = () => {
+      try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('supabase:session-changed')); } catch {}
     };
-    let mounted = true;
-    // Subscribe to auth state changes immediately so we don't miss events that happen
-    // during the redirect flow (getSessionFromUrl may trigger onAuthStateChange).
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, payload) => {
-      console.debug('[useSupabaseSession] onAuthStateChange', { event });
-      if (!mounted) return;
+
+    const unsub = supabase.auth.onAuthStateChange((event, payload: any) => {
+      if (!mountedRef.current) return;
       try {
-        // If payload contains session, prefer it
-        let user = null;
-        let accessToken: string | null = null;
-        if (payload && (payload as any).session) {
-          user = (payload as any).session.user || null;
-          accessToken = (payload as any).session.access_token || null;
-        }
-        // fallback to getUser
-        if (!user) {
-          const { data: ud } = await supabase.auth.getUser();
-          user = (ud as any)?.user || null;
-        }
-        if (user) {
-          const role = await resolveRole(user, accessToken);
-          const mapped = { user: mapUser(user, role), accessToken };
-          setSession(mapped);
-          setStatus('authenticated');
-          setGlobalDebug(mapped, 'authenticated', null);
-          // Notify any UI listeners that session/state changed
-          emitSessionChanged();
-        } else {
-          console.debug('[useSupabaseSession] signed out');
-          setSession(null);
-          setStatus('unauthenticated');
-          setGlobalDebug(null, 'unauthenticated', null);
-          emitSessionChanged();
-        }
-      } catch (e) {
-        console.error('[useSupabaseSession] onAuthStateChange handler error', e);
+        pushDebug({ where: 'onAuthStateChange', event, payload: !!payload });
+      } catch (e) {}
+      const s = payload?.session ?? null;
+      if (s && s.user) {
+        setSession({ user: s.user, accessToken: s.access_token });
+        setStatus('authenticated');
+        pushDebug({ where: 'onAuthStateChange', note: 'authenticated', userId: s.user?.id });
+      } else {
+        setSession(null);
+        setStatus('unauthenticated');
+        pushDebug({ where: 'onAuthStateChange', note: 'no-session' });
       }
+      emit();
     });
 
-    // Initialize: process OAuth redirect (if any) and then read session. We do this after
-    // listener registration so we won't miss the onAuthStateChange event dispatched
-    // by getSessionFromUrl.
-    const init = async () => {
+    (async () => {
       try {
-        if (typeof window !== 'undefined') {
-          const search = window.location.search || '';
-          const hash = window.location.hash || '';
-          const looksLikeOAuth = search.includes('code=') || search.includes('access_token') || hash.includes('access_token') || search.includes('provider_token');
-          if (looksLikeOAuth) {
-            try {
-              if (typeof (supabase.auth as any).getSessionFromUrl === 'function') {
-                console.debug('[useSupabaseSession] processing OAuth redirect via getSessionFromUrl');
-                await (supabase.auth as any).getSessionFromUrl().catch(() => null);
-              } else {
-                console.debug('[useSupabaseSession] processing OAuth redirect via getSession fallback');
-                await supabase.auth.getSession().catch(() => null);
-              }
-            } catch (e) {
-              console.debug('[useSupabaseSession] OAuth redirect handling failed', e);
-            }
-            // Clean the URL so we don't reprocess the redirect params
-            try {
-              const qs = window.location.search.replace(/([?&](code|access_token|provider_token|expires_in|token_type)=[^&]*)/g, '').replace(/^\?/, '');
-              const h = window.location.hash.replace(/(#.*access_token=[^&]*)/g, '');
-              const cleanUrl = window.location.pathname + (qs ? `?${qs}` : '') + (h || '');
-              window.history.replaceState({}, document.title, cleanUrl || window.location.pathname);
-            } catch (e) {
-              // ignore
-            }
-          }
+        pushDebug({ where: 'init', step: 'getSession' });
+        const { data } = await supabase.auth.getSession();
+        const s = (data as any)?.session || null;
+        if (s && s.user) {
+          pushDebug({ where: 'init', note: 'client-session-found', userId: s.user?.id });
+          setSession({ user: s.user, accessToken: s.access_token });
+          setStatus('authenticated');
+          return;
         }
 
-        // Try to read current session. Use small retry loop because some providers/platforms
-        // take a short moment to set cookies/session after redirect.
         try {
-          const attempts = [0, 200, 700, 1200];
-          let sess: any = null;
-          for (const delay of attempts) {
-            if (delay) await new Promise((r) => setTimeout(r, delay));
-            try {
-              const { data: sessData } = await supabase.auth.getSession();
-              sess = (sessData as any)?.session || null;
-              if (sess && sess.user) break;
-            } catch (e) {
-              // ignore transient errors
-            }
-          }
-          if (sess && sess.user) {
-            const accessToken = sess.access_token || null;
-            const refreshToken = (sess as any).refresh_token || null;
-            const expiresAt = (sess as any).expires_at || null;
-            console.debug('[useSupabaseSession] got session after redirect, hasAccessToken=', Boolean(accessToken));
-
-            // Ensure server can set httpOnly cookies for SSR: POST tokens to server endpoint
-            try {
-              await fetch('/api/auth/set-cookie', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken, expires_at: expiresAt }),
-                credentials: 'same-origin',
-              });
-              // Try to set client-side session as well (supabase-js v2 supports setSession)
-              try {
-                if (typeof (supabase.auth as any).setSession === 'function') {
-                  await (supabase.auth as any).setSession({ access_token: accessToken, refresh_token: refreshToken });
-                }
-              } catch (e) {
-                // ignore — session may be read from cookies after reload
-              }
-
-              // Reload page so server side can read cookies and render authenticated UI
-              if (typeof window !== 'undefined') {
-                // slight delay to allow client session to settle
-                setTimeout(() => {
-                  window.location.replace(window.location.pathname + window.location.search + window.location.hash);
-                }, 150);
-                return;
-              }
-            } catch (e) {
-              console.debug('[useSupabaseSession] set-cookie POST failed', e);
-            }
-
-              const role = await resolveRole(sess.user, accessToken);
-              const mapped = { user: mapUser(sess.user, role), accessToken };
-              setSession(mapped);
+          pushDebug({ where: 'init', step: 'server-fallback' });
+          const resp = await fetch('/api/auth/me', { credentials: 'same-origin' });
+          pushDebug({ where: 'init', step: 'server-fallback-response', status: resp?.status });
+          if (resp.ok) {
+            const j = await resp.json();
+            if (j?.user) {
+              pushDebug({ where: 'init', note: 'server-session-found', userId: j.user?.id });
+              setSession({ user: j.user, accessToken: null });
               setStatus('authenticated');
-              setGlobalDebug(mapped, 'authenticated', null);
-              // ensure listeners update
-              emitSessionChanged();
-            console.debug('[useSupabaseSession] initialized session from getSession', { user: sess.user.id, role });
-            return;
+              return;
+            }
           }
         } catch (e) {
-          // ignore
+          pushDebug({ where: 'init', step: 'server-fallback-error', error: String(e) });
         }
 
-        // If no session found, set unauthenticated
-        if (mounted) {
-          // Try server-side check: if cookies are present server may resolve user even
-          // when client-side session is missing (HttpOnly cookies). This helps UI update
-          // when SSR saw an authenticated user but client JS hasn't yet populated local session.
-          try {
-            const resp = await fetch('/api/auth/me');
-            if (resp.ok) {
-              const j = await resp.json();
-              if (j && j.user) {
-                  // set a lightweight session object so UI can react
-                  const mapped = { user: { id: j.user.id, email: j.user.email, role: (j.user.role || null) }, accessToken: null };
-                  setSession(mapped);
-                  setStatus('authenticated');
-                  setGlobalDebug(mapped, 'authenticated', null);
-                  emitSessionChanged();
-                  // If we don't have a client access token but server believes the user is authenticated,
-                  // trigger a one-time reload so SSR can render the authenticated UI. Guard with sessionStorage
-                  // to avoid reload loops.
-                  try {
-                    if (!mapped.accessToken && typeof window !== 'undefined') {
-                      const key = 'newlove:auth_reloaded';
-                      const last = Number(sessionStorage.getItem(key) || '0');
-                      const now = Date.now();
-                      // allow reload if not done in the last 15s
-                      if (!last || now - last > 15000) {
-                        sessionStorage.setItem(key, String(now));
-                        try {
-                          (window as any).__newloveAuth = { ...(window as any).__newloveAuth || {}, lastAction: 'server-fallback-reload', lastActionAt: now };
-                        } catch (e) {}
-                        setTimeout(() => {
-                          try {
-                            window.location.replace(window.location.pathname + window.location.search + window.location.hash);
-                          } catch (e) {
-                            window.location.reload();
-                          }
-                        }, 220);
-                        return;
-                      }
-                    }
-                  } catch (e) {
-                    // ignore storage errors
-                  }
-                  return;
-                }
-            }
-          } catch (e) {
-            // ignore
-          }
-
-          setSession(null);
-          setStatus('unauthenticated');
-        }
-      } catch (err: any) {
-        console.error('[useSupabaseSession] init error', err);
-        if (mounted) setError(String(err));
-      }
-    };
-
-    init();
-    const tryLoadSession = async () => {
-      if (!mounted) return;
-      try {
-        // Prefer getSessionFromUrl when URL looks like OAuth result
-        if (typeof window !== 'undefined') {
-          const search = window.location.search || '';
-          const hash = window.location.hash || '';
-          const looksLikeOAuth = search.includes('code=') || search.includes('access_token') || hash.includes('access_token') || search.includes('provider_token');
-          if (looksLikeOAuth && typeof (supabase.auth as any).getSessionFromUrl === 'function') {
-            try {
-              await (supabase.auth as any).getSessionFromUrl().catch(() => null);
-            } catch (e) {
-              // ignore
-            }
-          }
-        }
-        // After ensuring redirect processed, try to read session
-        const { data } = await supabase.auth.getSession();
-        const sess = (data as any)?.session || null;
-        if (sess && sess.user) {
-          const accessToken = sess.access_token || null;
-          const role = await resolveRole(sess.user, accessToken);
-          setSession({ user: mapUser(sess.user, role), accessToken });
-          setStatus('authenticated');
-            emitSessionChanged();
-        }
+  pushDebug({ where: 'init', note: 'no-session' });
+  setSession(null);
+  setStatus('unauthenticated');
       } catch (e) {
-        // ignore
+        setError(String(e));
+        pushDebug({ where: 'init', step: 'init-error', error: String(e) });
+        setSession(null);
+        setStatus('unauthenticated');
       }
-    };
-
-    const onFocus = () => {
-      tryLoadSession();
-    };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') tryLoadSession();
-    });
+    })();
 
     return () => {
-      mounted = false;
-      try {
-        listener?.subscription?.unsubscribe?.();
-      } catch (e) {
-        // ignore
-      }
+      mountedRef.current = false;
+      try { (unsub as any)?.data?.subscription?.unsubscribe?.(); } catch {}
+      pushDebug({ where: 'cleanup' });
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError(error.message);
-    return error;
-  };
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
-  return { session, status, signIn, signOut, error };
-}
+  const signOut = async () => { try { await supabase.auth.signOut(); } catch {} };
 
-// Helpers
-function mapUser(u: any, role: string) {
-  return {
-    id: u.id,
-    email: u.email,
-    name: u.user_metadata?.name || null,
-    username: u.user_metadata?.username || null,
-    image: u.user_metadata?.image || null,
-    role,
-  };
-}
-
-async function resolveRole(u: any, accessToken?: string | null) {
-  let r = (u.user_metadata?.role || u.role || 'USER');
-  const rNormRaw = String(r).toUpperCase();
-  const rNorm = (rNormRaw === 'AUTHENTICATED' || rNormRaw === 'ANONYMOUS') ? 'USER' : rNormRaw;
-  if (rNorm === 'ADMIN') return 'ADMIN';
-  // Prefer server-side check (with token) — avoids RLS problems when anon can't read user_roles
-  try {
-    const headers: any = {};
-    // If caller didn't supply accessToken (race after redirect), try to read a fresh session
-    let finalAccessToken = accessToken || null;
-    if (!finalAccessToken && typeof (supabase.auth as any).getSession === 'function') {
-      try {
-        const { data: fresh } = await (supabase.auth as any).getSession();
-        finalAccessToken = (fresh as any)?.session?.access_token || finalAccessToken;
-      } catch (e) {
-        // ignore
-      }
-    }
-    if (finalAccessToken) headers.Authorization = `Bearer ${finalAccessToken}`;
-    console.debug('[useSupabaseSession] fetching /api/user/role, userId=', u.id, 'hasAccessToken=', Boolean(accessToken));
-    const res = await fetch('/api/user/role', { headers });
-    if (res.ok) {
-      const json = await res.json();
-      if (json && json.role) {
-        const rFromServer = String(json.role).toUpperCase();
-        if (rFromServer !== 'ANON') {
-          console.debug('[useSupabaseSession] role resolved from /api/user/role ->', rFromServer);
-          return rFromServer;
-        }
-      }
-    }
-  } catch (e) {
-    console.debug('[useSupabaseSession] /api/user/role fetch failed', e);
-  }
-
-  // Fallback: try anon user_roles table (may be blocked by RLS)
-  try {
-    const { data: rolesData, error: rolesErr } = await supabase
-      .from('user_roles')
-      .select('role_id,roles(name)')
-      .eq('user_id', u.id);
-    if (!rolesErr && Array.isArray(rolesData)) {
-      const hasAdmin = rolesData.some((row: any) => {
-        const roleList: any = row.roles;
-        if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
-        return String(roleList?.name).toUpperCase() === 'ADMIN';
-      });
-      if (hasAdmin) return 'ADMIN';
-    }
-  } catch (e) {
-    console.debug('[useSupabaseSession] user_roles check failed', e);
-  }
-  return rNorm;
+  return { session, status, signOut, error };
 }
