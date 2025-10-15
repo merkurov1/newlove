@@ -83,14 +83,8 @@ import { safeData } from '@/lib/safeSerialize';
 // Надёжный SSR-запрос опубликованных проектов через anon key
 async function getPublicProjects() {
   try {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !anonKey) {
-      console.error('Supabase env vars missing');
-      return [];
-    }
-    const supabase = createClient(supabaseUrl, anonKey);
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
     const { data, error } = await supabase
       .from('projects')
       .select('id,slug,title')
