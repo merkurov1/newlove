@@ -17,119 +17,136 @@ export default function useSupabaseSession() {
   let mounted = true;
     const get = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        const s = data.session;
-        console.debug('[useSupabaseSession] getSession ->', { session: !!s, userId: s?.user?.id });
-        if (!mounted) return;
-        if (s?.user) {
-        const user = s.user;
-        let role = user.user_metadata?.role || 'USER';
-        // Проверяем user_roles только если явно нет ADMIN в user_metadata
-        if (role !== 'ADMIN') {
-          try {
-            const { data: rolesData, error } = await supabase
-              .from('user_roles')
-              .select('role_id,roles(name)')
-              .eq('user_id', user.id);
-            if (!error && Array.isArray(rolesData)) {
-              const hasAdmin = rolesData.some(r => {
-                const roleList: any = r.roles;
-                if (Array.isArray(roleList)) return roleList.some((roleObj: any) => roleObj.name === 'ADMIN');
-                return roleList?.name === 'ADMIN';
-              });
-              if (hasAdmin) role = 'ADMIN';
-            }
-          } catch (e) {
-            // ignore
+        // Handle OAuth redirect if present in URL
+        // If OAuth redirected with tokens in URL, attempt to call getSession to pick up session.
+        // (Supabase JS v2 may not have getSessionFromUrl in some environments.)
+        try {
+          if (typeof window !== 'undefined' && (window.location.search.includes('access_token') || window.location.hash.includes('access_token'))) {
+            await supabase.auth.getSession().catch(() => null);
+            console.debug('[useSupabaseSession] attempted to pick session after redirect');
           }
-          // Если локальная проверка не подтвердила ADMIN, запросим серверную проверку
-          if (role !== 'ADMIN' && typeof window !== 'undefined') {
+        } catch (e) {
+          // ignore parsing errors
+        }
+
+        // Fetch canonical user (ensures user_metadata is available)
+        const { data: userData, error: userErr } = await supabase.auth.getUser();
+        const user = (userData as any)?.user || null;
+        console.debug('[useSupabaseSession] getUser ->', { userId: user?.id, userErr });
+        if (!mounted) return;
+        if (user) {
+          // resolve role via helper below
+          const role = await (async (u: any) => {
+            // user metadata first
+            let r = u.user_metadata?.role || u.role || 'USER';
+            if (r === 'ADMIN') return 'ADMIN';
             try {
-              const res = await fetch('/api/user/role');
-              if (res.ok) {
-                const json = await res.json();
-                if (json && json.role === 'ADMIN') role = 'ADMIN';
+              const { data: rolesData, error: rolesErr } = await supabase
+                .from('user_roles')
+                .select('role_id,roles(name)')
+                .eq('user_id', u.id);
+              if (!rolesErr && Array.isArray(rolesData)) {
+                const hasAdmin = rolesData.some((row: any) => {
+                  const roleList: any = row.roles;
+                  if (Array.isArray(roleList)) return roleList.some((roleObj: any) => roleObj.name === 'ADMIN');
+                  return roleList?.name === 'ADMIN';
+                });
+                if (hasAdmin) return 'ADMIN';
               }
             } catch (e) {
               // ignore
             }
-          }
+            try {
+              const res = await fetch('/api/user/role');
+              if (res.ok) {
+                const json = await res.json();
+                if (json && json.role) return json.role;
+              }
+            } catch (e) {
+              // ignore
+            }
+            return r;
+          })(user);
+
+          setSession({
+            user: {
+              id: user.id,
+              email: user.email,
+              name: user.user_metadata?.name || null,
+              username: user.user_metadata?.username || null,
+              image: user.user_metadata?.image || null,
+              role,
+            },
+            accessToken: null,
+          });
+          setStatus('authenticated');
+        } else {
+          setSession(null);
+          setStatus('unauthenticated');
         }
-        setSession({
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.user_metadata?.name || null,
-            username: user.user_metadata?.username || null,
-            image: user.user_metadata?.image || null,
-            role,
-          },
-          accessToken: s.access_token,
-        });
-        setStatus('authenticated');
-      } else {
-        setSession(null);
-        setStatus('unauthenticated');
+      } catch (e: any) {
+        console.error('[useSupabaseSession] getSession error', e);
+        if (mounted) setError(String(e));
+        return;
       }
-    } catch (e: any) {
-      console.error('[useSupabaseSession] getSession error', e);
-      if (mounted) setError(String(e));
-      return;
-    }
     };
     get();
-  const { data: listener } = supabase.auth.onAuthStateChange(async (event, s) => {
-      console.debug('[useSupabaseSession] onAuthStateChange', { event, userId: s?.user?.id });
+  const { data: listener } = supabase.auth.onAuthStateChange(async (event, _s) => {
+      console.debug('[useSupabaseSession] onAuthStateChange', { event });
       if (!mounted) return;
-      if (s?.user) {
-        const user = s.user;
-        let role = user.user_metadata?.role || 'USER';
-        if (role !== 'ADMIN') {
-          try {
-            const { data: rolesData, error } = await supabase
-              .from('user_roles')
-              .select('role_id,roles(name)')
-              .eq('user_id', user.id);
-            if (!error && Array.isArray(rolesData)) {
-              const hasAdmin = rolesData.some(r => {
-                const roleList: any = r.roles;
-                if (Array.isArray(roleList)) return roleList.some((roleObj: any) => roleObj.name === 'ADMIN');
-                return roleList?.name === 'ADMIN';
-              });
-              if (hasAdmin) role = 'ADMIN';
-            }
-          } catch (e) {
-            // ignore
-          }
-          // fallback to server check if client anon read couldn't detect ADMIN
-          if (role !== 'ADMIN' && typeof window !== 'undefined') {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const user = (userData as any)?.user || null;
+        if (user) {
+          const role = await (async (u: any) => {
+            let r = u.user_metadata?.role || u.role || 'USER';
+            if (r === 'ADMIN') return 'ADMIN';
             try {
-              const res = await fetch('/api/user/role');
-              if (res.ok) {
-                const json = await res.json();
-                if (json && json.role === 'ADMIN') role = 'ADMIN';
+              const { data: rolesData, error: rolesErr } = await supabase
+                .from('user_roles')
+                .select('role_id,roles(name)')
+                .eq('user_id', u.id);
+              if (!rolesErr && Array.isArray(rolesData)) {
+                const hasAdmin = rolesData.some((row: any) => {
+                  const roleList: any = row.roles;
+                  if (Array.isArray(roleList)) return roleList.some((roleObj: any) => roleObj.name === 'ADMIN');
+                  return roleList?.name === 'ADMIN';
+                });
+                if (hasAdmin) return 'ADMIN';
               }
             } catch (e) {
               // ignore
             }
-          }
+            try {
+              const res = await fetch('/api/user/role');
+              if (res.ok) {
+                const json = await res.json();
+                if (json && json.role) return json.role;
+              }
+            } catch (e) {
+              // ignore
+            }
+            return r;
+          })(user);
+          setSession({
+            user: {
+              id: user.id,
+              email: user.email,
+              name: user.user_metadata?.name || null,
+              username: user.user_metadata?.username || null,
+              image: user.user_metadata?.image || null,
+              role,
+            },
+            accessToken: null,
+          });
+          setStatus('authenticated');
+        } else {
+          console.debug('[useSupabaseSession] signed out');
+          setSession(null);
+          setStatus('unauthenticated');
         }
-        setSession({
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.user_metadata?.name || null,
-            username: user.user_metadata?.username || null,
-            image: user.user_metadata?.image || null,
-            role,
-          },
-          accessToken: s.access_token,
-        });
-        setStatus('authenticated');
-      } else {
-        console.debug('[useSupabaseSession] signed out');
-        setSession(null);
-        setStatus('unauthenticated');
+      } catch (e) {
+        console.error('[useSupabaseSession] onAuthStateChange handler error', e);
       }
     });
     return () => {
