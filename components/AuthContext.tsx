@@ -1,5 +1,6 @@
 "use client";
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext } from 'react';
+import useSupabaseSession from '@/hooks/useSupabaseSession';
 import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 
 const supabase = createBrowserClient();
@@ -21,157 +22,43 @@ export const useAuth = () => {
   return ctx;
 };
 
+// Thin provider that delegates to the canonical useSupabaseSession hook.
 export function AuthProviderInner({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<any | null>(null);
-  const [roles, setRoles] = useState<string[]>([]);
-  const [session, setSession] = useState<any | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { session, status, signIn, signOut, error } = useSupabaseSession() as any;
 
-  // Subscribe to onAuthStateChange immediately (before any async logic)
-  useEffect(() => {
-    let mounted = true;
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, payload) => {
-      try {
-        const sess = (payload as any)?.session || null;
-        if (sess && sess.user) {
-          setUser(sess.user);
-          setSession(sess);
-          await loadRoles(sess.user.id, sess.access_token);
-        } else {
-          setUser(null);
-          setRoles([]);
-          setSession(null);
-        }
-      } catch (e) {
-        console.error('onAuthStateChange error', e);
-      }
-    });
-
-    // OAuth redirect/session polling logic
-    const init = async () => {
-      setIsLoading(true);
-      try {
-        // 1. If URL contains OAuth params, process them first
-        let didRedirect = false;
-        if (typeof window !== 'undefined') {
-          const search = window.location.search || '';
-          const hash = window.location.hash || '';
-          const looksLikeOAuth = search.includes('code=') || search.includes('access_token') || hash.includes('access_token') || search.includes('provider_token');
-          if (looksLikeOAuth && typeof (supabase.auth as any).getSessionFromUrl === 'function') {
-            try {
-              await (supabase.auth as any).getSessionFromUrl().catch(() => null);
-              didRedirect = true;
-            } catch (e) {}
-            // clean URL
-            try {
-              const qs = window.location.search.replace(/([?&](code|access_token|provider_token|expires_in|token_type)=[^&]*)/g, '').replace(/^[?&]+/, '');
-              const h = window.location.hash.replace(/(#.*access_token=[^&]*)/g, '');
-              const cleanUrl = window.location.pathname + (qs ? `?${qs}` : '') + (h || '');
-              window.history.replaceState({}, document.title, cleanUrl || window.location.pathname);
-            } catch (e) {}
-          }
-        }
-
-        // 2. Poll for session after redirect (if needed)
-        let sess: any = null;
-        const pollDelays = didRedirect ? [0, 300, 600, 1000, 1500, 2000] : [0, 300, 800, 1500];
-        for (const delay of pollDelays) {
-          if (delay) await new Promise((r) => setTimeout(r, delay));
-          try {
-            const { data } = await supabase.auth.getSession();
-            sess = (data as any)?.session || null;
-            if (sess && sess.user) break;
-          } catch (e) {}
-        }
-        if (sess && sess.user) {
-          setUser(sess.user);
-          setSession(sess);
-          await loadRoles(sess.user.id, sess.access_token);
-        } else {
-          setUser(null);
-          setRoles([]);
-        }
-      } catch (e) {
-        console.error('AuthProvider init error', e);
-      }
-      if (mounted) setIsLoading(false);
-    };
-    init();
-
-    // re-check session when user returns to tab (helps OAuth redirect flows)
-    const tryLoad = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        const s = (data as any)?.session || null;
-        if (s && s.user) {
-          setUser(s.user);
-          setSession(s);
-          await loadRoles(s.user.id, s.access_token);
-        }
-      } catch (e) { /* ignore */ }
-    };
-    const onFocus = () => tryLoad();
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') tryLoad();
-    });
-    return () => {
-      mounted = false;
-      try { listener?.subscription?.unsubscribe?.(); } catch (e) {}
-    };
-  }, []);
-
-  async function loadRoles(userId: string, accessToken?: string | null) {
-    try {
-      // Prefer server-side secure endpoint which uses service-role to fetch roles
-      const headers: any = {};
-      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-      const res = await fetch('/api/auth/me', { headers });
-      if (res.ok) {
-        const json = await res.json();
-        if (json && Array.isArray(json.roles) && json.roles.length) {
-          setRoles(json.roles.map((r: any) => String(r).toUpperCase()));
-          return;
-        }
-      }
-      // fallback: try anon user_roles read via browser client
-      const { data: rolesData, error } = await supabase.from('user_roles').select('role_id,roles(name)').eq('user_id', userId);
-      if (!error && Array.isArray(rolesData)) {
-        const found = rolesData.flatMap((r: any) => {
-          const roleList = r.roles;
-          if (Array.isArray(roleList)) return roleList.map((x: any) => String(x.name).toUpperCase());
-          if (roleList) return [String(roleList.name).toUpperCase()];
-          return [] as string[];
-        });
-        setRoles(found);
-      }
-    } catch (e) {
-      console.error('loadRoles failed', e);
-    }
-  }
-
-  async function signInWithGoogle() {
-    // redirect back to current URL
+  const signInWithGoogle = async () => {
     const redirectTo = typeof window !== 'undefined' ? window.location.href : undefined;
-    // set a short local-storage marker so we can detect redirect roundtrip
     try {
-      if (typeof window !== 'undefined' && redirectTo) localStorage.setItem('supabase_oauth_redirect', redirectTo);
-    } catch (e) {}
-    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } } as any);
-  }
+      if (typeof window !== 'undefined' && redirectTo) {
+        try { localStorage.setItem('supabase_oauth_redirect', redirectTo); } catch (e) {}
+      }
+      await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } } as any);
+    } catch (e) {
+      // swallow here — hook/useAuth consumers can inspect session/error
+      console.error('signInWithGoogle failed', e);
+    }
+  };
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    setUser(null);
-    setRoles([]);
-    setSession(null);
-  }
+  const roles: string[] = (() => {
+    try {
+      const r = (session && session.user && session.user.role) || null;
+      if (r) return [String(r).toUpperCase()];
+      return [];
+    } catch (e) {
+      return [];
+    }
+  })();
 
-  return (
-    <AuthContext.Provider value={{ user, roles, session, isLoading, signInWithGoogle, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value: AuthState = {
+    user: session ? session.user : null,
+    roles,
+    session: session || null,
+    isLoading: status === 'loading',
+    signInWithGoogle,
+    signOut: async () => { try { await signOut(); } catch (e) { /* ignore */ } },
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export default AuthContext;
