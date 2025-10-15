@@ -6,8 +6,9 @@ export async function GET(req: Request) {
     const { supabase, user } = await getUserAndSupabaseForRequest(req as any);
     if (!user) return NextResponse.json({ role: 'ANON' });
 
-    // Prefer already-resolved role from user object
-    let role = (user.user_metadata && user.user_metadata.role) || user.role || 'USER';
+  // Prefer already-resolved role from user object and normalize to uppercase
+  let role = (user.user_metadata && user.user_metadata.role) || user.role || 'USER';
+  role = String(role).toUpperCase();
 
     // If still not ADMIN, try to check user_roles via server supabase client
     if (role !== 'ADMIN' && supabase) {
@@ -19,8 +20,8 @@ export async function GET(req: Request) {
         if (!error && Array.isArray(rolesData)) {
           const hasAdmin = rolesData.some((r: any) => {
             const roleList: any = r.roles;
-            if (Array.isArray(roleList)) return roleList.some((roleObj: any) => roleObj.name === 'ADMIN');
-            return roleList?.name === 'ADMIN';
+            if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
+            return String(roleList?.name).toUpperCase() === 'ADMIN';
           });
           if (hasAdmin) role = 'ADMIN';
         }
