@@ -97,7 +97,9 @@ export default function UserSidebar() {
     return () => { mounted = false; };
   }, []);
 
-  const roleNorm = (Array.isArray(roles) && roles.length) ? roles[0] : 'USER';
+  // Prefer server-detected effectiveRole (RPC) if available, otherwise fall back to client roles/session
+  const roleFromClient = (Array.isArray(roles) && roles.length) ? roles[0] : ((user.role || '') && String(user.role).toUpperCase()) || 'USER';
+  const roleNorm = effectiveRole || roleFromClient || 'USER';
   // Debug info panel at the left of the sidebar for troubleshooting
   const debugPanel = (
       <div className="ml-3 text-xs text-gray-500">
