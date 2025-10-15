@@ -103,25 +103,26 @@ export async function requireAdmin(): Promise<any> {
  */
 export async function requireAdminFromRequest(req?: Request | null): Promise<any> {
   if (req) {
+    let helperUser: any = null;
     try {
       const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
       const maybe = await getUserAndSupabaseFromRequestInterop(req as Request);
-      const user = maybe?.user || null;
-      if (user?.id) {
-        const role = (user.user_metadata && user.user_metadata.role) || user.role || null;
-        if (role && String(role).toUpperCase() === 'ADMIN') return user;
+      helperUser = maybe?.user || null;
+      if (helperUser?.id) {
+        const role = (helperUser.user_metadata && helperUser.user_metadata.role) || helperUser.role || null;
+        if (role && String(role).toUpperCase() === 'ADMIN') return helperUser;
 
         // Try service-role lookup for user_roles
         try {
           const svc = getServerSupabaseClient({ useServiceRole: true });
-          const resp = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', user.id);
+          const resp = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', helperUser.id);
           if (!resp.error && Array.isArray(resp.data)) {
             const hasAdmin = resp.data.some((r: any) => {
               const roleList: any = r.roles;
               if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
               return String(roleList?.name).toUpperCase() === 'ADMIN';
             });
-            if (hasAdmin) return user;
+            if (hasAdmin) return helperUser;
           }
         } catch (e) {
           // ignore and continue to other checks
@@ -132,10 +133,10 @@ export async function requireAdminFromRequest(req?: Request | null): Promise<any
     } catch (e) {
       // Treat helper failures as unauthenticated and continue to other checks
       console.error('requireAdminFromRequest: getUserAndSupabaseFromRequestInterop failed', e);
+    }
 
-      // Fallback: try to extract a user id directly from the sb-access-token cookie
-      // and then perform a service-role RPC check. This helps in runtimes where the
-      // request-scoped helper cannot be initialized (edge vs node differences).
+    // If helper didn't yield a user, attempt cookie reconstruction + service RPC fallback
+    if (!helperUser?.id) {
       try {
         if (req && typeof req.headers?.get === 'function') {
           const cookieHeader = req.headers.get('cookie') || '';
