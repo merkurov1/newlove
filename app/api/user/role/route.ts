@@ -56,6 +56,7 @@ export async function GET(req: Request) {
       console.debug('[api/user/role] checked user_roles via service role client');
     } else {
       try {
+        // Direct read may be blocked by RLS for request-scoped client.
         const res = await (supabase as any)
           .from('user_roles')
           .select('role_id,roles(name)')
@@ -92,6 +93,53 @@ export async function GET(req: Request) {
       }
 
       if (hasAdmin) role = 'ADMIN';
+    }
+    // If the direct queries failed (RLS or missing service key), try a SECURITY DEFINER RPC
+    // which many deployments create as a safe server-side helper: get_my_roles / get_my_user_roles(_any)
+    if (role !== 'ADMIN' && (rolesErr || !Array.isArray(rolesData) || rolesData.length === 0)) {
+      try {
+        const rpcClient = serviceSupabase || supabase;
+        let rpcResp: any = null;
+
+        // Try common RPC names in order
+        try {
+          rpcResp = await (rpcClient as any).rpc('get_my_roles');
+        } catch (e) {
+          // ignore
+        }
+        if ((!rpcResp || rpcResp.error) && rpcClient) {
+          try {
+            rpcResp = await (rpcClient as any).rpc('get_my_user_roles');
+          } catch (e) {
+            // ignore
+          }
+        }
+        if ((!rpcResp || rpcResp.error) && rpcClient) {
+          try {
+            rpcResp = await (rpcClient as any).rpc('get_my_user_roles_any', { uid_text: user.id });
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        if (rpcResp && !rpcResp.error && Array.isArray(rpcResp.data)) {
+          const found = rpcResp.data.some((r: any) => {
+            if (!r) return false;
+            if (typeof r === 'string') return r.toUpperCase() === 'ADMIN';
+            // object shape: { role: 'ADMIN' } or { name: 'ADMIN' }
+            const vals = Object.values(r).map((v: any) => String(v).toUpperCase());
+            return vals.includes('ADMIN');
+          });
+          if (found) {
+            role = 'ADMIN';
+            console.debug('[api/user/role] detected ADMIN via RPC');
+          }
+        } else if (rpcResp && rpcResp.error) {
+          console.debug('[api/user/role] RPC call error', rpcResp.error);
+        }
+      } catch (e) {
+        console.debug('[api/user/role] rpc fallback failed', e);
+      }
     }
   } catch (e) {
     console.debug('[api/user/role] role lookup failed', e);
