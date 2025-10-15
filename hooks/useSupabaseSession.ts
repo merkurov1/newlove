@@ -85,6 +85,46 @@ export default function useSupabaseSession() {
 
     init();
 
+    // If user returns to the tab (after OAuth redirect), try to pick up session again.
+    const tryLoadSession = async () => {
+      if (!mounted) return;
+      try {
+        // Prefer getSessionFromUrl when URL looks like OAuth result
+        if (typeof window !== 'undefined') {
+          const search = window.location.search || '';
+          const hash = window.location.hash || '';
+          const looksLikeOAuth = search.includes('code=') || search.includes('access_token') || hash.includes('access_token') || search.includes('provider_token');
+          if (looksLikeOAuth && typeof (supabase.auth as any).getSessionFromUrl === 'function') {
+            try {
+              await (supabase.auth as any).getSessionFromUrl().catch(() => null);
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+        // After ensuring redirect processed, try to read session
+        const { data } = await supabase.auth.getSession();
+        const sess = (data as any)?.session || null;
+        if (sess && sess.user) {
+          const accessToken = sess.access_token || null;
+          const role = await resolveRole(sess.user, accessToken);
+          if (!mounted) return;
+          setSession({ user: mapUser(sess.user, role), accessToken });
+          setStatus('authenticated');
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    const onFocus = () => {
+      tryLoadSession();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') tryLoadSession();
+    });
+
     // Subscribe to auth state changes early so we don't miss events
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, payload) => {
       console.debug('[useSupabaseSession] onAuthStateChange', { event });
