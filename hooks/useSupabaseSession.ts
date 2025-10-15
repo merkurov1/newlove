@@ -185,6 +185,33 @@ export default function useSupabaseSession() {
                   setStatus('authenticated');
                   setGlobalDebug(mapped, 'authenticated', null);
                   emitSessionChanged();
+                  // If we don't have a client access token but server believes the user is authenticated,
+                  // trigger a one-time reload so SSR can render the authenticated UI. Guard with sessionStorage
+                  // to avoid reload loops.
+                  try {
+                    if (!mapped.accessToken && typeof window !== 'undefined') {
+                      const key = 'newlove:auth_reloaded';
+                      const last = Number(sessionStorage.getItem(key) || '0');
+                      const now = Date.now();
+                      // allow reload if not done in the last 15s
+                      if (!last || now - last > 15000) {
+                        sessionStorage.setItem(key, String(now));
+                        try {
+                          (window as any).__newloveAuth = { ...(window as any).__newloveAuth || {}, lastAction: 'server-fallback-reload', lastActionAt: now };
+                        } catch (e) {}
+                        setTimeout(() => {
+                          try {
+                            window.location.replace(window.location.pathname + window.location.search + window.location.hash);
+                          } catch (e) {
+                            window.location.reload();
+                          }
+                        }, 220);
+                        return;
+                      }
+                    }
+                  } catch (e) {
+                    // ignore storage errors
+                  }
                   return;
                 }
             }
