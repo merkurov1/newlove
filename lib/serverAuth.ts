@@ -13,12 +13,20 @@ type ServerAuthOptions = {
 export function getServerSupabaseClient(options: ServerAuthOptions = {}): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const preferServiceRole = !!options.useServiceRole;
+  // When requesting a service-role client, require the SUPABASE_SERVICE_ROLE_KEY explicitly.
+  // This prevents accidentally falling back to an anon key which leads to silent permission failures (42501).
+  let supabaseKey: string | undefined;
+  if (preferServiceRole) {
+    supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  } else {
+    supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+  }
 
-  const supabaseKey = preferServiceRole
-    ? process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
-    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL|SUPABASE_URL and SUPABASE_KEY (or SUPABASE_SERVICE_ROLE_KEY) are required');
+    if (preferServiceRole && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY is required when useServiceRole=true but is not configured in the environment');
+    }
+    throw new Error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL|SUPABASE_URL and a Supabase key are required');
   }
   return createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 }
