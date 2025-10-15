@@ -18,12 +18,33 @@ export default function useSupabaseSession() {
     const get = async () => {
       try {
         // Handle OAuth redirect if present in URL
-        // If OAuth redirected with tokens in URL, attempt to call getSession to pick up session.
-        // (Supabase JS v2 may not have getSessionFromUrl in some environments.)
         try {
-          if (typeof window !== 'undefined' && (window.location.search.includes('access_token') || window.location.hash.includes('access_token'))) {
-            await supabase.auth.getSession().catch(() => null);
-            console.debug('[useSupabaseSession] attempted to pick session after redirect');
+          if (typeof window !== 'undefined') {
+            const search = window.location.search || '';
+            const hash = window.location.hash || '';
+            const looksLikeOAuth = search.includes('code=') || search.includes('access_token') || hash.includes('access_token') || search.includes('provider_token');
+            if (looksLikeOAuth) {
+              // Prefer getSessionFromUrl if available (supabase-js v2 helper to parse OAuth redirect)
+              try {
+                if (typeof (supabase.auth as any).getSessionFromUrl === 'function') {
+                  console.debug('[useSupabaseSession] calling getSessionFromUrl to process OAuth redirect');
+                  await (supabase.auth as any).getSessionFromUrl().catch(() => null);
+                } else {
+                  // Fallback: call getSession to let client pick up a session if tokens were appended
+                  console.debug('[useSupabaseSession] calling getSession as fallback to process redirect');
+                  await supabase.auth.getSession().catch(() => null);
+                }
+                // Clean URL to remove OAuth parameters so we don't attempt to reprocess on navigation
+                try {
+                  const cleanUrl = window.location.pathname + window.location.search.replace(/([?&](code|access_token|provider_token|expires_in|token_type)=[^&]*)/g, '').replace(/^\?/, '') + window.location.hash.replace(/(#.*access_token=[^&]*)/g, '');
+                  window.history.replaceState({}, document.title, cleanUrl || window.location.pathname);
+                } catch (e) {
+                  // ignore replaceState errors
+                }
+              } catch (e) {
+                console.debug('[useSupabaseSession] OAuth redirect processing failed', e);
+              }
+            }
           }
         } catch (e) {
           // ignore parsing errors
