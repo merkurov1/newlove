@@ -154,7 +154,37 @@ export async function GET(req: Request) {
       diagnostics.cookieReconstructError = String(e);
     }
 
-    return NextResponse.json({ diagnostics });
+    // Safely serialize diagnostics to avoid circular structures (clients, SDKs)
+    const getCircularReplacer = () => {
+      const seen = new WeakSet();
+      return function (_key: string, value: any) {
+        if (typeof value === 'function') return undefined;
+        if (value && typeof value === 'object') {
+          if (seen.has(value)) return '[Circular]';
+          seen.add(value);
+        }
+        return value;
+      };
+    };
+
+    const safeDiagnostics: any = {};
+    for (const k of Object.keys(diagnostics)) {
+      const v = diagnostics[k];
+      try {
+        // try to JSON stringify with circular replacer and parse back
+        const s = JSON.stringify(v, getCircularReplacer());
+        safeDiagnostics[k] = JSON.parse(s);
+      } catch (e) {
+        // fallback to a short string summary
+        try {
+          safeDiagnostics[k] = String(v).slice(0, 1000);
+        } catch (ee) {
+          safeDiagnostics[k] = '(unserializable)';
+        }
+      }
+    }
+
+    return NextResponse.json({ diagnostics: safeDiagnostics });
   } catch (err) {
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
   }
