@@ -100,16 +100,12 @@ async function getPublicProjects() {
         projects = [];
       }
     }
-    if (error) {
-      console.error('Supabase fetch projects error', error);
+    // Ensure we have an array of projects
+    if (!Array.isArray(projects)) {
       return [];
     }
-    if (!Array.isArray(data)) {
-      console.error('Supabase projects: data is not array', data);
-      return [];
-    }
-    // Гарантируем структуру для компонента
-    return data.map(p => ({
+    // Guarantee shape for the component
+    return projects.map(p => ({
       id: p.id,
       slug: p.slug,
       title: p.title,
