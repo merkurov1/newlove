@@ -5,9 +5,16 @@ import { NextResponse } from 'next/server';
 // Эта функция будет вызываться по GET запросу на /api/articles/[id]
 export async function GET(request, { params }) {
   try {
-    const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-    const { supabase } = (await getUserAndSupabaseForRequest(request)) || {};
+    // Prefer server service-role client for article retrieval
     const articleId = params.id;
+    let supabase = null;
+    try {
+      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+      supabase = getServerSupabaseClient({ useServiceRole: true });
+    } catch (e) {
+      const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+      supabase = (await getUserAndSupabaseForRequest(request))?.supabase;
+    }
     if (!supabase) return NextResponse.json({ error: 'Article not found' }, { status: 404 });
 
   const { data: article, error } = await supabase.from('articles').select('*').eq('id', articleId).maybeSingle();

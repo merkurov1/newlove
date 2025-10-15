@@ -6,8 +6,16 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-  const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
-  const { supabase } = await getSupabaseForRequest(request) || {};
+  // Use server service-role client for public article listing
+  let supabase = null;
+  try {
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    supabase = getServerSupabaseClient({ useServiceRole: true });
+  } catch (e) {
+    // Fallback to request-scoped client if service client not available
+    const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
+    supabase = (await getSupabaseForRequest(request))?.supabase;
+  }
     const { searchParams } = new URL(request.url);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const limit = parseInt(searchParams.get('limit') || '15', 10);
