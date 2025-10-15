@@ -36,38 +36,61 @@ export default function useSupabaseSession() {
         if (!mounted) return;
         if (user) {
           // resolve role via helper below
-          const role = await (async (u: any) => {
-            // user metadata first (normalize to uppercase to tolerate 'admin' vs 'ADMIN')
-            let r = (u.user_metadata?.role || u.role || 'USER');
-            const rNorm = String(r).toUpperCase();
-            if (rNorm === 'ADMIN') return 'ADMIN';
-            try {
-              const { data: rolesData, error: rolesErr } = await supabase
-                .from('user_roles')
-                .select('role_id,roles(name)')
-                .eq('user_id', u.id);
-              if (!rolesErr && Array.isArray(rolesData)) {
-                const hasAdmin = rolesData.some((row: any) => {
-                  const roleList: any = row.roles;
-                  if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
-                  return String(roleList?.name).toUpperCase() === 'ADMIN';
+            const role = await (async (u: any) => {
+              // 1) Сначала смотрим user_metadata / user.role (локально в объекте пользователя)
+              let r = (u.user_metadata?.role || u.role || 'USER');
+              const rNorm = String(r).toUpperCase();
+              if (rNorm === 'ADMIN') {
+                console.debug('[useSupabaseSession] role resolved from user metadata -> ADMIN');
+                return 'ADMIN';
+              }
+              // 2) Попробуем проверить через публичный (anon) клиент таблицу user_roles — если RLS позволяет
+              try {
+                const { data: rolesData, error: rolesErr } = await supabase
+                  .from('user_roles')
+                  .select('role_id,roles(name)')
+                  .eq('user_id', u.id);
+                if (!rolesErr && Array.isArray(rolesData)) {
+                  const hasAdmin = rolesData.some((row: any) => {
+                    const roleList: any = row.roles;
+                    if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
+                    return String(roleList?.name).toUpperCase() === 'ADMIN';
+                  });
+                  if (hasAdmin) {
+                    console.debug('[useSupabaseSession] role resolved from user_roles -> ADMIN');
+                    return 'ADMIN';
+                  }
+                }
+              } catch (e) {
+                console.debug('[useSupabaseSession] user_roles check failed', e);
+              }
+              // 3) Как fallback — спросим серверный endpoint. ВАЖНО: передаём access token, чтобы сервер мог идентифицировать пользователя
+              try {
+                const { data: sessData } = await supabase.auth.getSession();
+                const accessToken = (sessData as any)?.session?.access_token || null;
+                console.debug('[useSupabaseSession] fetching /api/user/role, hasAccessToken=', Boolean(accessToken));
+                const res = await fetch('/api/user/role', {
+                  headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
                 });
-                if (hasAdmin) return 'ADMIN';
+                if (res.ok) {
+                  const json = await res.json();
+                  if (json && json.role) {
+                    const rFromServer = String(json.role).toUpperCase();
+                    // Не принимаем ANON как переопределяющую информацию, если у нас уже есть хотя бы USER
+                    if (rFromServer !== 'ANON') {
+                      console.debug('[useSupabaseSession] role resolved from /api/user/role ->', rFromServer);
+                      return rFromServer;
+                    } else {
+                      console.debug('[useSupabaseSession] /api/user/role returned ANON, ignoring');
+                    }
+                  }
+                }
+              } catch (e) {
+                console.debug('[useSupabaseSession] /api/user/role fetch failed', e);
               }
-            } catch (e) {
-              // ignore
-            }
-            try {
-              const res = await fetch('/api/user/role');
-              if (res.ok) {
-                const json = await res.json();
-                if (json && json.role) return String(json.role).toUpperCase();
-              }
-            } catch (e) {
-              // ignore
-            }
-            return r;
-          })(user);
+              // 4) Фоллбек — возвращаем локально определённую роль (нормализованную)
+              return String(r).toUpperCase();
+            })(user);
 
           setSession({
             user: {
@@ -100,6 +123,7 @@ export default function useSupabaseSession() {
         const user = (userData as any)?.user || null;
         if (user) {
           const role = await (async (u: any) => {
+            // Дублируем ту же логику что и выше: сначала метаданные, затем user_roles, затем серверный fallback
             let r = (u.user_metadata?.role || u.role || 'USER');
             const rNorm = String(r).toUpperCase();
             if (rNorm === 'ADMIN') return 'ADMIN';
@@ -117,16 +141,23 @@ export default function useSupabaseSession() {
                 if (hasAdmin) return 'ADMIN';
               }
             } catch (e) {
-              // ignore
+              console.debug('[useSupabaseSession] user_roles check failed', e);
             }
             try {
-              const res = await fetch('/api/user/role');
+              const { data: sessData } = await supabase.auth.getSession();
+              const accessToken = (sessData as any)?.session?.access_token || null;
+              const res = await fetch('/api/user/role', {
+                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+              });
               if (res.ok) {
                 const json = await res.json();
-                if (json && json.role) return String(json.role).toUpperCase();
+                if (json && json.role) {
+                  const rFromServer = String(json.role).toUpperCase();
+                  if (rFromServer !== 'ANON') return rFromServer;
+                }
               }
             } catch (e) {
-              // ignore
+              console.debug('[useSupabaseSession] /api/user/role fetch failed', e);
             }
             return String(r).toUpperCase();
           })(user);
