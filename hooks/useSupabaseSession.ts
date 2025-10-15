@@ -43,14 +43,27 @@ export default function useSupabaseSession() {
           }
         }
 
-        // Try to read current session
+        // Try to read current session. Use small retry loop because some providers/platforms
+        // take a short moment to set cookies/session after redirect.
         try {
-          const { data: sessData } = await supabase.auth.getSession();
-          const sess = (sessData as any)?.session || null;
+          const attempts = [0, 300, 1000];
+          let sess: any = null;
+          for (const delay of attempts) {
+            if (delay) await new Promise((r) => setTimeout(r, delay));
+            try {
+              const { data: sessData } = await supabase.auth.getSession();
+              sess = (sessData as any)?.session || null;
+              if (sess && sess.user) break;
+            } catch (e) {
+              // ignore transient errors
+            }
+          }
           if (sess && sess.user) {
-            const role = await resolveRole(sess.user, sess.access_token || null);
+            const accessToken = sess.access_token || null;
+            console.debug('[useSupabaseSession] got session after redirect, hasAccessToken=', Boolean(accessToken));
+            const role = await resolveRole(sess.user, accessToken);
             if (!mounted) return;
-            setSession({ user: mapUser(sess.user, role), accessToken: sess.access_token || null });
+            setSession({ user: mapUser(sess.user, role), accessToken });
             setStatus('authenticated');
             console.debug('[useSupabaseSession] initialized session from getSession', { user: sess.user.id, role });
             return;
@@ -141,6 +154,27 @@ async function resolveRole(u: any, accessToken?: string | null) {
   const rNormRaw = String(r).toUpperCase();
   const rNorm = (rNormRaw === 'AUTHENTICATED' || rNormRaw === 'ANONYMOUS') ? 'USER' : rNormRaw;
   if (rNorm === 'ADMIN') return 'ADMIN';
+  // Prefer server-side check (with token) — avoids RLS problems when anon can't read user_roles
+  try {
+    const headers: any = {};
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    console.debug('[useSupabaseSession] fetching /api/user/role, userId=', u.id, 'hasAccessToken=', Boolean(accessToken));
+    const res = await fetch('/api/user/role', { headers });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.role) {
+        const rFromServer = String(json.role).toUpperCase();
+        if (rFromServer !== 'ANON') {
+          console.debug('[useSupabaseSession] role resolved from /api/user/role ->', rFromServer);
+          return rFromServer;
+        }
+      }
+    }
+  } catch (e) {
+    console.debug('[useSupabaseSession] /api/user/role fetch failed', e);
+  }
+
+  // Fallback: try anon user_roles table (may be blocked by RLS)
   try {
     const { data: rolesData, error: rolesErr } = await supabase
       .from('user_roles')
@@ -156,20 +190,6 @@ async function resolveRole(u: any, accessToken?: string | null) {
     }
   } catch (e) {
     console.debug('[useSupabaseSession] user_roles check failed', e);
-  }
-  try {
-    const headers: any = {};
-    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-    const res = await fetch('/api/user/role', { headers });
-    if (res.ok) {
-      const json = await res.json();
-      if (json && json.role) {
-        const rFromServer = String(json.role).toUpperCase();
-        if (rFromServer !== 'ANON') return rFromServer;
-      }
-    }
-  } catch (e) {
-    console.debug('[useSupabaseSession] /api/user/role fetch failed', e);
   }
   return rNorm;
 }
