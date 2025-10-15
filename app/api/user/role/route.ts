@@ -17,10 +17,106 @@ export async function GET(req: Request) {
       console.debug('[api/user/role] cannot read authorization header', e);
     }
 
+    // Try to extract user id from Authorization header or cookies first.
+    // This avoids initializing the request-scoped supabase client which in some
+    // runtimes can mutate cookies/sessions and cause cross-tab logout.
+    let token: string | null = null;
+    let authHeaderPresent = false;
+    let cookieNames: string[] = [];
+    let tokenSource: 'authorization' | 'cookie' | 'none' = 'none';
+    try {
+      const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || null;
+      if (authHeader && typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')) {
+        token = authHeader.slice(7).trim();
+        authHeaderPresent = true;
+        tokenSource = 'authorization';
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    if (!token) {
+      try {
+        const cookieHeader = req.headers.get('cookie') || '';
+        const cookies = Object.fromEntries(
+          cookieHeader
+            .split(';')
+            .map((s) => {
+              const [k, ...v] = s.split('=');
+              return [k && k.trim(), decodeURIComponent((v || []).join('='))];
+            })
+            .filter(Boolean)
+        );
+        cookieNames = Object.keys(cookies || {});
+        token = cookies['sb-access-token'] || cookies['supabase-access-token'] || null;
+        if (token) tokenSource = 'cookie';
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // If we have a token, try to decode user id (sub) and perform a service-role RPC
+    // directly. This is the safest server-side check and avoids touching request client.
+    let decodedUid: string | null = null;
+    if (token) {
+      try {
+        const parts = token.split('.');
+        if (parts.length >= 2) {
+          const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const pad = payloadB64.length % 4;
+          const padded = payloadB64 + (pad ? '='.repeat(4 - pad) : '');
+          const buf = Buffer.from(padded, 'base64');
+          const payloadJson = buf.toString('utf8');
+          const payload = JSON.parse(payloadJson || '{}');
+          decodedUid = payload.sub || payload.user_id || null;
+        }
+      } catch (e) {
+        // ignore parsing errors
+      }
+    }
+
+    const debugInfo: Record<string, any> = { authHeaderPresent, cookieNames, tokenSource, decodedUid };
+
+    if (decodedUid) {
+      try {
+        let serviceInitError: any = null;
+        let serviceSupabase: any = null;
+        try {
+          serviceSupabase = getServerSupabaseClient({ useServiceRole: true });
+          debugInfo.serviceClientAvailable = true;
+        } catch (e) {
+          serviceInitError = String(e);
+          debugInfo.serviceClientAvailable = false;
+          debugInfo.serviceInitError = serviceInitError;
+        }
+
+        if (serviceSupabase) {
+          const rpcAny = await (serviceSupabase as any).rpc('get_my_user_roles_any', { uid_text: decodedUid });
+          const rpcResults: Record<string, any> = { get_my_user_roles_any: rpcAny };
+          debugInfo.rpc = rpcResults;
+          if (!rpcAny?.error && Array.isArray(rpcAny.data) && rpcAny.data.length) {
+            const found = rpcAny.data.some((r: any) => {
+              if (!r) return false;
+              if (typeof r === 'string') return r.toUpperCase() === 'ADMIN';
+              const vals = Object.values(r).map((v: any) => String(v).toUpperCase());
+              return vals.includes('ADMIN');
+            });
+            if (found) {
+              return NextResponse.json({ role: 'ADMIN', rpc: rpcResults, debug: debugInfo });
+            }
+          }
+          // If RPC did not find ADMIN, continue to full fallback logic below
+        }
+      } catch (e) {
+        console.debug('[api/user/role] service-role RPC by decoded token failed', e);
+      }
+    }
+
+    // Fallback: use canonical helper which may use request-scoped client or server fallback
     const { supabase, user } = await getUserAndSupabaseForRequest(req as any);
     if (!user) {
       console.debug('[api/user/role] no user resolved for request; returning ANON');
-      return NextResponse.json({ role: 'ANON' });
+      return NextResponse.json({ role: 'ANON', debug: debugInfo });
     }
     console.debug('[api/user/role] resolved user:', { id: user.id, role: (user.user_metadata?.role || user.role) });
 
@@ -64,7 +160,7 @@ export async function GET(req: Request) {
             if (found) {
               console.debug('[api/user/role] detected ADMIN via get_my_user_roles_any RPC');
               role = 'ADMIN';
-              return NextResponse.json({ role, rpc: rpcResults });
+              return NextResponse.json({ role, rpc: rpcResults, debug: debugInfo });
             }
           }
         } catch (e) {
@@ -184,9 +280,9 @@ export async function GET(req: Request) {
     console.debug('[api/user/role] role lookup failed', e);
   }
 
-    return NextResponse.json({ role, rpc: rpcResults });
+    return NextResponse.json({ role, rpc: rpcResults, debug: debugInfo });
   } catch (e) {
-    return NextResponse.json({ role: 'ANON' });
+    return NextResponse.json({ role: 'ANON', debug: { error: String(e) } });
   }
 }
 
