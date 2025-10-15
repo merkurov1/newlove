@@ -156,37 +156,6 @@ export default function useSupabaseSession() {
       if (document.visibilityState === 'visible') tryLoadSession();
     });
 
-    // Subscribe to auth state changes early so we don't miss events
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, payload) => {
-      console.debug('[useSupabaseSession] onAuthStateChange', { event });
-      if (!mounted) return;
-      try {
-        // If payload contains session, prefer it
-        let user = null;
-        let accessToken: string | null = null;
-        if (payload && (payload as any).session) {
-          user = (payload as any).session.user || null;
-          accessToken = (payload as any).session.access_token || null;
-        }
-        // fallback to getUser
-        if (!user) {
-          const { data: ud } = await supabase.auth.getUser();
-          user = (ud as any)?.user || null;
-        }
-        if (user) {
-          const role = await resolveRole(user, accessToken);
-          setSession({ user: mapUser(user, role), accessToken });
-          setStatus('authenticated');
-        } else {
-          console.debug('[useSupabaseSession] signed out');
-          setSession(null);
-          setStatus('unauthenticated');
-        }
-      } catch (e) {
-        console.error('[useSupabaseSession] onAuthStateChange handler error', e);
-      }
-    });
-
     return () => {
       mounted = false;
       try {
