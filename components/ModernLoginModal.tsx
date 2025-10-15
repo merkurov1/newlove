@@ -34,6 +34,8 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
 
 
   const handleOnboardWeb3Login = async () => {
+    // Close modal first so Onboard UI (popup/overlay) isn't covered
+    if (typeof onClose === 'function') onClose();
     setLoading(true);
     setWeb3Error('');
     try {
@@ -100,6 +102,8 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
   };
 
   const handleGoogle = async () => {
+    // Close modal before redirecting to OAuth so UI isn't blocked
+    if (typeof onClose === 'function') onClose();
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
