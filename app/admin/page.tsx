@@ -4,10 +4,18 @@ import { safeData } from '@/lib/safeSerialize';
 export const dynamic = 'force-dynamic';
 
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { cookies } from 'next/headers';
 
 export default async function AdminDashboard({ searchParams }: { searchParams?: any }) {
   // SSR RBAC: only allow admins
-  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
+  // Construct a Request that contains the server cookies so request-scoped
+  // helpers can validate the session consistently across runtimes.
+  const cookieHeader = cookies()
+    .getAll()
+    .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+    .join('; ');
+  const globalReq = new Request('http://localhost', { headers: { cookie: cookieHeader } });
+
   try {
     await requireAdminFromRequest(globalReq);
   } catch {
