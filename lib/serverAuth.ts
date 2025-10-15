@@ -177,9 +177,42 @@ export async function requireAdminFromRequest(req?: Request | null): Promise<any
             }
           }
           if (accessToken) {
-            // Try to decode JWT payload without verification to get `sub` (user id)
+            // Try to normalize and decode JWT payload without verification to get `sub` (user id)
             try {
-              const parts = accessToken.split('.');
+              // Normalize common wrapper shapes (base64-<json>, JSON wrapper with access_token)
+              let normalized = accessToken;
+              try {
+                const maybe = typeof normalized === 'string' ? decodeURIComponent(normalized) : normalized;
+                if (typeof maybe === 'string' && maybe.trim().startsWith('{')) {
+                  const parsed = JSON.parse(maybe);
+                  if (parsed && (parsed.access_token || parsed.token || parsed.accessToken)) {
+                    normalized = parsed.access_token || parsed.token || parsed.accessToken;
+                  }
+                }
+              } catch (e) {
+                // ignore
+              }
+              if (typeof normalized === 'string' && normalized.startsWith('base64-')) {
+                try {
+                  const b64 = normalized.slice('base64-'.length);
+                  const buf = Buffer.from(b64, 'base64');
+                  const txt = buf.toString('utf8');
+                  try {
+                    const parsed = JSON.parse(txt);
+                    if (parsed && (parsed.access_token || parsed.token || parsed.accessToken)) {
+                      normalized = parsed.access_token || parsed.token || parsed.accessToken;
+                    } else {
+                      normalized = txt;
+                    }
+                  } catch (e) {
+                    normalized = txt;
+                  }
+                } catch (e) {
+                  // ignore
+                }
+              }
+
+              const parts = normalized.split('.');
               if (parts.length >= 2) {
                 const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
                 // pad base64 string

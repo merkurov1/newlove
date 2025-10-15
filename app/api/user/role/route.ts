@@ -98,6 +98,51 @@ export async function GET(req: Request) {
     // directly. This is the safest server-side check and avoids touching request client.
   let decodedUid: string | null = null;
     if (token) {
+      // Normalize token from possible Supabase cookie shapes.
+      try {
+        let normalized = token;
+        // If token looks like URL-encoded JSON or starts with '{', try parse
+        try {
+          const maybe = typeof normalized === 'string' ? decodeURIComponent(normalized) : normalized;
+          if (typeof maybe === 'string' && maybe.trim().startsWith('{')) {
+            const parsed = JSON.parse(maybe);
+            // supabase sometimes stores { access_token: 'jwt', ... }
+            if (parsed && (parsed.access_token || parsed.token || parsed.accessToken)) {
+              normalized = parsed.access_token || parsed.token || parsed.accessToken;
+            }
+          }
+        } catch (e) {
+          // ignore decode/parse errors
+        }
+
+        // Some deployments store split cookies with a 'base64-' prefix
+        if (typeof normalized === 'string' && normalized.startsWith('base64-')) {
+          try {
+            const b64 = normalized.slice('base64-'.length);
+            const buf = Buffer.from(b64, 'base64');
+            const txt = buf.toString('utf8');
+            // try parse JSON wrapper
+            try {
+              const parsed = JSON.parse(txt);
+              if (parsed && (parsed.access_token || parsed.token || parsed.accessToken)) {
+                normalized = parsed.access_token || parsed.token || parsed.accessToken;
+              } else {
+                // if it's a raw JWT inside base64, use it
+                normalized = txt;
+              }
+            } catch (e) {
+              normalized = txt;
+            }
+          } catch (e) {
+            // ignore base64 decode errors
+          }
+        }
+
+        token = normalized;
+        debugInfo.normalizedTokenPreview = typeof token === 'string' ? (token.slice(0, 8) + '…') : null;
+      } catch (e) {
+        // non-fatal
+      }
       try {
         const parts = token.split('.');
         if (parts.length >= 2) {
