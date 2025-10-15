@@ -32,7 +32,18 @@ export async function GET(request) {
       return new Response(JSON.stringify({ error: 'Failed to fetch articles' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
 
-    return new Response(JSON.stringify(data || []), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    // Enrich with previewImage server-side so client infinite scroll get thumbnails
+    try {
+      const { getFirstImage } = await import('@/lib/contentUtils');
+      const enriched = await Promise.all((data || []).map(async (a) => {
+        let previewImage = null;
+        try { previewImage = a.content ? await getFirstImage(a.content) : null; } catch (e) { previewImage = null; }
+        return { id: a.id, title: a.title, slug: a.slug, content: a.content, publishedAt: a.publishedAt, previewImage };
+      }));
+      return new Response(JSON.stringify(enriched), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    } catch (e) {
+      return new Response(JSON.stringify(data || []), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
   } catch (error) {
     return new Response(JSON.stringify({ error: 'Failed to fetch articles' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }

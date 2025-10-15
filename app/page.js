@@ -42,16 +42,29 @@ async function getArticles() {
       console.error('Supabase articles: data is not array', data);
       return [];
     }
-    // Гарантируем структуру для компонента
-    return data.map(a => ({
-      id: a.id,
-      title: a.title,
-      slug: a.slug,
-      content: a.content,
-      publishedAt: a.publishedAt,
-      updatedAt: a.updatedAt,
-      author: a.author || null,
-    }));
+    // Enrich articles with server-side previewImage so the feed can render thumbnails
+    const enriched = await Promise.all(
+      data.map(async (a) => {
+        let previewImage = null;
+        try {
+          previewImage = a.content ? await getFirstImage(a.content) : null;
+        } catch (e) {
+          console.debug('getArticles: getFirstImage failed for', a.id, e);
+          previewImage = null;
+        }
+        return {
+          id: a.id,
+          title: a.title,
+          slug: a.slug,
+          content: a.content,
+          publishedAt: a.publishedAt,
+          updatedAt: a.updatedAt,
+          author: a.author || null,
+          previewImage,
+        };
+      })
+    );
+    return enriched;
   } catch (e) {
     console.error('SSR getArticles fatal error', e);
     return [];

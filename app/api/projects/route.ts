@@ -7,9 +7,11 @@ export async function GET() {
       const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
       supabase = (await getUserAndSupabaseForRequest(new Request('http://localhost')))?.supabase;
     } catch (e) {
-      // Fallback to server client
+      // Fallback to server client. Explicitly opt into the service-role key
+      // because this endpoint performs server-only reads of `projects` which
+      // may be protected by RLS and require elevated privileges.
       const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-      try { supabase = getServerSupabaseClient(); } catch (err) { supabase = null; }
+      try { supabase = getServerSupabaseClient({ useServiceRole: true }); } catch (err) { supabase = null; }
     }
     if (!supabase) return NextResponse.json({ success: true, count: 0, projects: [] });
 
