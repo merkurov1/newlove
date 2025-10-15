@@ -13,7 +13,10 @@ export default function useSupabaseSession() {
   const setGlobalDebug = (s: any, st: any, e: any) => {
     try {
       if (typeof window !== 'undefined') {
-        (window as any).__newloveAuth = { session: s ? { user: s.user ? { id: s.user.id, email: s.user.email, role: s.user.role || s.user?.user_metadata?.role || null } : null } : null, status: st, error: e || null };
+        const prev = (window as any).__newloveAuth || { history: [] };
+        const entry = { ts: Date.now(), status: st, short: (s && s.user) ? `${s.user.id} ${s.user.email}` : null, error: e ? String(e) : null };
+        const history = (prev.history || []).concat(entry).slice(-12);
+        (window as any).__newloveAuth = { session: s ? { user: s.user ? { id: s.user.id, email: s.user.email, role: s.user.role || s.user?.user_metadata?.role || null } : null } : null, status: st, error: e || null, history };
       }
     } catch (e) {
       // ignore
