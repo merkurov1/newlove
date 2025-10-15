@@ -3,8 +3,20 @@ import getUserAndSupabaseForRequest from '@/lib/getUserAndSupabaseForRequest';
 
 export async function GET(req: Request) {
   try {
+    // Диагностика: логируем Authorization заголовок и результат авторизации
+    try {
+      const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || null;
+      console.debug('[api/user/role] Authorization header present:', Boolean(authHeader));
+    } catch (e) {
+      console.debug('[api/user/role] cannot read authorization header', e);
+    }
+
     const { supabase, user } = await getUserAndSupabaseForRequest(req as any);
-    if (!user) return NextResponse.json({ role: 'ANON' });
+    if (!user) {
+      console.debug('[api/user/role] no user resolved for request; returning ANON');
+      return NextResponse.json({ role: 'ANON' });
+    }
+    console.debug('[api/user/role] resolved user:', { id: user.id, role: (user.user_metadata?.role || user.role) });
 
   // Prefer already-resolved role from user object and normalize to uppercase
   let role = (user.user_metadata && user.user_metadata.role) || user.role || 'USER';
