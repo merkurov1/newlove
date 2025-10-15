@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import getUserAndSupabaseForRequest from '@/lib/getUserAndSupabaseForRequest';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
+import tokenUtils from '@/lib/auth/tokenUtils';
 
 export async function GET(req: Request) {
   try {
@@ -43,50 +44,12 @@ export async function GET(req: Request) {
     if (!token) {
       try {
         const cookieHeader = req.headers.get('cookie') || '';
-        const cookies = Object.fromEntries(
-          cookieHeader
-            .split(';')
-            .map((s) => {
-              const [k, ...v] = s.split('=');
-              return [k && k.trim(), decodeURIComponent((v || []).join('='))];
-            })
-            .filter(Boolean)
-        );
-        cookieNames = Object.keys(cookies || {});
-        // Look for standard names first
-        token = cookies['sb-access-token'] || cookies['supabase-access-token'] || null;
-        if (!token) {
-          // Support Supabase namespaced and split cookies like
-          // sb-<project-ref>-auth-token.0 / .1 or similar.
-          const candidates: Record<string, string[]> = {};
-          for (const name of Object.keys(cookies || {})) {
-            // match names containing sb- and auth-token/access-token/token
-            if (/sb-.*(?:auth-token|access-token|token)/i.test(name) || /supabase-?access-?token/i.test(name)) {
-              // base name without numeric suffix
-              const m = name.match(/^(.*?)(?:\.(\d+))?$/);
-              const base = m ? m[1] : name;
-              const partIndex = m && m[2] ? parseInt(m[2], 10) : -1;
-              if (!candidates[base]) candidates[base] = [];
-              // store as index:value to sort later
-              candidates[base].push(typeof partIndex === 'number' && partIndex >= 0 ? `${partIndex}:${cookies[name]}` : `-:${cookies[name]}`);
-            }
-          }
-          // Reconstruct token from any candidate base by sorting parts
-          for (const base of Object.keys(candidates)) {
-            const parts = candidates[base]
-              .map((s) => {
-                const [idx, ...rest] = s.split(':');
-                return { idx: idx === '-' ? -1 : parseInt(idx, 10), val: rest.join(':') };
-              })
-              .sort((a, b) => a.idx - b.idx);
-            const joined = parts.map((p) => p.val).join('');
-            if (joined && joined.length > 0) {
-              token = joined;
-              debugInfo.matchedCookieBase = base;
-              debugInfo.matchedCookieParts = parts.map((p) => ({ idx: p.idx, len: p.val.length }));
-              break;
-            }
-          }
+        const res = tokenUtils.extractTokenFromCookieHeader(cookieHeader);
+        token = res.token;
+        cookieNames = res.cookieNames || [];
+        if (res.matchedCookieBase) {
+          debugInfo.matchedCookieBase = res.matchedCookieBase;
+          debugInfo.matchedCookieParts = res.matchedCookieParts;
         }
         if (token) tokenSource = 'cookie';
       } catch (e) {
@@ -98,53 +61,14 @@ export async function GET(req: Request) {
     // directly. This is the safest server-side check and avoids touching request client.
   let decodedUid: string | null = null;
     if (token) {
-      // Normalize token from possible Supabase cookie shapes.
       try {
-        let normalized = token;
-        // If token looks like URL-encoded JSON or starts with '{', try parse
-        try {
-          const maybe = typeof normalized === 'string' ? decodeURIComponent(normalized) : normalized;
-          if (typeof maybe === 'string' && maybe.trim().startsWith('{')) {
-            const parsed = JSON.parse(maybe);
-            // supabase sometimes stores { access_token: 'jwt', ... }
-            if (parsed && (parsed.access_token || parsed.token || parsed.accessToken)) {
-              normalized = parsed.access_token || parsed.token || parsed.accessToken;
-            }
-          }
-        } catch (e) {
-          // ignore decode/parse errors
-        }
-
-        // Some deployments store split cookies with a 'base64-' prefix
-        if (typeof normalized === 'string' && normalized.startsWith('base64-')) {
-          try {
-            const b64 = normalized.slice('base64-'.length);
-            const buf = Buffer.from(b64, 'base64');
-            const txt = buf.toString('utf8');
-            // try parse JSON wrapper
-            try {
-              const parsed = JSON.parse(txt);
-              if (parsed && (parsed.access_token || parsed.token || parsed.accessToken)) {
-                normalized = parsed.access_token || parsed.token || parsed.accessToken;
-              } else {
-                // if it's a raw JWT inside base64, use it
-                normalized = txt;
-              }
-            } catch (e) {
-              normalized = txt;
-            }
-          } catch (e) {
-            // ignore base64 decode errors
-          }
-        }
-
-        token = normalized;
-        debugInfo.normalizedTokenPreview = typeof token === 'string' ? (token.slice(0, 8) + '…') : null;
+        token = tokenUtils.normalizeToken(token);
+        debugInfo.normalizedTokenPreview = typeof token === 'string' ? (token.slice(0, 12) + '…') : null;
       } catch (e) {
         // non-fatal
       }
       try {
-        const parts = token.split('.');
+        const parts = (token || '').split('.');
         if (parts.length >= 2) {
           const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
           const pad = payloadB64.length % 4;
