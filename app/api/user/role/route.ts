@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import getUserAndSupabaseForRequest from '@/lib/getUserAndSupabaseForRequest';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
 
 export async function GET(req: Request) {
   try {
@@ -27,14 +28,39 @@ export async function GET(req: Request) {
   let role = (user.user_metadata && user.user_metadata.role) || user.role || 'USER';
   role = String(role).toUpperCase();
 
-    // If still not ADMIN, try to check user_roles via server supabase client
-    if (role !== 'ADMIN' && supabase) {
+    // If still not ADMIN, try to check user_roles via a server-side client using the service role key.
+    // This avoids RLS blocking anonymous reads. We prefer an explicit service-role client; if it fails,
+    // we fall back to any supabase client returned by the request helper.
+    if (role !== 'ADMIN') {
       try {
-        const { data: rolesData, error } = await (supabase as any)
-          .from('user_roles')
-          .select('role_id,roles(name)')
-          .eq('user_id', user.id);
-        if (!error && Array.isArray(rolesData)) {
+        let rolesData: any = null;
+        let rolesErr: any = null;
+        try {
+          const serviceSupabase = getServerSupabaseClient({ useServiceRole: true });
+          const res = await (serviceSupabase as any)
+            .from('user_roles')
+            .select('role_id,roles(name)')
+            .eq('user_id', user.id);
+          rolesData = res.data;
+          rolesErr = res.error;
+          console.debug('[api/user/role] checked user_roles via service role client');
+        } catch (e) {
+          // Service role client may not be available in some environments; fall back to provided supabase client
+          try {
+            const res = await (supabase as any)
+              .from('user_roles')
+              .select('role_id,roles(name)')
+              .eq('user_id', user.id);
+            rolesData = res.data;
+            rolesErr = res.error;
+            console.debug('[api/user/role] checked user_roles via request supabase client (fallback)');
+          } catch (e2) {
+            // ignore
+            rolesErr = e2;
+          }
+        }
+
+        if (!rolesErr && Array.isArray(rolesData)) {
           const hasAdmin = rolesData.some((r: any) => {
             const roleList: any = r.roles;
             if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
