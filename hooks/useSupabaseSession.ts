@@ -65,6 +65,24 @@ export default function useSupabaseSession() {
             try { sessionStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {}
           }
         } catch (e) {}
+        // One-time redirect after auth state change to respect stored redirect path
+        try {
+          if (typeof window !== 'undefined') {
+            const redirectKey1 = sessionStorage.getItem('login_redirect_path') || localStorage.getItem('login_redirect_path');
+            const redirectKey2 = localStorage.getItem('supabase_oauth_redirect');
+            const redirectTo = (redirectKey1 || redirectKey2) || null;
+            if (redirectTo) {
+              try { sessionStorage.removeItem('login_redirect_path'); } catch {}
+              try { localStorage.removeItem('login_redirect_path'); } catch {}
+              try { localStorage.removeItem('supabase_oauth_redirect'); } catch {}
+              const current = window.location.pathname + window.location.search;
+              if (redirectTo !== current) {
+                window.location.replace(redirectTo);
+                return;
+              }
+            }
+          }
+        } catch (e) {}
         pushDebug({ where: 'onAuthStateChange', note: 'authenticated', userId: s.user?.id });
       } else {
         setSession(null);
@@ -84,6 +102,25 @@ export default function useSupabaseSession() {
           pushDebug({ where: 'init', note: 'client-session-found', userId: s.user?.id });
           setSession({ user: s.user, accessToken: s.access_token });
           try { if (typeof window !== 'undefined') { const toStore = { id: s.user.id, email: s.user.email, name: s.user.name, image: s.user.user_metadata?.avatar_url || s.user?.picture || s.user?.image, role: s.user.role }; try { sessionStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {} } } catch (e) {}
+          // After successful client-side session detection, attempt one-time post-login redirect
+          try {
+            if (typeof window !== 'undefined') {
+              const redirectKey1 = sessionStorage.getItem('login_redirect_path') || localStorage.getItem('login_redirect_path');
+              const redirectKey2 = localStorage.getItem('supabase_oauth_redirect');
+              const redirectTo = (redirectKey1 || redirectKey2) || null;
+              if (redirectTo) {
+                try { sessionStorage.removeItem('login_redirect_path'); } catch {}
+                try { localStorage.removeItem('login_redirect_path'); } catch {}
+                try { localStorage.removeItem('supabase_oauth_redirect'); } catch {}
+                // If already on that path, don't navigate
+                const current = window.location.pathname + window.location.search;
+                if (redirectTo !== current) {
+                  window.location.replace(redirectTo);
+                  return;
+                }
+              }
+            }
+          } catch (e) {}
           setStatus('authenticated');
           return;
         }
@@ -98,6 +135,24 @@ export default function useSupabaseSession() {
               pushDebug({ where: 'init', note: 'server-session-found', userId: j.user?.id });
               setSession({ user: j.user, accessToken: null });
               try { if (typeof window !== 'undefined') { const toStore = { id: j.user.id, email: j.user.email, name: j.user.name, image: j.user.image, role: null }; try { sessionStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {} } } catch (e) {}
+              // One-time redirect after server-side session detected (e.g., after OAuth)
+              try {
+                if (typeof window !== 'undefined') {
+                  const redirectKey1 = sessionStorage.getItem('login_redirect_path') || localStorage.getItem('login_redirect_path');
+                  const redirectKey2 = localStorage.getItem('supabase_oauth_redirect');
+                  const redirectTo = (redirectKey1 || redirectKey2) || null;
+                  if (redirectTo) {
+                    try { sessionStorage.removeItem('login_redirect_path'); } catch {}
+                    try { localStorage.removeItem('login_redirect_path'); } catch {}
+                    try { localStorage.removeItem('supabase_oauth_redirect'); } catch {}
+                    const current = window.location.pathname + window.location.search;
+                    if (redirectTo !== current) {
+                      window.location.replace(redirectTo);
+                      return;
+                    }
+                  }
+                }
+              } catch (e) {}
               setStatus('authenticated');
               return;
             }
