@@ -7,7 +7,12 @@ import { updateArticle } from '../../../actions';
 async function getArticle(id) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq) || {};
+  const _ctx = await getUserAndSupabaseForRequest(globalReq) || {};
+  let supabase = _ctx?.supabase;
+  if (!_ctx?.isServer) {
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    supabase = getServerSupabaseClient({ useServiceRole: true });
+  }
   if (!supabase) notFound();
   const { data: articleRaw, error } = await supabase.from('articles').select('*').eq('id', id).maybeSingle();
   let article = articleRaw;

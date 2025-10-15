@@ -12,8 +12,16 @@ export default async function AdminLettersPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
   // Use canonical wrapper to avoid interop issues across .js/.ts builds
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
-  if (!supabase) throw new Error('Supabase client unavailable');
+  const _ctx = await getUserAndSupabaseForRequest(globalReq);
+
+  let supabase: any;
+  if (_ctx?.isServer) {
+    supabase = _ctx.supabase;
+  } else {
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    supabase = getServerSupabaseClient({ useServiceRole: true });
+  }
+
   const { data, error: lErr } = await supabase.from('letter').select('id,title,slug,published,sentAt,createdAt,author:authorId(name)').order('createdAt', { ascending: false });
   if (lErr) throw lErr;
   letters = data || [];
