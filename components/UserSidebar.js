@@ -1,5 +1,6 @@
 // components/UserSidebar.js
 "use client";
+import React from 'react';
 import Link from 'next/link';
 // import useSupabaseSession from '@/hooks/useSupabaseSession';
 import { useAuth } from './AuthContext';
@@ -58,7 +59,7 @@ export default function UserSidebar() {
   // Debug info panel at the left of the sidebar for troubleshooting
   const debugPanel = (
       <div className="ml-3 text-xs text-gray-500">
-        <div>status: {String(status)}</div>
+        <div>status: {String(isLoading)}</div>
         <div>id: {user.id}</div>
         <div>email: {user.email || '—'}</div>
         <div>role: {roleNorm}</div>
@@ -111,7 +112,7 @@ export default function UserSidebar() {
         <Link href="/users" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition" title="Пользователи">👥</Link>
       </nav>
       <div className="ml-3 text-xs text-gray-500">
-        <div>status: {String(status)}</div>
+        <div>status: {String(isLoading)}</div>
         <div>id: {user.id}</div>
         <div>email: {user.email || '—'}</div>
         <div>role: {(user.role || '').toString()}</div>
