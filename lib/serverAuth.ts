@@ -63,10 +63,29 @@ export async function requireUser(): Promise<any> {
 export async function requireAdmin(): Promise<any> {
   const user = await getServerUser();
   if (!user) throw new Error('Unauthorized');
-  const roleRaw = ((user as any).user_metadata as any)?.role || (user as any)?.role || 'USER';
-  const role = String(roleRaw).toUpperCase();
-  if (role !== 'ADMIN') throw new Error('Unauthorized');
-  return user;
+
+  // First try direct metadata/role field
+  const roleRaw = ((user as any).user_metadata as any)?.role || (user as any)?.role || null;
+  const role = roleRaw ? String(roleRaw).toUpperCase() : null;
+  if (role === 'ADMIN') return user;
+
+  // Fallback: check user_roles via service role client
+  try {
+    const svc = getServerSupabaseClient({ useServiceRole: true });
+    const resp = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', user.id);
+    if (!resp.error && Array.isArray(resp.data)) {
+      const hasAdmin = resp.data.some((r: any) => {
+        const roleList: any = r.roles;
+        if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
+        return String(roleList?.name).toUpperCase() === 'ADMIN';
+      });
+      if (hasAdmin) return user;
+    }
+  } catch (e) {
+    // ignore and fallthrough to unauthorized
+  }
+
+  throw new Error('Unauthorized');
 }
 
 /**
@@ -81,8 +100,25 @@ export async function requireAdminFromRequest(req?: Request | null): Promise<any
       const maybe = await getUserAndSupabaseFromRequestInterop(req as Request);
       const user = maybe?.user || null;
       if (user?.id) {
-        const role = (user.user_metadata && user.user_metadata.role) || user.role || 'USER';
-        if (role === 'ADMIN') return user;
+        const role = (user.user_metadata && user.user_metadata.role) || user.role || null;
+        if (role && String(role).toUpperCase() === 'ADMIN') return user;
+
+        // Try service-role lookup for user_roles
+        try {
+          const svc = getServerSupabaseClient({ useServiceRole: true });
+          const resp = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', user.id);
+          if (!resp.error && Array.isArray(resp.data)) {
+            const hasAdmin = resp.data.some((r: any) => {
+              const roleList: any = r.roles;
+              if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
+              return String(roleList?.name).toUpperCase() === 'ADMIN';
+            });
+            if (hasAdmin) return user;
+          }
+        } catch (e) {
+          // ignore and continue to other checks
+        }
+
         throw new Error('Not authorized');
       }
     } catch (e) {
