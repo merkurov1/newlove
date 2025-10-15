@@ -63,7 +63,8 @@ export async function requireUser(): Promise<any> {
 export async function requireAdmin(): Promise<any> {
   const user = await getServerUser();
   if (!user) throw new Error('Unauthorized');
-  const role = ((user as any).user_metadata as any)?.role || (user as any)?.role || 'USER';
+  const roleRaw = ((user as any).user_metadata as any)?.role || (user as any)?.role || 'USER';
+  const role = String(roleRaw).toUpperCase();
   if (role !== 'ADMIN') throw new Error('Unauthorized');
   return user;
 }

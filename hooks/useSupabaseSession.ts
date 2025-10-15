@@ -37,9 +37,10 @@ export default function useSupabaseSession() {
         if (user) {
           // resolve role via helper below
           const role = await (async (u: any) => {
-            // user metadata first
-            let r = u.user_metadata?.role || u.role || 'USER';
-            if (r === 'ADMIN') return 'ADMIN';
+            // user metadata first (normalize to uppercase to tolerate 'admin' vs 'ADMIN')
+            let r = (u.user_metadata?.role || u.role || 'USER');
+            const rNorm = String(r).toUpperCase();
+            if (rNorm === 'ADMIN') return 'ADMIN';
             try {
               const { data: rolesData, error: rolesErr } = await supabase
                 .from('user_roles')
@@ -48,8 +49,8 @@ export default function useSupabaseSession() {
               if (!rolesErr && Array.isArray(rolesData)) {
                 const hasAdmin = rolesData.some((row: any) => {
                   const roleList: any = row.roles;
-                  if (Array.isArray(roleList)) return roleList.some((roleObj: any) => roleObj.name === 'ADMIN');
-                  return roleList?.name === 'ADMIN';
+                  if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
+                  return String(roleList?.name).toUpperCase() === 'ADMIN';
                 });
                 if (hasAdmin) return 'ADMIN';
               }
@@ -60,7 +61,7 @@ export default function useSupabaseSession() {
               const res = await fetch('/api/user/role');
               if (res.ok) {
                 const json = await res.json();
-                if (json && json.role) return json.role;
+                if (json && json.role) return String(json.role).toUpperCase();
               }
             } catch (e) {
               // ignore
@@ -99,8 +100,9 @@ export default function useSupabaseSession() {
         const user = (userData as any)?.user || null;
         if (user) {
           const role = await (async (u: any) => {
-            let r = u.user_metadata?.role || u.role || 'USER';
-            if (r === 'ADMIN') return 'ADMIN';
+            let r = (u.user_metadata?.role || u.role || 'USER');
+            const rNorm = String(r).toUpperCase();
+            if (rNorm === 'ADMIN') return 'ADMIN';
             try {
               const { data: rolesData, error: rolesErr } = await supabase
                 .from('user_roles')
@@ -109,8 +111,8 @@ export default function useSupabaseSession() {
               if (!rolesErr && Array.isArray(rolesData)) {
                 const hasAdmin = rolesData.some((row: any) => {
                   const roleList: any = row.roles;
-                  if (Array.isArray(roleList)) return roleList.some((roleObj: any) => roleObj.name === 'ADMIN');
-                  return roleList?.name === 'ADMIN';
+                  if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
+                  return String(roleList?.name).toUpperCase() === 'ADMIN';
                 });
                 if (hasAdmin) return 'ADMIN';
               }
@@ -121,12 +123,12 @@ export default function useSupabaseSession() {
               const res = await fetch('/api/user/role');
               if (res.ok) {
                 const json = await res.json();
-                if (json && json.role) return json.role;
+                if (json && json.role) return String(json.role).toUpperCase();
               }
             } catch (e) {
               // ignore
             }
-            return r;
+            return String(r).toUpperCase();
           })(user);
           setSession({
             user: {
