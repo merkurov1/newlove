@@ -157,7 +157,17 @@ async function resolveRole(u: any, accessToken?: string | null) {
   // Prefer server-side check (with token) — avoids RLS problems when anon can't read user_roles
   try {
     const headers: any = {};
-    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    // If caller didn't supply accessToken (race after redirect), try to read a fresh session
+    let finalAccessToken = accessToken || null;
+    if (!finalAccessToken && typeof (supabase.auth as any).getSession === 'function') {
+      try {
+        const { data: fresh } = await (supabase.auth as any).getSession();
+        finalAccessToken = (fresh as any)?.session?.access_token || finalAccessToken;
+      } catch (e) {
+        // ignore
+      }
+    }
+    if (finalAccessToken) headers.Authorization = `Bearer ${finalAccessToken}`;
     console.debug('[useSupabaseSession] fetching /api/user/role, userId=', u.id, 'hasAccessToken=', Boolean(accessToken));
     const res = await fetch('/api/user/role', { headers });
     if (res.ok) {
