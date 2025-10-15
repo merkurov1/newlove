@@ -10,22 +10,25 @@ export default async function AdminProjectsPage() {
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const _ctx = await getUserAndSupabaseForRequest(globalReq);
-  let supabase = _ctx && _ctx.supabase;
+  // If the canonical helper returned a server-side service client, use it.
+  // Otherwise explicitly prefer the service-role server client for privileged admin reads
+  // to avoid permission-denied errors when RLS blocks request-scoped clients.
+  let supabase: any;
+  if (_ctx?.isServer) {
+    supabase = _ctx.supabase;
+  } else {
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    supabase = getServerSupabaseClient({ useServiceRole: true });
+  }
+
   let projects: any[] = [];
-  if (supabase) {
+  try {
     const { data, error } = await supabase.from('projects').select('*').order('createdAt', { ascending: false });
     if (error) console.error('Supabase fetch admin projects error', error);
     projects = data || [];
-  } else {
-    try {
-      const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
-      const { data, error } = await serverSupabase.from('projects').select('*').order('createdAt', { ascending: false });
-      if (error) console.error('Supabase fetch admin projects (server) error', error);
-      projects = data || [];
-    } catch (e) {
-      console.error('Failed to fetch admin projects via server client', e);
-      projects = [];
-    }
+  } catch (e) {
+    console.error('Failed to fetch admin projects via supabase client', e);
+    projects = [];
   }
 
   return (

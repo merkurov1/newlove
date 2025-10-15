@@ -8,12 +8,24 @@ export const dynamic = 'force-dynamic';
 export default async function AdminArticlesPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
+  const _ctx = await getUserAndSupabaseForRequest(globalReq);
+
+  let supabase: any;
+  if (_ctx?.isServer) {
+    supabase = _ctx.supabase;
+  } else {
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    supabase = getServerSupabaseClient({ useServiceRole: true });
+  }
+
   let articles: any[] = [];
-  if (supabase) {
-  const { data, error } = await supabase.from('articles').select('id,title,slug,published,author:authorId(name)').order('createdAt', { ascending: false });
+  try {
+    const { data, error } = await supabase.from('articles').select('id,title,slug,published,author:authorId(name)').order('createdAt', { ascending: false });
     if (error) console.error('Supabase fetch admin articles error', error);
     articles = safeData(data || []);
+  } catch (e) {
+    console.error('Failed to fetch admin articles via supabase client', e);
+    articles = [];
   }
 
   return (
