@@ -1,6 +1,6 @@
 'use client';
 
-import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { useAuth } from '@/components/AuthContext';
 import { useFormState } from 'react-dom';
 import { subscribeToNewsletter } from '@/app/admin/actions';
 import { useEffect, useRef, useState } from 'react';
@@ -21,7 +21,7 @@ function SubmitButton() {
 
 
 export default function Footer({ subscriberCount }) {
-  const { session } = useSupabaseSession();
+  const { session } = useAuth();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [checkingSubscription, setCheckingSubscription] = useState(true);
   const formRef = useRef(null);

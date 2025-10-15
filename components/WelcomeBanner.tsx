@@ -1,6 +1,6 @@
 'use client';
 
-import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { useAuth } from '@/components/AuthContext';
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -59,7 +59,8 @@ const BANNER_CONFIGS: Record<string, BannerConfig> = {
  * - Современный дизайн с градиентами и закругленными углами
  */
 export default function WelcomeBanner({ onClose, variant, forceShow = false }: WelcomeBannerProps) {
-  const { session, status } = useSupabaseSession();
+  const { session, isLoading } = useAuth();
+  const status = isLoading ? 'loading' : (session ? 'authenticated' : 'unauthenticated');
   const [isVisible, setIsVisible] = useState(false);
   const [bannerConfig, setBannerConfig] = useState<BannerConfig | null>(null);
   const { isLoaded, shouldShowBanner, markBannerShown, dismissBanner } = useBannerSettings();

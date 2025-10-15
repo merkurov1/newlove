@@ -2,10 +2,11 @@
 "use client";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import useSupabaseSession from "@/hooks/useSupabaseSession";
+import { useAuth } from '@/components/AuthContext';
 
 export default function AdminAutoRedirect() {
-  const { session, status } = useSupabaseSession();
+  const { session, isLoading } = useAuth();
+  const status = isLoading ? 'loading' : (session ? 'authenticated' : 'unauthenticated');
   const router = useRouter();
   const pathname = usePathname();
 

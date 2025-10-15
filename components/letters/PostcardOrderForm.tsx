@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { useAuth } from '@/components/AuthContext';
 import Image from 'next/image';
 
 interface Postcard {
@@ -32,7 +32,7 @@ interface FormData {
 }
 
 export default function PostcardOrderForm({ postcard, onBack }: PostcardOrderFormProps) {
-  const { session } = useSupabaseSession();
+  const { session } = useAuth();
   const [formData, setFormData] = useState<FormData>({
   recipientName: session?.user?.name || '',
     streetAddress: '',

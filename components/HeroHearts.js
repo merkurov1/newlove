@@ -1,8 +1,9 @@
 "use client";
-import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { useAuth } from '@/components/AuthContext';
 
 export default function HeroHearts({ className = "", style }) {
-  const { session, status } = useSupabaseSession();
+  const { session, isLoading } = useAuth();
+  const status = isLoading ? 'loading' : (session ? 'authenticated' : 'unauthenticated');
 
   // Определяем вариант hero
   let title = 'Добро пожаловать в мир медиа и технологий';

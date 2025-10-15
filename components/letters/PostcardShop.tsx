@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { useAuth } from '@/components/AuthContext';
 import PostcardOrderForm from './PostcardOrderForm';
 
 interface Postcard {
@@ -20,7 +20,7 @@ export default function PostcardShop() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPostcard, setSelectedPostcard] = useState<Postcard | null>(null);
-  const { session } = useSupabaseSession();
+  const { session } = useAuth();
 
   useEffect(() => {
     const fetchPostcards = async () => {

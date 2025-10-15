@@ -1,8 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createPortal } from 'react-dom';
-import useSupabaseSession from '@/hooks/useSupabaseSession';
-import { useAuth } from './AuthContext';
+import { useAuth } from '@/components/AuthContext';
 import Onboard from '@web3-onboard/core';
 import injectedModule from '@web3-onboard/injected-wallets';
 import walletConnectModule from '@web3-onboard/walletconnect';
@@ -12,8 +11,10 @@ import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 const supabase = createBrowserClient();
 
 export default function ModernLoginModal({ onClose }: { onClose?: () => void } = {}) {
-  const { status, error } = useSupabaseSession() as any;
+  const { isLoading, session } = useAuth() as any;
+  const status = isLoading ? 'loading' : (session ? 'authenticated' : 'unauthenticated');
   const auth = useAuth();
+  const error = null; // ModernLoginModal shows supabase errors from signInWithOAuth; keep placeholder
   const [loading, setLoading] = useState(false);
   const [web3Error, setWeb3Error] = useState('');
   const [mounted, setMounted] = useState(false);
