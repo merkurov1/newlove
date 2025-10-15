@@ -9,6 +9,17 @@ export default function useSupabaseSession() {
   const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
   const [error, setError] = useState<string | null>(null);
 
+  // Expose minimal debug info for diagnosing client issues (no tokens).
+  const setGlobalDebug = (s: any, st: any, e: any) => {
+    try {
+      if (typeof window !== 'undefined') {
+        (window as any).__newloveAuth = { session: s ? { user: s.user ? { id: s.user.id, email: s.user.email, role: s.user.role || s.user?.user_metadata?.role || null } : null } : null, status: st, error: e || null };
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     const emitSessionChanged = () => {
       try {
@@ -40,12 +51,18 @@ export default function useSupabaseSession() {
         }
         if (user) {
           const role = await resolveRole(user, accessToken);
-          setSession({ user: mapUser(user, role), accessToken });
+          const mapped = { user: mapUser(user, role), accessToken };
+          setSession(mapped);
           setStatus('authenticated');
+          setGlobalDebug(mapped, 'authenticated', null);
+          // Notify any UI listeners that session/state changed
+          emitSessionChanged();
         } else {
           console.debug('[useSupabaseSession] signed out');
           setSession(null);
           setStatus('unauthenticated');
+          setGlobalDebug(null, 'unauthenticated', null);
+          emitSessionChanged();
         }
       } catch (e) {
         console.error('[useSupabaseSession] onAuthStateChange handler error', e);
@@ -135,11 +152,13 @@ export default function useSupabaseSession() {
               console.debug('[useSupabaseSession] set-cookie POST failed', e);
             }
 
-            const role = await resolveRole(sess.user, accessToken);
-            setSession({ user: mapUser(sess.user, role), accessToken });
-            setStatus('authenticated');
-            emitSessionChanged();
-            emitSessionChanged();
+              const role = await resolveRole(sess.user, accessToken);
+              const mapped = { user: mapUser(sess.user, role), accessToken };
+              setSession(mapped);
+              setStatus('authenticated');
+              setGlobalDebug(mapped, 'authenticated', null);
+              // ensure listeners update
+              emitSessionChanged();
             console.debug('[useSupabaseSession] initialized session from getSession', { user: sess.user.id, role });
             return;
           }
@@ -157,11 +176,14 @@ export default function useSupabaseSession() {
             if (resp.ok) {
               const j = await resp.json();
               if (j && j.user) {
-                // set a lightweight session object so UI can react
-                setSession({ user: { id: j.user.id, email: j.user.email, role: (j.user.role || null) }, accessToken: null });
-                setStatus('authenticated');
-                return;
-              }
+                  // set a lightweight session object so UI can react
+                  const mapped = { user: { id: j.user.id, email: j.user.email, role: (j.user.role || null) }, accessToken: null };
+                  setSession(mapped);
+                  setStatus('authenticated');
+                  setGlobalDebug(mapped, 'authenticated', null);
+                  emitSessionChanged();
+                  return;
+                }
             }
           } catch (e) {
             // ignore

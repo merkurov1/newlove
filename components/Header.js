@@ -60,11 +60,24 @@ export default function Header({ projects, settings }) {
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('supabase:session-changed', onSessionChanged);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('supabase:session-changed', onSessionChanged);
+    };
   }, []);
 
   return (
     <>
+      {/* Opt-in debug overlay when ?auth_debug=1 */}
+      {typeof window !== 'undefined' && window.location.search.includes('auth_debug=1') && (
+        <div style={{position:'fixed', right:8, bottom:8, zIndex:99999, background:'rgba(0,0,0,0.7)', color:'#fff', padding:8, borderRadius:6, fontSize:12, maxWidth:320}}>
+          <div style={{fontWeight:700, marginBottom:6}}>Auth debug</div>
+          <div>status: {status}</div>
+          <div style={{marginTop:6}}>user: {session?.user ? `${session.user.id} ${session.user.email}` : 'null'}</div>
+          <div style={{marginTop:6}}>role: {session?.user?.role || '—'}</div>
+          <div style={{marginTop:6, opacity:0.8}}>open console: window.__newloveAuth</div>
+        </div>
+      )}
       <AdminAutoRedirect />
       <header
   className={`sticky top-0 z-50 w-full backdrop-blur-md bg-gradient-to-b from-pink-50 via-white/90 to-white transition-transform duration-400 ease-in-out ${hideOnScroll ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'shadow-sm' : ''}`}
