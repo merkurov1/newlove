@@ -140,128 +140,43 @@ export async function requireAdminFromRequest(req?: Request | null): Promise<any
       try {
         if (req && typeof req.headers?.get === 'function') {
           const cookieHeader = req.headers.get('cookie') || '';
-          const cookies = Object.fromEntries(
-            cookieHeader
-              .split(';')
-              .map((s) => {
-                const [k, ...v] = s.split('=');
-                return [k && k.trim(), decodeURIComponent((v || []).join('='))];
-              })
-              .filter(Boolean)
-          );
-          // Try standard cookie names first
-          let accessToken = cookies['sb-access-token'] || cookies['supabase-access-token'] || '';
-          // If missing, attempt to reconstruct split sb-<ref>-auth-token.* cookies
-          if (!accessToken) {
-            const candidates: Record<string, string[]> = {};
-            for (const name of Object.keys(cookies || {})) {
-              if (/sb-.*(?:auth-token|access-token|token)/i.test(name) || /supabase-?access-?token/i.test(name)) {
-                const m = name.match(/^(.*?)(?:\.(\d+))?$/);
-                const base = m ? m[1] : name;
-                const partIndex = m && m[2] ? parseInt(m[2], 10) : -1;
-                if (!candidates[base]) candidates[base] = [];
-                candidates[base].push(typeof partIndex === 'number' && partIndex >= 0 ? `${partIndex}:${cookies[name]}` : `-:${cookies[name]}`);
-              }
-            }
-            for (const base of Object.keys(candidates)) {
-              const parts = candidates[base]
-                .map((s) => {
-                  const [idx, ...rest] = s.split(':');
-                  return { idx: idx === '-' ? -1 : parseInt(idx, 10), val: rest.join(':') };
-                })
-                .sort((a, b) => a.idx - b.idx);
-              const joined = parts.map((p) => p.val).join('');
-              if (joined && joined.length) {
-                accessToken = joined;
-                break;
-              }
-            }
-          }
+          const res = (await import('./auth/tokenUtils')).default.extractTokenFromCookieHeader(cookieHeader);
+          let accessToken = res.token || '';
           if (accessToken) {
-            // Try to normalize and decode JWT payload without verification to get `sub` (user id)
-            try {
-              // Normalize common wrapper shapes (base64-<json>, JSON wrapper with access_token)
-              let normalized = accessToken;
+            const normalized = (await import('./auth/tokenUtils')).default.normalizeToken(accessToken);
+            const uid = (await import('./auth/tokenUtils')).default.decodeUidFromJwt(normalized);
+            if (uid) {
               try {
-                const maybe = typeof normalized === 'string' ? decodeURIComponent(normalized) : normalized;
-                if (typeof maybe === 'string' && maybe.trim().startsWith('{')) {
-                  const parsed = JSON.parse(maybe);
-                  if (parsed && (parsed.access_token || parsed.token || parsed.accessToken)) {
-                    normalized = parsed.access_token || parsed.token || parsed.accessToken;
-                  }
-                }
-              } catch (e) {
-                // ignore
-              }
-              if (typeof normalized === 'string' && normalized.startsWith('base64-')) {
+                const svc = getServerSupabaseClient({ useServiceRole: true });
                 try {
-                  const b64 = normalized.slice('base64-'.length);
-                  const buf = Buffer.from(b64, 'base64');
-                  const txt = buf.toString('utf8');
-                  try {
-                    const parsed = JSON.parse(txt);
-                    if (parsed && (parsed.access_token || parsed.token || parsed.accessToken)) {
-                      normalized = parsed.access_token || parsed.token || parsed.accessToken;
-                    } else {
-                      normalized = txt;
+                  const rpcAny = await (svc as any).rpc('get_my_user_roles_any', { uid_text: uid });
+                  if (!rpcAny?.error && Array.isArray(rpcAny.data) && rpcAny.data.length) {
+                    const found = rpcAny.data.some((r: any) => {
+                      if (!r) return false;
+                      if (typeof r === 'string') return r.toUpperCase() === 'ADMIN';
+                      const vals = Object.values(r).map((v: any) => String(v).toUpperCase());
+                      return vals.includes('ADMIN');
+                    });
+                    if (found) {
+                      return { id: uid, role: 'ADMIN' } as any;
                     }
-                  } catch (e) {
-                    normalized = txt;
                   }
-                } catch (e) {
-                  // ignore
+                } catch (e2) {
+                  // rpc missing or failed - fallback to direct select
                 }
-              }
 
-              const parts = normalized.split('.');
-              if (parts.length >= 2) {
-                const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-                // pad base64 string
-                const pad = payloadB64.length % 4;
-                const padded = payloadB64 + (pad ? '='.repeat(4 - pad) : '');
-                // Use Buffer where available
-                // eslint-disable-next-line @typescript-eslint/no-var-requires
-                const buf = Buffer.from(padded, 'base64');
-                const payloadJson = buf.toString('utf8');
-                const payload = JSON.parse(payloadJson || '{}');
-                const uid = payload.sub || payload.user_id || null;
-                if (uid) {
-                  try {
-                    const svc = getServerSupabaseClient({ useServiceRole: true });
-                    // Use security-definer RPC if available, otherwise check user_roles
-                    try {
-                      const rpcAny = await (svc as any).rpc('get_my_user_roles_any', { uid_text: uid });
-                      if (!rpcAny?.error && Array.isArray(rpcAny.data) && rpcAny.data.length) {
-                        const found = rpcAny.data.some((r: any) => {
-                          if (!r) return false;
-                          if (typeof r === 'string') return r.toUpperCase() === 'ADMIN';
-                          const vals = Object.values(r).map((v: any) => String(v).toUpperCase());
-                          return vals.includes('ADMIN');
-                        });
-                        if (found) {
-                          return { id: uid, role: 'ADMIN' } as any;
-                        }
-                      }
-                    } catch (e2) {
-                      // rpc missing or failed - fallback to direct select
-                    }
-
-                    const res = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', uid);
-                    if (!res.error && Array.isArray(res.data)) {
-                      const hasAdmin = res.data.some((r: any) => {
-                        const roleList: any = r.roles;
-                        if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
-                        return String(roleList?.name).toUpperCase() === 'ADMIN';
-                      });
-                      if (hasAdmin) return { id: uid, role: 'ADMIN' } as any;
-                    }
-                  } catch (e3) {
-                    // ignore fallback errors
-                  }
+                const res2 = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', uid);
+                if (!res2.error && Array.isArray(res2.data)) {
+                  const hasAdmin = res2.data.some((r: any) => {
+                    const roleList: any = r.roles;
+                    if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
+                    return String(roleList?.name).toUpperCase() === 'ADMIN';
+                  });
+                  if (hasAdmin) return { id: uid, role: 'ADMIN' } as any;
                 }
+              } catch (e3) {
+                // ignore fallback errors
               }
-            } catch (ePayload) {
-              // ignore payload parse errors
             }
           }
         }
