@@ -43,6 +43,34 @@ export async function GET(req: Request) {
       serviceSupabase = null;
     }
 
+    // First, try a SECURITY DEFINER RPC which is the most reliable way to check DB-owned roles.
+    try {
+      const rpcClient = serviceSupabase || supabase;
+      if (rpcClient) {
+        try {
+          const rpcAny = await (rpcClient as any).rpc('get_my_user_roles_any', { uid_text: user.id });
+          if (!rpcAny?.error && Array.isArray(rpcAny.data) && rpcAny.data.length) {
+            const found = rpcAny.data.some((r: any) => {
+              if (!r) return false;
+              if (typeof r === 'string') return r.toUpperCase() === 'ADMIN';
+              const vals = Object.values(r).map((v: any) => String(v).toUpperCase());
+              return vals.includes('ADMIN');
+            });
+            if (found) {
+              console.debug('[api/user/role] detected ADMIN via get_my_user_roles_any RPC');
+              role = 'ADMIN';
+              return NextResponse.json({ role });
+            }
+          }
+        } catch (e) {
+          console.debug('[api/user/role] get_my_user_roles_any RPC failed', e);
+        }
+      }
+    } catch (e) {
+      // continue to other checks
+      console.debug('[api/user/role] rpc any check top-level failed', e);
+    }
+
     let rolesData: any = null;
     let rolesErr: any = null;
 
