@@ -18,11 +18,9 @@ export default function AdminAutoRedirect() {
     // Prefer server-detected role via /api/user/role (covers DB-mapped roles)
     const checkServerRole = async () => {
       try {
-        const headers: Record<string, string> = {};
-        const token = (session as any)?.accessToken || (session as any)?.user?.access_token || null;
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        // Use same-origin credentials as a fallback for cookie-based sessions
-        const res = await fetch('/api/user/role', { headers, credentials: 'same-origin' });
+        // Rely on cookie-based same-origin auth. Do NOT send Authorization header here,
+        // so middleware and server checks use the same auth surface.
+        const res = await fetch('/api/user/role', { credentials: 'same-origin' });
         if (!mounted) return;
         if (!res.ok) return;
         const j = await res.json().catch(() => null);
