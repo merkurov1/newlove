@@ -29,10 +29,23 @@ export async function middleware(request: NextRequest) {
           return NextResponse.next();
         }
 
-        // Some API responses may embed RPC results; check them conservatively
-        if (body && body.rpc && body.rpc.get_my_user_roles_any_svc && Array.isArray(body.rpc.get_my_user_roles_any_svc.data)) {
-          const found = body.rpc.get_my_user_roles_any_svc.data.some((r: any) => String(r.role_name || '').toUpperCase() === 'ADMIN');
-          if (found) return NextResponse.next();
+        // Check various possible locations for service-backed RPC results.
+        const rpcContainers = [body && body.rpc, body && body.debug && body.debug.rpc];
+        for (const rpc of rpcContainers) {
+          if (!rpc) continue;
+          // Common naming: get_my_user_roles_any or get_my_user_roles_any_svc
+          const candidates = ['get_my_user_roles_any_svc', 'get_my_user_roles_any', 'get_my_user_roles', 'get_my_roles'];
+          for (const name of candidates) {
+            if (rpc[name] && Array.isArray(rpc[name].data)) {
+              const found = rpc[name].data.some((r: any) => {
+                if (!r) return false;
+                // support { role_name: 'ADMIN' }, { name: 'ADMIN' }, strings
+                const vals = Object.values(r).map((v: any) => String(v || '').toUpperCase());
+                return vals.includes('ADMIN');
+              });
+              if (found) return NextResponse.next();
+            }
+          }
         }
       }
     } catch (e) {
