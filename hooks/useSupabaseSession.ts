@@ -85,7 +85,7 @@ export default function useSupabaseSession() {
 
     init();
 
-    // Subscribe to auth state changes
+    // Subscribe to auth state changes early so we don't miss events
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, payload) => {
       console.debug('[useSupabaseSession] onAuthStateChange', { event });
       if (!mounted) return;

@@ -55,13 +55,14 @@ export default function UserSidebar() {
   };
 
   const role = (user.role || '').toString();
+  const roleNorm = (role.toUpperCase() === 'AUTHENTICATED' || role.toUpperCase() === 'ANONYMOUS') ? 'USER' : role.toUpperCase();
   // Debug info panel at the left of the sidebar for troubleshooting
   const debugPanel = (
-    <div className="ml-3 text-xs text-gray-500">
-      <div>status: {String(status)}</div>
-      <div>id: {user.id}</div>
-      <div>email: {user.email || '—'}</div>
-      <div>role: {role}</div>
+      <div className="ml-3 text-xs text-gray-500">
+        <div>status: {String(status)}</div>
+        <div>id: {user.id}</div>
+        <div>email: {user.email || '—'}</div>
+        <div>role: {roleNorm}</div>
       <div className="mt-2">
         <button
           onClick={runDiagnostics}
@@ -82,7 +83,7 @@ export default function UserSidebar() {
     </div>
   );
 
-  if (role.toUpperCase() === 'ADMIN') {
+  if (roleNorm === 'ADMIN') {
     // Админский сайдбар
     return (
       <div className="w-full border-t border-pink-300 bg-pink-50 flex flex-row items-center justify-center py-3 gap-3">
