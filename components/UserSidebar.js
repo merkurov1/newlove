@@ -15,6 +15,7 @@ export default function UserSidebar() {
   const [diagLoading, setDiagLoading] = React.useState(false);
   const [diagResult, setDiagResult] = React.useState(null);
   const [diagError, setDiagError] = React.useState(null);
+  const [effectiveRole, setEffectiveRole] = React.useState(null);
 
   const runDiagnostics = async () => {
     setDiagLoading(true);
@@ -73,6 +74,28 @@ export default function UserSidebar() {
     }
     setDiagLoading(false);
   };
+
+  // On mount, check effective role via server endpoint and cache it locally
+  React.useEffect(() => {
+    let mounted = true;
+    const checkRole = async () => {
+      try {
+        const sb = createBrowserClient();
+        const { data: sessData } = await sb.auth.getSession();
+        const sess = (sessData || {}).session || null;
+        const token = sess?.access_token || null;
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch('/api/user/role', { headers });
+        const json = await res.json().catch(() => null);
+        if (!mounted) return;
+        if (json && json.role) setEffectiveRole(String(json.role).toUpperCase());
+      } catch (e) {
+        // ignore — diagnostics button can be used
+      }
+    };
+    checkRole();
+    return () => { mounted = false; };
+  }, []);
 
   const roleNorm = (Array.isArray(roles) && roles.length) ? roles[0] : 'USER';
   // Debug info panel at the left of the sidebar for troubleshooting
