@@ -32,26 +32,12 @@ export default function UserSidebar() {
       const roleRes = await fetch('/api/user/role', { headers });
       const roleJson = await roleRes.json().catch(() => null);
 
-      // RPC: try several possible RPC names (some deployments use different names)
-      // order: get_my_roles() -> get_my_user_roles() -> get_my_user_roles_any(uid_text)
+      // RPC: get roles assigned in DB (get_my_roles) — safer and returns role names
       let rpcRoles = null;
       try {
-        let res = await sb.rpc('get_my_roles');
-        if (res.error) {
-          // try no-arg get_my_user_roles
-          res = await sb.rpc('get_my_user_roles');
-        }
-        if (res.error) {
-          // try text-accepting variant with explicit param
-          try {
-            res = await sb.rpc('get_my_user_roles_any', { uid_text: user.id });
-          } catch (e) {
-            // ignore — we'll surface the outer error below
-          }
-        }
-
-        if (res && res.error) rpcRoles = { error: res.error.message || String(res.error) };
-        else rpcRoles = (res && res.data) ? res.data : [];
+        const { data: rpcData, error: rpcError } = await sb.rpc('get_my_roles');
+        if (rpcError) rpcRoles = { error: rpcError.message || String(rpcError) };
+        else rpcRoles = rpcData || [];
       } catch (e) {
         rpcRoles = { error: e?.message || String(e) };
       }
@@ -141,7 +127,6 @@ export default function UserSidebar() {
         <div>email: {user.email || '—'}</div>
         <div>role: {(user.role || '').toString()}</div>
       </div>
-      {debugPanel}
     </div>
   );
 }
