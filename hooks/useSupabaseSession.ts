@@ -11,8 +11,41 @@ export default function useSupabaseSession() {
 
   useEffect(() => {
     let mounted = true;
+    // Subscribe to auth state changes immediately so we don't miss events that happen
+    // during the redirect flow (getSessionFromUrl may trigger onAuthStateChange).
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, payload) => {
+      console.debug('[useSupabaseSession] onAuthStateChange', { event });
+      if (!mounted) return;
+      try {
+        // If payload contains session, prefer it
+        let user = null;
+        let accessToken: string | null = null;
+        if (payload && (payload as any).session) {
+          user = (payload as any).session.user || null;
+          accessToken = (payload as any).session.access_token || null;
+        }
+        // fallback to getUser
+        if (!user) {
+          const { data: ud } = await supabase.auth.getUser();
+          user = (ud as any)?.user || null;
+        }
+        if (user) {
+          const role = await resolveRole(user, accessToken);
+          setSession({ user: mapUser(user, role), accessToken });
+          setStatus('authenticated');
+        } else {
+          console.debug('[useSupabaseSession] signed out');
+          setSession(null);
+          setStatus('unauthenticated');
+        }
+      } catch (e) {
+        console.error('[useSupabaseSession] onAuthStateChange handler error', e);
+      }
+    });
 
-    // Initialize: process OAuth redirect (if any) and then read session
+    // Initialize: process OAuth redirect (if any) and then read session. We do this after
+    // listener registration so we won't miss the onAuthStateChange event dispatched
+    // by getSessionFromUrl.
     const init = async () => {
       try {
         if (typeof window !== 'undefined') {
@@ -46,7 +79,7 @@ export default function useSupabaseSession() {
         // Try to read current session. Use small retry loop because some providers/platforms
         // take a short moment to set cookies/session after redirect.
         try {
-          const attempts = [0, 300, 1000];
+          const attempts = [0, 200, 700, 1200];
           let sess: any = null;
           for (const delay of attempts) {
             if (delay) await new Promise((r) => setTimeout(r, delay));
@@ -84,8 +117,6 @@ export default function useSupabaseSession() {
     };
 
     init();
-
-    // If user returns to the tab (after OAuth redirect), try to pick up session again.
     const tryLoadSession = async () => {
       if (!mounted) return;
       try {
