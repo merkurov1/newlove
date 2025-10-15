@@ -1,12 +1,13 @@
 // components/DebugEditButton.tsx
 'use client';
 
-import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { useAuth } from '@/components/AuthContext';
 import { usePathname } from 'next/navigation';
 import { useEditContext } from './EditContext';
 
 export default function DebugEditButton() {
-  const { session, status } = useSupabaseSession();
+  const { session, isLoading } = useAuth();
+  const status = isLoading ? 'loading' : (session ? 'authenticated' : 'unauthenticated');
   const pathname = usePathname();
   const editContext = useEditContext();
 

@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo, useCallback } from 'react';
 import useSupabaseSession from '@/hooks/useSupabaseSession';
 import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 
@@ -22,11 +22,11 @@ export const useAuth = () => {
   return ctx;
 };
 
-// Thin provider that delegates to the canonical useSupabaseSession hook.
+// Provider: single source of truth that wraps useSupabaseSession and exposes memoized value
 export function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const { session, status, signIn, signOut, error } = useSupabaseSession() as any;
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = useCallback(async () => {
     const redirectTo = typeof window !== 'undefined' ? window.location.href : undefined;
     try {
       if (typeof window !== 'undefined' && redirectTo) {
@@ -34,12 +34,11 @@ export function AuthProviderInner({ children }: { children: React.ReactNode }) {
       }
       await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } } as any);
     } catch (e) {
-      // swallow here — hook/useAuth consumers can inspect session/error
       console.error('signInWithGoogle failed', e);
     }
-  };
+  }, []);
 
-  const roles: string[] = (() => {
+  const roles: string[] = useMemo(() => {
     try {
       const r = (session && session.user && session.user.role) || null;
       if (r) return [String(r).toUpperCase()];
@@ -47,16 +46,16 @@ export function AuthProviderInner({ children }: { children: React.ReactNode }) {
     } catch (e) {
       return [];
     }
-  })();
+  }, [session]);
 
-  const value: AuthState = {
+  const value = useMemo<AuthState>(() => ({
     user: session ? session.user : null,
     roles,
     session: session || null,
     isLoading: status === 'loading',
     signInWithGoogle,
     signOut: async () => { try { await signOut(); } catch (e) { /* ignore */ } },
-  };
+  }), [session, status, roles, signInWithGoogle, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

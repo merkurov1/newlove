@@ -4,7 +4,7 @@
 import Link from "next/link";
 import SafeImage from '@/components/SafeImage';
 
-import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { useAuth } from '@/components/AuthContext';
 import AdminAutoRedirect from './AdminAutoRedirect';
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
@@ -13,7 +13,8 @@ import LoginButton from './LoginButton';
 
 
 export default function Header({ projects, settings }) {
-  const { session, status } = useSupabaseSession();
+  const { session, isLoading } = useAuth();
+  const status = isLoading ? 'loading' : (session ? 'authenticated' : 'unauthenticated');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [hideOnScroll, setHideOnScroll] = useState(false);
   const [scrolled, setScrolled] = useState(false);

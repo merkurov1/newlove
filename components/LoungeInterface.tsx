@@ -5,7 +5,7 @@ import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
 import LinkPreview from './LinkPreview';
-import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { useAuth } from '@/components/AuthContext';
 import type { InitialMessage, TypingUser } from '@/types/messages';
 
 type Props = {
@@ -17,7 +17,7 @@ type Props = {
 // TypingUser is imported from types/messages
 
 export default function LoungeInterface({ initialMessages, session: propSession }: Props) {
-  const { session: hookSession } = useSupabaseSession();
+  const { session: hookSession } = useAuth();
   const session = propSession ?? hookSession;
   const supabase = createBrowserClient();
   const [messages, setMessages] = useState(initialMessages);

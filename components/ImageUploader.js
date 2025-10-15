@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase-client';
-import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { useAuth } from '@/components/AuthContext';
 
 export default function ImageUploader({ onUploadSuccess }) {
-  const { session } = useSupabaseSession();
+  const { session } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
 

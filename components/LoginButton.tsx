@@ -4,11 +4,11 @@
 import { useState } from "react";
 import ModernLoginModal from "./ModernLoginModal";
 import Image from "next/image";
-import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { useAuth } from '@/components/AuthContext';
 
 export default function LoginButton() {
   const [modalOpen, setModalOpen] = useState(false);
-  const { session, signOut } = useSupabaseSession() as any;
+  const { session, signOut } = useAuth() as any;
 
   if (session?.user) {
     return (
