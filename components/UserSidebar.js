@@ -1,14 +1,14 @@
 // components/UserSidebar.js
 "use client";
 import Link from 'next/link';
-import useSupabaseSession from '@/hooks/useSupabaseSession';
+// import useSupabaseSession from '@/hooks/useSupabaseSession';
+import { useAuth } from './AuthContext';
 import Image from 'next/image';
 import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 
 export default function UserSidebar() {
-  const { session, status } = useSupabaseSession();
-  if (status !== 'authenticated' || !session?.user) return null;
-  const { user } = session;
+  const { user, roles, isLoading } = useAuth();
+  if (isLoading || !user) return null;
   const username = user.username || user.name || 'me';
 
   const [diagLoading, setDiagLoading] = React.useState(false);
@@ -54,8 +54,7 @@ export default function UserSidebar() {
     setDiagLoading(false);
   };
 
-  const role = (user.role || '').toString();
-  const roleNorm = (role.toUpperCase() === 'AUTHENTICATED' || role.toUpperCase() === 'ANONYMOUS') ? 'USER' : role.toUpperCase();
+  const roleNorm = (Array.isArray(roles) && roles.length) ? roles[0] : 'USER';
   // Debug info panel at the left of the sidebar for troubleshooting
   const debugPanel = (
       <div className="ml-3 text-xs text-gray-500">
