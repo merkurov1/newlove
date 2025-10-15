@@ -1,6 +1,5 @@
 // components/LoginButton.tsx
 
-
 "use client";
 import { useState } from "react";
 import ModernLoginModal from "./ModernLoginModal";
@@ -9,7 +8,7 @@ import useSupabaseSession from '@/hooks/useSupabaseSession';
 
 export default function LoginButton() {
   const [modalOpen, setModalOpen] = useState(false);
-  const { session } = useSupabaseSession();
+  const { session, signOut } = useSupabaseSession() as any;
 
   if (session?.user) {
     return (
@@ -24,24 +23,24 @@ export default function LoginButton() {
           />
         )}
         <span>{session.user?.name || session.user?.email}</span>
-        <button onClick={async () => { const { createClient } = await import('@/lib/supabase-browser'); const supabase = createClient(); await supabase.auth.signOut(); window.location.reload(); }}>Выйти</button>
+        <button onClick={async () => { if (signOut) await signOut(); window.location.reload(); }}>Выйти</button>
       </div>
     );
   }
 
-  // Кнопка снова открывает модальное окно выбора способа входа
   const handleOpen = () => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('login_redirect_path', window.location.pathname + window.location.search);
     }
     setModalOpen(true);
   };
+
   return (
     <>
       <button onClick={handleOpen} style={{ padding: 10, borderRadius: 8, fontWeight: 600, fontSize: 16 }}>
         Войти
       </button>
-  {modalOpen && <ModernLoginModal onClose={() => setModalOpen(false)} />}
+      {modalOpen && <ModernLoginModal />}
     </>
   );
 }

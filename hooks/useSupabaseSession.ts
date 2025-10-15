@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from 'react';
 
-import { createClient as createBrowserClient } from '@/lib/supabase-browser';
+import { supabase, createClient as createBrowserClient } from '@/lib/supabase-browser';
 
 // Use a single browser client factory so all components share the same
 // auth state and subscriptions. Other components already import and call
@@ -11,15 +11,17 @@ import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 export default function useSupabaseSession() {
   const [session, setSession] = useState<any | null>(null);
   const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
   let mounted = true;
-  const supabase = createBrowserClient();
     const get = async () => {
-      const { data } = await supabase.auth.getSession();
-      const s = data.session;
-      if (!mounted) return;
-      if (s?.user) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const s = data.session;
+        console.debug('[useSupabaseSession] getSession ->', { session: !!s, userId: s?.user?.id });
+        if (!mounted) return;
+        if (s?.user) {
         const user = s.user;
         let role = user.user_metadata?.role || 'USER';
         // Проверяем user_roles только если явно нет ADMIN в user_metadata
@@ -69,9 +71,15 @@ export default function useSupabaseSession() {
         setSession(null);
         setStatus('unauthenticated');
       }
+    } catch (e: any) {
+      console.error('[useSupabaseSession] getSession error', e);
+      if (mounted) setError(String(e));
+      return;
+    }
     };
     get();
-  const { data: listener } = supabase.auth.onAuthStateChange(async (_event, s) => {
+  const { data: listener } = supabase.auth.onAuthStateChange(async (event, s) => {
+      console.debug('[useSupabaseSession] onAuthStateChange', { event, userId: s?.user?.id });
       if (!mounted) return;
       if (s?.user) {
         const user = s.user;
@@ -119,6 +127,7 @@ export default function useSupabaseSession() {
         });
         setStatus('authenticated');
       } else {
+        console.debug('[useSupabaseSession] signed out');
         setSession(null);
         setStatus('unauthenticated');
       }
@@ -133,5 +142,13 @@ export default function useSupabaseSession() {
       }
     };
   }, []);
-  return { session, status };
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setError(error.message);
+    return error;
+  };
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
+  return { session, status, signIn, signOut, error };
 }
