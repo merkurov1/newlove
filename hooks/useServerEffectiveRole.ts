@@ -11,10 +11,8 @@ export default function useServerEffectiveRole(session: any | null) {
     }
     const check = async () => {
       try {
-        const token = (session as any)?.accessToken || (session as any)?.user?.access_token || null;
-        const headers: Record<string, string> = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        const res = await fetch('/api/user/role', { headers, credentials: 'same-origin' });
+        // Use cookie-based same-origin auth so server/middleware and client agree
+        const res = await fetch('/api/user/role', { credentials: 'same-origin' });
         if (!mounted) return;
         if (!res.ok) return;
         const j = await res.json().catch(() => null);
