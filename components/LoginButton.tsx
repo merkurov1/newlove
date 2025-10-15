@@ -23,7 +23,7 @@ export default function LoginButton() {
           />
         )}
         <span>{session.user?.name || session.user?.email}</span>
-        <button onClick={async () => { if (signOut) await signOut(); window.location.reload(); }}>Выйти</button>
+        <button onClick={async () => { if (signOut) await signOut(); }}>Выйти</button>
       </div>
     );
   }
