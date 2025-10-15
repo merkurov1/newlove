@@ -19,7 +19,11 @@ export async function getUserAndSupabaseForRequest(req?: Request | null): Promis
 
   try {
     const srv = await import('./serverAuth');
-    const supabase = srv.getServerSupabaseClient();
+    // Use service role for server-side fallback reads that require elevated
+    // privileges (projects, admin counters, etc.). Callers that should not
+    // have elevated access can still opt-out by using the request-based
+    // helpers or by explicitly importing serverAuth without the service role.
+    const supabase = srv.getServerSupabaseClient({ useServiceRole: true });
     return { supabase, isServer: true } as SupaRequestResult;
   } catch (e) {
     // Emergency mock fallback to keep the site running if DB completely unavailable
