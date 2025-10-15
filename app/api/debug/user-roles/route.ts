@@ -22,6 +22,12 @@ export async function GET(req: Request) {
 
     const out: any = { user_id: userId };
 
+    // Expose presence of key env vars (without revealing values) to help debugging
+    out.env = {
+      has_SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+      has_SUPABASE_URL: Boolean(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL),
+    };
+
     // Acquire service-role client if possible
     let svc: any = null;
     try {
@@ -30,6 +36,8 @@ export async function GET(req: Request) {
       out.service_client_error = String((err as any)?.message || err);
       svc = null;
     }
+
+    out.service_client_available = Boolean(svc);
 
     const primaryClient = svc || requestSupabase;
     if (!primaryClient) return NextResponse.json({ error: 'No DB client available' }, { status: 500 });
