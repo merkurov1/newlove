@@ -15,7 +15,7 @@ export async function getUserAndSupabaseFromRequest(req: Request) {
       .filter(Boolean)
   );
 
-  const accessToken = cookies['sb-access-token'] || cookies['supabase-access-token'] || '';
+  let accessToken = cookies['sb-access-token'] || cookies['supabase-access-token'] || '';
   // Some Supabase client builds (or different storage adapters) may store a
   // base64-encoded JSON blob in a cookie named like `sb-<project>-auth-token.0`.
   // Example value: base64(JSON.stringify({ access_token: '...', expires_at: ... }))
@@ -27,17 +27,16 @@ export async function getUserAndSupabaseFromRequest(req: Request) {
         if (/^sb-[^-]+-auth-token(\.|$)/.test(k) && typeof v === 'string' && v.trim()) {
           try {
             // Decode base64 (may be URL-encoded in cookie)
-            const raw = decodeURIComponent(v);
+            let raw = decodeURIComponent(v);
+            // Some clients prefix the value with 'base64-' or 'base64:'
+            if (raw.startsWith('base64-')) raw = raw.slice('base64-'.length);
+            if (raw.startsWith('base64:')) raw = raw.slice('base64:'.length);
             const json = Buffer.from(raw, 'base64').toString('utf8');
             const parsed = JSON.parse(json || '{}');
             if (parsed && parsed.access_token) {
               // prefer this token
-              // eslint-disable-next-line prefer-const
-              // @ts-ignore
-              // assign to accessToken variable in outer scope
-              (Object as any).assign && Object.assign ? (cookies['sb-access-token'] = parsed.access_token) : null;
-              // set local variable for later use
-              (accessToken as any) = parsed.access_token;
+              cookies['sb-access-token'] = parsed.access_token;
+              accessToken = parsed.access_token;
               break;
             }
           } catch (e) {
