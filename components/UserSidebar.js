@@ -10,7 +10,18 @@ export default function UserSidebar() {
   const { user } = session;
   const username = user.username || user.name || 'me';
 
-  if (user.role === 'ADMIN') {
+  const role = (user.role || '').toString();
+  // Debug info panel at the left of the sidebar for troubleshooting
+  const debugPanel = (
+    <div className="ml-3 text-xs text-gray-500">
+      <div>status: {String(status)}</div>
+      <div>id: {user.id}</div>
+      <div>email: {user.email || '—'}</div>
+      <div>role: {role}</div>
+    </div>
+  );
+
+  if (role.toUpperCase() === 'ADMIN') {
     // Админский сайдбар
     return (
       <div className="w-full border-t border-pink-300 bg-pink-50 flex flex-row items-center justify-center py-3 gap-3">
@@ -23,6 +34,7 @@ export default function UserSidebar() {
           <Link href="/admin" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-200 text-xl transition font-bold" title="Админка">⚙️</Link>
           <Link href="/admin/logs" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-200 text-xl transition font-bold" title="Логи">📝</Link>
         </nav>
+        {debugPanel}
       </div>
     );
   }
@@ -37,6 +49,12 @@ export default function UserSidebar() {
         <Link href={`/you/${username}`} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition" title="Профиль">👤</Link>
         <Link href="/users" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition" title="Пользователи">👥</Link>
       </nav>
+      <div className="ml-3 text-xs text-gray-500">
+        <div>status: {String(status)}</div>
+        <div>id: {user.id}</div>
+        <div>email: {user.email || '—'}</div>
+        <div>role: {(user.role || '').toString()}</div>
+      </div>
     </div>
   );
 }
