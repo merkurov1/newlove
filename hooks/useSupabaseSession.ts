@@ -105,9 +105,21 @@ export default function useSupabaseSession() {
                 body: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken, expires_at: expiresAt }),
                 credentials: 'same-origin',
               });
+              // Try to set client-side session as well (supabase-js v2 supports setSession)
+              try {
+                if (typeof (supabase.auth as any).setSession === 'function') {
+                  await (supabase.auth as any).setSession({ access_token: accessToken, refresh_token: refreshToken });
+                }
+              } catch (e) {
+                // ignore — session may be read from cookies after reload
+              }
+
               // Reload page so server side can read cookies and render authenticated UI
               if (typeof window !== 'undefined') {
-                window.location.replace(window.location.pathname + window.location.search + window.location.hash);
+                // slight delay to allow client session to settle
+                setTimeout(() => {
+                  window.location.replace(window.location.pathname + window.location.search + window.location.hash);
+                }, 150);
                 return;
               }
             } catch (e) {
