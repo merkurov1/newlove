@@ -127,6 +127,7 @@ export default function UserSidebar() {
         <div>email: {user.email || '—'}</div>
         <div>role: {(user.role || '').toString()}</div>
       </div>
+      {debugPanel}
     </div>
   );
 }
