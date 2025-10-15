@@ -48,7 +48,41 @@ export async function GET(req: Request) {
             .filter(Boolean)
         );
         cookieNames = Object.keys(cookies || {});
+        // Look for standard names first
         token = cookies['sb-access-token'] || cookies['supabase-access-token'] || null;
+        if (!token) {
+          // Support Supabase namespaced and split cookies like
+          // sb-<project-ref>-auth-token.0 / .1 or similar.
+          const candidates: Record<string, string[]> = {};
+          for (const name of Object.keys(cookies || {})) {
+            // match names containing sb- and auth-token/access-token/token
+            if (/sb-.*(?:auth-token|access-token|token)/i.test(name) || /supabase-?access-?token/i.test(name)) {
+              // base name without numeric suffix
+              const m = name.match(/^(.*?)(?:\.(\d+))?$/);
+              const base = m ? m[1] : name;
+              const partIndex = m && m[2] ? parseInt(m[2], 10) : -1;
+              if (!candidates[base]) candidates[base] = [];
+              // store as index:value to sort later
+              candidates[base].push(typeof partIndex === 'number' && partIndex >= 0 ? `${partIndex}:${cookies[name]}` : `-:${cookies[name]}`);
+            }
+          }
+          // Reconstruct token from any candidate base by sorting parts
+          for (const base of Object.keys(candidates)) {
+            const parts = candidates[base]
+              .map((s) => {
+                const [idx, ...rest] = s.split(':');
+                return { idx: idx === '-' ? -1 : parseInt(idx, 10), val: rest.join(':') };
+              })
+              .sort((a, b) => a.idx - b.idx);
+            const joined = parts.map((p) => p.val).join('');
+            if (joined && joined.length > 0) {
+              token = joined;
+              debugInfo.matchedCookieBase = base;
+              debugInfo.matchedCookieParts = parts.map((p) => ({ idx: p.idx, len: p.val.length }));
+              break;
+            }
+          }
+        }
         if (token) tokenSource = 'cookie';
       } catch (e) {
         // ignore
@@ -75,7 +109,7 @@ export async function GET(req: Request) {
       }
     }
 
-    const debugInfo: Record<string, any> = { authHeaderPresent, cookieNames, tokenSource, decodedUid };
+  const debugInfo: Record<string, any> = { authHeaderPresent, cookieNames, tokenSource, decodedUid };
 
     if (decodedUid) {
       try {
