@@ -93,7 +93,27 @@ export default function useSupabaseSession() {
           }
           if (sess && sess.user) {
             const accessToken = sess.access_token || null;
+            const refreshToken = (sess as any).refresh_token || null;
+            const expiresAt = (sess as any).expires_at || null;
             console.debug('[useSupabaseSession] got session after redirect, hasAccessToken=', Boolean(accessToken));
+
+            // Ensure server can set httpOnly cookies for SSR: POST tokens to server endpoint
+            try {
+              await fetch('/api/auth/set-cookie', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken, expires_at: expiresAt }),
+                credentials: 'same-origin',
+              });
+              // Reload page so server side can read cookies and render authenticated UI
+              if (typeof window !== 'undefined') {
+                window.location.replace(window.location.pathname + window.location.search + window.location.hash);
+                return;
+              }
+            } catch (e) {
+              console.debug('[useSupabaseSession] set-cookie POST failed', e);
+            }
+
             const role = await resolveRole(sess.user, accessToken);
             if (!mounted) return;
             setSession({ user: mapUser(sess.user, role), accessToken });
