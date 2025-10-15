@@ -28,14 +28,14 @@ export default function UserSidebar() {
       const sess = (sessData || {}).session || null;
       const token = sess?.access_token || null;
 
-      // call server role endpoint (fallback) and RPC for DB-assigned roles
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const roleRes = await fetch('/api/user/role', { headers });
-      const roleJson = await roleRes.json().catch(() => null);
+  // call server role endpoint (fallback) using same-origin cookie auth
+  const roleRes = await fetch('/api/user/role', { credentials: 'same-origin' });
+  const roleJson = await roleRes.json().catch(() => null);
 
   // RPC: get roles assigned in DB (get_my_roles) — safer and returns role names
       let rpcRoles = null;
       try {
+        // client-side RPC should be executed with the browser client which already has auth state
         const { data: rpcData, error: rpcError } = await sb.rpc('get_my_roles');
         if (rpcError) rpcRoles = { error: rpcError.message || String(rpcError) };
         else rpcRoles = rpcData || [];
@@ -62,7 +62,7 @@ export default function UserSidebar() {
       // call debug endpoint that uses service-role and RPCs (requires Authorization)
       let debugInfo = null;
       try {
-        const dbgRes = await fetch('/api/debug/user-roles', { headers });
+        const dbgRes = await fetch('/api/debug/user-roles', { credentials: 'same-origin' });
         debugInfo = await dbgRes.json().catch(() => null);
       } catch (e) {
         debugInfo = { error: e?.message || String(e) };
@@ -81,11 +81,9 @@ export default function UserSidebar() {
     const checkRole = async () => {
       try {
         const sb = createBrowserClient();
-        const { data: sessData } = await sb.auth.getSession();
-        const sess = (sessData || {}).session || null;
-        const token = sess?.access_token || null;
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await fetch('/api/user/role', { headers });
+  const { data: sessData } = await sb.auth.getSession();
+  const sess = (sessData || {}).session || null;
+  const res = await fetch('/api/user/role', { credentials: 'same-origin' });
         const json = await res.json().catch(() => null);
         if (!mounted) return;
         if (json && json.role) setEffectiveRole(String(json.role).toUpperCase());
