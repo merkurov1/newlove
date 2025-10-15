@@ -25,7 +25,10 @@ export async function GET(req: Request) {
     let cookieNames: string[] = [];
     let tokenSource: 'authorization' | 'cookie' | 'none' = 'none';
   // Debug info is collected and returned to help middleware diagnose role checks.
-  const debugInfo: Record<string, any> = { authHeaderPresent, cookieNames, tokenSource, decodedUid: null };
+  // Capture raw cookie header and header keys early for troubleshooting missing cookies.
+  const rawCookieHeader = (req.headers.get('cookie') as string) || null;
+  const requestHeaderKeys = Array.from(req.headers.keys());
+  const debugInfo: Record<string, any> = { authHeaderPresent, cookieNames, tokenSource, decodedUid: null, rawCookieHeader, requestHeaderKeys };
     try {
       const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || null;
       if (authHeader && typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')) {
@@ -111,10 +114,14 @@ export async function GET(req: Request) {
       }
     }
 
-    // update debug with decodedUid later
-    // (debugInfo declared earlier)
+  // update debug with decodedUid later - ensure debugInfo reflects runtime values
+  // (debugInfo was declared earlier; refresh its fields now so returned JSON matches actual values)
+  debugInfo.authHeaderPresent = authHeaderPresent;
+  debugInfo.cookieNames = cookieNames;
+  debugInfo.tokenSource = tokenSource;
 
     if (decodedUid) {
+      debugInfo.decodedUid = decodedUid;
       try {
         let serviceInitError: any = null;
         let serviceSupabase: any = null;

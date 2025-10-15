@@ -148,7 +148,34 @@ export async function requireAdminFromRequest(req?: Request | null): Promise<any
               })
               .filter(Boolean)
           );
-          const accessToken = cookies['sb-access-token'] || cookies['supabase-access-token'] || '';
+          // Try standard cookie names first
+          let accessToken = cookies['sb-access-token'] || cookies['supabase-access-token'] || '';
+          // If missing, attempt to reconstruct split sb-<ref>-auth-token.* cookies
+          if (!accessToken) {
+            const candidates: Record<string, string[]> = {};
+            for (const name of Object.keys(cookies || {})) {
+              if (/sb-.*(?:auth-token|access-token|token)/i.test(name) || /supabase-?access-?token/i.test(name)) {
+                const m = name.match(/^(.*?)(?:\.(\d+))?$/);
+                const base = m ? m[1] : name;
+                const partIndex = m && m[2] ? parseInt(m[2], 10) : -1;
+                if (!candidates[base]) candidates[base] = [];
+                candidates[base].push(typeof partIndex === 'number' && partIndex >= 0 ? `${partIndex}:${cookies[name]}` : `-:${cookies[name]}`);
+              }
+            }
+            for (const base of Object.keys(candidates)) {
+              const parts = candidates[base]
+                .map((s) => {
+                  const [idx, ...rest] = s.split(':');
+                  return { idx: idx === '-' ? -1 : parseInt(idx, 10), val: rest.join(':') };
+                })
+                .sort((a, b) => a.idx - b.idx);
+              const joined = parts.map((p) => p.val).join('');
+              if (joined && joined.length) {
+                accessToken = joined;
+                break;
+              }
+            }
+          }
           if (accessToken) {
             // Try to decode JWT payload without verification to get `sub` (user id)
             try {
