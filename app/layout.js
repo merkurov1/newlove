@@ -129,11 +129,11 @@ export default async function RootLayout({ children }) {
       <body>
         <AuthProvider>
           <Header settings={settings} projects={projects} />
+          {/* client-only sidebar should appear immediately under the header for logged-in users */}
+          <UserSidebar />
           <main>
             {children}
           </main>
-          {/* client-only sidebar shows for authenticated users */}
-          <UserSidebar />
           <Footer />
         </AuthProvider>
       </body>
