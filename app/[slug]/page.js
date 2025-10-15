@@ -32,29 +32,22 @@ async function getContent(slug) {
   
   try {
     console.log('📰 Searching for article with slug:', slug);
-    // Сначала ищем статью
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-    const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+    // Сначала ищем статью (используем server service-role client для публичных запросов,
+    // чтобы RLS для request-scoped клиентов не блокировал доступ к опубликованным материалам)
     let article = null;
-    if (supabase) {
-      const { data, error } = await supabase.from('articles').select('*, author:authorId(name,image)').eq('slug', slug).eq('published', true).maybeSingle();
+    try {
+      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+      const srv = getServerSupabaseClient({ useServiceRole: true });
+      const { data, error } = await srv.from('articles').select('*, author:authorId(name,image)').eq('slug', slug).eq('published', true).maybeSingle();
       if (error) {
-        console.error('Supabase fetch article error', error);
-      } else {
+        console.error('Supabase (service) fetch article error', error);
+      } else if (data) {
         // attach tags via helper if nested relation not available
-        let withTags = null;
-        if (data) {
-          if (Array.isArray(data)) {
-            withTags = await attachTagsToArticles(supabase, data);
-            withTags = Array.isArray(withTags) ? withTags : [];
-            article = withTags[0] || null;
-          } else {
-            // single object case
-            const attached = await attachTagsToArticles(supabase, [data]);
-            article = (Array.isArray(attached) && attached[0]) ? attached[0] : { ...data };
-          }
-        }
+        const attached = await attachTagsToArticles(srv, Array.isArray(data) ? data : [data]);
+        article = Array.isArray(attached) ? attached[0] || null : (attached && attached[0]) ? attached[0] : (Array.isArray(data) ? data[0] : data);
       }
+    } catch (e) {
+      console.error('Failed to fetch article via server client', e);
     }
     
     if (article) {
@@ -63,25 +56,18 @@ async function getContent(slug) {
     }
     
     console.log('📁 Searching for project with slug:', slug);
-    // Если статья не найдена, ищем проект
+    // Если статья не найдена, ищем проект (используем service-role client для публичных проектов)
     let project = null;
     if (!article) {
-      if (supabase) {
-        const { data: p, error: pErr } = await supabase.from('projects').select('*').eq('slug', slug).eq('published', true).maybeSingle();
-        if (pErr) console.error('Supabase fetch project error', pErr);
+      try {
+        const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+        const srv = getServerSupabaseClient({ useServiceRole: true });
+        const { data: p, error: pErr } = await srv.from('projects').select('*').eq('slug', slug).eq('published', true).maybeSingle();
+        if (pErr) console.error('Supabase (service) fetch project error', pErr);
         project = p;
-      } else {
-        // Fallback to service-role server client for project lookup when no request client
-        try {
-          const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-          const srv = getServerSupabaseClient({ useServiceRole: true });
-          const { data: p, error: pErr } = await srv.from('projects').select('*').eq('slug', slug).eq('published', true).maybeSingle();
-          if (pErr) console.error('Supabase fetch project (server) error', pErr);
-          project = p;
-        } catch (e) {
-          console.error('Failed to fetch project via server client', e);
-          project = null;
-        }
+      } catch (e) {
+        console.error('Failed to fetch project via server client', e);
+        project = null;
       }
     }
     

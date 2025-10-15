@@ -6,14 +6,19 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const slug = searchParams.get('slug');
   if (!slug) return NextResponse.json({ error: 'No slug' }, { status: 400 });
-    const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-    const { supabase } = await getUserAndSupabaseForRequest((globalThis && (globalThis).request) || new Request('http://localhost')) || {};
-  if (!supabase) return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
-  const { data: article, error } = await supabase.from('articles').select('id,slug,title,content,publishedAt').eq('slug', slug).eq('published', true).maybeSingle();
-  if (error) {
-    console.error('Supabase fetch article error', error);
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
-  }
-  if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json(article);
+    // Use server-side service-role client for public article lookups to avoid RLS blocking anon/request clients
+    try {
+      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+      const srv = getServerSupabaseClient({ useServiceRole: true });
+      const { data: article, error } = await srv.from('articles').select('id,slug,title,content,publishedAt').eq('slug', slug).eq('published', true).maybeSingle();
+      if (error) {
+        console.error('Supabase (service) fetch article error', error);
+        return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+      }
+      if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json(article);
+    } catch (e) {
+      console.error('article-by-slug: failed to fetch via service client', e);
+      return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    }
 }
