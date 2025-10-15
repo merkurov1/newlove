@@ -32,7 +32,7 @@ export default function UserSidebar() {
       const roleRes = await fetch('/api/user/role', { headers });
       const roleJson = await roleRes.json().catch(() => null);
 
-      // RPC: get roles assigned in DB (get_my_roles) — safer and returns role names
+  // RPC: get roles assigned in DB (get_my_roles) — safer and returns role names
       let rpcRoles = null;
       try {
         const { data: rpcData, error: rpcError } = await sb.rpc('get_my_roles');
@@ -42,7 +42,7 @@ export default function UserSidebar() {
         rpcRoles = { error: e?.message || String(e) };
       }
 
-      // try anon read of user_roles via browser client
+  // try anon read of user_roles via browser client
       let anonRoles = null;
       try {
         const { data: rolesData, error: rolesErr } = await sb
@@ -58,7 +58,16 @@ export default function UserSidebar() {
         anonRoles = { error: e?.message || String(e) };
       }
 
-  setDiagResult({ session: sess, roleEndpoint: roleJson, anonRoles, rpcRoles });
+      // call debug endpoint that uses service-role and RPCs (requires Authorization)
+      let debugInfo = null;
+      try {
+        const dbgRes = await fetch('/api/debug/user-roles', { headers });
+        debugInfo = await dbgRes.json().catch(() => null);
+      } catch (e) {
+        debugInfo = { error: e?.message || String(e) };
+      }
+
+  setDiagResult({ session: sess, roleEndpoint: roleJson, anonRoles, rpcRoles, debugInfo });
     } catch (e) {
       setDiagError(e?.message || String(e));
     }
@@ -88,6 +97,7 @@ export default function UserSidebar() {
           <div><strong>/api/user/role:</strong> {JSON.stringify(diagResult.roleEndpoint)}</div>
           <div className="mt-1"><strong>session.user.role / metadata:</strong> {JSON.stringify(diagResult.session?.user?.role || diagResult.session?.user?.user_metadata)}</div>
           <div className="mt-1"><strong>anon user_roles query:</strong> {JSON.stringify(diagResult.anonRoles)}</div>
+          <div className="mt-1"><strong>/api/debug/user-roles:</strong> {JSON.stringify(diagResult.debugInfo)}</div>
         </div>
       )}
     </div>
