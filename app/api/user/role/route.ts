@@ -31,6 +31,10 @@ export async function GET(req: Request) {
   // Normalize common Supabase value 'authenticated' -> 'USER'
   if (role === 'AUTHENTICATED') role = 'USER';
 
+  // Collect diagnostic info about RPCs/queries so callers (middleware) can
+  // decide based on service-side checks even if request-scoped reads are blocked.
+  const rpcResults: Record<string, any> = {};
+
   // Regardless of metadata, attempt a server-side lookup for roles membership (service role key)
   // This ensures that DB-assigned roles (user_roles -> roles) are detected even when user metadata
   // is not populated or contains a generic 'authenticated' value.
@@ -49,6 +53,7 @@ export async function GET(req: Request) {
       if (rpcClient) {
         try {
           const rpcAny = await (rpcClient as any).rpc('get_my_user_roles_any', { uid_text: user.id });
+          rpcResults.get_my_user_roles_any = rpcAny;
           if (!rpcAny?.error && Array.isArray(rpcAny.data) && rpcAny.data.length) {
             const found = rpcAny.data.some((r: any) => {
               if (!r) return false;
@@ -59,10 +64,11 @@ export async function GET(req: Request) {
             if (found) {
               console.debug('[api/user/role] detected ADMIN via get_my_user_roles_any RPC');
               role = 'ADMIN';
-              return NextResponse.json({ role });
+              return NextResponse.json({ role, rpc: rpcResults });
             }
           }
         } catch (e) {
+          rpcResults.get_my_user_roles_any = { error: String(e) };
           console.debug('[api/user/role] get_my_user_roles_any RPC failed', e);
         }
       }
@@ -81,6 +87,7 @@ export async function GET(req: Request) {
         .eq('user_id', user.id);
       rolesData = res.data;
       rolesErr = res.error;
+      rpcResults.user_roles_svc = res;
       console.debug('[api/user/role] checked user_roles via service role client');
     } else {
       try {
@@ -91,9 +98,11 @@ export async function GET(req: Request) {
           .eq('user_id', user.id);
         rolesData = res.data;
         rolesErr = res.error;
+        rpcResults.user_roles_req = res;
         console.debug('[api/user/role] checked user_roles via request supabase client (fallback)');
       } catch (e) {
         rolesErr = e;
+        rpcResults.user_roles_req = { error: String(e) };
       }
     }
 
@@ -111,11 +120,12 @@ export async function GET(req: Request) {
         if (roleIds.length && serviceSupabase) {
           try {
             const rRes = await (serviceSupabase as any).from('roles').select('id,name').in('id', roleIds);
+            rpcResults.roles_svc = rRes;
             if (!rRes.error && Array.isArray(rRes.data)) {
               hasAdmin = rRes.data.some((rr: any) => String(rr.name).toUpperCase() === 'ADMIN');
             }
           } catch (e) {
-            // ignore
+            rpcResults.roles_svc = { error: String(e) };
           }
         }
       }
@@ -163,6 +173,7 @@ export async function GET(req: Request) {
             console.debug('[api/user/role] detected ADMIN via RPC');
           }
         } else if (rpcResp && rpcResp.error) {
+          rpcResults.rpc_fallback = rpcResp;
           console.debug('[api/user/role] RPC call error', rpcResp.error);
         }
       } catch (e) {
@@ -173,7 +184,7 @@ export async function GET(req: Request) {
     console.debug('[api/user/role] role lookup failed', e);
   }
 
-    return NextResponse.json({ role });
+    return NextResponse.json({ role, rpc: rpcResults });
   } catch (e) {
     return NextResponse.json({ role: 'ANON' });
   }
