@@ -40,7 +40,7 @@ export default function LoginButton() {
       <button onClick={handleOpen} style={{ padding: 10, borderRadius: 8, fontWeight: 600, fontSize: 16 }}>
         Войти
       </button>
-      {modalOpen && <ModernLoginModal />}
+      {modalOpen && <ModernLoginModal onClose={() => setModalOpen(false)} />}
     </>
   );
 }
