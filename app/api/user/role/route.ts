@@ -35,8 +35,9 @@ export async function GET(req: Request) {
       try {
         let rolesData: any = null;
         let rolesErr: any = null;
+        let serviceSupabase: any = null;
         try {
-          const serviceSupabase = getServerSupabaseClient({ useServiceRole: true });
+          serviceSupabase = getServerSupabaseClient({ useServiceRole: true });
           const res = await (serviceSupabase as any)
             .from('user_roles')
             .select('role_id,roles(name)')
@@ -61,11 +62,28 @@ export async function GET(req: Request) {
         }
 
         if (!rolesErr && Array.isArray(rolesData)) {
-          const hasAdmin = rolesData.some((r: any) => {
+          // First try: inspect related `roles` payload (works when foreign key relationship exists)
+          let hasAdmin = rolesData.some((r: any) => {
             const roleList: any = r.roles;
             if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
             return String(roleList?.name).toUpperCase() === 'ADMIN';
           });
+
+          // Fallback: if `roles` relation not present, look up role names by role_id
+          if (!hasAdmin) {
+            const roleIds = rolesData.map((row: any) => row.role_id).filter(Boolean);
+            if (roleIds.length) {
+              try {
+                const rRes = await (serviceSupabase as any).from('roles').select('id,name').in('id', roleIds);
+                if (!rRes.error && Array.isArray(rRes.data)) {
+                  hasAdmin = rRes.data.some((rr: any) => String(rr.name).toUpperCase() === 'ADMIN');
+                }
+              } catch (e) {
+                // ignore
+              }
+            }
+          }
+
           if (hasAdmin) role = 'ADMIN';
         }
       } catch (e) {
