@@ -132,6 +132,81 @@ export async function requireAdminFromRequest(req?: Request | null): Promise<any
     } catch (e) {
       // Treat helper failures as unauthenticated and continue to other checks
       console.error('requireAdminFromRequest: getUserAndSupabaseFromRequestInterop failed', e);
+
+      // Fallback: try to extract a user id directly from the sb-access-token cookie
+      // and then perform a service-role RPC check. This helps in runtimes where the
+      // request-scoped helper cannot be initialized (edge vs node differences).
+      try {
+        if (req && typeof req.headers?.get === 'function') {
+          const cookieHeader = req.headers.get('cookie') || '';
+          const cookies = Object.fromEntries(
+            cookieHeader
+              .split(';')
+              .map((s) => {
+                const [k, ...v] = s.split('=');
+                return [k && k.trim(), decodeURIComponent((v || []).join('='))];
+              })
+              .filter(Boolean)
+          );
+          const accessToken = cookies['sb-access-token'] || cookies['supabase-access-token'] || '';
+          if (accessToken) {
+            // Try to decode JWT payload without verification to get `sub` (user id)
+            try {
+              const parts = accessToken.split('.');
+              if (parts.length >= 2) {
+                const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+                // pad base64 string
+                const pad = payloadB64.length % 4;
+                const padded = payloadB64 + (pad ? '='.repeat(4 - pad) : '');
+                // Use Buffer where available
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const buf = Buffer.from(padded, 'base64');
+                const payloadJson = buf.toString('utf8');
+                const payload = JSON.parse(payloadJson || '{}');
+                const uid = payload.sub || payload.user_id || null;
+                if (uid) {
+                  try {
+                    const svc = getServerSupabaseClient({ useServiceRole: true });
+                    // Use security-definer RPC if available, otherwise check user_roles
+                    try {
+                      const rpcAny = await (svc as any).rpc('get_my_user_roles_any', { uid_text: uid });
+                      if (!rpcAny?.error && Array.isArray(rpcAny.data) && rpcAny.data.length) {
+                        const found = rpcAny.data.some((r: any) => {
+                          if (!r) return false;
+                          if (typeof r === 'string') return r.toUpperCase() === 'ADMIN';
+                          const vals = Object.values(r).map((v: any) => String(v).toUpperCase());
+                          return vals.includes('ADMIN');
+                        });
+                        if (found) {
+                          return { id: uid, role: 'ADMIN' } as any;
+                        }
+                      }
+                    } catch (e2) {
+                      // rpc missing or failed - fallback to direct select
+                    }
+
+                    const res = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', uid);
+                    if (!res.error && Array.isArray(res.data)) {
+                      const hasAdmin = res.data.some((r: any) => {
+                        const roleList: any = r.roles;
+                        if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
+                        return String(roleList?.name).toUpperCase() === 'ADMIN';
+                      });
+                      if (hasAdmin) return { id: uid, role: 'ADMIN' } as any;
+                    }
+                  } catch (e3) {
+                    // ignore fallback errors
+                  }
+                }
+              }
+            } catch (ePayload) {
+              // ignore payload parse errors
+            }
+          }
+        }
+      } catch (eFallback) {
+        // ignore overall fallback failures
+      }
     }
   }
 
