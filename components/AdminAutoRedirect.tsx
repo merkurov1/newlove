@@ -14,8 +14,14 @@ export default function AdminAutoRedirect() {
     let mounted = true;
     // If not authenticated, nothing to do
     if (status !== 'authenticated' || !session) return;
+    // Only auto-redirect admins to /admin when they land on the site's root/home page.
+    // Previously we redirected from any page which caused surprising UX where admins
+    // were bounced out of sections they were visiting. Limit the redirect to the
+    // homepage so admins coming from other pages are not forced away.
+    const allowedAutoRedirectPaths = ['/', ''];
+  const currentPath = pathname || '/';
+  if (!allowedAutoRedirectPaths.includes(currentPath)) return;
 
-    // Prefer server-detected role via /api/user/role (covers DB-mapped roles)
     const checkServerRole = async () => {
       try {
         // Rely on cookie-based same-origin auth. Do NOT send Authorization header here,
