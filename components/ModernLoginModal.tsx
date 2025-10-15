@@ -36,7 +36,61 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
 
 
 
-  // Web3 login is disabled for this project scope (Google OAuth only)
+  // Web3 login: supported here via Onboard (EIP-4361 SIWE flow)
+  const handleWeb3 = async () => {
+    // Close modal before launching Onboard UI so it won't be visually blocked
+    if (typeof onClose === 'function') onClose();
+    setLoading(true);
+    setWeb3Error('');
+    try {
+      const walletConnect = walletConnectModule({
+        projectId: '0083c29479d8ea22af3a3a44a447c439',
+        requiredChains: [1],
+      });
+      const injected = injectedModule();
+      const onboard = Onboard({
+        wallets: [injected, walletConnect],
+        chains: [
+          {
+            id: '0x1',
+            token: 'ETH',
+            label: 'Ethereum Mainnet',
+            rpcUrl: 'https://mainnet.infura.io/v3/0083c29479d8ea22af3a3a44a447c439',
+          },
+        ],
+        appMetadata: {
+          name: 'newlove DApp',
+          icon: '<svg></svg>',
+          description: 'Авторизация через крипто-кошелек',
+        },
+      });
+      const wallets = await onboard.connectWallet();
+      if (!wallets || !wallets[0]) {
+        setWeb3Error('Кошелек не подключен');
+        setLoading(false);
+        return;
+      }
+      const wallet = wallets[0];
+      const address = wallet.accounts[0].address;
+      const ethersProvider = new ethers.BrowserProvider(wallet.provider, 'any');
+      const signer = await ethersProvider.getSigner();
+
+      const domain = window.location.host;
+      const uri = window.location.origin;
+      const version = '1';
+      const chainId = '1';
+      const nonce = Math.floor(Math.random() * 1e16).toString();
+      const issuedAt = new Date().toISOString();
+      const statement = 'Sign in with Ethereum to the app.';
+      const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\n${statement}\n\nURI: ${uri}\nVersion: ${version}\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
+      const signature = await signer.signMessage(message);
+      const { data, error } = await supabase.auth.signInWithWeb3({ chain: 'ethereum', message, signature: signature as any });
+      if (error) setWeb3Error(error.message || String(error));
+    } catch (e: any) {
+      setWeb3Error(e?.message || String(e));
+    }
+    setLoading(false);
+  };
 
   const handleGoogle = async () => {
     // Close modal before redirecting to OAuth so UI isn't blocked
@@ -82,8 +136,16 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
         >
           {loading ? 'Входим через Google...' : 'Войти через Google'}
         </button>
+          <button
+            onClick={async () => { try { if (typeof onClose === 'function') onClose(); await handleWeb3(); } catch (e){ /* ignore */ } }}
+            className="w-full bg-emerald-600 text-white rounded-lg px-6 py-3 font-semibold text-lg hover:bg-emerald-700 transition mb-2 shadow"
+            disabled={loading}
+          >
+            {loading ? 'Входим через Web3...' : 'Войти через Web3'}
+          </button>
         {/* Web3 login intentionally removed — Google OAuth only */}
   {error && <div className="text-red-600 text-sm text-center mt-2">{error}</div>}
+    {web3Error && <div className="text-red-600 text-sm text-center mt-2">{web3Error}</div>}
         <button
           onClick={onClose}
           className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl font-bold bg-transparent border-none cursor-pointer"
