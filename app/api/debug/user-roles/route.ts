@@ -2,48 +2,93 @@ import { NextResponse } from 'next/server';
 import getUserAndSupabaseForRequest from '@/lib/getUserAndSupabaseForRequest';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 
+// Server-only debug endpoint. Returns information about user_roles and RPCs
+// for the currently authenticated user, or for a provided `user_id` query param.
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const queryUserId = url.searchParams.get('user_id');
 
-    // If user_id query param is present, use it; otherwise resolve current user from request
-    let userId = queryUserId || null;
-    let supabaseFromReq: any = null;
+    // Resolve user id either from query or from the incoming request
+    let userId: string | null = queryUserId || null;
+    let requestSupabase: any = null;
     if (!userId) {
       const res = await getUserAndSupabaseForRequest(req as any);
-      supabaseFromReq = res.supabase;
+      requestSupabase = res.supabase;
       const user = res.user;
       if (!user || !user.id) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
       userId = user.id;
     }
 
-    // Use service role client to bypass RLS and inspect user_roles
+    const out: any = { user_id: userId };
+
+    // Acquire service-role client if possible
     let svc: any = null;
     try {
       svc = getServerSupabaseClient({ useServiceRole: true });
-    } catch (e) {
-      svc = supabaseFromReq;
+    } catch (err) {
+      out.service_client_error = String((err as any)?.message || err);
+      svc = null;
     }
 
-    if (!svc) return NextResponse.json({ error: 'No DB client available' }, { status: 500 });
+    const primaryClient = svc || requestSupabase;
+    if (!primaryClient) return NextResponse.json({ error: 'No DB client available' }, { status: 500 });
 
+    // Query user_roles via primary client
     try {
-      const res = await (svc as any)
-        .from('user_roles')
-        .select('role_id,roles(id,name)')
-        .eq('user_id', userId);
-      if (res.error) {
-        console.debug('[api/debug/user-roles] query error', res.error);
-        return NextResponse.json({ error: res.error.message || String(res.error) }, { status: 500 });
-      }
-      return NextResponse.json({ user_id: userId, roles: res.data || [] });
-    } catch (e) {
-      console.debug('[api/debug/user-roles] fatal', e);
-      return NextResponse.json({ error: String(e) }, { status: 500 });
+      const res = await primaryClient.from('user_roles').select('role_id,roles(id,name)').eq('user_id', userId);
+      out.user_roles = { data: res.data || null, error: res.error || null };
+    } catch (err) {
+      out.user_roles = { error: String((err as any)?.message || err) };
     }
-  } catch (e) {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+
+    // If role_ids exist, fetch roles separately
+    try {
+      const ids = (out.user_roles?.data || []).map((r: any) => r.role_id).filter(Boolean);
+      if (ids.length && primaryClient) {
+        const rr = await primaryClient.from('roles').select('id,name').in('id', ids);
+        out.roles = { data: rr.data || null, error: rr.error || null };
+      }
+    } catch (err) {
+      out.roles = { error: String((err as any)?.message || err) };
+    }
+
+    // Try RPCs using svc first, then request-scoped client
+    out.rpc = {};
+    const rpcCandidates = [] as any[];
+    if (svc) rpcCandidates.push({ client: svc, kind: 'svc' });
+    if (requestSupabase) rpcCandidates.push({ client: requestSupabase, kind: 'req' });
+
+    for (const candidate of rpcCandidates) {
+      const c = candidate.client;
+      const k = candidate.kind;
+      try {
+        try {
+          const r = await c.rpc('get_my_roles');
+          out.rpc[`get_my_roles_${k}`] = r;
+        } catch (err) {
+          out.rpc[`get_my_roles_${k}`] = { error: String((err as any)?.message || err) };
+        }
+        try {
+          const r = await c.rpc('get_my_user_roles');
+          out.rpc[`get_my_user_roles_${k}`] = r;
+        } catch (err) {
+          out.rpc[`get_my_user_roles_${k}`] = { error: String((err as any)?.message || err) };
+        }
+        try {
+          const r = await c.rpc('get_my_user_roles_any', { uid_text: userId });
+          out.rpc[`get_my_user_roles_any_${k}`] = r;
+        } catch (err) {
+          out.rpc[`get_my_user_roles_any_${k}`] = { error: String((err as any)?.message || err) };
+        }
+      } catch (err) {
+        out.rpc[`fatal_${k}`] = String((err as any)?.message || err);
+      }
+    }
+
+    return NextResponse.json(out);
+  } catch (err) {
+    return NextResponse.json({ error: String((err as any)?.message || err) }, { status: 500 });
   }
 }
 
