@@ -64,15 +64,8 @@ export default async function Home() {
     <main className="relative overflow-hidden">
       <BackgroundShapes />
       <div className="mb-6">
-        {/* Keep CloseableHero for other pages, but on homepage we render HeroHearts directly */}
-        <div className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8">
-          <div className="bg-white/40 backdrop-blur-md border border-white/20 rounded-3xl p-6 md:p-10 shadow-2xl overflow-hidden">
-              {/* Use CloseableHero so users can close the hero; it delegates to HeroHearts internally */}
-              <div className="w-full">
-                <CloseableHero />
-              </div>
-            </div>
-        </div>
+        {/* Render CloseableHero directly so when it returns null the entire hero block disappears */}
+        <CloseableHero className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8" />
       </div>
       {/* Auction slider for articles tagged 'auction' - placed right after hero */}
       {auctionArticles && auctionArticles.length > 0 && (
