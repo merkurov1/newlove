@@ -10,10 +10,9 @@ export default async function AdminArticlesPage() {
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const _ctx = await getUserAndSupabaseForRequest(globalReq);
 
-  let supabase: any;
-  if (_ctx?.isServer) {
-    supabase = _ctx.supabase;
-  } else {
+  // Prefer service-role client for admin pages to avoid RLS issues with request-scoped clients
+  let supabase: any = _ctx?.supabase;
+  if (!_ctx?.isServer || !supabase) {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     supabase = getServerSupabaseClient({ useServiceRole: true });
   }

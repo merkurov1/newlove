@@ -5,6 +5,10 @@ import { notFound } from 'next/navigation';
 import ContentForm from '@/components/admin/ContentForm';
 import { updateLetter } from '../../../actions';
 import SendLetterForm from '@/components/admin/SendLetterForm';
+import dynamic from 'next/dynamic';
+
+// Client-only closeable hero (shows for public, closable for logged-in users, always for admins)
+const CloseableHero = dynamic(() => import('@/components/CloseableHero'), { ssr: false });
 
 export default async function EditLetterPage({ params }) {
   const letterId = params.id;
@@ -29,6 +33,7 @@ export default async function EditLetterPage({ params }) {
   
   return (
     <div>
+      <CloseableHero />
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Редактирование выпуска рассылки</h1>
       
       <ContentForm initialData={letter} saveAction={updateLetter} type="выпуск" />
