@@ -84,6 +84,15 @@ export default async function Home() {
         <h1 className="text-3xl font-bold mb-6">Последние статьи</h1>
         <ArticlesFeed initialArticles={articles} />
       </section>
+      <section className="max-w-4xl mx-auto py-12 px-4">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-semibold">🌊 Flow</h2>
+          <Link href="/lab/feed" className="text-sm text-gray-500 hover:text-gray-700">Сводная лента →</Link>
+        </div>
+        <div>
+          <FlowFeed limit={12} />
+        </div>
+      </section>
     </main>
   );
 }
