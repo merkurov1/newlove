@@ -14,11 +14,34 @@ async function getTagData(slug) {
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const { supabase } = await getUserAndSupabaseForRequest(globalReq) || {};
   if (!supabase) notFound();
-  // Use configurable tags table name (default: "Tag")
-  const TAGS_TABLE = (typeof process !== 'undefined' && process.env && process.env.TAGS_TABLE_NAME) || 'Tag';
-  // Поиск тега по slug (регистр игнорируем вручную)
-  const { data: tags } = await supabase.from(TAGS_TABLE).select('*').ilike('slug', slug).limit(1);
-  const tag = (tags && tags[0]) || null;
+  // Try multiple table name candidates for Tag table (some deployments use
+  // `Tag`, others `tags`, etc.). Also try a few slug variants (decoded,
+  // lowercased) to be tolerant of URL casing and encoding.
+  const configured = (typeof process !== 'undefined' && process.env && process.env.TAGS_TABLE_NAME) || null;
+  const tableCandidates = configured ? [configured, 'Tag', 'tags', 'tag', 'Tags'] : ['Tag', 'tags', 'tag', 'Tags'];
+  const slugVariants = [];
+  try { slugVariants.push(slug); } catch (e) { /* ignore */ }
+  try { slugVariants.push(decodeURIComponent(slug)); } catch (e) { /* ignore */ }
+  try { slugVariants.push(String(slug).toLowerCase()); } catch (e) { /* ignore */ }
+  // ensure uniqueness
+  const uniqSlugVariants = Array.from(new Set(slugVariants.filter(Boolean)));
+
+  let tag = null;
+  for (const tbl of tableCandidates) {
+    try {
+      for (const s of uniqSlugVariants) {
+  const { data: tags } = await supabase.from(tbl).select('*').ilike('slug', s).limit(1);
+        if (tags && tags[0]) {
+          tag = tags[0];
+          break;
+        }
+      }
+    } catch (e) {
+      // table might not exist or permission denied - try next candidate
+      // do not throw here to keep lookup tolerant
+    }
+    if (tag) break;
+  }
   if (!tag) notFound();
   // Получаем связанные статьи через junction _ArticleToTag
   // Try RPC first; if disabled or not present fall back to safe behavior
