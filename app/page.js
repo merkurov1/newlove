@@ -29,42 +29,53 @@ async function getArticles(excludeIds = []) {
   try {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
-    // Try to filter out soft-deleted rows if the deployment has a deletedAt column.
-    // We'll attempt the more restrictive query first and fall back if the column doesn't exist.
-    const buildQuery = (useDeletedFilter) => {
+    // Try to filter out soft-deleted rows. Different deployments may use
+    // different column names (deletedAt, deleted_at, deleted). We'll try
+    // the common candidates and fall back to no deleted filter if none exist.
+    const deletedCols = ['deletedAt', 'deleted_at', 'deleted'];
+    const buildQuery = (deletedCol) => {
       let q = supabase
         .from('articles')
         .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
         .eq('published', true)
         .order('updatedAt', { ascending: false })
         .limit(15);
-      if (useDeletedFilter) q = q.is('deletedAt', null);
+      if (deletedCol) q = q.is(deletedCol, null);
       return q;
     };
-    let q = buildQuery(true);
+    // start by trying each deleted column candidate until one succeeds
+    let q = null;
+    let data = null;
+    let error = null;
+    for (const col of [...deletedCols, null]) {
+      try {
+        q = buildQuery(col);
+        // apply exclusion if provided
+        if (Array.isArray(excludeIds) && excludeIds.length > 0) {
+          const quoted = excludeIds.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
+          q = q.not('id', 'in', `(${quoted})`);
+        }
+        const res = await q;
+        data = res && res.data;
+        error = res && res.error;
+        if (error) throw error;
+        // success
+        break;
+      } catch (e) {
+        // try next column candidate
+        data = null;
+        error = e;
+        continue;
+      }
+    }
+    if (error && !data) {
+      console.error('Supabase fetch articles error', error);
+      return [];
+    }
     if (Array.isArray(excludeIds) && excludeIds.length > 0) {
       // Supabase expects an SQL-style list for `in`, quote IDs safely
       const quoted = excludeIds.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
       q = q.not('id', 'in', `(${quoted})`);
-    }
-    let data, error;
-    try {
-      ({ data, error } = await q);
-      if (error) throw error;
-    } catch (e) {
-      // Retry without deletedAt filter if the first query failed (likely missing column)
-      q = buildQuery(false);
-      if (Array.isArray(excludeIds) && excludeIds.length > 0) {
-        const quoted = excludeIds.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
-        q = q.not('id', 'in', `(${quoted})`);
-      }
-      const second = await q;
-      data = second.data;
-      error = second.error;
-      if (error) {
-        console.error('Supabase fetch articles error', error);
-        return [];
-      }
     }
     if (!Array.isArray(data)) {
       console.error('Supabase articles: data is not array', data);
@@ -107,8 +118,8 @@ async function getAuctionArticles() {
     try {
       const rpc = await supabase.rpc('get_articles_by_tag', { tag_slug: 'auction' });
       if (rpc && !rpc.error && Array.isArray(rpc.data) && rpc.data.length > 0) {
-        // Normalize shape similar to getArticles
-        const normalized = await Promise.all((rpc.data || []).map(async (a) => ({
+        // Normalize shape similar to getArticles and limit to 2 items
+        const normalizedAll = await Promise.all((rpc.data || []).map(async (a) => ({
           id: a.id,
           title: a.title,
           slug: a.slug,
@@ -119,6 +130,16 @@ async function getAuctionArticles() {
           previewImage: a.content ? await getFirstImage(a.content) : null,
           description: (a.excerpt || null),
         })));
+        // ensure dedupe and limit to 2
+        const seen = new Set();
+        const normalized = [];
+        for (const a of normalizedAll) {
+          if (!a || !a.id) continue;
+          if (seen.has(String(a.id))) continue;
+          seen.add(String(a.id));
+          normalized.push(a);
+          if (normalized.length >= 2) break;
+        }
         return normalized;
       }
     } catch (e) {
@@ -152,22 +173,46 @@ async function getAuctionArticles() {
     if (!tag) return [];
 
     const { data: rels } = await supabase.from('_ArticleToTag').select('A').eq('B', tag.id);
-    const ids = (rels || []).map(r => r.A).filter(Boolean);
+    const ids = Array.from(new Set((rels || []).map(r => r && r.A).filter(Boolean)));
     if (!ids || ids.length === 0) return [];
 
-    // Try to filter out soft-deleted rows if available, fall back if not
-    let artsResp;
-    try {
-      artsResp = await supabase.from('articles').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)').in('id', ids).eq('published', true).is('deletedAt', null).order('publishedAt', { ascending: false }).limit(8);
-      if (artsResp.error) throw artsResp.error;
-    } catch (e) {
-      artsResp = await supabase.from('articles').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false }).limit(8);
+    // try common deleted column names like in getArticles
+    const deletedCols = ['deletedAt', 'deleted_at', 'deleted'];
+    let artsResp = null;
+    for (const col of [...deletedCols, null]) {
+      try {
+        let q = supabase.from('articles')
+          .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
+          .in('id', ids)
+          .eq('published', true)
+          .order('publishedAt', { ascending: false })
+          .limit(8);
+        if (col) q = q.is(col, null);
+        const res = await q;
+        if (res && res.error) throw res.error;
+        artsResp = res;
+        break;
+      } catch (e) {
+        // try next col candidate
+        continue;
+      }
     }
-    const arts = artsResp.data || [];
+    const arts = (artsResp && artsResp.data) || [];
     if (!arts || !Array.isArray(arts) || arts.length === 0) return [];
 
+    // Ensure dedupe and strict limit of 2 for auction block
+    const seenIds = new Set();
+    const selected = [];
+    for (const a of arts) {
+      if (!a || !a.id) continue;
+      if (seenIds.has(String(a.id))) continue;
+      seenIds.add(String(a.id));
+      selected.push(a);
+      if (selected.length >= 2) break;
+    }
+
     const enriched = await Promise.all(
-      arts.map(async (a) => ({
+      selected.map(async (a) => ({
         id: a.id,
         title: a.title,
         slug: a.slug,
