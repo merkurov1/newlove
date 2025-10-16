@@ -23,7 +23,7 @@ interface Article {
 const PAGE_SIZE = 15;
 const API_PAGE_SIZE = 15;
 
-export default function ArticlesFeed({ initialArticles, excludeTag }: { initialArticles: Article[]; excludeTag?: string | null }) {
+export default function ArticlesFeed({ initialArticles, excludeTag, includeTag }: { initialArticles: Article[]; excludeTag?: string | null; includeTag?: string | null }) {
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(initialArticles.length === PAGE_SIZE);
@@ -37,10 +37,11 @@ export default function ArticlesFeed({ initialArticles, excludeTag }: { initialA
     const handleScroll = () => {
       if (!loaderRef.current) return;
       const rect = loaderRef.current.getBoundingClientRect();
-        if (rect.top < window.innerHeight && !loading) {
+  if (rect.top < window.innerHeight && !loading) {
         setLoading(true);
         const query = new URLSearchParams({ offset: String(offset), limit: String(API_PAGE_SIZE) });
-        if (excludeTag) query.set('excludeTag', excludeTag);
+  if (excludeTag) query.set('excludeTag', excludeTag);
+  if (includeTag) query.set('includeTag', includeTag);
         fetch(`/api/articles?${query.toString()}`)
           .then((res) => res.json())
           .then((data) => {
@@ -61,6 +62,7 @@ export default function ArticlesFeed({ initialArticles, excludeTag }: { initialA
   setLoading(true);
   const query = new URLSearchParams({ offset: String(articles.length), limit: String(API_PAGE_SIZE) });
   if (excludeTag) query.set('excludeTag', excludeTag);
+  if (includeTag) query.set('includeTag', includeTag);
   const res = await fetch(`/api/articles?${query.toString()}`);
     const data = await res.json();
     setArticles((prev) => [...prev, ...data]);
