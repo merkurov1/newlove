@@ -19,7 +19,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Некорректный или устаревший токен.' }, { status: 404 });
     }
     // Помечаем токен использованным
-    await supabase.from('subscriber_tokens').update({ used: true }).eq('token', token);
+    await supabase.from('subscriber_tokens').update({ used: true, usedAt: new Date().toISOString() }).eq('token', token);
+    // Активируем подписчика (double opt-in confirmed)
+    try {
+      await supabase.from('subscribers').update({ isActive: true, confirmedAt: new Date().toISOString() }).eq('id', tokenRow.subscriber_id || tokenRow.subscriberId);
+    } catch (e) {
+      console.warn('Failed to mark subscriber active after confirm:', String(e));
+    }
     return NextResponse.json({ message: 'Подписка успешно подтверждена!' });
   } catch (error) {
     return NextResponse.json({ error: 'Ошибка подтверждения.' }, { status: 500 });
