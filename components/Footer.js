@@ -60,9 +60,18 @@ export default function Footer({ subscriberCount }) {
 
   return (
     <footer className="border-t border-gray-200 bg-gray-50">
-      <div className="container mx-auto px-4 py-10">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-center gap-10">
-          <div className="flex-1 max-w-md mx-auto md:mx-0 flex flex-col gap-6">
+      {/* Subdued hero-style band for subscription / support — full-width but less aggressive than main hero */}
+      <section
+        className="w-full flex items-center justify-center"
+        style={{
+          background: 'linear-gradient(120deg, #ffffff 0%, #fbfdff 100%)',
+          WebkitBackdropFilter: 'blur(4px)',
+          backdropFilter: 'blur(4px)',
+        }}
+      >
+        <div className="container mx-auto px-4 py-12">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-center gap-10">
+            <div className="flex-1 max-w-md mx-auto md:mx-0 flex flex-col gap-6">
             {/* Показываем разный контент в зависимости от статуса подписки */}
             {checkingSubscription ? (
               <div className="animate-pulse">
@@ -151,7 +160,10 @@ export default function Footer({ subscriberCount }) {
             )}
             <DonateButton />
           </div>
+          </div>
         </div>
+      </section>
+      <div className="mt-6 container mx-auto px-4">
         <div className="mt-10 border-t border-gray-200 pt-6 text-center text-xs text-gray-400">
           <p>&copy; {new Date().getFullYear()} Anton Merkurov. Все права защищены.</p>
           <p className="mt-2 text-xs text-gray-500">Subscribers: <span className="font-semibold">{subscriberCount}</span></p>
