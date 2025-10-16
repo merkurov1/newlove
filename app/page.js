@@ -25,6 +25,8 @@ const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { 
 
 
 import { getArticlesByTag, getArticlesExcludingTag } from '@/lib/tagHelpers';
+import dynamic from 'next/dynamic';
+const BackgroundShapes = dynamic(() => import('@/components/BackgroundShapes'), { ssr: false });
 export default async function Home() {
   // SSR: Получаем сначала статьи для auction, then exclude them from main feed
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
@@ -34,21 +36,37 @@ export default async function Home() {
   const articles = await getArticlesExcludingTag(supabase, 'auction', 15);
 
   return (
-    <main>
+    <main className="relative overflow-hidden">
+      <BackgroundShapes />
       <div className="mb-8">
         <CloseableHero />
       </div>
+      {/* Hero */}
+      <section className="relative max-w-5xl mx-auto px-4 py-12 sm:py-20">
+        <div className="bg-white/40 backdrop-blur-md border border-white/20 rounded-3xl p-8 md:p-12 shadow-2xl overflow-hidden">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight mb-4 text-gray-900">Art, Love & Modern Money</h1>
+          <p className="text-lg sm:text-xl text-gray-700 mb-6 max-w-2xl">Короткие истории, размышления и заметки о том, как искусство и финансы переплетаются в современном мире.</p>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <a href="#articles" className="inline-flex items-center justify-center rounded-full px-6 py-3 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-500 text-white font-semibold shadow-lg hover:scale-[1.01] transition-transform">Читать статьи</a>
+            <a href="/lab" className="inline-flex items-center justify-center rounded-full px-6 py-3 border border-white/20 bg-white/30 text-pink-600 font-semibold hover:opacity-90 transition-opacity">Эксперименты</a>
+          </div>
+        </div>
+      </section>
       {/* Auction slider for articles tagged 'auction' - placed right after hero */}
       {auctionArticles && auctionArticles.length > 0 && (
-        <section className="max-w-4xl mx-auto py-12 px-4">
-          <AuctionSlider articles={auctionArticles} />
+        <section className="max-w-6xl mx-auto py-8 px-4" aria-label="Аукционные статьи">
+          <div className="rounded-2xl p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
+            <AuctionSlider articles={auctionArticles} />
+          </div>
         </section>
       )}
 
       {/* Main articles feed excluding auction-tagged articles */}
-      <section className="max-w-3xl mx-auto py-8 px-4">
-        <h1 className="text-3xl font-bold mb-6">Последние статьи</h1>
-  <ArticlesFeed initialArticles={articles} excludeTag="auction" />
+      <section id="articles" className="max-w-6xl mx-auto py-12 px-4">
+        <h1 className="text-3xl sm:text-4xl font-bold mb-6">Последние статьи</h1>
+        <div className="rounded-2xl p-4 bg-white/30 backdrop-blur-sm border border-white/10">
+          <ArticlesFeed initialArticles={articles} excludeTag="auction" />
+        </div>
       </section>
 
       {/* Flow feed follows the articles */}
