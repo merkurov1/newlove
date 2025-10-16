@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { useState } from 'react';
 import { useAuth } from '@/components/AuthContext';
 import useServerEffectiveRole from '@/hooks/useServerEffectiveRole';
 import ModernLoginModal from './ModernLoginModal';
