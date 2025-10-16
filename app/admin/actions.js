@@ -51,14 +51,9 @@ export async function createArticle(formData) {
   
   // Проверка уникальности slug
   // Check slug uniqueness via Supabase
-  const _ctx = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
-  let supabase = _ctx?.supabase;
-  // For admin flows prefer the service-role client even when a request-scoped client
-  // is present. Request-scoped clients often lack permissions under RLS and cause 42501.
-  if (!_ctx?.isServer) {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    supabase = getServerSupabaseClient({ useServiceRole: true });
-  }
+  // Always use explicit service-role client for admin DML to avoid RLS permission issues.
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!supabase) throw new Error('Database client not available');
   const { data: existingSlug } = await supabase.from('articles').select('id').eq('slug', slug).maybeSingle();
   if (existingSlug) {
@@ -146,12 +141,9 @@ export async function updateArticle(formData) {
   );
   if (validBlocks.length === 0) throw new Error('No valid blocks');
   // Update article via Supabase (tags handling TODO)
-  const _ctx = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
-  let supabase = _ctx?.supabase;
-  if (!_ctx?.isServer) {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    supabase = getServerSupabaseClient({ useServiceRole: true });
-  }
+  // Use explicit service-role client for admin updates
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!supabase) throw new Error('Database client not available');
   const { error: updateErr } = await supabase.from('articles').update({
     title,
@@ -182,13 +174,8 @@ export async function deleteArticle(formData) {
   await verifyAdmin();
   const id = formData.get('id')?.toString();
   if (!id) { throw new Error('Article ID is required.'); }
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const _ctx = await getUserAndSupabaseForRequest(globalReq);
-  let supabase = _ctx?.supabase;
-  if (!_ctx?.isServer) {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    supabase = getServerSupabaseClient({ useServiceRole: true });
-  }
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!supabase) throw new Error('Database client not available');
   const { data: article } = await supabase.from('articles').select('slug').eq('id', id).maybeSingle();
   const { error: delErr } = await supabase.from('articles').delete().eq('id', id);
@@ -507,8 +494,8 @@ export async function createLetter(formData) {
   }
 
   try {
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
     if (!supabase) throw new Error('Database client not available');
 
     const { data: letter, error: insertErr } = await supabase.from('letter').insert({
@@ -532,11 +519,11 @@ export async function createLetter(formData) {
     revalidatePath('/letters');
     if (published) revalidatePath(`/letters/${letter.slug}`);
     redirect('/admin/letters');
-    // Link tags if provided
+    // Link tags if provided (use service-role client)
     const parsedTags = parseTagNames(tagsString);
     if (parsedTags.length > 0) {
       try {
-  await upsertTagsAndLink(supabase, 'letter', letter.id, parsedTags);
+        await upsertTagsAndLink(supabase, 'letter', letter.id, parsedTags);
       } catch (e) {
         console.error('Error linking tags for letter', e);
       }
@@ -580,8 +567,8 @@ export async function updateLetter(formData) {
   }
 
   try {
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
     if (!supabase) throw new Error('Database client not available');
 
     // Проверяем, что letter существует
@@ -618,11 +605,11 @@ export async function updateLetter(formData) {
     }
 
     redirect('/admin/letters');
-    // Update tags
+    // Update tags (use service-role client)
     const parsedTags = parseTagNames(tagsString);
     if (parsedTags.length > 0) {
       try {
-  await upsertTagsAndLink(supabase, 'letter', id, parsedTags);
+        await upsertTagsAndLink(supabase, 'letter', id, parsedTags);
       } catch (e) {
         console.error('Error linking tags for letter', e);
       }
@@ -648,8 +635,8 @@ export async function deleteLetter(formData) {
   if (!id) {
     throw new Error('Letter ID is required.');
   }
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!supabase) throw new Error('Database client not available');
   const { data: letter } = await supabase.from('letter').select('slug,published').eq('id', id).maybeSingle();
   if (!letter) throw new Error('Письмо не найдено.');
@@ -672,7 +659,8 @@ export async function sendLetter(prevState, formData) {
   }
 
   try {
-  const { supabase } = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
     if (!supabase) return { status: 'error', message: 'База данных недоступна.' };
     const { data: letter } = await supabase.from('letter').select('*').eq('id', letterId).maybeSingle();
     if (!letter) return { status: 'error', message: 'Письмо не найдено.' };
@@ -777,8 +765,8 @@ export async function createPostcard(formData) {
   }
 
   try {
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
     if (!supabase) throw new Error('Database client not available');
 
     const payload = {
@@ -790,7 +778,7 @@ export async function createPostcard(formData) {
       available,
       featured,
     };
-  const { data: postcard, error } = await supabase.from('postcards').insert(payload).select().maybeSingle();
+    const { data: postcard, error } = await supabase.from('postcards').insert(payload).select().maybeSingle();
     if (error) {
       console.error('Supabase insert postcard error', error);
       throw new Error('Ошибка при создании открытки: ' + (error.message || String(error)));
@@ -819,8 +807,8 @@ export async function updatePostcard(formData) {
   }
 
   try {
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
     if (!supabase) throw new Error('Database client not available');
 
     const updates = {
@@ -832,7 +820,7 @@ export async function updatePostcard(formData) {
       featured,
       updatedAt: new Date().toISOString(),
     };
-  const { data: updatedPostcard, error } = await supabase.from('postcards').update(updates).eq('id', id).select().maybeSingle();
+    const { data: updatedPostcard, error } = await supabase.from('postcards').update(updates).eq('id', id).select().maybeSingle();
     if (error) {
       console.error('Supabase update postcard error', error);
       throw new Error('Ошибка при обновлении открытки: ' + (error.message || String(error)));
@@ -855,8 +843,8 @@ export async function deletePostcard(formData) {
   }
 
   try {
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-    const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
     if (!supabase) throw new Error('Database client not available');
 
     // Проверяем есть ли заказы для этой открытки
