@@ -84,10 +84,8 @@ export default function CloseableHero({ className = '' }) {
       <p className="text-gray-700 font-medium" style={{ fontSize: 'clamp(1rem, 2.2vw, 1.25rem)', maxWidth: '44rem', margin: '0 auto' }}>
         Вам открыты все публикации, включая личные истории и творческие эксперименты. Подпишитесь на рассылку и следите за свежими материалами.
       </p>
-      <div className="mt-6 flex gap-3">
-        <a href="/articles" className="px-5 py-3 bg-blue-600 text-white rounded-md font-semibold">Читать материалы</a>
-        <a href="/you" className="px-4 py-2 border border-gray-200 rounded-md">Мой профиль</a>
-      </div>
+      {/* For authenticated users we render only text (no CTAs) */}
+      <div className="mt-6" />
     </>
   );
 
