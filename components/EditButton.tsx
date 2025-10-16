@@ -33,7 +33,7 @@ export default function EditButton({
   variant = 'floating',
   className = ''
 }: EditButtonProps) {
-  const { session } = useAuth();
+  const { session, roles } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [isHovered, setIsHovered] = useState(false);
@@ -41,10 +41,12 @@ export default function EditButton({
   // Получаем контекст редактирования (если доступен)
   const editContext = useEditContext();
 
-  // Проверка прав доступа
-  if (!session?.user || session.user.role !== 'ADMIN') {
-    return null;
-  }
+  // Проверка прав доступа — предпочитаем roles массив из контекста (нормализованный)
+  const hasAdmin = Array.isArray(roles)
+    ? roles.map(r => String(r).toUpperCase()).includes('ADMIN')
+    : (session?.user && String(session.user.role).toUpperCase() === 'ADMIN');
+
+  if (!hasAdmin) return null;
 
   // Объединяем пропы с контекстом (пропы имеют приоритет)
   const finalContentType = contentType || editContext.contentType;
