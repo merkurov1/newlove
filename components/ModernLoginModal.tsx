@@ -85,7 +85,32 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
       const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\n${statement}\n\nURI: ${uri}\nVersion: ${version}\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
       const signature = await signer.signMessage(message);
       const { data, error } = await supabase.auth.signInWithWeb3({ chain: 'ethereum', message, signature: signature as any });
-      if (error) setWeb3Error(error.message || String(error));
+      if (error) {
+        setWeb3Error(error.message || String(error));
+      } else {
+        // Try to hydrate client-side session immediately so UI updates without a full page reload.
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const s = (sessionData as any)?.session || null;
+          if (s && s.user) {
+            // persist minimal user info to localStorage to notify other tabs and useSupabaseSession
+            const toStore = { id: s.user.id, email: s.user.email, name: s.user.user_metadata?.name || s.user.name, image: s.user.user_metadata?.avatar_url || s.user.picture || s.user.image, role: s.user.role };
+            try { localStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {}
+            // Broadcast via BroadcastChannel if available
+            try {
+              if (typeof BroadcastChannel !== 'undefined') {
+                const bc = new BroadcastChannel('newlove-auth');
+                try { bc.postMessage({ type: 'login', user: toStore }); } catch (e) {}
+                try { bc.close(); } catch (e) {}
+              }
+            } catch (e) {}
+            // Emit a global event that useSupabaseSession listens for
+            try { window.dispatchEvent(new Event('supabase:session-changed')); } catch (e) {}
+          }
+        } catch (e) {
+          // ignore session hydration errors
+        }
+      }
     } catch (e: any) {
       setWeb3Error(e?.message || String(e));
     }
