@@ -385,7 +385,13 @@ export async function updateProfile(prevState, formData) {
     }
     revalidatePath('/profile');
     revalidatePath(`/you/${updatedUser?.username}`);
-    return { status: 'success', message: 'Профиль успешно обновлен!' };
+    // After successful profile update, redirect the user to their public profile page
+    try {
+      redirect(`/you/${updatedUser?.username}`);
+    } catch (e) {
+      // If redirect fails in some runtimes, fall back to returning success message
+      return { status: 'success', message: 'Профиль успешно обновлен!' };
+    }
   } catch (error) {
     if (process.env.NODE_ENV === 'development') console.error('Ошибка обновления профиля:', error);
     return { status: 'error', message: 'Произошла неизвестная ошибка.' };

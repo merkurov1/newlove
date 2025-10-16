@@ -162,6 +162,9 @@ export default function UserSidebar() {
         <div>id: {user.id}</div>
         <div>email: {user.email || '—'}</div>
         <div>role: {(user.role || '').toString()}</div>
+        {!user.username && (
+          <div className="mt-1 text-xs text-yellow-600">Заполните username в профиле чтобы получить публичную ссылку</div>
+        )}
       </div>
       {debugPanel}
     </div>
