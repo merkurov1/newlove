@@ -58,7 +58,6 @@ export default async function Home() {
 
       {/* Main articles feed excluding auction-tagged articles */}
       <section id="articles" className="max-w-6xl mx-auto py-12 px-4">
-        <h1 className="text-3xl sm:text-4xl font-bold mb-6">Последние статьи</h1>
         <div className="rounded-2xl p-4 bg-white/30 backdrop-blur-sm border border-white/10">
           <ArticlesFeed initialArticles={articles} excludeTag="auction" />
         </div>

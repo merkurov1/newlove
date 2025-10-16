@@ -160,8 +160,7 @@ export default function AuctionSlider({ articles }: AuctionSliderProps) {
         </Link>
         <p className="text-gray-600 mb-3 line-clamp-4 w-full min-h-[3.25em]">{article.description || ''}</p>
         <div className="mt-2 flex gap-3 items-center">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white/30 backdrop-blur-sm border border-white/10">Аукцион</span>
-          <span className="text-sm text-gray-500">Читать • {article.readTime || '—'}</span>
+          {/* Removed auction badge and read time per UI request */}
         </div>
       </div>
     </section>
