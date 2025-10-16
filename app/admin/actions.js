@@ -466,20 +466,39 @@ export async function subscribeToNewsletter(prevState, formData) {
     let created = null;
     try {
       // Supabase JS supports upsert; use email as conflict key
-      const { data: upserted, error: upsertErr } = await supabase.from('subscribers').upsert(subscriberPayload, { onConflict: 'email', ignoreDuplicates: false }).select().maybeSingle();
+      const { data: upserted, error: upsertErr } = await supabase.from('subscribers').upsert(subscriberPayload, { onConflict: 'email' }).select();
       if (upsertErr) {
         console.error('Supabase upsert subscriber error', upsertErr);
       }
-      created = upserted;
+      // Supabase may return an array or a single object depending on client; normalize
+      if (Array.isArray(upserted)) created = upserted[0] || null;
+      else created = upserted || null;
     } catch (e) {
       console.error('Supabase upsert subscriber exception', e);
     }
+
+    // Fallback: if upsert didn't return a row, try to fetch by email
+    if (!created) {
+      try {
+        const { data: existing, error: fetchErr } = await supabase.from('subscribers').select('*').eq('email', email).limit(1).maybeSingle();
+        if (fetchErr) console.error('Error fetching subscriber after upsert failure', fetchErr);
+        created = existing || null;
+      } catch (e) {
+        console.error('Exception fetching existing subscriber', e);
+      }
+    }
+
     // If upsert returned an existing row, check status
     if (created && created.isActive) return { status: 'success', message: 'Вы уже подписаны на рассылку.' };
 
     // Генерируем токен для double opt-in
-  const confirmationToken = createId();
-  const { error: tokenErr } = await supabase.from('subscriber_tokens').insert({ subscriber_id: created.id, type: 'confirm', token: confirmationToken });
+    if (!created || !created.id) {
+      console.error('Failed to create or locate subscriber row for email', email);
+      return { status: 'error', message: 'Не удалось создать подписчика. Попробуйте позже.' };
+    }
+
+    const confirmationToken = createId();
+    const { error: tokenErr } = await supabase.from('subscriber_tokens').insert({ subscriber_id: created.id, type: 'confirm', token: confirmationToken });
     if (tokenErr) {
       console.error('Supabase insert token error', tokenErr);
     }
