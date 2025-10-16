@@ -25,8 +25,17 @@ export default async function ProfilePage() {
     // via diagnostics if necessary.
     try { redirect('/'); } catch (err) { /* noop in prerender */ }
   }
-  // Если user не найден, редиректим
-  if (!user?.id) redirect('/');
+  // Если user не найден, показываем клиентский компонент с приглашением войти
+  // вместо строгого редиректа — это даёт лучший UX: пользователь увидит
+  // кнопку входа/модальное и сможет вернуться после логина.
+  if (!user?.id) {
+    // Render a lightweight client-side guest prompt — import dynamically
+    const { default: ProfileGuest } = await import('@/components/profile/ProfileGuest');
+    return (
+      // @ts-expect-error ServerComponent returning a Client Component
+      <ProfileGuest />
+    );
+  }
 
   let userData = null;
   if (supabase) {
