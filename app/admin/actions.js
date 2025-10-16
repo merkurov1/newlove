@@ -550,7 +550,7 @@ export async function createLetter(formData) {
     const supabase = getServerSupabaseClient({ useServiceRole: true });
     if (!supabase) throw new Error('Database client not available');
 
-    const { data: letter, error: insertErr } = await supabase.from('letter').insert({
+  const { data: letter, error: insertErr } = await supabase.from('letters').insert({
       id: createId(),
       title,
       slug,
@@ -623,15 +623,15 @@ export async function updateLetter(formData) {
     if (!supabase) throw new Error('Database client not available');
 
     // Проверяем, что letter существует
-    const { data: existingLetter } = await supabase.from('letter').select('*').eq('id', id).maybeSingle();
+  const { data: existingLetter } = await supabase.from('letters').select('*').eq('id', id).maybeSingle();
     if (!existingLetter) throw new Error('Письмо не найдено.');
 
     // Проверяем уникальность slug (исключаем текущее письмо)
-    const { data: existingSlugLetter } = await supabase.from('letter').select('id').eq('slug', slug).maybeSingle();
+  const { data: existingSlugLetter } = await supabase.from('letters').select('id').eq('slug', slug).maybeSingle();
     if (existingSlugLetter && existingSlugLetter.id !== id) throw new Error('Письмо с таким URL уже существует. Используйте другой slug.');
 
     // Обновляем письмо
-    const { data: updatedLetter, error: updateErr } = await supabase.from('letter').update({
+  const { data: updatedLetter, error: updateErr } = await supabase.from('letters').update({
       title,
       slug,
       content: JSON.stringify(validBlocks),
@@ -689,9 +689,9 @@ export async function deleteLetter(formData) {
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!supabase) throw new Error('Database client not available');
-  const { data: letter } = await supabase.from('letter').select('slug,published').eq('id', id).maybeSingle();
+  const { data: letter } = await supabase.from('letters').select('slug,published').eq('id', id).maybeSingle();
   if (!letter) throw new Error('Письмо не найдено.');
-  const { error: delErr } = await supabase.from('letter').delete().eq('id', id);
+  const { error: delErr } = await supabase.from('letters').delete().eq('id', id);
   if (delErr) {
     console.error('Supabase delete letter error', delErr);
     throw new Error('Ошибка при удалении письма');
@@ -713,7 +713,7 @@ export async function sendLetter(prevState, formData) {
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
     if (!supabase) return { status: 'error', message: 'База данных недоступна.' };
-    const { data: letter } = await supabase.from('letter').select('*').eq('id', letterId).maybeSingle();
+  const { data: letter } = await supabase.from('letters').select('*').eq('id', letterId).maybeSingle();
     if (!letter) return { status: 'error', message: 'Письмо не найдено.' };
     if (letter.sentAt) return { status: 'error', message: 'Это письмо уже было отправлено.' };
     if (!process.env.RESEND_API_KEY) return { status: 'error', message: 'Email сервис не настроен. Обратитесь к администратору.' };
@@ -772,7 +772,7 @@ export async function sendLetter(prevState, formData) {
     }
 
     // Отмечаем письмо как отправленное
-    const { error: sentErr } = await supabase.from('letter').update({ sentAt: new Date().toISOString() }).eq('id', letterId);
+  const { error: sentErr } = await supabase.from('letters').update({ sentAt: new Date().toISOString() }).eq('id', letterId);
     if (sentErr) console.error('Supabase mark sent error', sentErr);
 
     revalidatePath(`/admin/letters/edit/${letterId}`);

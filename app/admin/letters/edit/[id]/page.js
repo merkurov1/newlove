@@ -26,7 +26,7 @@ export default async function EditLetterPage({ params }) {
       supabase = getServerSupabaseClient({ useServiceRole: true });
     }
     if (!supabase) notFound();
-  const { data: letterRaw, error } = await supabase.from('letter').select('*').eq('id', letterId).maybeSingle();
+  const { data: letterRaw, error } = await supabase.from('letters').select('*').eq('id', letterId).maybeSingle();
   let letter = letterRaw;
   if (letter) {
     const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');

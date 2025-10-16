@@ -21,7 +21,7 @@ export default async function AdminLettersPage() {
     supabase = getServerSupabaseClient({ useServiceRole: true });
   }
 
-  const { data, error: lErr } = await supabase.from('letter').select('id,title,slug,published,sentAt,createdAt,author:authorId(name)').order('createdAt', { ascending: false });
+  const { data, error: lErr } = await supabase.from('letters').select('id,title,slug,published,sentAt,createdAt,author:authorId(name)').order('createdAt', { ascending: false });
   if (lErr) throw lErr;
   letters = data || [];
   } catch (err) {
