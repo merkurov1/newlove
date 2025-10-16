@@ -97,17 +97,17 @@ export async function createArticle(formData) {
     console.error('Supabase insert article error', insertErr);
     throw new Error('Ошибка при создании статьи');
   }
-  revalidatePath('/admin/articles');
-  redirect('/admin/articles');
-  // Link tags (if any)
+  // Link tags (if any) BEFORE redirecting so junction rows are created.
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   if (parsedTags.length > 0) {
     try {
-  await upsertTagsAndLink(supabase, 'article', articleId, parsedTags);
+      await upsertTagsAndLink(supabase, 'article', articleId, parsedTags);
     } catch (e) {
       console.error('Error linking tags for article', e);
     }
   }
+  revalidatePath('/admin/articles');
+  redirect('/admin/articles');
 }
 
 export async function updateArticle(formData) {
@@ -156,18 +156,18 @@ export async function updateArticle(formData) {
     console.error('Supabase update article error', updateErr);
     throw new Error('Ошибка при обновлении статьи');
   }
-  revalidatePath('/admin/articles');
-  revalidatePath(`/${slug}`);
-  redirect('/admin/articles');
-  // Update tags
+  // Update tags BEFORE redirect
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   if (parsedTags.length > 0) {
     try {
-  await upsertTagsAndLink(supabase, 'article', id, parsedTags);
+      await upsertTagsAndLink(supabase, 'article', id, parsedTags);
     } catch (e) {
       console.error('Error linking tags for article', e);
     }
   }
+  revalidatePath('/admin/articles');
+  revalidatePath(`/${slug}`);
+  redirect('/admin/articles');
 }
 
 export async function deleteArticle(formData) {
@@ -250,8 +250,17 @@ export async function createProject(formData) {
         }).select().maybeSingle();
         if (!retryErr) {
           console.debug('Retry insert with service-role client succeeded');
-          revalidatePath('/admin/projects');
-          redirect('/admin/projects');
+          // Link tags (if any) BEFORE redirect
+          const parsedTags = parseTagNames(formData.get('tags')?.toString());
+          if (parsedTags.length > 0) {
+            try {
+              await upsertTagsAndLink(supabase, 'project', projectId, parsedTags);
+            } catch (e) {
+              console.error('Error linking tags for project', e);
+            }
+          }
+          await revalidatePath('/admin/projects');
+          await redirect('/admin/projects');
           return;
         }
         console.error('Retry insert with service-role client failed', retryErr);
@@ -261,8 +270,17 @@ export async function createProject(formData) {
     }
     throw new Error('Ошибка при создании проекта');
   }
-  revalidatePath('/admin/projects');
-  redirect('/admin/projects');
+  // Link tags (if any) BEFORE redirect
+  const parsedTags = parseTagNames(formData.get('tags')?.toString());
+  if (parsedTags.length > 0) {
+    try {
+      await upsertTagsAndLink(supabase, 'project', projectId, parsedTags);
+    } catch (e) {
+      console.error('Error linking tags for project', e);
+    }
+  }
+  await revalidatePath('/admin/projects');
+  await redirect('/admin/projects');
   // Link tags (if any)
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   if (parsedTags.length > 0) {
@@ -514,12 +532,7 @@ export async function createLetter(formData) {
       }
       throw new Error('Ошибка при создании письма: ' + (insertErr.message || String(insertErr)));
     }
-
-    revalidatePath('/admin/letters');
-    revalidatePath('/letters');
-    if (published) revalidatePath(`/letters/${letter.slug}`);
-    redirect('/admin/letters');
-    // Link tags if provided (use service-role client)
+    // Link tags if provided (use service-role client) BEFORE redirect
     const parsedTags = parseTagNames(tagsString);
     if (parsedTags.length > 0) {
       try {
@@ -528,6 +541,10 @@ export async function createLetter(formData) {
         console.error('Error linking tags for letter', e);
       }
     }
+    await revalidatePath('/admin/letters');
+    await revalidatePath('/letters');
+    if (published) await revalidatePath(`/letters/${letter.slug}`);
+    await redirect('/admin/letters');
   } catch (error) {
     if (error.message && /slug/i.test(error.message)) throw error;
     throw new Error('Ошибка при создании письма: ' + (error.message || String(error)));
@@ -593,6 +610,15 @@ export async function updateLetter(formData) {
     }
 
     // Обновляем кеш страниц
+    // Update tags (use service-role client) BEFORE redirect
+    const parsedTags = parseTagNames(tagsString);
+    if (parsedTags.length > 0) {
+      try {
+        await upsertTagsAndLink(supabase, 'letter', id, parsedTags);
+      } catch (e) {
+        console.error('Error linking tags for letter', e);
+      }
+    }
     revalidatePath('/admin/letters');
     revalidatePath('/letters');
     revalidatePath(`/admin/letters/edit/${id}`);
@@ -605,15 +631,6 @@ export async function updateLetter(formData) {
     }
 
     redirect('/admin/letters');
-    // Update tags (use service-role client)
-    const parsedTags = parseTagNames(tagsString);
-    if (parsedTags.length > 0) {
-      try {
-        await upsertTagsAndLink(supabase, 'letter', id, parsedTags);
-      } catch (e) {
-        console.error('Error linking tags for letter', e);
-      }
-    }
   } catch (error) {
     console.error('Error updating letter:', error);
     
