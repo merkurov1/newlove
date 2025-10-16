@@ -23,56 +23,32 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
     return <div className="p-8 text-center text-red-600 font-bold text-xl">403 Forbidden — Admins only</div>;
   }
   // Получаем статистику по основным сущностям
-  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq);
+  // For admin dashboard always use the service-role server client to guarantee
+  // we can read counts and recent items regardless of request-scoped RLS.
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
   let stats = { articles: 0, projects: 0, letters: 0, postcards: 0 };
   let recentArticles: any[] = [];
   let recentProjects: any[] = [];
-  if (supabase) {
-    try {
-      const [articlesCount, projectsCount, lettersCount, postcardsCount, articlesData, projectsData] = await Promise.all([
-        supabase.from('articles').select('id', { count: 'exact', head: true }),
-        supabase.from('projects').select('id', { count: 'exact', head: true }),
-        supabase.from('letter').select('id', { count: 'exact', head: true }),
-        supabase.from('postcards').select('id', { count: 'exact', head: true }),
-        supabase.from('articles').select('id,title,slug,published,author:authorId(name),updatedAt').order('updatedAt', { ascending: false }).limit(5),
-        supabase.from('projects').select('id,title,slug,published,createdAt').order('createdAt', { ascending: false }).limit(5),
-      ]);
-      stats = {
-        articles: articlesCount.count ?? 0,
-        projects: projectsCount.count ?? 0,
-        letters: lettersCount.count ?? 0,
-        postcards: postcardsCount.count ?? 0,
-      };
-      recentArticles = Array.isArray(articlesData.data) ? articlesData.data : [];
-      recentProjects = Array.isArray(projectsData.data) ? projectsData.data : [];
-    } catch (e) {
-      // ignore, fallback to zeros
-    }
-  } else {
-    // Fallback to server service-role client for SSR paths without request-scoped supabase
-    try {
-      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-      const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
-      const [articlesCount, projectsCount, lettersCount, postcardsCount, articlesData, projectsData] = await Promise.all([
-        serverSupabase.from('articles').select('id', { count: 'exact', head: true }),
-        serverSupabase.from('projects').select('id', { count: 'exact', head: true }),
-        serverSupabase.from('letter').select('id', { count: 'exact', head: true }),
-        serverSupabase.from('postcards').select('id', { count: 'exact', head: true }),
-        serverSupabase.from('articles').select('id,title,slug,published,author:authorId(name),updatedAt').order('updatedAt', { ascending: false }).limit(5),
-        serverSupabase.from('projects').select('id,title,slug,published,createdAt').order('createdAt', { ascending: false }).limit(5),
-      ]);
-      stats = {
-        articles: articlesCount.count ?? 0,
-        projects: projectsCount.count ?? 0,
-        letters: lettersCount.count ?? 0,
-        postcards: postcardsCount.count ?? 0,
-      };
-      recentArticles = Array.isArray(articlesData.data) ? articlesData.data : [];
-      recentProjects = Array.isArray(projectsData.data) ? projectsData.data : [];
-    } catch (e) {
-      // ignore, fallback to zeros
-    }
+  try {
+    const [articlesCount, projectsCount, lettersCount, postcardsCount, articlesData, projectsData] = await Promise.all([
+      serverSupabase.from('articles').select('id', { count: 'exact', head: true }),
+      serverSupabase.from('projects').select('id', { count: 'exact', head: true }),
+      serverSupabase.from('letter').select('id', { count: 'exact', head: true }),
+      serverSupabase.from('postcards').select('id', { count: 'exact', head: true }),
+      serverSupabase.from('articles').select('id,title,slug,published,author:authorId(name),updatedAt').order('updatedAt', { ascending: false }).limit(5),
+      serverSupabase.from('projects').select('id,title,slug,published,createdAt').order('createdAt', { ascending: false }).limit(5),
+    ]);
+    stats = {
+      articles: articlesCount.count ?? 0,
+      projects: projectsCount.count ?? 0,
+      letters: lettersCount.count ?? 0,
+      postcards: postcardsCount.count ?? 0,
+    };
+    recentArticles = Array.isArray(articlesData.data) ? articlesData.data : [];
+    recentProjects = Array.isArray(projectsData.data) ? projectsData.data : [];
+  } catch (e) {
+    console.error('Admin dashboard data fetch error:', e);
   }
   return (
     <div className="p-6 space-y-8">
