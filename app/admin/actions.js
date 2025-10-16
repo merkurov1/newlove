@@ -250,13 +250,13 @@ export async function createProject(formData) {
         }).select().maybeSingle();
         if (!retryErr) {
           console.debug('Retry insert with service-role client succeeded');
-          // Link tags (if any) BEFORE redirect
+          // Link tags (if any) BEFORE redirect — use the service-role client (svc)
           const parsedTags = parseTagNames(formData.get('tags')?.toString());
           if (parsedTags.length > 0) {
             try {
-              await upsertTagsAndLink(supabase, 'project', projectId, parsedTags);
+              await upsertTagsAndLink(svc, 'project', projectId, parsedTags);
             } catch (e) {
-              console.error('Error linking tags for project', e);
+              console.error('Error linking tags for project (service-role)', e);
             }
           }
           await revalidatePath('/admin/projects');
@@ -281,15 +281,6 @@ export async function createProject(formData) {
   }
   await revalidatePath('/admin/projects');
   await redirect('/admin/projects');
-  // Link tags (if any)
-  const parsedTags = parseTagNames(formData.get('tags')?.toString());
-  if (parsedTags.length > 0) {
-    try {
-  await upsertTagsAndLink(supabase, 'project', projectId, parsedTags);
-    } catch (e) {
-      console.error('Error linking tags for project', e);
-    }
-  }
 }
 
 export async function updateProject(formData) {

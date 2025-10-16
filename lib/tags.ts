@@ -2,6 +2,19 @@
 // Helper utilities for upserting tags and linking them to entities using Supabase.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+// Lazy-import server auth to obtain a service-role client when needed
+async function getServiceRoleClient(): Promise<SupabaseClient | null> {
+  try {
+    // dynamic import to avoid bundling server-only code in some runtimes
+    const mod = await import('@/lib/serverAuth');
+    const getServerSupabaseClient = (mod && mod.getServerSupabaseClient) || mod.default;
+    if (!getServerSupabaseClient) return null;
+    return getServerSupabaseClient({ useServiceRole: true });
+  } catch (e) {
+    console.warn('Could not obtain service-role client from serverAuth', e?.message || e);
+    return null;
+  }
+}
 
 export type LinkEntity = 'article' | 'project' | 'letter';
 
@@ -108,8 +121,40 @@ export async function upsertTagsAndLink(
   // Supabase client's onConflict expects a comma-separated string in types
   try {
     const { error: insertErr } = await supabase.from(junctionTable).upsert(inserts, { onConflict: 'A,B' });
-    if (insertErr) console.error('insert junction error', insertErr);
+    if (insertErr) {
+      console.error('insert junction error', insertErr);
+      // If this appears to be a permission/RLS error, optionally retry with service-role client
+      const msg = (insertErr && (insertErr.message || insertErr.toString())) || '';
+      if (/permission|permission denied|42501|forbidden|not authorized/i.test(msg)) {
+        try {
+          const svc = await getServiceRoleClient();
+          if (svc) {
+            const { error: svcErr } = await svc.from(junctionTable).upsert(inserts, { onConflict: 'A,B' });
+            if (svcErr) {
+              console.error('insert junction retry with service-role failed', svcErr);
+            } else {
+              console.debug('insert junction retry with service-role succeeded');
+            }
+          } else {
+            console.warn('Service-role client not available for junction retry');
+          }
+        } catch (retryE) {
+          console.error('Exception while retrying junction insert with service-role', retryE);
+        }
+      }
+    }
   } catch (e) {
     console.error('insert junction unexpected error', e);
+    // Try service-role fallback once more in case this was a permission-related exception
+    try {
+      const svc = await getServiceRoleClient();
+      if (svc) {
+        const { error: svcErr } = await svc.from(junctionTable).upsert(inserts, { onConflict: 'A,B' });
+        if (svcErr) console.error('insert junction fallback with service-role failed', svcErr);
+        else console.debug('insert junction fallback with service-role succeeded');
+      }
+    } catch (fallbackE) {
+      console.error('Service-role junction fallback exception', fallbackE);
+    }
   }
 }
