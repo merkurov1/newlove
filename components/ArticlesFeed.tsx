@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import SafeImage from "@/components/SafeImage";
+import EditButton from '@/components/EditButton';
 
 interface Article {
   id: string;
@@ -76,10 +77,14 @@ export default function ArticlesFeed({ initialArticles }: { initialArticles: Art
           <article
             key={article.id}
             data-last-article={idx === articles.length - 1 ? true : undefined}
-            className="flex flex-col group animate-fade-in-up min-w-0 max-w-full"
+            className="relative flex flex-col group animate-fade-in-up min-w-0 max-w-full"
             style={{ animationDelay: `${idx * 100}ms`, animationFillMode: "both" }}
             role="listitem"
           >
+            {/* Inline compact edit button for admins (positioned top-right) */}
+            <div className="absolute top-2 right-2 z-20">
+              <EditButton contentType="article" contentId={article.id} variant="compact" />
+            </div>
             <Link
               href={`/${article.slug}`}
               className="block relative w-full aspect-[2/1] group min-w-0 overflow-hidden"
