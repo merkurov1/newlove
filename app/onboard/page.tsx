@@ -92,6 +92,25 @@ export default function OnboardLoginPage() {
         } catch (e) {
           // best-effort sync, ignore errors
         }
+        // Also sync server-side cookie & upsert application user so server components
+        // see the authenticated session immediately. This mirrors ModernLoginModal flow.
+        try {
+          const sessResp2 = await supabase.auth.getSession();
+          const s2 = (sessResp2 as any)?.data?.session || null;
+          if (s2 && s2.user) {
+            try {
+              await fetch('/api/auth/set-cookie', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ access_token: s2.access_token, refresh_token: s2.refresh_token, expires_at: s2.expires_at }),
+              });
+            } catch (e) {}
+            try {
+              // Try upsert after cookie set (best-effort)
+              await fetch('/api/auth/upsert', { method: 'POST', credentials: 'same-origin' });
+            } catch (e) {}
+          }
+        } catch (e) {}
       }
     } catch (e: any) {
       setError(e.message || String(e));
