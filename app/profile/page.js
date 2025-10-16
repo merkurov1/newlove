@@ -6,11 +6,25 @@ import ProfileForm from '@/components/profile/ProfileForm'; // Мы создад
 
 export default async function ProfilePage() {
   const globalReq = globalThis?.request || new Request('http://localhost');
-  const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
-  const { user, supabase } = await (async () => {
-    const res = await getSupabaseForRequest(globalReq) || {};
-    return { user: res.user, supabase: res.supabase };
-  })();
+  // Import the canonical helper directly to avoid interop/export shape issues
+  // that sometimes occur when the build produces different module formats.
+  let user = null;
+  let supabase = null;
+  try {
+    const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+    const res = await getUserAndSupabaseForRequest(globalReq) || {};
+    user = res.user || null;
+    supabase = res.supabase || null;
+  } catch (e) {
+    // If the helper fails during build/runtime, log and redirect to home so
+    // the page doesn't crash the whole prerender process. We'll still allow
+    // the client to surface an error if needed.
+    console.error('profile/page: failed to obtain supabase/user for request', e);
+    // Redirect unauthenticated/failing requests to home to avoid 500/404
+    // during prerender. This keeps the app stable while we surface errors
+    // via diagnostics if necessary.
+    try { redirect('/'); } catch (err) { /* noop in prerender */ }
+  }
   // Если user не найден, редиректим
   if (!user?.id) redirect('/');
 
