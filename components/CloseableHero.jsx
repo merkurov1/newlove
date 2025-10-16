@@ -68,6 +68,7 @@ export default function CloseableHero({ className = '' }) {
     const [modalOpen, setModalOpen] = useState(false);
     const handleOpen = () => {
       try { if (typeof window !== 'undefined') localStorage.setItem('login_redirect_path', window.location.pathname + window.location.search); } catch (e) {}
+      try { window.dispatchEvent(new Event('newlove:close-mobile-menu')); } catch (e) {}
       setModalOpen(true);
     };
     return (

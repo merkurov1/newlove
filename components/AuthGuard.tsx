@@ -33,7 +33,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         <div style={{ textAlign: "center", marginTop: 48 }}>
           <h1>Доступ ограничен</h1>
           <p>Пожалуйста, войдите, чтобы просмотреть этот контент.</p>
-          <button onClick={() => setModalOpen(true)} style={{ padding: 10, borderRadius: 8, fontWeight: 600, fontSize: 16 }}>Войти</button>
+          <button onClick={() => { try { window.dispatchEvent(new Event('newlove:close-mobile-menu')); } catch (e) {} setModalOpen(true); }} style={{ padding: 10, borderRadius: 8, fontWeight: 600, fontSize: 16 }}>Войти</button>
         </div>
   {modalOpen && <ModernLoginModal onClose={() => setModalOpen(false)} />}
       </>

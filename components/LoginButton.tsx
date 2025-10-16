@@ -31,6 +31,8 @@ export default function LoginButton() {
   const handleOpen = () => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('login_redirect_path', window.location.pathname + window.location.search);
+      // request header to close mobile menu if it's open
+      try { window.dispatchEvent(new Event('newlove:close-mobile-menu')); } catch (e) {}
     }
     setModalOpen(true);
   };
