@@ -14,7 +14,7 @@ export default function CloseableHero({ className = '' }) {
   const { session, isLoading } = useAuth();
   const serverRole = useServerEffectiveRole(session?.user ? session : null);
 
-  const isAdmin = (serverRole === 'ADMIN') || (session?.user?.role === 'ADMIN');
+  const isAdmin = (serverRole === 'ADMIN') || (String(session?.user?.role || '').toUpperCase() === 'ADMIN');
   const isAuthed = !!session?.user;
 
   const [closed, setClosed] = useState(false);
@@ -44,7 +44,7 @@ export default function CloseableHero({ className = '' }) {
     } catch (e) {
       setClosed(false);
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, storageKey]);
 
   function doClose() {
     try {
