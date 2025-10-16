@@ -19,9 +19,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Некорректный или устаревший токен.' }, { status: 404 });
     }
     // Помечаем токен использованным
-    await supabase.from('subscriber_tokens').update({ used: true }).eq('token', token);
-    // Удаляем подписчика (или soft-delete)
-    await supabase.from('subscribers').delete().eq('id', tokenRow.subscriber_id || tokenRow.subscriberId);
+    await supabase.from('subscriber_tokens').update({ used: true, usedAt: new Date().toISOString() }).eq('token', token);
+    // Soft-delete: помечаем подписчика неактивным и сохраняем время отписки
+    try {
+      await supabase.from('subscribers').update({ isActive: false, unsubscribedAt: new Date().toISOString() }).eq('id', tokenRow.subscriber_id || tokenRow.subscriberId);
+    } catch (e) {
+      console.warn('Failed to mark subscriber as unsubscribed:', String(e));
+    }
     return NextResponse.json({ message: 'Вы успешно отписались от рассылки.' });
   } catch (error) {
     return NextResponse.json({ error: 'Ошибка при отписке.' }, { status: 500 });

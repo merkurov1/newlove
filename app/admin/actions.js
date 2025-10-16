@@ -461,34 +461,25 @@ export async function subscribeToNewsletter(prevState, formData) {
       return { status: 'error', message: 'Сервис временно недоступен.' };
     }
 
-    // Проверяем, есть ли уже подписчик с этим email или userId
-    let existing = null;
-    if (userId) {
-      const { data, error } = await supabase.from('subscribers').select('*').or(`email.eq.${email},userId.eq.${userId}`).limit(1).maybeSingle();
-      if (error) console.error('Supabase check subscriber error', error);
-      existing = data;
-    } else {
-      const { data, error } = await supabase.from('subscribers').select('*').eq('email', email).limit(1).maybeSingle();
-      if (error) console.error('Supabase check subscriber error', error);
-      existing = data;
+    // Try to upsert subscriber to avoid race conditions (unique constraint on email expected)
+    const subscriberPayload = { id: createId(), email, userId: userId || null, isActive: false };
+    let created = null;
+    try {
+      // Supabase JS supports upsert; use email as conflict key
+      const { data: upserted, error: upsertErr } = await supabase.from('subscribers').upsert(subscriberPayload, { onConflict: 'email', ignoreDuplicates: false }).select().maybeSingle();
+      if (upsertErr) {
+        console.error('Supabase upsert subscriber error', upsertErr);
+      }
+      created = upserted;
+    } catch (e) {
+      console.error('Supabase upsert subscriber exception', e);
     }
-
-    if (existing) {
-      if (existing.isActive) return { status: 'success', message: 'Вы уже подписаны на рассылку.' };
-      return { status: 'success', message: 'Подтвердите подписку по ссылке в письме.' };
-    }
-
-    // Создаём подписчика
-    const subscriberPayload = { id: createId(), email, userId: userId || null };
-    const { data: created, error: insertErr } = await supabase.from('subscribers').insert(subscriberPayload).select().maybeSingle();
-    if (insertErr) {
-      console.error('Supabase insert subscriber error', insertErr);
-      return { status: 'error', message: 'Ошибка при подписке.' };
-    }
+    // If upsert returned an existing row, check status
+    if (created && created.isActive) return { status: 'success', message: 'Вы уже подписаны на рассылку.' };
 
     // Генерируем токен для double opt-in
-    const confirmationToken = createId();
-    const { error: tokenErr } = await supabase.from('subscriber_tokens').insert({ subscriber_id: created.id, type: 'confirm', token: confirmationToken });
+  const confirmationToken = createId();
+  const { error: tokenErr } = await supabase.from('subscriber_tokens').insert({ subscriber_id: created.id, type: 'confirm', token: confirmationToken });
     if (tokenErr) {
       console.error('Supabase insert token error', tokenErr);
     }
@@ -736,51 +727,68 @@ export async function sendLetter(prevState, formData) {
       }
     }
 
-    // Bulk-create unsubscribe tokens per subscriber (non-fatal)
-    try {
-      // Bulk token insert needs service role privileges (can write to subscriber_tokens)
-      const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
-      if (serverSupabase && subscribers.length > 0) {
-        const tokens = subscribers.map(s => ({ subscriber_id: s.id, type: 'unsubscribe', token: createId() }));
-        const { error: tokenErr } = await serverSupabase.from('subscriber_tokens').insert(tokens);
-        if (tokenErr) console.warn('subscriber_tokens bulk insert warning:', tokenErr.message || tokenErr);
-      }
-    } catch (e) {
-      console.warn('Failed to create unsubscribe tokens (non-fatal):', e?.message || e);
-    }
-
     if (subscribers.length === 0) {
       return { status: 'error', message: 'Нет активных подписчиков для отправки.' };
     }
 
-    // Инициализируем Resend
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    
-    // Рендерим email
-    const emailHtml = await renderNewsletterEmail(letter);
-    
-    // Отправляем письмо
-    const { data, error } = await resend.emails.send({
-      from: 'Anton Merkurov <noreply@resend.dev>',
-      to: subscribers.map(s => s.email),
-      subject: letter.title,
-      html: emailHtml,
-    });
-
-    if (error) {
-      return { status: 'error', message: `Ошибка отправки: ${error.message}` };
+    // Bulk-create unsubscribe tokens per subscriber and RETURN the inserted rows so we can map tokens to subscribers
+    let tokensMap = new Map();
+    try {
+      const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
+      if (serverSupabase) {
+        const tokensPayload = subscribers.map(s => ({ subscriber_id: s.id, type: 'unsubscribe', token: createId() }));
+        // Use .insert(...).select() to get returned rows (token values)
+        const { data: insertedTokens, error: tokenErr } = await serverSupabase.from('subscriber_tokens').insert(tokensPayload).select('subscriber_id,token');
+        if (tokenErr) {
+          console.warn('subscriber_tokens bulk insert warning:', (tokenErr && tokenErr.message) || String(tokenErr));
+        }
+        if (insertedTokens && Array.isArray(insertedTokens)) {
+          for (const t of insertedTokens) {
+            tokensMap.set(t.subscriber_id, t.token);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to create unsubscribe tokens (non-fatal):', (e && e.message) || String(e));
     }
 
-    // Отмечаем письмо как отправленное
-  const { error: sentErr } = await supabase.from('letters').update({ sentAt: new Date().toISOString() }).eq('id', letterId);
+    // Render email template once (it can be reused); template renderer should accept unsubscribeUrl param when used per-recipient
+    const baseRendered = await renderNewsletterEmail(letter);
+
+    // Send per-recipient to avoid leaking all addresses and to include personalized unsubscribe links
+    const { sendNewsletterToSubscriber } = await import('@/lib/newsletter/sendNewsletterToSubscriber');
+
+    // Simple batching with limited concurrency
+    const BATCH_SIZE = 10; // number of concurrent sends
+    const chunks = [];
+    for (let i = 0; i < subscribers.length; i += BATCH_SIZE) chunks.push(subscribers.slice(i, i + BATCH_SIZE));
+
+    let totalSent = 0;
+    for (const chunk of chunks) {
+      // send chunk in parallel
+      const promises = chunk.map(async (s) => {
+        const token = tokensMap.get(s.id) || createId();
+        // If token was not inserted earlier, let helper insert it (skipTokenInsert=false)
+        const opts = tokensMap.has(s.id) ? { token, skipTokenInsert: true } : { token };
+        // renderNewsletterEmail should support being called with unsubscribe URL; if not, helper will pass it to renderer
+        const res = await sendNewsletterToSubscriber(s, letter, opts);
+        if (res && res.status === 'sent') totalSent += 1;
+        return res;
+      });
+      // Wait for this batch to complete
+      await Promise.all(promises);
+    }
+
+    // Mark letter as sentAt (note: use sentAt = now even if some recipients failed; see future improvements)
+    const { error: sentErr } = await supabase.from('letters').update({ sentAt: new Date().toISOString() }).eq('id', letterId);
     if (sentErr) console.error('Supabase mark sent error', sentErr);
 
     revalidatePath(`/admin/letters/edit/${letterId}`);
     revalidatePath('/admin/letters');
-    
-    return { 
-      status: 'success', 
-      message: `Письмо успешно отправлено ${subscribers.length} подписчикам!` 
+
+    return {
+      status: 'success',
+      message: `Письмо отправлено (успешно): ${totalSent} из ${subscribers.length} подписчиков.`
     };
 
   } catch (error) {
