@@ -31,8 +31,8 @@ export default async function Home() {
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   const auctionArticles = await getArticlesByTag(supabase, 'auction', 50);
   const auctionIds = (auctionArticles || []).map(a => a.id).filter(Boolean);
-  // Show only articles tagged 'news' in the main feed
-  const articles = await getArticlesByTag(supabase, 'news', 15);
+  // Show main feed: all articles excluding those tagged 'auction'
+  const articles = await getArticlesExcludingTag(supabase, 'auction', 15);
   // Compute debug info for tag exclusion when requested
   const globalReq = (globalThis && globalThis.request) || null;
   let showDebug = !!(process && process.env && process.env.TAG_HELPERS_DEBUG);
