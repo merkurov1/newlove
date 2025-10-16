@@ -116,9 +116,24 @@ async function getPublicProjects() {
   }
 }
 
+// Fetch subscriber count from the database (service-role client)
+async function getSubscriberCount() {
+  try {
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
+    if (!supabase) return 0;
+    const res = await supabase.from('subscribers').select('id', { count: 'exact', head: true });
+    return res && typeof res.count === 'number' ? Number(res.count) : 0;
+  } catch (e) {
+    console.error('Failed to fetch subscriber count for layout', e);
+    return 0;
+  }
+}
+
 export default async function RootLayout({ children }) {
   // Получаем только опубликованные проекты через anon key
   const projects = await getPublicProjects();
+  const subscriberCount = await getSubscriberCount();
   const settings = {
     site_name: 'Anton Merkurov',
     slogan: 'Art x Love x Money',
@@ -134,7 +149,7 @@ export default async function RootLayout({ children }) {
           <main>
             {children}
           </main>
-          <Footer />
+          <Footer subscriberCount={Number(subscriberCount) || 0} />
         </AuthProvider>
       </body>
     </html>

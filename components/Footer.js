@@ -80,28 +80,14 @@ export default function Footer({ subscriberCount }) {
                 <div className="h-10 bg-gray-200 rounded"></div>
               </div>
             ) : isSubscribed ? (
-              // Для подписанных пользователей
-              <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-                <div className="flex items-center gap-3 mb-3">
+              // If user is already subscribed, don't show subscription form — show a compact notice
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center gap-3">
                   <span className="text-2xl">✅</span>
-                  <h3 className="text-lg font-semibold text-green-800">Вы подписаны на рассылку!</h3>
-                </div>
-                <p className="text-sm text-green-700 mb-4">
-                  Спасибо, что остаетесь с нами. Новые письма приходят прямо на вашу почту.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Link 
-                    href="/letters"
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm font-medium"
-                  >
-                    📮 Читать архив писем
-                  </Link>
-                  <Link 
-                    href="/letters"
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-green-600 text-green-600 rounded-md hover:bg-green-50 transition-colors text-sm font-medium"
-                  >
-                    🎨 Заказать открытку
-                  </Link>
+                  <div>
+                    <div className="text-sm font-semibold text-green-800">Вы подписаны на рассылку</div>
+                    <div className="text-xs text-green-700">Спасибо, что остаетесь с нами.</div>
+                  </div>
                 </div>
               </div>
             ) : session ? (
