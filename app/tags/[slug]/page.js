@@ -14,14 +14,18 @@ async function getTagData(slug) {
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const { supabase } = await getUserAndSupabaseForRequest(globalReq) || {};
   if (!supabase) notFound();
+  // Use configurable tags table name (default: "Tag")
+  const TAGS_TABLE = (typeof process !== 'undefined' && process.env && process.env.TAGS_TABLE_NAME) || 'Tag';
   // Поиск тега по slug (регистр игнорируем вручную)
-  const { data: tags } = await supabase.from('Tag').select('*').ilike('slug', slug).limit(1);
+  const { data: tags } = await supabase.from(TAGS_TABLE).select('*').ilike('slug', slug).limit(1);
   const tag = (tags && tags[0]) || null;
   if (!tag) notFound();
   // Получаем связанные статьи через junction _ArticleToTag
   // Try RPC first; if disabled or not present fall back to safe behavior
   let articlesResp = null;
   try {
+    // RPC may be present in some deployments for performance. If it fails,
+    // we'll fall back to manual junction query below.
     articlesResp = await supabase.rpc('get_articles_by_tag', { tag_slug: tag.slug });
   } catch (e) {
     // rpc missing or errored - fallback
