@@ -398,6 +398,43 @@ export async function updateProfile(prevState, formData) {
   }
 }
 
+// --- USER ADMIN ACTIONS ---
+export async function adminUpdateUserRole(userId, role) {
+  // Verify requestor is admin
+  await verifyAdmin();
+  if (!userId) throw new Error('User ID required');
+  if (!role) throw new Error('Role required');
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+  if (!supabase) throw new Error('Supabase client not available');
+  try {
+    const { error } = await supabase.auth.admin.updateUserById(userId, { user_metadata: { role } });
+    if (error) throw error;
+    revalidatePath('/admin/users');
+    return { status: 'success' };
+  } catch (e) {
+    console.error('adminUpdateUserRole error', e);
+    return { status: 'error', message: String(e) };
+  }
+}
+
+export async function adminDeleteUser(userId) {
+  await verifyAdmin();
+  if (!userId) throw new Error('User ID required');
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+  if (!supabase) throw new Error('Supabase client not available');
+  try {
+    const { error } = await supabase.auth.admin.deleteUser(userId);
+    if (error) throw error;
+    revalidatePath('/admin/users');
+    return { status: 'success' };
+  } catch (e) {
+    console.error('adminDeleteUser error', e);
+    return { status: 'error', message: String(e) };
+  }
+}
+
 // --- ТОВАРЫ (Products) - УДАЛЕНО ---
 // Все функции для работы с товарами убраны
 
