@@ -680,12 +680,22 @@ export async function deleteLetter(formData) {
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!supabase) throw new Error('Database client not available');
-  const { data: letter } = await supabase.from('letters').select('slug,published').eq('id', id).maybeSingle();
+  // Fetch letter for slug info and to verify existence
+  const { data: letter, error: fetchErr } = await supabase.from('letters').select('slug,published').eq('id', id).maybeSingle();
+  if (fetchErr) {
+    console.error('Error fetching letter before delete:', fetchErr);
+    throw new Error('Ошибка доступа к базе данных при удалении письма.');
+  }
   if (!letter) throw new Error('Письмо не найдено.');
-  const { error: delErr } = await supabase.from('letters').delete().eq('id', id);
+
+  // Perform delete and request the deleted row back for verification
+  const { data: deletedRow, error: delErr } = await supabase.from('letters').delete().eq('id', id).select('id,slug').maybeSingle();
   if (delErr) {
     console.error('Supabase delete letter error', delErr);
-    throw new Error('Ошибка при удалении письма');
+    throw new Error('Ошибка при удалении письма: ' + (delErr.message || String(delErr)));
+  }
+  if (!deletedRow) {
+    console.warn('Delete reported success but no row returned for id:', id);
   }
   revalidatePath('/admin/letters');
   revalidatePath('/letters');
