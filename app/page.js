@@ -32,6 +32,32 @@ export default async function Home() {
   const auctionArticles = await getArticlesByTag(supabase, 'auction', 50);
   const auctionIds = (auctionArticles || []).map(a => a.id).filter(Boolean);
   const articles = await getArticlesExcludingTag(supabase, 'auction', 15);
+  // Compute debug info for tag exclusion when requested
+  const globalReq = (globalThis && globalThis.request) || null;
+  let showDebug = !!(process && process.env && process.env.TAG_HELPERS_DEBUG);
+  try {
+    if (!showDebug && globalReq && typeof globalReq.url === 'string') {
+      const u = new URL(globalReq.url);
+      if (u.searchParams.get('tag_debug') === '1') showDebug = true;
+    }
+  } catch (e) {
+    // ignore
+  }
+  let tagDebugInfo = null;
+  if (showDebug) {
+    try {
+      const { getTagBySlug, readArticleRelationsForTag } = await import('@/lib/tagHelpers');
+      const tagRow = await getTagBySlug(supabase, 'auction');
+      let rels = [];
+      if (tagRow && tagRow.id) {
+        rels = await readArticleRelationsForTag(supabase, tagRow.id) || [];
+      }
+      const excludedIds = Array.from(new Set((rels || []).map(r => r && (r.A || r.article_id || r.articleId || r.a || r.article || r.id)).filter(Boolean)));
+      tagDebugInfo = { tagRow, relsCount: (rels || []).length, excludedIds, auctionIds };
+    } catch (e) {
+      tagDebugInfo = { error: String(e) };
+    }
+  }
 
   return (
     <main className="relative overflow-hidden">
@@ -60,6 +86,21 @@ export default async function Home() {
       <section id="articles" className="max-w-6xl mx-auto py-12 px-4">
         <div className="rounded-2xl p-4 bg-white/30 backdrop-blur-sm border border-white/10">
           <ArticlesFeed initialArticles={articles} excludeTag="auction" />
+          {tagDebugInfo && (
+            <div className="mt-6 p-4 bg-gray-50 border border-gray-200 text-sm text-gray-700 rounded">
+              <div className="font-medium mb-2">DEBUG: tag exclusion info</div>
+              {tagDebugInfo.error ? (
+                <pre className="whitespace-pre-wrap text-red-600">{tagDebugInfo.error}</pre>
+              ) : (
+                <div>
+                  <div><strong>tag row:</strong> {tagDebugInfo.tagRow ? JSON.stringify(tagDebugInfo.tagRow) : 'not found'}</div>
+                  <div className="mt-2"><strong>relations count:</strong> {tagDebugInfo.relsCount}</div>
+                  <div className="mt-2"><strong>excluded ids (sample 50):</strong> {JSON.stringify((tagDebugInfo.excludedIds || []).slice(0,50))}</div>
+                  <div className="mt-2"><strong>auctionArticles ids (server RPC):</strong> {JSON.stringify((tagDebugInfo.auctionIds || []).slice(0,50))}</div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
