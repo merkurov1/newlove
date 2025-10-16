@@ -117,10 +117,12 @@ export function extractTokenFromCookieHeader(cookieHeader: string): ReconstructR
   return reconstructTokenFromCookies(cookies);
 }
 
-export default {
+const tokenUtils = {
   parseCookies,
   reconstructTokenFromCookies,
   normalizeToken,
   decodeUidFromJwt,
   extractTokenFromCookieHeader,
 };
+
+export default tokenUtils;

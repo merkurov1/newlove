@@ -9,13 +9,32 @@ import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 
 export default function UserSidebar() {
   const { user, roles, isLoading } = useAuth();
-  if (isLoading || !user) return null;
-  const username = user.username || user.name || 'me';
-
   const [diagLoading, setDiagLoading] = React.useState(false);
   const [diagResult, setDiagResult] = React.useState(null);
   const [diagError, setDiagError] = React.useState(null);
   const [effectiveRole, setEffectiveRole] = React.useState(null);
+  // On mount, check effective role via server endpoint and cache it locally
+  React.useEffect(() => {
+    let mounted = true;
+    const checkRole = async () => {
+      try {
+        const sb = createBrowserClient();
+        const { data: sessData } = await sb.auth.getSession();
+        const sess = (sessData || {}).session || null;
+        const res = await fetch('/api/user/role', { credentials: 'same-origin' });
+        const json = await res.json().catch(() => null);
+        if (!mounted) return;
+        if (json && json.role) setEffectiveRole(String(json.role).toUpperCase());
+      } catch (e) {
+        // ignore — diagnostics button can be used
+      }
+    };
+    checkRole();
+    return () => { mounted = false; };
+  }, []);
+
+  if (isLoading || !user) return null;
+  const username = user.username || user.name || 'me';
 
   const runDiagnostics = async () => {
     setDiagLoading(true);
@@ -75,25 +94,6 @@ export default function UserSidebar() {
     setDiagLoading(false);
   };
 
-  // On mount, check effective role via server endpoint and cache it locally
-  React.useEffect(() => {
-    let mounted = true;
-    const checkRole = async () => {
-      try {
-        const sb = createBrowserClient();
-  const { data: sessData } = await sb.auth.getSession();
-  const sess = (sessData || {}).session || null;
-  const res = await fetch('/api/user/role', { credentials: 'same-origin' });
-        const json = await res.json().catch(() => null);
-        if (!mounted) return;
-        if (json && json.role) setEffectiveRole(String(json.role).toUpperCase());
-      } catch (e) {
-        // ignore — diagnostics button can be used
-      }
-    };
-    checkRole();
-    return () => { mounted = false; };
-  }, []);
 
   // Prefer server-detected effectiveRole (RPC) if available, otherwise fall back to client roles/session
   const roleFromClient = (Array.isArray(roles) && roles.length) ? roles[0] : ((user.role || '') && String(user.role).toUpperCase()) || 'USER';
