@@ -1,6 +1,8 @@
 "use client";
+import { useState } from 'react';
 import { useAuth } from '@/components/AuthContext';
 import useServerEffectiveRole from '@/hooks/useServerEffectiveRole';
+import ModernLoginModal from './ModernLoginModal';
 
 export default function HeroHearts({ className = "", style }) {
   const { session, isLoading } = useAuth();
@@ -18,10 +20,27 @@ export default function HeroHearts({ className = "", style }) {
         Исследуем пересечение искусства, любви и денег в цифровую эпоху. Зарегистрируйтесь, чтобы получить доступ к эксклюзивным материалам и закрытому сообществу.
       </p>
       <div className="mt-6">
-        <a href="#" onClick={(e) => { e.preventDefault(); try { localStorage.setItem('login_redirect_path', window.location.pathname + window.location.search); } catch (e) {} window.location.href = '/onboard'; }} className="px-6 py-3 bg-pink-600 text-white rounded-md font-semibold">Войти / Зарегистрироваться</a>
+        {/* Use the same modal as the header LoginButton for consistent UX */}
+        {/* eslint-disable-next-line react-hooks/rules-of-hooks */}
+        <PublicHeroLogin />
       </div>
     </>
   );
+
+  // Small client component to host modal state for the PublicHero login button
+  function PublicHeroLogin() {
+    const [modalOpen, setModalOpen] = useState(false);
+    const handleOpen = () => {
+      try { if (typeof window !== 'undefined') localStorage.setItem('login_redirect_path', window.location.pathname + window.location.search); } catch (e) {}
+      setModalOpen(true);
+    };
+    return (
+      <>
+        <button onClick={handleOpen} className="px-6 py-3 bg-pink-600 text-white rounded-md font-semibold">Войти / Зарегистрироваться</button>
+        {modalOpen && <ModernLoginModal onClose={() => setModalOpen(false)} />}
+      </>
+    );
+  }
 
   const UserHero = () => (
     <>
