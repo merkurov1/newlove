@@ -76,7 +76,7 @@ export default async function Home() {
       </div>
       {/* Auction slider for articles tagged 'auction' - placed right after hero */}
       {auctionArticles && auctionArticles.length > 0 && (
-        <section className="max-w-5xl mx-auto py-4 sm:py-6 px-4" aria-label="Аукционные статьи">
+        <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
           <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
             <AuctionSlider articles={auctionArticles} />
           </div>
@@ -84,7 +84,7 @@ export default async function Home() {
       )}
 
       {/* Main articles feed excluding auction-tagged articles */}
-  <section id="articles" className="max-w-5xl mx-auto py-6 sm:py-8 px-4">
+  <section id="articles" className="max-w-5xl mx-auto py-4 sm:py-6 lg:py-4 lg:-mt-6 px-4">
     <div className="rounded-2xl p-3 sm:p-4 bg-white/30 backdrop-blur-sm border border-white/10">
           <ArticlesFeed initialArticles={articles} includeTag="news" />
           {tagDebugInfo && (
