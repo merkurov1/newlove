@@ -99,15 +99,36 @@ export default function AdminUsersPage() {
 
   async function updateUser(userId: string, updates: Partial<User>) {
     try {
-  const supabase = createBrowserClient();
       if (updates.role) {
-        const { error } = await supabase.auth.admin.updateUserById(userId, { user_metadata: { role: updates.role } });
-        if (error) throw error;
+        const res = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'updateRole', userId, role: updates.role }),
+        });
+        const json = await res.json();
+        if (!res.ok || json.status === 'error') throw new Error(json.message || 'Update failed');
         await fetchData();
       }
     } catch (err) {
       console.error(err);
       alert('Ошибка обновления пользователя');
+    }
+  }
+
+  async function deleteUserAction(userId: string) {
+    if (!confirm('Удалить пользователя? Это действие необратимо.')) return;
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteUser', userId }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.status === 'error') throw new Error(json.message || 'Delete failed');
+      await fetchData();
+    } catch (e) {
+      console.error(e);
+      alert('Ошибка удаления пользователя');
     }
   }
 
@@ -170,7 +191,10 @@ export default function AdminUsersPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <Button variant="secondary" size="sm" onClick={() => setEditingUser(user)}>✏️ Редактировать</Button>
+                    <div className="flex items-center gap-2">
+                      <Button variant="secondary" size="sm" onClick={() => setEditingUser(user)}>✏️ Редактировать</Button>
+                      <Button variant="danger" size="sm" onClick={() => deleteUserAction(user.id)}>🗑️ Удалить</Button>
+                    </div>
                   </td>
                 </tr>
               ))}
