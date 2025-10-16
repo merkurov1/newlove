@@ -31,8 +31,8 @@ export default async function Home() {
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   const auctionArticles = await getArticlesByTag(supabase, 'auction', 50);
   const auctionIds = (auctionArticles || []).map(a => a.id).filter(Boolean);
-  // Show main feed: all articles excluding those tagged 'auction'
-  const articles = await getArticlesExcludingTag(supabase, 'auction', 15);
+  // Show main feed: articles tagged 'news'
+  const newsArticles = await getArticlesByTag(supabase, 'news', 15);
   // Compute debug info for tag exclusion when requested
   const globalReq = (globalThis && globalThis.request) || null;
   let showDebug = !!(process && process.env && process.env.TAG_HELPERS_DEBUG);
@@ -77,7 +77,7 @@ export default async function Home() {
       {/* Main articles feed excluding auction-tagged articles */}
   <section id="articles" className="max-w-5xl mx-auto py-4 sm:py-6 lg:py-4 lg:-mt-6 px-4">
     <div className="rounded-2xl p-3 sm:p-4 bg-white/30 backdrop-blur-sm border border-white/10">
-          <ArticlesFeed initialArticles={articles} includeTag="news" />
+          <ArticlesFeed initialArticles={newsArticles} includeTag="news" />
           {tagDebugInfo && (
             <div className="mt-6 p-4 bg-gray-50 border border-gray-200 text-sm text-gray-700 rounded">
               <div className="font-medium mb-2">DEBUG: tag exclusion info</div>
