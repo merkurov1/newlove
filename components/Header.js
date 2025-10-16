@@ -72,9 +72,13 @@ export default function Header({ projects, settings }) {
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('supabase:session-changed', onSessionChanged);
+    // Close mobile menu when other UI needs to open modal (e.g., web3/onboard login)
+  const closeMenuHandler = () => setIsMenuOpen(false);
+  window.addEventListener('newlove:close-mobile-menu', closeMenuHandler);
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('supabase:session-changed', onSessionChanged);
+  window.removeEventListener('newlove:close-mobile-menu', closeMenuHandler);
     };
   }, []);
 
