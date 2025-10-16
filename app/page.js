@@ -109,124 +109,17 @@ async function getArticles(excludeIds = []) {
     return [];
   }
 }
-// Fetch articles for the special "auction" tag. Try RPC first, fall back to junction query.
+import { getArticlesByTag } from '@/lib/tagHelpers';
+
+// Fetch articles for the special "auction" tag using shared helpers
 async function getAuctionArticles() {
   try {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
-    // Try RPC for performance
-    try {
-      const rpc = await supabase.rpc('get_articles_by_tag', { tag_slug: 'auction' });
-      if (rpc && !rpc.error && Array.isArray(rpc.data) && rpc.data.length > 0) {
-        // Normalize shape similar to getArticles and return all found (bounded)
-        const normalizedAll = await Promise.all((rpc.data || []).map(async (a) => ({
-          id: a.id,
-          title: a.title,
-          slug: a.slug,
-          content: a.content,
-          publishedAt: a.publishedAt || a.updatedAt,
-          updatedAt: a.updatedAt,
-          author: a.author || null,
-          previewImage: a.content ? await getFirstImage(a.content) : null,
-          description: (a.excerpt || null),
-        })));
-        // dedupe while preserving order and cap to safe maximum (50)
-        const seen = new Set();
-        const normalized = [];
-        for (const a of normalizedAll) {
-          if (!a || !a.id) continue;
-          if (seen.has(String(a.id))) continue;
-          seen.add(String(a.id));
-          normalized.push(a);
-          if (normalized.length >= 50) break;
-        }
-        return normalized;
-      }
-    } catch (e) {
-      // rpc missing or failed - continue to fallback
-    }
-
-    // Fallback: tolerant lookup for Tag table name and slug variants (some deployments differ)
-    const configured = (typeof process !== 'undefined' && process.env && process.env.TAGS_TABLE_NAME) || null;
-    const tableCandidates = configured ? [configured, 'Tag', 'tags', 'tag', 'Tags'] : ['Tag', 'tags', 'tag', 'Tags'];
-    const slugVariants = [];
-    try { slugVariants.push('auction'); } catch (e) {}
-    try { slugVariants.push(decodeURIComponent('auction')); } catch (e) {}
-    try { slugVariants.push(String('auction').toLowerCase()); } catch (e) {}
-    const uniqSlugVariants = Array.from(new Set(slugVariants.filter(Boolean)));
-
-    let tag = null;
-    for (const tbl of tableCandidates) {
-      try {
-        for (const s of uniqSlugVariants) {
-          const { data: tags } = await supabase.from(tbl).select('id,slug').ilike('slug', s).limit(1);
-          if (tags && tags[0]) {
-            tag = tags[0];
-            break;
-          }
-        }
-      } catch (e) {
-        // table might not exist or permission denied - try next candidate
-      }
-      if (tag) break;
-    }
-    if (!tag) return [];
-
-    const { data: rels } = await supabase.from('_ArticleToTag').select('A').eq('B', tag.id);
-    const ids = Array.from(new Set((rels || []).map(r => r && r.A).filter(Boolean)));
-    if (!ids || ids.length === 0) return [];
-
-    // try common deleted column names like in getArticles
-    const deletedCols = ['deletedAt', 'deleted_at', 'deleted'];
-    let artsResp = null;
-    for (const col of [...deletedCols, null]) {
-      try {
-        // return up to 50 auction-tagged articles; allow RPC earlier, fallback to ids
-        let q = supabase.from('articles')
-          .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
-          .in('id', ids)
-          .eq('published', true)
-          .order('publishedAt', { ascending: false })
-          .limit(50);
-        if (col) q = q.is(col, null);
-        const res = await q;
-        if (res && res.error) throw res.error;
-        artsResp = res;
-        break;
-      } catch (e) {
-        // try next col candidate
-        continue;
-      }
-    }
-    const arts = (artsResp && artsResp.data) || [];
-    if (!arts || !Array.isArray(arts) || arts.length === 0) return [];
-
-    // Ensure dedupe and return up to limit
-    const seenIds = new Set();
-    const selected = [];
-    for (const a of arts) {
-      if (!a || !a.id) continue;
-      if (seenIds.has(String(a.id))) continue;
-      seenIds.add(String(a.id));
-      selected.push(a);
-      if (selected.length >= 50) break;
-    }
-
-    const enriched = await Promise.all(
-      selected.map(async (a) => ({
-        id: a.id,
-        title: a.title,
-        slug: a.slug,
-        content: a.content,
-        publishedAt: a.publishedAt,
-        updatedAt: a.updatedAt,
-        author: a.author || null,
-        previewImage: a.content ? await getFirstImage(a.content) : null,
-      }))
-    );
-    return enriched;
+    const arts = await getArticlesByTag(supabase, 'auction', 50);
+    return arts;
   } catch (e) {
-    console.error('getAuctionArticles error', e);
+    console.error('getAuctionArticles wrapper error', e);
     return [];
   }
 }

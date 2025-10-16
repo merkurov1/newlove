@@ -10,8 +10,7 @@
     "vercel:login": "vercel login",
     "vercel:deploy": "vercel --prod",
     "vercel:logs": "vercel logs --since 60m",
-    "vercel:logs:grep": "vercel logs --since 60m | grep -E 'SANITIZE DIAG|Unsupported Server Component type|2153716801' -n -C 5"
-    ,
+    "vercel:logs:grep": "vercel logs --since 60m | grep -E 'SANITIZE DIAG|Unsupported Server Component type|2153716801' -n -C 5",
     "check:metadata": "node scripts/check_metadata.js",
     "test:attach-tags": "node scripts/test_attach_tags.js"
   },
@@ -93,7 +92,9 @@
     "pino-pretty": "^10.2.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "5.4.5",
-  "vercel": "^28.20.0"
+    "vercel": "^28.20.0"
   }
 }
