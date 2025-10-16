@@ -63,34 +63,94 @@ export async function getServerUser(): Promise<any | null> {
 }
 
 export async function requireUser(): Promise<any> {
-  const user = await getServerUser();
-  if (!user) throw new Error('Unauthorized');
-  return user;
+  let user = await getServerUser();
+  if (user) return user;
+
+  // Fallback: try to reconstruct Request from runtime (server actions / SSR)
+  try {
+    const buildReq = async () => {
+      const existing = (globalThis && (globalThis as any).request) || null;
+      try {
+        if (existing && typeof existing.headers?.get === 'function' && existing.headers.get('cookie')) return existing;
+      } catch (e) {}
+      // Try next/headers cookies
+      try {
+        const { cookies } = await import('next/headers');
+        const cookieHeader = cookies()
+          .getAll()
+          .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
+          .join('; ');
+        return new Request('http://localhost', { headers: { cookie: cookieHeader } });
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const req = await buildReq();
+    if (req) {
+      const { getUserAndSupabaseForRequest } = await import('./getUserAndSupabaseForRequest');
+      const res = await getUserAndSupabaseForRequest(req as Request);
+      if (res && res.user) return res.user;
+    }
+  } catch (e) {
+    // ignore and throw below
+  }
+
+  throw new Error('Unauthorized');
 }
 
 export async function requireAdmin(): Promise<any> {
-  const user = await getServerUser();
-  if (!user) throw new Error('Unauthorized');
+  // Try server-scoped user first
+  let user = await getServerUser();
+  if (user) {
+    const roleRaw = ((user as any).user_metadata as any)?.role || (user as any)?.role || null;
+    const role = roleRaw ? String(roleRaw).toUpperCase() : null;
+    if (role === 'ADMIN') return user;
+  }
 
-  // First try direct metadata/role field
-  const roleRaw = ((user as any).user_metadata as any)?.role || (user as any)?.role || null;
-  const role = roleRaw ? String(roleRaw).toUpperCase() : null;
-  if (role === 'ADMIN') return user;
-
-  // Fallback: check user_roles via service role client
+  // Next try request-scoped / cookie-aware path via requireAdminFromRequest
   try {
-    const svc = getServerSupabaseClient({ useServiceRole: true });
-    const resp = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', user.id);
-    if (!resp.error && Array.isArray(resp.data)) {
-      const hasAdmin = resp.data.some((r: any) => {
-        const roleList: any = r.roles;
-        if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
-        return String(roleList?.name).toUpperCase() === 'ADMIN';
-      });
-      if (hasAdmin) return user;
+    const buildReq = async () => {
+      const existing = (globalThis && (globalThis as any).request) || null;
+      try {
+        if (existing && typeof existing.headers?.get === 'function' && existing.headers.get('cookie')) return existing;
+      } catch (e) {}
+      try {
+        const { cookies } = await import('next/headers');
+        const cookieHeader = cookies()
+          .getAll()
+          .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
+          .join('; ');
+        return new Request('http://localhost', { headers: { cookie: cookieHeader } });
+      } catch (e) {
+        return null;
+      }
+    };
+    const req = await buildReq();
+    if (req) {
+      const maybe = await requireAdminFromRequest(req as Request);
+      if (maybe && maybe.id) return maybe;
     }
   } catch (e) {
-    // ignore and fallthrough to unauthorized
+    // ignore and fallthrough to final fallback
+  }
+
+  // Final: original service-role check using any found user id from server user
+  if (user && user.id) {
+    try {
+      const svc = getServerSupabaseClient({ useServiceRole: true });
+      const resp = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', user.id);
+      if (!resp.error && Array.isArray(resp.data)) {
+        const hasAdmin = resp.data.some((r: any) => {
+          const roleList: any = r.roles;
+          if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
+          return String(roleList?.name).toUpperCase() === 'ADMIN';
+        });
+        if (hasAdmin) return user;
+      }
+    } catch (e) {
+      // ignore
+    }
   }
 
   throw new Error('Unauthorized');
