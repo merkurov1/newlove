@@ -212,12 +212,10 @@ export async function createProject(formData) {
   if (!title || !contentRaw || !slug) throw new Error('All fields are required.');
 
   // Проверка уникальности slug
-  const _ctx = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
-  let supabase = _ctx && _ctx.supabase;
-  // Fallback to server service-role client for server-only admin flows
-  if (!supabase) {
-    supabase = getServerSupabaseClient({ useServiceRole: true });
-  }
+  // For admin flows prefer the service-role client to avoid RLS blocking even
+  // when a request-scoped client exists. We already verified admin above.
+  const { getServerSupabaseClient: _getSvc } = await import('@/lib/serverAuth');
+  let supabase = _getSvc({ useServiceRole: true });
   const { data: existing } = await supabase.from('projects').select('id').eq('slug', slug).maybeSingle();
   if (existing) {
     throw new Error('Проект с таким slug уже существует. Пожалуйста, выберите другой URL.');
@@ -249,6 +247,31 @@ export async function createProject(formData) {
   }).select().maybeSingle();
   if (insertErr) {
     console.error('Supabase insert project error', insertErr);
+    // If this is an RLS permission error, attempt a retry with explicit service-role client
+    if (insertErr && String(insertErr.code) === '42501') {
+      try {
+        const { getServerSupabaseClient: _getSvcRetry } = await import('@/lib/serverAuth');
+        const svc = _getSvcRetry({ useServiceRole: true });
+        const { data: createdRetry, error: retryErr } = await svc.from('projects').insert({
+          id: projectId,
+          title,
+          content: JSON.stringify(validBlocks),
+          slug,
+          published,
+          publishedAt: published ? new Date().toISOString() : null,
+          authorId: session.user.id,
+        }).select().maybeSingle();
+        if (!retryErr) {
+          console.debug('Retry insert with service-role client succeeded');
+          revalidatePath('/admin/projects');
+          redirect('/admin/projects');
+          return;
+        }
+        console.error('Retry insert with service-role client failed', retryErr);
+      } catch (e) {
+        console.error('Exception during retry with service-role client', e);
+      }
+    }
     throw new Error('Ошибка при создании проекта');
   }
   revalidatePath('/admin/projects');
@@ -287,11 +310,9 @@ export async function updateProject(formData) {
     b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
   );
   if (validBlocks.length === 0) throw new Error('No valid blocks');
-  const _ctx2 = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
-  let supabase = _ctx2 && _ctx2.supabase;
-  if (!supabase) {
-    supabase = getServerSupabaseClient({ useServiceRole: true });
-  }
+  // Prefer service-role client for admin updates
+  const { getServerSupabaseClient: _getSvc2 } = await import('@/lib/serverAuth');
+  let supabase = _getSvc2({ useServiceRole: true });
   const { error: updateErr } = await supabase.from('projects').update({
     title,
     content: JSON.stringify(validBlocks),
@@ -321,11 +342,9 @@ export async function deleteProject(formData) {
   await verifyAdmin();
   const id = formData.get('id')?.toString();
   if (!id) { throw new Error('Project ID is required.'); }
-  const _ctx3 = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
-  let supabase = _ctx3 && _ctx3.supabase;
-  if (!supabase) {
-    supabase = getServerSupabaseClient({ useServiceRole: true });
-  }
+  // Prefer service-role client for admin deletes
+  const { getServerSupabaseClient: _getSvc3 } = await import('@/lib/serverAuth');
+  let supabase = _getSvc3({ useServiceRole: true });
   const { data: project } = await supabase.from('projects').select('slug').eq('id', id).maybeSingle();
   const { error: delErr } = await supabase.from('projects').delete().eq('id', id);
   if (delErr) {
