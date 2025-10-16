@@ -8,8 +8,9 @@ async function getArticle(id) {
   const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const _ctx = await getUserAndSupabaseForRequest(globalReq) || {};
+  // Prefer service-role client for admin pages to avoid RLS issues with request-scoped clients
   let supabase = _ctx?.supabase;
-  if (!_ctx?.isServer) {
+  if (!_ctx?.isServer || !supabase) {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     supabase = getServerSupabaseClient({ useServiceRole: true });
   }
