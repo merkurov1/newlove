@@ -11,7 +11,7 @@ async function getServiceRoleClient(): Promise<SupabaseClient | null> {
     if (!getServerSupabaseClient) return null;
     return getServerSupabaseClient({ useServiceRole: true });
   } catch (e) {
-    console.warn('Could not obtain service-role client from serverAuth', e?.message || e);
+    console.warn('Could not obtain service-role client from serverAuth', (e as any)?.message || e);
     return null;
   }
 }
