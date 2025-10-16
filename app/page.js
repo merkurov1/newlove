@@ -21,6 +21,7 @@ const HeroHearts = nextDynamic(() => import('@/components/HeroHearts'), { ssr: f
 const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
 const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ssr: false });
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
+const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { ssr: false });
 
 
 // Надёжный SSR-запрос опубликованных статей через anon key
@@ -76,6 +77,9 @@ export default async function Home() {
 
   return (
     <main>
+      <div className="mb-8">
+        <CloseableHero />
+      </div>
       <section className="max-w-3xl mx-auto py-8 px-4">
         <h1 className="text-3xl font-bold mb-6">Последние статьи</h1>
         <ArticlesFeed initialArticles={articles} />
