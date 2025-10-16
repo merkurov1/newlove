@@ -20,6 +20,7 @@ export async function GET(request) {
   const offset = parseInt(searchParams.get('offset') || '0', 10);
   const limit = parseInt(searchParams.get('limit') || '15', 10);
   const excludeTag = searchParams.get('excludeTag') || null;
+  const includeTag = searchParams.get('includeTag') || null;
 
     if (limit <= 0) {
       return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -27,6 +28,26 @@ export async function GET(request) {
 
     if (!supabase) {
       return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // If includeTag is provided, fetch matching articles and page them
+    if (includeTag) {
+      try {
+        const { getArticlesByTag } = await import('@/lib/tagHelpers');
+        const all = await getArticlesByTag(supabase, includeTag, 1000);
+        const paged = Array.isArray(all) ? (all.slice(offset, offset + limit)) : [];
+        // Enrich with previewImage
+        const { getFirstImage } = await import('@/lib/contentUtils');
+        const enriched = await Promise.all((paged || []).map(async (a) => {
+          let previewImage = null;
+          try { previewImage = a.content ? await getFirstImage(a.content) : null; } catch (e) { previewImage = null; }
+          return { id: a.id, title: a.title, slug: a.slug, content: a.content, publishedAt: a.publishedAt, previewImage };
+        }));
+        return new Response(JSON.stringify(enriched), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      } catch (e) {
+        console.error('Failed to fetch includeTag articles', includeTag, e);
+        // fallthrough to default behavior
+      }
     }
 
     // Prepare exclusion list if requested
