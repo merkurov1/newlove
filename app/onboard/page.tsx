@@ -64,7 +64,35 @@ export default function OnboardLoginPage() {
         signature: signature as any,
       });
       if (error) setError(error.message);
-      else setUser(data.user);
+      else {
+        setUser(data.user);
+        // Ensure client-side session helpers see the new session immediately.
+        try {
+          // Attempt to read the current client session
+          const sessResp = await supabase.auth.getSession();
+          const sess = (sessResp as any)?.data?.session || null;
+          if (sess && sess.user) {
+            const toStore = {
+              id: sess.user.id,
+              email: sess.user.email,
+              name: sess.user.name,
+              image: sess.user.user_metadata?.avatar_url || sess.user?.picture || sess.user?.image,
+              role: sess.user.role,
+            };
+            try { localStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {}
+            try {
+              if (typeof BroadcastChannel !== 'undefined') {
+                const bc = new BroadcastChannel('newlove-auth');
+                bc.postMessage({ type: 'login', user: toStore });
+                try { bc.close(); } catch (e) {}
+              }
+            } catch (e) {}
+            try { window.dispatchEvent(new Event('supabase:session-changed')); } catch (e) {}
+          }
+        } catch (e) {
+          // best-effort sync, ignore errors
+        }
+      }
     } catch (e: any) {
       setError(e.message || String(e));
     }
