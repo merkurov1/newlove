@@ -12,9 +12,14 @@ const CloseableHero = dynamic(() => import('@/components/CloseableHero'), { ssr:
 
 export default async function EditLetterPage({ params }) {
   const letterId = params.id;
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-    const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-    const _ctx = await getUserAndSupabaseForRequest(globalReq);
+  const { cookies } = await import('next/headers');
+  const cookieHeader = cookies()
+    .getAll()
+    .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+    .join('; ');
+  const globalReq = new Request('http://localhost', { headers: { cookie: cookieHeader } });
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+  const _ctx = await getUserAndSupabaseForRequest(globalReq);
     let supabase = _ctx?.supabase;
     if (!_ctx?.isServer) {
       const { getServerSupabaseClient } = await import('@/lib/serverAuth');

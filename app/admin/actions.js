@@ -2,6 +2,7 @@
 
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { Resend } from 'resend';
@@ -10,7 +11,26 @@ import { createId } from '@paralleldrive/cuid2';
 import { parseTagNames, upsertTagsAndLink } from '@/lib/tags';
 
 async function verifyAdmin() {
-  const globalReq = (globalThis && globalThis.request) || null;
+  // Build a Request that includes cookies when globalThis.request doesn't
+  // provide them (some runtimes / browsers omit cookie headers for server
+  // actions). This ensures requireAdminFromRequest can reconstruct the
+  // Supabase token from cookies and perform service-role RPC checks.
+  const buildRequest = () => {
+    const existing = (globalThis && globalThis.request) || null;
+    try {
+      // If existing request already has cookie header, use it directly
+      if (existing && typeof existing.headers?.get === 'function' && existing.headers.get('cookie')) return existing;
+    } catch (e) {
+      // ignore
+    }
+    const cookieHeader = cookies()
+      .getAll()
+      .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+      .join('; ');
+    return new Request('http://localhost', { headers: { cookie: cookieHeader } });
+  };
+
+  const globalReq = buildRequest();
   const user = await requireAdminFromRequest(globalReq);
   return { user };
 }
@@ -31,8 +51,7 @@ export async function createArticle(formData) {
   
   // Проверка уникальности slug
   // Check slug uniqueness via Supabase
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const _ctx = await getUserAndSupabaseForRequest(globalReq);
+  const _ctx = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
   let supabase = _ctx?.supabase;
   // For admin flows prefer the service-role client even when a request-scoped client
   // is present. Request-scoped clients often lack permissions under RLS and cause 42501.
@@ -127,8 +146,7 @@ export async function updateArticle(formData) {
   );
   if (validBlocks.length === 0) throw new Error('No valid blocks');
   // Update article via Supabase (tags handling TODO)
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const _ctx = await getUserAndSupabaseForRequest(globalReq);
+  const _ctx = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
   let supabase = _ctx?.supabase;
   if (!_ctx?.isServer) {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
@@ -194,8 +212,7 @@ export async function createProject(formData) {
   if (!title || !contentRaw || !slug) throw new Error('All fields are required.');
 
   // Проверка уникальности slug
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const _ctx = await getUserAndSupabaseForRequest(globalReq);
+  const _ctx = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
   let supabase = _ctx && _ctx.supabase;
   // Fallback to server service-role client for server-only admin flows
   if (!supabase) {
@@ -270,8 +287,7 @@ export async function updateProject(formData) {
     b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
   );
   if (validBlocks.length === 0) throw new Error('No valid blocks');
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const _ctx2 = await getUserAndSupabaseForRequest(globalReq);
+  const _ctx2 = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
   let supabase = _ctx2 && _ctx2.supabase;
   if (!supabase) {
     supabase = getServerSupabaseClient({ useServiceRole: true });
@@ -305,8 +321,7 @@ export async function deleteProject(formData) {
   await verifyAdmin();
   const id = formData.get('id')?.toString();
   if (!id) { throw new Error('Project ID is required.'); }
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const _ctx3 = await getUserAndSupabaseForRequest(globalReq);
+  const _ctx3 = await getUserAndSupabaseForRequest((globalThis && globalThis.request) || new Request('http://localhost'));
   let supabase = _ctx3 && _ctx3.supabase;
   if (!supabase) {
     supabase = getServerSupabaseClient({ useServiceRole: true });

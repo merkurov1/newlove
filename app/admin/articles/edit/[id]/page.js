@@ -5,7 +5,12 @@ import ContentForm from '@/components/admin/ContentForm';
 import { updateArticle } from '../../../actions';
 
 async function getArticle(id) {
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const { cookies } = await import('next/headers');
+  const cookieHeader = cookies()
+    .getAll()
+    .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+    .join('; ');
+  const globalReq = new Request('http://localhost', { headers: { cookie: cookieHeader } });
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const _ctx = await getUserAndSupabaseForRequest(globalReq) || {};
   // Prefer service-role client for admin pages to avoid RLS issues with request-scoped clients
