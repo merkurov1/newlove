@@ -19,10 +19,22 @@ export default function CloseableHero({ className = '' }) {
 
   const [closed, setClosed] = useState(false);
 
+  // Build a per-user storage key so closing the hero doesn't leak between users
+  const storageKey = session?.user?.id ? `${STORAGE_KEY}:${session.user.id}` : STORAGE_KEY;
+
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return setClosed(false);
+      // If there is no authenticated user, we don't persist a closed state for "anon"
+      if (!session?.user) {
+        setClosed(false);
+        return;
+      }
+
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) {
+        setClosed(false);
+        return;
+      }
       const ts = parseInt(raw, 10);
       if (Number.isFinite(ts) && Date.now() - ts < WEEK_MS) {
         setClosed(true);
@@ -32,11 +44,11 @@ export default function CloseableHero({ className = '' }) {
     } catch (e) {
       setClosed(false);
     }
-  }, [isAuthed]);
+  }, [session?.user?.id]);
 
   function doClose() {
     try {
-      localStorage.setItem(STORAGE_KEY, String(Date.now()));
+      localStorage.setItem(storageKey, String(Date.now()));
     } catch (e) {}
     setClosed(true);
   }
