@@ -123,10 +123,34 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   }
 
   async function handleSubmit(e: React.FormEvent) {
-    if (!user || role !== 'ADMIN') {
-      e.preventDefault();
-      setError('Ошибка: нет прав администратора. Войдите как админ.');
+    e.preventDefault();
+    // Perform a server-side role check to avoid relying solely on client-side
+    // metadata which can be stale or blocked by RLS. This endpoint uses the
+    // service-role key (when available) to determine if the current session
+    // belongs to an ADMIN. It is safe to call from the browser (same-origin).
+    setError('');
+    setIsCheckingSlug(true);
+    try {
+      const res = await fetch('/api/user/role', { credentials: 'same-origin' });
+      if (!res.ok) {
+        setError('Не удалось проверить привилегии администратора. Попробуйте позже.');
+        setIsCheckingSlug(false);
+        return false;
+      }
+      const body = await res.json();
+      const serverRole = (body && body.role) ? String(body.role).toUpperCase() : 'ANON';
+      if (serverRole !== 'ADMIN') {
+        setError('Ошибка: нет прав администратора. Войдите как админ.');
+        setIsCheckingSlug(false);
+        return false;
+      }
+    } catch (err) {
+      console.error('Ошибка проверки роли на сервере:', err);
+      setError('Не удалось проверить привилегии администратора. Попробуйте позже.');
+      setIsCheckingSlug(false);
       return false;
+    } finally {
+      setIsCheckingSlug(false);
     }
     if (!validateBlocks(content)) {
       e.preventDefault();
@@ -139,6 +163,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       return false;
     }
     setError('');
+    // Allow the form to proceed (the server-side actions will re-check permissions)
     return true;
   }
 
