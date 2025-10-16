@@ -14,101 +14,17 @@ async function getTagData(slug) {
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const { supabase } = await getUserAndSupabaseForRequest(globalReq) || {};
   if (!supabase) notFound();
-  // Try multiple table name candidates for Tag table (some deployments use
-  // `Tag`, others `tags`, etc.). Also try a few slug variants (decoded,
-  // lowercased) to be tolerant of URL casing and encoding.
-  const configured = (typeof process !== 'undefined' && process.env && process.env.TAGS_TABLE_NAME) || null;
-  const tableCandidates = configured ? [configured, 'Tag', 'tags', 'tag', 'Tags'] : ['Tag', 'tags', 'tag', 'Tags'];
-  const slugVariants = [];
-  try { slugVariants.push(slug); } catch (e) { /* ignore */ }
-  try { slugVariants.push(decodeURIComponent(slug)); } catch (e) { /* ignore */ }
-  try { slugVariants.push(String(slug).toLowerCase()); } catch (e) { /* ignore */ }
-  // ensure uniqueness
-  const uniqSlugVariants = Array.from(new Set(slugVariants.filter(Boolean)));
-
-  let tag = null;
-  for (const tbl of tableCandidates) {
-    try {
-      for (const s of uniqSlugVariants) {
-        // 1) try case-insensitive exact match on slug
-        try {
-          const { data: tags } = await supabase.from(tbl).select('*').ilike('slug', s).limit(1);
-          if (tags && tags[0]) {
-            tag = tags[0];
-            break;
-          }
-        } catch (e) {
-          // ignore this attempt and continue to next strategy
-        }
-        // 2) try wildcard match on slug (in case DB stored prefixes/suffixes)
-        try {
-          const { data: tags } = await supabase.from(tbl).select('*').ilike('slug', `%${s}%`).limit(1);
-          if (tags && tags[0]) {
-            tag = tags[0];
-            break;
-          }
-        } catch (e) {
-          // ignore
-        }
-        // 3) try matching by name field (some deployments keep slug empty or different)
-        try {
-          const { data: tags } = await supabase.from(tbl).select('*').ilike('name', s).limit(1);
-          if (tags && tags[0]) {
-            tag = tags[0];
-            break;
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-    } catch (e) {
-      // table might not exist or permission denied - try next candidate
-      // do not throw here to keep lookup tolerant
-    }
-    if (tag) break;
-  }
+  const { getTagBySlug, getArticlesByTag } = await import('@/lib/tagHelpers');
+  const tag = await getTagBySlug(supabase, slug);
   if (!tag) notFound();
-  // Получаем связанные статьи через junction _ArticleToTag
-  // Try RPC first; if disabled or not present fall back to safe behavior
-  let articlesResp = null;
+  const articles = await getArticlesByTag(supabase, tag.slug || tag.name || slug, 50);
+  // Attach tags to fetched articles for UI (best effort)
   try {
-    // RPC may be present in some deployments for performance. If it fails,
-    // we'll fall back to manual junction query below.
-    articlesResp = await supabase.rpc('get_articles_by_tag', { tag_slug: tag.slug });
+    const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
+    tag.articles = await attachTagsToArticles(supabase, articles || []);
   } catch (e) {
-    // rpc missing or errored - fallback
+    tag.articles = articles || [];
   }
-
-  if (!articlesResp || articlesResp.error) {
-    // If global flag to disable junctions is set, skip reading _ArticleToTag and return empty list
-    if (typeof process !== 'undefined' && process.env && process.env.DISABLE_ARTICLE_TO_TAGS === 'true') {
-      const arts = [];
-      const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
-      const artsWithTags = await attachTagsToArticles(supabase, arts || []);
-      tag.articles = (artsWithTags && Array.isArray(artsWithTags)) ? artsWithTags : [];
-    } else {
-      // fallback: query articles by checking tags relation manually if rpc not present
-      const { data: rels } = await supabase.from('_ArticleToTag').select('A').eq('B', tag.id);
-      const ids = (rels || []).map(r => r.A);
-      if (ids.length === 0) {
-        tag.articles = [];
-      } else {
-        const { data: arts } = await supabase.from('articles').select('*, author:authorId(name,image)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false });
-        const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
-        const artsWithTags = await attachTagsToArticles(supabase, arts || []);
-        tag.articles = (artsWithTags && Array.isArray(artsWithTags)) ? artsWithTags : [];
-      }
-    }
-  } else {
-    // RPC returned list (ensure we normalize shape)
-    try {
-      tag.articles = (articlesResp && (articlesResp.data || articlesResp)) || [];
-    } catch (e) {
-      console.error('tags/[slug] getTagData: failed to normalize RPC response', e, articlesResp);
-      tag.articles = [];
-    }
-  }
-  // Ensure articles array exists
   if (!Array.isArray(tag.articles)) tag.articles = [];
   return tag;
 }
