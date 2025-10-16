@@ -118,7 +118,7 @@ async function getAuctionArticles() {
     try {
       const rpc = await supabase.rpc('get_articles_by_tag', { tag_slug: 'auction' });
       if (rpc && !rpc.error && Array.isArray(rpc.data) && rpc.data.length > 0) {
-        // Normalize shape similar to getArticles and limit to 2 items
+        // Normalize shape similar to getArticles and return all found (bounded)
         const normalizedAll = await Promise.all((rpc.data || []).map(async (a) => ({
           id: a.id,
           title: a.title,
@@ -130,7 +130,7 @@ async function getAuctionArticles() {
           previewImage: a.content ? await getFirstImage(a.content) : null,
           description: (a.excerpt || null),
         })));
-        // ensure dedupe and limit to 2
+        // dedupe while preserving order and cap to safe maximum (50)
         const seen = new Set();
         const normalized = [];
         for (const a of normalizedAll) {
@@ -138,7 +138,7 @@ async function getAuctionArticles() {
           if (seen.has(String(a.id))) continue;
           seen.add(String(a.id));
           normalized.push(a);
-          if (normalized.length >= 2) break;
+          if (normalized.length >= 50) break;
         }
         return normalized;
       }
@@ -181,12 +181,13 @@ async function getAuctionArticles() {
     let artsResp = null;
     for (const col of [...deletedCols, null]) {
       try {
+        // return up to 50 auction-tagged articles; allow RPC earlier, fallback to ids
         let q = supabase.from('articles')
           .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
           .in('id', ids)
           .eq('published', true)
           .order('publishedAt', { ascending: false })
-          .limit(8);
+          .limit(50);
         if (col) q = q.is(col, null);
         const res = await q;
         if (res && res.error) throw res.error;
@@ -200,7 +201,7 @@ async function getAuctionArticles() {
     const arts = (artsResp && artsResp.data) || [];
     if (!arts || !Array.isArray(arts) || arts.length === 0) return [];
 
-    // Ensure dedupe and strict limit of 2 for auction block
+    // Ensure dedupe and return up to limit
     const seenIds = new Set();
     const selected = [];
     for (const a of arts) {
@@ -208,7 +209,7 @@ async function getAuctionArticles() {
       if (seenIds.has(String(a.id))) continue;
       seenIds.add(String(a.id));
       selected.push(a);
-      if (selected.length >= 2) break;
+      if (selected.length >= 50) break;
     }
 
     const enriched = await Promise.all(
