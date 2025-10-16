@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
+import GlobeAvatar from '@/components/GlobeAvatar';
 import LinkPreview from './LinkPreview';
 import { useAuth } from '@/components/AuthContext';
 import type { InitialMessage, TypingUser } from '@/types/messages';
@@ -168,7 +169,11 @@ export default function LoungeInterface({ initialMessages, session: propSession 
             <span className="text-xs text-gray-500 mr-2 whitespace-nowrap">Онлайн:</span>
                 {onlineUsers.map((u, i) => (
               <span key={u.name + i} className="flex items-center gap-1 mr-2 whitespace-nowrap max-w-[80px]">
-                <SafeImage src={u.image || '/default-avatar.png'} alt={u.name ? `Аватар пользователя: ${u.name}` : 'Аватар пользователя'} width={28} height={28} className="rounded-full border" unoptimized />
+                {u.image ? (
+                  <SafeImage src={u.image} alt={u.name ? `Аватар пользователя: ${u.name}` : 'Аватар пользователя'} width={28} height={28} className="rounded-full border" unoptimized />
+                ) : (
+                  <GlobeAvatar size={28} />
+                )}
                 <span className="text-xs text-gray-700 hidden xs:inline truncate max-w-[48px]">{u.name}</span>
               </span>
             ))}
@@ -211,7 +216,11 @@ export default function LoungeInterface({ initialMessages, session: propSession 
               transition={{ duration: 0.25 }}
               layout
             >
-              {!isCurrentUser && <Image src={message.user?.image || '/default-avatar.png'} alt={message.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" />}
+              {!isCurrentUser && (message.user?.image ? (
+                <Image src={message.user.image} alt={message.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" />
+              ) : (
+                <GlobeAvatar size={40} />
+              ))}
               <div className={`flex flex-col max-w-[90vw] sm:max-w-sm p-2 sm:p-3 rounded-lg ${isCurrentUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none border'}`}>
                 {/* --- reply preview --- */}
                 {replyData && (
@@ -260,7 +269,11 @@ export default function LoungeInterface({ initialMessages, session: propSession 
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg>
                 </button>
               )}
-              {isCurrentUser && <Image src={session.user?.image || '/default-avatar.png'} alt={session.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" />}
+              {isCurrentUser && (session.user?.image ? (
+                <Image src={session.user.image} alt={session.user?.name || 'Avatar'} width={40} height={40} className="rounded-full" />
+              ) : (
+                <GlobeAvatar size={40} />
+              ))}
             </motion.div>
           );
   })}
@@ -276,7 +289,11 @@ export default function LoungeInterface({ initialMessages, session: propSession 
       </div>
 
   <form onSubmit={handleSubmit} className="p-1 sm:p-4 bg-white border-t flex items-center gap-1 sm:gap-3 relative">
-  <Image src={session.user?.image || '/default-avatar.png'} alt="Your avatar" width={32} height={32} className="rounded-full" />
+  {session.user?.image ? (
+    <Image src={session.user.image} alt="Your avatar" width={32} height={32} className="rounded-full" />
+  ) : (
+    <GlobeAvatar size={32} />
+  )}
   <div className="relative w-full min-w-0">
           {/* --- reply preview над textarea --- */}
           {replyTo && (

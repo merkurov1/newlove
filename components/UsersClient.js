@@ -2,17 +2,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import GlobeAvatar from '@/components/GlobeAvatar';
 import UserFilters from '@/components/UserFilters';
 import { getRoleEmoji, getRoleName } from '@/lib/roles';
 
 // Fallback-аватар по первой букве
 function FallbackAvatar({ name }) {
-  const letter = (name || '?').charAt(0).toUpperCase();
-  return (
-    <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold mb-3 border group-hover:scale-105 transition-transform">
-      {letter}
-    </div>
-  );
+  // Simple globe icon fallback to avoid loading a placeholder image file
+  return <GlobeAvatar size={64} className="mb-3" />;
 }
 
 export default function UsersClient({ users: initialUsers }) {
