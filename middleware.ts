@@ -49,13 +49,13 @@ export async function middleware(request: NextRequest) {
         }
       }
     } catch (e) {
-      // Treat any failure as unauthorized for safety
-      // (we could also allow on error, but that weakens protection)
+      // Log and continue rather than forcibly redirecting. Pages will render
+      // server-side checks (requireAdminFromRequest) and can show a friendly 403.
+      console.debug('middleware /admin role check failed (allowing page to handle):', e);
     }
 
-    // Redirect unauthorized users to /403
-    url.pathname = '/403';
-    return NextResponse.rewrite(url);
+    // Do not force a redirect here; let the page or API handle unauthorized state.
+    return NextResponse.next();
   }
 
   return NextResponse.next();
