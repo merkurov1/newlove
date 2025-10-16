@@ -382,7 +382,7 @@ export default async function RootLayout({ children }) {
   const { getUserAndSupabaseFromRequest } = mod;
   const { supabase } = await getUserAndSupabaseFromRequest(globalReq);
     if (supabase) {
-      const { data, error } = await supabase.from('project').select('*').eq('published', true).order('createdAt', { ascending: true });
+  const { data, error } = await supabase.from('projects').select('*').eq('published', true).order('createdAt', { ascending: true });
       if (error) console.error('Supabase fetch projects error', error);
       projects = safeData(data || []);
     } else {

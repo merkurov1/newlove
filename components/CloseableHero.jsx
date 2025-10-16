@@ -25,7 +25,7 @@ export default function CloseableHero({ className = '' }) {
   useEffect(() => {
     try {
       // If there is no authenticated user, we don't persist a closed state for "anon"
-      if (!session?.user) {
+      if (!isAuthed) {
         setClosed(false);
         return;
       }
@@ -44,7 +44,7 @@ export default function CloseableHero({ className = '' }) {
     } catch (e) {
       setClosed(false);
     }
-  }, [session?.user?.id, storageKey]);
+  }, [isAuthed, storageKey]);
 
   function doClose() {
     try {
