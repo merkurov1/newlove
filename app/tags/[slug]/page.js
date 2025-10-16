@@ -30,10 +30,35 @@ async function getTagData(slug) {
   for (const tbl of tableCandidates) {
     try {
       for (const s of uniqSlugVariants) {
-  const { data: tags } = await supabase.from(tbl).select('*').ilike('slug', s).limit(1);
-        if (tags && tags[0]) {
-          tag = tags[0];
-          break;
+        // 1) try case-insensitive exact match on slug
+        try {
+          const { data: tags } = await supabase.from(tbl).select('*').ilike('slug', s).limit(1);
+          if (tags && tags[0]) {
+            tag = tags[0];
+            break;
+          }
+        } catch (e) {
+          // ignore this attempt and continue to next strategy
+        }
+        // 2) try wildcard match on slug (in case DB stored prefixes/suffixes)
+        try {
+          const { data: tags } = await supabase.from(tbl).select('*').ilike('slug', `%${s}%`).limit(1);
+          if (tags && tags[0]) {
+            tag = tags[0];
+            break;
+          }
+        } catch (e) {
+          // ignore
+        }
+        // 3) try matching by name field (some deployments keep slug empty or different)
+        try {
+          const { data: tags } = await supabase.from(tbl).select('*').ilike('name', s).limit(1);
+          if (tags && tags[0]) {
+            tag = tags[0];
+            break;
+          }
+        } catch (e) {
+          // ignore
         }
       }
     } catch (e) {
