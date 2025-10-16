@@ -665,7 +665,8 @@ export async function sendLetter(prevState, formData) {
 
     // Bulk-create unsubscribe tokens per subscriber (non-fatal)
     try {
-      const serverSupabase = getServerSupabaseClient();
+      // Bulk token insert needs service role privileges (can write to subscriber_tokens)
+      const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
       if (serverSupabase && subscribers.length > 0) {
         const tokens = subscribers.map(s => ({ subscriber_id: s.id, type: 'unsubscribe', token: createId() }));
         const { error: tokenErr } = await serverSupabase.from('subscriber_tokens').insert(tokens);

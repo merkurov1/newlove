@@ -6,7 +6,8 @@ export async function GET() {
   // Use the server service-role client for read-only/export operations during build
   let supabase;
   try {
-    supabase = getServerSupabaseClient();
+    // RSS generation runs server-side and needs elevated read privileges
+    supabase = getServerSupabaseClient({ useServiceRole: true });
   } catch (e) {
     console.error('Unable to create server supabase client for RSS:', e);
     return new Response('DB unavailable', { status: 500 });

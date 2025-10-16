@@ -20,8 +20,11 @@ export default async function ArticlesPage() {
   let { supabase } = await getSupabaseForRequest(globalReq) || {};
   if (!supabase) {
     try {
-      const serverAuth = await import('@/lib/serverAuth');
-      supabase = serverAuth.getServerSupabaseClient();
+  const serverAuth = await import('@/lib/serverAuth');
+  // Explicitly opt-in to the service-role client for server-side fallback
+  // to ensure elevated read/export operations (RSS/build-time fetches)
+  // succeed when request-scoped clients are unavailable.
+  supabase = serverAuth.getServerSupabaseClient({ useServiceRole: true });
     } catch (e) {
       console.error('Supabase client unavailable (both session and server fallback)', e);
       return (

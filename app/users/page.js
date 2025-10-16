@@ -5,7 +5,8 @@ import UsersClient from '@/components/UsersClient';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 
 export default async function UsersPage() {
-  const supabase = getServerSupabaseClient();
+  // listing users requires elevated privileges; explicitly opt into service role
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
   const { data, error } = await supabase.auth.admin.listUsers();
   if (error) throw new Error(error.message);
   // Преобразуем пользователей для UsersClient

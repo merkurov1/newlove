@@ -6,7 +6,9 @@ export async function GET() {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     let supabase;
     try {
-      supabase = getServerSupabaseClient();
+      // Postcards route is a server-side/export operation and requires elevated
+      // read privileges; explicitly opt into the service-role client.
+      supabase = getServerSupabaseClient({ useServiceRole: true });
     } catch (e) {
       console.error('Unable to create server supabase client in postcards route', e);
       return NextResponse.json({ postcards: [] });

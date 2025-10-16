@@ -5,8 +5,8 @@ import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAu
 export async function GET(request: NextRequest) {
   try {
     await requireAdminFromRequest(request as Request);
-    // Use centralized server client to list users
-    const supabase = getServerSupabaseClient();
+  // Use centralized server client to list users (requires service role privileges)
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
     const { data, error } = await supabase.auth.admin.listUsers();
     if (error) throw error;
     const users = (data.users || []).map(u => ({
