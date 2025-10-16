@@ -268,6 +268,20 @@ export default function useSupabaseSession() {
                 }
               } catch (e) {}
               setStatus('authenticated');
+              // Best-effort: ensure application-level user exists after server-detected session (OAuth redirect)
+              try {
+                (async () => {
+                  try {
+                    await fetch('/api/auth/upsert', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ id: j.user.id, email: j.user.email, name: j.user.name || null, image: j.user.image || null }),
+                    });
+                  } catch (e) {
+                    try { console.warn('upsert after server fallback failed', e); } catch {}
+                  }
+                })();
+              } catch (e) {}
               return;
             }
           }
