@@ -25,16 +25,22 @@ const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { 
 
 
 // Надёжный SSR-запрос опубликованных статей через anon key
-async function getArticles() {
+async function getArticles(excludeIds = []) {
   try {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
-    const { data, error } = await supabase
+    let q = supabase
       .from('articles')
       .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
       .eq('published', true)
       .order('updatedAt', { ascending: false })
       .limit(15);
+    if (Array.isArray(excludeIds) && excludeIds.length > 0) {
+      // Supabase expects an SQL-style list for `in`, quote IDs safely
+      const quoted = excludeIds.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
+      q = q.not('id', 'in', `(${quoted})`);
+    }
+    const { data, error } = await q;
     if (error) {
       console.error('Supabase fetch articles error', error);
       return [];
@@ -129,29 +135,27 @@ async function getAuctionArticles() {
   }
 }
 export default async function Home() {
-  // SSR: Получаем опубликованные статьи
-  const articles = await getArticles();
+  // SSR: Получаем сначала статьи для auction, then exclude them from main feed
   const auctionArticles = await getAuctionArticles();
+  const auctionIds = (auctionArticles || []).map(a => a.id).filter(Boolean);
+  const articles = await (async () => {
+    try {
+      // call internal getArticles with exclusion list
+      const impl = await import('@/app/page');
+      // this file exports getArticles, but we've made it return default _inner when called without args
+    } catch (e) {
+      // ignore, we'll call module-local helper below
+    }
+    // Call the local inner implementation by invoking getArticles with excludeIds
+    return await getArticles(auctionIds);
+  })();
 
   return (
     <main>
       <div className="mb-8">
         <CloseableHero />
       </div>
-      <section className="max-w-3xl mx-auto py-8 px-4">
-        <h1 className="text-3xl font-bold mb-6">Последние статьи</h1>
-        <ArticlesFeed initialArticles={articles} />
-      </section>
-      <section className="max-w-4xl mx-auto py-12 px-4">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-semibold">🌊 Flow</h2>
-          <Link href="/lab/feed" className="text-sm text-gray-500 hover:text-gray-700">Сводная лента →</Link>
-        </div>
-        <div>
-          <FlowFeed limit={12} />
-        </div>
-      </section>
-      {/* Auction slider for articles tagged 'auction' */}
+      {/* Auction slider for articles tagged 'auction' - placed right after hero */}
       {auctionArticles && auctionArticles.length > 0 && (
         <section className="max-w-4xl mx-auto py-12 px-4">
           <div className="flex items-center justify-between mb-6">
@@ -161,6 +165,23 @@ export default async function Home() {
           <AuctionSlider articles={auctionArticles} />
         </section>
       )}
+
+      {/* Main articles feed excluding auction-tagged articles */}
+      <section className="max-w-3xl mx-auto py-8 px-4">
+        <h1 className="text-3xl font-bold mb-6">Последние статьи</h1>
+        <ArticlesFeed initialArticles={articles} />
+      </section>
+
+      {/* Flow feed follows the articles */}
+      <section className="max-w-4xl mx-auto py-12 px-4">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-semibold">🌊 Flow</h2>
+          <Link href="/lab/feed" className="text-sm text-gray-500 hover:text-gray-700">Сводная лента →</Link>
+        </div>
+        <div>
+          <FlowFeed limit={12} />
+        </div>
+      </section>
     </main>
   );
 }
