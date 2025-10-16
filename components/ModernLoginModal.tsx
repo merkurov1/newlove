@@ -112,10 +112,11 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
             try {
               // POST access/refresh tokens to server endpoint which will set HttpOnly cookies
               await fetch('/api/auth/set-cookie', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at }),
-              });
+                  method: 'POST',
+                  credentials: 'same-origin',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at }),
+                });
               // Force a server-side refresh so RSCs re-render with the authenticated session
               try { router.refresh(); } catch (e) { /* ignore */ }
 
@@ -123,6 +124,7 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
               try {
                 await fetch('/api/auth/upsert', {
                   method: 'POST',
+                  credentials: 'same-origin',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ id: s.user.id, email: s.user.email, name: s.user.user_metadata?.name || s.user.name || null, image: s.user.user_metadata?.avatar_url || s.user.picture || s.user.image || null }),
                 });

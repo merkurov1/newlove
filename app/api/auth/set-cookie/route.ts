@@ -11,6 +11,23 @@ export async function POST(req: Request) {
 
     if (!accessToken) return NextResponse.json({ ok: false, error: 'no access_token' }, { status: 400 });
 
+    // In production require a same-origin Referer/Origin to mitigate abuse.
+    try {
+      if (process.env.NODE_ENV === 'production') {
+        const origin = req.headers.get('origin');
+        const referer = req.headers.get('referer');
+        const expected = process.env.NEXT_PUBLIC_SITE_URL || (origin || referer || null);
+        if (expected && origin && !origin.startsWith(expected)) {
+          return NextResponse.json({ ok: false, error: 'origin_mismatch' }, { status: 403 });
+        }
+        if (expected && referer && !referer.startsWith(expected)) {
+          return NextResponse.json({ ok: false, error: 'referer_mismatch' }, { status: 403 });
+        }
+      }
+    } catch (e) {
+      // ignore header parsing errors and continue
+    }
+
     const now = Math.floor(Date.now() / 1000);
     const maxAge = expiresAt && expiresAt > now ? Math.max(60, expiresAt - now) : 60 * 60 * 24 * 30; // fallback 30 days
 
@@ -29,7 +46,9 @@ export async function POST(req: Request) {
   for (const c of cookies) res.headers.append('Set-Cookie', c);
   return res;
   } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+    // Log details server-side but do not expose raw error text to the client
+    try { console.error('set-cookie error', e); } catch (err) {}
+    return NextResponse.json({ ok: false, error: 'internal_error' }, { status: 500 });
   }
 }
 
