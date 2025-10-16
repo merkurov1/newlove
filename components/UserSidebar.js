@@ -34,7 +34,10 @@ export default function UserSidebar() {
   }, []);
 
   if (isLoading || !user) return null;
-  const username = user.username || user.name || 'me';
+  // Prefer canonical username (slug). If username isn't set, link to /profile (edit page)
+  // to avoid generating invalid public profile URLs from display names.
+  const username = user.username || null;
+  const profileHref = username ? `/you/${username}` : '/profile';
 
   const runDiagnostics = async () => {
     setDiagLoading(true);
@@ -134,7 +137,7 @@ export default function UserSidebar() {
           <Image src={user.image} alt={user.name || ''} width={36} height={36} className="rounded-full border border-pink-300" />
         )}
         <nav className="flex flex-row items-center gap-3">
-          <Link href={`/you/${username}`} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-100 text-xl transition font-bold" title="Профиль">👤</Link>
+    <Link href={profileHref} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-100 text-xl transition font-bold" title="Профиль">👤</Link>
           <Link href="/users" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-100 text-xl transition font-bold" title="Пользователи">👥</Link>
           <Link href="/admin" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-200 text-xl transition font-bold" title="Админка">⚙️</Link>
           <Link href="/admin/logs" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-200 text-xl transition font-bold" title="Логи">📝</Link>
@@ -151,7 +154,7 @@ export default function UserSidebar() {
         <Image src={user.image} alt={user.name || ''} width={36} height={36} className="rounded-full border border-gray-200" />
       )}
       <nav className="flex flex-row items-center gap-3">
-        <Link href={`/you/${username}`} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition" title="Профиль">👤</Link>
+  <Link href={profileHref} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition" title="Профиль">👤</Link>
         <Link href="/users" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition" title="Пользователи">👥</Link>
       </nav>
       <div className="ml-3 text-xs text-gray-500">
