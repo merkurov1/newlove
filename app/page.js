@@ -29,21 +29,42 @@ async function getArticles(excludeIds = []) {
   try {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
-    let q = supabase
-      .from('articles')
-      .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
-      .eq('published', true)
-      .order('updatedAt', { ascending: false })
-      .limit(15);
+    // Try to filter out soft-deleted rows if the deployment has a deletedAt column.
+    // We'll attempt the more restrictive query first and fall back if the column doesn't exist.
+    const buildQuery = (useDeletedFilter) => {
+      let q = supabase
+        .from('articles')
+        .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
+        .eq('published', true)
+        .order('updatedAt', { ascending: false })
+        .limit(15);
+      if (useDeletedFilter) q = q.is('deletedAt', null);
+      return q;
+    };
+    let q = buildQuery(true);
     if (Array.isArray(excludeIds) && excludeIds.length > 0) {
       // Supabase expects an SQL-style list for `in`, quote IDs safely
       const quoted = excludeIds.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
       q = q.not('id', 'in', `(${quoted})`);
     }
-    const { data, error } = await q;
-    if (error) {
-      console.error('Supabase fetch articles error', error);
-      return [];
+    let data, error;
+    try {
+      ({ data, error } = await q);
+      if (error) throw error;
+    } catch (e) {
+      // Retry without deletedAt filter if the first query failed (likely missing column)
+      q = buildQuery(false);
+      if (Array.isArray(excludeIds) && excludeIds.length > 0) {
+        const quoted = excludeIds.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
+        q = q.not('id', 'in', `(${quoted})`);
+      }
+      const second = await q;
+      data = second.data;
+      error = second.error;
+      if (error) {
+        console.error('Supabase fetch articles error', error);
+        return [];
+      }
     }
     if (!Array.isArray(data)) {
       console.error('Supabase articles: data is not array', data);
@@ -104,16 +125,45 @@ async function getAuctionArticles() {
       // rpc missing or failed - continue to fallback
     }
 
-    // Fallback: find Tag by slug and then fetch articles via _ArticleToTag
-    const { data: tagRows } = await supabase.from('Tag').select('id,slug').ilike('slug', 'auction').limit(1);
-    const tag = (tagRows && tagRows[0]) || null;
+    // Fallback: tolerant lookup for Tag table name and slug variants (some deployments differ)
+    const configured = (typeof process !== 'undefined' && process.env && process.env.TAGS_TABLE_NAME) || null;
+    const tableCandidates = configured ? [configured, 'Tag', 'tags', 'tag', 'Tags'] : ['Tag', 'tags', 'tag', 'Tags'];
+    const slugVariants = [];
+    try { slugVariants.push('auction'); } catch (e) {}
+    try { slugVariants.push(decodeURIComponent('auction')); } catch (e) {}
+    try { slugVariants.push(String('auction').toLowerCase()); } catch (e) {}
+    const uniqSlugVariants = Array.from(new Set(slugVariants.filter(Boolean)));
+
+    let tag = null;
+    for (const tbl of tableCandidates) {
+      try {
+        for (const s of uniqSlugVariants) {
+          const { data: tags } = await supabase.from(tbl).select('id,slug').ilike('slug', s).limit(1);
+          if (tags && tags[0]) {
+            tag = tags[0];
+            break;
+          }
+        }
+      } catch (e) {
+        // table might not exist or permission denied - try next candidate
+      }
+      if (tag) break;
+    }
     if (!tag) return [];
 
     const { data: rels } = await supabase.from('_ArticleToTag').select('A').eq('B', tag.id);
     const ids = (rels || []).map(r => r.A).filter(Boolean);
     if (!ids || ids.length === 0) return [];
 
-    const { data: arts } = await supabase.from('articles').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false }).limit(8);
+    // Try to filter out soft-deleted rows if available, fall back if not
+    let artsResp;
+    try {
+      artsResp = await supabase.from('articles').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)').in('id', ids).eq('published', true).is('deletedAt', null).order('publishedAt', { ascending: false }).limit(8);
+      if (artsResp.error) throw artsResp.error;
+    } catch (e) {
+      artsResp = await supabase.from('articles').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false }).limit(8);
+    }
+    const arts = artsResp.data || [];
     if (!arts || !Array.isArray(arts) || arts.length === 0) return [];
 
     const enriched = await Promise.all(

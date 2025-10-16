@@ -28,12 +28,30 @@ export async function GET(request) {
       return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
-    const { data, error } = await supabase
-  .from('articles')
-      .select('id,title,slug,content,publishedAt')
-      .eq('published', true)
-      .order('publishedAt', { ascending: false })
-      .range(offset, offset + limit - 1);
+    // Try to exclude soft-deleted rows if the deployment has `deletedAt` column.
+    let data, error;
+    try {
+      const resp = await supabase
+        .from('articles')
+        .select('id,title,slug,content,publishedAt')
+        .eq('published', true)
+        .is('deletedAt', null)
+        .order('publishedAt', { ascending: false })
+        .range(offset, offset + limit - 1);
+      data = resp.data;
+      error = resp.error;
+      if (error) throw error;
+    } catch (e) {
+      // If the `deletedAt` column doesn't exist, retry without that filter
+      const resp = await supabase
+        .from('articles')
+        .select('id,title,slug,content,publishedAt')
+        .eq('published', true)
+        .order('publishedAt', { ascending: false })
+        .range(offset, offset + limit - 1);
+      data = resp.data;
+      error = resp.error;
+    }
 
     if (error) {
       console.error('Supabase fetch articles error', error);
