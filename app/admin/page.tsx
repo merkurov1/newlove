@@ -32,10 +32,10 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
   let recentProjects: any[] = [];
   try {
     const [articlesCount, projectsCount, lettersCount, postcardsCount, articlesData, projectsData] = await Promise.all([
-      serverSupabase.from('articles').select('id', { count: 'exact', head: true }),
-      serverSupabase.from('projects').select('id', { count: 'exact', head: true }),
-      serverSupabase.from('letter').select('id', { count: 'exact', head: true }),
-      serverSupabase.from('postcards').select('id', { count: 'exact', head: true }),
+  serverSupabase.from('articles').select('id', { count: 'exact', head: true }),
+  serverSupabase.from('projects').select('id', { count: 'exact', head: true }),
+  serverSupabase.from('letters').select('id', { count: 'exact', head: true }),
+  serverSupabase.from('postcards').select('id', { count: 'exact', head: true }),
       serverSupabase.from('articles').select('id,title,slug,published,author:authorId(name),updatedAt').order('updatedAt', { ascending: false }).limit(5),
       serverSupabase.from('projects').select('id,title,slug,published,createdAt').order('createdAt', { ascending: false }).limit(5),
     ]);
