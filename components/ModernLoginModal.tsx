@@ -150,9 +150,13 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
     if (typeof onClose === 'function') onClose();
     setLoading(true);
     try {
-      // Ensure we redirect back to the current page after OAuth completes
-  const redirectTo = typeof window !== 'undefined' ? window.location.href : undefined;
-  const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } } as any);
+      // Ensure we redirect back to the current page after OAuth completes.
+      // Use canonical origin as redirectTo to avoid OAuth provider issues;
+      // save the full desired path into localStorage so we can navigate after sign-in.
+      const desiredRedirect = typeof window !== 'undefined' ? window.location.href : undefined;
+      const canonical = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : undefined);
+      try { if (typeof window !== 'undefined' && desiredRedirect) try { localStorage.setItem('supabase_oauth_redirect', desiredRedirect); } catch (e) {} } catch (e) {}
+      const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: canonical } } as any);
       if (error) setWeb3Error(error.message);
     } catch (e: any) {
       setWeb3Error(e.message || String(e));

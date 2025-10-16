@@ -27,12 +27,15 @@ export function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const { session, status, signIn, signOut, error } = useSupabaseSession() as any;
 
   const signInWithGoogle = useCallback(async () => {
-    const redirectTo = typeof window !== 'undefined' ? window.location.href : undefined;
+    // Redirect target for Supabase OAuth should be the canonical origin (no query/hash)
+    // We store the full desired path in localStorage and use origin as redirectTo.
+    const desiredRedirect = typeof window !== 'undefined' ? window.location.href : undefined;
+    const canonical = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : undefined);
     try {
-      if (typeof window !== 'undefined' && redirectTo) {
-        try { localStorage.setItem('supabase_oauth_redirect', redirectTo); } catch (e) {}
+      if (typeof window !== 'undefined' && desiredRedirect) {
+        try { localStorage.setItem('supabase_oauth_redirect', desiredRedirect); } catch (e) {}
       }
-      await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } } as any);
+      await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: canonical } } as any);
     } catch (e) {
       console.error('signInWithGoogle failed', e);
     }
