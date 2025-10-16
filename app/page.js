@@ -71,9 +71,67 @@ async function getArticles() {
     return [];
   }
 }
+// Fetch articles for the special "auction" tag. Try RPC first, fall back to junction query.
+async function getAuctionArticles() {
+  try {
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
+    // Try RPC for performance
+    try {
+      const rpc = await supabase.rpc('get_articles_by_tag', { tag_slug: 'auction' });
+      if (rpc && !rpc.error && Array.isArray(rpc.data) && rpc.data.length > 0) {
+        // Normalize shape similar to getArticles
+        const normalized = await Promise.all((rpc.data || []).map(async (a) => ({
+          id: a.id,
+          title: a.title,
+          slug: a.slug,
+          content: a.content,
+          publishedAt: a.publishedAt || a.updatedAt,
+          updatedAt: a.updatedAt,
+          author: a.author || null,
+          previewImage: a.content ? await getFirstImage(a.content) : null,
+          description: (a.excerpt || null),
+        })));
+        return normalized;
+      }
+    } catch (e) {
+      // rpc missing or failed - continue to fallback
+    }
+
+    // Fallback: find Tag by slug and then fetch articles via _ArticleToTag
+    const { data: tagRows } = await supabase.from('Tag').select('id,slug').ilike('slug', 'auction').limit(1);
+    const tag = (tagRows && tagRows[0]) || null;
+    if (!tag) return [];
+
+    const { data: rels } = await supabase.from('_ArticleToTag').select('A').eq('B', tag.id);
+    const ids = (rels || []).map(r => r.A).filter(Boolean);
+    if (!ids || ids.length === 0) return [];
+
+    const { data: arts } = await supabase.from('articles').select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)').in('id', ids).eq('published', true).order('publishedAt', { ascending: false }).limit(8);
+    if (!arts || !Array.isArray(arts) || arts.length === 0) return [];
+
+    const enriched = await Promise.all(
+      arts.map(async (a) => ({
+        id: a.id,
+        title: a.title,
+        slug: a.slug,
+        content: a.content,
+        publishedAt: a.publishedAt,
+        updatedAt: a.updatedAt,
+        author: a.author || null,
+        previewImage: a.content ? await getFirstImage(a.content) : null,
+      }))
+    );
+    return enriched;
+  } catch (e) {
+    console.error('getAuctionArticles error', e);
+    return [];
+  }
+}
 export default async function Home() {
   // SSR: Получаем опубликованные статьи
   const articles = await getArticles();
+  const auctionArticles = await getAuctionArticles();
 
   return (
     <main>
@@ -93,6 +151,16 @@ export default async function Home() {
           <FlowFeed limit={12} />
         </div>
       </section>
+      {/* Auction slider for articles tagged 'auction' */}
+      {auctionArticles && auctionArticles.length > 0 && (
+        <section className="max-w-4xl mx-auto py-12 px-4">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-semibold">🏷️ Auction</h2>
+            <Link href="/tags/auction" className="text-sm text-gray-500 hover:text-gray-700">Все по тегу →</Link>
+          </div>
+          <AuctionSlider articles={auctionArticles} />
+        </section>
+      )}
     </main>
   );
 }
