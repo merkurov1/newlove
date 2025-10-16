@@ -48,9 +48,16 @@ async function getTagData(slug) {
       }
     }
   } else {
-    tag.articles = (articlesResp && (articlesResp.data || articlesResp)) || [];
+    // RPC returned list (ensure we normalize shape)
+    try {
+      tag.articles = (articlesResp && (articlesResp.data || articlesResp)) || [];
+    } catch (e) {
+      console.error('tags/[slug] getTagData: failed to normalize RPC response', e, articlesResp);
+      tag.articles = [];
+    }
   }
-  tag.articles = (articles && (articles.data || articles)) || [];
+  // Ensure articles array exists
+  if (!Array.isArray(tag.articles)) tag.articles = [];
   return tag;
 }
 
