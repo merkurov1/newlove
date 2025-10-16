@@ -73,10 +73,6 @@ export default function UserSidebar() {
         <Link href="/users" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition" title="Пользователи">👥</Link>
       </nav>
       <div className="ml-3 text-xs text-gray-500">
-        <div>status: {String(isLoading)}</div>
-        <div>id: {user.id}</div>
-        <div>email: {user.email || '—'}</div>
-        <div>role: {(user.role || '').toString()}</div>
         {!user.username && (
           <div className="mt-1 text-xs text-yellow-600">Заполните username в профиле чтобы получить публичную ссылку</div>
         )}
