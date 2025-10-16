@@ -163,7 +163,7 @@ export default function WelcomeBanner({ onClose, variant, forceShow = false }: W
             {currentVariant === 'authenticated' && (
               <div className="mt-6 flex flex-col sm:flex-row gap-3">
                 <Link 
-                  href="/profile"
+                  href={session?.user?.username ? `/you/${session.user.username}` : '/profile'}
                   className="bg-rose-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-rose-700 transition-colors text-center"
                 >
                   Мой профиль
