@@ -63,10 +63,8 @@ export default async function Home() {
   return (
     <main className="relative overflow-hidden">
       <BackgroundShapes />
-      <div className="mb-6">
-        {/* Render CloseableHero directly so when it returns null the entire hero block disappears */}
-        <CloseableHero className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8" />
-      </div>
+      {/* Render CloseableHero directly so when it returns null the entire hero block disappears */}
+      <CloseableHero className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8 mb-6" />
       {/* Auction slider for articles tagged 'auction' - placed right after hero */}
       {auctionArticles && auctionArticles.length > 0 && (
         <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">

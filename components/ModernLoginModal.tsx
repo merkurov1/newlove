@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/components/AuthContext';
+import { useRouter } from 'next/navigation';
 import Onboard from '@web3-onboard/core';
 import injectedModule from '@web3-onboard/injected-wallets';
 import walletConnectModule from '@web3-onboard/walletconnect';
@@ -14,6 +15,7 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
   const { isLoading, session } = useAuth() as any;
   const status = isLoading ? 'loading' : (session ? 'authenticated' : 'unauthenticated');
   const auth = useAuth();
+  const router = useRouter();
   const error = null; // ModernLoginModal shows supabase errors from signInWithOAuth; keep placeholder
   const [loading, setLoading] = useState(false);
   const [web3Error, setWeb3Error] = useState('');
@@ -106,6 +108,20 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
             } catch (e) {}
             // Emit a global event that useSupabaseSession listens for
             try { window.dispatchEvent(new Event('supabase:session-changed')); } catch (e) {}
+            // Also sync server-side cookie so Server Components see the session
+            try {
+              // POST access/refresh tokens to server endpoint which will set HttpOnly cookies
+              await fetch('/api/auth/set-cookie', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at }),
+              });
+              // Force a server-side refresh so RSCs re-render with the authenticated session
+              try { router.refresh(); } catch (e) { /* ignore */ }
+            } catch (e) {
+              // non-fatal
+              console.warn('Failed to sync session cookie with server:', e);
+            }
           }
         } catch (e) {
           // ignore session hydration errors
