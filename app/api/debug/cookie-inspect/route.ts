@@ -16,10 +16,15 @@ function parseCookies(cookieHeader: string | null) {
 
 export async function GET(req: Request) {
   try {
+    // Disable this debug endpoint in production to avoid leaking cookie/token info
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ ok: false, error: 'not_found' }, { status: 404 });
+    }
     const cookieHeader = (req as any).headers?.get?.('cookie') || null;
     const cookies = parseCookies(cookieHeader);
 
-    const cookieEntries = Object.keys(cookies).map((k) => ({ name: k, preview: String(cookies[k] || '').slice(0, 120) + (String(cookies[k] || '').length > 120 ? '...' : '') }));
+    // For debug only: do not reveal cookie values in full; only report presence and length
+    const cookieEntries = Object.keys(cookies).map((k) => ({ name: k, present: true, length: String(cookies[k] || '').length }));
 
     const sbCandidates: Array<any> = [];
     for (const [k, v] of Object.entries(cookies)) {
@@ -42,7 +47,7 @@ export async function GET(req: Request) {
         } catch (e) {
           // ignore parse errors
         }
-        sbCandidates.push({ name: k, preview: preview.length > 200 ? preview.slice(0, 200) + '...' : preview, parsedAccessTokenPresent, parsedAccessTokenLen });
+        sbCandidates.push({ name: k, present: true, parsedAccessTokenPresent, parsedAccessTokenLen });
       }
     }
 
@@ -57,12 +62,15 @@ export async function GET(req: Request) {
       const { supabase, user } = await getUserAndSupabaseForRequest(req as any);
       userResult = { ok: true, hasSupabaseClient: Boolean(supabase), user: user ? { id: user.id, email: user.email, role: user.role || user.user_metadata?.role || null } : null };
     } catch (e) {
-      userResult = { ok: false, error: String(e) };
+      // Do not expose raw exception text even in debug; return a flag instead
+      try { console.error('cookie-inspect helper failed', e); } catch (err) {}
+      userResult = { ok: false, error: 'helper_failed' };
     }
 
     return NextResponse.json({ ok: true, cookieHeaderPresent: Boolean(cookieHeader), cookies: cookieEntries, sbCandidates, accessCookies, userResult });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) });
+    try { console.error('cookie-inspect top-level error', e); } catch (err) {}
+    return NextResponse.json({ ok: false, error: 'internal_error' });
   }
 }
 

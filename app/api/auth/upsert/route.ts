@@ -28,11 +28,13 @@ export async function POST(req: Request) {
 
     const { data, error } = await svc.from('users').upsert(payload, { onConflict: 'id' }).select().maybeSingle();
     if (error) {
-      return NextResponse.json({ ok: false, error: String(error) }, { status: 500 });
+      try { console.error('upsert user error', { userId: user.id, payload, error }); } catch (err) {}
+      return NextResponse.json({ ok: false, error: 'upsert_failed' }, { status: 500 });
     }
     return NextResponse.json({ ok: true, data });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+    try { console.error('upsert endpoint exception', e); } catch (err) {}
+    return NextResponse.json({ ok: false, error: 'internal_error' }, { status: 500 });
   }
 }
 
