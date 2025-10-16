@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import SafeImage from '@/components/SafeImage';
+import GlobeAvatar from './GlobeAvatar';
 
 import { useAuth } from '@/components/AuthContext';
 import AdminAutoRedirect from './AdminAutoRedirect';
@@ -214,13 +215,20 @@ export default function Header({ projects, settings }) {
 
             {status === 'authenticated' && session?.user ? (
               <div className="flex items-center gap-3">
-                <SafeImage
-                  src={(session.user.user_metadata && (session.user.user_metadata.avatar_url || session.user.user_metadata.avatar)) || session.user.image || session.user.picture || '/images/avatar-placeholder.png'}
-                  alt={displayName || session.user.email || 'User'}
-                  width={36}
-                  height={36}
-                  className="rounded-full"
-                />
+                {(() => {
+                  const avatarSrc = (session.user.user_metadata && (session.user.user_metadata.avatar_url || session.user.user_metadata.avatar)) || session.user.image || session.user.picture || null;
+                  return avatarSrc ? (
+                    <SafeImage
+                      src={avatarSrc}
+                      alt={displayName || session.user.email || 'User'}
+                      width={36}
+                      height={36}
+                      className="rounded-full"
+                    />
+                  ) : (
+                    <GlobeAvatar size={36} className="rounded-full" />
+                  );
+                })()}
                 <div className="hidden sm:flex flex-col text-sm leading-tight">
                   <span className="font-medium text-gray-900">{displayName || session.user.email || walletShort}</span>
                   <span className="text-xs text-gray-500">{walletShort ? walletShort : (session.user.email || '')}</span>
