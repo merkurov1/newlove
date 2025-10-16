@@ -8,21 +8,33 @@ import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
 
 // --- 1. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ---
-// Находит тег по его slug и подгружает все связанные с ним статьи
+// Находит тег по его slug и подгружает все связанные с ним статьи.
+// Используем service-role server client для публичных данных (без привязки к конкретному request)
 async function getTagData(slug) {
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-  const { supabase } = await getUserAndSupabaseForRequest(globalReq) || {};
-  if (!supabase) notFound();
+  const normalized = String(slug || '').trim();
+  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+  const debug = typeof process !== 'undefined' && process.env && process.env.TAG_PAGE_DEBUG === 'true';
+  if (debug) console.debug('[tags page] using service-role client for slug=', normalized);
+
   const { getTagBySlug, getArticlesByTag } = await import('@/lib/tagHelpers');
-  const tag = await getTagBySlug(supabase, slug);
-  if (!tag) notFound();
-  const articles = await getArticlesByTag(supabase, tag.slug || tag.name || slug, 50);
+  // Find tag (tolerant lookup inside helper)
+  const tag = await getTagBySlug(supabase, normalized);
+  if (!tag) {
+    if (debug) console.debug('[tags page] tag not found for', normalized);
+    notFound();
+  }
+
+  const lookupKey = tag.slug || tag.name || normalized;
+  const articles = await getArticlesByTag(supabase, lookupKey, 50);
+  if (debug) console.debug('[tags page] found articles count=', (articles || []).length, 'for tag', lookupKey);
+
   // Attach tags to fetched articles for UI (best effort)
   try {
     const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
     tag.articles = await attachTagsToArticles(supabase, articles || []);
   } catch (e) {
+    if (debug) console.debug('[tags page] attachTagsToArticles failed', e);
     tag.articles = articles || [];
   }
   if (!Array.isArray(tag.articles)) tag.articles = [];
