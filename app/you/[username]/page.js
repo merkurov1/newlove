@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Image from 'next/image';
 import { Suspense } from 'react';
+import SubscriptionToggle from '@/components/profile/SubscriptionToggle';
 import { getFirstImage } from '@/lib/contentUtils';
 
 // Fallback-аватар по первой букве
@@ -30,6 +31,17 @@ async function getUserProfile(username) {
   const { data: users } = await supabase.from('users').select('*').eq('username', username).limit(1);
   const user = (users && users[0]) || null;
   if (!user) notFound();
+  // Check whether this user has an active subscriber record
+  let isSubscribed = false;
+  try {
+    const { data: subRow, error: subErr } = await supabase.from('subscribers').select('id,isActive').eq('userId', user.id).limit(1).maybeSingle();
+    if (!subErr && subRow) {
+      // if table has isActive column, prefer it; otherwise presence implies subscribed
+      isSubscribed = typeof subRow.isActive !== 'undefined' ? !!subRow.isActive : true;
+    }
+  } catch (e) {
+    // ignore subscription lookup errors (table may not exist in some environments)
+  }
   // Fetch articles and projects separately
   // Load articles via the request-scoped client (this will include tag attach later)
   const { data: articlesRaw } = await supabase.from('articles').select('*').eq('authorId', user.id).eq('published', true).order('publishedAt', { ascending: false });
@@ -57,6 +69,7 @@ async function getUserProfile(username) {
   // Do not mutate original DB object; return a safe clone with serialized arrays
   return {
     ...user,
+    isSubscribed: !!isSubscribed,
     articles: Array.isArray(articles) ? JSON.parse(JSON.stringify(articles)) : [],
     projects: Array.isArray(projects) ? JSON.parse(JSON.stringify(projects)) : []
   };
@@ -99,6 +112,18 @@ async function ProfileContent({ username }) {
   const user = await getUserProfile(username);
   if (!user) return notFound();
 
+  // Determine whether current request belongs to the profile owner to show edit controls
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  let viewerIsOwner = false;
+  try {
+    const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+    const ctx = await getUserAndSupabaseForRequest(globalReq) || {};
+    const viewer = ctx.user || null;
+    if (viewer && viewer.id && viewer.id === user.id) viewerIsOwner = true;
+  } catch (e) {
+    // ignore
+  }
+
   return (
     <div className="container mx-auto px-4 py-12">
       {/* --- БЛОК С ИНФОРМАЦИЕЙ О ПОЛЬЗОВАТЕЛЕ --- */}
@@ -125,6 +150,31 @@ async function ProfileContent({ username }) {
           <Link href={user.website} target="_blank" rel="noopener noreferrer" className="mt-4 text-blue-600 hover:underline">
             {user.website.replace(/^(https?:\/\/)?(www\.)?/, '')}
           </Link>
+        )}
+
+        {/* Subscription status for this profile (public) */}
+        <div className="mt-4">
+          {user.isSubscribed ? (
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 text-green-700 text-sm font-semibold">📫 Подписан на рассылку</span>
+          ) : (
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm">✉️ Не подписан</span>
+          )}
+        </div>
+
+        {/* Edit profile button visible only to the owner */}
+        {viewerIsOwner && (
+          <div className="mt-4 flex items-center gap-4">
+            <Link href="/profile" className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Редактировать профиль</Link>
+            {/* Subscription toggle for owner (email required) */}
+            {user.email && (
+              // @ts-expect-error client component
+              <Suspense fallback={null}>
+                {/* eslint-disable-next-line @next/next/no-before-interactive-script-load */}
+                {/* @ts-ignore */}
+                <SubscriptionToggle initialSubscribed={user.isSubscribed} email={user.email} />
+              </Suspense>
+            )}
+          </div>
         )}
       </div>
 
