@@ -41,10 +41,6 @@ export default async function Home() {
       {/* Auction slider for articles tagged 'auction' - placed right after hero */}
       {auctionArticles && auctionArticles.length > 0 && (
         <section className="max-w-4xl mx-auto py-12 px-4">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-semibold">🏷️ Auction</h2>
-            <Link href="/tags/auction" className="text-sm text-gray-500 hover:text-gray-700">Все по тегу →</Link>
-          </div>
           <AuctionSlider articles={auctionArticles} />
         </section>
       )}
