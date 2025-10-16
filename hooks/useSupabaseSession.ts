@@ -135,6 +135,60 @@ export default function useSupabaseSession() {
       emit();
     });
 
+    // When user returns to the tab (visibilitychange / focus), re-check session
+    const checkSession = async () => {
+      try {
+        pushDebug({ where: 'visibility', step: 'checkSession' });
+        const { data } = await supabase.auth.getSession();
+        const s = (data as any)?.session || null;
+        if (s && s.user) {
+          // restore if needed
+          setSession({ user: s.user, accessToken: s.access_token });
+          setStatus('authenticated');
+          try { if (typeof window !== 'undefined') {
+            const toStore = { id: s.user.id, email: s.user.email, name: s.user.name, image: s.user.user_metadata?.avatar_url || s.user?.picture || s.user?.image, role: s.user.role };
+            try { localStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {}
+            try { if (bc) bc.postMessage({ type: 'login', user: toStore }); } catch (e) {}
+          } } catch (e) {}
+          return;
+        }
+
+        // fallback to server-side check
+        try {
+          const resp = await fetch('/api/auth/me', { credentials: 'same-origin' });
+          if (resp.ok) {
+            const j = await resp.json();
+            if (j?.user) {
+              setSession({ user: j.user, accessToken: null });
+              setStatus('authenticated');
+              try { if (typeof window !== 'undefined') { const toStore = { id: j.user.id, email: j.user.email, name: j.user.name, image: j.user.image, role: null }; try { localStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {} try { if (bc) bc.postMessage({ type: 'login', user: toStore }); } catch (e) {} } } catch (e) {}
+              return;
+            }
+          }
+        } catch (e) {
+          // ignore network errors here
+        }
+
+        // if nothing found, mark unauthenticated
+        setSession(null);
+        setStatus('unauthenticated');
+        try { if (typeof window !== 'undefined') localStorage.removeItem('newlove_auth_user'); } catch (e) {}
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    const onVisibility = () => {
+      try {
+        if (document.visibilityState === 'visible') {
+          checkSession();
+        }
+      } catch (e) {}
+    };
+    const onFocus = () => { try { checkSession(); } catch (e) {} };
+    try { window.addEventListener('visibilitychange', onVisibility); } catch (e) {}
+    try { window.addEventListener('focus', onFocus); } catch (e) {}
+
     (async () => {
       try {
         pushDebug({ where: 'init', step: 'getSession' });
@@ -261,6 +315,8 @@ export default function useSupabaseSession() {
       mountedRef.current = false;
       try { (unsub as any)?.data?.subscription?.unsubscribe?.(); } catch {}
       try { window.removeEventListener('storage', onStorage); } catch (e) {}
+      try { window.removeEventListener('visibilitychange', onVisibility); } catch (e) {}
+      try { window.removeEventListener('focus', onFocus); } catch (e) {}
       try { if (bc) bc.close(); } catch (e) {}
       pushDebug({ where: 'cleanup' });
     };
