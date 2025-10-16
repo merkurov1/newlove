@@ -52,6 +52,8 @@ export async function getUserAndSupabaseFromRequest(req: Request) {
 
   let supabase = null;
   try {
+    // Use the default server client (anon/SUPABASE_KEY) for session validation.
+    // We only use the service-role client later when checking `user_roles`.
     supabase = getServerSupabaseClient();
   } catch (e) {
     console.error('Unable to create server supabase client', e);

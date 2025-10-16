@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 // Создаем клиент с service role для админских операций
-const supabaseAdmin = getServerSupabaseClient();
+const supabaseAdmin = getServerSupabaseClient({ useServiceRole: true });
 
 export async function POST(request: NextRequest) {
   try {
