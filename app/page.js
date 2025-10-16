@@ -65,8 +65,8 @@ export default async function Home() {
       <BackgroundShapes />
       <div className="mb-6">
         {/* Keep CloseableHero for other pages, but on homepage we render HeroHearts directly */}
-        <div className="relative max-w-5xl mx-auto px-4 py-8 sm:py-12 lg:py-8">
-          <div className="bg-white/40 backdrop-blur-md border border-white/20 rounded-3xl p-8 md:p-12 shadow-2xl overflow-hidden">
+        <div className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8">
+          <div className="bg-white/40 backdrop-blur-md border border-white/20 rounded-3xl p-6 md:p-10 shadow-2xl overflow-hidden">
               {/* Use CloseableHero so users can close the hero; it delegates to HeroHearts internally */}
               <div className="w-full">
                 <CloseableHero />
@@ -76,16 +76,16 @@ export default async function Home() {
       </div>
       {/* Auction slider for articles tagged 'auction' - placed right after hero */}
       {auctionArticles && auctionArticles.length > 0 && (
-        <section className="max-w-6xl mx-auto py-6 sm:py-8 px-4" aria-label="Аукционные статьи">
-          <div className="rounded-2xl p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
+        <section className="max-w-5xl mx-auto py-4 sm:py-6 px-4" aria-label="Аукционные статьи">
+          <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
             <AuctionSlider articles={auctionArticles} />
           </div>
         </section>
       )}
 
       {/* Main articles feed excluding auction-tagged articles */}
-  <section id="articles" className="max-w-6xl mx-auto py-8 sm:py-10 px-4">
-        <div className="rounded-2xl p-4 bg-white/30 backdrop-blur-sm border border-white/10">
+  <section id="articles" className="max-w-5xl mx-auto py-6 sm:py-8 px-4">
+    <div className="rounded-2xl p-3 sm:p-4 bg-white/30 backdrop-blur-sm border border-white/10">
           <ArticlesFeed initialArticles={articles} includeTag="news" />
           {tagDebugInfo && (
             <div className="mt-6 p-4 bg-gray-50 border border-gray-200 text-sm text-gray-700 rounded">
@@ -106,8 +106,8 @@ export default async function Home() {
       </section>
 
       {/* Flow feed follows the articles */}
-  <section className="max-w-4xl mx-auto py-8 sm:py-10 px-4">
-        <div className="flex items-center justify-between mb-6">
+  <section className="max-w-5xl mx-auto py-6 sm:py-8 px-4">
+        <div className="flex items-center justify-between mb-4 sm:mb-6">
           <h2 className="text-2xl font-semibold">🌊 Flow</h2>
           <Link href="/lab/feed" className="text-sm text-gray-500 hover:text-gray-700">Сводная лента →</Link>
         </div>
