@@ -33,11 +33,21 @@ export async function upsertTagsAndLink(
 
   // Helper slugify
   const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9-_]+/g, '-').replace(/^-+|-+$/g, '').replace(/--+/g, '-');
+  // Centralized table name for tags: prefer canonical "Tag" but allow overriding via
+  // environment variable TAGS_TABLE_NAME if the database uses a different name.
+  const TAGS_TABLE = (typeof process !== 'undefined' && process.env && process.env.TAGS_TABLE_NAME) || 'Tag';
 
   // 1) fetch existing tags by name
-  const { data: existingTags = [], error: fetchErr } = await supabase.from('Tag').select('id,name,slug').in('name', names) as any;
-  if (fetchErr) {
-    console.error('fetch tags error', fetchErr);
+  // Use the configured TAGS_TABLE. If fetch fails because the relation doesn't
+  // exist or another DB error occurs, log and return early so the caller sees a
+  // predictable behavior.
+  let existingTags: any[] = [];
+  try {
+    const r = await supabase.from(TAGS_TABLE).select('id,name,slug').in('name', names) as any;
+    if (r.error) throw r.error;
+    existingTags = r.data || [];
+  } catch (e) {
+    console.error('fetch tags error (table: ' + TAGS_TABLE + ')', e);
     return;
   }
   const tagIdByName: Record<string, string> = {};
@@ -48,24 +58,27 @@ export async function upsertTagsAndLink(
   if (missing.length > 0) {
     const now = new Date().toISOString();
     const toInsert = missing.map(n => ({ id: (typeof randomUUID === 'function' ? randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`), name: n, slug: slugify(n), createdAt: now, updatedAt: now }));
-    const { data: inserted = [], error: insertErr } = await supabase.from('Tag').insert(toInsert).select('id,name,slug') as any;
-    if (insertErr) {
-      // If insertion fails, try best-effort: continue and rely on later select
-      console.error('insert missing tags error', insertErr);
-    } else {
-      for (const r of inserted || []) tagIdByName[r.name] = r.id;
+    try {
+      const r = await supabase.from(TAGS_TABLE).insert(toInsert).select('id,name,slug') as any;
+      if (r.error) throw r.error;
+      for (const rr of r.data || []) tagIdByName[rr.name] = rr.id;
+    } catch (e) {
+      console.error('insert missing tags error (table: ' + TAGS_TABLE + ')', e);
+      // continue and rely on later select
     }
   }
 
   // 3) ensure we have mapping for all names by querying again for any missing
   const missingAfterInsert = names.filter(n => !tagIdByName[n]);
   if (missingAfterInsert.length > 0) {
-    const { data: rows = [], error: finalFetchErr } = await supabase.from('Tag').select('id,name,slug').in('name', missingAfterInsert) as any;
-    if (finalFetchErr) {
-      console.error('fetch tags after insert error', finalFetchErr);
+    try {
+      const r = await supabase.from(TAGS_TABLE).select('id,name,slug').in('name', missingAfterInsert) as any;
+      if (r.error) throw r.error;
+      for (const rr of r.data || []) tagIdByName[rr.name] = rr.id;
+    } catch (e) {
+      console.error('fetch tags after insert error (table: ' + TAGS_TABLE + ')', e);
       return;
     }
-    for (const r of rows || []) tagIdByName[r.name] = r.id;
   }
 
   // Prepare junction inserts depending on entity type
