@@ -15,9 +15,8 @@ import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/Struct
 import nextDynamic from 'next/dynamic';
 
 
-// SSR-friendly динамический импорт HeroHearts (только на клиенте)
-
-const HeroHearts = nextDynamic(() => import('@/components/HeroHearts'), { ssr: false });
+// SSR-friendly динамический импорт CloseableHero (client-only)
+const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { ssr: false });
 const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
 const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ssr: false });
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
