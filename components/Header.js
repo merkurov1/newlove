@@ -32,6 +32,40 @@ export default function Header({ projects, settings }) {
     ''
   );
 
+  // Extract possible wallet address from session (support multiple shapes)
+  const getWalletAddress = (sess) => {
+    try {
+      const u = sess?.user;
+      if (!u) return null;
+      // common places: user_metadata.address or wallets array
+      const m = u.user_metadata || {};
+      if (m?.address) return m.address;
+      if (m?.wallet) return m.wallet;
+      if (Array.isArray(m?.wallets) && m.wallets[0] && m.wallets[0].address) return m.wallets[0].address;
+      // supabase identities array may contain provider/identity_data
+      if (Array.isArray(u.identities)) {
+        for (const id of u.identities) {
+          if (!id) continue;
+          if (id.provider && /web3|ethereum|wallet/i.test(id.provider) && id.identity_data) {
+            // try common fields
+            if (id.identity_data.address) return id.identity_data.address;
+            if (id.identity_data.account) return id.identity_data.account;
+            if (id.id) return id.id;
+          }
+        }
+      }
+      return null;
+    } catch (e) { return null; }
+  };
+
+  const walletAddress = getWalletAddress(session);
+  const shorten = (addr) => {
+    if (!addr || typeof addr !== 'string') return addr;
+    if (addr.length <= 10) return addr;
+    return `${addr.slice(0,6)}…${addr.slice(-4)}`;
+  };
+  const walletShort = walletAddress ? shorten(walletAddress) : null;
+
   const site_name = settings?.site_name || 'Anton Merkurov';
   const slogan = settings?.slogan || 'Art x Love x Money';
   // Простая и чистая логика: settings (правильный URL) -> локальный fallback
@@ -188,8 +222,8 @@ export default function Header({ projects, settings }) {
                   className="rounded-full"
                 />
                 <div className="hidden sm:flex flex-col text-sm leading-tight">
-                  <span className="font-medium text-gray-900">{displayName || session.user.email}</span>
-                  <span className="text-xs text-gray-500">{session.user.email}</span>
+                  <span className="font-medium text-gray-900">{displayName || session.user.email || walletShort}</span>
+                  <span className="text-xs text-gray-500">{walletShort ? walletShort : (session.user.email || '')}</span>
                 </div>
               </div>
             ) : (
