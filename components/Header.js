@@ -21,6 +21,16 @@ export default function Header({ projects, settings }) {
   const [scrolled, setScrolled] = useState(false);
   const lastScrollY = useRef(0);
   const [, setTick] = useState(0);
+  const serverRole = useServerEffectiveRole(session?.user ? session : null);
+
+  // Compute a friendly display name: prefer user_metadata fields from OAuth providers
+  const displayName = (
+    session?.user?.user_metadata?.name ||
+    session?.user?.user_metadata?.full_name ||
+    session?.user?.name ||
+    (session?.user?.email ? session.user.email.split('@')[0] : null) ||
+    ''
+  );
 
   const site_name = settings?.site_name || 'Anton Merkurov';
   const slogan = settings?.slogan || 'Art x Love x Money';
@@ -71,13 +81,12 @@ export default function Header({ projects, settings }) {
   return (
     <>
       {/* Opt-in debug overlay when ?auth_debug=1 */}
-      {typeof window !== 'undefined' && window.location.search.includes('auth_debug=1') && (
+          {typeof window !== 'undefined' && window.location.search.includes('auth_debug=1') && (
         <div style={{position:'fixed', right:8, bottom:8, zIndex:99999, background:'rgba(0,0,0,0.7)', color:'#fff', padding:8, borderRadius:6, fontSize:12, maxWidth:320}}>
           <div style={{fontWeight:700, marginBottom:6}}>Auth debug</div>
           <div>status: {status}</div>
           <div style={{marginTop:6}}>user: {session?.user ? `${session.user.id} ${session.user.email}` : 'null'}</div>
-          <div style={{marginTop:6}}>role: {session?.user?.role || '—'}</div>
-    const serverRole = useServerEffectiveRole(session?.user ? session : null);
+          <div style={{marginTop:6}}>role: {session?.user?.role || serverRole || '—'}</div>
           <div style={{marginTop:6, opacity:0.9}}>open console: window.__newloveAuth</div>
           <div style={{marginTop:6, opacity:0.85}}>
             <div style={{fontWeight:600}}>Recent events:</div>
@@ -168,14 +177,14 @@ export default function Header({ projects, settings }) {
             {status === 'authenticated' && session?.user ? (
               <div className="flex items-center gap-3">
                 <SafeImage
-                  src={(session.user.user_metadata && session.user.user_metadata.avatar_url) || session.user.image || session.user.picture || '/images/avatar-placeholder.png'}
-                  alt={session.user.name || session.user.email || 'User'}
+                  src={(session.user.user_metadata && (session.user.user_metadata.avatar_url || session.user.user_metadata.avatar)) || session.user.image || session.user.picture || '/images/avatar-placeholder.png'}
+                  alt={displayName || session.user.email || 'User'}
                   width={36}
                   height={36}
                   className="rounded-full"
                 />
                 <div className="hidden sm:flex flex-col text-sm leading-tight">
-                  <span className="font-medium text-gray-900">{session.user.name || session.user.email}</span>
+                  <span className="font-medium text-gray-900">{displayName || session.user.email}</span>
                   <span className="text-xs text-gray-500">{session.user.email}</span>
                 </div>
               </div>
@@ -227,10 +236,11 @@ export default function Header({ projects, settings }) {
             {/* Ссылки из UserSidebar перенесены сюда */}
             {status === 'authenticated' && (
               (() => {
-                const username = session.user?.username || session.user?.name || 'me';
+                const username = session.user?.username;
+                const profileHref = username ? `/you/${username}` : '/profile';
                 return <>
                   <li>
-                    <Link href={`/you/${username}`} onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 py-2 text-gray-600 font-semibold hover:text-gray-900">
+                    <Link href={profileHref} onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2 py-2 text-gray-600 font-semibold hover:text-gray-900">
                       👤 Профиль
                     </Link>
                   </li>
