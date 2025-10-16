@@ -77,8 +77,18 @@ export default function useSupabaseSession() {
               try { localStorage.removeItem('supabase_oauth_redirect'); } catch {}
               const current = window.location.pathname + window.location.search;
               if (redirectTo !== current) {
-                window.location.replace(redirectTo);
-                return;
+                try {
+                  const targetUrl = new URL(redirectTo, window.location.origin);
+                  const isAdminTarget = targetUrl.pathname.startsWith('/admin');
+                  const userRole = (s && s.user && s.user.role) ? String(s.user.role).toUpperCase() : null;
+                  if (!isAdminTarget || (isAdminTarget && userRole === 'ADMIN')) {
+                    window.location.replace(redirectTo);
+                    return;
+                  }
+                } catch (e) {
+                  // If URL parsing fails, play safe and do not redirect to admin
+                  try { window.location.replace(redirectTo); return; } catch (err) {}
+                }
               }
             }
           }
@@ -115,8 +125,17 @@ export default function useSupabaseSession() {
                 // If already on that path, don't navigate
                 const current = window.location.pathname + window.location.search;
                 if (redirectTo !== current) {
-                  window.location.replace(redirectTo);
-                  return;
+                  try {
+                    const targetUrl = new URL(redirectTo, window.location.origin);
+                    const isAdminTarget = targetUrl.pathname.startsWith('/admin');
+                    const userRole = (s && s.user && s.user.role) ? String(s.user.role).toUpperCase() : null;
+                    if (!isAdminTarget || (isAdminTarget && userRole === 'ADMIN')) {
+                      window.location.replace(redirectTo);
+                      return;
+                    }
+                  } catch (e) {
+                    try { window.location.replace(redirectTo); return; } catch (err) {}
+                  }
                 }
               }
             }
@@ -147,8 +166,17 @@ export default function useSupabaseSession() {
                     try { localStorage.removeItem('supabase_oauth_redirect'); } catch {}
                     const current = window.location.pathname + window.location.search;
                     if (redirectTo !== current) {
-                      window.location.replace(redirectTo);
-                      return;
+                      try {
+                        const targetUrl = new URL(redirectTo, window.location.origin);
+                        const isAdminTarget = targetUrl.pathname.startsWith('/admin');
+                        const userRole = (j && j.user && j.user.role) ? String(j.user.role).toUpperCase() : null;
+                        if (!isAdminTarget || (isAdminTarget && userRole === 'ADMIN')) {
+                          window.location.replace(redirectTo);
+                          return;
+                        }
+                      } catch (e) {
+                        try { window.location.replace(redirectTo); return; } catch (err) {}
+                      }
                     }
                   }
                 }
