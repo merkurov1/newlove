@@ -147,20 +147,69 @@ export default async function Home({ searchParams }) {
   return (
     <main className="relative overflow-hidden">
       <BackgroundShapes />
-      {/* Render CloseableHero directly so when it returns null the entire hero block disappears */}
+      {/* Server-rendered hero fallback (progressive enhancement).
+          We keep the client-only CloseableHero for enhanced behavior,
+          but render a basic hero on the server so non-hydrated clients
+          (tablets, noscript, partial JS failures) see content. */}
+      <div className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8 mb-6">
+        <div className="rounded-2xl p-6 bg-white/80 dark:bg-neutral-900">
+          <h1 className="text-3xl sm:text-4xl font-extrabold">Anton Merkurov</h1>
+          <p className="mt-2 text-lg text-neutral-700 dark:text-neutral-300">Медиа, технологии и искусство. Персональный сайт и блог.</p>
+          <div className="mt-4">
+            <a href="/you" className="inline-block text-sm font-medium text-pink-600 hover:underline">Обо мне →</a>
+          </div>
+        </div>
+      </div>
+      {/* Client-only CloseableHero (enhanced behavior) */}
       <CloseableHero className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8 mb-6" />
       {/* New auction slider placed under the hero */}
       {Array.isArray(auctionArticles) && auctionArticles.length > 0 && (
         <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
           <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
-            <AuctionSlider articles={auctionArticles} />
+            {/* Server-side fallback list (progressive) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(auctionArticles || []).slice(0, 5).map((a) => (
+                <a key={a.id} href={`/${a.slug}`} className="block rounded-lg overflow-hidden shadow-sm bg-white dark:bg-neutral-900">
+                  {a.previewImage ? (
+                    <div className="h-40 w-full bg-gray-100 dark:bg-neutral-800">
+                      <img src={a.previewImage} alt={a.title} className="object-cover w-full h-40" />
+                    </div>
+                  ) : (
+                    <div className="h-40 w-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center">📰</div>
+                  )}
+                  <div className="p-3">
+                    <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">{a.title}</h3>
+                    {a.description ? <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">{a.description}</p> : null}
+                  </div>
+                </a>
+              ))}
+            </div>
+            {/* Client enhancement: replace with Swiper when hydrated */}
+            <div className="mt-4">
+              <AuctionSlider articles={auctionArticles} />
+            </div>
           </div>
         </section>
       )}
 
       {/* Main articles feed excluding auction-tagged articles */}
   <section id="articles" className="max-w-5xl mx-auto py-4 sm:py-6 lg:py-4 lg:-mt-6 px-4">
-    <div className="rounded-2xl p-3 sm:p-4 bg-white/30 backdrop-blur-sm border border-white/10">
+          <div className="rounded-2xl p-3 sm:p-4 bg-white/30 backdrop-blur-sm border border-white/10">
+          {/* Server-side fallback list of articles (first page) */}
+          <div className="space-y-4">
+            {(newsArticles || []).slice(0, 6).map((n) => (
+              <article key={n.id} className="p-3 bg-white rounded-md shadow-sm">
+                <a href={`/${n.slug}`} className="flex items-start gap-4">
+                  {n.previewImage ? <img src={n.previewImage} alt={n.title} className="w-24 h-16 object-cover rounded" /> : <div className="w-24 h-16 bg-neutral-100 rounded" />}
+                  <div>
+                    <h3 className="text-lg font-semibold">{n.title}</h3>
+                    {n.description ? <p className="text-sm text-neutral-600">{n.description}</p> : null}
+                  </div>
+                </a>
+              </article>
+            ))}
+          </div>
+          {/* Client-side ArticlesFeed enhancement */}
           <ArticlesFeed initialArticles={newsArticles} includeTag="news" />
           {tagDebugInfo && (
             <div className="mt-6 p-4 bg-gray-50 border border-gray-200 text-sm text-gray-700 rounded">
