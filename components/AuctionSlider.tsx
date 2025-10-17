@@ -1,11 +1,11 @@
 "use client";
 import React, { useEffect } from 'react';
+import Image from 'next/image';
 import { Swiper, SwiperSlide } from 'swiper/react';
 // import modules from Swiper v12 modules path
 import { Navigation, Pagination, Autoplay } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/navigation';
-import 'swiper/css/pagination';
+// Swiper CSS is imported globally in app/layout.js to ensure styles are available
+// before client-only components mount. Do not re-import here to avoid FOUC/duplication.
 
 type Article = {
   id?: string | number;
@@ -19,8 +19,6 @@ type Article = {
 };
 
 export default function AuctionSlider({ articles }: { articles: Article[] }) {
-  if (!Array.isArray(articles) || articles.length === 0) return null;
-
   useEffect(() => {
     try {
       // Mount-time diagnostic to help debug hydration / client init issues
@@ -31,6 +29,8 @@ export default function AuctionSlider({ articles }: { articles: Article[] }) {
       // ignore
     }
   }, [articles]);
+
+  if (!Array.isArray(articles) || articles.length === 0) return null;
 
   const mapImg = (a: Article) => a.previewImage || a.preview_image_url || null;
   const mapSlug = (a: Article) => {
@@ -61,8 +61,8 @@ export default function AuctionSlider({ articles }: { articles: Article[] }) {
           <SwiperSlide key={String(a.id || a.slug || Math.random())}>
             <a href={`/${mapSlug(a)}`} className="block rounded-lg overflow-hidden shadow-sm bg-white dark:bg-neutral-900">
               {mapImg(a) ? (
-                <div className="h-48 w-full bg-gray-100 dark:bg-neutral-800">
-                  <img src={String(mapImg(a))} alt={a.title || ''} className="object-cover w-full h-48" />
+                <div className="h-48 w-full bg-gray-100 dark:bg-neutral-800 relative">
+                  <Image src={String(mapImg(a))} alt={a.title || ''} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" draggable={false} />
                 </div>
               ) : (
                 <div className="h-48 w-full bg-gradient-to-br from-pink-50 to-yellow-50 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
