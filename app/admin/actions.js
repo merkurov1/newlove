@@ -372,9 +372,12 @@ export async function subscribeToNewsletter(prevState, formData) {
     // upsert subscriber; mark inactive until confirmed
     let subscriber;
     try {
+      // Ensure an id is provided on insert. Some DB setups don't set a default
+      // value for subscribers.id, so providing one avoids NOT NULL violations.
+      const payload = { id: createId(), email, userId: user?.id || null, isActive: false };
       const upsertRes = await svc
         .from('subscribers')
-        .upsert({ email, userId: user?.id || null, isActive: false }, { onConflict: 'email' })
+        .upsert(payload, { onConflict: 'email' })
         .select()
         .single();
       subscriber = upsertRes.data;
