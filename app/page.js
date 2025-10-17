@@ -90,14 +90,14 @@ export default async function Home() {
        * )}
        */}
 
-  {/* New auction slider placed under the hero */}
-      {auctionArticles && auctionArticles.length > 0 && (
-        <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
+      {/* New auction slider placed under the hero — always render the slot
+          so the server wrapper can show a placeholder when there are no
+          auction-tagged articles. This guarantees visible, testable UI. */}
+      <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
           <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
-            <AuctionSliderNewServer articles={auctionArticles} />
+            <AuctionSliderNewServer articles={auctionArticles} tagDebugInfo={tagDebugInfo} />
           </div>
-        </section>
-      )}
+      </section>
 
       {/* Main articles feed excluding auction-tagged articles */}
   <section id="articles" className="max-w-5xl mx-auto py-4 sm:py-6 lg:py-4 lg:-mt-6 px-4">
