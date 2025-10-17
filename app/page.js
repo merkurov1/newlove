@@ -65,13 +65,26 @@ export default async function Home() {
       <BackgroundShapes />
       {/* Render CloseableHero directly so when it returns null the entire hero block disappears */}
       <CloseableHero className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8 mb-6" />
-      {/* Auction slider for articles tagged 'auction' - placed right after hero */}
+      {/* Auction slider for articles tagged 'auction' - previous implementation commented out below */}
+      {/**
+       * Previous implementation:
+       * {auctionArticles && auctionArticles.length > 0 && (
+       *   <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
+       *     <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
+       *       <AuctionSliderServer articles={auctionArticles} />
+       *     </div>
+       *   </section>
+       * )}
+       */}
+
+      {/* New auction slider placed under the hero */}
+      import AuctionSliderNewServer from '@/components/AuctionSliderNew.server';
       {auctionArticles && auctionArticles.length > 0 && (
-          <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
-            <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
-              <AuctionSliderServer articles={auctionArticles} />
-            </div>
-          </section>
+        <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
+          <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
+            <AuctionSliderNewServer articles={auctionArticles} />
+          </div>
+        </section>
       )}
 
       {/* Main articles feed excluding auction-tagged articles */}
