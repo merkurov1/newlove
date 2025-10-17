@@ -539,21 +539,23 @@ export async function deleteLetter(formData) {
         if (retry.error) {
           console.error('Retry with service role failed:', retry.error);
           try { (await import('@sentry/nextjs')).captureException(retry.error); } catch (e) {}
-          throw new Error('Ошибка при удалении письма: ' + (retry.error.message || String(retry.error)));
+          throw new Error('Ошибка при удалении письма: permission denied for table letters.\n' +
+            'Убедитесь, что сервисная роль имеет права на таблицу `letters`.\n' +
+            'Рекомендация: выполните `sql/ensure_service_role_grants.sql` в Supabase SQL Editor (или вручную выдайте соответствующие права).');
         }
         // success via retry
         error = null;
       } catch (e) {
         console.error('Retry with service role threw:', e);
         try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) {}
-        throw new Error('Не удалось удалить письмо: ' + (e?.message || String(e)));
+        throw new Error('Не удалось удалить письмо: ' + (e?.message || String(e)) + '\nПроверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql');
       }
     }
 
     if (error) {
-      console.error('Supabase delete letter error:', error);
-      try { (await import('@sentry/nextjs')).captureException(error); } catch (e) {}
-      throw new Error('Ошибка при удалении письма: ' + (error.message || String(error)));
+  console.error('Supabase delete letter error:', error);
+  try { (await import('@sentry/nextjs')).captureException(error); } catch (e) {}
+  throw new Error('Ошибка при удалении письма: ' + (error.message || String(error)) + '\nЕсли это ошибка прав (42501), убедитесь в настройке сервисной роли.');
     }
 
     revalidatePath('/admin/letters');
