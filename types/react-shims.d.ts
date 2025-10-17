@@ -17,6 +17,7 @@ declare module 'react' {
   export function createElement(...args: any[]): any;
   const React: any;
   export default React;
+  export type ComponentType<P = any> = any;
 }
 
 declare namespace JSX {
