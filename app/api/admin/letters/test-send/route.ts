@@ -7,9 +7,9 @@ import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSub
 // perform a dry-run and return `{ status: 'skipped' }` when keys are missing.
 export async function GET(req: Request) {
   try {
-    const url = new URL(req.url);
-    const email = url.searchParams.get('email') || 'test@example.com';
-    const testSubscriber = { id: 'test-subscriber', email };
+  // Hardcoded test address per request
+  const email = 'merkurov@gmail.com';
+  const testSubscriber = { id: 'test-subscriber', email };
     const testLetter = {
       title: 'Test newsletter from local environment',
       content: [{ type: 'richText', data: { html: `<p>This is a test preview of the newsletter HTML. Unsubscribe: %UNSUBSCRIBE%</p>` } }],
