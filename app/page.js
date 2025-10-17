@@ -22,17 +22,17 @@ const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ss
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 
 
-import { getArticlesByTag, getArticlesExcludingTag } from '@/lib/tagHelpers';
+import { getArticlesByTag, getArticlesExcludingTag, getArticlesByTagStrict } from '@/lib/tagHelpers';
 import dynamic from 'next/dynamic';
 const BackgroundShapes = dynamic(() => import('@/components/BackgroundShapes'), { ssr: false });
 export default async function Home({ searchParams }) {
   // SSR: Получаем сначала статьи для auction, then exclude them from main feed
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-  // Strict fetch: only articles with tag 'auction'
-  const auctionArticles = await getArticlesByTag(supabase, 'auction', 50) || [];
+  // Strict fetch: only articles with tag 'auction' (use strict variant)
+  const auctionArticles = await getArticlesByTagStrict(supabase, 'auction', 50) || [];
 
-  // (No extra fallbacks here — intentionally strict: only articles tagged 'auction')
+  // (No extra fallbacks here — strictly only articles tagged 'auction')
   const auctionIds = (auctionArticles || []).map(a => a.id).filter(Boolean);
   // Show main feed: articles excluding auction-tagged items
   const newsArticles = await getArticlesExcludingTag(supabase, 'auction', 15);
@@ -150,11 +150,13 @@ export default async function Home({ searchParams }) {
       {/* New auction slider placed under the hero — always render the slot
           so the server wrapper can show a placeholder when there are no
           auction-tagged articles. This guarantees visible, testable UI. */}
-      <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
+      {Array.isArray(auctionArticles) && auctionArticles.length > 0 && (
+        <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
           <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
             <AuctionSliderNewServer articles={auctionArticles} tagDebugInfo={tagDebugInfo} />
           </div>
-      </section>
+        </section>
+      )}
 
       {/* Main articles feed excluding auction-tagged articles */}
   <section id="articles" className="max-w-5xl mx-auto py-4 sm:py-6 lg:py-4 lg:-mt-6 px-4">
