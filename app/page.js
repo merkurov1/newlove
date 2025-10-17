@@ -13,19 +13,21 @@ import SafeImage from '@/components/SafeImage';
 import { getFirstImage } from '@/lib/contentUtils';
 import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
 import nextDynamic from 'next/dynamic';
+import Image from 'next/image';
 
 
 // SSR-friendly динамический импорт CloseableHero (client-only)
 const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { ssr: false });
-import AuctionSlider from '@/components/AuctionSlider';
+// Client-only AuctionSlider (Swiper) — load dynamically without SSR to avoid
+// hydration/init issues when Swiper tries to access the DOM during SSR.
+const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
 const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ssr: false });
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 
 
 import { getArticlesByTag, getArticlesExcludingTag, getArticlesByTagStrict, getTagBySlug } from '@/lib/tagHelpers';
 import AuctionSliderNewServer from '@/components/AuctionSliderNew.server';
-import dynamic from 'next/dynamic';
-const BackgroundShapes = dynamic(() => import('@/components/BackgroundShapes'), { ssr: false });
+const BackgroundShapes = nextDynamic(() => import('@/components/BackgroundShapes'), { ssr: false });
 export default async function Home({ searchParams }) {
   // SSR: Получаем сначала статьи для auction, then exclude them from main feed
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
@@ -303,8 +305,8 @@ export default async function Home({ searchParams }) {
               {(auctionArticles || []).slice(0, 5).map((a) => (
                 <a key={a.id} href={`/${a.slug}`} className="block rounded-lg overflow-hidden shadow-sm bg-white dark:bg-neutral-900">
                   {a.previewImage ? (
-                    <div className="h-40 w-full bg-gray-100 dark:bg-neutral-800">
-                      <img src={a.previewImage} alt={a.title} className="object-cover w-full h-40" />
+                    <div className="h-40 w-full bg-gray-100 dark:bg-neutral-800 relative">
+                      <Image src={a.previewImage} alt={a.title || ''} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" priority draggable={false} />
                     </div>
                   ) : (
                     <div className="h-40 w-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center">📰</div>
@@ -318,7 +320,13 @@ export default async function Home({ searchParams }) {
             </div>
             {/* Client enhancement: replace with Swiper when hydrated */}
             <div className="mt-4">
+              {/* Server-rendered fallback / placeholder */}
               <AuctionSliderNewServer articles={auctionArticles} tagDebugInfo={tagDebugInfo} />
+
+              {/* Client-only Swiper enhancement: mounts after hydration and replaces/enhances the server fallback */}
+              <div suppressHydrationWarning>
+                <AuctionSlider articles={auctionArticles} />
+              </div>
             </div>
           </div>
         </section>
@@ -332,7 +340,13 @@ export default async function Home({ searchParams }) {
             {(newsArticles || []).slice(0, 6).map((n) => (
               <article key={n.id} className="p-3 bg-white rounded-md shadow-sm">
                 <a href={`/${n.slug}`} className="flex items-start gap-4">
-                  {n.previewImage ? <img src={n.previewImage} alt={n.title} className="w-24 h-16 object-cover rounded" /> : <div className="w-24 h-16 bg-neutral-100 rounded" />}
+                  {n.previewImage ? (
+                    <div className="w-24 h-16 relative rounded overflow-hidden">
+                      <Image src={n.previewImage} alt={n.title || ''} fill sizes="96px" className="object-cover" draggable={false} />
+                    </div>
+                  ) : (
+                    <div className="w-24 h-16 bg-neutral-100 rounded" />
+                  )}
                   <div>
                     <h3 className="text-lg font-semibold">{n.title}</h3>
                     {n.description ? <p className="text-sm text-neutral-600">{n.description}</p> : null}
