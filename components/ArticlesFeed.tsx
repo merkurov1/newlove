@@ -55,7 +55,7 @@ export default function ArticlesFeed({ initialArticles, excludeTag, includeTag }
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [offset, loading, infiniteDone, hasMore]);
+    }, [offset, loading, infiniteDone, hasMore, excludeTag, includeTag]);
 
   // Кнопка "Показать ещё" после 15 статей
   const handleShowMore = async () => {

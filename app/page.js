@@ -17,7 +17,7 @@ import nextDynamic from 'next/dynamic';
 
 // SSR-friendly динамический импорт CloseableHero (client-only)
 const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { ssr: false });
-import AuctionSliderServer from '@/components/AuctionSlider.server';
+import AuctionSliderNewServer from '@/components/AuctionSliderNew.server';
 const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ssr: false });
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 
@@ -29,7 +29,20 @@ export default async function Home() {
   // SSR: Получаем сначала статьи для auction, then exclude them from main feed
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-  const auctionArticles = await getArticlesByTag(supabase, 'auction', 50);
+  // Robust lookup for auction-tagged articles. Try common variants and
+  // fall back to a small news set to ensure the slider has content when
+  // tag lookup fails in some schemas/environments.
+  let auctionArticles = await getArticlesByTag(supabase, 'auction', 50) || [];
+  if ((!auctionArticles || auctionArticles.length === 0)) {
+    try { auctionArticles = await getArticlesByTag(supabase, 'auctions', 50) || []; } catch (e) { auctionArticles = []; }
+  }
+  if ((!auctionArticles || auctionArticles.length === 0)) {
+    try { auctionArticles = await getArticlesByTag(supabase, 'auctioned', 50) || []; } catch (e) { auctionArticles = []; }
+  }
+  // final safe fallback: show a small set of recent news so the UI is visible
+  if ((!auctionArticles || auctionArticles.length === 0)) {
+    try { auctionArticles = await getArticlesByTag(supabase, 'news', 5) || []; } catch (e) { auctionArticles = []; }
+  }
   const auctionIds = (auctionArticles || []).map(a => a.id).filter(Boolean);
   // Show main feed: articles tagged 'news'
   const newsArticles = await getArticlesByTag(supabase, 'news', 15);
@@ -77,8 +90,7 @@ export default async function Home() {
        * )}
        */}
 
-      {/* New auction slider placed under the hero */}
-      import AuctionSliderNewServer from '@/components/AuctionSliderNew.server';
+  {/* New auction slider placed under the hero */}
       {auctionArticles && auctionArticles.length > 0 && (
         <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
           <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">

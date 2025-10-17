@@ -18,7 +18,7 @@ export default function AuctionSliderNew({ articles }: { articles: Article[] }) 
   useEffect(() => {
     // clamp index when articles change
     if (index >= len) setIndex(0);
-  }, [len]);
+  }, [len, index]);
 
   if (!articles || articles.length === 0) return null;
 
