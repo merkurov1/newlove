@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, FC } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthContext';
 import useServerEffectiveRole from '@/hooks/useServerEffectiveRole';
 import ModernLoginModal from './ModernLoginModal';
@@ -7,7 +7,7 @@ import ModernLoginModal from './ModernLoginModal';
 const STORAGE_KEY = 'closeable_hero_closed_at_v1';
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-const CloseableHero: FC<{ className?: string }> = ({ className = '' }) => {
+export default function CloseableHero({ className = '' }) {
   const { session } = useAuth();
   const serverRole = useServerEffectiveRole(session?.user ? session : null);
 
@@ -48,13 +48,10 @@ const CloseableHero: FC<{ className?: string }> = ({ className = '' }) => {
 
   function PublicHeroLogin() {
     const [modalOpen, setModalOpen] = useState(false);
-    const handleOpen = () => {
-      setModalOpen(true);
-    };
     return (
       <>
         <button
-          onClick={handleOpen}
+          onClick={() => setModalOpen(true)}
           className="px-8 py-3 bg-pink-600 text-white rounded-lg font-semibold shadow-md hover:bg-pink-700 transition-all duration-300 ease-in-out transform hover:scale-105"
         >
           Войти / Зарегистрироваться
@@ -113,12 +110,9 @@ const CloseableHero: FC<{ className?: string }> = ({ className = '' }) => {
           </svg>
         </button>
       )}
-      {/* ИЗМЕНЕНИЕ: Теперь Hero-секция находится в таком же 'стеклянном' блоке, как и остальные элементы */}
       <section className="text-center rounded-2xl p-8 sm:p-12 bg-gradient-to-r from-white/40 to-white/10 dark:from-white/10 dark:to-white/5 border border-white/20 dark:border-white/10 backdrop-blur-md">
         <HeroContent />
       </section>
     </div>
   );
-};
-
-export default CloseableHero;
+}
