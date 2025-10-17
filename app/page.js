@@ -49,6 +49,11 @@ export default async function Home({ searchParams }) {
       const ids = [];
       for (const r of (relRows || [])) {
         if (!r) continue;
+        // If the row itself already looks like a full article (common when junction select expands A into top-level fields), use it
+        if ((r.id || r._id) && (r.title || r.slug)) {
+          embedded.push(r);
+          continue;
+        }
         // If A is an object with fields, take it
         const Aobj = r.A || r.a || r.article || null;
         if (Aobj && typeof Aobj === 'object' && (Aobj.id || Aobj.title || Aobj.slug)) {
@@ -313,7 +318,7 @@ export default async function Home({ searchParams }) {
             </div>
             {/* Client enhancement: replace with Swiper when hydrated */}
             <div className="mt-4">
-              <AuctionSlider articles={auctionArticles} />
+              <AuctionSliderNewServer articles={auctionArticles} tagDebugInfo={tagDebugInfo} />
             </div>
           </div>
         </section>
