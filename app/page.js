@@ -22,17 +22,44 @@ const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ss
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 
 
-import { getArticlesByTag, getArticlesExcludingTag, getArticlesByTagStrict } from '@/lib/tagHelpers';
+import { getArticlesByTag, getArticlesExcludingTag, getArticlesByTagStrict, getTagBySlug } from '@/lib/tagHelpers';
+import AuctionSliderNewServer from '@/components/AuctionSliderNew.server';
 import dynamic from 'next/dynamic';
 const BackgroundShapes = dynamic(() => import('@/components/BackgroundShapes'), { ssr: false });
 export default async function Home({ searchParams }) {
   // SSR: Получаем сначала статьи для auction, then exclude them from main feed
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-  // Strict fetch: only articles with tag 'auction' (use strict variant)
-  const auctionArticles = await getArticlesByTagStrict(supabase, 'auction', 50) || [];
+  // Strict, deterministic server-side fetch using canonical junction table `_ArticleToTag`.
+  // We select the related article object (A) from the junction in one request which behaves like an inner join.
+  let auctionArticles = [];
+  try {
+    const tag = await getTagBySlug(supabase, 'auction');
+    if (tag && tag.id) {
+      // Query the canonical junction table and embed the related article (A)
+      const relRes = await supabase
+        .from('_ArticleToTag')
+        .select('A(id,title,slug,content,publishedAt,updatedAt,author,previewImage,preview_image,description,excerpt)')
+        .eq('B', tag.id)
+        .limit(50);
+      const relRows = relRes && relRes.data ? relRes.data : (Array.isArray(relRes) ? relRes : []);
+      auctionArticles = (relRows || []).map(r => (r && (r.A || r.article || r.a)) || null).filter(Boolean).map(a => ({
+        id: a.id || a._id || null,
+        title: a.title || a.article?.title || '',
+        slug: a.slug || a.article?.slug || '/',
+        previewImage: a.previewImage || a.preview_image || null,
+        description: a.description || a.excerpt || null,
+        content: a.content || null,
+        publishedAt: a.publishedAt || null,
+        updatedAt: a.updatedAt || null,
+        author: a.author || null,
+      }));
+    }
+  } catch (e) {
+    auctionArticles = [];
+  }
 
-  // (No extra fallbacks here — strictly only articles tagged 'auction')
+  // (No extra fallbacks here — strictly only articles tagged 'auction' via canonical junction)
   const auctionIds = (auctionArticles || []).map(a => a.id).filter(Boolean);
   // Show main feed: articles excluding auction-tagged items
   const newsArticles = await getArticlesExcludingTag(supabase, 'auction', 15);
