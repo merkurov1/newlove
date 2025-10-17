@@ -29,44 +29,8 @@ export default async function Home() {
   // SSR: Получаем сначала статьи для auction, then exclude them from main feed
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-  // Robust lookup for auction-tagged articles. Try common variants and
-  // fall back to a small news set to ensure the slider has content when
-  // tag lookup fails in some schemas/environments.
-  let auctionArticles = await getArticlesByTag(supabase, 'auction', 50) || [];
-  if ((!auctionArticles || auctionArticles.length === 0)) {
-    try { auctionArticles = await getArticlesByTag(supabase, 'auctions', 50) || []; } catch (e) { auctionArticles = []; }
-  }
-  if ((!auctionArticles || auctionArticles.length === 0)) {
-    try { auctionArticles = await getArticlesByTag(supabase, 'auctioned', 50) || []; } catch (e) { auctionArticles = []; }
-  }
-  // final safe fallback: show a small set of recent news so the UI is visible
-  if ((!auctionArticles || auctionArticles.length === 0)) {
-    try { auctionArticles = await getArticlesByTag(supabase, 'news', 5) || []; } catch (e) { auctionArticles = []; }
-  }
-  // If tag lookup still failed, as a last resort fetch recent published articles directly
-  if ((!auctionArticles || auctionArticles.length === 0)) {
-    try {
-      const resp = await supabase.from('articles')
-        .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
-        .eq('published', true)
-        .order('publishedAt', { ascending: false })
-        .limit(5);
-      const rows = (resp && resp.data) || [];
-      // attach previewImage using existing helper
-      auctionArticles = await Promise.all((rows || []).map(async (r) => ({
-        id: r.id,
-        title: r.title,
-        slug: r.slug,
-        content: r.content,
-        publishedAt: r.publishedAt,
-        updatedAt: r.updatedAt,
-        author: r.author || null,
-        previewImage: r.content ? await getFirstImage(r.content) : null,
-      })));
-    } catch (e) {
-      auctionArticles = [];
-    }
-  }
+  // Strict fetch: only articles with tag 'auction'
+  const auctionArticles = await getArticlesByTag(supabase, 'auction', 50) || [];
 
   // Extra fallback: try to locate the 'auction' tag row and read junction relations directly
   if ((!auctionArticles || auctionArticles.length === 0)) {
@@ -123,12 +87,12 @@ export default async function Home() {
     }
   }
   const auctionIds = (auctionArticles || []).map(a => a.id).filter(Boolean);
-  // Show main feed: articles tagged 'news'
-  const newsArticles = await getArticlesByTag(supabase, 'news', 15);
+  // Show main feed: articles excluding auction-tagged items
+  const newsArticles = await getArticlesExcludingTag(supabase, 'auction', 15);
   // Compute debug info for tag exclusion when requested
   const globalReq = (globalThis && globalThis.request) || null;
   // TEMP: force debug on to surface tag lookup details in prod for diagnosis
-  let showDebug = true || !!(process && process.env && process.env.TAG_HELPERS_DEBUG);
+  let showDebug = !!(process && process.env && process.env.TAG_HELPERS_DEBUG);
   try {
     if (!showDebug && globalReq && typeof globalReq.url === 'string') {
       const u = new URL(globalReq.url);
