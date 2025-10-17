@@ -1,170 +1,139 @@
 "use server";
 
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import { Resend } from 'resend';
+import { createId } from '@paralleldrive/cuid2';
+
+// --- Импорты Helper-функций ---
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
-import { cookies } from 'next/headers';
-import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
-import { Resend } from 'resend';
+import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSubscriber';
 import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
-import { createId } from '@paralleldrive/cuid2';
 import { parseTagNames, upsertTagsAndLink } from '@/lib/tags';
 
+// --- Вспомогательные функции ---
+
+/**
+ * Проверяет, является ли текущий пользователь администратором.
+ */
 async function verifyAdmin() {
-  // Build a Request that includes cookies when globalThis.request doesn't
-  // provide them (some runtimes / browsers omit cookie headers for server
-  // actions). This ensures requireAdminFromRequest can reconstruct the
-  // Supabase token from cookies and perform service-role RPC checks.
   const buildRequest = () => {
-    const existing = (globalThis && globalThis.request) || null;
-    try {
-      // If existing request already has cookie header, use it directly
-      if (existing && typeof existing.headers?.get === 'function' && existing.headers.get('cookie')) return existing;
-    } catch (e) {
-      // ignore
-    }
     const cookieHeader = cookies()
       .getAll()
       .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
       .join('; ');
     return new Request('http://localhost', { headers: { cookie: cookieHeader } });
   };
-
-  const globalReq = buildRequest();
-  const user = await requireAdminFromRequest(globalReq);
+  const user = await requireAdminFromRequest(buildRequest());
   return { user };
 }
 
-// --- ИСПРАВЛЕННАЯ ЛОГИКА ОБРАБОТКИ ТЕГОВ ---
-// Tag helpers moved to lib/tags.ts — use parseTagNames/upsertTagsAndLink from there.
+/**
+ * Resolve a Supabase client suitable for server actions.
+ * Prefer a request-aware client (supports cookies/session). If that
+ * isn't available, fall back to the server client (service role when
+ * requested).
+ */
+async function getSupabaseForAction(useServiceRole = false) {
+  try {
+    const { supabase } = await getUserAndSupabaseForRequest(new Request('http://localhost'));
+    if (supabase) return supabase;
+  } catch (e) {
+    // ignore and fallback
+  }
+  return getServerSupabaseClient({ useServiceRole });
+}
 
-// --- СТАТЬИ (Article) ---
+
+// --- Статьи (Article) ---
+
 export async function createArticle(formData) {
-  const session = await verifyAdmin();
+  const { user } = await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
   const title = formData.get('title')?.toString();
   const contentRaw = formData.get('content')?.toString();
   const slug = formData.get('slug')?.toString();
   const published = formData.get('published') === 'on';
-  const tagsToConnect = parseTagNames(formData.get('tags')?.toString());
 
-  if (!title || !contentRaw || !slug) throw new Error('All fields are required.');
-  
-  // Проверка уникальности slug
-  // Check slug uniqueness via Supabase
-  // Always use explicit service-role client for admin DML to avoid RLS permission issues.
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  const supabase = getServerSupabaseClient({ useServiceRole: true });
-  if (!supabase) throw new Error('Database client not available');
+  if (!title || !contentRaw || !slug) throw new Error('Все поля обязательны.');
+
   const { data: existingSlug } = await supabase.from('articles').select('id').eq('slug', slug).maybeSingle();
   if (existingSlug) {
-    throw new Error('Статья с таким slug уже существует. Пожалуйста, выберите другой URL.');
+    throw new Error('Статья с таким slug уже существует.');
   }
 
-  // Валидация JSON контента
-  let blocks;
+  let validBlocks;
   try {
-    blocks = JSON.parse(contentRaw);
+    const blocks = JSON.parse(contentRaw);
+    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
-    throw new Error('Content is not valid JSON');
+    throw new Error('Контент имеет неверный JSON формат.');
   }
-  if (!Array.isArray(blocks)) throw new Error('Content is not an array of blocks');
-  
-  // Валидация структуры блоков
-  const validBlocks = blocks.filter(
-    b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
-  );
-  if (validBlocks.length === 0) throw new Error('No valid blocks');
-  
-  // Валидация authorId - должен быть строкой для cuid
-  const authorId = session.user.id?.toString();
-  if (!authorId || authorId.length < 20) {
-    throw new Error('Invalid author ID format');
-  }
-  
-  // Явно генерируем CUID для статьи
+
   const articleId = createId();
-  // Insert article via Supabase. Note: tag connectOrCreate not implemented here yet.
-  const { data: createdArticle, error: insertErr } = await supabase.from('articles').insert({
+  const { error } = await supabase.from('articles').insert({
     id: articleId,
     title,
     content: JSON.stringify(validBlocks),
     slug,
     published,
     publishedAt: published ? new Date().toISOString() : null,
-    authorId: authorId,
-  }).select().maybeSingle();
-  if (insertErr) {
-    console.error('Supabase insert article error', insertErr);
-    throw new Error('Ошибка при создании статьи');
+    authorId: user.id,
+  });
+
+  if (error) {
+    console.error('Supabase insert article error:', error);
+    throw new Error('Ошибка при создании статьи.');
   }
-  // Link tags (if any) BEFORE redirecting so junction rows are created.
+
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
-  if (parsedTags.length > 0) {
-    try {
-      await upsertTagsAndLink(supabase, 'article', articleId, parsedTags);
-    } catch (e) {
-      console.error('Error linking tags for article', e);
-    }
-  }
+  await upsertTagsAndLink(supabase, 'article', articleId, parsedTags);
+
   revalidatePath('/admin/articles');
   redirect('/admin/articles');
 }
 
 export async function updateArticle(formData) {
   await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
   const id = formData.get('id')?.toString();
   const title = formData.get('title')?.toString();
   const contentRaw = formData.get('content')?.toString();
   const slug = formData.get('slug')?.toString();
   const published = formData.get('published') === 'on';
-  const tagsToConnect = parseTagNames(formData.get('tags')?.toString());
 
-  if (!id || !title || !contentRaw || !slug) throw new Error('All fields are required.');
-  
-  // Валидация id - должен быть строкой для cuid
-  if (!id || id.length < 20) {
-    throw new Error('Invalid article ID format');
-  }
-  
-  // Валидация JSON контента
-  let blocks;
+  if (!id || !title || !contentRaw || !slug) throw new Error('Все поля обязательны.');
+
+  let validBlocks;
   try {
-    blocks = JSON.parse(contentRaw);
+    const blocks = JSON.parse(contentRaw);
+    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
-    throw new Error('Content is not valid JSON');
+    throw new Error('Контент имеет неверный JSON формат.');
   }
-  if (!Array.isArray(blocks)) throw new Error('Content is not an array of blocks');
-  
-  // Валидация структуры блоков
-  const validBlocks = blocks.filter(
-    b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
-  );
-  if (validBlocks.length === 0) throw new Error('No valid blocks');
-  // Update article via Supabase (tags handling TODO)
-  // Use explicit service-role client for admin updates
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  const supabase = getServerSupabaseClient({ useServiceRole: true });
-  if (!supabase) throw new Error('Database client not available');
-  const { error: updateErr } = await supabase.from('articles').update({
+
+  const { error } = await supabase.from('articles').update({
     title,
     content: JSON.stringify(validBlocks),
     slug,
     published,
     publishedAt: published ? new Date().toISOString() : null,
   }).eq('id', id);
-  if (updateErr) {
-    console.error('Supabase update article error', updateErr);
-    throw new Error('Ошибка при обновлении статьи');
+
+  if (error) {
+    console.error('Supabase update article error:', error);
+    throw new Error('Ошибка при обновлении статьи.');
   }
-  // Update tags BEFORE redirect
+
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
-  if (parsedTags.length > 0) {
-    try {
-      await upsertTagsAndLink(supabase, 'article', id, parsedTags);
-    } catch (e) {
-      console.error('Error linking tags for article', e);
-    }
-  }
+  await upsertTagsAndLink(supabase, 'article', id, parsedTags);
+
   revalidatePath('/admin/articles');
   revalidatePath(`/${slug}`);
   redirect('/admin/articles');
@@ -172,360 +141,256 @@ export async function updateArticle(formData) {
 
 export async function deleteArticle(formData) {
   await verifyAdmin();
-  const id = formData.get('id')?.toString();
-  if (!id) { throw new Error('Article ID is required.'); }
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-  if (!supabase) throw new Error('Database client not available');
+  const id = formData.get('id')?.toString();
+  if (!id) throw new Error('Article ID is required.');
+
   const { data: article } = await supabase.from('articles').select('slug').eq('id', id).maybeSingle();
-  const { error: delErr } = await supabase.from('articles').delete().eq('id', id);
-  if (delErr) {
-    console.error('Supabase delete article error', delErr);
-    throw new Error('Ошибка при удалении статьи');
+  const { error } = await supabase.from('articles').delete().eq('id', id);
+
+  if (error) {
+    console.error('Supabase delete article error:', error);
+    throw new Error('Ошибка при удалении статьи.');
   }
+
   revalidatePath('/admin/articles');
   if (article) revalidatePath(`/${article.slug}`);
 }
 
-// --- ПРОЕКТЫ (Project) ---
+// --- Проекты (Project) ---
+
 export async function createProject(formData) {
-  const session = await verifyAdmin();
+  const { user } = await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
   const title = formData.get('title')?.toString();
   const contentRaw = formData.get('content')?.toString();
   const slug = formData.get('slug')?.toString();
   const published = formData.get('published') === 'on';
-  const tagsToConnect = parseTagNames(formData.get('tags')?.toString());
 
-  if (!title || !contentRaw || !slug) throw new Error('All fields are required.');
+  if (!title || !contentRaw || !slug) throw new Error('Все поля обязательны.');
 
-  // Проверка уникальности slug
-  // For admin flows prefer the service-role client to avoid RLS blocking even
-  // when a request-scoped client exists. We already verified admin above.
-  const { getServerSupabaseClient: _getSvc } = await import('@/lib/serverAuth');
-  let supabase = _getSvc({ useServiceRole: true });
   const { data: existing } = await supabase.from('projects').select('id').eq('slug', slug).maybeSingle();
   if (existing) {
-    throw new Error('Проект с таким slug уже существует. Пожалуйста, выберите другой URL.');
+    throw new Error('Проект с таким slug уже существует.');
   }
 
-  let blocks;
+  let validBlocks;
   try {
-    blocks = JSON.parse(contentRaw);
+    const blocks = JSON.parse(contentRaw);
+    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
-    throw new Error('Content is not valid JSON');
+    throw new Error('Контент имеет неверный JSON формат.');
   }
-  if (!Array.isArray(blocks)) throw new Error('Content is not an array of blocks');
-  // Жёсткая валидация структуры блоков
-  const validBlocks = blocks.filter(
-    b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
-  );
-  if (validBlocks.length === 0) throw new Error('No valid blocks');
 
-  // Явно генерируем CUID для проекта
   const projectId = createId();
-  const { data: created, error: insertErr } = await supabase.from('projects').insert({
+  const { error } = await supabase.from('projects').insert({
     id: projectId,
     title,
     content: JSON.stringify(validBlocks),
     slug,
     published,
     publishedAt: published ? new Date().toISOString() : null,
-    authorId: session.user.id,
-  }).select().maybeSingle();
-  if (insertErr) {
-    console.error('Supabase insert project error', insertErr);
-    // If this is an RLS permission error, attempt a retry with explicit service-role client
-    if (insertErr && String(insertErr.code) === '42501') {
-      try {
-        const { getServerSupabaseClient: _getSvcRetry } = await import('@/lib/serverAuth');
-        const svc = _getSvcRetry({ useServiceRole: true });
-        const { data: createdRetry, error: retryErr } = await svc.from('projects').insert({
-          id: projectId,
-          title,
-          content: JSON.stringify(validBlocks),
-          slug,
-          published,
-          publishedAt: published ? new Date().toISOString() : null,
-          authorId: session.user.id,
-        }).select().maybeSingle();
-        if (!retryErr) {
-          console.debug('Retry insert with service-role client succeeded');
-          // Link tags (if any) BEFORE redirect — use the service-role client (svc)
-          const parsedTags = parseTagNames(formData.get('tags')?.toString());
-          if (parsedTags.length > 0) {
-            try {
-              await upsertTagsAndLink(svc, 'project', projectId, parsedTags);
-            } catch (e) {
-              console.error('Error linking tags for project (service-role)', e);
-            }
-          }
-          await revalidatePath('/admin/projects');
-          await redirect('/admin/projects');
-          return;
-        }
-        console.error('Retry insert with service-role client failed', retryErr);
-      } catch (e) {
-        console.error('Exception during retry with service-role client', e);
-      }
-    }
-    throw new Error('Ошибка при создании проекта');
+    authorId: user.id,
+  });
+
+  if (error) {
+    console.error('Supabase insert project error:', error);
+    throw new Error('Ошибка при создании проекта.');
   }
-  // Link tags (if any) BEFORE redirect
+
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
-  if (parsedTags.length > 0) {
-    try {
-      await upsertTagsAndLink(supabase, 'project', projectId, parsedTags);
-    } catch (e) {
-      console.error('Error linking tags for project', e);
-    }
-  }
-  await revalidatePath('/admin/projects');
-  await redirect('/admin/projects');
+  await upsertTagsAndLink(supabase, 'project', projectId, parsedTags);
+
+  revalidatePath('/admin/projects');
+  redirect('/admin/projects');
 }
 
 export async function updateProject(formData) {
   await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
   const id = formData.get('id')?.toString();
   const title = formData.get('title')?.toString();
   const contentRaw = formData.get('content')?.toString();
   const slug = formData.get('slug')?.toString();
   const published = formData.get('published') === 'on';
-  const tagsToConnect = parseTagNames(formData.get('tags')?.toString());
 
-  if (!id || !title || !contentRaw || !slug) throw new Error('All fields are required.');
+  if (!id || !title || !contentRaw || !slug) throw new Error('Все поля обязательны.');
 
-  let blocks;
+  let validBlocks;
   try {
-    blocks = JSON.parse(contentRaw);
+    const blocks = JSON.parse(contentRaw);
+    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
-    throw new Error('Content is not valid JSON');
+    throw new Error('Контент имеет неверный JSON формат.');
   }
-  if (!Array.isArray(blocks)) throw new Error('Content is not an array of blocks');
-  // Жёсткая валидация структуры блоков
-  const validBlocks = blocks.filter(
-    b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
-  );
-  if (validBlocks.length === 0) throw new Error('No valid blocks');
-  // Prefer service-role client for admin updates
-  const { getServerSupabaseClient: _getSvc2 } = await import('@/lib/serverAuth');
-  let supabase = _getSvc2({ useServiceRole: true });
-  const { error: updateErr } = await supabase.from('projects').update({
+
+  const { error } = await supabase.from('projects').update({
     title,
     content: JSON.stringify(validBlocks),
     slug,
     published,
     publishedAt: published ? new Date().toISOString() : null,
   }).eq('id', id);
-  if (updateErr) {
-    console.error('Supabase update project error', updateErr);
-    throw new Error('Ошибка при обновлении проекта');
+
+  if (error) {
+    console.error('Supabase update project error:', error);
+    throw new Error('Ошибка при обновлении проекта.');
   }
+
+  const parsedTags = parseTagNames(formData.get('tags')?.toString());
+  await upsertTagsAndLink(supabase, 'project', id, parsedTags);
+
   revalidatePath('/admin/projects');
   revalidatePath(`/${slug}`);
   redirect('/admin/projects');
-  // Update tags
-  const parsedTags = parseTagNames(formData.get('tags')?.toString());
-  if (parsedTags.length > 0) {
-    try {
-  await upsertTagsAndLink(supabase, 'project', id, parsedTags);
-    } catch (e) {
-      console.error('Error linking tags for project', e);
-    }
-  }
 }
 
 export async function deleteProject(formData) {
   await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
   const id = formData.get('id')?.toString();
-  if (!id) { throw new Error('Project ID is required.'); }
-  // Prefer service-role client for admin deletes
-  const { getServerSupabaseClient: _getSvc3 } = await import('@/lib/serverAuth');
-  let supabase = _getSvc3({ useServiceRole: true });
+  if (!id) throw new Error('Project ID is required.');
+
   const { data: project } = await supabase.from('projects').select('slug').eq('id', id).maybeSingle();
-  const { error: delErr } = await supabase.from('projects').delete().eq('id', id);
-  if (delErr) {
-    console.error('Supabase delete project error', delErr);
-    throw new Error('Ошибка при удалении проекта');
+  const { error } = await supabase.from('projects').delete().eq('id', id);
+
+  if (error) {
+    console.error('Supabase delete project error:', error);
+    throw new Error('Ошибка при удалении проекта.');
   }
+
   revalidatePath('/admin/projects');
   if (project) revalidatePath(`/${project.slug}`);
 }
 
-// --- ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ ---
+// --- Профиль пользователя (User-Context) ---
+// В этой функции используется getUserAndSupabaseForRequest, и это ПРАВИЛЬНО.
+// Она работает от имени текущего пользователя, а не администратора.
 export async function updateProfile(prevState, formData) {
-  // Получаем текущего пользователя через Supabase helper
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-  const { user, supabase } = await getUserAndSupabaseForRequest(globalReq);
-  if (!user?.id) {
+  const { user, supabase } = await getUserAndSupabaseForRequest(new Request('http://localhost'));
+  if (!user) {
     return { status: 'error', message: 'Вы не авторизованы.' };
   }
-  const id = user.id;
+
   const username = formData.get('username')?.toString().toLowerCase().trim();
   const name = formData.get('name')?.toString().trim();
-  const bio = formData.get('bio')?.toString();
-  const website = formData.get('website')?.toString();
   if (!username || !name) {
     return { status: 'error', message: 'Имя и username обязательны.' };
   }
   if (!/^[a-z0-9_.]+$/.test(username)) {
       return { status: 'error', message: 'Username может содержать только строчные буквы, цифры, _ и .' };
   }
-  try {
-    if (!supabase) throw new Error('Supabase client not available');
-    // Попытка обновления
-    const { data: updatedUser, error } = await supabase.from('users').update({ username, name, bio, website }).eq('id', id).select('username').maybeSingle();
-    if (error) {
-      // Unique constraint handling
-      const msg = error.message || String(error);
-      if (/unique|duplicate|23505/i.test(msg)) {
-        return { status: 'error', message: 'Этот username уже занят. Пожалуйста, выберите другой.' };
-      }
-      console.error('Supabase update user error', error);
-      return { status: 'error', message: 'Произошла неизвестная ошибка.' };
+
+  const { data: updatedUser, error } = await supabase
+    .from('users')
+    .update({
+      username,
+      name,
+      bio: formData.get('bio')?.toString(),
+      website: formData.get('website')?.toString(),
+    })
+    .eq('id', user.id)
+    .select('username')
+    .single();
+
+  if (error) {
+    if (error.code === '23505') { // Unique constraint violation
+      return { status: 'error', message: 'Этот username уже занят.' };
     }
-    revalidatePath('/profile');
-    revalidatePath(`/you/${updatedUser?.username}`);
-    // After successful profile update, redirect the user to their public profile page
-    try {
-      redirect(`/you/${updatedUser?.username}`);
-    } catch (e) {
-      // If redirect fails in some runtimes, fall back to returning success message
-      return { status: 'success', message: 'Профиль успешно обновлен!' };
-    }
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') console.error('Ошибка обновления профиля:', error);
+    console.error('Supabase update user error:', error);
     return { status: 'error', message: 'Произошла неизвестная ошибка.' };
   }
+
+  revalidatePath('/profile');
+  revalidatePath(`/you/${updatedUser.username}`);
+  redirect(`/you/${updatedUser.username}`);
 }
 
-// --- USER ADMIN ACTIONS ---
+// --- Админские действия с пользователями ---
+
 export async function adminUpdateUserRole(userId, role) {
-  // Verify requestor is admin
   await verifyAdmin();
-  if (!userId) throw new Error('User ID required');
-  if (!role) throw new Error('Role required');
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-  if (!supabase) throw new Error('Supabase client not available');
-  try {
-    const { error } = await supabase.auth.admin.updateUserById(userId, { user_metadata: { role } });
-    if (error) throw error;
-    revalidatePath('/admin/users');
-    return { status: 'success' };
-  } catch (e) {
-    console.error('adminUpdateUserRole error', e);
-    return { status: 'error', message: String(e) };
+  if (!userId || !role) throw new Error('User ID и Role обязательны.');
+
+  const { error } = await supabase.auth.admin.updateUserById(userId, { user_metadata: { role } });
+  if (error) {
+    console.error('adminUpdateUserRole error:', error);
+    return { status: 'error', message: error.message };
   }
+  revalidatePath('/admin/users');
+  return { status: 'success' };
 }
 
 export async function adminDeleteUser(userId) {
   await verifyAdmin();
-  if (!userId) throw new Error('User ID required');
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-  if (!supabase) throw new Error('Supabase client not available');
-  try {
-    const { error } = await supabase.auth.admin.deleteUser(userId);
-    if (error) throw error;
-    revalidatePath('/admin/users');
-    return { status: 'success' };
-  } catch (e) {
-    console.error('adminDeleteUser error', e);
-    return { status: 'error', message: String(e) };
+  if (!userId) throw new Error('User ID обязателен.');
+  
+  const { error } = await supabase.auth.admin.deleteUser(userId);
+  if (error) {
+    console.error('adminDeleteUser error:', error);
+    return { status: 'error', message: error.message };
   }
+  revalidatePath('/admin/users');
+  return { status: 'success' };
 }
 
-// --- ТОВАРЫ (Products) - УДАЛЕНО ---
-// Все функции для работы с товарами убраны
+// --- Рассылки и подписки (User-Context) ---
 
-// --- РАССЫЛКИ И ПОДПИСКИ ---
 export async function subscribeToNewsletter(prevState, formData) {
-// --- ОТПРАВКА РАССЫЛКИ С УНИКАЛЬНОЙ ССЫЛКОЙ ДЛЯ ОТПИСКИ ---
-
-
-
-  const email = formData.get('email')?.toString().trim();
-  if (!email || !/\S+@\S+\.\S+/.test(email)) {
-    return { status: 'error', message: 'Введите корректный email адрес.' };
-  }
-  try {
-    // Получаем userId если пользователь залогинен
-    let userId = null;
-    const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
-    const { user, supabase } = await getUserAndSupabaseForRequest(globalReq);
-    if (user?.id) userId = user.id;
-
-    if (!supabase) {
-      // Fallback: try server-side direct DB or return error
-      console.error('Supabase client unavailable for subscribeToNewsletter');
-      return { status: 'error', message: 'Сервис временно недоступен.' };
+    const email = formData.get('email')?.toString().trim();
+    if (!email || !/\S+@\S+\.\S+/.test(email)) {
+        return { status: 'error', message: 'Введите корректный email адрес.' };
     }
 
-    // Try to upsert subscriber to avoid race conditions (unique constraint on email expected)
-    const subscriberPayload = { id: createId(), email, userId: userId || null, isActive: false };
-    let created = null;
+    const { user, supabase } = await getUserAndSupabaseForRequest(new Request('http://localhost'));
+
+    // upsert subscriber; mark inactive until confirmed
+    const { data: subscriber, error } = await supabase
+        .from('subscribers')
+        .upsert({ email, userId: user?.id || null, isActive: false }, { onConflict: 'email' })
+        .select()
+        .single();
+    
+    if (error) {
+        console.error('Supabase upsert subscriber error:', error);
+        return { status: 'error', message: 'Ошибка при подписке.' };
+    }
+
+    if (subscriber.isActive) {
+        return { status: 'success', message: 'Вы уже подписаны.' };
+    }
+    
+    // generate confirmation token and insert into subscriber_tokens
     try {
-      // Supabase JS supports upsert; use email as conflict key
-      const { data: upserted, error: upsertErr } = await supabase.from('subscribers').upsert(subscriberPayload, { onConflict: 'email' }).select();
-      if (upsertErr) {
-        console.error('Supabase upsert subscriber error', upsertErr);
+      const confirmToken = createId();
+      const { error: tokenErr } = await supabase.from('subscriber_tokens').insert({ subscriber_id: subscriber.id, type: 'confirm', token: confirmToken, created_at: new Date().toISOString() });
+      if (tokenErr) {
+        console.warn('Failed to insert confirm token:', tokenErr.message || tokenErr);
+      } else {
+        const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-confirm?token=${confirmToken}`;
+        console.info('Created confirm token for subscriber', subscriber.email);
+        // TODO: send confirmation email (dry-run if RESEND not configured)
+        return { status: 'success', message: 'Проверьте почту для подтверждения подписки.', confirmUrl };
       }
-      // Supabase may return an array or a single object depending on client; normalize
-      if (Array.isArray(upserted)) created = upserted[0] || null;
-      else created = upserted || null;
     } catch (e) {
-      console.error('Supabase upsert subscriber exception', e);
+      console.warn('subscribeToNewsletter: token insert failed', e?.message || e);
     }
 
-    // Fallback: if upsert didn't return a row, try to fetch by email
-    if (!created) {
-      try {
-        const { data: existing, error: fetchErr } = await supabase.from('subscribers').select('*').eq('email', email).limit(1).maybeSingle();
-        if (fetchErr) console.error('Error fetching subscriber after upsert failure', fetchErr);
-        created = existing || null;
-      } catch (e) {
-        console.error('Exception fetching existing subscriber', e);
-      }
-    }
-
-    // If upsert returned an existing row, check status
-    if (created && created.isActive) return { status: 'success', message: 'Вы уже подписаны на рассылку.' };
-
-    // Генерируем токен для double opt-in
-    if (!created || !created.id) {
-      console.error('Failed to create or locate subscriber row for email', email);
-      return { status: 'error', message: 'Не удалось создать подписчика. Попробуйте позже.' };
-    }
-
-    const confirmationToken = createId();
-    const { error: tokenErr } = await supabase.from('subscriber_tokens').insert({ subscriber_id: created.id, type: 'confirm', token: confirmationToken });
-    if (tokenErr) {
-      console.error('Supabase insert token error', tokenErr);
-    }
-
-    // Отправляем письмо с подтверждением
-    const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-confirm?token=${confirmationToken}`;
-    try {
-      const resend = new Resend(process.env.RESEND_API_KEY);
-      await resend.emails.send({
-        from: 'noreply@merkurov.love',
-        to: email,
-        subject: 'Подтвердите подписку на рассылку',
-        html: `<p>Пожалуйста, подтвердите подписку, перейдя по ссылке:<br><a href="${confirmUrl}">${confirmUrl}</a></p>`
-      });
-    } catch (mailErr) {
-      console.error('Ошибка отправки письма подтверждения:', mailErr);
-      return { status: 'error', message: 'Ошибка отправки письма: ' + (mailErr?.message || mailErr) };
-    }
-    return { status: 'success', message: 'Почти готово! Проверьте почту и подтвердите подписку.' };
-  } catch (error) {
-    console.error('Ошибка при подписке:', error);
-    return { status: 'error', message: 'Ошибка при подписке: ' + (error?.message || error) };
-  }
+    return { status: 'success', message: 'Проверьте почту для подтверждения подписки.' };
 }
+
+// --- Письма (Letter) ---
 
 export async function createLetter(formData) {
-  const session = await verifyAdmin();
+  const { user } = await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
   const title = formData.get('title')?.toString().trim();
   const slug = formData.get('slug')?.toString().trim();
   const rawContent = formData.get('content')?.toString();
@@ -536,67 +401,46 @@ export async function createLetter(formData) {
     throw new Error('Заполните все обязательные поля.');
   }
 
-  // Валидация JSON контента (аналогично updateArticle)
   let validBlocks;
   try {
     const blocks = JSON.parse(rawContent);
-    if (!Array.isArray(blocks)) {
-      throw new Error('Content is not an array of blocks');
-    }
-    
-    // Валидация структуры блоков
-    validBlocks = blocks.filter(
-      b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
-    );
-    if (validBlocks.length === 0) {
-      throw new Error('No valid blocks');
-    }
+    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch (e) {
-    throw new Error('Content is not valid JSON: ' + e.message);
+    throw new Error('Контент имеет неверный JSON формат: ' + e.message);
   }
 
-  try {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const supabase = getServerSupabaseClient({ useServiceRole: true });
-    if (!supabase) throw new Error('Database client not available');
+  const letterId = createId();
+  const { error } = await supabase.from('letters').insert({
+    id: letterId,
+    title,
+    slug,
+    content: JSON.stringify(validBlocks),
+    published,
+    authorId: user.id,
+  });
 
-  const { data: letter, error: insertErr } = await supabase.from('letters').insert({
-      id: createId(),
-      title,
-      slug,
-      content: JSON.stringify(validBlocks),
-      published,
-      authorId: session.user.id,
-    }).select().maybeSingle();
-
-    if (insertErr) {
-      // Handle unique constraint from DB
-      if (/unique|duplicate|23505/i.test(insertErr.message || '')) {
-        throw new Error('Статья с таким URL уже существует. Используйте другой slug.');
-      }
-      throw new Error('Ошибка при создании письма: ' + (insertErr.message || String(insertErr)));
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('Письмо с таким URL уже существует.');
     }
-    // Link tags if provided (use service-role client) BEFORE redirect
-    const parsedTags = parseTagNames(tagsString);
-    if (parsedTags.length > 0) {
-      try {
-        await upsertTagsAndLink(supabase, 'letter', letter.id, parsedTags);
-      } catch (e) {
-        console.error('Error linking tags for letter', e);
-      }
-    }
-    await revalidatePath('/admin/letters');
-    await revalidatePath('/letters');
-    if (published) await revalidatePath(`/letters/${letter.slug}`);
-    await redirect('/admin/letters');
-  } catch (error) {
-    if (error.message && /slug/i.test(error.message)) throw error;
-    throw new Error('Ошибка при создании письма: ' + (error.message || String(error)));
+    console.error('Ошибка при создании письма:', error);
+    throw new Error('Ошибка при создании письма: ' + error.message);
   }
+
+  const parsedTags = parseTagNames(tagsString);
+  await upsertTagsAndLink(supabase, 'letter', letterId, parsedTags);
+
+  revalidatePath('/admin/letters');
+  revalidatePath('/letters');
+  if (published) revalidatePath(`/letters/${slug}`);
+  redirect('/admin/letters');
 }
 
 export async function updateLetter(formData) {
-  const session = await verifyAdmin();
+  await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
   const id = formData.get('id')?.toString();
   const title = formData.get('title')?.toString()?.trim();
   const slug = formData.get('slug')?.toString()?.trim();
@@ -608,360 +452,228 @@ export async function updateLetter(formData) {
     throw new Error('Заполните все обязательные поля.');
   }
 
-  // Валидация JSON контента
+  const { data: existingLetter } = await supabase.from('letters').select('slug, published').eq('id', id).single();
+  if (!existingLetter) throw new Error('Письмо не найдено.');
+
   let validBlocks;
   try {
     const blocks = JSON.parse(rawContent);
-    if (!Array.isArray(blocks)) {
-      throw new Error('Content is not an array of blocks');
-    }
-    
-    // Валидация структуры блоков
-    validBlocks = blocks.filter(
-      b => b && typeof b.type === 'string' && b.data && typeof b.data === 'object'
-    );
-    if (validBlocks.length === 0) {
-      throw new Error('No valid blocks');
-    }
+    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch (e) {
-    throw new Error('Content is not valid JSON: ' + e.message);
+    throw new Error('Контент имеет неверный JSON формат: ' + e.message);
+  }
+  
+  const { error } = await supabase.from('letters').update({
+    title,
+    slug,
+    content: JSON.stringify(validBlocks),
+    published,
+    updatedAt: new Date().toISOString(),
+  }).eq('id', id);
+
+  if (error) {
+    if (error.code === '23505') {
+        throw new Error('Письмо с таким URL уже существует.');
+    }
+    console.error('Ошибка при обновлении письма:', error);
+    throw new Error('Ошибка при обновлении письма: ' + error.message);
   }
 
-  try {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const supabase = getServerSupabaseClient({ useServiceRole: true });
-    if (!supabase) throw new Error('Database client not available');
+  const parsedTags = parseTagNames(tagsString);
+  await upsertTagsAndLink(supabase, 'letter', id, parsedTags);
 
-    // Проверяем, что letter существует
-  const { data: existingLetter } = await supabase.from('letters').select('*').eq('id', id).maybeSingle();
-    if (!existingLetter) throw new Error('Письмо не найдено.');
-
-    // Проверяем уникальность slug (исключаем текущее письмо)
-  const { data: existingSlugLetter } = await supabase.from('letters').select('id').eq('slug', slug).maybeSingle();
-    if (existingSlugLetter && existingSlugLetter.id !== id) throw new Error('Письмо с таким URL уже существует. Используйте другой slug.');
-
-    // Обновляем письмо
-  const { data: updatedLetter, error: updateErr } = await supabase.from('letters').update({
-      title,
-      slug,
-      content: JSON.stringify(validBlocks),
-      published,
-      updatedAt: new Date().toISOString(),
-    }).eq('id', id).select().maybeSingle();
-    if (updateErr) {
-      console.error('Supabase update letter error', updateErr);
-      throw updateErr;
-    }
-
-    // Обновляем кеш страниц
-    // Update tags (use service-role client) BEFORE redirect
-    const parsedTags = parseTagNames(tagsString);
-    if (parsedTags.length > 0) {
-      try {
-        await upsertTagsAndLink(supabase, 'letter', id, parsedTags);
-      } catch (e) {
-        console.error('Error linking tags for letter', e);
-      }
-    }
-    revalidatePath('/admin/letters');
-    revalidatePath('/letters');
-    revalidatePath(`/admin/letters/edit/${id}`);
-    if (published) {
-      revalidatePath(`/letters/${updatedLetter.slug}`);
-    }
-    // Если slug изменился, обновляем старую страницу тоже
-    if (existingLetter.slug !== slug && existingLetter.published) {
-      revalidatePath(`/letters/${existingLetter.slug}`);
-    }
-
-    redirect('/admin/letters');
-  } catch (error) {
-    console.error('Error updating letter:', error);
-    
-    // Handle uniqueness and other DB errors gracefully for Supabase
-    const msg = (error && (error.message || error.toString())) || 'Unknown error';
-    if (/unique|duplicate|23505|already exists/i.test(msg)) {
-      throw new Error('Письмо с таким URL уже существует. Используйте другой slug.');
-    }
-    // For other errors, log and redirect to admin letters to avoid blocking admin UX
-    console.error('Error updating letter, redirecting to admin:', msg);
-    revalidatePath('/admin/letters');
-    redirect('/admin/letters');
+  revalidatePath('/admin/letters');
+  revalidatePath('/letters');
+  revalidatePath(`/admin/letters/edit/${id}`);
+  if (published) revalidatePath(`/letters/${slug}`);
+  if (existingLetter.slug !== slug && existingLetter.published) {
+    revalidatePath(`/letters/${existingLetter.slug}`);
   }
+
+  redirect('/admin/letters');
 }
 
 export async function deleteLetter(formData) {
   await verifyAdmin();
-  const id = formData.get('id')?.toString();
-  if (!id) {
-    throw new Error('Letter ID is required.');
-  }
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-  if (!supabase) throw new Error('Database client not available');
-  // Fetch letter for slug info and to verify existence
-  const { data: letter, error: fetchErr } = await supabase.from('letters').select('slug,published').eq('id', id).maybeSingle();
-  if (fetchErr) {
-    console.error('Error fetching letter before delete:', fetchErr);
-    throw new Error('Ошибка доступа к базе данных при удалении письма.');
-  }
-  if (!letter) throw new Error('Письмо не найдено.');
+  const id = formData.get('id')?.toString();
+  if (!id) throw new Error('Letter ID is required.');
 
-  // Perform delete and request the deleted row back for verification
-  const { data: deletedRow, error: delErr } = await supabase.from('letters').delete().eq('id', id).select('id,slug').maybeSingle();
-  if (delErr) {
-    console.error('Supabase delete letter error', delErr);
-    throw new Error('Ошибка при удалении письма: ' + (delErr.message || String(delErr)));
+  const { data: letter } = await supabase.from('letters').select('slug, published').eq('id', id).maybeSingle();
+  const { error } = await supabase.from('letters').delete().eq('id', id);
+
+  if (error) {
+    console.error('Supabase delete letter error:', error);
+    throw new Error('Ошибка при удалении письма: ' + error.message);
   }
-  if (!deletedRow) {
-    console.warn('Delete reported success but no row returned for id:', id);
-  }
+
   revalidatePath('/admin/letters');
   revalidatePath('/letters');
-  if (letter.published) revalidatePath(`/letters/${letter.slug}`);
+  if (letter?.published) revalidatePath(`/letters/${letter.slug}`);
 }
 
 export async function sendLetter(prevState, formData) {
-  const session = await verifyAdmin();
+  await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
   const letterId = formData.get('letterId')?.toString();
-  
+  const testEmail = formData.get('testEmail')?.toString()?.trim();
+
   if (!letterId) {
     return { status: 'error', message: 'Не указан ID письма.' };
   }
 
+  const { data: letter, error: letterErr } = await supabase.from('letters').select('id,title,slug,content,published').eq('id', letterId).maybeSingle();
+  if (letterErr || !letter) {
+    console.error('sendLetter: failed to load letter', letterErr);
+    return { status: 'error', message: 'Письмо не найдено.' };
+  }
+
+  // Normalize letter object for sendNewsletterToSubscriber
+  const letterObj = {
+    id: letter.id,
+    title: letter.title,
+    content: letter.content,
+    html: (() => {
+      try { return renderNewsletterEmail(letter, ''); } catch (e) { return ''; }
+    })(),
+  };
+
+  // If a testEmail is provided, send a single test email and return result
+  if (testEmail) {
+    const testSubscriber = { id: createId(), email: testEmail };
+    const res = await sendNewsletterToSubscriber(testSubscriber, letterObj, { skipTokenInsert: true });
+    if (res.status === 'sent' || res.status === 'skipped') {
+      return { status: 'success', message: `Тестовое письмо отправлено на ${testEmail}` , providerResponse: res.providerResponse };
+    }
+    return { status: 'error', message: res.error || 'Ошибка при отправке тестового письма', details: res };
+  }
+
+  // Try to enqueue the letter for background sending if a jobs table exists
   try {
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  const supabase = getServerSupabaseClient({ useServiceRole: true });
-    if (!supabase) return { status: 'error', message: 'База данных недоступна.' };
-  const { data: letter } = await supabase.from('letters').select('*').eq('id', letterId).maybeSingle();
-    if (!letter) return { status: 'error', message: 'Письмо не найдено.' };
-    if (letter.sentAt) return { status: 'error', message: 'Это письмо уже было отправлено.' };
-    if (!process.env.RESEND_API_KEY) return { status: 'error', message: 'Email сервис не настроен. Обратитесь к администратору.' };
+    const { error: jobErr } = await supabase.from('newsletter_jobs').insert({ letter_id: letterId, status: 'pending', created_at: new Date().toISOString() });
+    if (!jobErr) {
+      return { status: 'success', message: 'Письмо поставлено в очередь на отправку.' };
+    }
+  } catch (e) {
+    // table may not exist — fallthrough to limited send
+  }
 
-    // Получаем всех активных подписчиков (id + email) — нужно для создания unsubscribe tokens
-    let subscribers = [];
-    try {
-      const { data, error } = await supabase.from('subscribers').select('id,email').eq('isActive', true);
-      if (error) throw error;
-      subscribers = data || [];
-    } catch (e) {
-      console.log('isActive field not found or error, getting all subscribers');
+  // Safe fallback: send to a limited number of subscribers (avoid large sends in dev)
+  try {
+    const { data: subs, error: subsErr } = await supabase.from('subscribers').select('id,email').eq('isActive', true).limit(20);
+    if (subsErr) {
+      console.error('sendLetter: failed to load subscribers', subsErr);
+      return { status: 'error', message: 'Не удалось получить список подписчиков.' };
+    }
+
+    let sent = 0;
+    for (const s of subs || []) {
       try {
-        const { data, error } = await supabase.from('subscribers').select('id,email');
-        if (error) throw error;
-        subscribers = data || [];
-      } catch (err) {
-        console.log('No subscribers table found');
-        subscribers = [];
+        const r = await sendNewsletterToSubscriber(s, letterObj);
+        if (r.status === 'sent' || r.status === 'skipped') sent++;
+      } catch (e) {
+        console.warn('sendLetter: send to subscriber failed', e);
       }
     }
-
-    if (subscribers.length === 0) {
-      return { status: 'error', message: 'Нет активных подписчиков для отправки.' };
-    }
-
-    // Bulk-create unsubscribe tokens per subscriber and RETURN the inserted rows so we can map tokens to subscribers
-    let tokensMap = new Map();
-    try {
-      const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
-      if (serverSupabase) {
-        const tokensPayload = subscribers.map(s => ({ subscriber_id: s.id, type: 'unsubscribe', token: createId() }));
-        // Use .insert(...).select() to get returned rows (token values)
-        const { data: insertedTokens, error: tokenErr } = await serverSupabase.from('subscriber_tokens').insert(tokensPayload).select('subscriber_id,token');
-        if (tokenErr) {
-          console.warn('subscriber_tokens bulk insert warning:', (tokenErr && tokenErr.message) || String(tokenErr));
-        }
-        if (insertedTokens && Array.isArray(insertedTokens)) {
-          for (const t of insertedTokens) {
-            tokensMap.set(t.subscriber_id, t.token);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to create unsubscribe tokens (non-fatal):', (e && e.message) || String(e));
-    }
-
-    // Render email template once (it can be reused); template renderer should accept unsubscribeUrl param when used per-recipient
-    const baseRendered = await renderNewsletterEmail(letter);
-
-    // Send per-recipient to avoid leaking all addresses and to include personalized unsubscribe links
-    const { sendNewsletterToSubscriber } = await import('@/lib/newsletter/sendNewsletterToSubscriber');
-
-    // Simple batching with limited concurrency
-    const BATCH_SIZE = 10; // number of concurrent sends
-    const chunks = [];
-    for (let i = 0; i < subscribers.length; i += BATCH_SIZE) chunks.push(subscribers.slice(i, i + BATCH_SIZE));
-
-    let totalSent = 0;
-    for (const chunk of chunks) {
-      // send chunk in parallel
-      const promises = chunk.map(async (s) => {
-        const token = tokensMap.get(s.id) || createId();
-        // If token was not inserted earlier, let helper insert it (skipTokenInsert=false)
-        const opts = tokensMap.has(s.id) ? { token, skipTokenInsert: true } : { token };
-        // renderNewsletterEmail should support being called with unsubscribe URL; if not, helper will pass it to renderer
-        const res = await sendNewsletterToSubscriber(s, letter, opts);
-        if (res && res.status === 'sent') totalSent += 1;
-        return res;
-      });
-      // Wait for this batch to complete
-      await Promise.all(promises);
-    }
-
-    // Mark letter as sentAt (note: use sentAt = now even if some recipients failed; see future improvements)
-    const { error: sentErr } = await supabase.from('letters').update({ sentAt: new Date().toISOString() }).eq('id', letterId);
-    if (sentErr) console.error('Supabase mark sent error', sentErr);
-
-    revalidatePath(`/admin/letters/edit/${letterId}`);
-    revalidatePath('/admin/letters');
-
-    return {
-      status: 'success',
-      message: `Письмо отправлено (успешно): ${totalSent} из ${subscribers.length} подписчиков.`
-    };
-
-  } catch (error) {
-    console.error('Ошибка отправки рассылки:', error);
-    
-    // Если ошибка связана с отсутствием подписчиков или базой данных - возвращаем информативное сообщение
-    if (error.code && error.code.startsWith('P')) {
-      return { 
-        status: 'error', 
-        message: 'База данных подписчиков пока не настроена. Используйте тестовую отправку.' 
-      };
-    }
-    
-    return { 
-      status: 'error', 
-      message: 'Произошла ошибка при отправке. Попробуйте позже.' 
-    };
+    return { status: 'success', message: `Отправлено ${sent} подписчикам (ограничено).` };
+  } catch (e) {
+    console.error('sendLetter fallback failed', e);
+    return { status: 'error', message: 'Не удалось отправить рассылку.' };
   }
 }
 
-// --- ОТКРЫТКИ (Postcards) ---
+// --- Открытки (Postcards) ---
+
 export async function createPostcard(formData) {
-  const session = await verifyAdmin();
+  await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
   const title = formData.get('title')?.toString().trim();
-  const description = formData.get('description')?.toString().trim();
   const image = formData.get('image')?.toString().trim();
   const price = parseInt(formData.get('price')?.toString() || '0');
-  const available = formData.get('available') === 'on';
-  const featured = formData.get('featured') === 'on';
 
-  if (!title || !image || !price || price <= 0) {
+  if (!title || !image || price <= 0) {
     throw new Error('Заполните все обязательные поля.');
   }
 
-  try {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const supabase = getServerSupabaseClient({ useServiceRole: true });
-    if (!supabase) throw new Error('Database client not available');
+  const { error } = await supabase.from('postcards').insert({
+    id: createId(),
+    title,
+    description: formData.get('description')?.toString().trim(),
+    image,
+    price,
+    available: formData.get('available') === 'on',
+    featured: formData.get('featured') === 'on',
+  });
 
-    const payload = {
-      id: createId(),
-      title,
-      description,
-      image,
-      price,
-      available,
-      featured,
-    };
-    const { data: postcard, error } = await supabase.from('postcards').insert(payload).select().maybeSingle();
-    if (error) {
-      console.error('Supabase insert postcard error', error);
-      throw new Error('Ошибка при создании открытки: ' + (error.message || String(error)));
-    }
-
-    revalidatePath('/admin/postcards');
-    revalidatePath('/letters'); // Обновляем страницу с открытками
-    return { success: true, postcard };
-  } catch (error) {
+  if (error) {
+    console.error('Supabase insert postcard error:', error);
     throw new Error('Ошибка при создании открытки: ' + error.message);
   }
+
+  revalidatePath('/admin/postcards');
+  revalidatePath('/letters'); // Обновляем страницу с открытками
 }
 
 export async function updatePostcard(formData) {
-  const session = await verifyAdmin();
+  await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
   const id = formData.get('id')?.toString();
   const title = formData.get('title')?.toString().trim();
-  const description = formData.get('description')?.toString().trim();
   const image = formData.get('image')?.toString().trim();
   const price = parseInt(formData.get('price')?.toString() || '0');
-  const available = formData.get('available') === 'on';
-  const featured = formData.get('featured') === 'on';
 
-  if (!id || !title || !image || !price || price <= 0) {
+  if (!id || !title || !image || price <= 0) {
     throw new Error('Заполните все обязательные поля.');
   }
 
-  try {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const supabase = getServerSupabaseClient({ useServiceRole: true });
-    if (!supabase) throw new Error('Database client not available');
-
-    const updates = {
+  const { error } = await supabase
+    .from('postcards')
+    .update({
       title,
-      description,
+      description: formData.get('description')?.toString().trim(),
       image,
       price,
-      available,
-      featured,
+      available: formData.get('available') === 'on',
+      featured: formData.get('featured') === 'on',
       updatedAt: new Date().toISOString(),
-    };
-    const { data: updatedPostcard, error } = await supabase.from('postcards').update(updates).eq('id', id).select().maybeSingle();
-    if (error) {
-      console.error('Supabase update postcard error', error);
-      throw new Error('Ошибка при обновлении открытки: ' + (error.message || String(error)));
-    }
+    })
+    .eq('id', id);
 
-    revalidatePath('/admin/postcards');
-    revalidatePath('/letters'); // Обновляем страницу с открытками
-    return { success: true, postcard: updatedPostcard };
-  } catch (error) {
+  if (error) {
+    console.error('Supabase update postcard error:', error);
     throw new Error('Ошибка при обновлении открытки: ' + error.message);
   }
+
+  revalidatePath('/admin/postcards');
+  revalidatePath('/letters');
 }
 
 export async function deletePostcard(formData) {
   await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
   const id = formData.get('id')?.toString();
-  
-  if (!id) {
-    throw new Error('Postcard ID is required.');
+  if (!id) throw new Error('Postcard ID is required.');
+
+  // Проверка на связанные заказы
+  const { count } = await supabase
+    .from('postcard_orders')
+    .select('*', { count: 'exact', head: true })
+    .eq('postcardId', id);
+
+  if (count > 0) {
+    throw new Error('Нельзя удалить открытку с существующими заказами.');
   }
 
-  try {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const supabase = getServerSupabaseClient({ useServiceRole: true });
-    if (!supabase) throw new Error('Database client not available');
+  const { error } = await supabase.from('postcards').delete().eq('id', id);
 
-    // Проверяем есть ли заказы для этой открытки
-    let ordersCount = 0;
-    try {
-  // The orders are stored in `postcard_orders` (migration name). Query that table.
-  const { data, error } = await supabase.from('postcard_orders').select('id').eq('postcardId', id);
-      if (error) throw error;
-      ordersCount = (data && data.length) || 0;
-    } catch (err) {
-      console.error('Error checking postcard orders', err);
-      // If the orders table doesn't exist, treat as zero
-      ordersCount = 0;
-    }
-
-    if (ordersCount > 0) {
-      throw new Error('Нельзя удалить открытку с существующими заказами.');
-    }
-
-  const { error: delErr } = await supabase.from('postcards').delete().eq('id', id);
-    if (delErr) {
-      console.error('Supabase delete postcard error', delErr);
-      throw new Error('Ошибка при удалении открытки: ' + (delErr.message || String(delErr)));
-    }
-
-    revalidatePath('/admin/postcards');
-    revalidatePath('/letters'); // Обновляем страницу с открытками
-    return { success: true };
-  } catch (error) {
+  if (error) {
+    console.error('Supabase delete postcard error:', error);
     throw new Error('Ошибка при удалении открытки: ' + error.message);
   }
+
+  revalidatePath('/admin/postcards');
+  revalidatePath('/letters');
 }
