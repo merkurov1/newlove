@@ -43,6 +43,30 @@ export default async function Home() {
   if ((!auctionArticles || auctionArticles.length === 0)) {
     try { auctionArticles = await getArticlesByTag(supabase, 'news', 5) || []; } catch (e) { auctionArticles = []; }
   }
+  // If tag lookup still failed, as a last resort fetch recent published articles directly
+  if ((!auctionArticles || auctionArticles.length === 0)) {
+    try {
+      const resp = await supabase.from('articles')
+        .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
+        .eq('published', true)
+        .order('publishedAt', { ascending: false })
+        .limit(5);
+      const rows = (resp && resp.data) || [];
+      // attach previewImage using existing helper
+      auctionArticles = await Promise.all((rows || []).map(async (r) => ({
+        id: r.id,
+        title: r.title,
+        slug: r.slug,
+        content: r.content,
+        publishedAt: r.publishedAt,
+        updatedAt: r.updatedAt,
+        author: r.author || null,
+        previewImage: r.content ? await getFirstImage(r.content) : null,
+      })));
+    } catch (e) {
+      auctionArticles = [];
+    }
+  }
   const auctionIds = (auctionArticles || []).map(a => a.id).filter(Boolean);
   // Show main feed: articles tagged 'news'
   const newsArticles = await getArticlesByTag(supabase, 'news', 15);
