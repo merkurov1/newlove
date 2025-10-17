@@ -38,13 +38,13 @@ const AuctionSkeleton = () => (
 
 
 /**
- * Упрощенная и надежная функция для получения статей по тегу через RPC-вызов.
+ * Универсальная и надежная функция для получения статей по тегу через RPC-вызов.
  * @param {SupabaseClient} supabase - Клиент Supabase.
  * @param {string} tagSlug - Slug тега.
  * @param {number} [limit=50] - Лимит статей.
  * @returns {Promise<Array>} - Массив статей.
  */
-async function getAuctionArticles(supabase, tagSlug, limit = 50) {
+async function getArticlesByTag(supabase, tagSlug, limit = 50) {
   const { data, error } = await supabase.rpc('get_articles_by_tag_slug', {
     tag_slug_param: tagSlug
   }).limit(limit);
@@ -56,44 +56,16 @@ async function getAuctionArticles(supabase, tagSlug, limit = 50) {
   return data || [];
 }
 
-/**
- * Упрощенная функция для получения статей, исключая определенный тег.
- * @param {SupabaseClient} supabase - Клиент Supabase.
- * @param {string} tagToExclude - Slug тега для исключения.
- * @param {number} [limit=15] - Лимит статей.
- * @returns {Promise<Array>} - Массив статей.
- */
-async function getArticlesExcludingTag(supabase, tagToExclude, limit = 15) {
-  const articlesToExclude = await getAuctionArticles(supabase, tagToExclude, 2000);
-  const excludedIds = articlesToExclude.map(a => a.id).filter(Boolean);
-
-  let query = supabase
-    .from('articles')
-    .select('id, title, slug, previewImage, preview_image, description, excerpt, publishedAt')
-    .eq('published', true)
-    .order('publishedAt', { ascending: false })
-    .limit(limit);
-
-  if (excludedIds.length > 0) {
-    query = query.not('id', 'in', `(${excludedIds.join(',')})`);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error('Ошибка при получении ленты новостей:', error);
-    return [];
-  }
-  return data || [];
-}
-
 
 export default async function Home() {
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
-  const auctionArticles = await getAuctionArticles(supabase, 'auction', 20);
-  const newsArticles = await getArticlesExcludingTag(supabase, 'auction', 15);
+  // Получаем статьи для аукциона с тегом 'auction'
+  const auctionArticles = await getArticlesByTag(supabase, 'auction', 20);
+  
+  // ИЗМЕНЕНИЕ ЗДЕСЬ: Получаем статьи для новостной ленты с тегом 'news'
+  const newsArticles = await getArticlesByTag(supabase, 'news', 15);
 
   return (
     <main className="relative overflow-hidden">
@@ -119,6 +91,7 @@ export default async function Home() {
       {/* Основная лента статей */}
       <section id="articles" className="max-w-5xl mx-auto py-4 sm:py-6 lg:py-4 lg:-mt-6 px-4">
         <div className="rounded-2xl p-3 sm:p-4 bg-white/30 backdrop-blur-sm border border-white/10">
+          {/* Теперь этот компонент получит правильные статьи */}
           <ArticlesFeed initialArticles={newsArticles} includeTag="news" />
         </div>
       </section>

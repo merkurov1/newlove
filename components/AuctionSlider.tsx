@@ -1,70 +1,71 @@
 "use client";
-import React, { useEffect } from 'react';
+import React from 'react';
 import Image from 'next/image';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination, Autoplay } from 'swiper/modules';
+import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules';
+import 'swiper/css/effect-fade'; // Импортируем стили для эффекта затухания
+
 // Глобальные стили Swiper импортируются в layout.js
 
 type Article = {
   id?: string | number;
   title?: string;
   slug?: string;
-  previewImage?: string | null;
-  preview_image?: string | null;
+  preview_image?: string | null; // Теперь у нас только одно поле с полной ссылкой
   description?: string | null;
-  publishedAt?: string | null;
 };
 
 export default function AuctionSlider({ articles }: { articles: Article[] }) {
-  useEffect(() => {
-    try {
-      console.debug('[AuctionSlider] mounted, articles count=', Array.isArray(articles) ? articles.length : 0);
-    } catch (e) {}
-  }, [articles]);
-
   if (!Array.isArray(articles) || articles.length === 0) return null;
 
-  // Функция теперь корректно ищет поля previewImage или preview_image
-  const mapImg = (a: Article) => a.previewImage || a.preview_image || null;
-  
-  const mapSlug = (a: Article) => {
-    const s = (a && a.slug) || null;
-    if (s && String(s).trim().length > 0) return String(s).trim();
-    if (a && a.id) return String(a.id);
-    return '';
-  };
+  // Упрощенная функция для получения slug
+  const mapSlug = (a: Article) => (a?.slug || a?.id || '').toString();
 
   return (
-    <div className="auction-slider">
+    <div className="auction-slider-single">
       <Swiper
-        modules={[Navigation, Pagination, Autoplay]}
+        // Подключаем новые модули
+        modules={[Navigation, Pagination, Autoplay, EffectFade]}
+        // Включаем навигационные стрелки
         navigation
+        // Включаем пагинацию (точки внизу)
         pagination={{ clickable: true }}
-        autoplay={{ delay: 4500, pauseOnMouseEnter: true }}
-        spaceBetween={12}
+        // Автопроигрывание
+        autoplay={{ delay: 5000, pauseOnMouseEnter: true }}
+        // ВАЖНО: Показываем только один слайд
         slidesPerView={1}
-        breakpoints={{
-          640: { slidesPerView: 1 },
-          768: { slidesPerView: 2 },
-          1024: { slidesPerView: 3 },
-        }}
-        className="py-4"
+        // Убираем отступы между слайдами
+        spaceBetween={0}
+        // Включаем красивый эффект "затухания" при смене слайдов
+        effect="fade"
+        // Зацикливаем слайдер
+        loop={true}
+        className="py-1"
       >
         {articles.map((a) => (
-          <SwiperSlide key={String(a.id || a.slug || a.title || Math.random())}>
-            <a href={`/${mapSlug(a)}`} className="block rounded-lg overflow-hidden shadow-sm bg-white dark:bg-neutral-900">
-              {mapImg(a) ? (
-                <div className="h-48 w-full bg-gray-100 dark:bg-neutral-800 relative">
-                  <Image src={String(mapImg(a))} alt={a.title || ''} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" draggable={false} />
+          <SwiperSlide key={String(a.id || a.slug)}>
+            <a href={`/${mapSlug(a)}`} className="block rounded-lg overflow-hidden shadow-lg bg-white dark:bg-neutral-900 group">
+              <div className="w-full bg-gray-100 dark:bg-neutral-800 relative aspect-video sm:aspect-[2/1] lg:aspect-[2.5/1]">
+                {a.preview_image ? (
+                  <Image
+                    src={a.preview_image} // Теперь используем только это поле
+                    alt={a.title || ''}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 80vw"
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    draggable={false}
+                    priority={true} // Первая картинка загрузится быстрее
+                  />
+                ) : (
+                  <div className="h-full w-full bg-gradient-to-br from-pink-50 to-yellow-50 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
+                    <span className="text-lg text-neutral-500">Нет изображения</span>
+                  </div>
+                )}
+                {/* Наложение градиента для текста */}
+                <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black/70 to-transparent p-4 sm:p-6 flex flex-col justify-end">
+                  <h3 className="text-xl sm:text-2xl font-bold text-white drop-shadow-md">{a.title}</h3>
+                  {a.description && <p className="mt-1 text-sm sm:text-base text-gray-200 drop-shadow-sm line-clamp-2">{a.description}</p>}
                 </div>
-              ) : (
-                <div className="h-48 w-full bg-gradient-to-br from-pink-50 to-yellow-50 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
-                  <span className="text-sm text-neutral-500">No image</span>
-                </div>
-              )}
-              <div className="p-3">
-                <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">{a.title}</h3>
-                {a.description ? <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300 line-clamp-2">{a.description}</p> : null}
               </div>
             </a>
           </SwiperSlide>
@@ -73,3 +74,4 @@ export default function AuctionSlider({ articles }: { articles: Article[] }) {
     </div>
   );
 }
+
