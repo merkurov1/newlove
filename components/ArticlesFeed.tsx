@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, FC } from "react";
 import Link from "next/link";
 import SafeImage from "@/components/SafeImage";
 import EditButton from '@/components/EditButton';
 
-// Та же самая вспомогательная функция для исправления URL
-const normalizeImageUrl = (url) => {
+// Вспомогательная функция для исправления URL с явным указанием типа
+const normalizeImageUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   return url.replace(/([^:]\/)\/+/g, "$1");
 };
@@ -17,8 +17,8 @@ interface Article {
   slug: string;
   content: string;
   publishedAt: string;
-  previewImage?: string | null; // API может возвращать это поле
-  preview_image?: string | null; // База данных возвращает это поле
+  previewImage?: string | null;
+  preview_image?: string | null;
   description?: string;
   author?: {
     name?: string;
@@ -27,10 +27,16 @@ interface Article {
   tags?: any[];
 }
 
+interface ArticlesFeedProps {
+  initialArticles: Article[];
+  excludeTag?: string | null;
+  includeTag?: string | null;
+}
+
 const PAGE_SIZE = 15;
 const API_PAGE_SIZE = 15;
 
-export default function ArticlesFeed({ initialArticles, excludeTag, includeTag }: { initialArticles: Article[]; excludeTag?: string | null; includeTag?: string | null }) {
+const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, includeTag }) => {
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(initialArticles.length === PAGE_SIZE);
@@ -38,7 +44,6 @@ export default function ArticlesFeed({ initialArticles, excludeTag, includeTag }
   const loaderRef = useRef<HTMLDivElement>(null);
   const [infiniteDone, setInfiniteDone] = useState(false);
 
-  // Логика подгрузки осталась без изменений
   useEffect(() => {
     if (infiniteDone || !hasMore) return;
     const handleScroll = () => {
@@ -63,20 +68,17 @@ export default function ArticlesFeed({ initialArticles, excludeTag, includeTag }
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, [offset, loading, infiniteDone, hasMore, excludeTag, includeTag]);
-    
-  // ... (остальная логика компонента без изменений) ...
 
   return (
     <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 md:px-10">
       <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 overflow-x-hidden">
-        {articles.map((article, idx) => {
-          // Определяем и "чистим" URL картинки
+        {articles.map((article) => {
           const imageUrl = normalizeImageUrl(article.previewImage || article.preview_image);
-
           return (
             <article
               key={article.id}
-              // ... (остальные атрибуты без изменений)
+              className="relative flex flex-col group animate-fade-in-up min-w-0 max-w-full"
+              role="listitem"
             >
               <div className="absolute top-2 right-2 z-20">
                 <EditButton contentType="article" contentId={article.id} variant="compact" />
@@ -89,7 +91,7 @@ export default function ArticlesFeed({ initialArticles, excludeTag, includeTag }
               >
                 {imageUrl ? (
                   <SafeImage
-                    src={imageUrl} // Используем исправленный URL
+                    src={imageUrl}
                     alt={`Изображение к статье: ${article.title}`}
                     fill
                     sizes="100vw"
@@ -114,14 +116,13 @@ export default function ArticlesFeed({ initialArticles, excludeTag, includeTag }
                 {article.description && (
                   <p className="text-gray-700 text-base line-clamp-2 mt-1 break-words max-w-full">{article.description}</p>
                 )}
-                {/* ... (остальной JSX без изменений) ... */}
               </div>
             </article>
-          )
+          );
         })}
       </div>
-       {/* ... (остальной JSX для загрузки без изменений) ... */}
     </div>
   );
-}
+};
 
+export default ArticlesFeed;
