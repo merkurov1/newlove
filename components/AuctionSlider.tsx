@@ -1,14 +1,13 @@
 "use client";
-import React from 'react';
+import React, { FC } from 'react';
 import Image from 'next/image';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules';
 import 'swiper/css/effect-fade';
 
-// Вспомогательная функция для исправления URL
-const normalizeImageUrl = (url) => {
+// Вспомогательная функция для исправления URL с явным указанием типа
+const normalizeImageUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
-  // Заменяет http://...//... на http://.../...
   return url.replace(/([^:]\/)\/+/g, "$1");
 };
 
@@ -17,10 +16,14 @@ type Article = {
   title?: string;
   slug?: string;
   preview_image?: string | null;
-  excerpt?: string | null; // Используем excerpt, как в базе
+  excerpt?: string | null;
 };
 
-export default function AuctionSlider({ articles }: { articles: Article[] }) {
+interface AuctionSliderProps {
+  articles: Article[];
+}
+
+const AuctionSlider: FC<AuctionSliderProps> = ({ articles }) => {
   if (!Array.isArray(articles) || articles.length === 0) return null;
 
   const mapSlug = (a: Article) => (a?.slug || a?.id || '').toString();
@@ -39,15 +42,14 @@ export default function AuctionSlider({ articles }: { articles: Article[] }) {
         className="py-1"
       >
         {articles.map((a) => {
-          const imageUrl = normalizeImageUrl(a.preview_image); // "Чистим" URL здесь
-
+          const imageUrl = normalizeImageUrl(a.preview_image);
           return (
             <SwiperSlide key={String(a.id || a.slug)}>
               <a href={`/${mapSlug(a)}`} className="block rounded-lg overflow-hidden shadow-lg bg-white dark:bg-neutral-900 group">
                 <div className="w-full bg-gray-100 dark:bg-neutral-800 relative aspect-video sm:aspect-[2/1] lg:aspect-[2.5/1]">
                   {imageUrl ? (
                     <Image
-                      src={imageUrl} // Используем исправленный URL
+                      src={imageUrl}
                       alt={a.title || ''}
                       fill
                       sizes="(max-width: 768px) 100vw, 80vw"
@@ -62,7 +64,6 @@ export default function AuctionSlider({ articles }: { articles: Article[] }) {
                   )}
                   <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black/70 to-transparent p-4 sm:p-6 flex flex-col justify-end">
                     <h3 className="text-xl sm:text-2xl font-bold text-white drop-shadow-md">{a.title}</h3>
-                    {/* Используем поле 'excerpt', так как 'description' убрали из SQL */}
                     {a.excerpt && <p className="mt-1 text-sm sm:text-base text-gray-200 drop-shadow-sm line-clamp-2">{a.excerpt}</p>}
                   </div>
                 </div>
@@ -73,4 +74,6 @@ export default function AuctionSlider({ articles }: { articles: Article[] }) {
       </Swiper>
     </div>
   );
-}
+};
+
+export default AuctionSlider;
