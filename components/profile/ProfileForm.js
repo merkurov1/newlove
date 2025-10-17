@@ -20,9 +20,15 @@ function SubmitButton() {
 }
 
 export default function ProfileForm({ user }) {
+  user = user || {};
   const initialState = { message: null, status: null };
   const [state, dispatch] = useFormState(updateProfile, initialState);
   const [showMessage, setShowMessage] = useState(false);
+
+  // basic client-side username validation
+  function validateUsername(val) {
+    return /^[a-z0-9_.]+$/.test(String(val || '').toLowerCase());
+  }
 
   // Показываем сообщение об успехе/ошибке на 3 секунды
   useEffect(() => {
@@ -43,6 +49,9 @@ export default function ProfileForm({ user }) {
           <span className="inline-flex items-center px-3 py-2 rounded-t-md sm:rounded-l-md sm:rounded-t-none border border-b-0 sm:border-b border-gray-300 bg-gray-50 text-gray-500 text-sm">merkurov.love/you/</span>
           <input type="text" name="username" id="username" required defaultValue={user.username || ''} className="flex-1 min-w-0 block w-full px-3 py-3 rounded-b-md sm:rounded-r-md sm:rounded-b-none border-gray-300 text-base" />
         </div>
+        {!validateUsername(user.username) && (
+          <p className="text-xs text-yellow-600 mt-1">Username может содержать только строчные буквы, цифры, _ и .</p>
+        )}
       </div>
 
       <div>

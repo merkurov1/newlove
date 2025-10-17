@@ -20,10 +20,10 @@ export default async function ProfilePage() {
     // the page doesn't crash the whole prerender process. We'll still allow
     // the client to surface an error if needed.
     console.error('profile/page: failed to obtain supabase/user for request', e);
-    // Redirect unauthenticated/failing requests to home to avoid 500/404
-    // during prerender. This keeps the app stable while we surface errors
-    // via diagnostics if necessary.
-    try { redirect('/'); } catch (err) { /* noop in prerender */ }
+    // Avoid redirect here; render guest prompt instead. Redirecting during
+    // build/prerender can cause the entire page to fail. We'll let the
+    // guest UI handle prompting to login.
+    user = null;
   }
   // Если user не найден, показываем клиентский компонент с приглашением войти
   // вместо строгого редиректа — это даёт лучший UX: пользователь увидит
