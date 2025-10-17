@@ -71,7 +71,6 @@ export default async function Home() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify([PersonSchema, WebsiteSchema, BlogSchema]) }} />
       <BackgroundShapes />
       
-      {/* ИЗМЕНЕНИЕ: Все секции обернуты в единый контейнер для консистентности */}
       <div className="max-w-5xl mx-auto px-4 space-y-12 sm:space-y-16">
         <CloseableHero />
 
