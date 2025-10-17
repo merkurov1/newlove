@@ -51,10 +51,11 @@ export default async function Home({ searchParams }) {
   let tagDebugInfo = null;
   if (showDebug) {
     // Collect per-step diagnostic info so we can pinpoint which operation throws
-    const diag = {
+      const diag = {
       tagRow: null,
       tagRowError: null,
       relsCount: 0,
+        relsMethod: null,
       relsError: null,
       excludedIds: [],
       auctionIds: [],
@@ -63,7 +64,7 @@ export default async function Home({ searchParams }) {
       error: null,
     };
     try {
-      const { getTagBySlug, readArticleRelationsForTag } = await import('@/lib/tagHelpers');
+      const { getTagBySlug, readArticleRelationsForTag, readArticleRelationsForTagStrict } = await import('@/lib/tagHelpers');
       // 1) get tag row
       try {
         const tagRow = await getTagBySlug(supabase, 'auction');
@@ -76,11 +77,18 @@ export default async function Home({ searchParams }) {
       let rels = [];
       try {
         if (diag.tagRow && diag.tagRow.id) {
-          // Use the strict reader by default
+          // Try strict reader first (REST/client). If it fails, fall back to tolerant reader.
           try {
             rels = await readArticleRelationsForTagStrict(supabase, diag.tagRow.id) || [];
+            diag.relsMethod = 'strict';
           } catch (e) {
-            rels = await readArticleRelationsForTag(supabase, diag.tagRow.id) || [];
+            try {
+              rels = await readArticleRelationsForTag(supabase, diag.tagRow.id) || [];
+              diag.relsMethod = 'fallback';
+            } catch (e2) {
+              diag.relsMethod = 'error';
+              throw e2;
+            }
           }
         }
         diag.relsCount = Array.isArray(rels) ? rels.length : 0;
