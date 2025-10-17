@@ -1,14 +1,13 @@
 export const dynamic = 'force-dynamic';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { cookies } from 'next/headers';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 // Создаем клиент с service role для админских операций
 const supabaseAdmin = getServerSupabaseClient({ useServiceRole: true });
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     // Проверяем аутентификацию через Supabase
     try {
