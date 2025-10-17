@@ -17,7 +17,7 @@ import nextDynamic from 'next/dynamic';
 
 // SSR-friendly динамический импорт CloseableHero (client-only)
 const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { ssr: false });
-const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
+import AuctionSliderServer from '@/components/AuctionSlider.server';
 const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ssr: false });
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 
@@ -67,11 +67,11 @@ export default async function Home() {
       <CloseableHero className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8 mb-6" />
       {/* Auction slider for articles tagged 'auction' - placed right after hero */}
       {auctionArticles && auctionArticles.length > 0 && (
-        <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
-          <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
-            <AuctionSlider articles={auctionArticles} />
-          </div>
-        </section>
+          <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
+            <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
+              <AuctionSliderServer articles={auctionArticles} />
+            </div>
+          </section>
       )}
 
       {/* Main articles feed excluding auction-tagged articles */}
