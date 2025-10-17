@@ -1,4 +1,5 @@
 // app/page.js
+import { Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import nextDynamic from 'next/dynamic';
@@ -14,13 +15,27 @@ const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ss
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 const BackgroundShapes = nextDynamic(() => import('@/components/BackgroundShapes'), { ssr: false });
 
-// Упрощенный серверный компонент-заглушка для аукциона
-import AuctionSliderNewServer from '@/components/AuctionSliderNew.server';
-
 export const metadata = {
   title: 'Главная | Anton Merkurov',
   description: 'Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.'
 };
+
+// Компонент-заглушка (скелет) для слайдера, пока он грузится на клиенте
+const AuctionSkeleton = () => (
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse">
+    {[...Array(3)].map((_, i) => (
+      <div key={i} className="block rounded-lg overflow-hidden shadow-sm bg-white/80 dark:bg-neutral-900/80">
+        <div className="h-48 w-full bg-gray-300 dark:bg-neutral-800"></div>
+        <div className="p-3 space-y-3">
+          <div className="h-5 bg-gray-300 dark:bg-neutral-700 rounded w-3/4"></div>
+          <div className="h-3 bg-gray-300 dark:bg-neutral-700 rounded w-full"></div>
+          <div className="h-3 bg-gray-300 dark:bg-neutral-700 rounded w-1/2"></div>
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
 
 /**
  * Упрощенная и надежная функция для получения статей по тегу через RPC-вызов.
@@ -36,7 +51,7 @@ async function getAuctionArticles(supabase, tagSlug, limit = 50) {
 
   if (error) {
     console.error(`Ошибка при получении статей с тегом "${tagSlug}":`, error);
-    return []; // Возвращаем пустой массив в случае ошибки
+    return [];
   }
   return data || [];
 }
@@ -49,11 +64,9 @@ async function getAuctionArticles(supabase, tagSlug, limit = 50) {
  * @returns {Promise<Array>} - Массив статей.
  */
 async function getArticlesExcludingTag(supabase, tagToExclude, limit = 15) {
-  // 1. Получаем ID статей, которые нужно исключить
-  const articlesToExclude = await getAuctionArticles(supabase, tagToExclude, 2000); // Получаем все ID
+  const articlesToExclude = await getAuctionArticles(supabase, tagToExclude, 2000);
   const excludedIds = articlesToExclude.map(a => a.id).filter(Boolean);
 
-  // 2. Запрашиваем статьи, которых нет в списке исключенных ID
   let query = supabase
     .from('articles')
     .select('id, title, slug, previewImage, preview_image, description, excerpt, publishedAt')
@@ -77,18 +90,13 @@ async function getArticlesExcludingTag(supabase, tagToExclude, limit = 15) {
 
 export default async function Home() {
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  // Используем сервисный ключ для надежного доступа к данным на сервере
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
-  // 1. Получаем статьи для аукциона одним простым вызовом
   const auctionArticles = await getAuctionArticles(supabase, 'auction', 20);
-
-  // 2. Получаем основную ленту, исключая статьи для аукциона
   const newsArticles = await getArticlesExcludingTag(supabase, 'auction', 15);
 
   return (
     <main className="relative overflow-hidden">
-      {/* SEO: Вставляем JSON-LD для структурированных данных */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify([PersonSchema, WebsiteSchema, BlogSchema]) }}
@@ -101,15 +109,9 @@ export default async function Home() {
       {Array.isArray(auctionArticles) && auctionArticles.length > 0 && (
         <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
           <div className="rounded-2xl p-3 sm:p-4 bg-gradient-to-r from-white/40 to-white/10 border border-white/10 backdrop-blur-md">
-            {/* Паттерн Progressive Enhancement:
-              1. На сервере рендерится <AuctionSliderNewServer /> как простой HTML/CSS-компонент.
-              2. На клиенте загружается JS, и <AuctionSlider /> заменяет его на интерактивный слайдер Swiper.
-              Обертка suppressHydrationWarning нужна, чтобы React не ругался на различия между серверным и клиентским рендером.
-            */}
-            <div suppressHydrationWarning>
-              <AuctionSliderNewServer articles={auctionArticles} />
+            <Suspense fallback={<AuctionSkeleton />}>
               <AuctionSlider articles={safeData(auctionArticles)} />
-            </div>
+            </Suspense>
           </div>
         </section>
       )}
@@ -117,9 +119,6 @@ export default async function Home() {
       {/* Основная лента статей */}
       <section id="articles" className="max-w-5xl mx-auto py-4 sm:py-6 lg:py-4 lg:-mt-6 px-4">
         <div className="rounded-2xl p-3 sm:p-4 bg-white/30 backdrop-blur-sm border border-white/10">
-          {/* Убрали дублирование рендеринга. 
-            Компонент ArticlesFeed теперь сам отвечает за отображение начальных статей.
-          */}
           <ArticlesFeed initialArticles={newsArticles} includeTag="news" />
         </div>
       </section>

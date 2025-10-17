@@ -2,18 +2,15 @@
 import React, { useEffect } from 'react';
 import Image from 'next/image';
 import { Swiper, SwiperSlide } from 'swiper/react';
-// import modules from Swiper v12 modules path
 import { Navigation, Pagination, Autoplay } from 'swiper/modules';
-// Swiper CSS is imported globally in app/layout.js to ensure styles are available
-// before client-only components mount. Do not re-import here to avoid FOUC/duplication.
+// Глобальные стили Swiper импортируются в layout.js
 
 type Article = {
   id?: string | number;
   title?: string;
   slug?: string;
-  // support both shapes produced by normalizeArticle and other sources
   previewImage?: string | null;
-  preview_image_url?: string | null;
+  preview_image?: string | null;
   description?: string | null;
   publishedAt?: string | null;
 };
@@ -21,22 +18,18 @@ type Article = {
 export default function AuctionSlider({ articles }: { articles: Article[] }) {
   useEffect(() => {
     try {
-      // Mount-time diagnostic to help debug hydration / client init issues
-      // Visible in browser console only when JS runs.
-      // eslint-disable-next-line no-console
       console.debug('[AuctionSlider] mounted, articles count=', Array.isArray(articles) ? articles.length : 0);
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   }, [articles]);
 
   if (!Array.isArray(articles) || articles.length === 0) return null;
 
-  const mapImg = (a: Article) => a.previewImage || a.preview_image_url || null;
+  // Функция теперь корректно ищет поля previewImage или preview_image
+  const mapImg = (a: Article) => a.previewImage || a.preview_image || null;
+  
   const mapSlug = (a: Article) => {
-    const s = (a && a.slug) || (a && (a as any).urlSlug) || null;
+    const s = (a && a.slug) || null;
     if (s && String(s).trim().length > 0) return String(s).trim();
-    // fallback to id-based path when slug missing
     if (a && a.id) return String(a.id);
     return '';
   };
@@ -58,7 +51,7 @@ export default function AuctionSlider({ articles }: { articles: Article[] }) {
         className="py-4"
       >
         {articles.map((a) => (
-          <SwiperSlide key={String(a.id || a.slug || (a && a.title) || Math.random())}>
+          <SwiperSlide key={String(a.id || a.slug || a.title || Math.random())}>
             <a href={`/${mapSlug(a)}`} className="block rounded-lg overflow-hidden shadow-sm bg-white dark:bg-neutral-900">
               {mapImg(a) ? (
                 <div className="h-48 w-full bg-gray-100 dark:bg-neutral-800 relative">
@@ -71,7 +64,7 @@ export default function AuctionSlider({ articles }: { articles: Article[] }) {
               )}
               <div className="p-3">
                 <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">{a.title}</h3>
-                {a.description ? <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{a.description}</p> : null}
+                {a.description ? <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300 line-clamp-2">{a.description}</p> : null}
               </div>
             </a>
           </SwiperSlide>
