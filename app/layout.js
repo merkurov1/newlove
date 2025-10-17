@@ -1,6 +1,10 @@
 import AuthProvider from '@/components/AuthProvider';
 
 import './main.css';
+// Global Swiper styles (move here so CSS is present before client-only slider mounts)
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Header from '@/components/Header';
