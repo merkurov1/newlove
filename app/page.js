@@ -36,14 +36,35 @@ export default async function Home({ searchParams }) {
   try {
     const tag = await getTagBySlug(supabase, 'auction');
     if (tag && tag.id) {
-      // Query the canonical junction table and embed the related article (A)
+      // Query the canonical junction table and attempt to read embedded article objects (A)
       const relRes = await supabase
         .from('_ArticleToTag')
-        .select('A(id,title,slug,content,publishedAt,updatedAt,author,previewImage,preview_image,description,excerpt)')
+        .select('A, A(id,title,slug,content,publishedAt,updatedAt,author,previewImage,preview_image,description,excerpt)')
         .eq('B', tag.id)
-        .limit(50);
+        .limit(2000);
       const relRows = relRes && relRes.data ? relRes.data : (Array.isArray(relRes) ? relRes : []);
-      auctionArticles = (relRows || []).map(r => (r && (r.A || r.article || r.a)) || null).filter(Boolean).map(a => ({
+
+      // Collect articles embedded under A or collect A ids for later per-id fetch
+      const embedded = [];
+      const ids = [];
+      for (const r of (relRows || [])) {
+        if (!r) continue;
+        // If A is an object with fields, take it
+        const Aobj = r.A || r.a || r.article || null;
+        if (Aobj && typeof Aobj === 'object' && (Aobj.id || Aobj.title || Aobj.slug)) {
+          embedded.push(Aobj);
+          continue;
+        }
+        // If A is primitive id or nested id-like
+        const maybeId = (r.A && (typeof r.A === 'string' || typeof r.A === 'number')) ? r.A : (r.A && r.A.id ? r.A.id : null);
+        if (maybeId) ids.push(String(maybeId));
+        // Also check other common columns
+        const alt = (r.A || r.article_id || r.articleId || r.a || (r.article && r.article.id));
+        if (!maybeId && (alt && (typeof alt === 'string' || typeof alt === 'number'))) ids.push(String(alt));
+      }
+
+      // Normalize embedded articles
+      auctionArticles = (embedded || []).map(a => ({
         id: a.id || a._id || null,
         title: a.title || a.article?.title || '',
         slug: a.slug || a.article?.slug || '/',
@@ -54,6 +75,94 @@ export default async function Home({ searchParams }) {
         updatedAt: a.updatedAt || null,
         author: a.author || null,
       }));
+
+      // If we collected ids and have no embedded articles, try fetching by ids.
+      if ((auctionArticles.length === 0) && ids.length > 0) {
+        // Dedupe ids
+        const uniq = Array.from(new Set(ids.map(String)));
+        // Try bulk IN first (server has service role)
+        try {
+          const sel = 'id,title,slug,content,publishedAt,updatedAt,author,previewImage,preview_image,description,excerpt';
+          const res = await supabase.from('articles').select(sel).in('id', uniq).limit(50);
+          const arts = res && res.data ? res.data : (Array.isArray(res) ? res : []);
+          if (Array.isArray(arts) && arts.length > 0) {
+            auctionArticles = arts.map(a => ({
+              id: a.id || a._id || null,
+              title: a.title || '',
+              slug: a.slug || '/',
+              previewImage: a.previewImage || a.preview_image || null,
+              description: a.description || a.excerpt || null,
+              content: a.content || null,
+              publishedAt: a.publishedAt || null,
+              updatedAt: a.updatedAt || null,
+              author: a.author || null,
+            }));
+          }
+        } catch (e) {
+          // ignore and fallback to per-id selects
+        }
+
+        // Per-id selects fallback (some RLS setups block IN but allow single reads)
+        if (auctionArticles.length === 0) {
+          const per = [];
+          for (const id of uniq.slice(0, 200)) {
+            try {
+              const r = await supabase.from('articles').select('id,title,slug,content,publishedAt,updatedAt,author,previewImage,preview_image,description,excerpt').eq('id', id).limit(1);
+              const d = r && r.data ? r.data : (Array.isArray(r) ? r : []);
+              if (Array.isArray(d) && d.length > 0) per.push(d[0]);
+            } catch (e) {
+              continue;
+            }
+          }
+          if (per.length > 0) {
+            auctionArticles = per.map(a => ({
+              id: a.id || a._id || null,
+              title: a.title || '',
+              slug: a.slug || '/',
+              previewImage: a.previewImage || a.preview_image || null,
+              description: a.description || a.excerpt || null,
+              content: a.content || null,
+              publishedAt: a.publishedAt || null,
+              updatedAt: a.updatedAt || null,
+              author: a.author || null,
+            }));
+          }
+        }
+
+        // Final server REST fallback using service-role key if still empty
+        if (auctionArticles.length === 0) {
+          try {
+            const svcKey = (process && process.env && process.env.SUPABASE_SERVICE_ROLE_KEY) || null;
+            const svcUrl = (process && process.env && (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)) || null;
+            if (svcKey && svcUrl) {
+              const restBase = svcUrl.replace(/\/$/, '');
+              const quoted = uniq.map(id => `"${String(id).replace(/\"/g, '\\"')}"`).join(',');
+              const select = 'id,title,slug,content,publishedAt,updatedAt,author,previewImage,preview_image,description,excerpt';
+              const url = `${restBase}/rest/v1/articles?select=${encodeURIComponent(select)}&id=in.(${encodeURIComponent(quoted)})&limit=50`;
+              const headers = { Accept: 'application/json', apikey: svcKey, Authorization: `Bearer ${svcKey}` };
+              const resp = await fetch(url, { method: 'GET', headers });
+              if (resp && resp.ok) {
+                const json = await resp.json();
+                if (Array.isArray(json) && json.length > 0) {
+                  auctionArticles = json.map(a => ({
+                    id: a.id || a._id || null,
+                    title: a.title || '',
+                    slug: a.slug || '/',
+                    previewImage: a.previewImage || a.preview_image || null,
+                    description: a.description || a.excerpt || null,
+                    content: a.content || null,
+                    publishedAt: a.publishedAt || null,
+                    updatedAt: a.updatedAt || null,
+                    author: a.author || null,
+                  }));
+                }
+              }
+            }
+          } catch (e) {
+            // ignore final fallback errors
+          }
+        }
+      }
     }
   } catch (e) {
     auctionArticles = [];
