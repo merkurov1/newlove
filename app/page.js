@@ -48,7 +48,8 @@ export default async function Home() {
   const newsArticles = await getArticlesByTag(supabase, 'news', 15);
   // Compute debug info for tag exclusion when requested
   const globalReq = (globalThis && globalThis.request) || null;
-  let showDebug = !!(process && process.env && process.env.TAG_HELPERS_DEBUG);
+  // TEMP: force debug on to surface tag lookup details in prod for diagnosis
+  let showDebug = true || !!(process && process.env && process.env.TAG_HELPERS_DEBUG);
   try {
     if (!showDebug && globalReq && typeof globalReq.url === 'string') {
       const u = new URL(globalReq.url);
