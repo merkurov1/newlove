@@ -353,27 +353,43 @@ export async function subscribeToNewsletter(prevState, formData) {
     // Use service-role client for writes (in case RLS prevents anon/request client from inserting)
     let svc;
     try {
+      // Log presence of critical env vars to help diagnose missing-key issues in prod logs
+      try {
+        console.info('subscribeToNewsletter env', {
+          hasServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+          supabaseUrl: !!(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL),
+        });
+      } catch (e) {}
+
       svc = getServerSupabaseClient({ useServiceRole: true });
     } catch (e) {
       console.error('subscribeToNewsletter: service role client not available', e);
       try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) {}
-      return { status: 'error', message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).' };
+      return { status: 'error', message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).', error: String(e) };
     }
 
     // upsert subscriber; mark inactive until confirmed
-    const { data: subscriber, error } = await svc
+    let subscriber;
+    try {
+      const upsertRes = await svc
         .from('subscribers')
         .upsert({ email, userId: user?.id || null, isActive: false }, { onConflict: 'email' })
         .select()
         .single();
-    
-    if (error) {
-        console.error('Supabase upsert subscriber error:', error);
-        try { (await import('@sentry/nextjs')).captureException(error); } catch (e) {}
-        if (String(error.code) === '42501') {
-          return { status: 'error', message: 'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.' };
-        }
-        return { status: 'error', message: 'Ошибка при подписке.' };
+      subscriber = upsertRes.data;
+      if (upsertRes.error) {
+        throw upsertRes.error;
+      }
+    } catch (error) {
+      console.error('Supabase upsert subscriber error:', error);
+      try { (await import('@sentry/nextjs')).captureException(error); } catch (e) {}
+      // Provide richer error back to client to aid debugging (without leaking secrets)
+      const code = error?.code || null;
+      const msg = error?.message || String(error) || 'Ошибка при подписке.';
+      if (String(code) === '42501') {
+        return { status: 'error', message: 'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.', code, details: error };
+      }
+      return { status: 'error', message: msg, code, details: error };
     }
 
     if (subscriber.isActive) {
