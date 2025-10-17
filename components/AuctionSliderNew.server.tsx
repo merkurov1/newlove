@@ -27,14 +27,18 @@ export default function AuctionSliderNewServer({ articles, tagDebugInfo }: { art
         {tagDebugInfo && (
           <div className="mt-4 p-3 bg-gray-50 border border-gray-200 text-sm text-gray-700 rounded">
             <div className="font-medium mb-2">DEBUG: tag exclusion info</div>
-            {tagDebugInfo.error ? (
-              <pre className="whitespace-pre-wrap text-red-600">{tagDebugInfo.error}</pre>
+            {tagDebugInfo && tagDebugInfo.error ? (
+              <pre className="whitespace-pre-wrap text-red-600">{String(tagDebugInfo.error)}</pre>
             ) : (
               <div>
-                <div><strong>tag row:</strong> {tagDebugInfo.tagRow ? JSON.stringify(tagDebugInfo.tagRow) : 'not found'}</div>
-                <div className="mt-2"><strong>relations count:</strong> {tagDebugInfo.relsCount}</div>
-                <div className="mt-2"><strong>excluded ids (sample 50):</strong> {JSON.stringify((tagDebugInfo.excludedIds || []).slice(0,50))}</div>
-                <div className="mt-2"><strong>auctionArticles ids (server RPC):</strong> {JSON.stringify((tagDebugInfo.auctionIds || []).slice(0,50))}</div>
+                <div>
+                  <strong>tag row:</strong>
+                  <span> </span>
+                  <span className="break-words">{safeStringify(tagDebugInfo.tagRow, 'not found')}</span>
+                </div>
+                <div className="mt-2"><strong>relations count:</strong> {Number(tagDebugInfo.relsCount || 0)}</div>
+                <div className="mt-2"><strong>excluded ids (sample 50):</strong> <span className="break-words">{safeArraySampleString(tagDebugInfo.excludedIds,50)}</span></div>
+                <div className="mt-2"><strong>auctionArticles ids (server RPC):</strong> <span className="break-words">{safeArraySampleString(tagDebugInfo.auctionIds,50)}</span></div>
               </div>
             )}
           </div>
@@ -42,3 +46,22 @@ export default function AuctionSliderNewServer({ articles, tagDebugInfo }: { art
       </div>
     );
 }
+
+  function safeStringify(value: any, fallback = '') {
+    try {
+      if (value === undefined || value === null) return fallback;
+      if (typeof value === 'string') return value;
+      return JSON.stringify(value);
+    } catch (e) {
+      try { return String(value); } catch (ee) { return fallback; }
+    }
+  }
+
+  function safeArraySampleString(val: any, n = 50) {
+    try {
+      if (!Array.isArray(val)) return safeStringify(val, '[]');
+      return JSON.stringify(val.slice(0, n));
+    } catch (e) {
+      return '[]';
+    }
+  }
