@@ -1,8 +1,7 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
-import NextError from "next/error";
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 
 export default function GlobalError({ error }: { error: Error & { digest?: string } }) {
   useEffect(() => {
@@ -12,11 +11,12 @@ export default function GlobalError({ error }: { error: Error & { digest?: strin
   return (
     <html>
       <body>
-        {/* `NextError` is the default Next.js error page component. Its type
-        definition requires a `statusCode` prop. However, since the App Router
-        does not expose status codes for errors, we simply pass 0 to render a
-        generic error message. */}
-        <NextError statusCode={0} />
+        <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Произошла ошибка</h1>
+            <p style={{ color: '#666' }}>Мы уже получили уведомление — спасибо за терпение.</p>
+          </div>
+        </div>
       </body>
     </html>
   );
