@@ -170,7 +170,7 @@ async function ProfileContent({ username }) {
             {user.email && (
               // @ts-expect-error client component
               <Suspense fallback={null}>
-                {/* eslint-disable-next-line @next/next/no-before-interactive-script-load */}
+                {/* removed obsolete eslint-disable to avoid unknown rule warning */}
                 {/* @ts-ignore */}
                 <SubscriptionToggle initialSubscribed={user.isSubscribed} email={user.email} />
               </Suspense>
