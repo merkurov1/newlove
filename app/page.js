@@ -50,53 +50,83 @@ export default async function Home({ searchParams }) {
   }
   let tagDebugInfo = null;
   if (showDebug) {
+    // Collect per-step diagnostic info so we can pinpoint which operation throws
+    const diag = {
+      tagRow: null,
+      tagRowError: null,
+      relsCount: 0,
+      relsError: null,
+      excludedIds: [],
+      auctionIds: [],
+      rpcProbe: { ok: false, count: 0, error: null, stack: null },
+      tagTableChecks: [],
+      error: null,
+    };
     try {
       const { getTagBySlug, readArticleRelationsForTag } = await import('@/lib/tagHelpers');
-      const tagRow = await getTagBySlug(supabase, 'auction');
-      let rels = [];
-      if (tagRow && tagRow.id) {
-        rels = await readArticleRelationsForTag(supabase, tagRow.id) || [];
+      // 1) get tag row
+      try {
+        const tagRow = await getTagBySlug(supabase, 'auction');
+        diag.tagRow = tagRow ? JSON.parse(JSON.stringify(tagRow)) : null;
+      } catch (e) {
+        diag.tagRowError = { message: e && e.message ? e.message : String(e), stack: e && e.stack ? e.stack : null };
       }
-      const excludedIds = Array.from(new Set((rels || []).map(r => r && (r.A || r.article_id || r.articleId || r.a || r.article || r.id)).filter(Boolean)));
-      // Additional probes: RPC and tag-table attempts
-      const rpcProbe = { ok: false, count: 0, error: null };
+
+      // 2) read relations if tag found
+      let rels = [];
+      try {
+        if (diag.tagRow && diag.tagRow.id) {
+          rels = await readArticleRelationsForTag(supabase, diag.tagRow.id) || [];
+        }
+        diag.relsCount = Array.isArray(rels) ? rels.length : 0;
+        diag.excludedIds = Array.from(new Set((rels || []).map(r => (r && (r.A || r.article_id || r.articleId || r.a || r.article || r.id)) || null).filter(Boolean))).map(String);
+      } catch (e) {
+        diag.relsError = { message: e && e.message ? e.message : String(e), stack: e && e.stack ? e.stack : null };
+      }
+
+      // 3) RPC probe
       try {
         const rpc = await supabase.rpc('get_articles_by_tag', { tag_slug: 'auction' });
         const rpcData = (rpc && (rpc.data || rpc)) || [];
-        rpcProbe.ok = true;
-        rpcProbe.count = Array.isArray(rpcData) ? rpcData.length : (rpcData ? 1 : 0);
+        diag.rpcProbe.ok = true;
+        diag.rpcProbe.count = Array.isArray(rpcData) ? rpcData.length : (rpcData ? 1 : 0);
+        // collect auctionIds from rpcData (try to extract ids)
+        try {
+          diag.auctionIds = Array.from(new Set((rpcData || []).map(d => (d && (d.id || d.article_id || d.articleId)) || null).filter(Boolean))).map(String);
+        } catch (e) {
+          // ignore
+        }
       } catch (e) {
-        rpcProbe.error = String(e);
+        diag.rpcProbe.error = e && e.message ? e.message : String(e);
+        diag.rpcProbe.stack = e && e.stack ? e.stack : null;
       }
 
-      const tagTableChecks = [];
+      // 4) tag table checks
       const tableCandidates = ['tags','Tag','Tags','tag'];
       for (const tbl of tableCandidates) {
         try {
           const res = await supabase.from(tbl).select('id,slug,name').ilike('slug', 'auction').limit(1);
           if (res && res.data && res.data[0]) {
-            tagTableChecks.push({ table: tbl, found: true, row: res.data[0] });
+            diag.tagTableChecks.push({ table: tbl, found: true, row: JSON.parse(JSON.stringify(res.data[0])) });
             continue;
           }
           const res2 = await supabase.from(tbl).select('id,slug,name').ilike('name', 'auction').limit(1);
           if (res2 && res2.data && res2.data[0]) {
-            tagTableChecks.push({ table: tbl, found: true, row: res2.data[0] });
+            diag.tagTableChecks.push({ table: tbl, found: true, row: JSON.parse(JSON.stringify(res2.data[0])) });
             continue;
           }
-          tagTableChecks.push({ table: tbl, found: false });
+          diag.tagTableChecks.push({ table: tbl, found: false });
         } catch (e) {
-          tagTableChecks.push({ table: tbl, error: String(e) });
+          diag.tagTableChecks.push({ table: tbl, error: e && e.message ? e.message : String(e), stack: e && e.stack ? e.stack : null });
         }
       }
 
-  // Make debug info JSON-serializable to avoid hydration/runtime issues
-  const safeTagRow = tagRow ? JSON.parse(JSON.stringify(tagRow)) : null;
-  const safeExcludedIds = Array.isArray(excludedIds) ? excludedIds.map(String) : [];
-  const safeAuctionIds = Array.isArray(auctionIds) ? auctionIds.map(String) : [];
-  const safeTagTableChecks = Array.isArray(tagTableChecks) ? tagTableChecks.map((c) => ({ table: c.table, found: !!c.found, error: c.error ? String(c.error) : undefined, row: c.row ? JSON.parse(JSON.stringify(c.row)) : undefined })) : [];
-  tagDebugInfo = { tagRow: safeTagRow, relsCount: (rels || []).length, excludedIds: safeExcludedIds, auctionIds: safeAuctionIds, rpcProbe, tagTableChecks: safeTagTableChecks };
+      // 5) ensure auctionIds includes auctionIds derived from page-level auctionArticles
+      diag.auctionIds = Array.from(new Set([...(diag.auctionIds || []), ...(Array.isArray(auctionIds) ? auctionIds.map(String) : [])]));
+
+      tagDebugInfo = diag;
     } catch (e) {
-      tagDebugInfo = { error: String(e) };
+      tagDebugInfo = { error: { message: e && e.message ? e.message : String(e), stack: e && e.stack ? e.stack : null } };
     }
   }
 
