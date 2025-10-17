@@ -5,9 +5,10 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules';
 import 'swiper/css/effect-fade';
 
-// Вспомогательная функция для исправления URL с явным указанием типа
+// Вспомогательная функция, которая исправляет любые двойные слэши в URL
 const normalizeImageUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
+  // Эта команда заменяет http://...//... на http://.../... где угодно в строке
   return url.replace(/([^:]\/)\/+/g, "$1");
 };
 
@@ -42,14 +43,16 @@ const AuctionSlider: FC<AuctionSliderProps> = ({ articles }) => {
         className="py-1"
       >
         {articles.map((a) => {
+          // "Чистим" URL прямо перед использованием
           const imageUrl = normalizeImageUrl(a.preview_image);
+
           return (
             <SwiperSlide key={String(a.id || a.slug)}>
               <a href={`/${mapSlug(a)}`} className="block rounded-lg overflow-hidden shadow-lg bg-white dark:bg-neutral-900 group">
                 <div className="w-full bg-gray-100 dark:bg-neutral-800 relative aspect-video sm:aspect-[2/1] lg:aspect-[2.5/1]">
                   {imageUrl ? (
                     <Image
-                      src={imageUrl}
+                      src={imageUrl} // Используем исправленный URL
                       alt={a.title || ''}
                       fill
                       sizes="(max-width: 768px) 100vw, 80vw"
