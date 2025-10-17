@@ -17,51 +17,26 @@ export default function AuctionSliderNewServer({ articles, tagDebugInfo }: { art
       description: 'Здесь будут показаны статьи с тегом "auction".'
     }];
 
-    const toRender = has ? articles : placeholder;
+    // Ensure each article has a minimal, safe shape for the client slider.
+    const normalizeForClient = (a: any) => {
+      if (!a || typeof a !== 'object') return { id: String(a || 'unknown'), title: String(a || ''), slug: '/', previewImage: null, description: null };
+      return {
+        id: a.id || a._id || a.article_id || a.articleId || (a.article && (a.article.id || a.article._id)) || String(a.slug || a.title || 'unknown'),
+        title: a.title || (a.article && a.article.title) || 'Без названия',
+        slug: a.slug || (a.article && a.article.slug) || '/',
+        previewImage: a.previewImage || a.preview_image || (a.content ? null : null) || null,
+        description: a.description || a.excerpt || a.preview || null,
+      };
+    };
+
+    const toRender = has ? (Array.isArray(articles) ? articles.map(normalizeForClient) : placeholder) : placeholder;
 
     return (
       <div>
         {/* Small count/banner visible server-side */}
         <div className="mb-3 text-sm text-gray-600">Аукционных статей: {has ? articles.length : 0}</div>
         <AuctionSliderNew articles={toRender} />
-        {tagDebugInfo && (
-          <div className="mt-4 p-3 bg-gray-50 border border-gray-200 text-sm text-gray-700 rounded">
-            <div className="font-medium mb-2">DEBUG: tag exclusion info</div>
-            {tagDebugInfo && tagDebugInfo.error ? (
-              <pre className="whitespace-pre-wrap text-red-600">{String(tagDebugInfo.error)}</pre>
-            ) : (
-              <div>
-                <div>
-                  <strong>tag row:</strong>
-                  <span> </span>
-                  <span className="break-words">{safeStringify(tagDebugInfo.tagRow, 'not found')}</span>
-                </div>
-                <div className="mt-2"><strong>relations count:</strong> {Number(tagDebugInfo.relsCount || 0)}</div>
-                <div className="mt-2"><strong>excluded ids (sample 50):</strong> <span className="break-words">{safeArraySampleString(tagDebugInfo.excludedIds,50)}</span></div>
-                <div className="mt-2"><strong>auctionArticles ids (server RPC):</strong> <span className="break-words">{safeArraySampleString(tagDebugInfo.auctionIds,50)}</span></div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     );
 }
 
-  function safeStringify(value: any, fallback = '') {
-    try {
-      if (value === undefined || value === null) return fallback;
-      if (typeof value === 'string') return value;
-      return JSON.stringify(value);
-    } catch (e) {
-      try { return String(value); } catch (ee) { return fallback; }
-    }
-  }
-
-  function safeArraySampleString(val: any, n = 50) {
-    try {
-      if (!Array.isArray(val)) return safeStringify(val, '[]');
-      return JSON.stringify(val.slice(0, n));
-    } catch (e) {
-      return '[]';
-    }
-  }
