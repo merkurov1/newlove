@@ -494,23 +494,63 @@ export async function updateLetter(formData) {
   redirect('/admin/letters');
 }
 
+/**
+ * Server action to delete a letter. Returns void on success and throws on error.
+ * @param {FormData} formData
+ * @returns {Promise<void>}
+ */
 export async function deleteLetter(formData) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   const id = formData.get('id')?.toString();
-  if (!id) throw new Error('Letter ID is required.');
+  if (!id) return { status: 'error', message: 'Letter ID is required.' };
 
-  const { data: letter } = await supabase.from('letters').select('slug, published').eq('id', id).maybeSingle();
-  const { error } = await supabase.from('letters').delete().eq('id', id);
+  try {
+    const { data: letter } = await supabase.from('letters').select('slug, published').eq('id', id).maybeSingle();
+    let { error } = await supabase.from('letters').delete().eq('id', id);
 
-  if (error) {
-    console.error('Supabase delete letter error:', error);
-    throw new Error('Ошибка при удалении письма: ' + error.message);
+    // If permission denied, try to provide a clearer error or retry using explicit service role
+    if (error && String(error.code) === '42501') {
+      console.error('Supabase delete letter permission denied (42501). Attempting retry with service role client if available.');
+      try { (await import('@sentry/nextjs')).captureException(error); } catch (e) {}
+
+      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error('Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server.');
+      }
+
+      try {
+        const svc = getServerSupabaseClient({ useServiceRole: true });
+        const retry = await svc.from('letters').delete().eq('id', id);
+        if (retry.error) {
+          console.error('Retry with service role failed:', retry.error);
+          try { (await import('@sentry/nextjs')).captureException(retry.error); } catch (e) {}
+          throw new Error('Ошибка при удалении письма: ' + (retry.error.message || String(retry.error)));
+        }
+        // success via retry
+        error = null;
+      } catch (e) {
+        console.error('Retry with service role threw:', e);
+        try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) {}
+        throw new Error('Не удалось удалить письмо: ' + (e?.message || String(e)));
+      }
+    }
+
+    if (error) {
+      console.error('Supabase delete letter error:', error);
+      try { (await import('@sentry/nextjs')).captureException(error); } catch (e) {}
+      throw new Error('Ошибка при удалении письма: ' + (error.message || String(error)));
+    }
+
+    revalidatePath('/admin/letters');
+    revalidatePath('/letters');
+    if (letter?.published) revalidatePath(`/letters/${letter.slug}`);
+    // server action expects void return on success
+    return;
+  } catch (e) {
+    console.error('deleteLetter exception:', e);
+    try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) {}
+    throw e instanceof Error ? e : new Error(String(e));
   }
-
-  revalidatePath('/admin/letters');
-  revalidatePath('/letters');
-  if (letter?.published) revalidatePath(`/letters/${letter.slug}`);
 }
 
 export async function sendLetter(prevState, formData) {
