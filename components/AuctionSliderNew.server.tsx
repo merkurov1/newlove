@@ -1,7 +1,7 @@
 import React from 'react';
 import AuctionSliderNew from './AuctionSliderNew';
 
-export default function AuctionSliderNewServer({ articles }: { articles?: any[] }) {
+export default function AuctionSliderNewServer({ articles, tagDebugInfo }: { articles?: any[], tagDebugInfo?: any }) {
   // If there are no articles, provide a safe placeholder so the UI
   // remains visible and consistent. This avoids returning null from
   // the server component which would hide the entire slot under Hero.
@@ -41,6 +41,4 @@ export default function AuctionSliderNewServer({ articles }: { articles?: any[] 
         )}
       </div>
     );
-
-  return <AuctionSliderNew articles={articles} />;
 }
