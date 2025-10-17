@@ -307,7 +307,8 @@ export async function updateProfile(prevState, formData) {
 
   revalidatePath('/profile');
   revalidatePath(`/you/${updatedUser.username}`);
-  redirect(`/you/${updatedUser.username}`);
+  // Return success so client-side form handlers can navigate reliably
+  return { status: 'success', message: 'Профиль обновлён.', username: updatedUser.username };
 }
 
 // --- Админские действия с пользователями ---

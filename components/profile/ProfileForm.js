@@ -4,6 +4,7 @@
 import { useFormState, useFormStatus } from 'react-dom';
 import { updateProfile } from '@/app/admin/actions';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 // Маленький компонент для кнопки, чтобы показывать статус отправки
 function SubmitButton() {
@@ -24,6 +25,7 @@ export default function ProfileForm({ user }) {
   const initialState = { message: null, status: null };
   const [state, dispatch] = useFormState(updateProfile, initialState);
   const [showMessage, setShowMessage] = useState(false);
+  const router = useRouter();
 
   // basic client-side username validation
   function validateUsername(val) {
@@ -39,7 +41,13 @@ export default function ProfileForm({ user }) {
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [state]);
+    // If server action returned success with a username, navigate there
+    try {
+      if (state && state.status === 'success' && state.username) {
+        router.push(`/you/${state.username}`);
+      }
+    } catch (e) {}
+  }, [state, router]);
 
   return (
   <form action={dispatch} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md">
