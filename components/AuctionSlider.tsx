@@ -58,7 +58,7 @@ export default function AuctionSlider({ articles }: { articles: Article[] }) {
         className="py-4"
       >
         {articles.map((a) => (
-          <SwiperSlide key={String(a.id || a.slug || Math.random())}>
+          <SwiperSlide key={String(a.id || a.slug || (a && a.title) || Math.random())}>
             <a href={`/${mapSlug(a)}`} className="block rounded-lg overflow-hidden shadow-sm bg-white dark:bg-neutral-900">
               {mapImg(a) ? (
                 <div className="h-48 w-full bg-gray-100 dark:bg-neutral-800 relative">

@@ -325,7 +325,7 @@ export default async function Home({ searchParams }) {
 
               {/* Client-only Swiper enhancement: mounts after hydration and replaces/enhances the server fallback */}
               <div suppressHydrationWarning>
-                <AuctionSlider articles={auctionArticles} />
+                <AuctionSlider articles={safeData(auctionArticles)} />
               </div>
             </div>
           </div>
