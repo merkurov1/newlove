@@ -8,16 +8,21 @@ import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 
 type Article = {
-  id: string;
-  title: string;
-  slug: string;
+  id?: string | number;
+  title?: string;
+  slug?: string;
+  // support both shapes produced by normalizeArticle and other sources
+  previewImage?: string | null;
   preview_image_url?: string | null;
   description?: string | null;
-  published_at?: string | null;
+  publishedAt?: string | null;
 };
 
 export default function AuctionSlider({ articles }: { articles: Article[] }) {
   if (!Array.isArray(articles) || articles.length === 0) return null;
+
+  const mapImg = (a: Article) => a.previewImage || a.preview_image_url || null;
+  const mapSlug = (a: Article) => (a && a.slug) || (a && (a as any).urlSlug) || '';
 
   return (
     <div className="auction-slider">
@@ -36,11 +41,11 @@ export default function AuctionSlider({ articles }: { articles: Article[] }) {
         className="py-4"
       >
         {articles.map((a) => (
-          <SwiperSlide key={a.id}>
-            <a href={`/articles/${a.slug}`} className="block rounded-lg overflow-hidden shadow-sm bg-white dark:bg-neutral-900">
-              {a.preview_image_url ? (
+          <SwiperSlide key={String(a.id || a.slug || Math.random())}>
+            <a href={`/${mapSlug(a)}`} className="block rounded-lg overflow-hidden shadow-sm bg-white dark:bg-neutral-900">
+              {mapImg(a) ? (
                 <div className="h-48 w-full bg-gray-100 dark:bg-neutral-800">
-                  <img src={a.preview_image_url} alt={a.title} className="object-cover w-full h-48" />
+                  <img src={String(mapImg(a))} alt={a.title || ''} className="object-cover w-full h-48" />
                 </div>
               ) : (
                 <div className="h-48 w-full bg-gradient-to-br from-pink-50 to-yellow-50 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">

@@ -151,17 +151,8 @@ export default async function Home({ searchParams }) {
           We keep the client-only CloseableHero for enhanced behavior,
           but render a basic hero on the server so non-hydrated clients
           (tablets, noscript, partial JS failures) see content. */}
-      <div className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8 mb-6">
-        <div className="rounded-2xl p-6 bg-white/80 dark:bg-neutral-900">
-          <h1 className="text-3xl sm:text-4xl font-extrabold">Anton Merkurov</h1>
-          <p className="mt-2 text-lg text-neutral-700 dark:text-neutral-300">Медиа, технологии и искусство. Персональный сайт и блог.</p>
-          <div className="mt-4">
-            <a href="/you" className="inline-block text-sm font-medium text-pink-600 hover:underline">Обо мне →</a>
-          </div>
-        </div>
-      </div>
-      {/* Client-only CloseableHero (enhanced behavior) */}
-      <CloseableHero className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8 mb-6" />
+          {/* Client-only CloseableHero (enhanced behavior) */}
+          <CloseableHero className="relative max-w-5xl mx-auto px-4 py-6 sm:py-10 lg:py-8 mb-6" />
       {/* New auction slider placed under the hero */}
       {Array.isArray(auctionArticles) && auctionArticles.length > 0 && (
         <section className="max-w-5xl mx-auto py-3 sm:py-4 lg:py-4 px-4" aria-label="Аукционные статьи">
