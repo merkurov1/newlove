@@ -68,7 +68,43 @@ export default async function Home() {
         rels = await readArticleRelationsForTag(supabase, tagRow.id) || [];
       }
       const excludedIds = Array.from(new Set((rels || []).map(r => r && (r.A || r.article_id || r.articleId || r.a || r.article || r.id)).filter(Boolean)));
-      tagDebugInfo = { tagRow, relsCount: (rels || []).length, excludedIds, auctionIds };
+      // Additional probes: RPC and tag-table attempts
+      const rpcProbe = { ok: false, count: 0, error: null };
+      try {
+        const rpc = await supabase.rpc('get_articles_by_tag', { tag_slug: 'auction' });
+        const rpcData = (rpc && (rpc.data || rpc)) || [];
+        rpcProbe.ok = true;
+        rpcProbe.count = Array.isArray(rpcData) ? rpcData.length : (rpcData ? 1 : 0);
+      } catch (e) {
+        rpcProbe.error = String(e);
+      }
+
+      const tagTableChecks = [];
+      const tableCandidates = ['tags','Tag','Tags','tag'];
+      for (const tbl of tableCandidates) {
+        try {
+          const res = await supabase.from(tbl).select('id,slug,name').ilike('slug', 'auction').limit(1);
+          if (res && res.data && res.data[0]) {
+            tagTableChecks.push({ table: tbl, found: true, row: res.data[0] });
+            continue;
+          }
+          const res2 = await supabase.from(tbl).select('id,slug,name').ilike('name', 'auction').limit(1);
+          if (res2 && res2.data && res2.data[0]) {
+            tagTableChecks.push({ table: tbl, found: true, row: res2.data[0] });
+            continue;
+          }
+          tagTableChecks.push({ table: tbl, found: false });
+        } catch (e) {
+          tagTableChecks.push({ table: tbl, error: String(e) });
+        }
+      }
+
+  // Make debug info JSON-serializable to avoid hydration/runtime issues
+  const safeTagRow = tagRow ? JSON.parse(JSON.stringify(tagRow)) : null;
+  const safeExcludedIds = Array.isArray(excludedIds) ? excludedIds.map(String) : [];
+  const safeAuctionIds = Array.isArray(auctionIds) ? auctionIds.map(String) : [];
+  const safeTagTableChecks = Array.isArray(tagTableChecks) ? tagTableChecks.map((c) => ({ table: c.table, found: !!c.found, error: c.error ? String(c.error) : undefined, row: c.row ? JSON.parse(JSON.stringify(c.row)) : undefined })) : [];
+  tagDebugInfo = { tagRow: safeTagRow, relsCount: (rels || []).length, excludedIds: safeExcludedIds, auctionIds: safeAuctionIds, rpcProbe, tagTableChecks: safeTagTableChecks };
     } catch (e) {
       tagDebugInfo = { error: String(e) };
     }
