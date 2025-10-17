@@ -5,7 +5,7 @@ import Link from "next/link";
 import SafeImage from "@/components/SafeImage";
 import EditButton from '@/components/EditButton';
 
-// Та же самая вспомогательная функция для исправления URL
+// The same helper function to fix the URL
 const normalizeImageUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   return url.replace(/([^:]\/)\/+/g, "$1");
@@ -19,8 +19,8 @@ interface Article {
   publishedAt: string;
   previewImage?: string | null;
   preview_image?: string | null;
-  description?: string; // Оставим на случай, если API его возвращает
-  excerpt?: string | null; // Поле из нашей БД
+  description?: string;
+  excerpt?: string | null;
   author?: {
     name?: string;
     image?: string;
@@ -40,12 +40,11 @@ const API_PAGE_SIZE = 15;
 const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, includeTag }) => {
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(initialArticles.length === PAGE_SIZE);
+  const [hasMore, setHasMore] = useState(initialArticles.length >= PAGE_SIZE);
   const [offset, setOffset] = useState(initialArticles.length);
   const loaderRef = useRef<HTMLDivElement>(null);
   const [infiniteDone, setInfiniteDone] = useState(false);
 
-  // Логика подгрузки осталась без изменений
   useEffect(() => {
     if (infiniteDone || !hasMore) return;
     const handleScroll = () => {
@@ -75,7 +74,6 @@ const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, incl
     <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 md:px-10">
       <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 overflow-x-hidden">
         {articles.map((article) => {
-          // Определяем и "чистим" URL картинки
           const imageUrl = normalizeImageUrl(article.preview_image || article.previewImage);
 
           return (
@@ -87,15 +85,28 @@ const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, incl
               <div className="absolute top-2 right-2 z-20">
                 <EditButton contentType="article" contentId={article.id} variant="compact" />
               </div>
+
               <Link
                 href={`/${article.slug}`}
                 className="block relative w-full aspect-[2/1] group min-w-0 overflow-hidden"
                 aria-label={`Читать статью: ${article.title}`}
                 style={{ background: '#fff', minHeight: 320 }}
               >
+                {/* --- VISUAL DEBUG BLOCK --- */}
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, zIndex: 100,
+                  background: 'rgba(0, 100, 255, 0.8)', color: 'white',
+                  padding: '5px', fontSize: '10px', width: '100%',
+                  wordBreak: 'break-all'
+                }}>
+                  <p><strong>Raw URL:</strong> {article.preview_image || article.previewImage || 'EMPTY'}</p>
+                  <p><strong>Fixed URL:</strong> {imageUrl || 'EMPTY'}</p>
+                </div>
+                {/* --- END DEBUG BLOCK --- */}
+                
                 {imageUrl ? (
                   <SafeImage
-                    src={imageUrl} // Используем исправленный URL
+                    src={imageUrl}
                     alt={`Изображение к статье: ${article.title}`}
                     fill
                     sizes="100vw"
@@ -106,7 +117,7 @@ const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, incl
                   <div className="w-full h-full aspect-[2/1] bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center min-h-[320px]">
                     <div className="text-center">
                       <div className="text-4xl text-gray-300 mb-2">📰</div>
-                      <div className="text-sm text-gray-400">No image</div>
+                      <div className="text-sm text-gray-400">No Image</div>
                     </div>
                   </div>
                 )}
@@ -127,7 +138,6 @@ const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, incl
           );
         })}
       </div>
-      {/* Остальная часть компонента для подгрузки */}
     </div>
   );
 };
