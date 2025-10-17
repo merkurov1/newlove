@@ -175,6 +175,41 @@ export default async function Home({ searchParams }) {
     auctionArticles = [];
   }
 
+  // If all fetch attempts failed but the junction returned rows or we collected ids,
+  // build minimal placeholders so the auction section can still render and be visible.
+  // This prevents the homepage from hiding the entire auction UI when DB shape or RLS
+  // prevents fetching full article objects but the canonical relations exist.
+  try {
+    const anyRels = Array.isArray(relRows) && relRows.length > 0;
+    const anyIds = Array.isArray(ids) && ids.length > 0;
+    if ((!Array.isArray(auctionArticles) || auctionArticles.length === 0) && (anyRels || anyIds)) {
+      const placeholders = [];
+      if (anyRels) {
+        for (const r of (relRows || []).slice(0, 12)) {
+          if (!r) continue;
+          const Aobj = r.A || r.a || r.article || null;
+          // attempt to extract an id-like value
+          const maybeId = (Aobj && (Aobj.id || Aobj._id)) || r.A || r.a || r.article_id || r.articleId || null;
+          const idStr = maybeId ? String(maybeId) : null;
+          const title = (Aobj && (Aobj.title || Aobj.name)) || null;
+          const slug = (Aobj && (Aobj.slug)) || (idStr ? idStr : '/');
+          const preview = (Aobj && (Aobj.previewImage || Aobj.preview_image)) || null;
+          const desc = (Aobj && (Aobj.description || Aobj.excerpt)) || null;
+          placeholders.push({ id: idStr || slug, title: title || 'Article', slug, previewImage: preview, description: desc });
+        }
+      }
+      if (placeholders.length === 0 && anyIds) {
+        for (const id of (ids || []).slice(0, 12)) {
+          const sid = String(id);
+          placeholders.push({ id: sid, title: 'Article', slug: sid, previewImage: null, description: null });
+        }
+      }
+      if (placeholders.length > 0) auctionArticles = placeholders;
+    }
+  } catch (e) {
+    // keep auctionArticles empty on any unexpected error
+  }
+
   // (No extra fallbacks here — strictly only articles tagged 'auction' via canonical junction)
   const auctionIds = (auctionArticles || []).map(a => a.id).filter(Boolean);
   // Show main feed: articles excluding auction-tagged items
