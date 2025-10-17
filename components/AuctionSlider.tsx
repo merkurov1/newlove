@@ -1,5 +1,5 @@
 "use client";
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 // import modules from Swiper v12 modules path
 import { Navigation, Pagination, Autoplay } from 'swiper/modules';
@@ -21,8 +21,25 @@ type Article = {
 export default function AuctionSlider({ articles }: { articles: Article[] }) {
   if (!Array.isArray(articles) || articles.length === 0) return null;
 
+  useEffect(() => {
+    try {
+      // Mount-time diagnostic to help debug hydration / client init issues
+      // Visible in browser console only when JS runs.
+      // eslint-disable-next-line no-console
+      console.debug('[AuctionSlider] mounted, articles count=', Array.isArray(articles) ? articles.length : 0);
+    } catch (e) {
+      // ignore
+    }
+  }, [articles]);
+
   const mapImg = (a: Article) => a.previewImage || a.preview_image_url || null;
-  const mapSlug = (a: Article) => (a && a.slug) || (a && (a as any).urlSlug) || '';
+  const mapSlug = (a: Article) => {
+    const s = (a && a.slug) || (a && (a as any).urlSlug) || null;
+    if (s && String(s).trim().length > 0) return String(s).trim();
+    // fallback to id-based path when slug missing
+    if (a && a.id) return String(a.id);
+    return '';
+  };
 
   return (
     <div className="auction-slider">
