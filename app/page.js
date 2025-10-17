@@ -76,9 +76,15 @@ export default async function Home({ searchParams }) {
       let rels = [];
       try {
         if (diag.tagRow && diag.tagRow.id) {
-          rels = await readArticleRelationsForTag(supabase, diag.tagRow.id) || [];
+          // Use the strict reader by default
+          try {
+            rels = await readArticleRelationsForTagStrict(supabase, diag.tagRow.id) || [];
+          } catch (e) {
+            rels = await readArticleRelationsForTag(supabase, diag.tagRow.id) || [];
+          }
         }
         diag.relsCount = Array.isArray(rels) ? rels.length : 0;
+        diag.relsSample = Array.isArray(rels) ? (rels.slice(0,10).map(r => (r && typeof r === 'object') ? JSON.parse(JSON.stringify(r)) : r)) : [];
         diag.excludedIds = Array.from(new Set((rels || []).map(r => (r && (r.A || r.article_id || r.articleId || r.a || r.article || r.id)) || null).filter(Boolean))).map(String);
       } catch (e) {
         diag.relsError = { message: e && e.message ? e.message : String(e), stack: e && e.stack ? e.stack : null };
