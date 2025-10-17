@@ -32,60 +32,7 @@ export default async function Home() {
   // Strict fetch: only articles with tag 'auction'
   const auctionArticles = await getArticlesByTag(supabase, 'auction', 50) || [];
 
-  // Extra fallback: try to locate the 'auction' tag row and read junction relations directly
-  if ((!auctionArticles || auctionArticles.length === 0)) {
-    try {
-      const { getTagBySlug, readArticleRelationsForTag, /* extractArticleIdFromRelRow */ } = await import('@/lib/tagHelpers');
-      // use a tolerant tag lookup (getTagBySlug handles candidate tables)
-      const tag = await getTagBySlug(supabase, 'auction');
-      if (tag && tag.id) {
-        const rels = await readArticleRelationsForTag(supabase, tag.id) || [];
-        // Best-effort extract ids using shapes common in junction rows
-        const ids = Array.from(new Set((rels || []).map(r => {
-          if (!r) return null;
-          // common shapes
-          if (r.article_id) return r.article_id;
-          if (r.articleId) return r.articleId;
-          if (r.A) {
-            if (typeof r.A === 'object') return r.A.id || r.A._id || null;
-            return r.A;
-          }
-          if (r.a) {
-            if (typeof r.a === 'object') return r.a.id || r.a._id || null;
-            return r.a;
-          }
-          if (r.id) return r.id;
-          return null;
-        }).filter(Boolean))).map(String);
-        if (ids.length > 0) {
-          try {
-            const resp2 = await supabase.from('articles')
-              .select('id,title,slug,content,publishedAt,updatedAt,author:authorId(name)')
-              .in('id', ids)
-              .eq('published', true)
-              .limit(50);
-            const rows2 = (resp2 && resp2.data) || [];
-            if (rows2 && rows2.length > 0) {
-              auctionArticles = await Promise.all(rows2.map(async (r) => ({
-                id: r.id,
-                title: r.title,
-                slug: r.slug,
-                content: r.content,
-                publishedAt: r.publishedAt,
-                updatedAt: r.updatedAt,
-                author: r.author || null,
-                previewImage: r.content ? await getFirstImage(r.content) : null,
-              })));
-            }
-          } catch (e) {
-            // ignore and proceed to whatever we have
-          }
-        }
-      }
-    } catch (e) {
-      // swallow - this is extra best-effort fallback
-    }
-  }
+  // (No extra fallbacks here — intentionally strict: only articles tagged 'auction')
   const auctionIds = (auctionArticles || []).map(a => a.id).filter(Boolean);
   // Show main feed: articles excluding auction-tagged items
   const newsArticles = await getArticlesExcludingTag(supabase, 'auction', 15);
