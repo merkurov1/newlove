@@ -21,13 +21,13 @@ interface Props {
 
 export default function UserEditModal({ user, onClose, onSave }: Props) {
   // Hooks must be declared unconditionally at the top of the component
-  const [formData, setFormData] = React.useState<Partial<User>>({
+  const [formData, setFormData] = React.useState({
     name: user?.name ?? '',
     username: user?.username ?? '',
     bio: user?.bio ?? '',
     website: user?.website ?? '',
     role: user?.role ?? Role.USER,
-  });
+  } as Partial<User>);
   const [saving, setSaving] = React.useState(false);
 
   if (!user) return null;

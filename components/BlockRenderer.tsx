@@ -38,7 +38,7 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
             
             return (
               <div key={idx} className="mb-6">
-                <HeaderTag className={`font-bold text-gray-900 leading-tight ${sizeClasses}`} dangerouslySetInnerHTML={{ __html: block.data.text || '' }} />
+                {React.createElement(HeaderTag as any, { className: `font-bold text-gray-900 leading-tight ${sizeClasses}`, dangerouslySetInnerHTML: { __html: block.data.text || '' } })}
               </div>
             );
           case 'list':
