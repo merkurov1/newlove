@@ -10,12 +10,22 @@
 -- SELECT rolname FROM pg_roles ORDER BY rolname;
 
 -- 1) Дать право использовать схему public (USAGE) и селект на все текущие таблицы
+-- 1) Дать сервисной роли доступ к схеме и права на DML (SELECT/INSERT/UPDATE/DELETE)
 GRANT USAGE ON SCHEMA public TO SERVICE_ROLE_NAME;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO SERVICE_ROLE_NAME;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO SERVICE_ROLE_NAME;
 
--- 2) Опционально: сделать так, чтобы новые таблицы по умолчанию давали SELECT этой роли
+-- Права на секвенсы (если используются SERIAL/SEQUENCE для id)
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO SERVICE_ROLE_NAME;
+
+-- Права на выполнение функций (RPC), если у вас есть функции в public
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO SERVICE_ROLE_NAME;
+
+-- 2) Опционально: сделать так, чтобы новые таблицы по умолчанию давали DML этой роли
 -- (полезно для новых миграций)
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO SERVICE_ROLE_NAME;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO SERVICE_ROLE_NAME;
+
+-- И для новых секвенций (чтобы роль могла читать/использовать их):
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO SERVICE_ROLE_NAME;
 
 -- 3) Диагностика: проверить права на конкретную таблицу
 -- В psql выполните:
