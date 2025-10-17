@@ -348,10 +348,20 @@ export async function subscribeToNewsletter(prevState, formData) {
         return { status: 'error', message: 'Введите корректный email адрес.' };
     }
 
-    const { user, supabase } = await getUserAndSupabaseForRequest(new Request('http://localhost'));
+    const { user } = await getUserAndSupabaseForRequest(new Request('http://localhost'));
+
+    // Use service-role client for writes (in case RLS prevents anon/request client from inserting)
+    let svc;
+    try {
+      svc = getServerSupabaseClient({ useServiceRole: true });
+    } catch (e) {
+      console.error('subscribeToNewsletter: service role client not available', e);
+      try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) {}
+      return { status: 'error', message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).' };
+    }
 
     // upsert subscriber; mark inactive until confirmed
-    const { data: subscriber, error } = await supabase
+    const { data: subscriber, error } = await svc
         .from('subscribers')
         .upsert({ email, userId: user?.id || null, isActive: false }, { onConflict: 'email' })
         .select()
@@ -359,6 +369,10 @@ export async function subscribeToNewsletter(prevState, formData) {
     
     if (error) {
         console.error('Supabase upsert subscriber error:', error);
+        try { (await import('@sentry/nextjs')).captureException(error); } catch (e) {}
+        if (String(error.code) === '42501') {
+          return { status: 'error', message: 'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.' };
+        }
         return { status: 'error', message: 'Ошибка при подписке.' };
     }
 
@@ -369,9 +383,10 @@ export async function subscribeToNewsletter(prevState, formData) {
     // generate confirmation token and insert into subscriber_tokens
     try {
       const confirmToken = createId();
-      const { error: tokenErr } = await supabase.from('subscriber_tokens').insert({ subscriber_id: subscriber.id, type: 'confirm', token: confirmToken, created_at: new Date().toISOString() });
+      const { error: tokenErr } = await svc.from('subscriber_tokens').insert({ subscriber_id: subscriber.id, type: 'confirm', token: confirmToken, created_at: new Date().toISOString() });
       if (tokenErr) {
         console.warn('Failed to insert confirm token:', tokenErr.message || tokenErr);
+        try { (await import('@sentry/nextjs')).captureException(tokenErr); } catch (e) {}
       } else {
         const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-confirm?token=${confirmToken}`;
         console.info('Created confirm token for subscriber', subscriber.email);
