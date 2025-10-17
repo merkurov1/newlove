@@ -1,5 +1,5 @@
 "use client";
-import React, from 'react';
+import React, { FC } from 'react'; // This is the corrected line
 import Image from 'next/image';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules';
@@ -24,7 +24,7 @@ interface AuctionSliderProps {
   articles: Article[];
 }
 
-const AuctionSlider: React.FC<AuctionSliderProps> = ({ articles }) => {
+const AuctionSlider: FC<AuctionSliderProps> = ({ articles }) => {
   if (!Array.isArray(articles) || articles.length === 0) return null;
 
   const mapSlug = (a: Article) => (a?.slug || a?.id || '').toString();
