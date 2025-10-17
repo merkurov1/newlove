@@ -67,32 +67,36 @@ export default async function Home() {
   const newsArticles = await getArticlesByTag(supabase, 'news', 15);
 
   return (
-    <main className="relative overflow-hidden">
+    <main className="relative overflow-hidden py-8 sm:py-12">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify([PersonSchema, WebsiteSchema, BlogSchema]) }} />
       <BackgroundShapes />
-      <CloseableHero className="mb-8" />
+      
+      {/* ИЗМЕНЕНИЕ: Все секции обернуты в единый контейнер для консистентности */}
+      <div className="max-w-5xl mx-auto px-4 space-y-12 sm:space-y-16">
+        <CloseableHero />
 
-      {Array.isArray(auctionArticles) && auctionArticles.length > 0 && (
-        <section className="max-w-5xl mx-auto px-4 mb-8 sm:mb-12" aria-label="Аукционные статьи">
-          <Suspense fallback={<AuctionSkeleton />}>
-            <AuctionSlider articles={safeData(auctionArticles)} />
-          </Suspense>
+        {Array.isArray(auctionArticles) && auctionArticles.length > 0 && (
+          <section aria-label="Аукционные статьи">
+            <Suspense fallback={<AuctionSkeleton />}>
+              <AuctionSlider articles={safeData(auctionArticles)} />
+            </Suspense>
+          </section>
+        )}
+
+        <section id="articles">
+          <ArticlesFeed initialArticles={safeData(newsArticles)} includeTag="news" />
         </section>
-      )}
 
-      <section id="articles" className="max-w-5xl mx-auto px-4 mb-8 sm:mb-12">
-        <ArticlesFeed initialArticles={safeData(newsArticles)} includeTag="news" />
-      </section>
-
-      <section className="max-w-5xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl sm:text-3xl font-semibold">🌊 Flow</h2>
-          <Link href="/lab/feed" className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition-colors">Сводная лента →</Link>
-        </div>
-        <div>
-          <FlowFeed limit={12} />
-        </div>
-      </section>
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl sm:text-3xl font-semibold">🌊 Flow</h2>
+            <Link href="/lab/feed" className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition-colors">Сводная лента →</Link>
+          </div>
+          <div>
+            <FlowFeed limit={12} />
+          </div>
+        </section>
+      </div>
     </main>
   );
 }
