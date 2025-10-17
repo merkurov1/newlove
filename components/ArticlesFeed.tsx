@@ -5,7 +5,7 @@ import Link from "next/link";
 import SafeImage from "@/components/SafeImage";
 import EditButton from '@/components/EditButton';
 
-// Вспомогательная функция для исправления URL с явным указанием типа
+// Та же самая вспомогательная функция для исправления URL
 const normalizeImageUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   return url.replace(/([^:]\/)\/+/g, "$1");
@@ -19,7 +19,8 @@ interface Article {
   publishedAt: string;
   previewImage?: string | null;
   preview_image?: string | null;
-  description?: string;
+  description?: string; // Оставим на случай, если API его возвращает
+  excerpt?: string | null; // Поле из нашей БД
   author?: {
     name?: string;
     image?: string;
@@ -44,6 +45,7 @@ const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, incl
   const loaderRef = useRef<HTMLDivElement>(null);
   const [infiniteDone, setInfiniteDone] = useState(false);
 
+  // Логика подгрузки осталась без изменений
   useEffect(() => {
     if (infiniteDone || !hasMore) return;
     const handleScroll = () => {
@@ -73,7 +75,9 @@ const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, incl
     <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 md:px-10">
       <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 overflow-x-hidden">
         {articles.map((article) => {
-          const imageUrl = normalizeImageUrl(article.previewImage || article.preview_image);
+          // Определяем и "чистим" URL картинки
+          const imageUrl = normalizeImageUrl(article.preview_image || article.previewImage);
+
           return (
             <article
               key={article.id}
@@ -91,7 +95,7 @@ const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, incl
               >
                 {imageUrl ? (
                   <SafeImage
-                    src={imageUrl}
+                    src={imageUrl} // Используем исправленный URL
                     alt={`Изображение к статье: ${article.title}`}
                     fill
                     sizes="100vw"
@@ -113,14 +117,17 @@ const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, incl
                     {article.title}
                   </h3>
                 </Link>
-                {article.description && (
-                  <p className="text-gray-700 text-base line-clamp-2 mt-1 break-words max-w-full">{article.description}</p>
+                {(article.excerpt || article.description) && (
+                  <p className="text-gray-700 text-base line-clamp-2 mt-1 break-words max-w-full">
+                    {article.excerpt || article.description}
+                  </p>
                 )}
               </div>
             </article>
           );
         })}
       </div>
+      {/* Остальная часть компонента для подгрузки */}
     </div>
   );
 };
