@@ -25,7 +25,7 @@ const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false
 import { getArticlesByTag, getArticlesExcludingTag } from '@/lib/tagHelpers';
 import dynamic from 'next/dynamic';
 const BackgroundShapes = dynamic(() => import('@/components/BackgroundShapes'), { ssr: false });
-export default async function Home() {
+export default async function Home({ searchParams }) {
   // SSR: Получаем сначала статьи для auction, then exclude them from main feed
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
@@ -37,13 +37,13 @@ export default async function Home() {
   // Show main feed: articles excluding auction-tagged items
   const newsArticles = await getArticlesExcludingTag(supabase, 'auction', 15);
   // Compute debug info for tag exclusion when requested
-  const globalReq = (globalThis && globalThis.request) || null;
-  // TEMP: force debug on to surface tag lookup details in prod for diagnosis
+  // Prefer explicit query param `?tag_debug=1` in the server page (passed via searchParams)
+  // or enable globally via env TAG_HELPERS_DEBUG
   let showDebug = !!(process && process.env && process.env.TAG_HELPERS_DEBUG);
   try {
-    if (!showDebug && globalReq && typeof globalReq.url === 'string') {
-      const u = new URL(globalReq.url);
-      if (u.searchParams.get('tag_debug') === '1') showDebug = true;
+    if (!showDebug && searchParams) {
+      // searchParams may be an object of strings in Next.js server components
+      if (searchParams.tag_debug === '1' || searchParams.tag_debug === 1) showDebug = true;
     }
   } catch (e) {
     // ignore
