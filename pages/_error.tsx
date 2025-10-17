@@ -1,21 +1,27 @@
 
 import * as Sentry from "@sentry/nextjs";
-import Error from "next/error";
-
 import type { ErrorProps } from "next/dist/pages/_error";
 import type { NextPageContext } from "next/dist/shared/lib/utils";
 
 const CustomErrorComponent = (props: ErrorProps) => {
-  return <Error statusCode={props.statusCode} />;
+  const status = props?.statusCode ?? 500;
+  return (
+    <div className="min-h-screen flex items-center justify-center p-8">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold mb-2">Ошибка {status}</h1>
+        <p className="text-gray-600">Что-то пошло не так. Мы получили уведомление и работаем над этим.</p>
+      </div>
+    </div>
+  );
 };
 
 CustomErrorComponent.getInitialProps = async (contextData: NextPageContext) => {
-  // In case this is running in a serverless function, await this in order to give Sentry
-  // time to send the error before the lambda exits
+  // Ensure Sentry captures the error before serverless function exits
   await Sentry.captureUnderscoreErrorException(contextData);
 
-  // This will contain the status code of the response
-  return Error.getInitialProps(contextData);
+  // Provide a minimal statusCode to the component
+  const statusCode = contextData.res?.statusCode ?? (contextData.err as any)?.statusCode ?? 500;
+  return { statusCode } as ErrorProps;
 };
 
 export default CustomErrorComponent;
