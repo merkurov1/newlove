@@ -115,3 +115,19 @@
 		grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
 	}
 }
+
+/* Site background: light pink in day, slightly darker in dark mode */
+:root {
+  --site-bg-day: #fff1f5; /* very light pink */
+  --site-bg-night: #ffd6e0; /* slightly deeper pink for dark mode */
+}
+
+body {
+  background-color: var(--site-bg-day);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: var(--site-bg-night);
+  }
+}
