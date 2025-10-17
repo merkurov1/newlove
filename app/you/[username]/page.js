@@ -163,7 +163,7 @@ async function ProfileContent({ username }) {
 
         {/* Edit profile button visible only to the owner */}
         {viewerIsOwner && (
-          <div className="mt-4 flex items-center gap-4">
+            <div className="mt-4 flex items-center gap-4">
             {/* Use a plain anchor to guarantee navigation even if client JS hasn't hydrated */}
             <a href="/profile" className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Редактировать профиль</a>
             {/* Subscription toggle for owner (email required) */}
