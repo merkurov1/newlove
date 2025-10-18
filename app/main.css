@@ -21,9 +21,11 @@
 }
 /* src/styles/main.css (или ваш глобальный CSS файл) */
 
+/* stylelint-disable */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+/* stylelint-enable */
 
 /* Галерея изображений: grid всегда, даже вне .prose */
 .gallery-grid {
