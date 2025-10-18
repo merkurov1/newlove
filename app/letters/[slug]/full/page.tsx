@@ -1,9 +1,9 @@
 // ===== ФАЙЛ: app/letters/[slug]/full/page.tsx =====
-// (ОРИГИНАЛЬНЫЙ КОД)
+// (ТВОЙ ОРИГИНАЛЬНЫЙ, ПРАВИЛЬНЫЙ КОД)
 
 import { notFound, redirect } from 'next/navigation';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest'; // <-- Твой хелпер
+import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
 import dynamicImport from 'next/dynamic';
@@ -20,7 +20,6 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function LetterFullPage({ params }: Props) {
     const { slug } = params;
     
-    // ----- ЭТО ТВОЙ ОРИГИНАЛЬНЫЙ КОД -----
     let req: Request | null = (globalThis && (globalThis as any).request) || null;
     if (!req) {
         const cookieHeader = cookies()
@@ -85,4 +84,4 @@ export default async function LetterFullPage({ params }: Props) {
     );
 }
 
-export const dynamic = 'force-dynamic'; // <-- Он у тебя тут уже был
+export const dynamic = 'force-dynamic';

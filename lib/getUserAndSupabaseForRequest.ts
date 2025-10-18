@@ -31,6 +31,7 @@ export async function getUserAndSupabaseForRequest(req?: Request | null): Promis
     }
 
     // Если Request не помог, пытаемся собрать 'user' из next/headers
+    [span_0](start_span)[span_1](start_span)// (Логика, взятая из твоего же файла serverAuth.ts [cite: 278-284])
     try {
         const { cookies } = await import('next/headers');
         const cookieHeader = cookies()
