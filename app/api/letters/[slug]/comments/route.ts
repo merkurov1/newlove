@@ -8,9 +8,11 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
     const slug = params.slug;
     try {
         // Require authentication for listing comments to prevent public access
+        const url = new URL(req.url);
+        const wantDebug = url.searchParams.get('_debug') === '1';
         const ctx = await getUserAndSupabaseForRequest(req) || {};
         const user = ctx.user || null;
-        if (!user || !user.id) return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        if (!user || !user.id) return new Response(JSON.stringify({ error: 'unauthenticated', debug: wantDebug ? { viewer: null } : undefined }), { status: 401, headers: { 'Content-Type': 'application/json' } });
 
         const { getServerSupabaseClient } = await import('@/lib/serverAuth');
         const svc = getServerSupabaseClient({ useServiceRole: true });
@@ -18,12 +20,15 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
         const { data: letter, error: letterErr } = await svc.from('letters').select('id').eq('slug', slug).maybeSingle();
         if (letterErr || !letter) return new Response(JSON.stringify({ comments: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
-        // Read comments table
-        let comments: Array<any> = [];
-        const { data: rows, error } = await svc.from('letter_comments').select('id,content,created_at,user_id,author_display').eq('letter_id', letter.id).order('created_at', { ascending: true });
-        if (!error && Array.isArray(rows)) comments = rows;
+    // Read comments table
+    let comments: Array<any> = [];
+    const { data: rows, error } = await svc.from('letter_comments').select('id,content,created_at,user_id,author_display').eq('letter_id', letter.id).order('created_at', { ascending: true });
+    if (!error && Array.isArray(rows)) comments = rows;
 
-        return new Response(JSON.stringify({ comments }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const payload: any = { comments };
+    if (wantDebug) payload.debug = { viewerId: user.id, viewerRole: user.role || null, letterId: letter.id };
+
+    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (e) {
         return new Response(JSON.stringify({ comments: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
