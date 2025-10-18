@@ -1,16 +1,21 @@
 // ===== ФАЙЛ: app/letters/[slug]/full/page.tsx =====
-// (ПОЛНЫЙ КОД С ИЗМЕНЕНИЯМИ)
+// (ПОЛНЫЙ ЧИСТЫЙ КОД)
 
 import { notFound, redirect } from 'next/navigation';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-// import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest'; // <- УДАЛИТЬ
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
-import dynamicImport from 'next/dynamic';
-import serializeForClient from '@/lib/serializeForClient';
-import { createServerClient } from '@/lib/supabase/server'; // <-- НОВЫЙ ИМПОРТ
 
+// Переименованный импорт, чтобы избежать конфликта
+import dynamicImport from 'next/dynamic';
+
+import serializeForClient from '@/lib/serializeForClient';
+// Наш новый хелпер
+import { createServerClient } from '@/lib/supabase/server'; 
+
+// Динамическая загрузка компонента комментариев
 const LetterCommentsClient = dynamicImport(() => import('@/components/letters/LetterCommentsClient'), { ssr: false });
+
 type Props = { params: { slug: string } };
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
@@ -47,14 +52,11 @@ export default async function LetterFullPage({ params }: Props) {
     const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
     if (!letter.published && !isOwnerOrAdmin) return notFound();
 
-    // *** КЛЮЧЕВОЙ МОМЕНТ ***
-    // Эта проверка теперь будет работать, так как 'user' будет корректно определен
+    // Эта проверка теперь будет работать корректно
     if (!user) {
         const loginUrl = `/you/login?next=${encodeURIComponent(`/letters/${slug}/full`)}`;
         redirect(loginUrl);
     }
-
-    // ... остальной код файла без изменений ...
 
     let parsedBlocks: any[] = [];
     try {
@@ -65,6 +67,7 @@ export default async function LetterFullPage({ params }: Props) {
         console.error('Failed to parse letter content', e, letter.content);
     }
 
+    // Sanitize blocks for client transfer
     const safeParsed = serializeForClient(parsedBlocks || []) || [];
 
     return (
@@ -81,4 +84,5 @@ export default async function LetterFullPage({ params }: Props) {
     );
 }
 
+// Эта строка заставляет страницу рендериться динамически
 export const dynamic = 'force-dynamic';

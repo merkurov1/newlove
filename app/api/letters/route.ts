@@ -1,5 +1,5 @@
 // ===== ФАЙЛ: app/api/letters/route.ts =====
-// (ПОЛНЫЙ ЧИСТЫЙ КОД)
+// (ПОЛНЫЙ КОД С ИСПРАВЛЕНИЕМ)
 
 import { createServerClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
@@ -11,31 +11,34 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
 	try {
 		const cookieStore = cookies();
-		const supabase = createServerClient(cookieStore);
-
-		// 1. Проверяем, залогинен ли пользователь
-		const { data: { user } } = await supabase.auth.getUser();
+		
+		// 1. Создаем ОБЫЧНЫЙ клиент, чтобы проверить, кто пользователь
+		const supabaseUserClient = createServerClient(cookieStore);
+		const { data: { user } } = await supabaseUserClient.auth.getUser();
 		const isAdmin = user && (String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
 
-		// 2. Создаем запрос
-		let query = supabase
+		// 2. Создаем SERVICE_ROLE клиент, чтобы читать данные (как в старом коде)
+		const supabaseServiceClient = createServerClient(cookieStore, { useServiceRole: true });
+
+		// 3. Создаем запрос с помощью service-клиента
+		let query = supabaseServiceClient
 			.from('letters')
 			.select('id,title,slug,published,publishedAt,createdAt,author:authorId(name)')
 			.order('publishedAt', { ascending: false })
 			.limit(100);
 
-		// 3. Если пользователь НЕ админ, показываем только опубликованные
+		// 4. Если пользователь НЕ админ, показываем только опубликованные
+		// (Эта логика теперь будет работать)
 		if (!isAdmin) {
 			query = query.eq('published', true);
 		}
-		// (Если пользователь - админ, он увидит все письма)
+		// (Если пользователь - админ, он увидит все письма, включая черновики)
 
 		const { data, error } = await query;
 
 		if (error) {
-			console.error('Failed to fetch letters', error);
-			// Возвращаем ошибку, а не пустой массив
-			return new Response(JSON.stringify({ error: 'Failed to fetch' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+			console.error('Failed to fetch letters (service client)', error);
+			return new Response(JSON.stringify({ error: 'Failed to fetch letters' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
 		}
 
 		return NextResponse.json({ letters: data || [] });
