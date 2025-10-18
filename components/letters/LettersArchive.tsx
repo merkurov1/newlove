@@ -23,19 +23,19 @@ export default function LettersArchive() {
   useEffect(() => {
     const fetchLetters = async () => {
       try {
-          const response = await fetch('/api/letters', { credentials: 'same-origin' });
-          if (!response.ok) {
-            // try to parse debug info if present
-            try {
-              const txt = await response.text();
-              try { const j = JSON.parse(txt); setDebug(j.debug || j); } catch { setDebug(txt); }
-            } catch (e) { /* ignore */ }
-            throw new Error('Failed to fetch letters');
-          }
+        const response = await fetch('/api/letters', { credentials: 'same-origin' });
+        if (!response.ok) {
+          // try to parse debug info if present
+          try {
+            const txt = await response.text();
+            try { const j = JSON.parse(txt); setDebug(j.debug || j); } catch { setDebug(txt); }
+          } catch (e) { /* ignore */ }
+          throw new Error('Failed to fetch letters');
+        }
 
-          const data = await response.json();
-          setLetters(data.letters || []);
-          if (data.debug) setDebug(data.debug);
+        const data = await response.json();
+        setLetters(data.letters || []);
+        if (data.debug) setDebug(data.debug);
       } catch (err) {
         setError('Не удалось загрузить архив писем');
         console.error('Letters fetch error:', err);
@@ -56,7 +56,7 @@ export default function LettersArchive() {
     });
   };
 
-    if (loading) {
+  if (loading) {
     return (
       <div className="space-y-4">
         {[...Array(3)].map((_, i) => (
@@ -73,8 +73,8 @@ export default function LettersArchive() {
     return (
       <div className="text-center py-8">
         <div className="text-red-600 mb-2">⚠️ {error}</div>
-        <button 
-          onClick={() => window.location.reload()} 
+        <button
+          onClick={() => window.location.reload()}
           className="text-blue-600 hover:underline"
         >
           Попробовать снова
@@ -98,7 +98,7 @@ export default function LettersArchive() {
   return (
     <div className="space-y-4">
       {letters.map((letter) => (
-        <article 
+        <article
           key={letter.id}
           className="group border border-blue-50 rounded-xl p-4 bg-white/90 hover:border-blue-200 hover:shadow transition-all duration-200"
         >
