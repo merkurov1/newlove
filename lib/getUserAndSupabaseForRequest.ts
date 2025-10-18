@@ -1,5 +1,5 @@
 // ===== ФАЙЛ: lib/getUserAndSupabaseForRequest.ts =====
-// (ПОЛНЫЙ ЧИСТЫЙ КОД С ИСПРАВЛЕННЫМ FALLBACK)
+// (ПОЛНЫЙ КОД С ФИНАЛЬНЫМ ИСПРАВЛЕНИЕМ)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -10,13 +10,22 @@ export async function getUserAndSupabaseForRequest(req?: Request | null): Promis
     // 1. Первая попытка (старый метод)
     const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
     const res = await getUserAndSupabaseFromRequestInterop(req as any);
-    if (res && res.supabase) return { supabase: res.supabase, user: res.user || null, isServer: false };
+
+    // ----- ИСПРАВЛЕНИЕ ЗДЕСЬ -----
+    // Если старый метод отработал, НО НЕ НАШЕЛ 'user',
+    // мы НЕ возвращаем результат, а проваливаемся дальше
+    // в наш новый 'fallback' блок.
+    if (res && res.supabase && res.user) {
+        // Возвращаем, только если 'user' НАЙДЕН
+        return { supabase: res.supabase, user: res.user, isServer: false };
+    }
+    // Если res.user 'null', мы игнорируем 'res' и идем в 'catch' блок...
+
   } catch (e) {
-    // ignore and fallthrough to server fallback
+    // ...либо если 'Interop' упал, мы тоже идем в 'fallback'
   }
 
-  // ----- ИСПРАВЛЕНИЕ ЗДЕСЬ -----
-  // 2. Fallback-блок (теперь он умеет читать cookies)
+  // 2. Fallback-блок (теперь он будет срабатывать)
   try {
     const srv = await import('./serverAuth');
     const supabase = srv.getServerSupabaseClient({ useServiceRole: true });
@@ -31,6 +40,7 @@ export async function getUserAndSupabaseForRequest(req?: Request | null): Promis
     }
 
     // Если Request не помог, пытаемся собрать 'user' из next/headers
+    // (Это наш рабочий фикс)
     try {
         const { cookies } = await import('next/headers');
         const cookieHeader = cookies()
@@ -50,8 +60,6 @@ export async function getUserAndSupabaseForRequest(req?: Request | null): Promis
     return { supabase, user: null, isServer: true } as SupaRequestResult;
 
   } catch (e) {
-  // ----- КОНЕЦ ИСПРАВЛЕНИЯ -----
-    
     // Emergency mock fallback
     try {
       if (typeof process !== 'undefined' && process.env && process.env.EMERGENCY_SUPABASE_MOCK === 'true') {
