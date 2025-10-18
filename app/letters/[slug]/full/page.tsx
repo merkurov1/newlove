@@ -4,6 +4,7 @@ import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
 import dynamicImport from 'next/dynamic';
+import serializeForClient from '@/lib/serializeForClient';
 
 const LetterCommentsClient = dynamicImport(() => import('@/components/letters/LetterCommentsClient'), { ssr: false });
 
@@ -58,16 +59,17 @@ export default async function LetterFullPage({ params }: Props) {
         return new Response(null, { status: 302, headers: { Location: loginUrl } }) as any;
     }
 
-    let parsedBlocks = [];
+    let parsedBlocks: any[] = [];
     try {
         const raw = typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content);
         const parsed = JSON.parse(raw || '[]');
         parsedBlocks = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
-        // Deep-clone to strip any non-plain prototypes (Dates, class instances)
-        parsedBlocks = JSON.parse(JSON.stringify(parsedBlocks));
     } catch (e) {
         console.error('Failed to parse letter content', e, letter.content);
     }
+
+    // Sanitize blocks for client transfer
+    const safeParsed = serializeForClient(parsedBlocks || []) || [];
 
     return (
         <main className="max-w-3xl mx-auto px-4 py-8">

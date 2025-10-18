@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 const ReadMoreOrLoginClient = dynamic(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
+import serializeForClient from '@/lib/serializeForClient';
 
 type Props = { params: { slug: string } };
 
@@ -60,7 +61,7 @@ export default async function LetterPage({ params }: Props) {
 
 
   // Parse content into blocks (we'll use a teaser for unauthenticated viewers)
-  let parsedBlocks = [];
+  let parsedBlocks: any[] = [];
   try {
     const raw = typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content);
     const parsed = JSON.parse(raw || '[]');
@@ -69,14 +70,9 @@ export default async function LetterPage({ params }: Props) {
     console.error('Failed to parse letter content', e, letter.content);
   }
 
-  // For server-side render always show a single-block teaser to avoid
-  // duplicating content when the client hydrates and replaces it with
-  // the full body for authenticated users. The client component will
-  // attempt to fetch the full content when appropriate.
-  // Deep-clone parsed blocks to ensure only plain JSON objects (no
-  // Dates, class instances or null-prototype objects) are passed into
-  // any client components rendered by BlockRenderer (e.g. GalleryGrid).
-  const safeParsed = JSON.parse(JSON.stringify(parsedBlocks || []));
+  // Use centralized serializer to produce plain JSON objects safe for
+  // passing into Client Components.
+  const safeParsed = serializeForClient(parsedBlocks || []) || [];
   const teaser = (safeParsed || []).slice(0, 1);
   const toRender = teaser;
 
