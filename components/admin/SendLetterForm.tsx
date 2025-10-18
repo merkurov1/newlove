@@ -22,7 +22,7 @@ export default function SendLetterForm({ letter }: SendLetterFormProps) {
   async function handleSendLetter(formData: FormData) {
     setIsLoading(true);
     setMessage('');
-    
+
     try {
       // append testEmail if set
       if (testEmail) formData.set('testEmail', testEmail);
@@ -54,16 +54,16 @@ export default function SendLetterForm({ letter }: SendLetterFormProps) {
     <div>
       <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
         <p className="text-yellow-800 text-sm">
-          <strong>📝 Публикация ≠ Отправка рассылки</strong><br/>
-          • Публикация = письмо появляется на сайте<br/>
+          <strong>📝 Публикация ≠ Отправка рассылки</strong><br />
+          • Публикация = письмо появляется на сайте<br />
           • Отправка рассылки = письмо приходит подписчикам на email
         </p>
       </div>
-      
+
       <p className="text-blue-700 mb-4">
         Письмо готово к отправке. Убедитесь что содержимое корректное, затем нажмите кнопку ниже.
       </p>
-      
+
       {message && (
         <div className="mb-4 p-3 bg-white border rounded-md">
           {message}
@@ -74,7 +74,7 @@ export default function SendLetterForm({ letter }: SendLetterFormProps) {
           )}
         </div>
       )}
-      
+
       <form action={handleSendLetter} className="flex gap-3 flex-col md:flex-row">
         <input type="hidden" name="letterId" value={letter.id} />
 
@@ -105,7 +105,7 @@ export default function SendLetterForm({ letter }: SendLetterFormProps) {
           </button>
         </div>
       </form>
-      
+
       <p className="text-sm text-gray-600 mt-2">
         ⚠️ После отправки отменить нельзя. Письмо будет доставлено всем активным подписчикам.
       </p>
