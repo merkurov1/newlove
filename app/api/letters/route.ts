@@ -8,39 +8,64 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+	// Try to use service-role client first; if it fails (missing key or permissions),
+	// fall back to anon client and return only published letters. Include debug info
+	// when running in development or when fallback occurs so the page can display it.
+	const debugEnabled = process.env.NEXT_PUBLIC_DEBUG === 'true' || process.env.NODE_ENV !== 'production';
+	let debug: any = null;
+
 	try {
-		// 1. Создаем ОБЫЧНЫЙ клиент, чтобы проверить, кто пользователь
-		const supabaseUserClient = createClient();
-		const { data: { user } } = await supabaseUserClient.auth.getUser();
-		const isAdmin = user && (String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
-
-		// 2. Создаем SERVICE_ROLE клиент, чтобы читать данные
-		const supabaseService = createClient({ useServiceRole: true });
-
-		// 3. Создаем запрос с помощью service-клиента
-		let query = supabaseService
-			.from('letters')
-			.select('id,title,slug,published,publishedAt,createdAt,author:authorId(name)')
-			.order('publishedAt', { ascending: false })
-			.limit(100);
-
-		// 4. Если пользователь НЕ админ, показываем только опубликованные
-		if (!isAdmin) {
-			query = query.eq('published', true);
+		// 1. Build viewer context to check admin status if possible
+		let isAdmin = false;
+		try {
+			const supabaseUserClient = createClient();
+			const { data: { user } } = await supabaseUserClient.auth.getUser();
+			isAdmin = !!(user && (String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN'));
+		} catch (e) {
+			// ignore viewer lookup failures; treat as non-admin
+			if (debugEnabled) debug = { ...(debug || {}), viewerError: String(e) };
 		}
 
-		const { data, error } = await query;
+		// 2. Attempt with service-role client
+		try {
+			const supabaseService = createClient({ useServiceRole: true });
+			let query = supabaseService
+				.from('letters')
+				.select('id,title,slug,published,publishedAt,createdAt,author:authorId(name)')
+				.order('publishedAt', { ascending: false })
+				.limit(100);
 
-		if (error) {
-			console.error('Failed to fetch letters (service client)', error);
-			return NextResponse.json({ error: 'Failed to fetch letters' }, { status: 500 });
+			if (!isAdmin) query = query.eq('published', true);
+
+			const { data, error } = await query;
+			if (error) throw error;
+			return NextResponse.json({ letters: data || [] });
+		} catch (svcErr) {
+			// record and fall back to anon client
+			if (debugEnabled) debug = { ...(debug || {}), serviceRoleError: String(svcErr) };
 		}
 
-		return NextResponse.json({ letters: data || [] });
+		// 3. Fallback: use anon client and only select minimal fields (published only)
+		try {
+			const anon = createClient();
+			const { data, error } = await anon
+				.from('letters')
+				.select('id,title,slug,published,publishedAt,createdAt,author:authorId(name)')
+				.eq('published', true)
+				.order('publishedAt', { ascending: false })
+				.limit(100);
+			if (error) throw error;
+			return NextResponse.json({ letters: data || [], debug: debugEnabled ? debug : undefined });
+		} catch (anonErr) {
+			// final failure
+			if (debugEnabled) debug = { ...(debug || {}), anonError: String(anonErr) };
+			console.error('letters API final failure', debug || anonErr);
+			return NextResponse.json({ error: 'Failed to fetch letters', debug: debugEnabled ? debug : undefined }, { status: 500 });
+		}
 
 	} catch (e) {
-		console.error('letters API error', e);
-		return NextResponse.json({ error: String(e) }, { status: 500 });
+		console.error('letters API unexpected error', e);
+		return NextResponse.json({ error: String(e), debug: debugEnabled ? (debug || String(e)) : undefined }, { status: 500 });
 	}
 }
 
