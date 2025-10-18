@@ -1,5 +1,5 @@
 // ===== ФАЙЛ: lib/getUserAndSupabaseForRequest.ts =====
-// (ПОЛНЫЙ КОД С ИСПРАВЛЕНИЕМ FALLBACK-ЛОГИКИ)
+// (ПОЛНЫЙ ЧИСТЫЙ КОД С ИСПРАВЛЕННЫМ FALLBACK)
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -7,6 +7,7 @@ export type SupaRequestResult = { supabase: SupabaseClient | null; user?: any | 
 
 export async function getUserAndSupabaseForRequest(req?: Request | null): Promise<SupaRequestResult> {
   try {
+    // 1. Первая попытка (старый метод)
     const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
     const res = await getUserAndSupabaseFromRequestInterop(req as any);
     if (res && res.supabase) return { supabase: res.supabase, user: res.user || null, isServer: false };
@@ -15,21 +16,41 @@ export async function getUserAndSupabaseForRequest(req?: Request | null): Promis
   }
 
   // ----- ИСПРАВЛЕНИЕ ЗДЕСЬ -----
+  // 2. Fallback-блок (теперь он умеет читать cookies)
   try {
-    // Мы импортируем ВЕСЬ 'srv', а не только 'getServerSupabaseClient'
     const srv = await import('./serverAuth');
-    
-    // 1. Создаем service-клиент
     const supabase = srv.getServerSupabaseClient({ useServiceRole: true });
     
-    // 2. Пытаемся получить пользователя, используя getServerUser()
-    //    (Который внутри себя сам попробует найти куки)
-    const user = await srv.getServerUser().catch(() => null);
+    // Пытаемся получить пользователя, используя Request (если он был передан)
+    if (req) {
+       try {
+         const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
+         const res = await getUserAndSupabaseFromRequestInterop(req as Request);
+         if (res && res.user) return { supabase, user: res.user, isServer: true };
+       } catch (e) { /* ignore */ }
+    }
 
-    // 3. Возвращаем и 'supabase', и 'user'
-    return { supabase, user, isServer: true } as SupaRequestResult;
+    // Если Request не помог, пытаемся собрать 'user' из next/headers
+    try {
+        const { cookies } = await import('next/headers');
+        const cookieHeader = cookies()
+          .getAll()
+          .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
+          .join('; ');
+        const reqFromCookies = new Request('http://localhost', { headers: { cookie: cookieHeader } });
+        
+        const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
+        const res = await getUserAndSupabaseFromRequestInterop(reqFromCookies as any);
+        if (res && res.user) return { supabase, user: res.user, isServer: true };
+    } catch (e) {
+        // ignore и используем 'null'
+    }
+
+    // Если ничего не помогло, возвращаем 'null'
+    return { supabase, user: null, isServer: true } as SupaRequestResult;
+
   } catch (e) {
-    // ----- КОНЕЦ ИСПРАВЛЕНИЯ -----
+  // ----- КОНЕЦ ИСПРАВЛЕНИЯ -----
     
     // Emergency mock fallback
     try {
