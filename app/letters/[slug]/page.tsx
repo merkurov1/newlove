@@ -7,7 +7,7 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest'; // <-- Твой хелпер
 
 // ----- ИСПРАВЛЕНИЕ 1: Переименовываем импорт -----
-import dynamicImport from 'next/dynamic'; [span_2](start_span)// Было 'import dynamic ...'[span_2](end_span)
+import dynamicImport from 'next/dynamic'; // Было 'import dynamic ...'
 
 // ----- ИСПРАВЛЕНИЕ 2: Используем 'dynamicImport' -----
 const ReadMoreOrLoginClient = dynamicImport(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
