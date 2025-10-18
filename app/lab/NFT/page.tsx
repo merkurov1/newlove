@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
-import { formatEther } from "ethers/lib/utils";
+import { formatEther } from "ethers";
 import { useAccount } from "wagmi";
 import { CONTRACT_ADDRESS, NFT_ABI } from "./contract";
 

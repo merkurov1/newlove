@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { ethers } from 'ethers';
-import { solidityKeccak256, arrayify } from 'ethers/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,8 +14,9 @@ async function signVoucherForAddress(walletAddress: string) {
   if (!CONTRACT_ADDRESS) throw new Error('CONTRACT_ADDRESS not configured');
 
   const wallet = new ethers.Wallet(SIGNER_KEY);
-  const digest = solidityKeccak256(['address', 'uint256', 'address'], [CONTRACT_ADDRESS, CHAIN_ID, walletAddress]);
-  const signature = await wallet.signMessage(arrayify(digest));
+  // Use ethers v6 packing helper
+  const digest = ethers.solidityPackedKeccak256(['address', 'uint256', 'address'], [CONTRACT_ADDRESS, CHAIN_ID, walletAddress]);
+  const signature = await wallet.signMessage(ethers.getBytes(digest));
   return signature;
 }
 
