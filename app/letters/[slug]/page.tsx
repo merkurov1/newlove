@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { cookies } from 'next/headers';
@@ -55,22 +55,12 @@ export default async function LetterPage({ params }: Props) {
   const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
   if (!letter.published && !isOwnerOrAdmin) return notFound();
 
-  // If user is not authenticated, show teaser only (public teaser is the
-  // first block; the rest of the letter requires registration)
+  // Enforce authentication: all letters require a logged-in user to view.
+  // If not authenticated, redirect to the login page and include the
+  // return path so the user can continue after signing in.
   if (!user) {
-    const teaser = typeof letter.content === 'string' ? JSON.parse(letter.content).slice(0, 1) : (Array.isArray(letter.content) ? letter.content.slice(0, 1) : []);
-    return (
-      <main className="max-w-3xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-4">{letter.title}</h1>
-        <div className="prose mb-6">
-          {teaser.length > 0 ? <BlockRenderer blocks={teaser} /> : <p className="italic text-gray-500">Краткое содержание недоступно.</p>}
-        </div>
-        <div className="p-4 bg-yellow-50 border border-yellow-100 rounded">
-          <p className="mb-2">Чтобы прочитать полное письмо, войдите или зарегистрируйтесь — остальная часть письма доступна только для зарегистрированных пользователей.</p>
-          <a href="/login" className="text-blue-600 hover:underline">Войти или зарегистрироваться →</a>
-        </div>
-      </main>
-    );
+    const nextPath = encodeURIComponent(`/letters/${slug}`);
+    redirect(`/login?next=${nextPath}`);
   }
 
   // Authenticated: show full content
