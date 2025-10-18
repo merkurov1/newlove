@@ -6,7 +6,7 @@ import { safeData } from '@/lib/safeSerialize';
 
 type Props = { params: { slug: string } };
 
-export async function generateMetadata({ params }) {
+export async function generateMetadata({ params }: { params: { slug: string } }) {
   const slug = params.slug;
   // Minimal metadata while we fetch content
   return sanitizeMetadata({ title: `Письмо — ${slug}` });
