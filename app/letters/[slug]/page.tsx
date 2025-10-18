@@ -1,28 +1,20 @@
 // ===== ФАЙЛ: app/letters/[slug]/page.tsx =====
-// (ПОЛНЫЙ КОД С ОТКАТОМ К СТАРОМУ ХЕЛПЕРУ)
+// (ВОЗВРАЩАЕМ НОВЫЙ ХЕЛПЕР)
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-
-// ----- ИСПРАВЛЕНИЕ 1: Переименовываем импорт -----
-import dynamicImport from 'next/dynamic'; // Было 'import dynamic ...'
-
-// Используем 'dynamicImport' для загрузки компонента
-const ReadMoreOrLoginClient = dynamicImport(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
-
-// ----- ИСПРАВЛЕНИЕ 2: УДАЛЯЕМ 'cookies' и 'createServerClient' -----
-// import { cookies } from 'next/headers'; 
-// import { createServerClient } from '@/lib/supabase/server'; 
-
-// ----- ИСПРАВЛЕНИЕ 3: ИМПОРТИРУЕМ СТАРЫЙ, РАБОЧИЙ ХЕЛПЕР -----
-import { getServerSupabaseClient } from '@/lib/serverAuth'; // <-- ВОТ ОН
-
+import dynamicImport from 'next/dynamic'; // <-- Переименованный импорт
+import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
 import serializeForClient from '@/lib/serializeForClient';
 
-// Мы по-прежнему оставляем это, чтобы страница не кешировалась
-export const dynamic = 'force-dynamic';
+// ----- ВОЗВРАЩАЕМ НОВЫЙ ХЕЛПЕР -----
+import { createServerClient } from '@/lib/supabase/server'; 
+
+const ReadMoreOrLoginClient = dynamicImport(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
+
+export const dynamic = 'force-dynamic'; // <-- Делаем динамической
 
 type Props = { params: { slug: string } };
 
@@ -34,32 +26,32 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function LetterPage({ params }: Props) {
   const { slug } = params;
 
-  // ----- ИСПРАВЛЕНИЕ 4: Используем СТАРЫЙ хелпер для загрузки письма -----
+  // ----- ВОЗВРАЩАЕМ НОВУЮ ЛОГИКУ -----
+  const cookieStore = cookies();
+  const supabase = createServerClient(cookieStore); // Обычный клиент
+  const { data: { user } } = await supabase.auth.getUser(); // Получаем user
+
+  // Service-role клиент для чтения
+  const supabaseService = createServerClient(cookieStore, { useServiceRole: true });
   let letter: any = null;
+  
   try {
-    const svc = getServerSupabaseClient({ useServiceRole: true }); // <-- СТАРЫЙ ХЕЛПЕР
-    const { data, error } = await svc.from('letters').select('*').eq('slug', slug).maybeSingle();
-    if (error) {
-      console.error('Failed to load letter (service client)', error);
-    } else {
-      letter = data || null;
-    }
+    const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
+    if (error) console.error('Failed to load letter (service client)', error);
+    else letter = data || null;
   } catch (e) {
     console.error('Error fetching letter (service client)', e);
   }
 
-  if (!letter) return notFound(); // <-- Это твой 404
+  if (!letter) return notFound();
 
-  // ----- ИСПРАВЛЕНИЕ 5: ВРЕМЕННО УБИРАЕМ ПРОВЕРКУ НА АДМИНА -----
-  // (Потому что старый хелпер не получает 'user' так же легко)
-  // const isOwnerOrAdmin = user && (user.id === letter.authorId || ...);
+  // Эта проверка теперь будет работать, т.к. 'user' корректный
+  const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
   
-  // Оставляем только проверку на 'published'.
-  // Архив все равно отдает только опубликованные письма.
-  if (!letter.published) return notFound();
+  // Эта проверка - причина 404 (но теперь 'isOwnerOrAdmin' будет true)
+  if (!letter.published && !isOwnerOrAdmin) return notFound();
 
-  // ... остальной код файла без изменений ...
-
+  // ... (остальной код файла без изменений) ...
   let parsedBlocks: any[] = [];
   try {
     const raw = typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content);
@@ -81,10 +73,8 @@ export default async function LetterPage({ params }: Props) {
           {toRender.length > 0 ? <BlockRenderer blocks={toRender} /> : <p className="italic text-gray-500">Содержимое отсутствует.</p>}
         </div>
       </div>
-
       <div className="mt-6">
         <p className="text-sm text-gray-600 mb-3">Для просмотра полного текста и комментариев перейдите на страницу с полным содержимым.</p>
-  
         <div>
           <ReadMoreOrLoginClient slug={slug} />
         </div>
