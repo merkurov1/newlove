@@ -44,9 +44,9 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
             // ignore parse errors
         }
 
-    const payload: any = { status: 'ok', blocks };
-    if (wantDebug) payload.debug = { viewerId: viewer?.id || null, isOwnerOrAdmin };
-    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        const payload: any = { status: 'ok', blocks };
+        if (wantDebug) payload.debug = { viewerId: viewer?.id || null, isOwnerOrAdmin };
+        return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (e) {
         return new Response(JSON.stringify({ error: 'server_error', detail: String(e) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }

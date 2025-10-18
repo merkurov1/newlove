@@ -81,12 +81,16 @@ export default async function LetterPage({ params }: Props) {
     <main className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-4">{letter.title}</h1>
       <div className="prose mb-6">
-        {/* Server-rendered teaser or full content (to be hydrated client-side) */}
-        {toRender.length > 0 ? <BlockRenderer blocks={toRender} /> : <p className="italic text-gray-500">Содержимое отсутствует.</p>}
+        {/* Server-rendered teaser placed in a named container so the client
+            hydrator can replace it (or hide it) without rendering a duplicate
+            copy. */}
+        <div id={`letter-body-server-${slug}`}>
+          {toRender.length > 0 ? <BlockRenderer blocks={toRender} /> : <p className="italic text-gray-500">Содержимое отсутствует.</p>}
+        </div>
       </div>
 
       {/* Client will attempt to fetch and replace teaser with full content for authenticated users */}
-      <LetterFullClient slug={slug} initialTeaser={teaser} />
+      <LetterFullClient slug={slug} serverContainerId={`letter-body-server-${slug}`} />
 
       {/* Visual separator before comments so they don't blend with the letter text */}
       <div className="mt-10 mb-6 border-t border-gray-200" />

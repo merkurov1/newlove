@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import BlockRenderer from '@/components/BlockRenderer';
 
-export default function LetterFullClient({ slug, initialTeaser }: { slug: string; initialTeaser: any[] }) {
-    const [blocks, setBlocks] = useState<any[] | null>(initialTeaser || []);
+export default function LetterFullClient({ slug, initialTeaser, serverContainerId }: { slug: string; initialTeaser?: any[]; serverContainerId?: string }) {
+    const [blocks, setBlocks] = useState<any[] | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -34,11 +34,22 @@ export default function LetterFullClient({ slug, initialTeaser }: { slug: string
         return () => { mounted = false; };
     }, [slug]);
 
+    useEffect(() => {
+        // If a server container was rendered, hide it when client mounts so
+        // we don't visually duplicate the teaser when we render client-side
+        // content. We hide it first and render the client-only full content
+        // below.
+        if (serverContainerId && typeof document !== 'undefined') {
+            const el = document.getElementById(serverContainerId);
+            if (el) el.style.display = 'none';
+        }
+    }, [serverContainerId]);
+
     return (
         <div>
             {loading && <div className="text-sm text-gray-500 mb-2">Загрузка полного текста...</div>}
             {error && <div className="text-sm text-red-600 mb-2">Ошибка: {error}</div>}
-            {blocks && blocks.length > 0 ? <BlockRenderer blocks={blocks} /> : <p className="italic text-gray-500">Содержимое недоступно.</p>}
+            {blocks && blocks.length > 0 ? <BlockRenderer blocks={blocks} /> : null}
         </div>
     );
 }
