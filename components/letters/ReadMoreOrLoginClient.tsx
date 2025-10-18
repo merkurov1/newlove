@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient as createBrowserClient } from '@/lib/supabase-browser';
-import ModernLoginModal from './ModernLoginModal';
+import ModernLoginModal from '@/components/ModernLoginModal';
 
 export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
     const [hasSession, setHasSession] = useState<boolean | null>(null);
