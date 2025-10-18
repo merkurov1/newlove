@@ -125,7 +125,18 @@ export default function NFTLabPageClient() {
             const tx = await contract.publicMint(qty, { value: total });
             setStatus("Транзакция отправлена, ожидаю подтверждения...");
             await tx.wait();
-            setStatus("Успех! NFT куплен.");
+            setStatus("Успех! NFT куплен. Теперь вы можете выбрать образ — Ангел или Демон.");
+            // show chooser by setting a transient flag (we'll use currentId to infer)
+            setTimeout(() => {
+                try {
+                    // attempt to set currentId from chain
+                    const eth = (window as any).ethereum;
+                    if (!eth) return;
+                    const provider = new (ethers as any).BrowserProvider(eth as any);
+                    const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
+                    contract.currentId().then((v: any) => setCurrentId(Number(v) - 1)).catch(() => {});
+                } catch (e) {}
+            }, 2500);
             // optionally refresh on-chain state
             setTimeout(() => window.location.reload(), 1200);
         } catch (err: any) {
@@ -210,8 +221,50 @@ export default function NFTLabPageClient() {
         }
     }
 
+    async function requestVariant(variant: 'Angel' | 'Devil') {
+        if (!isConnected || !address || !currentId) {
+            setStatus('Сначала подключите кошелёк и убедитесь что у вас есть токен');
+            return;
+        }
+        setProcessing(true);
+        setStatus('Запрашиваю желаемый образ у сервера...');
+        try {
+            const res = await fetch('/api/request-variant', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ wallet_address: address, variant, tx_hash: null, token_id: currentId }),
+            });
+            const j = await res.json();
+            if (!res.ok) {
+                if (j.reason === 'server_not_configured') {
+                    setStatus('Сервер не настроен: мы не можем зарезервировать вариант автоматически. Вы можете вручную перевести токен на нужный адрес после получения.');
+                } else {
+                    setStatus(j.error || 'Сервер вернул ошибку при резерве');
+                }
+                return;
+            }
+            // success stub
+            setStatus(`Вариант ${variant} зарезервирован (заглушка). Следите за уведомлениями.`);
+        } catch (e: any) {
+            console.error(e);
+            setStatus(e?.message || 'Ошибка при запросе варианта');
+        } finally {
+            setProcessing(false);
+        }
+    }
+
     return (
         <main className="mx-auto max-w-prose py-12 px-4">
+            <div className="mt-6 p-6 bg-pink-50 border rounded">
+                <h3 className="text-lg font-semibold">Как это работает — весёлая версия</h3>
+                <p className="mt-2">Вы сначала получаете основное Neutral Heart — это ваше базовое сердечко. Затем, если захотите, вы можете превратить его в Ангелочка или Чертика. Просто нажмите кнопку выбора после покупки или клейма — мы постараемся сделать процесс прозрачным и быстрым.</p>
+                <ol className="mt-2 list-decimal pl-5 text-sm">
+                    <li>Подключите кошелёк через Onboard.</li>
+                    <li>Купите базовое сердце или получите его бесплатно (для подписчиков).</li>
+                    <li>Нажмите «Выбрать образ» и укажите — Ангел или Демон, и (опционально) адрес, кому подарить.</li>
+                    <li>Если сервер сконфигурирован, он зарезервирует и отправит нужный вариант; иначе вы сможете вручную выполнить transfer после получения токена.</li>
+                </ol>
+            </div>
             <h1 className="text-3xl font-bold">Необратимый Выбор — получить Neutral Heart</h1>
 
             <div className="mt-4 p-4 bg-yellow-50 border-l-4 border-yellow-400">
@@ -231,6 +284,18 @@ export default function NFTLabPageClient() {
             </div>
 
             <div className="mt-6 space-y-4">
+                {/* Variant chooser area - appears when we have a recent token */}
+                {currentId ? (
+                    <div className="p-4 border rounded">
+                        <h2 className="text-lg font-semibold">Выбрать образ для токена #{currentId}</h2>
+                        <p className="mt-2 text-sm">Выберите ангела или демона. Также можно указать адрес получателя (оставьте пустым — оставим токен себе).</p>
+                        <div className="mt-3 flex gap-3">
+                            <button className="px-3 py-2 bg-indigo-600 text-white rounded" onClick={() => requestVariant('Angel')}>Сделать Ангелом</button>
+                            <button className="px-3 py-2 bg-red-600 text-white rounded" onClick={() => requestVariant('Devil')}>Сделать Демоном</button>
+                        </div>
+                        <div className="mt-2 text-sm text-neutral-500">Если сервер не настроен, вы увидите подсказку, как вручную перевести токен.</div>
+                    </div>
+                ) : null}
                 <div>
                     <strong>Адрес контракта:</strong> <code>{CONTRACT_ADDRESS}</code>
                 </div>
