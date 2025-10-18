@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { cookies } from 'next/headers';
@@ -54,9 +54,9 @@ export default async function LetterFullPage({ params }: Props) {
 
     // Require authenticated user for full view and comments
     if (!user) {
-        // Server redirect to login page preserving current URL
+        // Use Next.js server redirect to ensure correct App Router behavior
         const loginUrl = `/you/login?next=${encodeURIComponent(`/letters/${slug}/full`)}`;
-        return new Response(null, { status: 302, headers: { Location: loginUrl } }) as any;
+        redirect(loginUrl);
     }
 
     let parsedBlocks: any[] = [];
@@ -75,7 +75,7 @@ export default async function LetterFullPage({ params }: Props) {
         <main className="max-w-3xl mx-auto px-4 py-8">
             <h1 className="text-2xl font-bold mb-4">{letter.title}</h1>
             <div className="prose mb-6">
-                {parsedBlocks.length > 0 ? <BlockRenderer blocks={parsedBlocks} /> : <p className="italic text-gray-500">Содержимое отсутствует.</p>}
+                {safeParsed.length > 0 ? <BlockRenderer blocks={safeParsed} /> : <p className="italic text-gray-500">Содержимое отсутствует.</p>}
             </div>
 
             <div className="mt-10 mb-6 border-t border-gray-200" />
