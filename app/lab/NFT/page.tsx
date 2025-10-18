@@ -134,8 +134,8 @@ export default function NFTLabPageClient() {
                     if (!eth) return;
                     const provider = new (ethers as any).BrowserProvider(eth as any);
                     const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
-                    contract.currentId().then((v: any) => setCurrentId(Number(v) - 1)).catch(() => {});
-                } catch (e) {}
+                    contract.currentId().then((v: any) => setCurrentId(Number(v) - 1)).catch(() => { });
+                } catch (e) { }
             }, 2500);
             // optionally refresh on-chain state
             setTimeout(() => window.location.reload(), 1200);
