@@ -12,7 +12,8 @@ export async function GET(request: Request) {
 	// fall back to anon client and return only published letters. Include debug info
 	// when running in development or when fallback occurs so the page can display it.
 	const debugEnabled = process.env.NEXT_PUBLIC_DEBUG === 'true' || process.env.NODE_ENV !== 'production';
-	let debug: any = null;
+	// initialize debug as an object to avoid runtime TypeErrors when spreading
+	let debug: Record<string, any> = {};
 
 	try {
 		// If the incoming request includes cookies (likely a logged-in user),
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
 
 			const { data, error } = await query;
 			if (error) throw error;
-			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, ...debug } : undefined });
+			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, ...(debug || {}) } : undefined });
 		} catch (svcErr) {
 			// record and fall back to anon client
 			if (debugEnabled) debug = { ...(debug || {}), serviceRoleError: String(svcErr) };
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
 				.order('publishedAt', { ascending: false })
 				.limit(100);
 			if (error) throw error;
-			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, ...debug } : undefined });
+			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, ...(debug || {}) } : undefined });
 		} catch (anonErr) {
 			// final failure
 			if (debugEnabled) debug = { ...(debug || {}), anonError: String(anonErr) };
