@@ -86,10 +86,10 @@ export default async function LetterPage({ params }: Props) {
       </div>
 
       {/* Client will attempt to fetch and replace teaser with full content for authenticated users */}
-  <LetterFullClient slug={slug} initialTeaser={teaser} />
+      <LetterFullClient slug={slug} initialTeaser={teaser} />
 
-  {/* Comments (client only) */}
-  <LetterCommentsClient slug={slug} />
+      {/* Comments (client only) */}
+      <LetterCommentsClient slug={slug} />
     </main>
   );
 }
