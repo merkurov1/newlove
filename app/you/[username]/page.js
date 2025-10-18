@@ -10,6 +10,8 @@ import { Suspense } from 'react';
 import SubscriptionToggle from '@/components/profile/SubscriptionToggle';
 import { getFirstImage } from '@/lib/contentUtils';
 import ProfileEditLink from '@/components/profile/ProfileEditLink';
+import dynamic from 'next/dynamic';
+const ConnectWalletButton = dynamic(() => import('@/components/profile/ConnectWalletButton'), { ssr: false });
 
 // Fallback-аватар по первой букве
 function FallbackAvatar({ name }) {
@@ -176,6 +178,10 @@ async function ProfileContent({ username }) {
                 <SubscriptionToggle initialSubscribed={user.isSubscribed} email={user.email} />
               </Suspense>
             )}
+            {/* Connect wallet button (client component) - load dynamically */}
+            {/** Client component imported dynamically to avoid server import issues */}
+            {/* client-only connect wallet button */}
+            <ConnectWalletButton />
           </div>
         )}
       </div>
