@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BskyAgent } from '@atproto/api';
 
+// Run this API route in the Node runtime (not Edge). The AT Protocol
+// client relies on Node-style networking and can trigger Vercel Edge
+// cache-key generation errors when executed in the Edge runtime.
+export const runtime = 'nodejs';
+
 // Кеш для токена аутентификации
 let cachedAgent: BskyAgent | null = null;
 let cacheExpiry = 0;
@@ -11,9 +16,16 @@ async function getAgent() {
     return cachedAgent;
   }
 
-  const agent = new BskyAgent({
-    service: 'https://bsky.social'
-  });
+  // If credentials aren't provided, skip authentication and return null so
+  // callers can handle the absence of a working agent gracefully. This
+  // avoids network calls during builds/prerender and prevents Vercel from
+  // attempting to generate cache keys for the AT Protocol session endpoint.
+  if (!process.env.BLUESKY_IDENTIFIER || !process.env.BLUESKY_PASSWORD) {
+    console.debug('Bluesky credentials are not configured; skipping agent.login');
+    return null;
+  }
+
+  const agent = new BskyAgent({ service: 'https://bsky.social' });
 
   try {
     const response = await agent.login({
@@ -23,15 +35,15 @@ async function getAgent() {
 
     if (response.success) {
       cachedAgent = agent;
-      // Кешируем на 50 минут
+      // Cache for 50 minutes
       cacheExpiry = Date.now() + 50 * 60 * 1000;
       return agent;
-    } else {
-      throw new Error('Authentication failed');
     }
+
+    throw new Error('Authentication failed');
   } catch (error) {
     console.error('Bluesky authentication error:', error);
-    throw error;
+    return null;
   }
 }
 
@@ -42,6 +54,16 @@ export async function GET(request: NextRequest) {
     const cursor = searchParams.get('cursor') || undefined;
 
     const agent = await getAgent();
+
+    if (!agent) {
+      // Bluesky not configured; return an empty response with 503 so callers
+      // know the feature is temporarily unavailable without causing build
+      // failures or Vercel cache-key errors.
+      return NextResponse.json(
+        { posts: [], cursor: null, hasMore: false, message: 'Bluesky not configured' },
+        { status: 503 }
+      );
+    }
 
     // Получаем посты пользователя
     const response = await agent.getAuthorFeed({
@@ -132,6 +154,10 @@ export async function POST(request: NextRequest) {
     }
 
     const agent = await getAgent();
+
+    if (!agent) {
+      return NextResponse.json({ error: 'Bluesky not configured' }, { status: 503 });
+    }
 
     // Создаем пост
     const response = await agent.post({
