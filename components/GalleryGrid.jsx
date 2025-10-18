@@ -47,7 +47,7 @@ export default function GalleryGrid({ images, imagesJson }) {
           gap: '1rem', margin: '2rem 0',
         }}
       >
-  {safeImages.map((item, i) => (
+        {safeImages.map((item, i) => (
           <div
             key={item.url || i}
             onClick={() => setIndex(i)}
