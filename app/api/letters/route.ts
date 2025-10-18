@@ -19,7 +19,15 @@ export async function GET(request: Request) {
 		// we want to return minimal debug info back so the archive UI can show
 		// why the service/anon path was selected or what error happened.
 		const hasCookies = Boolean(request.headers.get('cookie'));
-		const includeDebugForRequest = debugEnabled || hasCookies;
+		// Always include debug info in the response body so users without DevTools
+		// can see what's happening. We still avoid printing secrets, but include
+		// the captured errors and a small header snapshot for diagnosis.
+		const includeDebugForRequest = true;
+		const headerSnapshot = {
+			host: request.headers.get('host') || undefined,
+			userAgent: request.headers.get('user-agent') || undefined,
+			cookiePresent: hasCookies,
+		};
 		// 1. Build viewer context to check admin status if possible
 		let isAdmin = false;
 		try {
@@ -44,7 +52,7 @@ export async function GET(request: Request) {
 
 			const { data, error } = await query;
 			if (error) throw error;
-			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? debug : undefined });
+			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, ...debug } : undefined });
 		} catch (svcErr) {
 			// record and fall back to anon client
 			if (debugEnabled) debug = { ...(debug || {}), serviceRoleError: String(svcErr) };
@@ -60,7 +68,7 @@ export async function GET(request: Request) {
 				.order('publishedAt', { ascending: false })
 				.limit(100);
 			if (error) throw error;
-			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? debug : undefined });
+			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, ...debug } : undefined });
 		} catch (anonErr) {
 			// final failure
 			if (debugEnabled) debug = { ...(debug || {}), anonError: String(anonErr) };
