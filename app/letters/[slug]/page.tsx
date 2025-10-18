@@ -46,7 +46,7 @@ export default async function LetterPage({ params }: Props) {
 
   // If user is not authenticated, show teaser only
   if (!user) {
-    const teaser = typeof letter.content === 'string' ? JSON.parse(letter.content).slice(0, 2) : (Array.isArray(letter.content) ? letter.content.slice(0,2) : []);
+    const teaser = typeof letter.content === 'string' ? JSON.parse(letter.content).slice(0, 2) : (Array.isArray(letter.content) ? letter.content.slice(0, 2) : []);
     return (
       <main className="max-w-3xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-4">{letter.title}</h1>
