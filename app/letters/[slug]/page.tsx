@@ -1,16 +1,23 @@
 // ===== ФАЙЛ: app/letters/[slug]/page.tsx =====
-// (ВОЗВРАЩАЕМ ОРИГИНАЛЬНЫЙ КОД)
+// (ПОЛНЫЙ ЧИСТЫЙ КОД С ИСПРАВЛЕНИЕМ КОНФЛИКТА 'dynamic')
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
-import dynamic from 'next/dynamic';
+import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest'; // <-- Твой хелпер
 
-const ReadMoreOrLoginClient = dynamic(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
+// ----- ИСПРАВЛЕНИЕ 1: Переименовываем импорт -----
+import dynamicImport from 'next/dynamic'; // Было 'import dynamic ...'
+
+// ----- ИСПРАВЛЕНИЕ 2: Используем 'dynamicImport' -----
+const ReadMoreOrLoginClient = dynamicImport(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
+
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
 import serializeForClient from '@/lib/serializeForClient';
+
+// ----- ИСПРАВЛЕНИЕ 3: 'export const dynamic' теперь не конфликтует -----
+export const dynamic = 'force-dynamic';
 
 type Props = { params: { slug: string } };
 
@@ -22,6 +29,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function LetterPage({ params }: Props) {
   const { slug } = params;
   
+  // ----- ЭТО ТВОЙ ОРИГИНАЛЬНЫЙ КОД -----
   let req: Request | null = (globalThis && (globalThis as any).request) || null;
   if (!req) {
     const cookieHeader = cookies()
@@ -35,7 +43,7 @@ export default async function LetterPage({ params }: Props) {
   const ctx = await getUserAndSupabaseForRequest(req) || {};
   const { user } = ctx as any;
 
-  // Use service-role client for reliable server reads
+  // Используем service-role (он у тебя работает)
   let letter: any = null;
   try {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
@@ -52,7 +60,7 @@ export default async function LetterPage({ params }: Props) {
 
   if (!letter) return notFound();
 
-  // Эта проверка теперь будет работать, т.к. 'user' будет 'true'
+  // Эта проверка теперь будет работать
   const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
   if (!letter.published && !isOwnerOrAdmin) return notFound(); // <-- Причина 404
 
