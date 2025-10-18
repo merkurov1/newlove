@@ -16,17 +16,26 @@ interface Letter {
 
 export default function LettersArchive() {
   const [letters, setLetters] = useState<Letter[]>([]);
+  const [debug, setDebug] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchLetters = async () => {
       try {
-        const response = await fetch('/api/letters');
-        if (!response.ok) throw new Error('Failed to fetch letters');
-        
-        const data = await response.json();
-        setLetters(data.letters || []);
+          const response = await fetch('/api/letters', { credentials: 'same-origin' });
+          if (!response.ok) {
+            // try to parse debug info if present
+            try {
+              const txt = await response.text();
+              try { const j = JSON.parse(txt); setDebug(j.debug || j); } catch { setDebug(txt); }
+            } catch (e) { /* ignore */ }
+            throw new Error('Failed to fetch letters');
+          }
+
+          const data = await response.json();
+          setLetters(data.letters || []);
+          if (data.debug) setDebug(data.debug);
       } catch (err) {
         setError('Не удалось загрузить архив писем');
         console.error('Letters fetch error:', err);
@@ -47,7 +56,7 @@ export default function LettersArchive() {
     });
   };
 
-  if (loading) {
+    if (loading) {
     return (
       <div className="space-y-4">
         {[...Array(3)].map((_, i) => (
@@ -79,6 +88,9 @@ export default function LettersArchive() {
       <div className="text-center py-8">
         <div className="text-gray-600 mb-2">📭 Архив пуст</div>
         <div className="text-sm text-gray-500">Письма появятся здесь после публикации</div>
+        {debug && (
+          <pre className="whitespace-pre-wrap text-xs text-left mt-4 bg-gray-50 p-3 rounded">{JSON.stringify(debug, null, 2)}</pre>
+        )}
       </div>
     );
   }
@@ -91,11 +103,11 @@ export default function LettersArchive() {
           className="group border border-blue-50 rounded-xl p-4 bg-white/90 hover:border-blue-200 hover:shadow transition-all duration-200"
         >
           <Link href={`/letters/${letter.slug}`} className="block">
-            <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors mb-1 line-clamp-2">
+            <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors mb-1">
               {letter.title}
             </h3>
             <div className="flex items-center justify-between text-xs text-gray-400">
-              <span>{letter.author.name}</span>
+              <span>{letter.author?.name || 'Автор'}</span>
               <time dateTime={letter.publishedAt || letter.createdAt}>
                 {formatDate(letter.publishedAt || letter.createdAt)}
               </time>
@@ -103,15 +115,11 @@ export default function LettersArchive() {
           </Link>
         </article>
       ))}
-      
-      {letters.length > 10 && (
-        <div className="text-center pt-4">
-          <Link 
-            href="/letters/archive" 
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Показать все письма →
-          </Link>
+
+      {debug && (
+        <div className="mt-4">
+          <h4 className="text-sm font-medium text-gray-700">Debug info</h4>
+          <pre className="whitespace-pre-wrap text-xs bg-gray-50 p-3 rounded mt-2">{JSON.stringify(debug, null, 2)}</pre>
         </div>
       )}
     </div>
