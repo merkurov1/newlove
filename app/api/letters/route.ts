@@ -29,37 +29,9 @@ export async function GET(request: Request) {
 			userAgent: request.headers.get('user-agent') || undefined,
 			cookiePresent: hasCookies,
 		};
-		// 1. Build viewer context to check admin status if possible
-		let isAdmin = false;
-		try {
-			const supabaseUserClient = createClient();
-			const { data: { user } } = await supabaseUserClient.auth.getUser();
-			isAdmin = !!(user && (String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN'));
-		} catch (e) {
-			// ignore viewer lookup failures; treat as non-admin
-			if (debugEnabled) debug = { ...(debug || {}), viewerError: String(e) };
-		}
-
-		// 2. Attempt with service-role client
-		try {
-			const supabaseService = createClient({ useServiceRole: true });
-			let query = supabaseService
-				.from('letters')
-				.select('id,title,slug,published,publishedAt,createdAt,author:authorId(name)')
-				.order('publishedAt', { ascending: false })
-				.limit(100);
-
-			if (!isAdmin) query = query.eq('published', true);
-
-			const { data, error } = await query;
-			if (error) throw error;
-			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, ...(debug || {}) } : undefined });
-		} catch (svcErr) {
-			// record and fall back to anon client
-			if (debugEnabled) debug = { ...(debug || {}), serviceRoleError: String(svcErr) };
-		}
-
-		// 3. Fallback: use anon client and only select minimal fields (published only)
+		// For the public archive we always use the anon client. This avoids
+		// cookie/session-related failures for logged-in users and keeps the
+		// behaviour identical between guests and authenticated visitors.
 		try {
 			const anon = createClient();
 			const { data, error } = await anon
@@ -68,13 +40,16 @@ export async function GET(request: Request) {
 				.eq('published', true)
 				.order('publishedAt', { ascending: false })
 				.limit(100);
-			if (error) throw error;
+			if (error) {
+				if (debugEnabled) debug = { ...(debug || {}), anonError: String(error) };
+				console.error('letters API anon query error', error);
+				return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? { headerSnapshot, ...(debug || {}) } : undefined }, { status: 500 });
+			}
 			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, ...(debug || {}) } : undefined });
 		} catch (anonErr) {
-			// final failure
 			if (debugEnabled) debug = { ...(debug || {}), anonError: String(anonErr) };
-			console.error('letters API final failure', debug || anonErr);
-			return NextResponse.json({ error: 'Failed to fetch letters', debug: debugEnabled ? debug : undefined }, { status: 500 });
+			console.error('letters API final failure', anonErr);
+			return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? { headerSnapshot, ...(debug || {}) } : undefined }, { status: 500 });
 		}
 
 	} catch (e) {
