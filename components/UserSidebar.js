@@ -52,11 +52,11 @@ export default function UserSidebar() {
           <Image src={user.image} alt={user.name || ''} width={36} height={36} className="rounded-full border border-pink-300" />
         )}
         <nav className="flex flex-row items-center gap-3">
-    <Link href={profileHref} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-100 text-xl transition font-bold" title="Профиль">👤</Link>
+          <Link href={profileHref} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-100 text-xl transition font-bold" title="Профиль">👤</Link>
           <Link href="/users" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-100 text-xl transition font-bold" title="Пользователи">👥</Link>
           <Link href="/admin" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-200 text-xl transition font-bold" title="Админка">⚙️</Link>
         </nav>
-  {/* debugPanel removed */}
+        {/* debugPanel removed */}
       </div>
     );
   }
@@ -68,7 +68,7 @@ export default function UserSidebar() {
         <Image src={user.image} alt={user.name || ''} width={36} height={36} className="rounded-full border border-gray-200" />
       )}
       <nav className="flex flex-row items-center gap-3">
-  <Link href={profileHref} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition" title="Профиль">👤</Link>
+        <Link href={profileHref} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition" title="Профиль">👤</Link>
         <Link href="/users" className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition" title="Пользователи">👥</Link>
       </nav>
       <div className="ml-3 text-xs text-gray-500">

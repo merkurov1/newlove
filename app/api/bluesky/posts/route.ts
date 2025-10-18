@@ -82,9 +82,9 @@ export async function GET(request: NextRequest) {
       .map(item => {
         const record = item.post.record as any;
         const embed = item.post.embed;
-        
+
         // Обрабатываем изображения из embed
-        let images: Array<{url: string, alt?: string}> = [];
+        let images: Array<{ url: string, alt?: string }> = [];
         if (embed) {
           const embedData = embed as any; // Приводим к any для работы с различными типами embed
           if (embedData.$type === 'app.bsky.embed.images#view' && embedData.images) {
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
             }));
           }
         }
-        
+
         return {
           uri: item.post.uri,
           cid: item.post.cid,
@@ -130,9 +130,9 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Bluesky API error:', error);
-    
+
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to fetch Bluesky posts',
         message: error instanceof Error ? error.message : 'Unknown error'
       },
@@ -174,9 +174,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Bluesky post creation error:', error);
-    
+
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to create post',
         message: error instanceof Error ? error.message : 'Unknown error'
       },

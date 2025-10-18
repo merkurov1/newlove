@@ -282,7 +282,7 @@ export async function updateProfile(prevState, formData) {
     return { status: 'error', message: 'Имя и username обязательны.' };
   }
   if (!/^[a-z0-9_.]+$/.test(username)) {
-      return { status: 'error', message: 'Username может содержать только строчные буквы, цифры, _ и .' };
+    return { status: 'error', message: 'Username может содержать только строчные буквы, цифры, _ и .' };
   }
 
   const { data: updatedUser, error } = await supabase
@@ -346,7 +346,7 @@ export async function adminUpdateUserRole(userId, role) {
     }
   } catch (syncErr) {
     console.warn('adminUpdateUserRole: failed to sync users/subscribers tables', syncErr);
-    try { (await import('@sentry/nextjs')).captureException(syncErr); } catch (e) {}
+    try { (await import('@sentry/nextjs')).captureException(syncErr); } catch (e) { }
   }
 
   revalidatePath('/admin/users');
@@ -357,7 +357,7 @@ export async function adminDeleteUser(userId) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!userId) throw new Error('User ID обязателен.');
-  
+
   const { error } = await supabase.auth.admin.deleteUser(userId);
   if (error) {
     console.error('adminDeleteUser error:', error);
@@ -370,80 +370,80 @@ export async function adminDeleteUser(userId) {
 // --- Рассылки и подписки (User-Context) ---
 
 export async function subscribeToNewsletter(prevState, formData) {
-    const email = formData.get('email')?.toString().trim();
-    if (!email || !/\S+@\S+\.\S+/.test(email)) {
-        return { status: 'error', message: 'Введите корректный email адрес.' };
-    }
+  const email = formData.get('email')?.toString().trim();
+  if (!email || !/\S+@\S+\.\S+/.test(email)) {
+    return { status: 'error', message: 'Введите корректный email адрес.' };
+  }
 
-    const { user } = await getUserAndSupabaseForRequest(new Request('http://localhost'));
+  const { user } = await getUserAndSupabaseForRequest(new Request('http://localhost'));
 
-    // Use service-role client for writes (in case RLS prevents anon/request client from inserting)
-    let svc;
+  // Use service-role client for writes (in case RLS prevents anon/request client from inserting)
+  let svc;
+  try {
+    // Log presence of critical env vars to help diagnose missing-key issues in prod logs
     try {
-      // Log presence of critical env vars to help diagnose missing-key issues in prod logs
-      try {
-        console.info('subscribeToNewsletter env', {
-          hasServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-          supabaseUrl: !!(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL),
-        });
-      } catch (e) {}
+      console.info('subscribeToNewsletter env', {
+        hasServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+        supabaseUrl: !!(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL),
+      });
+    } catch (e) { }
 
-      svc = getServerSupabaseClient({ useServiceRole: true });
-    } catch (e) {
-      console.error('subscribeToNewsletter: service role client not available', e);
-      try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) {}
-      return { status: 'error', message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).', error: String(e) };
-    }
+    svc = getServerSupabaseClient({ useServiceRole: true });
+  } catch (e) {
+    console.error('subscribeToNewsletter: service role client not available', e);
+    try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) { }
+    return { status: 'error', message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).', error: String(e) };
+  }
 
-    // upsert subscriber; mark inactive until confirmed
-    let subscriber;
-    try {
-      // Ensure an id is provided on insert. Some DB setups don't set a default
-      // value for subscribers.id, so providing one avoids NOT NULL violations.
-      const payload = { id: createId(), email, userId: user?.id || null, isActive: false };
-      const upsertRes = await svc
-        .from('subscribers')
-        .upsert(payload, { onConflict: 'email' })
-        .select()
-        .single();
-      subscriber = upsertRes.data;
-      if (upsertRes.error) {
-        throw upsertRes.error;
-      }
-    } catch (error) {
-      console.error('Supabase upsert subscriber error:', error);
-      try { (await import('@sentry/nextjs')).captureException(error); } catch (e) {}
-      // Provide richer error back to client to aid debugging (without leaking secrets)
-      const code = error?.code || null;
-      const msg = error?.message || String(error) || 'Ошибка при подписке.';
-      if (String(code) === '42501') {
-        return { status: 'error', message: 'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.', code, details: error };
-      }
-      return { status: 'error', message: msg, code, details: error };
+  // upsert subscriber; mark inactive until confirmed
+  let subscriber;
+  try {
+    // Ensure an id is provided on insert. Some DB setups don't set a default
+    // value for subscribers.id, so providing one avoids NOT NULL violations.
+    const payload = { id: createId(), email, userId: user?.id || null, isActive: false };
+    const upsertRes = await svc
+      .from('subscribers')
+      .upsert(payload, { onConflict: 'email' })
+      .select()
+      .single();
+    subscriber = upsertRes.data;
+    if (upsertRes.error) {
+      throw upsertRes.error;
     }
+  } catch (error) {
+    console.error('Supabase upsert subscriber error:', error);
+    try { (await import('@sentry/nextjs')).captureException(error); } catch (e) { }
+    // Provide richer error back to client to aid debugging (without leaking secrets)
+    const code = error?.code || null;
+    const msg = error?.message || String(error) || 'Ошибка при подписке.';
+    if (String(code) === '42501') {
+      return { status: 'error', message: 'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.', code, details: error };
+    }
+    return { status: 'error', message: msg, code, details: error };
+  }
 
-    if (subscriber.isActive) {
-        return { status: 'success', message: 'Вы уже подписаны.' };
-    }
-    
-    // generate confirmation token and insert into subscriber_tokens
-    try {
-      const confirmToken = createId();
-      const { error: tokenErr } = await svc.from('subscriber_tokens').insert({ subscriber_id: subscriber.id, type: 'confirm', token: confirmToken, created_at: new Date().toISOString() });
-      if (tokenErr) {
-        console.warn('Failed to insert confirm token:', tokenErr.message || tokenErr);
-        try { (await import('@sentry/nextjs')).captureException(tokenErr); } catch (e) {}
-      } else {
-        const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-confirm?token=${confirmToken}`;
-        console.info('Created confirm token for subscriber', subscriber.email);
-        // TODO: send confirmation email (dry-run if RESEND not configured)
-        return { status: 'success', message: 'Проверьте почту для подтверждения подписки.', confirmUrl };
-      }
-    } catch (e) {
-      console.warn('subscribeToNewsletter: token insert failed', e?.message || e);
-    }
+  if (subscriber.isActive) {
+    return { status: 'success', message: 'Вы уже подписаны.' };
+  }
 
-    return { status: 'success', message: 'Проверьте почту для подтверждения подписки.' };
+  // generate confirmation token and insert into subscriber_tokens
+  try {
+    const confirmToken = createId();
+    const { error: tokenErr } = await svc.from('subscriber_tokens').insert({ subscriber_id: subscriber.id, type: 'confirm', token: confirmToken, created_at: new Date().toISOString() });
+    if (tokenErr) {
+      console.warn('Failed to insert confirm token:', tokenErr.message || tokenErr);
+      try { (await import('@sentry/nextjs')).captureException(tokenErr); } catch (e) { }
+    } else {
+      const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-confirm?token=${confirmToken}`;
+      console.info('Created confirm token for subscriber', subscriber.email);
+      // TODO: send confirmation email (dry-run if RESEND not configured)
+      return { status: 'success', message: 'Проверьте почту для подтверждения подписки.', confirmUrl };
+    }
+  } catch (e) {
+    console.warn('subscribeToNewsletter: token insert failed', e?.message || e);
+  }
+
+  return { status: 'success', message: 'Проверьте почту для подтверждения подписки.' };
 }
 
 // --- Письма (Letter) ---
@@ -524,7 +524,7 @@ export async function updateLetter(formData) {
   } catch (e) {
     throw new Error('Контент имеет неверный JSON формат: ' + e.message);
   }
-  
+
   const { error } = await supabase.from('letters').update({
     title,
     slug,
@@ -535,7 +535,7 @@ export async function updateLetter(formData) {
 
   if (error) {
     if (error.code === '23505') {
-        throw new Error('Письмо с таким URL уже существует.');
+      throw new Error('Письмо с таким URL уже существует.');
     }
     console.error('Ошибка при обновлении письма:', error);
     throw new Error('Ошибка при обновлении письма: ' + error.message);
@@ -573,7 +573,7 @@ export async function deleteLetter(formData) {
     // If permission denied, try to provide a clearer error or retry using explicit service role
     if (error && String(error.code) === '42501') {
       console.error('Supabase delete letter permission denied (42501). Attempting retry with service role client if available.');
-      try { (await import('@sentry/nextjs')).captureException(error); } catch (e) {}
+      try { (await import('@sentry/nextjs')).captureException(error); } catch (e) { }
 
       if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
         throw new Error('Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server.');
@@ -584,7 +584,7 @@ export async function deleteLetter(formData) {
         const retry = await svc.from('letters').delete().eq('id', id);
         if (retry.error) {
           console.error('Retry with service role failed:', retry.error);
-          try { (await import('@sentry/nextjs')).captureException(retry.error); } catch (e) {}
+          try { (await import('@sentry/nextjs')).captureException(retry.error); } catch (e) { }
           throw new Error('Ошибка при удалении письма: permission denied for table letters.\n' +
             'Убедитесь, что сервисная роль имеет права на таблицу `letters`.\n' +
             'Рекомендация: выполните `sql/ensure_service_role_grants.sql` в Supabase SQL Editor (или вручную выдайте соответствующие права).');
@@ -593,15 +593,15 @@ export async function deleteLetter(formData) {
         error = null;
       } catch (e) {
         console.error('Retry with service role threw:', e);
-        try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) {}
+        try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) { }
         throw new Error('Не удалось удалить письмо: ' + (e?.message || String(e)) + '\nПроверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql');
       }
     }
 
     if (error) {
-  console.error('Supabase delete letter error:', error);
-  try { (await import('@sentry/nextjs')).captureException(error); } catch (e) {}
-  throw new Error('Ошибка при удалении письма: ' + (error.message || String(error)) + '\nЕсли это ошибка прав (42501), убедитесь в настройке сервисной роли.');
+      console.error('Supabase delete letter error:', error);
+      try { (await import('@sentry/nextjs')).captureException(error); } catch (e) { }
+      throw new Error('Ошибка при удалении письма: ' + (error.message || String(error)) + '\nЕсли это ошибка прав (42501), убедитесь в настройке сервисной роли.');
     }
 
     revalidatePath('/admin/letters');
@@ -611,7 +611,7 @@ export async function deleteLetter(formData) {
     return;
   } catch (e) {
     console.error('deleteLetter exception:', e);
-    try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) {}
+    try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) { }
     throw e instanceof Error ? e : new Error(String(e));
   }
 }
@@ -647,7 +647,7 @@ export async function sendLetter(prevState, formData) {
     const testSubscriber = { id: createId(), email: testEmail };
     const res = await sendNewsletterToSubscriber(testSubscriber, letterObj, { skipTokenInsert: true });
     if (res.status === 'sent' || res.status === 'skipped') {
-      return { status: 'success', message: `Тестовое письмо отправлено на ${testEmail}` , providerResponse: res.providerResponse };
+      return { status: 'success', message: `Тестовое письмо отправлено на ${testEmail}`, providerResponse: res.providerResponse };
     }
     return { status: 'error', message: res.error || 'Ошибка при отправке тестового письма', details: res };
   }
