@@ -2,6 +2,7 @@
 // (ПОЛНЫЙ ЧИСТЫЙ КОД С НОВОЙ ЛОГИКОЙ)
 
 import { createClient } from '@/lib/supabase/server';
+import buildSafeDebug from '@/lib/debug';
 import { NextResponse } from 'next/server';
 
 // safeStringify: convert unknown values to a safe JSON-friendly string,
@@ -40,36 +41,54 @@ export async function GET(request: Request) {
 		// we want to return minimal debug info back so the archive UI can show
 		// why the service/anon path was selected or what error happened.
 		const hasCookies = Boolean(request.headers.get('cookie'));
-		// Always include debug info in the response body so users without DevTools
-		// can see what's happening. We still avoid printing secrets, but include
-		// the captured errors and a small header snapshot for diagnosis.
-		const includeDebugForRequest = true;
+		// Include debug when explicitly enabled or when ?debug=1 is passed.
+		const url = new URL(request.url);
+		const includeDebugForRequest = debugEnabled || url.searchParams.get('debug') === '1';
 		const headerSnapshot = {
 			host: request.headers.get('host') || undefined,
 			userAgent: request.headers.get('user-agent') || undefined,
 			cookiePresent: hasCookies,
 		};
-		// For the public archive we always use the anon client. This avoids
-		// cookie/session-related failures for logged-in users and keeps the
-		// behaviour identical between guests and authenticated visitors.
+		// Use Supabase REST endpoint with anon key to avoid server SDK/cookie issues.
 		try {
-			const anon = createClient();
-			const { data, error } = await anon
-				.from('letters')
-				.select('id,title,slug,published,publishedAt,createdAt,authorId')
-				.eq('published', true)
-				.order('publishedAt', { ascending: false })
-				.limit(100);
-			if (error) {
-				if (debugEnabled) debug = { ...(debug || {}), anonError: String(error) };
-				console.error('letters API anon query error', error);
-				return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? { headerSnapshot, debug: safeStringify(debug) } : undefined }, { status: 500 });
+			const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+			const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
+			if (!supabaseUrl || !anonKey) {
+				const outDebug = buildSafeDebug(request, { errors: ['missing env'] });
+				return NextResponse.json({ error: 'Supabase env missing', debug: includeDebugForRequest ? outDebug : undefined }, { status: 500 });
 			}
-			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, debug: safeStringify(debug) } : undefined });
-		} catch (anonErr) {
-			if (debugEnabled) debug = { ...(debug || {}), anonError: String(anonErr) };
-			console.error('letters API final failure', anonErr);
-			return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? { headerSnapshot, debug: safeStringify(debug) } : undefined }, { status: 500 });
+
+			const base = supabaseUrl.replace(/\/$/, '');
+			const select = encodeURIComponent('id,title,slug,published,publishedAt,createdAt,authorId');
+			const url = `${base}/rest/v1/letters?select=${select}&published=eq.true&order=publishedAt.desc&limit=100`;
+
+			const res = await fetch(url, {
+				headers: {
+					apikey: anonKey,
+					Authorization: `Bearer ${anonKey}`,
+					Accept: 'application/json'
+				}
+			});
+
+			const text = await res.text();
+			let parsedBody: any = null;
+			try { parsedBody = JSON.parse(text); } catch { parsedBody = text; }
+
+			if (!res.ok) {
+				const outDebug = buildSafeDebug(request, { restStatus: res.status, restBody: parsedBody, errors: [String(res.status)] });
+				console.error('letters REST error', res.status, parsedBody);
+				return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? outDebug : undefined }, { status: 500 });
+			}
+
+			// success - ensure we return an array of items only
+			const letters = Array.isArray(parsedBody) ? parsedBody : [];
+			const outDebug = includeDebugForRequest ? buildSafeDebug(request, { restStatus: res.status, restBody: { itemCount: letters.length } }) : undefined;
+			return NextResponse.json({ letters, debug: outDebug });
+
+		} catch (e) {
+			console.error('letters REST final failure', e);
+			const outDebug = buildSafeDebug(request, { errors: [String(e)] });
+			return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? outDebug : undefined }, { status: 500 });
 		}
 
 	} catch (e) {

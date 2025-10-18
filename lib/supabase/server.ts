@@ -11,31 +11,25 @@ import { cookies } from "next/headers";
 export function createClient(options: { useServiceRole?: boolean } = {}) {
   const cookieStore = cookies();
 
-  // ----- ИСПРАВЛЕНИЕ 1: Добавляем '!' в конце -----
-  // '!' говорит TypeScript, что мы уверены, что эта переменная не 'undefined'
-  // (потому что мы проверяем ее ниже)
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  // Safely read env vars and return clear errors instead of relying on '!'
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
   if (!supabaseUrl) {
-    throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_URL");
+    throw new Error('Missing env var: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL');
   }
 
   let supabaseKey: string;
-
   if (options.useServiceRole) {
-    // ----- ИСПРАВЛЕНИЕ 1: Добавляем '!' в конце -----
-    supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
     if (!supabaseKey) {
-      throw new Error("Missing env var: SUPABASE_SERVICE_ROLE_KEY");
+      throw new Error('Missing env var: SUPABASE_SERVICE_ROLE_KEY (required for service role)');
     }
   } else {
-    // ----- ИСПРАВЛЕНИЕ 1: Добавляем '!' в конце -----
-    supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
     if (!supabaseKey) {
-      throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY");
+      throw new Error('Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY');
     }
   }
 
-  // 'createServerClient' теперь получит 'string', а не 'string | undefined'
   return createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       get(name: string) {
