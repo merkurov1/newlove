@@ -4,6 +4,26 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
+// safeStringify: convert unknown values to a safe JSON-friendly string,
+// avoid throwing on circular structures and limit size to avoid truncation.
+function safeStringify(obj: any, maxLen = 2000) {
+	try {
+		const seen = new WeakSet();
+		const s = JSON.stringify(obj, function (k, v) {
+			if (v && typeof v === 'object') {
+				if (seen.has(v)) return '[Circular]';
+				seen.add(v);
+			}
+			if (typeof v === 'bigint') return String(v);
+			return v;
+		});
+		if (s.length > maxLen) return s.slice(0, maxLen) + '...';
+		return s;
+	} catch (e) {
+		try { return String(obj); } catch { return 'unserializable'; }
+	}
+}
+
 // Заставляем этот маршрут всегда выполняться динамически
 export const dynamic = 'force-dynamic';
 
@@ -43,13 +63,13 @@ export async function GET(request: Request) {
 			if (error) {
 				if (debugEnabled) debug = { ...(debug || {}), anonError: String(error) };
 				console.error('letters API anon query error', error);
-				return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? { headerSnapshot, ...(debug || {}) } : undefined }, { status: 500 });
+				return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? { headerSnapshot, debug: safeStringify(debug) } : undefined }, { status: 500 });
 			}
-			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, ...(debug || {}) } : undefined });
+			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, debug: safeStringify(debug) } : undefined });
 		} catch (anonErr) {
-			if (debugEnabled) debug = { ...(debug || {}), anonError: String(anonErr) };
-			console.error('letters API final failure', anonErr);
-			return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? { headerSnapshot, ...(debug || {}) } : undefined }, { status: 500 });
+		if (debugEnabled) debug = { ...(debug || {}), anonError: String(anonErr) };
+		console.error('letters API final failure', anonErr);
+		return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? { headerSnapshot, debug: safeStringify(debug) } : undefined }, { status: 500 });
 		}
 
 	} catch (e) {
