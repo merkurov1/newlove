@@ -177,12 +177,6 @@ export default function Header({ projects, settings }) {
               {status === 'authenticated' && (
                 <>
                   <li>
-                    <Link href="/talks" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
-                      Talks
-                      <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
-                    </Link>
-                  </li>
-                  <li>
                     <Link href="/lab" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
                       Lab
                       <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
@@ -266,9 +260,6 @@ export default function Header({ projects, settings }) {
             {/* Защищенные разделы только для авторизованных */}
             {status === 'authenticated' && (
               <>
-                <li>
-                  <Link href="/talks" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Talks</Link>
-                </li>
                 <li>
                   <Link href="/lab" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Lab</Link>
                 </li>

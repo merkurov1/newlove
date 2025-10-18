@@ -24,7 +24,7 @@ async function getContent(slug) {
   console.log('🔍 getContent called for slug:', slug);
   
   // Исключаем статические маршруты
-  const staticRoutes = ['admin', 'api', 'articles', 'auth', 'digest', 'profile', 'projects', 'rss.xml', 'sentry-example-page', 'tags', 'talks', 'users', 'you', 'roles-demo'];
+  const staticRoutes = ['admin', 'api', 'articles', 'auth', 'digest', 'profile', 'projects', 'rss.xml', 'sentry-example-page', 'tags', 'users', 'you', 'roles-demo'];
   if (staticRoutes.includes(slug)) {
     console.log('⏭️ Skipping static route:', slug);
     return null;
