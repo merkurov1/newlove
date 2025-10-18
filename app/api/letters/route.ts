@@ -67,9 +67,9 @@ export async function GET(request: Request) {
 			}
 			return NextResponse.json({ letters: data || [], debug: includeDebugForRequest ? { headerSnapshot, debug: safeStringify(debug) } : undefined });
 		} catch (anonErr) {
-		if (debugEnabled) debug = { ...(debug || {}), anonError: String(anonErr) };
-		console.error('letters API final failure', anonErr);
-		return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? { headerSnapshot, debug: safeStringify(debug) } : undefined }, { status: 500 });
+			if (debugEnabled) debug = { ...(debug || {}), anonError: String(anonErr) };
+			console.error('letters API final failure', anonErr);
+			return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? { headerSnapshot, debug: safeStringify(debug) } : undefined }, { status: 500 });
 		}
 
 	} catch (e) {
