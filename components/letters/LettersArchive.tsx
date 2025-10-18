@@ -20,25 +20,50 @@ export default function LettersArchive() {
   const [debug, setDebug] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastFetchInfo, setLastFetchInfo] = useState<any>(null);
+  const [anonAttempt, setAnonAttempt] = useState<any>(null);
 
   useEffect(() => {
     const fetchLetters = async () => {
+      const url = '/api/letters';
       try {
-        const response = await fetch('/api/letters', { credentials: 'same-origin' });
-        if (!response.ok) {
-          // try to parse debug info if present
+        let response: Response | null = null;
+        try {
+          response = await fetch(url, { credentials: 'same-origin' });
+        } catch (e) {
+          setLastFetchInfo({ error: String(e) });
+          throw e;
+        }
+
+        const status = response.status;
+        const ok = response.ok;
+        const text = await response.text();
+        let parsed: any = null;
+        try { parsed = JSON.parse(text); } catch { parsed = text; }
+        setLastFetchInfo({ url, status, ok, body: parsed });
+
+        if (!ok) {
+          try { setDebug(parsed?.debug || parsed); } catch { setDebug(parsed); }
+          // attempt anonymous fetch to compare behaviour
           try {
-            const txt = await response.text();
-            try { const j = JSON.parse(txt); setDebug(j.debug || j); } catch { setDebug(txt); }
-          } catch (e) { /* ignore */ }
+            const anonRes = await fetch(url);
+            const anonText = await anonRes.text();
+            let anonParsed: any = null;
+            try { anonParsed = JSON.parse(anonText); } catch { anonParsed = anonText; }
+            setAnonAttempt({ status: anonRes.status, ok: anonRes.ok, body: anonParsed });
+          } catch (e) {
+            setAnonAttempt({ error: String(e) });
+          }
           throw new Error('Failed to fetch letters');
         }
 
-        const data = await response.json();
+        const data = typeof parsed === 'object' ? parsed : JSON.parse(text);
         setLetters(data.letters || []);
         if (data.debug) setDebug(data.debug);
       } catch (err) {
-        setError('Не удалось загрузить архив писем');
+        const errMsg = err instanceof Error ? err.message : String(err);
+        setError('Не удалось загрузить архив писем — ' + errMsg);
+        setLastFetchInfo((lf: any) => lf || { error: errMsg });
         console.error('Letters fetch error:', err);
       } finally {
         setLoading(false);
