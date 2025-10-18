@@ -15,13 +15,17 @@ export async function GET(req: Request) {
       content: [{ type: 'richText', data: { html: `<p>This is a test preview of the newsletter HTML. Unsubscribe: %UNSUBSCRIBE%</p>` } }],
     };
 
-    if (!process.env.RESEND_API_KEY) {
+    // Allow passing a temporary key via ?key= for iPad debugging (will not be persisted)
+    const url = new URL(req.url);
+    const key = url.searchParams.get('key') || undefined;
+
+    if (!process.env.RESEND_API_KEY && !key) {
       // Dry-run behavior: return helpful debug info
-      const result = await sendNewsletterToSubscriber(testSubscriber, testLetter);
+      const result = await sendNewsletterToSubscriber(testSubscriber, testLetter, { resendApiKey: undefined });
       return NextResponse.json({ ok: true, dryRun: true, message: 'RESEND_API_KEY not configured. Dry-run performed.', result });
     }
 
-    const result = await sendNewsletterToSubscriber(testSubscriber, testLetter);
+    const result = await sendNewsletterToSubscriber(testSubscriber, testLetter, { resendApiKey: key });
     return NextResponse.json({ ok: true, result });
   } catch (err: any) {
     console.error('test-send error', (err && err.stack) || String(err));
