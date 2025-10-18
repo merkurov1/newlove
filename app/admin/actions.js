@@ -318,11 +318,37 @@ export async function adminUpdateUserRole(userId, role) {
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!userId || !role) throw new Error('User ID и Role обязательны.');
 
+  // Update auth user's metadata
   const { error } = await supabase.auth.admin.updateUserById(userId, { user_metadata: { role } });
   if (error) {
-    console.error('adminUpdateUserRole error:', error);
+    console.error('adminUpdateUserRole error (auth):', error);
     return { status: 'error', message: error.message };
   }
+
+  try {
+    // Keep the users table in sync if it exists in the project schema.
+    // Merge existing user_metadata to avoid clobbering other fields.
+    const { data: userRow } = await supabase.from('users').select('user_metadata,email').eq('id', userId).maybeSingle();
+    const existingMeta = (userRow && userRow.user_metadata) || {};
+    const mergedMeta = { ...existingMeta, role };
+    if (userRow) {
+      await supabase.from('users').update({ user_metadata: mergedMeta }).eq('id', userId);
+    }
+
+    // If role is SUBSCRIBER, ensure there's a subscriber record linked to this user
+    if (String(role).toUpperCase() === 'SUBSCRIBER') {
+      const email = userRow?.email || null;
+      if (email) {
+        // Upsert by email to avoid duplicates; set userId so it's linked
+        const upsertPayload = { email, userId, isActive: true };
+        await supabase.from('subscribers').upsert(upsertPayload, { onConflict: 'email' });
+      }
+    }
+  } catch (syncErr) {
+    console.warn('adminUpdateUserRole: failed to sync users/subscribers tables', syncErr);
+    try { (await import('@sentry/nextjs')).captureException(syncErr); } catch (e) {}
+  }
+
   revalidatePath('/admin/users');
   return { status: 'success' };
 }
