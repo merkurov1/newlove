@@ -63,6 +63,8 @@ export default async function LetterFullPage({ params }: Props) {
         const raw = typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content);
         const parsed = JSON.parse(raw || '[]');
         parsedBlocks = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+        // Deep-clone to strip any non-plain prototypes (Dates, class instances)
+        parsedBlocks = JSON.parse(JSON.stringify(parsedBlocks));
     } catch (e) {
         console.error('Failed to parse letter content', e, letter.content);
     }
