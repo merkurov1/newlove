@@ -84,6 +84,25 @@ export default function NFTLabPageClient() {
         loadOnchain();
     }, []);
 
+    // when address changes, re-check eligibility and on-chain claimed flag
+    useEffect(() => {
+        if (!address) return;
+        checkEligibility();
+        // also check claimed on chain using provider
+        (async () => {
+            try {
+                const eth = (window as any).ethereum;
+                if (!eth) return;
+                const provider = new (ethers as any).BrowserProvider(eth as any);
+                const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
+                const claimed = await contract.hasClaimedOnChain(address);
+                setHasClaimedOnChain(Boolean(claimed));
+            } catch (e) {
+                // ignore
+            }
+        })();
+    }, [address]);
+
     async function handlePublicMint(qty = 1) {
         if (!isConnected) {
             setStatus("Пожалуйста, подключите кошелёк");
@@ -216,35 +235,50 @@ export default function NFTLabPageClient() {
                     <strong>Адрес контракта:</strong> <code>{CONTRACT_ADDRESS}</code>
                 </div>
 
-                <div className="p-4 border rounded">
-                    <h2 className="text-xl font-semibold">Публичная продажа</h2>
-                    <p className="mt-2">Купить за {priceEth ?? "—"} MATIC</p>
-                    <div className="mt-4 flex gap-3">
-                        <button
-                            className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-                            onClick={() => handlePublicMint(1)}
-                            disabled={isProcessing}
-                        >
-                            Купить за {priceEth ?? "—"} MATIC
-                        </button>
-                        <button
-                            className="px-4 py-2 bg-gray-200 rounded"
-                            onClick={() => connectWallet()}
-                        >
-                            {isConnected ? (address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Кошелёк подключён') : 'Подключить кошелёк'}
-                        </button>
+                <div className="p-4 border rounded flex gap-4">
+                    <div className="w-36 flex-shrink-0">
+                        <img src="/scripts/neutral_heart_preview.png" alt="Neutral Heart preview" className="rounded shadow" />
                     </div>
-                    <div className="mt-2 text-sm text-neutral-500">Доступно: {publicMinted ?? "—"} / {maxPublic ?? "—"}</div>
+                    <div className="flex-1">
+                        <h2 className="text-xl font-semibold">Публичная продажа</h2>
+                        <p className="mt-2">Купить за <strong>{priceEth ?? "—"} MATIC</strong></p>
+                        <div className="mt-4 flex gap-3">
+                            <button
+                                className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+                                onClick={() => handlePublicMint(1)}
+                                disabled={isProcessing || (maxPublic !== null && publicMinted !== null && publicMinted >= maxPublic)}
+                            >
+                                Купить за {priceEth ?? "—"} MATIC
+                            </button>
+                            <button
+                                className="px-4 py-2 bg-gray-200 rounded"
+                                onClick={() => connectWallet()}
+                            >
+                                {isConnected ? (address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Кошелёк подключён') : 'Подключить кошелёк'}
+                            </button>
+                        </div>
+                        <div className="mt-2 text-sm text-neutral-500">Доступно: {publicMinted ?? "—"} / {maxPublic ?? "—"}</div>
+                    </div>
                 </div>
 
                 <div className="p-4 border rounded">
                     <h2 className="text-xl font-semibold">Бесплатный клейм для подписчиков</h2>
                     <p className="mt-2">Для подписчиков — бесплатно (платите только газ)</p>
+                    <div className="mt-3 text-sm">
+                        {isEligible === null ? (
+                            <span className="text-neutral-500">Неизвестно, проверяю право...</span>
+                        ) : isEligible ? (
+                            <span className="text-green-600">Вы в списке подписчиков — можете получить NFT</span>
+                        ) : (
+                            <span className="text-red-600">Вы не в списке подписчиков</span>
+                        )}
+                        {hasClaimedOnChain ? <div className="mt-1 text-sm text-red-600">Этот адрес уже получил NFT on-chain</div> : null}
+                    </div>
                     <div className="mt-4">
                         <button
                             className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50"
                             onClick={handleSubscriberClaim}
-                            disabled={isProcessing}
+                            disabled={isProcessing || isEligible === false || hasClaimedOnChain === true}
                         >
                             Получить бесплатно (для подписчиков)
                         </button>
