@@ -1,14 +1,10 @@
 'use client';
 
-import LoungeInterface from '@/components/LoungeInterface';
-import type { InitialMessage } from '@/types/messages';
-
-type Props = {
-  initialMessages?: InitialMessage[];
-  session?: any;
-};
-
-export default function TalksClientPage({ initialMessages = [], session = null }: Props) {
-  // Keep this client component minimal during migration.
-  return <LoungeInterface initialMessages={initialMessages} session={session} />;
+export default function TalksClientPage() {
+  return (
+    <div className="max-w-3xl mx-auto p-6 text-center">
+      <h1 className="text-2xl font-bold mb-4">Раздел «Talks» временно отключён</h1>
+      <p className="text-gray-600">Мы временно отключили раздел обсуждений для уменьшения нагрузки на сервер. Приносим извинения за неудобства.</p>
+    </div>
+  );
 }
