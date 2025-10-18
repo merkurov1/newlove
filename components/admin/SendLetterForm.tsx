@@ -16,6 +16,7 @@ interface SendLetterFormProps {
 export default function SendLetterForm({ letter }: SendLetterFormProps) {
   const [isLoading, setIsLoading] = React.useState(false);
   const [message, setMessage] = React.useState('');
+  const [providerDetails, setProviderDetails] = React.useState(null as any);
   const [testEmail, setTestEmail] = React.useState('');
 
   async function handleSendLetter(formData: FormData) {
@@ -26,7 +27,8 @@ export default function SendLetterForm({ letter }: SendLetterFormProps) {
       // append testEmail if set
       if (testEmail) formData.set('testEmail', testEmail);
       const result = await sendLetter(null, formData);
-      
+      setProviderDetails(result.providerResponse || null);
+
       if (result.status === 'success') {
         setMessage(`✅ ${result.message}`);
       } else {
@@ -65,6 +67,11 @@ export default function SendLetterForm({ letter }: SendLetterFormProps) {
       {message && (
         <div className="mb-4 p-3 bg-white border rounded-md">
           {message}
+          {providerDetails && (
+            <pre className="mt-3 p-2 bg-gray-50 rounded text-xs overflow-auto text-left">
+              {JSON.stringify(providerDetails, null, 2)}
+            </pre>
+          )}
         </div>
       )}
       
