@@ -1,6 +1,7 @@
 "use client";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
@@ -62,7 +63,8 @@ export default function LoungeInterface({ initialMessages, session: propSession 
     const channel = supabase.channel('realtime-talks'); // Дадим каналу более уникальное имя
 
     // --- ПОДПИСКА НА НОВЫЕ СООБЩЕНИЯ (INSERT) ---
-    channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message' },
+    // Use lowercase table name 'messages' to match API/table naming
+    channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
   (payload: any) => {
         // Добавляем новое сообщение в конец списка без перезагрузки
         setMessages((currentMessages) => [...currentMessages, payload.new as InitialMessage]);
@@ -70,7 +72,7 @@ export default function LoungeInterface({ initialMessages, session: propSession 
     );
 
     // --- ПОДПИСКА НА УДАЛЕННЫЕ СООБЩЕНИЯ (DELETE) ---
-    channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'Message' },
+    channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' },
   (payload: any) => {
         // Убираем удаленное сообщение из списка по ID
         setMessages((currentMessages) => currentMessages.filter(msg => msg.id !== payload.old.id));
@@ -155,7 +157,7 @@ export default function LoungeInterface({ initialMessages, session: propSession 
       <div className="flex flex-col items-center justify-center h-[calc(100vh-10rem)] text-center">
         <h2 className="text-2xl font-semibold mb-4">Присоединяйтесь к обсуждению</h2>
         <p className="mb-6 text-gray-600">Чтобы отправлять сообщения, пожалуйста, войдите.</p>
-  <button className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-700">Войти</button>
+        <Link href="/login" className="px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg hover:bg-gray-700">Войти</Link>
       </div>
     );
   }
@@ -201,7 +203,7 @@ export default function LoungeInterface({ initialMessages, session: propSession 
           // Найти первую ссылку в сообщении
           const urlMatch = message.content.match(/https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+/);
           const likes = reactions[message.id] ? reactions[message.id].size : 0;
-          const likedByMe = reactions[message.id]?.has(session.user.id);
+          const likedByMe = reactions[message.id]?.has?.(session.user.id) || false;
           // --- reply ---
           const replyData = (message as any).replyTo;
           // Проверка роли админа (user.role === 'ADMIN')
