@@ -1,5 +1,5 @@
 // ===== ФАЙЛ: lib/supabase/server.ts =====
-// (ПОЛНЫЙ, ФИНАЛЬНЫЙ КОД)
+// (ПОЛНЫЙ, ГИБКИЙ КОД)
 
 import { createServerClient as _createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
@@ -14,7 +14,7 @@ export function createServerClient(
   options: ServerClientOptions = {}
 ) {
   
-  // 1. Ищем URL в обеих переменных (это мы уже исправляли)
+  // 1. Ищем URL в обеих переменных (как в твоем старом коде)
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   let supabaseKey: string;
 
@@ -27,17 +27,15 @@ export function createServerClient(
       throw new Error('SUPABASE_SERVICE_ROLE_KEY is required when useServiceRole=true');
     }
   } else {
-    // 3. ----- ИСПРАВЛЕНИЕ ЗДЕСЬ -----
-    // Ищем Anon Key в ДВУХ местах, как это делал старый 'lib/serverAuth.ts'
+    // 3. Ищем Anon Key в ДВУХ местах (как в твоем старом коде)
     supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY!;
   }
 
-  // 4. Проверки (мы их исправляли)
+  // 4. Проверки
   if (!supabaseUrl) {
     throw new Error('Supabase URL not found. Please set NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL');
   }
   if (!supabaseKey) {
-    // Эта ошибка была из-за того, что 'SUPABASE_KEY' не проверялся
     throw new Error('Supabase key not found. Please set NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_KEY');
   }
 
