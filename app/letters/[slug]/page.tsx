@@ -15,22 +15,27 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function LetterPage({ params }: Props) {
   const { slug } = params;
 
-  // Fetch context (user + supabase)
-  const ctx = await getUserAndSupabaseForRequest((globalThis && (globalThis as any).request) || new Request('http://localhost')) || {};
-  const { supabase, user } = ctx as any;
+  // Fetch request-scoped user (if any) for permission checks but use the
+  // service-role supabase client for the canonical server-side read. Using
+  // the service client avoids RLS/anon-key surprises that can cause a
+  // false-negative (missing) letter and a 404.
+  const req = (globalThis && (globalThis as any).request) || new Request('http://localhost');
+  const ctx = await getUserAndSupabaseForRequest(req) || {};
+  const { user } = ctx as any;
 
-  // Fetch the letter by slug (published or not)
-  let letter = null;
+  // Use service-role client for reliable server reads
+  let letter: any = null;
   try {
-    if (!supabase) throw new Error('No supabase');
-    const { data, error } = await supabase.from('letters').select('*').eq('slug', slug).maybeSingle();
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const svc = getServerSupabaseClient({ useServiceRole: true });
+    const { data, error } = await svc.from('letters').select('*').eq('slug', slug).maybeSingle();
     if (error) {
-      console.error('Failed to load letter', error);
+      console.error('Failed to load letter (service client)', error);
     } else {
       letter = data || null;
     }
   } catch (e) {
-    console.error('Error fetching letter', e);
+    console.error('Error fetching letter (service client)', e);
   }
 
   if (!letter) return notFound();
