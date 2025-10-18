@@ -7,15 +7,46 @@ import CodeBlock from './blocks/CodeBlock';
 import type { EditorJsBlock } from '@/types/blocks';
 
 export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
-  // Ensure we only operate on plain JSON-serializable objects. Defensive
-  // deep-clone here to strip prototypes (Dates, custom classes) which
-  // Next.js cannot pass from server -> client.
+  // Recursive sanitizer: ensure all objects/arrays are plain and Dates are converted
+  // to ISO strings. This protects against non-plain prototypes (e.g. Object.create(null)
+  // or class instances) which Next.js refuses to serialize into client component props.
+  function sanitizeForClient(value: any): any {
+    if (value === null || value === undefined) return value;
+    const t = typeof value;
+    if (t === 'string' || t === 'number' || t === 'boolean') return value;
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) {
+      return value.map((v) => sanitizeForClient(v));
+    }
+    if (t === 'object') {
+      // Built-ins we allow to remain as primitives or strings
+      const proto = Object.getPrototypeOf(value);
+      // If prototype is not plain object, coerce by shallow-copying
+      const out: any = {};
+      for (const k of Object.keys(value)) {
+        try {
+          out[k] = sanitizeForClient(value[k]);
+        } catch (e) {
+          out[k] = String(value[k]);
+        }
+      }
+      return out;
+    }
+    // functions, symbols, etc. -> stringify
+    try { return String(value); } catch (e) { return null; }
+  }
+
   const safeBlocks = (() => {
     try {
-      return JSON.parse(JSON.stringify(blocks || []));
+      const cloned = JSON.parse(JSON.stringify(blocks || []));
+      return sanitizeForClient(cloned || []);
     } catch (e) {
       console.error('BlockRenderer: failed to deep-clone blocks', e);
-      return Array.isArray(blocks) ? blocks : [];
+      try {
+        return sanitizeForClient(blocks || []);
+      } catch (ex) {
+        return Array.isArray(blocks) ? blocks : [];
+      }
     }
   })();
 
