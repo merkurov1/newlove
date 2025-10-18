@@ -27,7 +27,7 @@ export default async function AdminUsersPage() {
         }));
       }
     } else {
-  const { data, error } = await supabaseAdmin.from('users').select('id,email,username,name,user_metadata');
+      const { data, error } = await supabaseAdmin.from('users').select('id,email,username,name,user_metadata');
       if (!error && Array.isArray(data)) {
         users = data.map((u: any) => ({ id: u.id, email: u.email, username: u.username, name: u.name, role: u.user_metadata?.role ?? 'USER' }));
       }
@@ -39,7 +39,7 @@ export default async function AdminUsersPage() {
   // Fetch subscribers for status
   let subs: any[] = [];
   try {
-  const { data: s } = await supabaseAdmin.from('subscribers').select('id,email,isActive,userId');
+    const { data: s } = await supabaseAdmin.from('subscribers').select('id,email,isActive,userId');
     if (Array.isArray(s)) subs = s;
   } catch (e) {
     console.error('Failed to fetch subscribers', e);
