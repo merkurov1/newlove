@@ -22,14 +22,14 @@ import DebugEditButton from '@/components/DebugEditButton';
 
 async function getContent(slug) {
   console.log('🔍 getContent called for slug:', slug);
-  
+
   // Исключаем статические маршруты
   const staticRoutes = ['admin', 'api', 'articles', 'auth', 'digest', 'profile', 'projects', 'rss.xml', 'sentry-example-page', 'tags', 'users', 'you', 'roles-demo'];
   if (staticRoutes.includes(slug)) {
     console.log('⏭️ Skipping static route:', slug);
     return null;
   }
-  
+
   try {
     console.log('📰 Searching for article with slug:', slug);
     // Сначала ищем статью (используем server service-role client для публичных запросов,
@@ -49,12 +49,12 @@ async function getContent(slug) {
     } catch (e) {
       console.error('Failed to fetch article via server client', e);
     }
-    
+
     if (article) {
       console.log('✅ Found article:', article.title);
       return { type: 'article', content: safeData(article) };
     }
-    
+
     console.log('📁 Searching for project with slug:', slug);
     // Если статья не найдена, ищем проект (используем service-role client для публичных проектов)
     let project = null;
@@ -70,12 +70,12 @@ async function getContent(slug) {
         project = null;
       }
     }
-    
+
     if (project) {
       console.log('✅ Found project:', project.title);
       return { type: 'project', content: safeData(project) };
     }
-    
+
     console.log('❌ No content found for slug:', slug);
     return null;
   } catch (error) {
@@ -86,7 +86,7 @@ async function getContent(slug) {
 
 export async function generateMetadata({ params }) {
   console.log('🏷️ generateMetadata called for slug:', params.slug);
-  
+
   try {
     const result = await getContent(params.slug);
     if (!result) {
@@ -147,7 +147,7 @@ export async function generateMetadata({ params }) {
     // Ensure metadata contains only serializable values (no React elements/functions)
     return sanitizeMetadata(meta);
   } catch (error) {
-    return { 
+    return {
       title: 'Ошибка загрузки',
       description: 'Произошла ошибка при загрузке метаданных'
     };
@@ -169,7 +169,7 @@ export default async function ContentPage({ params }) {
 
 function ArticleComponent({ article }) {
   console.log('📰 Rendering ArticleComponent:', article.title);
-  
+
   let blocks = [];
   try {
     if (article.content) {
@@ -187,12 +187,12 @@ function ArticleComponent({ article }) {
   }
 
   return (
-    <EditProvider value={{ 
-      contentType: 'article', 
-      contentId: article.id, 
+    <EditProvider value={{
+      contentType: 'article',
+      contentId: article.id,
       slug: article.slug,
       title: article.title,
-      isEditable: true 
+      isEditable: true
     }}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <article>
@@ -201,7 +201,7 @@ function ArticleComponent({ article }) {
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 flex-1">{article.title}</h1>
               <EditButton variant="inline" showLabel={true} className="ml-4 flex-shrink-0" />
             </div>
-            
+
             <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0 text-sm text-gray-600 mb-6">
               {article.author?.image && (
                 <Image
@@ -218,7 +218,7 @@ function ArticleComponent({ article }) {
                 {new Date(article.createdAt).toLocaleDateString('ru-RU')}
               </time>
             </div>
-            
+
             {article.tags && article.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-6">
                 {article.tags.map((tag) => (
@@ -233,7 +233,7 @@ function ArticleComponent({ article }) {
               </div>
             )}
           </header>
-          
+
           <div className="prose prose-lg max-w-none">
             {blocks.length > 0 ? (
               <BlockRenderer blocks={blocks} />
@@ -243,14 +243,14 @@ function ArticleComponent({ article }) {
               </div>
             )}
           </div>
-          
-          <SocialShare 
+
+          <SocialShare
             title={article.title}
             url={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/${article.slug}`}
             description={generateDescription(article.content)}
           />
         </article>
-        
+
         {/* Floating Edit Button - автоматически получает контекст */}
         <EditButton variant="floating" />
         <DebugEditButton />
@@ -261,7 +261,7 @@ function ArticleComponent({ article }) {
 
 function ProjectComponent({ project }) {
   console.log('📁 Rendering ProjectComponent:', project.title);
-  
+
   let blocks = [];
   try {
     if (project.content) {
@@ -279,12 +279,12 @@ function ProjectComponent({ project }) {
   }
 
   return (
-    <EditProvider value={{ 
-      contentType: 'project', 
-      contentId: project.id, 
+    <EditProvider value={{
+      contentType: 'project',
+      contentId: project.id,
       slug: project.slug,
       title: project.title,
-      isEditable: true 
+      isEditable: true
     }}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <article>
@@ -294,7 +294,7 @@ function ProjectComponent({ project }) {
               <EditButton variant="inline" showLabel={true} className="ml-4 flex-shrink-0" />
             </div>
           </header>
-          
+
           <div className="prose prose-lg max-w-none">
             {blocks.length > 0 ? (
               <BlockRenderer blocks={blocks} />
@@ -305,7 +305,7 @@ function ProjectComponent({ project }) {
             )}
           </div>
         </article>
-        
+
         {/* Floating Edit Button - автоматически получает контекст */}
         <EditButton variant="floating" />
         <DebugEditButton />

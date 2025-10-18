@@ -63,7 +63,7 @@ export default function Header({ projects, settings }) {
   const shorten = (addr) => {
     if (!addr || typeof addr !== 'string') return addr;
     if (addr.length <= 10) return addr;
-    return `${addr.slice(0,6)}…${addr.slice(-4)}`;
+    return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
   };
   const walletShort = walletAddress ? shorten(walletAddress) : null;
 
@@ -103,39 +103,39 @@ export default function Header({ projects, settings }) {
     };
     const onSessionChanged = () => {
       // force re-render
-      try { setTick(t => t + 1); } catch (e) {}
+      try { setTick(t => t + 1); } catch (e) { }
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('supabase:session-changed', onSessionChanged);
     // Close mobile menu when other UI needs to open modal (e.g., web3/onboard login)
-  const closeMenuHandler = () => setIsMenuOpen(false);
-  window.addEventListener('newlove:close-mobile-menu', closeMenuHandler);
+    const closeMenuHandler = () => setIsMenuOpen(false);
+    window.addEventListener('newlove:close-mobile-menu', closeMenuHandler);
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('supabase:session-changed', onSessionChanged);
-  window.removeEventListener('newlove:close-mobile-menu', closeMenuHandler);
+      window.removeEventListener('newlove:close-mobile-menu', closeMenuHandler);
     };
   }, []);
 
   return (
     <>
       {/* Opt-in debug overlay when ?auth_debug=1 */}
-          {typeof window !== 'undefined' && window.location.search.includes('auth_debug=1') && (
-        <div style={{position:'fixed', right:8, bottom:8, zIndex:99999, background:'rgba(0,0,0,0.7)', color:'#fff', padding:8, borderRadius:6, fontSize:12, maxWidth:320}}>
-          <div style={{fontWeight:700, marginBottom:6}}>Auth debug</div>
+      {typeof window !== 'undefined' && window.location.search.includes('auth_debug=1') && (
+        <div style={{ position: 'fixed', right: 8, bottom: 8, zIndex: 99999, background: 'rgba(0,0,0,0.7)', color: '#fff', padding: 8, borderRadius: 6, fontSize: 12, maxWidth: 320 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Auth debug</div>
           <div>status: {status}</div>
-          <div style={{marginTop:6}}>user: {session?.user ? `${session.user.id} ${session.user.email}` : 'null'}</div>
-          <div style={{marginTop:6}}>role: {session?.user?.role || serverRole || '—'}</div>
-          <div style={{marginTop:6, opacity:0.9}}>open console: window.__newloveAuth</div>
-          <div style={{marginTop:6, opacity:0.85}}>
-            <div style={{fontWeight:600}}>Recent events:</div>
-            <div style={{maxHeight:120, overflow:'auto', marginTop:6}}>
+          <div style={{ marginTop: 6 }}>user: {session?.user ? `${session.user.id} ${session.user.email}` : 'null'}</div>
+          <div style={{ marginTop: 6 }}>role: {session?.user?.role || serverRole || '—'}</div>
+          <div style={{ marginTop: 6, opacity: 0.9 }}>open console: window.__newloveAuth</div>
+          <div style={{ marginTop: 6, opacity: 0.85 }}>
+            <div style={{ fontWeight: 600 }}>Recent events:</div>
+            <div style={{ maxHeight: 120, overflow: 'auto', marginTop: 6 }}>
               {typeof window !== 'undefined' && (window.__newloveAuth || {}).history ? (
                 (window.__newloveAuth.history || []).slice().reverse().map((h, i) => (
-                  <div key={i} style={{fontSize:11, opacity:0.95, paddingTop:4}}>{new Date(h.ts).toLocaleTimeString()} {h.status} {h.short ? ` — ${h.short}` : ''}</div>
+                  <div key={i} style={{ fontSize: 11, opacity: 0.95, paddingTop: 4 }}>{new Date(h.ts).toLocaleTimeString()} {h.status} {h.short ? ` — ${h.short}` : ''}</div>
                 ))
               ) : (
-                <div style={{fontSize:11, opacity:0.7}}>no events yet</div>
+                <div style={{ fontSize: 11, opacity: 0.7 }}>no events yet</div>
               )}
             </div>
           </div>
@@ -143,14 +143,14 @@ export default function Header({ projects, settings }) {
       )}
       <AdminAutoRedirect />
       <header
-  className={`sticky top-0 z-50 w-full backdrop-blur-md bg-gradient-to-b from-pink-50 via-white/90 to-white transition-transform duration-400 ease-in-out ${hideOnScroll ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'shadow-sm' : ''}`}
-  style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}
+        className={`sticky top-0 z-50 w-full backdrop-blur-md bg-gradient-to-b from-pink-50 via-white/90 to-white transition-transform duration-400 ease-in-out ${hideOnScroll ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'shadow-sm' : ''}`}
+        style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}
       >
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
           <Link href="/" className="group flex items-center space-x-4">
-            <SafeImage 
-              src={logoUrl} 
-              alt="Логотип" 
+            <SafeImage
+              src={logoUrl}
+              alt="Логотип"
               width={40}
               height={40}
               priority
@@ -163,13 +163,13 @@ export default function Header({ projects, settings }) {
           </Link>
 
           <nav className="hidden items-center md:flex">
-            <ul className="list-none flex items-center justify-center gap-6 text-xs font-semibold uppercase tracking-[0.2em]"> 
+            <ul className="list-none flex items-center justify-center gap-6 text-xs font-semibold uppercase tracking-[0.2em]">
               {/* Магазин временно убран - будет добавлен позже */}
               {Array.isArray(projects) && projects.map((project) => (
                 <li key={project.id}>
                   <Link href={`/${project.slug}`} className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
                     {project.title}
-                    <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
+                    <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{ transitionProperty: 'transform' }}></span>
                   </Link>
                 </li>
               ))}
@@ -179,7 +179,7 @@ export default function Header({ projects, settings }) {
                   <li>
                     <Link href="/lab" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
                       Lab
-                      <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
+                      <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{ transitionProperty: 'transform' }}></span>
                     </Link>
                   </li>
                   {/* Kit удалён */}
@@ -189,13 +189,13 @@ export default function Header({ projects, settings }) {
               <li>
                 <Link href="/letters" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
                   Letters
-                  <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{transitionProperty:'transform'}}></span>
+                  <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{ transitionProperty: 'transform' }}></span>
                 </Link>
               </li>
             </ul>
           </nav>
 
-          <div className="hidden md:flex items-center justify-end" style={{minWidth: '150px'}}>
+          <div className="hidden md:flex items-center justify-end" style={{ minWidth: '150px' }}>
             <a
               href="https://github.com/merkurov1/newlove"
               target="_blank"
@@ -203,7 +203,7 @@ export default function Header({ projects, settings }) {
               className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-900 transition-colors mr-4"
               title="GitHub Repository"
             >
-              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.157-1.11-1.465-1.11-1.465-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.339-2.221-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.025A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.295 2.748-1.025 2.748-1.025.546 1.378.202 2.397.1 2.65.64.7 1.028 1.595 1.028 2.688 0 3.847-2.337 4.695-4.566 4.944.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.749 0 .268.18.579.688.481C19.138 20.2 22 16.448 22 12.021 22 6.484 17.523 2 12 2Z"/></svg>
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.157-1.11-1.465-1.11-1.465-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.339-2.221-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.025A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.295 2.748-1.025 2.748-1.025.546 1.378.202 2.397.1 2.65.64.7 1.028 1.595 1.028 2.688 0 3.847-2.337 4.695-4.566 4.944.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.749 0 .268.18.579.688.481C19.138 20.2 22 16.448 22 12.021 22 6.484 17.523 2 12 2Z" /></svg>
               <span className="sr-only">GitHub</span>
             </a>
 
@@ -247,8 +247,8 @@ export default function Header({ projects, settings }) {
         </div>
         {/* Animated gradient line убрана по финальному ТЗ */}
       </header>
-      
-  <div className={`fixed inset-0 z-40 transform bg-white/90 backdrop-blur-md pt-24 transition-transform duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`} style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}>
+
+      <div className={`fixed inset-0 z-40 transform bg-white/90 backdrop-blur-md pt-24 transition-transform duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`} style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}>
         <nav className="container mx-auto px-4">
           <ul className="list-none flex flex-col items-center gap-6 text-sm font-semibold uppercase tracking-[0.2em]">
             {/* Магазин временно убран - будет добавлен позже */}
@@ -300,7 +300,7 @@ export default function Header({ projects, settings }) {
               className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-900 transition-colors mb-4"
               title="GitHub Repository"
             >
-              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.157-1.11-1.465-1.11-1.465-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.339-2.221-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.025A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.295 2.748-1.025 2.748-1.025.546 1.378.202 2.397.1 2.65.64.7 1.028 1.595 1.028 2.688 0 3.847-2.337 4.695-4.566 4.944.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.749 0 .268.18.579.688.481C19.138 20.2 22 16.448 22 12.021 22 6.484 17.523 2 12 2Z"/></svg>
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.021c0 4.428 2.865 8.184 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.157-1.11-1.465-1.11-1.465-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.339-2.221-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.025A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.295 2.748-1.025 2.748-1.025.546 1.378.202 2.397.1 2.65.64.7 1.028 1.595 1.028 2.688 0 3.847-2.337 4.695-4.566 4.944.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.749 0 .268.18.579.688.481C19.138 20.2 22 16.448 22 12.021 22 6.484 17.523 2 12 2Z" /></svg>
               <span className="sr-only">GitHub</span>
             </a>
             {status === 'loading' && <div className="h-8 w-24 animate-pulse rounded-md bg-gray-200" />}
@@ -308,7 +308,7 @@ export default function Header({ projects, settings }) {
               <LoginButton />
             </div>
           </div>
-  </div>
+        </div>
       </div>
     </>
   );
