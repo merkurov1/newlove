@@ -70,12 +70,12 @@ export default async function LetterPage({ params }: Props) {
     console.error('Failed to parse letter content', e, letter.content);
   }
 
-  // Decide what to show: guests see only a teaser (first block), authenticated
-  // users and owners/admins see the full body.
-  const isAuthenticated = Boolean(user);
-  const showFull = isAuthenticated || isOwnerOrAdmin;
+  // For server-side render always show a single-block teaser to avoid
+  // duplicating content when the client hydrates and replaces it with
+  // the full body for authenticated users. The client component will
+  // attempt to fetch the full content when appropriate.
   const teaser = parsedBlocks.slice(0, 1);
-  const toRender = showFull ? parsedBlocks : teaser;
+  const toRender = teaser;
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
@@ -87,6 +87,9 @@ export default async function LetterPage({ params }: Props) {
 
       {/* Client will attempt to fetch and replace teaser with full content for authenticated users */}
       <LetterFullClient slug={slug} initialTeaser={teaser} />
+
+      {/* Visual separator before comments so they don't blend with the letter text */}
+      <div className="mt-10 mb-6 border-t border-gray-200" />
 
       {/* Comments (client only) */}
       <LetterCommentsClient slug={slug} />

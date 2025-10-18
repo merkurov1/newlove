@@ -7,20 +7,21 @@ import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest
 export async function GET(req: Request, { params }: { params: { slug: string } }) {
     const slug = params.slug;
     try {
+        // Require authentication for listing comments to prevent public access
+        const ctx = await getUserAndSupabaseForRequest(req) || {};
+        const user = ctx.user || null;
+        if (!user || !user.id) return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+
         const { getServerSupabaseClient } = await import('@/lib/serverAuth');
         const svc = getServerSupabaseClient({ useServiceRole: true });
         // Find letter id
         const { data: letter, error: letterErr } = await svc.from('letters').select('id').eq('slug', slug).maybeSingle();
         if (letterErr || !letter) return new Response(JSON.stringify({ comments: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
-        // Try to read comments table; if missing, return empty list
+        // Read comments table
         let comments: Array<any> = [];
-        try {
-            const { data: rows, error } = await svc.from('letter_comments').select('id,content,created_at,user_id,author_display').eq('letter_id', letter.id).order('created_at', { ascending: true });
-            if (!error && Array.isArray(rows)) comments = rows;
-        } catch (e) {
-            // table may not exist; return empty
-        }
+        const { data: rows, error } = await svc.from('letter_comments').select('id,content,created_at,user_id,author_display').eq('letter_id', letter.id).order('created_at', { ascending: true });
+        if (!error && Array.isArray(rows)) comments = rows;
 
         return new Response(JSON.stringify({ comments }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (e) {

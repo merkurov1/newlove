@@ -14,7 +14,13 @@ export default function LetterCommentsClient({ slug }: { slug: string }) {
         async function load() {
             setLoading(true);
             try {
-                const res = await fetch(`/api/letters/${encodeURIComponent(slug)}/comments`);
+                const res = await fetch(`/api/letters/${encodeURIComponent(slug)}/comments`, { credentials: 'same-origin' });
+                if (res.status === 401) {
+                    // Not authenticated - show prompt instead of comments
+                    if (mounted) setComments([]);
+                    if (mounted) setError('unauthenticated');
+                    return;
+                }
                 const json = await res.json();
                 if (mounted) setComments(json.comments || []);
             } catch (e) {
@@ -51,8 +57,13 @@ export default function LetterCommentsClient({ slug }: { slug: string }) {
         <div className="mt-8">
             <h3 className="text-lg font-semibold mb-3">Комментарии</h3>
             {loading && <div className="text-sm text-gray-500">Загрузка комментариев...</div>}
-            {error && <div className="text-sm text-red-600">Ошибка: {error}</div>}
-            {!loading && comments.length === 0 && <div className="text-sm text-gray-500 mb-3">Пока нет комментариев — будьте первым!</div>}
+            {error === 'unauthenticated' && (
+                <div className="text-sm text-gray-600 mb-3">
+                    Комментарии доступны только для зарегистрированных пользователей. <a href="/you/login" className="text-blue-600 underline">Войдите</a> или <a href="/onboard" className="text-blue-600 underline">зарегистрируйтесь</a>.
+                </div>
+            )}
+            {error && error !== 'unauthenticated' && <div className="text-sm text-red-600">Ошибка: {error}</div>}
+            {!loading && !error && comments.length === 0 && <div className="text-sm text-gray-500 mb-3">Пока нет комментариев — будьте первым!</div>}
             <ul className="space-y-4">
                 {comments.map((c) => (
                     <li key={c.id} className="bg-white/90 p-3 rounded border border-gray-100">
@@ -66,7 +77,7 @@ export default function LetterCommentsClient({ slug }: { slug: string }) {
             <form onSubmit={handlePost} className="mt-4">
                 <textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} className="w-full p-2 border rounded resize-none" rows={3} placeholder="Оставить комментарий..." />
                 <div className="mt-2 flex items-center gap-2">
-                    <button disabled={posting} type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Отправить</button>
+                    <button disabled={posting || error === 'unauthenticated'} type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Отправить</button>
                     <button type="button" onClick={() => setNewContent('')} className="px-3 py-2 border rounded">Очистить</button>
                 </div>
             </form>
