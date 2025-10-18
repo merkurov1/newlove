@@ -12,7 +12,7 @@ export function getOnboard() {
 
     const injected = injectedModule();
 
-        const chains = [
+    const chains = [
         {
             // Onboard prefers hex chain ids (0x89 == 137)
             id: '0x89',
