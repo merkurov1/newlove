@@ -1,0 +1,13 @@
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+HardhatError: HH117: Empty string `` for network or forking URL - Expected a non-empty string.
+    at new HttpProvider (/workspaces/newlove/node_modules/hardhat/src/internal/core/providers/http.ts:55:13)
+    at createProvider (/workspaces/newlove/node_modules/hardhat/src/internal/core/providers/construction.ts:128:23)
+    at LazyInitializationProviderAdapter._providerFactory (/workspaces/newlove/node_modules/hardhat/src/internal/core/runtime-environment.ts:100:28)
+    at LazyInitializationProviderAdapter.init (/workspaces/newlove/node_modules/hardhat/src/internal/core/providers/lazy-initialization.ts:40:42)
+    at LazyInitializationProviderAdapter._getOrInitProvider (/workspaces/newlove/node_modules/hardhat/src/internal/core/providers/lazy-initialization.ts:173:34)
+    at LazyInitializationProviderAdapter.send (/workspaces/newlove/node_modules/hardhat/src/internal/core/providers/lazy-initialization.ts:68:33)
+    at HardhatEthersProvider.send (/workspaces/newlove/node_modules/@nomicfoundation/hardhat-ethers/src/internal/hardhat-ethers-provider.ts:105:34)
+    at getSigners (/workspaces/newlove/node_modules/@nomicfoundation/hardhat-ethers/src/internal/helpers.ts:46:42)
+    at Proxy.getSigners (/workspaces/newlove/node_modules/@nomicfoundation/hardhat-ethers/src/internal/index.ts:37:35)
+    at main (/workspaces/newlove/scripts/mint_and_transfer.js:9:38)

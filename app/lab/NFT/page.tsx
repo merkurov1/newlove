@@ -41,6 +41,10 @@ export default function NFTLabPageClient() {
     const [priceEth, setPriceEth] = useState<string | null>(null);
     const [maxPublic, setMaxPublic] = useState<number | null>(null);
     const [publicMinted, setPublicMinted] = useState<number | null>(null);
+    const [chainId, setChainId] = useState<number | null>(null);
+    const [currentId, setCurrentId] = useState<number | null>(null);
+    const [hasClaimedOnChain, setHasClaimedOnChain] = useState<boolean | null>(null);
+    const [isEligible, setIsEligible] = useState<boolean | null>(null);
 
     useEffect(() => {
         // Read on-chain metadata (price, supply)
@@ -53,6 +57,14 @@ export default function NFTLabPageClient() {
                 const price = await contract.priceWei();
                 const max = await contract.maxPublicSupply();
                 const minted = await contract.publicMinted();
+                const cid = await provider.getNetwork();
+                const cur = await contract.currentId();
+                setChainId(cid.chainId);
+                setCurrentId(Number(cur));
+                if (address) {
+                    const claimed = await contract.hasClaimedOnChain(address);
+                    setHasClaimedOnChain(Boolean(claimed));
+                }
                 setPriceEth(formatEther(price));
                 setMaxPublic(Number(max));
                 setPublicMinted(Number(minted));
@@ -112,6 +124,10 @@ export default function NFTLabPageClient() {
             setStatus("Пожалуйста, подключите кошелёк");
             return;
         }
+        if (hasClaimedOnChain) {
+            setStatus('Этот адрес уже отметился on-chain как получивший NFT');
+            return;
+        }
         setProcessing(true);
         setStatus(null);
 
@@ -152,6 +168,28 @@ export default function NFTLabPageClient() {
             setStatus(err?.message || "Ошибка при получении подписи / минте");
         } finally {
             setProcessing(false);
+        }
+    }
+
+    async function checkEligibility() {
+        if (!address) {
+            setIsEligible(null);
+            return;
+        }
+        try {
+            const res = await fetch('/api/check-eligibility', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ wallet_address: address }),
+            });
+            if (res.ok) {
+                const j = await res.json();
+                setIsEligible(Boolean(j.eligible));
+            } else {
+                setIsEligible(null);
+            }
+        } catch (e) {
+            setIsEligible(null);
         }
     }
 
