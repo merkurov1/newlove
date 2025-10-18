@@ -1,5 +1,5 @@
 // ===== ФАЙЛ: app/api/letters/route.ts =====
-// (ПОЛНЫЙ КОД С ИСПРАВЛЕНИЕМ)
+// (ПОЛНЫЙ ЧИСТЫЙ КОД)
 
 import { createServerClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
@@ -12,29 +12,17 @@ export async function GET(request: Request) {
 	try {
 		const cookieStore = cookies();
 		
-		// 1. Создаем ОБЫЧНЫЙ клиент, чтобы проверить, кто пользователь
-		const supabaseUserClient = createServerClient(cookieStore);
-		const { data: { user } } = await supabaseUserClient.auth.getUser();
-		const isAdmin = user && (String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
+		// 1. Используем СРАЗУ service-role клиент,
+        //    как в твоем оригинальном файле
+		const supabase = createServerClient(cookieStore, { useServiceRole: true });
 
-		// 2. Создаем SERVICE_ROLE клиент, чтобы читать данные (как в старом коде)
-		const supabaseServiceClient = createServerClient(cookieStore, { useServiceRole: true });
-
-		// 3. Создаем запрос с помощью service-клиента
-		let query = supabaseServiceClient
+		// 2. Создаем запрос (только опубликованные, как в оригинале)
+		const { data, error } = await supabase
 			.from('letters')
 			.select('id,title,slug,published,publishedAt,createdAt,author:authorId(name)')
+			.eq('published', true) // <-- Только опубликованные
 			.order('publishedAt', { ascending: false })
 			.limit(100);
-
-		// 4. Если пользователь НЕ админ, показываем только опубликованные
-		// (Эта логика теперь будет работать)
-		if (!isAdmin) {
-			query = query.eq('published', true);
-		}
-		// (Если пользователь - админ, он увидит все письма, включая черновики)
-
-		const { data, error } = await query;
 
 		if (error) {
 			console.error('Failed to fetch letters (service client)', error);
@@ -51,7 +39,7 @@ export async function GET(request: Request) {
 
 
 export async function POST(request: Request) {
-	// Placeholder implementation during migration.
+	// Placeholder
 	const body = await request.text();
 	return new Response(JSON.stringify({ ok: true, received: body }), {
 		status: 200,
