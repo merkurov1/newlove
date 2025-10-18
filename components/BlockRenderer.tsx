@@ -5,50 +5,12 @@ import TextBlock from './blocks/TextBlock';
 import GalleryGrid from './GalleryGrid';
 import CodeBlock from './blocks/CodeBlock';
 import type { EditorJsBlock } from '@/types/blocks';
+import serializeForClient from '@/lib/serializeForClient';
 
 export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
-  // Recursive sanitizer: ensure all objects/arrays are plain and Dates are converted
-  // to ISO strings. This protects against non-plain prototypes (e.g. Object.create(null)
-  // or class instances) which Next.js refuses to serialize into client component props.
-  function sanitizeForClient(value: any): any {
-    if (value === null || value === undefined) return value;
-    const t = typeof value;
-    if (t === 'string' || t === 'number' || t === 'boolean') return value;
-    if (value instanceof Date) return value.toISOString();
-    if (Array.isArray(value)) {
-      return value.map((v) => sanitizeForClient(v));
-    }
-    if (t === 'object') {
-      // Built-ins we allow to remain as primitives or strings
-      const proto = Object.getPrototypeOf(value);
-      // If prototype is not plain object, coerce by shallow-copying
-      const out: any = {};
-      for (const k of Object.keys(value)) {
-        try {
-          out[k] = sanitizeForClient(value[k]);
-        } catch (e) {
-          out[k] = String(value[k]);
-        }
-      }
-      return out;
-    }
-    // functions, symbols, etc. -> stringify
-    try { return String(value); } catch (e) { return null; }
-  }
-
-  const safeBlocks = (() => {
-    try {
-      const cloned = JSON.parse(JSON.stringify(blocks || []));
-      return sanitizeForClient(cloned || []);
-    } catch (e) {
-      console.error('BlockRenderer: failed to deep-clone blocks', e);
-      try {
-        return sanitizeForClient(blocks || []);
-      } catch (ex) {
-        return Array.isArray(blocks) ? blocks : [];
-      }
-    }
-  })();
+  // Use centralized serializer to ensure plain JSON-serializable objects
+  // are produced for passing into Client Components.
+  const safeBlocks: EditorJsBlock[] = serializeForClient(blocks || []) || [];
 
   if (!Array.isArray(safeBlocks) || !safeBlocks.length) {
     return (
@@ -132,8 +94,8 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
           case 'columns':
             return (
               <div key={idx} className={`mb-6 grid gap-6 ${block.data.columns?.length === 2 ? 'grid-cols-1 md:grid-cols-2' :
-                  block.data.columns?.length === 3 ? 'grid-cols-1 md:grid-cols-3' :
-                    'grid-cols-1'
+                block.data.columns?.length === 3 ? 'grid-cols-1 md:grid-cols-3' :
+                  'grid-cols-1'
                 }`}>
                 {block.data.columns?.map((column: any, colIdx: number) => (
                   <div key={colIdx} className="prose prose-lg max-w-none">
@@ -196,11 +158,9 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
           // Обратная совместимость с другими кастомными типами
           case 'gallery':
             if (block.type === 'gallery' && Array.isArray(block.data.images)) {
-              // Pass images as JSON string to avoid prototype/non-plain issues
-              // when serializing props from Server -> Client components.
-              const imagesJson = JSON.stringify(block.data.images || []);
-              // @ts-ignore - imagesJson is provided and parsed client-side in GalleryGrid
-              return <GalleryGrid key={idx} imagesJson={imagesJson} />;
+              // block.data.images is sanitized by serializeForClient above
+              // @ts-ignore - images prop is provided; allow runtime check in GalleryGrid (client-side)
+              return <GalleryGrid key={idx} images={block.data.images} />;
             }
             return null;
           default:
