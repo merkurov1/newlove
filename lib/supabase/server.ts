@@ -1,5 +1,5 @@
 // ===== ФАЙЛ: lib/supabase/server.ts =====
-// (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+// (ПОЛНЫЙ КОД С ИСПРАВЛЕНИЕМ ОПЕЧАТКИ)
 
 import { createServerClient as _createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
@@ -14,11 +14,8 @@ export function createServerClient(
   options: ServerClientOptions = {}
 ) {
   
-  // ----- ИЗМЕНЕНИЕ ЗДЕСЬ -----
-  [span_0](start_span)// Ищем URL в обеих переменных, как это делал старый 'lib/serverAuth.ts'[span_0](end_span)
+  // Ищем URL в обеих переменных, как это делал старый 'lib/serverAuth.ts'
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  // -------------------------
-
   let supabaseKey: string;
 
   const preferServiceRole = !!options.useServiceRole;
@@ -34,9 +31,11 @@ export function createServerClient(
 
   // Добавляем проверку, что supabaseUrl нашелся
   if (!supabaseUrl) {
+    // ----- ИСПРАВЛЕНИЕ ЗДЕСЬ -----
     throw new Error('Supabase URL not found. Please set NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL');
   }
   if (!supabaseKey) {
+    // ----- И ИСПРАВЛЕНИЕ ЗДЕСЬ -----
     throw new Error('Supabase key not found. Please set NEXT_PUBLIC_SUPABASE_ANON_KEY (or SUPABASE_SERVICE_ROLE_KEY)');
   }
 
