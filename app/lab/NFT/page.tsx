@@ -12,6 +12,7 @@ export default function NFTLabPageClient() {
     // can render even when there's no global WagmiProvider.
     const [address, setAddress] = useState<string | null>(null);
     const [isConnected, setIsConnected] = useState(false);
+    const [onboardWallet, setOnboardWallet] = useState<any | null>(null);
 
     // Local connect helper (use injected provider directly)
     async function connectWallet() {
@@ -38,11 +39,12 @@ export default function NFTLabPageClient() {
                 setStatus("Не удалось подключить кошелёк");
                 return;
             }
-            const account = selected.accounts && selected.accounts[0];
+            const account = selected?.accounts && selected.accounts[0];
             if (account && account.address) {
                 setAddress(account.address);
                 setIsConnected(true);
             }
+            setOnboardWallet(selected || null);
             setStatus("Кошелёк подключён");
         } catch (err: any) {
             console.error(err);
@@ -59,6 +61,7 @@ export default function NFTLabPageClient() {
     const [currentId, setCurrentId] = useState<number | null>(null);
     const [hasClaimedOnChain, setHasClaimedOnChain] = useState<boolean | null>(null);
     const [isEligible, setIsEligible] = useState<boolean | null>(null);
+    const [hasTransformed, setHasTransformed] = useState<boolean>(false);
 
     useEffect(() => {
         // Read on-chain metadata (price, supply)
@@ -129,14 +132,16 @@ export default function NFTLabPageClient() {
         setProcessing(true);
         setStatus(null);
         try {
-            const eth = (window as any).ethereum;
-            const provider = new (ethers as any).BrowserProvider(eth as any);
-            // request accounts (will be a no-op if already connected/approved)
-            try {
-                await provider.send("eth_requestAccounts", []);
-            } catch (e) {
-                // fallthrough - some providers may throw; we'll still try to get signer
+            // choose provider: prefer onboard wallet provider, else injected window.ethereum
+            let rawProvider: any = null;
+            if (onboardWallet && typeof onboardWallet.getProvider === 'function') {
+                try { rawProvider = onboardWallet.getProvider(); } catch (e) { rawProvider = null; }
             }
+            if (!rawProvider && onboardWallet && onboardWallet.provider) rawProvider = onboardWallet.provider;
+            if (!rawProvider) rawProvider = (window as any).ethereum;
+            const provider = new (ethers as any).BrowserProvider(rawProvider as any);
+            // request accounts (will be a no-op if already connected/approved)
+            try { await provider.send("eth_requestAccounts", []); } catch (e) { }
             const signerLocal = provider.getSigner();
             try {
                 const a = await signerLocal.getAddress();
@@ -218,8 +223,15 @@ export default function NFTLabPageClient() {
             if (!signature) throw new Error("No signature returned (not eligible or server error)");
 
             // use signer to call contract.claimForSubscriber(signature)
-            const provider = new (ethers as any).BrowserProvider((window as any).ethereum);
-            await provider.send("eth_requestAccounts", []);
+            // choose provider: prefer onboard wallet provider, else injected window.ethereum
+            let rawProvider2: any = null;
+            if (onboardWallet && typeof onboardWallet.getProvider === 'function') {
+                try { rawProvider2 = onboardWallet.getProvider(); } catch (e) { rawProvider2 = null; }
+            }
+            if (!rawProvider2 && onboardWallet && onboardWallet.provider) rawProvider2 = onboardWallet.provider;
+            if (!rawProvider2) rawProvider2 = (window as any).ethereum;
+            const provider = new (ethers as any).BrowserProvider(rawProvider2 as any);
+            try { await provider.send("eth_requestAccounts", []); } catch (e) { }
             const signerLocal = provider.getSigner();
             const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signerLocal);
             setStatus("Транзакция подписана, ожидаю подтверждения...");
@@ -270,6 +282,10 @@ export default function NFTLabPageClient() {
             setStatus('Сначала подключите кошелёк и убедитесь что у вас есть токен');
             return;
         }
+        if (hasTransformed || hasClaimedOnChain) {
+            setStatus('Этот адрес уже совершил выбор или уже получил токен. Изменение невозможно.');
+            return;
+        }
         setProcessing(true);
         setStatus('Запрашиваю желаемый образ у сервера...');
         try {
@@ -288,7 +304,8 @@ export default function NFTLabPageClient() {
                 return;
             }
             // success stub
-            setStatus(`Вариант ${variant} зарезервирован (заглушка). Следите за уведомлениями.`);
+            setHasTransformed(true);
+            setStatus(`Вариант ${variant} зарезервирован (заглушка). ВНИМАНИЕ: выбор необратим.`);
         } catch (e: any) {
             console.error(e);
             setStatus(e?.message || 'Ошибка при запросе варианта');
@@ -299,15 +316,18 @@ export default function NFTLabPageClient() {
 
     return (
         <main className="mx-auto max-w-prose py-12 px-4">
-            <div className="mt-6 p-6 bg-pink-50 border rounded">
-                <h3 className="text-lg font-semibold">Как это работает — весёлая версия</h3>
-                <p className="mt-2">Вы сначала получаете основное Neutral Heart — это ваше базовое сердечко. Затем, если захотите, вы можете превратить его в Ангелочка или Чертика. Просто нажмите кнопку выбора после покупки или клейма — мы постараемся сделать процесс прозрачным и быстрым.</p>
-                <ol className="mt-2 list-decimal pl-5 text-sm">
-                    <li>Подключите кошелёк через Onboard.</li>
-                    <li>Купите базовое сердце или получите его бесплатно (для подписчиков).</li>
-                    <li>Нажмите «Выбрать образ» и укажите — Ангел или Демон, и (опционально) адрес, кому подарить.</li>
-                    <li>Если сервер сконфигурирован, он зарезервирует и отправит нужный вариант; иначе вы сможете вручную выполнить transfer после получения токена.</li>
-                </ol>
+            <div className="mt-6 p-6 bg-gradient-to-r from-neutral-900 to-neutral-700 text-white rounded">
+                <h2 className="text-2xl font-bold">НЕОБРАТИМЫЙ ВЫБОР</h2>
+                <p className="mt-3 font-semibold">NFT, КОТОРЫЙ ТРЕБУЕТ ДУШИ.</p>
+                <p className="mt-2">Это не просто коллекция. Это экзистенциальный эксперимент на блокчейне. Готовы ли вы принять решение, которое определит вашу цифровую сущность навсегда?</p>
+                <div className="mt-4">
+                    <p className="font-medium">МЕХАНИКА, КОТОРАЯ СТАНОВИТСЯ ИСТОРИЕЙ:</p>
+                    <ol className="mt-2 list-decimal pl-5 text-sm">
+                        <li><strong>ТОЧКА ОТСЧЁТА: "НЕЙТРАЛЬНОЕ СЕРДЦЕ"</strong><br/>Ваш путь начинается с NFT "Нейтральное Сердце" — символа чистого, нерешенного потенциала. Оно ждёт вашего решающего шага.</li>
+                        <li className="mt-2"><strong>МОМЕНТ ИСТИНЫ: ОДИН КЛИК, НЕТ ПУТИ НАЗАД</strong><br/>Подключите кошелёк. Перед вами два пути: <em>ПЕРЕДАТЬ АНГЕЛУ</em> или <em>ОТДАТЬ ДЕМОНУ</em>.</li>
+                        <li className="mt-2"><strong>НЕОБРАТИМАЯ ТРАНСФОРМАЦИЯ</strong><br/>После подтверждения транзакции ваше "Нейтральное Сердце" исчезает, чтобы навсегда превратиться в "Ангела с Сердцем" или "Демона с Сердцем". Это действие необратимо — метаданные меняются навсегда.</li>
+                    </ol>
+                </div>
             </div>
             <h1 className="text-3xl font-bold">Необратимый Выбор — получить Neutral Heart</h1>
 
