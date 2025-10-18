@@ -120,10 +120,7 @@ export default function NFTLabPageClient() {
     }, [address]);
 
     async function handlePublicMint(qty = 1) {
-        if (!isConnected) {
-            setStatus("Пожалуйста, подключите кошелёк");
-            return;
-        }
+        // If user isn't flagged as connected, try to request accounts from injected provider.
         if (!(window as any).ethereum) {
             setStatus("Пожалуйста, установите и подключите кошелёк (например MetaMask)");
             return;
@@ -132,9 +129,24 @@ export default function NFTLabPageClient() {
         setProcessing(true);
         setStatus(null);
         try {
-            const provider = new (ethers as any).BrowserProvider((window as any).ethereum);
-            await provider.send("eth_requestAccounts", []);
+            const eth = (window as any).ethereum;
+            const provider = new (ethers as any).BrowserProvider(eth as any);
+            // request accounts (will be a no-op if already connected/approved)
+            try {
+                await provider.send("eth_requestAccounts", []);
+            } catch (e) {
+                // fallthrough - some providers may throw; we'll still try to get signer
+            }
             const signerLocal = provider.getSigner();
+            try {
+                const a = await signerLocal.getAddress();
+                if (a) {
+                    setAddress(a);
+                    setIsConnected(true);
+                }
+            } catch (e) {
+                // signer not available
+            }
             const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signerLocal);
             const price = await contract.priceWei();
             const total = price.mul(qty);
@@ -164,9 +176,25 @@ export default function NFTLabPageClient() {
     }
 
     async function handleSubscriberClaim() {
-        if (!isConnected || !address) {
-            setStatus("Пожалуйста, подключите кошелёк");
+        // Ensure we have accounts available; try to request if needed
+        if (!(window as any).ethereum) {
+            setStatus("Пожалуйста, установите и подключите кошелёк (например MetaMask)");
             return;
+        }
+        if (!isConnected || !address) {
+            try {
+                const provider = new (ethers as any).BrowserProvider((window as any).ethereum);
+                await provider.send('eth_requestAccounts', []);
+                const signer = provider.getSigner();
+                const a = await signer.getAddress();
+                if (a) {
+                    setAddress(a);
+                    setIsConnected(true);
+                }
+            } catch (e) {
+                setStatus("Пожалуйста, подключите кошелёк");
+                return;
+            }
         }
         if (hasClaimedOnChain) {
             setStatus('Этот адрес уже отметился on-chain как получивший NFT');
@@ -283,21 +311,7 @@ export default function NFTLabPageClient() {
             </div>
             <h1 className="text-3xl font-bold">Необратимый Выбор — получить Neutral Heart</h1>
 
-            <div className="mt-4 p-4 bg-yellow-50 border-l-4 border-yellow-400">
-                <h3 className="font-semibold">Недостающая информация (пожалуйста, предоставьте позже)</h3>
-                <ul className="mt-2 list-disc pl-5 text-sm text-neutral-700">
-                    <li>Run DB migrations: migrations/2025-10-18_add_letter_comments.sql and migrations/2025-10-18_create_subscribers_table.sql (run in Supabase SQL Editor)</li>
-                    <li>Apply RLS policies for comments and subscribers (use DROP POLICY IF EXISTS; CREATE POLICY ...)</li>
-                    <li>Set Vercel env vars: SIGNER_PRIVATE_KEY (server-only), SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS, NEXT_PUBLIC_CHAIN_ID, POLYGON_RPC_URL, POLYGONSCAN_API_KEY, NOREPLY_EMAIL</li>
-                    <li>Deploy contract: run scripts/deploy.js with Hardhat and set NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS</li>
-                    <li>Set trusted signer on-chain: call setTrustedSigner(&lt;address derived from SIGNER_PRIVATE_KEY&gt;) as contract owner</li>
-                    <li>Seed subscribers table with eligible wallet addresses (has_claimed=false)</li>
-                    <li>Upload token assets and set baseURI via setBaseURI()</li>
-                    <li>Install frontend web3 deps (wagmi, viem, @supabase/supabase-js) and wire providers at app root</li>
-                    <li>End-to-end testing: public paid mint and subscriber-claim flow on testnet; verify DB and on-chain states</li>
-                    <li>Optional hardening: add expiry/nonce to vouchers and on-chain verification in /api/mark-claimed</li>
-                </ul>
-            </div>
+
 
             <div className="mt-6 space-y-4">
                 {/* Variant chooser area - appears when we have a recent token */}
