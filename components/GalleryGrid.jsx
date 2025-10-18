@@ -11,8 +11,18 @@ export default function GalleryGrid({ images }) {
 
   if (!images || images.length === 0) return null;
 
+  // Ensure images are plain objects (strip prototypes) and prepare slides
+  const safeImages = (() => {
+    try {
+      return JSON.parse(JSON.stringify(images || []));
+    } catch (e) {
+      console.error('GalleryGrid: failed to deep-clone images', e);
+      return images || [];
+    }
+  })();
+
   // Готовим слайды для лайтбокса
-  const slides = images.map(item => ({
+  const slides = safeImages.map(item => ({
     src: item.url,
     width: 800, // можно добавить width/height в GalleryImage при необходимости
     height: 600,
@@ -27,7 +37,7 @@ export default function GalleryGrid({ images }) {
           gap: '1rem', margin: '2rem 0',
         }}
       >
-        {images.map((item, i) => (
+        {safeImages.map((item, i) => (
           <div
             key={item.url || i}
             onClick={() => setIndex(i)}
