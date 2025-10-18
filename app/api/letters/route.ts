@@ -56,7 +56,7 @@ export async function GET(request: Request) {
 			const anon = createClient();
 			const { data, error } = await anon
 				.from('letters')
-				.select('id,title,slug,published,publishedAt,createdAt,author:authorId(name)')
+				.select('id,title,slug,published,publishedAt,createdAt,authorId')
 				.eq('published', true)
 				.order('publishedAt', { ascending: false })
 				.limit(100);
