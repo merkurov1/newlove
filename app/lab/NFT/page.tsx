@@ -3,11 +3,14 @@
 import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { formatEther } from "ethers";
-import { useAccount } from "wagmi";
 import { CONTRACT_ADDRESS, NFT_ABI } from "./contract";
 
 export default function NFTLabPageClient() {
-    const { address, isConnected } = useAccount();
+    // wagmi provider is not guaranteed to be present in this app.
+    // Use local wallet detection using window.ethereum so the page
+    // can render even when there's no global WagmiProvider.
+    const [address, setAddress] = useState<string | null>(null);
+    const [isConnected, setIsConnected] = useState(false);
 
     // Local connect helper (use injected provider directly)
     async function connectWallet() {
@@ -18,6 +21,14 @@ export default function NFTLabPageClient() {
         try {
             const provider = new (ethers as any).BrowserProvider((window as any).ethereum);
             await provider.send("eth_requestAccounts", []);
+            const signer = provider.getSigner();
+            try {
+                const a = await signer.getAddress();
+                setAddress(a);
+                setIsConnected(true);
+            } catch (e) {
+                // signer may not be available immediately — ignore
+            }
             setStatus("Кошелёк подключён");
         } catch (err: any) {
             console.error(err);
@@ -45,6 +56,17 @@ export default function NFTLabPageClient() {
                 setPriceEth(formatEther(price));
                 setMaxPublic(Number(max));
                 setPublicMinted(Number(minted));
+                // try to set address if unlocked
+                try {
+                    const signer = provider.getSigner();
+                    const a = await signer.getAddress();
+                    if (a) {
+                        setAddress(a);
+                        setIsConnected(true);
+                    }
+                } catch (e) {
+                    // ignore — wallet not connected
+                }
             } catch (err) {
                 // ignore
             }
@@ -173,7 +195,7 @@ export default function NFTLabPageClient() {
                             className="px-4 py-2 bg-gray-200 rounded"
                             onClick={() => connectWallet()}
                         >
-                            Подключить кошелёк
+                            {isConnected ? (address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Кошелёк подключён') : 'Подключить кошелёк'}
                         </button>
                     </div>
                     <div className="mt-2 text-sm text-neutral-500">Доступно: {publicMinted ?? "—"} / {maxPublic ?? "—"}</div>
