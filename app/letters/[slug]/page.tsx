@@ -55,30 +55,37 @@ export default async function LetterPage({ params }: Props) {
   const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
   if (!letter.published && !isOwnerOrAdmin) return notFound();
 
-  // Enforce authentication: all letters require a logged-in user to view.
-  // If not authenticated, redirect to the login page and include the
-  // return path so the user can continue after signing in.
-  if (!user) {
-    const nextPath = encodeURIComponent(`/letters/${slug}`);
-    redirect(`/login?next=${nextPath}`);
-  }
 
-  // Authenticated: show full content
-  let blocks = [];
+  // Parse content into blocks (we'll use a teaser for unauthenticated viewers)
+  let parsedBlocks = [];
   try {
     const raw = typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content);
     const parsed = JSON.parse(raw || '[]');
-    blocks = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+    parsedBlocks = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
   } catch (e) {
     console.error('Failed to parse letter content', e, letter.content);
   }
+
+  // Decide what to show: guests see only a teaser (first block), authenticated
+  // users and owners/admins see the full body.
+  const isAuthenticated = Boolean(user);
+  const showFull = isAuthenticated || isOwnerOrAdmin;
+  const teaser = parsedBlocks.slice(0, 1);
+  const toRender = showFull ? parsedBlocks : teaser;
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-4">{letter.title}</h1>
       <div className="prose mb-6">
-        {blocks.length > 0 ? <BlockRenderer blocks={blocks} /> : <p className="italic text-gray-500">Содержимое отсутствует.</p>}
+        {toRender.length > 0 ? <BlockRenderer blocks={toRender} /> : <p className="italic text-gray-500">Содержимое отсутствует.</p>}
       </div>
+
+      {!showFull && (
+        <div className="p-4 bg-yellow-50 border border-yellow-100 rounded">
+          <p className="mb-2">Полный текст письма доступен только зарегистрированным пользователям.</p>
+          <a href={`/login?next=${encodeURIComponent(`/letters/${slug}`)}`} className="text-blue-600 hover:underline">Войти или зарегистрироваться →</a>
+        </div>
+      )}
     </main>
   );
 }
