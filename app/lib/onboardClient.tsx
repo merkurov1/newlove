@@ -2,8 +2,8 @@
 
 import Onboard from '@web3-onboard/core';
 import injectedModule from '@web3-onboard/injected-wallets';
-// walletconnect is optional; only include if you have PROJECT ID configured
-// import walletConnectModule from '@web3-onboard/walletconnect';
+// walletconnect optional: include when NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is set
+import walletConnectModule from '@web3-onboard/walletconnect';
 
 let onboard: any = null;
 
@@ -12,6 +12,18 @@ export function getOnboard() {
 
     const injected = injectedModule();
 
+    // Optionally enable WalletConnect (project id must be supplied via env)
+    const wallets: any[] = [injected];
+    try {
+        const wcProject = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || (globalThis as any)?.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+        if (wcProject) {
+            const walletConnect = walletConnectModule({ projectId: wcProject, requiredChains: [137] });
+            wallets.push(walletConnect);
+        }
+    } catch (e) {
+        // ignore if not available / server-side
+    }
+
     const chains = [
         {
             // Onboard prefers hex chain ids (0x89 == 137)
@@ -19,11 +31,18 @@ export function getOnboard() {
             token: 'MATIC',
             label: 'Polygon',
             rpcUrl: process.env.NEXT_PUBLIC_POLYGON_RPC || 'https://polygon-rpc.com'
+        },
+        {
+            // Also include Ethereum mainnet so users on ETH can connect and then switch chains if needed
+            id: '0x1',
+            token: 'ETH',
+            label: 'Ethereum Mainnet',
+            rpcUrl: process.env.NEXT_PUBLIC_ETHEREUM_RPC || 'https://mainnet.infura.io/v3/0083c29479d8ea22af3a3a44a447c439'
         }
     ];
 
     onboard = Onboard({
-        wallets: [injected],
+        wallets,
         chains,
         appMetadata: {
             name: 'NewLove NFT Lab',

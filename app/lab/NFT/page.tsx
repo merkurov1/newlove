@@ -132,17 +132,19 @@ export default function NFTLabPageClient() {
         setProcessing(true);
         setStatus(null);
         try {
-            // choose provider: prefer onboard wallet provider, else injected window.ethereum
+            // choose provider: prefer onboard wallet.provider, fall back to getProvider(), then injected window.ethereum
             let rawProvider: any = null;
-            if (onboardWallet && typeof onboardWallet.getProvider === 'function') {
-                try { rawProvider = onboardWallet.getProvider(); } catch (e) { rawProvider = null; }
+            try {
+                if (onboardWallet && onboardWallet.provider) rawProvider = onboardWallet.provider;
+                else if (onboardWallet && typeof onboardWallet.getProvider === 'function') rawProvider = await onboardWallet.getProvider();
+            } catch (e) {
+                rawProvider = null;
             }
-            if (!rawProvider && onboardWallet && onboardWallet.provider) rawProvider = onboardWallet.provider;
             if (!rawProvider) rawProvider = (window as any).ethereum;
-            const provider = new (ethers as any).BrowserProvider(rawProvider as any);
+            const provider = new (ethers as any).BrowserProvider(rawProvider as any, 'any');
             // request accounts (will be a no-op if already connected/approved)
             try { await provider.send("eth_requestAccounts", []); } catch (e) { }
-            const signerLocal = provider.getSigner();
+            const signerLocal = await provider.getSigner();
             try {
                 const a = await signerLocal.getAddress();
                 if (a) {
@@ -223,16 +225,18 @@ export default function NFTLabPageClient() {
             if (!signature) throw new Error("No signature returned (not eligible or server error)");
 
             // use signer to call contract.claimForSubscriber(signature)
-            // choose provider: prefer onboard wallet provider, else injected window.ethereum
+            // choose provider: prefer onboard wallet.provider, fall back to getProvider(), then injected window.ethereum
             let rawProvider2: any = null;
-            if (onboardWallet && typeof onboardWallet.getProvider === 'function') {
-                try { rawProvider2 = onboardWallet.getProvider(); } catch (e) { rawProvider2 = null; }
+            try {
+                if (onboardWallet && onboardWallet.provider) rawProvider2 = onboardWallet.provider;
+                else if (onboardWallet && typeof onboardWallet.getProvider === 'function') rawProvider2 = await onboardWallet.getProvider();
+            } catch (e) {
+                rawProvider2 = null;
             }
-            if (!rawProvider2 && onboardWallet && onboardWallet.provider) rawProvider2 = onboardWallet.provider;
             if (!rawProvider2) rawProvider2 = (window as any).ethereum;
-            const provider = new (ethers as any).BrowserProvider(rawProvider2 as any);
+            const provider = new (ethers as any).BrowserProvider(rawProvider2 as any, 'any');
             try { await provider.send("eth_requestAccounts", []); } catch (e) { }
-            const signerLocal = provider.getSigner();
+            const signerLocal = await provider.getSigner();
             const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signerLocal);
             setStatus("Транзакция подписана, ожидаю подтверждения...");
             const tx = await contract.claimForSubscriber(signature);
