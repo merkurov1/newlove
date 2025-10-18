@@ -1,3 +1,84 @@
+import React from 'react';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
+import Link from 'next/link';
+
+export const dynamic = 'force-dynamic';
+
+export default async function AdminUsersPage() {
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
+  let users: any[] = [];
+  try {
+    const { data, error } = await supabase.from('users').select('id,email,username,name,created_at,updated_at,user_metadata');
+    if (!error && Array.isArray(data)) users = data;
+  } catch (e) {
+    console.error('Failed to fetch users', e);
+  }
+
+  // Fetch subscribers status map
+  let subs: any[] = [];
+  try {
+    const { data: s } = await supabase.from('subscribers').select('id,email,isActive,userId');
+    if (Array.isArray(s)) subs = s;
+  } catch (e) {
+    console.error('Failed to fetch subscribers', e);
+  }
+
+  const subsByUser: Record<string, any> = {};
+  for (const s of subs) {
+    if (s.userId) subsByUser[String(s.userId)] = s;
+  }
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Пользователи</h1>
+        <Link href="/admin" className="text-sm text-gray-600 hover:underline">← Назад в панель</Link>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full table-auto border-collapse">
+          <thead>
+            <tr className="text-left text-sm text-gray-600 border-b">
+              <th className="py-2">Email</th>
+              <th>Username</th>
+              <th>Имя</th>
+              <th>Подписка</th>
+              <th>Роль</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id} className="border-b hover:bg-gray-50">
+                <td className="py-3 text-sm">{u.email}</td>
+                <td className="text-sm">{u.username || '-'}</td>
+                <td className="text-sm">{u.name || '-'}</td>
+                <td className="text-sm">{subsByUser[u.id]?.isActive ? 'Да' : 'Нет'}</td>
+                <td className="text-sm">{(u.user_metadata && u.user_metadata.role) || '-'}</td>
+                <td className="text-sm">
+                  <div className="flex gap-2">
+                    <button onClick={async () => {
+                      if (!confirm('Сделать пользователя админом?')) return;
+                      await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateRole', userId: u.id, role: 'ADMIN' }) });
+                      location.reload();
+                    }} className="px-2 py-1 bg-blue-600 text-white rounded text-xs">Сделать ADMIN</button>
+
+                    <button onClick={async () => {
+                      if (!confirm('Удалить пользователя? Это действие необратимо.')) return;
+                      await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deleteUser', userId: u.id }) });
+                      location.reload();
+                    }} className="px-2 py-1 bg-red-600 text-white rounded text-xs">Удалить</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { getRoleEmoji, getRoleName } from '@/lib/roles';
 import Image from 'next/image';
