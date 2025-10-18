@@ -6,18 +6,28 @@ import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import SafeImage from '@/components/SafeImage';
 
-export default function GalleryGrid({ images }) {
+export default function GalleryGrid({ images, imagesJson }) {
+  // If imagesJson is provided (server-side passed JSON string), parse it
+  let parsedImages = images;
+  if (!parsedImages && imagesJson) {
+    try {
+      parsedImages = JSON.parse(imagesJson || '[]');
+    } catch (e) {
+      console.error('GalleryGrid: failed to parse imagesJson', e);
+      parsedImages = [];
+    }
+  }
   const [index, setIndex] = useState(-1);
 
-  if (!images || images.length === 0) return null;
+  if (!parsedImages || parsedImages.length === 0) return null;
 
   // Ensure images are plain objects (strip prototypes) and prepare slides
   const safeImages = (() => {
     try {
-      return JSON.parse(JSON.stringify(images || []));
+      return JSON.parse(JSON.stringify(parsedImages || []));
     } catch (e) {
       console.error('GalleryGrid: failed to deep-clone images', e);
-      return images || [];
+      return parsedImages || [];
     }
   })();
 
@@ -37,7 +47,7 @@ export default function GalleryGrid({ images }) {
           gap: '1rem', margin: '2rem 0',
         }}
       >
-        {safeImages.map((item, i) => (
+  {safeImages.map((item, i) => (
           <div
             key={item.url || i}
             onClick={() => setIndex(i)}

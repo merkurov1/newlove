@@ -165,7 +165,11 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
           // Обратная совместимость с другими кастомными типами
           case 'gallery':
             if (block.type === 'gallery' && Array.isArray(block.data.images)) {
-              return <GalleryGrid key={idx} images={block.data.images} />;
+              // Pass images as JSON string to avoid prototype/non-plain issues
+              // when serializing props from Server -> Client components.
+              const imagesJson = JSON.stringify(block.data.images || []);
+              // @ts-ignore - imagesJson is provided and parsed client-side in GalleryGrid
+              return <GalleryGrid key={idx} imagesJson={imagesJson} />;
             }
             return null;
           default:
