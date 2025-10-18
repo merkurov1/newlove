@@ -1,13 +1,16 @@
+// ===== ФАЙЛ: app/letters/[slug]/full/page.tsx =====
+// (ПОЛНЫЙ КОД С ИЗМЕНЕНИЯМИ)
+
 import { notFound, redirect } from 'next/navigation';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
+// import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest'; // <- УДАЛИТЬ
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
 import dynamicImport from 'next/dynamic';
 import serializeForClient from '@/lib/serializeForClient';
+import { createServerClient } from '@/lib/supabase/server'; // <-- НОВЫЙ ИМПОРТ
 
 const LetterCommentsClient = dynamicImport(() => import('@/components/letters/LetterCommentsClient'), { ssr: false });
-
 type Props = { params: { slug: string } };
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
@@ -18,25 +21,17 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function LetterFullPage({ params }: Props) {
     const { slug } = params;
 
-    // Build cookie-aware Request for server-scoped session detection
-    let req: Request | null = (globalThis && (globalThis as any).request) || null;
-    if (!req) {
-        const cookieHeader = cookies()
-            .getAll()
-            .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
-            .join('; ');
-        req = new Request('http://localhost', { headers: { cookie: cookieHeader } });
-    }
+    // Новая логика получения пользователя и Supabase
+    const cookieStore = cookies();
+    const supabase = createServerClient(cookieStore);
+    const { data: { user } } = await supabase.auth.getUser();
 
-    const ctx = await getUserAndSupabaseForRequest(req) || {};
-    const { user } = ctx as any;
-
-    // Use service-role client for reliable server reads
+    // Используем service-role клиент
+    const supabaseService = createServerClient(cookieStore, { useServiceRole: true });
     let letter: any = null;
+
     try {
-        const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-        const svc = getServerSupabaseClient({ useServiceRole: true });
-        const { data, error } = await svc.from('letters').select('*').eq('slug', slug).maybeSingle();
+        const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
         if (error) {
             console.error('Failed to load letter (service client)', error);
         } else {
@@ -48,16 +43,18 @@ export default async function LetterFullPage({ params }: Props) {
 
     if (!letter) return notFound();
 
-    // If unpublished, require owner/admin
+    // Проверка на владельца/админа
     const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
     if (!letter.published && !isOwnerOrAdmin) return notFound();
 
-    // Require authenticated user for full view and comments
+    // *** КЛЮЧЕВОЙ МОМЕНТ ***
+    // Эта проверка теперь будет работать, так как 'user' будет корректно определен
     if (!user) {
-        // Use Next.js server redirect to ensure correct App Router behavior
         const loginUrl = `/you/login?next=${encodeURIComponent(`/letters/${slug}/full`)}`;
         redirect(loginUrl);
     }
+
+    // ... остальной код файла без изменений ...
 
     let parsedBlocks: any[] = [];
     try {
@@ -68,7 +65,6 @@ export default async function LetterFullPage({ params }: Props) {
         console.error('Failed to parse letter content', e, letter.content);
     }
 
-    // Sanitize blocks for client transfer
     const safeParsed = serializeForClient(parsedBlocks || []) || [];
 
     return (
@@ -79,8 +75,8 @@ export default async function LetterFullPage({ params }: Props) {
             </div>
 
             <div className="mt-10 mb-6 border-t border-gray-200" />
-
-            <LetterCommentsClient />
+ 
+           <LetterCommentsClient />
         </main>
     );
 }
