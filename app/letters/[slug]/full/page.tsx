@@ -1,21 +1,22 @@
 // ===== ФАЙЛ: app/letters/[slug]/full/page.tsx =====
-// (ПОЛНЫЙ ЧИСТЫЙ КОД)
+// (ПОЛНЫЙ КОД С ОТКАТОМ К СТАРЫМ ХЕЛПЕРАМ)
 
 import { notFound, redirect } from 'next/navigation';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
+
+// ----- ИСПРАВЛЕНИЕ 1: ИСПОЛЬЗУЕМ СТАРЫЕ, РАБОЧИЕ ХЕЛПЕРЫ -----
+import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
+import { getServerSupabaseClient } from '@/lib/serverAuth'; // <-- Рабочий хелпер
+
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
 
-// Переименованный импорт, чтобы избежать конфликта
-import dynamicImport from 'next/dynamic';
+// ----- ИСПРАВЛЕНИЕ 2: Переименовываем импорт -----
+import dynamicImport from 'next/dynamic'; 
 
 import serializeForClient from '@/lib/serializeForClient';
-// Наш новый хелпер
-import { createServerClient } from '@/lib/supabase/server'; 
 
-// Динамическая загрузка компонента комментариев
 const LetterCommentsClient = dynamicImport(() => import('@/components/letters/LetterCommentsClient'), { ssr: false });
-
 type Props = { params: { slug: string } };
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
@@ -26,17 +27,26 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function LetterFullPage({ params }: Props) {
     const { slug } = params;
 
-    // Новая логика получения пользователя и Supabase
-    const cookieStore = cookies();
-    const supabase = createServerClient(cookieStore);
-    const { data: { user } } = await supabase.auth.getUser();
+    // ----- ИСПРАВЛЕНИЕ 3: Возвращаем ОРИГИНАЛЬНУЮ логику -----
+    // (которая была в твоих файлах)
+    let req: Request | null = (globalThis && (globalThis as any).request) || null;
+    if (!req) {
+        const cookieHeader = cookies()
+            .getAll()
+            .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+            .join('; ');
+        req = new Request('http://localhost', { headers: { cookie: cookieHeader } });
+    }
 
-    // Используем service-role клиент
-    const supabaseService = createServerClient(cookieStore, { useServiceRole: true });
+    // Эта функция была сломана, но мы ее починим в lib/getUserAndSupabaseForRequest.ts
+    const ctx = await getUserAndSupabaseForRequest(req) || {};
+    const { user } = ctx as any;
+
+    // Используем service-role клиент (он у нас работает)
     let letter: any = null;
-
     try {
-        const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
+        const svc = getServerSupabaseClient({ useServiceRole: true });
+        const { data, error } = await svc.from('letters').select('*').eq('slug', slug).maybeSingle();
         if (error) {
             console.error('Failed to load letter (service client)', error);
         } else {
@@ -48,15 +58,17 @@ export default async function LetterFullPage({ params }: Props) {
 
     if (!letter) return notFound();
 
-    // Проверка на владельца/админа
+    // Эта проверка теперь должна сработать
     const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
     if (!letter.published && !isOwnerOrAdmin) return notFound();
 
-    // Эта проверка теперь будет работать корректно
+    // Эта проверка теперь не должна перекидывать
     if (!user) {
         const loginUrl = `/you/login?next=${encodeURIComponent(`/letters/${slug}/full`)}`;
         redirect(loginUrl);
     }
+
+    // ... остальной код без изменений ...
 
     let parsedBlocks: any[] = [];
     try {
@@ -67,7 +79,6 @@ export default async function LetterFullPage({ params }: Props) {
         console.error('Failed to parse letter content', e, letter.content);
     }
 
-    // Sanitize blocks for client transfer
     const safeParsed = serializeForClient(parsedBlocks || []) || [];
 
     return (
@@ -84,5 +95,5 @@ export default async function LetterFullPage({ params }: Props) {
     );
 }
 
-// Эта строка заставляет страницу рендериться динамически
+// Оставляем это, чтобы страница не кешировалась
 export const dynamic = 'force-dynamic';

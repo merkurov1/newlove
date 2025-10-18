@@ -1,13 +1,10 @@
-// lib/getUserAndSupabaseForRequest.ts
+// ===== ФАЙЛ: lib/getUserAndSupabaseForRequest.ts =====
+// (ПОЛНЫЙ КОД С ИСПРАВЛЕНИЕМ FALLBACK-ЛОГИКИ)
+
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type SupaRequestResult = { supabase: SupabaseClient | null; user?: any | null; isServer?: boolean };
 
-/**
- * Canonical wrapper that normalizes various export shapes of the supabase-server
- * helper. Pages and API routes should import this instead of importing
- * `@/lib/supabase-server` directly to avoid interop issues.
- */
 export async function getUserAndSupabaseForRequest(req?: Request | null): Promise<SupaRequestResult> {
   try {
     const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
@@ -17,16 +14,24 @@ export async function getUserAndSupabaseForRequest(req?: Request | null): Promis
     // ignore and fallthrough to server fallback
   }
 
+  // ----- ИСПРАВЛЕНИЕ ЗДЕСЬ -----
   try {
+    // Мы импортируем ВЕСЬ 'srv', а не только 'getServerSupabaseClient'
     const srv = await import('./serverAuth');
-    // Use service role for server-side fallback reads that require elevated
-    // privileges (projects, admin counters, etc.). Callers that should not
-    // have elevated access can still opt-out by using the request-based
-    // helpers or by explicitly importing serverAuth without the service role.
+    
+    // 1. Создаем service-клиент
     const supabase = srv.getServerSupabaseClient({ useServiceRole: true });
-    return { supabase, isServer: true } as SupaRequestResult;
+    
+    // 2. Пытаемся получить пользователя, используя getServerUser()
+    //    (Который внутри себя сам попробует найти куки)
+    const user = await srv.getServerUser().catch(() => null);
+
+    // 3. Возвращаем и 'supabase', и 'user'
+    return { supabase, user, isServer: true } as SupaRequestResult;
   } catch (e) {
-    // Emergency mock fallback to keep the site running if DB completely unavailable
+    // ----- КОНЕЦ ИСПРАВЛЕНИЯ -----
+    
+    // Emergency mock fallback
     try {
       if (typeof process !== 'undefined' && process.env && process.env.EMERGENCY_SUPABASE_MOCK === 'true') {
         const { createMockSupabase } = await import('./mockSupabaseClient');
