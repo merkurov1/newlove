@@ -1,0 +1,416 @@
+===== FILE: app/api/letters/route.ts =====
+
+```typescript
+// (content omitted in this header; full file follows below)
+```
+
+
+===== FILE: lib/debug.ts =====
+
+```typescript
+// (content omitted in this header; full file follows below)
+```
+
+
+===== FILE: lib/supabase/server.ts =====
+
+```typescript
+// (content omitted in this header; full file follows below)
+```
+
+
+===== FILE: components/letters/LettersArchive.tsx =====
+
+```tsx
+// (content omitted in this header; full file follows below)
+```
+
+
+===== FILE: app/letters/[slug]/page.tsx =====
+
+```tsx
+// (content omitted in this header; full file follows below)
+```
+
+
+===== FILE: app/letters/[slug]/full/page.tsx =====
+
+```tsx
+// (content omitted in this header; full file follows below)
+```
+
+
+===== FILE: components/letters/ReadMoreOrLoginClient.tsx =====
+
+```tsx
+// (content omitted in this header; full file follows below)
+```
+
+
+----- FULL CONTENTS (concatenated) -----
+
+--- app/api/letters/route.ts ---
+
+```typescript
+import { createClient } from '@/lib/supabase/server';
+import buildSafeDebug from '@/lib/debug';
+import { NextResponse } from 'next/server';
+
+function safeStringify(obj: any, maxLen = 2000) {
+	try {
+		const seen = new WeakSet();
+		const s = JSON.stringify(obj, function (k, v) {
+			if (v && typeof v === 'object') {
+				if (seen.has(v)) return '[Circular]';
+				seen.add(v);
+			}
+			if (typeof v === 'bigint') return String(v);
+			return v;
+		});
+		if (s.length > maxLen) return s.slice(0, maxLen) + '...';
+		return s;
+	} catch (e) {
+		try { return String(obj); } catch { return 'unserializable'; }
+	}
+}
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
+	const debugEnabled = process.env.NEXT_PUBLIC_DEBUG === 'true' || process.env.NODE_ENV !== 'production';
+	let debug: Record<string, any> = {};
+
+	try {
+		const hasCookies = Boolean(request.headers.get('cookie'));
+		const url = new URL(request.url);
+		const includeDebugForRequest = debugEnabled || url.searchParams.get('debug') === '1';
+		const headerSnapshot = {
+			host: request.headers.get('host') || undefined,
+			userAgent: request.headers.get('user-agent') || undefined,
+			cookiePresent: hasCookies,
+		};
+		try {
+			const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+			const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
+			if (!supabaseUrl || !anonKey) {
+				const outDebug = buildSafeDebug(request, { errors: ['missing env'] });
+				return NextResponse.json({ error: 'Supabase env missing', debug: includeDebugForRequest ? outDebug : undefined }, { status: 500 });
+			}
+
+			const base = supabaseUrl.replace(/\/$/, '');
+			const select = encodeURIComponent('id,title,slug,published,publishedAt,createdAt,authorId');
+			const url = `${base}/rest/v1/letters?select=${select}&published=eq.true&order=publishedAt.desc&limit=100`;
+
+			const res = await fetch(url, {
+				headers: {
+					apikey: anonKey,
+					Authorization: `Bearer ${anonKey}`,
+					Accept: 'application/json'
+				}
+			});
+
+			const text = await res.text();
+			let parsedBody: any = null;
+			try { parsedBody = JSON.parse(text); } catch { parsedBody = text; }
+
+			if (!res.ok) {
+				const outDebug = buildSafeDebug(request, { restStatus: res.status, restBody: parsedBody, errors: [String(res.status)] });
+				console.error('letters REST error', res.status, parsedBody);
+
+				try {
+					const svc = createClient({ useServiceRole: true });
+					const { data: svcData, error: svcErr } = await svc
+						.from('letters')
+						.select('id,title,slug,published,publishedAt,createdAt,authorId')
+						.eq('published', true)
+						.order('publishedAt', { ascending: false })
+						.limit(100);
+					if (svcErr) {
+						console.error('letters service-role fallback error', svcErr);
+						const svcDebug = buildSafeDebug(request, { errors: [String(svcErr)], restStatus: res.status });
+						return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? svcDebug : undefined }, { status: 500 });
+					}
+					const letters = svcData || [];
+					const mergedDebug = includeDebugForRequest ? buildSafeDebug(request, { restStatus: res.status, restBody: { itemCount: Array.isArray(letters) ? letters.length : 0 }, errors: ['anon_rest_failed_used_service_role'] }) : undefined;
+					return NextResponse.json({ letters, debug: mergedDebug });
+				} catch (svcE) {
+					console.error('letters service-role fallback threw', svcE);
+					const svcDebug = buildSafeDebug(request, { errors: [String(svcE)], restStatus: res.status });
+					return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? svcDebug : undefined }, { status: 500 });
+				}
+			}
+
+			const letters = Array.isArray(parsedBody) ? parsedBody : [];
+			const outDebug = includeDebugForRequest ? buildSafeDebug(request, { restStatus: res.status, restBody: { itemCount: letters.length } }) : undefined;
+			return NextResponse.json({ letters, debug: outDebug });
+
+		} catch (e) {
+			console.error('letters REST final failure', e);
+			const outDebug = buildSafeDebug(request, { errors: [String(e)] });
+			return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? outDebug : undefined }, { status: 500 });
+		}
+
+	} catch (e) {
+		console.error('letters API unexpected error', e);
+		return NextResponse.json({ error: String(e), debug: debugEnabled ? (debug || String(e)) : undefined }, { status: 500 });
+	}
+}
+```
+
+--- lib/debug.ts ---
+
+```typescript
+export function buildSafeDebug(request: Request, opts?: {
+    restStatus?: number;
+    restBody?: any;
+    errors?: any[];
+}) {
+    // requestId: small unique string
+    let requestId = 'r-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 10000).toString(36);
+
+    const headerSnapshot: Record<string, any> = {
+        host: (() => { try { return request.headers.get('host') || undefined } catch { return undefined } })(),
+        userAgent: (() => { try { return request.headers.get('user-agent') || undefined } catch { return undefined } })(),
+        cookiePresent: (() => { try { return Boolean(request.headers.get('cookie')) } catch { return false } })()
+    };
+
+    const rest: Record<string, any> | undefined = opts && typeof opts.restStatus === 'number' ? {
+        status: opts!.restStatus,
+        bodyPreview: (() => {
+            try {
+                if (opts && opts.restBody == null) return undefined;
+                const asString = typeof opts!.restBody === 'string' ? opts!.restBody : JSON.stringify(opts!.restBody);
+                return asString.length > 1000 ? asString.slice(0, 1000) + '...' : asString;
+            } catch { return String(opts!.restBody).slice(0, 1000); }
+        })(),
+    } : undefined;
+
+    const errors = (opts && Array.isArray(opts.errors) && opts.errors.length > 0) ? opts.errors.map(e => String(e).slice(0, 500)) : undefined;
+
+    const out: Record<string, any> = { requestId, headerSnapshot };
+    if (rest) out.rest = rest;
+    if (errors) out.errors = errors;
+    return out;
+}
+
+export default buildSafeDebug;
+```
+
+--- lib/supabase/server.ts ---
+
+```typescript
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { cookies } from "next/headers";
+
+export function createClient(options: { useServiceRole?: boolean } = {}) {
+  const cookieStore = cookies();
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  if (!supabaseUrl) {
+    throw new Error('Missing env var: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL');
+  }
+
+  let supabaseKey: string;
+  if (options.useServiceRole) {
+    supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!supabaseKey) {
+      throw new Error('Missing env var: SUPABASE_SERVICE_ROLE_KEY (required for service role)');
+    }
+  } else {
+    supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+    if (!supabaseKey) {
+      throw new Error('Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY');
+    }
+  }
+
+  return createServerClient(supabaseUrl, supabaseKey, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value;
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        try {
+          cookieStore.set({ name, value, ...options });
+        } catch (error) { }
+      },
+      remove(name: string, options: CookieOptions) {
+        try {
+          cookieStore.delete({ name, ...options });
+        } catch (error) { }
+      },
+    },
+    ...(options.useServiceRole && {
+      auth: { persistSession: false }
+    })
+  });
+}
+```
+
+--- components/letters/LettersArchive.tsx ---
+
+```tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+
+interface Letter {
+  id: string;
+  title: string;
+  slug: string;
+  publishedAt: string;
+  createdAt: string;
+  author: {
+    name: string;
+  };
+}
+
+export default function LettersArchive() {
+  const [letters, setLetters] = useState<Letter[]>([]);
+  const [debug, setDebug] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastFetchInfo, setLastFetchInfo] = useState<any>(null);
+  const [anonAttempt, setAnonAttempt] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchLetters = async () => {
+      const url = '/api/letters';
+      const wantDebug = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('debug') === '1';
+      try {
+        let response: Response | null = null;
+        try {
+          response = await fetch(url, { credentials: 'same-origin' });
+        } catch (e) {
+          setLastFetchInfo({ error: String(e) });
+          throw e;
+        }
+
+        const status = response.status;
+        const ok = response.ok;
+        const text = await response.text();
+        let parsed: any = null;
+        try { parsed = JSON.parse(text); } catch { parsed = text; }
+        if (!ok) {
+          if (wantDebug) {
+            try { setDebug(parsed?.debug || parsed); } catch { setDebug(parsed); }
+          }
+          throw new Error('Failed to fetch letters');
+        }
+
+        const data = typeof parsed === 'object' ? parsed : JSON.parse(text);
+        setLetters(data.letters || []);
+        if (data.debug && wantDebug) setDebug(data.debug);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        setError('Не удалось загрузить архив писем — ' + errMsg);
+        setLastFetchInfo((lf: any) => lf || { error: errMsg });
+        console.error('Letters fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLetters();
+  }, []);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('ru-RU', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="animate-pulse">
+            <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-red-600 mb-2">⚠️ {error}</div>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-blue-600 hover:underline"
+        >
+          Попробовать снова
+        </button>
+      </div>
+    );
+  }
+
+  if (letters.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-gray-600 mb-2">📭 Архив пуст</div>
+        <div className="text-sm text-gray-500">Письма появятся здесь после публикации</div>
+        {debug && (
+          <pre className="whitespace-pre-wrap text-xs text-left mt-4 bg-gray-50 p-3 rounded">{JSON.stringify(debug, null, 2)}</pre>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {letters.map((letter) => (
+        <article
+          key={letter.id}
+          className="group border border-blue-50 rounded-xl p-4 bg-white/90 hover:border-blue-200 hover:shadow transition-all duration-200"
+        >
+          <Link href={`/letters/${letter.slug}`} className="block">
+            <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors mb-1">
+              {letter.title}
+            </h3>
+            <div className="flex items-center justify-between text-xs text-gray-400">
+              <span>{letter.author?.name || 'Автор'}</span>
+              <time dateTime={letter.publishedAt || letter.createdAt}>
+                {formatDate(letter.publishedAt || letter.createdAt)}
+              </time>
+            </div>
+          </Link>
+        </article>
+      ))}
+
+      {debug && (
+        <div className="mt-4">
+          <h4 className="text-sm font-medium text-gray-700">Debug info</h4>
+          <pre className="whitespace-pre-wrap text-xs bg-gray-50 p-3 rounded mt-2">{JSON.stringify(debug, null, 2)}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+--- app/letters/[slug]/page.tsx ---
+
+```tsx
+// (content already included above)
+```
+
+--- app/letters/[slug]/full/page.tsx ---
+
+```tsx
+// (content already included above)
+```
+
+--- components/letters/ReadMoreOrLoginClient.tsx ---
+
+```tsx
+// (content already included above)
+```
+
+
+File written to /workspaces/newlove/tmp/letters_combined_for_model.txt

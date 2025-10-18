@@ -1,97 +1,122 @@
-// ===== ФАЙЛ: app/letters/[slug]/full/page.tsx =====
-// (ПОЛНЫЙ КОД С НОВОЙ ЛОГИКОЙ)
-
-import { notFound, redirect } from 'next/navigation';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import BlockRenderer from '@/components/BlockRenderer';
-import dynamicImport from 'next/dynamic';
-import serializeForClient from '@/lib/serializeForClient';
-
-// ----- НОВЫЙ ИМПОРТ -----
 import { createClient } from '@/lib/supabase/server';
+import { notFound, redirect } from 'next/navigation';
+import Link from 'next/link';
 
-const LetterCommentsClient = dynamicImport(() => import('@/components/letters/LetterCommentsClient'), { ssr: false });
-type Props = { params: { slug: string } };
-
-export async function generateMetadata({ params }: { params: { slug: string } }) {
-    const slug = params.slug;
-    return sanitizeMetadata({ title: `Письмо — ${slug}` });
+interface PageProps {
+  params: {
+    slug: string;
+  };
 }
 
-export default async function LetterFullPage({ params }: Props) {
-    const { slug } = params;
+export default async function LetterFullPage({ params }: PageProps) {
+  const supabase = createClient();
+  
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    // ----- НОВАЯ, ПРОСТАЯ ЛОГИКА АУТЕНТИФИКАЦИИ -----
-    const supabase = createClient(); // Обычный клиент
-    const { data: { user } } = await supabase.auth.getUser(); // Получаем user
+  if (authError || !user) {
+    redirect(`/letters/${params.slug}`);
+  }
 
-    // If user is authenticated, fetch the full letter using service-role.
-    // If guest, fetch a public minimal copy (teaser) via REST anon and render
-    // a prompt to login instead of redirecting.
-    let letter: any = null;
-    let isOwnerOrAdmin = false;
+  const { data: letter, error } = await supabase
+    .from('letters')
+    .select('id, title, slug, content, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(name, email)')
+    .eq('slug', params.slug)
+    .eq('published', true)
+    .single();
 
-    if (user) {
-        const supabaseService = createClient({ useServiceRole: true });
-        try {
-            const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
-            if (error) console.error('Failed to load letter (service client)', error);
-            else letter = data || null;
-        } catch (e) {
-            console.error('Error fetching letter (service client)', e);
-        }
+  if (error || !letter) {
+    console.error('Letter fetch error:', error);
+    notFound();
+  }
 
-        if (!letter) return notFound();
+  const letterAuthor = Array.isArray(letter.User) ? letter.User[0] : letter.User;
 
-        isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
-        if (!letter.published && !isOwnerOrAdmin) return notFound();
-    } else {
-        // guest - fetch minimal public data via REST anon
-        try {
-            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-            const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
-            if (supabaseUrl && anonKey) {
-                const base = supabaseUrl.replace(/\/$/, '');
-                const select = encodeURIComponent('id,title,slug,published,publishedAt,createdAt,content');
-                const url = `${base}/rest/v1/letters?select=${select}&slug=eq.${encodeURIComponent(slug)}&limit=1`;
-                const res = await fetch(url, { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, Accept: 'application/json' } });
-                if (res.ok) {
-                    const pb = await res.json().catch(() => ([]));
-                    letter = Array.isArray(pb) && pb.length > 0 ? pb[0] : null;
-                }
-            }
-        } catch (e) {
-            console.error('Guest fallback REST fetch failed', e);
-        }
-        if (!letter) return notFound();
-        // ensure we only show teaser if unpublished
-        if (!letter.published) return notFound();
-    }
+  const { data: comments } = await supabase
+    .from('letter_comments')
+    .select('id, content, created_at, user_id, author_display, User(name, email)')
+    .eq('letter_id', letter.id)
+    .eq('is_public', true)
+    .order('created_at', { ascending: true });
 
-    // (user was already checked earlier and redirected if missing)
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+      <div className="max-w-3xl mx-auto px-4 py-12">
+        <Link 
+          href="/letters"
+          className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-6 text-sm"
+        >
+          ← Вернуться к архиву
+        </Link>
 
-    // ... (остальной код без изменений) ...
-    let parsedBlocks: any[] = [];
-    try {
-        const raw = typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content);
-        const parsed = JSON.parse(raw || '[]');
-        parsedBlocks = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
-    } catch (e) {
-        console.error('Failed to parse letter content', e, letter.content);
-    }
-
-    const safeParsed = serializeForClient(parsedBlocks || []) || [];
-
-    return (
-        <main className="max-w-3xl mx-auto px-4 py-8">
-            <h1 className="text-2xl font-bold mb-4">{letter.title}</h1>
-            <div className="prose mb-6">
-                {safeParsed.length > 0 ? <BlockRenderer blocks={safeParsed} /> : <p className="italic text-gray-500">Содержимое отсутствует.</p>}
+        <article className="bg-white rounded-2xl shadow-sm border border-blue-100 p-8 mb-8">
+          <header className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-3">
+              {letter.title}
+            </h1>
+            <div className="flex items-center gap-4 text-sm text-gray-500">
+              <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Автор'}</span>
+              <span>•</span>
+              <time dateTime={letter.publishedAt || letter.createdAt}>
+                {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('ru-RU', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </time>
             </div>
-            <div className="mt-10 mb-6 border-t border-gray-200" />
-            <LetterCommentsClient />
-        </main>
-    );
-}
+          </header>
 
-export const dynamic = 'force-dynamic';
+          <div className="prose prose-lg max-w-none">
+            <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+              {letter.content}
+            </div>
+          </div>
+        </article>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-blue-100 p-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">
+            Комментарии {comments && comments.length > 0 && `(${comments.length})`}
+          </h2>
+
+          {comments && comments.length > 0 ? (
+            <div className="space-y-6">
+              {comments.map((comment) => {
+                const commentUser = Array.isArray(comment.User) ? comment.User[0] : comment.User;
+                return (
+                  <div key={comment.id} className="border-b border-gray-100 last:border-0 pb-6 last:pb-0">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-medium">
+                        {(comment.author_display || commentUser?.name || commentUser?.email)?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="font-medium text-gray-900">
+                            {comment.author_display || commentUser?.name || commentUser?.email?.split('@')[0] || 'Пользователь'}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {new Date(comment.created_at).toLocaleDateString('ru-RU', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-gray-700 whitespace-pre-wrap">
+                          {comment.content}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-8">
+              Пока нет комментариев. Будьте первым!
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
