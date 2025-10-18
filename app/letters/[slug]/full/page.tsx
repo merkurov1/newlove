@@ -76,7 +76,7 @@ export default async function LetterFullPage({ params }: Props) {
 
             <div className="mt-10 mb-6 border-t border-gray-200" />
 
-            <LetterCommentsClient slug={slug} />
+            <LetterCommentsClient />
         </main>
     );
 }
