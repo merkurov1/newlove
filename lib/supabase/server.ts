@@ -1,61 +1,60 @@
 // ===== ФАЙЛ: lib/supabase/server.ts =====
-// (ПОЛНЫЙ, ГИБКИЙ КОД)
+// (ПОЛНЫЙ ЧИСТЫЙ КОД С ИСПРАВЛЕНИЯМИ ТИПОВ)
 
-import { createServerClient as _createServerClient, type CookieOptions } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { SupabaseClient } from '@supabase/supabase-js';
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { cookies } from "next/headers";
+// Мы убрали 'SupabaseClient', так как он вызывал ошибку GenericSchema
 
-type ServerClientOptions = {
-  useServiceRole?: boolean;
-};
+// Мы экспортируем функцию с именем 'createClient'
+// ----- ИСПРАВЛЕНИЕ 2: Убираем ': SupabaseClient' отсюда,
+// чтобы TypeScript сам определил правильный (более сложный) тип
+export function createClient(options: { useServiceRole?: boolean } = {}) {
+  const cookieStore = cookies();
 
-export function createServerClient(
-  cookieStore: ReturnType<typeof cookies>,
-  options: ServerClientOptions = {}
-) {
-  
-  // 1. Ищем URL в обеих переменных (как в твоем старом коде)
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  // ----- ИСПРАВЛЕНИЕ 1: Добавляем '!' в конце -----
+  // '!' говорит TypeScript, что мы уверены, что эта переменная не 'undefined'
+  // (потому что мы проверяем ее ниже)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  if (!supabaseUrl) {
+    throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_URL");
+  }
+
   let supabaseKey: string;
 
-  const preferServiceRole = !!options.useServiceRole;
-
-  if (preferServiceRole) {
-    // 2. Логика для Service Role (она была правильной)
+  if (options.useServiceRole) {
+    // ----- ИСПРАВЛЕНИЕ 1: Добавляем '!' в конце -----
     supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     if (!supabaseKey) {
-      throw new Error('SUPABASE_SERVICE_ROLE_KEY is required when useServiceRole=true');
+      throw new Error("Missing env var: SUPABASE_SERVICE_ROLE_KEY");
     }
   } else {
-    // 3. Ищем Anon Key в ДВУХ местах (как в твоем старом коде)
-    supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY!;
+    // ----- ИСПРАВЛЕНИЕ 1: Добавляем '!' в конце -----
+    supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    if (!supabaseKey) {
+      throw new Error("Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    }
   }
 
-  // 4. Проверки
-  if (!supabaseUrl) {
-    throw new Error('Supabase URL not found. Please set NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL');
-  }
-  if (!supabaseKey) {
-    throw new Error('Supabase key not found. Please set NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_KEY');
-  }
-
-  return _createServerClient(supabaseUrl, supabaseKey, {
+  // 'createServerClient' теперь получит 'string', а не 'string | undefined'
+  return createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       get(name: string) {
-        return cookieStore.get(name)?.value
+        return cookieStore.get(name)?.value;
       },
       set(name: string, value: string, options: CookieOptions) {
-        try { cookieStore.set({ name, value, ...options }) } catch (error) {}
+        try {
+          cookieStore.set({ name, value, ...options });
+        } catch (error) { }
       },
       remove(name: string, options: CookieOptions) {
-        try { cookieStore.delete({ name, ...options }) } catch (error) {}
+        try {
+          cookieStore.delete({ name, ...options });
+        } catch (error) { }
       },
     },
-    ...(preferServiceRole && {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      }
+    // Отключаем auth для service role
+    ...(options.useServiceRole && {
+      auth: { persistSession: false }
     })
   });
 }

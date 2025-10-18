@@ -1,26 +1,25 @@
 // ===== ФАЙЛ: components/letters/ReadMoreOrLoginClient.tsx =====
-// (ПОЛНЫЙ КОД С ИЗМЕНЕНИЯМИ)
+// (ПОЛНЫЙ КОД С НОВОЙ ЛОГИКОЙ)
 
 "use client";
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-// import { createClient as createBrowserClient } from '@/lib/supabase-browser'; // <- УДАЛИТЬ
-import { createClient } from '@/lib/supabase/client'; // <-- НОВЫЙ ИМПОРТ
+// ----- НОВЫЙ ИМПОРТ -----
+import { createClient } from '@/lib/supabase/client'; 
 import ModernLoginModal from '@/components/ModernLoginModal';
 
 export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
     const [hasSession, setHasSession] = useState<boolean | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
-    
-    // Используем новый хелпер
+
+    // ----- НОВЫЙ КЛИЕНТ -----
     const supabase = createClient(); 
 
     useEffect(() => {
         let mounted = true;
         async function check() {
             try {
-                // Логика остается той же
                 const { data } = await supabase.auth.getSession();
                 const s = (data as any)?.session || null;
                 if (!mounted) return;
@@ -32,10 +31,10 @@ export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
     
         check();
         return () => { mounted = false; };
-    }, [slug, supabase]); // Добавляем supabase в зависимости useEffect
+    }, [slug, supabase]); // <-- Добавили supabase в зависимости
 
-    // ... остальной код файла без изменений ...
-    
+    // ... (остальной код без изменений) ...
+
     if (hasSession === null) {
         return (
             <div className="flex gap-3">
@@ -56,10 +55,10 @@ export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
     const handleReadFull = async (e: any) => {
         e.preventDefault();
         try {
+            // Этот API-маршрут мы тоже починили
             const res = await fetch(`/api/letters/full/${encodeURIComponent(slug)}?_debug=1`, { credentials: 'same-origin' });
-            // *** КЛЮЧЕВОЙ МОМЕНТ ***
-            // Теперь, благодаря фиксу в API,
-            // этот запрос вернет 200, а не 401
+            
+            // Теперь он должен вернуть 200
             if (res.status === 200) {
                 window.location.href = `/letters/${slug}/full`;
                 return;

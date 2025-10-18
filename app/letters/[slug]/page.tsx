@@ -1,22 +1,19 @@
 // ===== ФАЙЛ: app/letters/[slug]/page.tsx =====
-// (ПОЛНЫЙ ЧИСТЫЙ КОД С ИСПРАВЛЕНИЕМ КОНФЛИКТА 'dynamic')
+// (ПОЛНЫЙ ЧИСТЫЙ КОД С НОВОЙ ЛОГИКОЙ)
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest'; // <-- Твой хелпер
-
-// ----- ИСПРАВЛЕНИЕ 1: Переименовываем импорт -----
-import dynamicImport from 'next/dynamic'; // Было 'import dynamic ...'
-
-// ----- ИСПРАВЛЕНИЕ 2: Используем 'dynamicImport' -----
-const ReadMoreOrLoginClient = dynamicImport(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
-
-import { cookies } from 'next/headers';
+import dynamicImport from 'next/dynamic'; // <-- Переименованный импорт
 import BlockRenderer from '@/components/BlockRenderer';
 import serializeForClient from '@/lib/serializeForClient';
 
-// ----- ИСПРАВЛЕНИЕ 3: 'export const dynamic' теперь не конфликтует -----
+// ----- НОВЫЙ ИМПОРТ -----
+import { createClient } from '@/lib/supabase/server'; 
+
+const ReadMoreOrLoginClient = dynamicImport(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
+
+// Эта строка теперь не конфликтует
 export const dynamic = 'force-dynamic';
 
 type Props = { params: { slug: string } };
@@ -28,32 +25,19 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
 export default async function LetterPage({ params }: Props) {
   const { slug } = params;
-  
-  // ----- ЭТО ТВОЙ ОРИГИНАЛЬНЫЙ КОД -----
-  let req: Request | null = (globalThis && (globalThis as any).request) || null;
-  if (!req) {
-    const cookieHeader = cookies()
-      .getAll()
-      .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
-      .join('; ');
-    req = new Request('http://localhost', { headers: { cookie: cookieHeader } });
-  }
 
-  // Этот хелпер мы починили (Файл 1)
-  const ctx = await getUserAndSupabaseForRequest(req) || {};
-  const { user } = ctx as any;
+  // ----- НОВАЯ, ПРОСТАЯ ЛОГИКА АУТЕНТИФИКАЦИИ -----
+  const supabase = createClient(); // Обычный клиент
+  const { data: { user } } = await supabase.auth.getUser(); // Получаем user
 
-  // Используем service-role (он у тебя работает)
+  // Service-role клиент для чтения
+  const supabaseService = createClient({ useServiceRole: true });
   let letter: any = null;
+  
   try {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const svc = getServerSupabaseClient({ useServiceRole: true });
-    const { data, error } = await svc.from('letters').select('*').eq('slug', slug).maybeSingle();
-    if (error) {
-      console.error('Failed to load letter (service client)', error);
-    } else {
-      letter = data || null;
-    }
+    const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
+    if (error) console.error('Failed to load letter (service client)', error);
+    else letter = data || null;
   } catch (e) {
     console.error('Error fetching letter (service client)', e);
   }
@@ -62,7 +46,8 @@ export default async function LetterPage({ params }: Props) {
 
   // Эта проверка теперь будет работать
   const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
-  if (!letter.published && !isOwnerOrAdmin) return notFound(); // <-- Причина 404
+  
+  if (!letter.published && !isOwnerOrAdmin) return notFound();
 
   // ... (остальной код файла без изменений) ...
   let parsedBlocks: any[] = [];

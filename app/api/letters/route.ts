@@ -1,56 +1,57 @@
 // ===== ФАЙЛ: app/api/letters/route.ts =====
-// (ВОЗВРАЩАЕМ ОРИГИНАЛЬНЫЙ КОД)
+// (ПОЛНЫЙ ЧИСТЫЙ КОД С НОВОЙ ЛОГИКОЙ)
+
+import { createClient } from '@/lib/supabase/server';
+import { NextResponse } from 'next/server';
+
+// Заставляем этот маршрут всегда выполняться динамически
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
 	try {
-		// Prefer service-role server client for public reads to avoid RLS surprises
-		let supabase: any = null;
-		try {
-			const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-			supabase = getServerSupabaseClient({ useServiceRole: true });
-		} catch (e) {
-			// Fallback to request-scoped client
-			try {
-				const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
-				supabase = (await getSupabaseForRequest(request))?.supabase;
-			} catch (err) {
-				supabase = null;
-			}
-		}
+		// 1. Создаем ОБЫЧНЫЙ клиент, чтобы проверить, кто пользователь
+		const supabaseUserClient = createClient();
+		const { data: { user } } = await supabaseUserClient.auth.getUser();
+		const isAdmin = user && (String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
 
-		if (!supabase) {
-			return new Response(JSON.stringify({ letters: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-		}
+		// 2. Создаем SERVICE_ROLE клиент, чтобы читать данные
+		const supabaseService = createClient({ useServiceRole: true });
 
-		// Fetch published letters. Try plural table name `letters` (matches migrations/dumps).
-		const { data, error } = await supabase
+		// 3. Создаем запрос с помощью service-клиента
+		let query = supabaseService
 			.from('letters')
 			.select('id,title,slug,published,publishedAt,createdAt,author:authorId(name)')
-			.eq('published', true)
 			.order('publishedAt', { ascending: false })
 			.limit(100);
 
-		if (error) {
-			console.error('Failed to fetch letters', error);
-			return new Response(JSON.stringify({ letters: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+		// 4. Если пользователь НЕ админ, показываем только опубликованные
+		if (!isAdmin) {
+			query = query.eq('published', true);
 		}
 
-		return new Response(JSON.stringify({ letters: data || [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+		const { data, error } = await query;
+
+		if (error) {
+			console.error('Failed to fetch letters (service client)', error);
+			return NextResponse.json({ error: 'Failed to fetch letters' }, { status: 500 });
+		}
+
+		return NextResponse.json({ letters: data || [] });
+
 	} catch (e) {
 		console.error('letters API error', e);
-		return new Response(JSON.stringify({ letters: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+		return NextResponse.json({ error: String(e) }, { status: 500 });
 	}
 }
 
+// ... (POST и OPTIONS остаются как были)
 export async function POST(request: Request) {
-	// Placeholder implementation during migration.
 	const body = await request.text();
 	return new Response(JSON.stringify({ ok: true, received: body }), {
 		status: 200,
 		headers: { 'Content-Type': 'application/json' },
 	});
 }
-
 export function OPTIONS() {
 	return new Response(null, { status: 204 });
 }
