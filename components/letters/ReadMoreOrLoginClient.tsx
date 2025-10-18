@@ -6,7 +6,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 // ----- НОВЫЙ ИМПОРТ -----
-import { createClient } from '@/lib/supabase/client'; 
+import { createClient } from '@/lib/supabase/client';
 import ModernLoginModal from '@/components/ModernLoginModal';
 
 export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
@@ -14,7 +14,7 @@ export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
     const [modalOpen, setModalOpen] = useState(false);
 
     // ----- НОВЫЙ КЛИЕНТ -----
-    const supabase = createClient(); 
+    const supabase = createClient();
 
     useEffect(() => {
         let mounted = true;
@@ -28,7 +28,7 @@ export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
                 if (mounted) setHasSession(false);
             }
         }
-    
+
         check();
         return () => { mounted = false; };
     }, [slug, supabase]); // <-- Добавили supabase в зависимости
@@ -40,7 +40,7 @@ export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
             <div className="flex gap-3">
                 <div className="px-4 py-2 bg-gray-100 rounded animate-pulse w-24 h-9" />
                 <div className="px-4 py-2 border rounded w-24 h-9" />
-           </div>
+            </div>
         );
     }
 
@@ -55,25 +55,32 @@ export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
     const handleReadFull = async (e: any) => {
         e.preventDefault();
         try {
-            // Этот API-маршрут мы тоже починили
-            const res = await fetch(`/api/letters/full/${encodeURIComponent(slug)}?_debug=1`, { credentials: 'same-origin' });
-            
-            // Теперь он должен вернуть 200
+            // Use same-origin credentials so server can read cookies/session
+            const res = await fetch(`/api/letters/full/${encodeURIComponent(slug)}?_debug=1`, { credentials: 'same-origin', cache: 'no-store' });
+            if (!res) {
+                handleOpen();
+                return;
+            }
             if (res.status === 200) {
+                // Navigate via location to force full page load (server rendering)
                 window.location.href = `/letters/${slug}/full`;
                 return;
             }
             if (res.status === 401) {
+                // not authenticated — open login modal
                 handleOpen();
                 return;
             }
             if (res.status === 404) {
-                alert('Страница с полным текстом пока недоступна.');
+                // Not available to this viewer
+                alert('Страница с полным текстом недоступна.');
                 return;
             }
+            // Any other non-200 -> open login modal as a safe fallback
             handleOpen();
         } catch (err) {
-            try { window.location.href = `/letters/${slug}/full`; } catch (e) { handleOpen(); }
+            console.warn('Preflight check failed, opening login modal as fallback', err);
+            handleOpen();
         }
     };
 
