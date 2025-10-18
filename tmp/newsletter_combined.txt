@@ -1,0 +1,794 @@
+===== FILE: lib/newsletter/sendNewsletterToSubscriber.js =====
+import { Resend } from 'resend';
+import { createId } from '@paralleldrive/cuid2';
+// Note: getUserAndSupabaseFromRequest is not used here; avoid importing to prevent build errors
+import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
+
+/**
+ * Отправляет письмо рассылки с уникальной ссылкой для отписки
+ * @param {object} subscriber - объект подписчика (id, email)
+ * @param {object} letter - объект письма (title, ...)
+ */
+/**
+ * Send a newsletter email to a single subscriber.
+ * This function is safe to call in a server action; it uses the server role Supabase client
+ * to insert unsubscribe tokens. If RESEND API key is missing, it will perform a dry-run.
+ *
+ * @param {{id: string, email: string}} subscriber
+ * @param {{id?: string, title: string, html?: string, content?: any}} letter
+ * @returns {Promise<{status: string, unsubscribeUrl?: string, error?: string}>}
+ */
+export async function sendNewsletterToSubscriber(subscriber, letter, opts = {}) {
+  if (!subscriber || !subscriber.email || !subscriber.id) {
+    return { status: 'error', error: 'Invalid subscriber' };
+  }
+  if (!letter || !letter.title) {
+    return { status: 'error', error: 'Invalid letter' };
+  }
+
+  // Allow caller to pass a pre-generated token to avoid duplicate inserts
+  const unsubscribeToken = opts.token || createId();
+  const unsubscribeUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-unsubscribe?token=${unsubscribeToken}`;
+
+  // Insert token via server client but don't fail send if token insert fails.
+  // If opts.skipTokenInsert === true, caller provided and already inserted the token.
+  if (!opts.skipTokenInsert) {
+    try {
+      const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
+      if (serverSupabase) {
+        const tokenRow = { subscriber_id: subscriber.id, type: 'unsubscribe', token: unsubscribeToken, created_at: new Date().toISOString() };
+        const { error: tokenErr } = await serverSupabase.from('subscriber_tokens').insert(tokenRow);
+        if (tokenErr) {
+          console.warn('subscriber_tokens insert warning:', tokenErr.message || String(tokenErr));
+        } else {
+          console.info('Inserted unsubscribe token for', subscriber.email);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to insert unsubscribe token (non-fatal):', (e && e.message) || String(e));
+    }
+  }
+
+  // Render email HTML (if renderNewsletterEmail returns string or accepts unsubscribeUrl)
+  let emailHtml = '';
+  try {
+    // Normalize letter content to plain JSON/string to avoid passing
+    // objects with custom prototypes into the react-email renderer.
+    const safeLetter = { ...letter };
+    try {
+      safeLetter.content = typeof letter.content === 'string' ? letter.content : JSON.parse(JSON.stringify(letter.content));
+    } catch (e) {
+      // fallback: coerce to string
+      safeLetter.content = typeof letter.content === 'string' ? letter.content : String(letter.content || '');
+    }
+    emailHtml = renderNewsletterEmail(safeLetter, unsubscribeUrl) || '';
+  } catch (e) {
+    console.warn('Newsletter render failed, falling back to basic layout:', e?.message || e);
+    emailHtml = `<p>${letter.title}</p><p>To unsubscribe click <a href="${unsubscribeUrl}">here</a></p>`;
+  }
+
+  // If RESEND key is missing, treat as dry-run
+  // Determine API key (allow override via opts.resendApiKey)
+  const apiKey = opts.resendApiKey || process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.info('Dry-run: RESEND API key not configured. Email not sent.');
+    return { status: 'skipped', unsubscribeUrl };
+  }
+
+  // Build from header (display name + email) with safe defaults
+  // so it's available when we call the provider below.
+  const fromEmail = process.env.NOREPLY_EMAIL || 'noreply@merkurov.love';
+  const fromDisplay = process.env.NOREPLY_DISPLAY || 'Anton Merkurov';
+  const fromHeader = `${fromDisplay} <${fromEmail}>`;
+  // Log presence of key (masked) for debugging; keep logging in try
+  // to avoid crashing when e.g. apiKey is not a string-like value.
+  try {
+    const maskedKey = `${String(apiKey).slice(0, 4)}...${String(apiKey).slice(-4)}`;
+    console.info('Resend send: using API key', maskedKey, 'from', fromHeader);
+  } catch (e) { /* ignore logging errors */ }
+
+  try {
+    console.info('Sending newsletter', { to: subscriber.email, letterId: letter.id || null });
+    const resend = new Resend(apiKey);
+    const resp = await resend.emails.send({
+      from: fromHeader,
+      to: subscriber.email,
+      subject: letter.title,
+      html: emailHtml,
+    });
+    // The Resend SDK may return different shapes depending on version:
+    // - { id, status, ... }
+    // - { data: { id, ... }, error: ... }
+    // Normalize common fields when present.
+    // Normalize id and status from different SDK shapes
+    const extractedId = resp?.id ?? resp?.data?.id ?? (resp && resp.raw && resp.raw.data && resp.raw.data.id) ?? (resp && resp.raw && resp.raw.id) ?? null;
+    const extractedStatus = resp?.status ?? resp?.data?.status ?? (resp && resp.raw && resp.raw.data && resp.raw.data.status) ?? (resp && resp.raw && resp.raw.status) ?? null;
+    // If we have an id but status is missing, default to 'unknown' to avoid returning null
+    const finalStatus = extractedStatus ?? (extractedId ? 'unknown' : null);
+    const providerResponse = { id: extractedId, status: finalStatus, raw: resp };
+    console.info('Resend provider response', { to: subscriber.email, providerResponse });
+    return { status: 'sent', unsubscribeUrl, providerResponse };
+  } catch (sendErr) {
+    try { (await import('@sentry/nextjs')).captureException(sendErr); } catch (e) { }
+    console.error('Failed to send newsletter email:', (sendErr && sendErr.message) || String(sendErr));
+    // Attempt to extract provider response / HTTP body from common shapes
+    let providerDetails = undefined;
+    try {
+      // axios-like
+      if (sendErr && sendErr.response) providerDetails = sendErr.response;
+      // fetch-like (node-fetch) may have .body
+      else if (sendErr && sendErr.body) providerDetails = sendErr.body;
+      // Resend SDK may attach rawError or data
+      else if (sendErr && sendErr.rawError) providerDetails = sendErr.rawError;
+      // Some libs attach status/code
+      if (sendErr && sendErr.status) providerDetails = { ...(providerDetails || {}), status: sendErr.status };
+      if (sendErr && sendErr.code) providerDetails = { ...(providerDetails || {}), code: sendErr.code };
+    } catch (ex) {
+      // ignore
+    }
+
+    const errMsg = (sendErr && (sendErr.message || sendErr.toString())) || 'Unknown send error';
+    return { status: 'error', error: errMsg, providerDetails, raw: sendErr, apiKeyUsed: `${String(apiKey).slice(0, 4)}...${String(apiKey).slice(-4)}` };
+  }
+}
+
+
+
+===== FILE: emails/NewsletterEmail.jsx =====
+import { Html, Head, Preview, Body, Container, Section, Heading, Text, Hr, render } from '@react-email/components';
+import * as React from 'react';
+
+// Функция для конвертации блочного контента в HTML
+// Современная функция: гарантирует ресайз Supabase-изображений в любом HTML
+function addResizeToSupabaseImages(html, width = 600, quality = 70) {
+  if (!html || typeof html !== 'string') return html;
+  try {
+    // Используем DOMParser через JSDOM-like API (или fallback на regex)
+    // В среде node/email можно использовать regexp, но делаем максимально устойчиво
+  return html.replace(/<img([^>]+src=[\"'])(https:\/\/[^\"'>]*supabase\.co\/+storage[^\"'>]*)([\"'][^>]*)>/g, (match, before, url, after) => {
+    // Добавляем/заменяем style на max-width:600px;height:auto;
+    let styleAttr = '';
+    if (/style=[\"'][^\"']*[^\"']*[\"']/.test(after)) {
+      // Уже есть style — заменяем max-width и height
+      after = after.replace(/style=[\"'][^\"']*[\"']/, (styleMatch) => {
+        let style = styleMatch.slice(7, -1);
+        style = style.replace(/max-width:[^;]+;?/g, '').replace(/height:[^;]+;?/g, '');
+        style = `max-width:${width}px;height:auto;` + style;
+        return `style="${style}"`;
+      });
+    } else {
+      styleAttr = ` style=\"max-width:${width}px;height:auto;\"`;
+    }
+    return `<img${before}${url}"${styleAttr}${after.replace(/^\"|^\'/, '')}>`;
+  });
+  } catch {
+    return html;
+  }
+}
+
+function blocksToHtml(blocks) {
+  // Если это строка (html или markdown), всегда прогоняем через addResizeToSupabaseImages
+  if (typeof blocks === 'string') {
+    return addResizeToSupabaseImages(blocks);
+  }
+  // Если это не массив, пробуем распарсить как JSON
+  if (!Array.isArray(blocks)) {
+    try {
+      blocks = JSON.parse(blocks);
+    } catch {
+      // Если не парсится — возвращаем пустую строку (или можно вернуть addResizeToSupabaseImages(blocks || ''))
+      return '';
+    }
+  }
+  // Если после парсинга это не массив — возвращаем пустую строку
+  if (!Array.isArray(blocks)) {
+    return '';
+  }
+  return blocks.map((block, index) => {
+    switch (block.type) {
+      case 'richText': {
+        let html = block.data?.html || '';
+        html = addResizeToSupabaseImages(html);
+        return html;
+      }
+      case 'image': {
+        let url = block.data?.url || '';
+        // Просто ограничиваем style, не добавляем параметры
+        return `<img src="${url}" alt="${block.data?.caption || ''}" style="max-width:600px;height:auto;display:block;margin:20px auto;" />`;
+      }
+      case 'gallery':
+        if (block.data?.images && Array.isArray(block.data.images)) {
+          return block.data.images.map(img => {
+            let url = img.url || '';
+            return `<img src="${url}" alt="${img.caption || ''}" style="max-width:600px;height:auto;display:block;margin:10px auto;" />`;
+          }).join('');
+        }
+        return '';
+      case 'columns':
+        if (block.data?.columns && Array.isArray(block.data.columns)) {
+          const columnWidth = Math.floor(100 / block.data.columns.length);
+          const columnsHtml = block.data.columns.map(col => {
+            // columns могут содержать html с <img>
+            let html = col.html || '';
+            html = addResizeToSupabaseImages(html);
+            return `<div style="display: inline-block; width: ${columnWidth}%; vertical-align: top; padding: 0 10px;">${html}</div>`;
+          }).join('');
+          return `<div style="margin: 20px 0;">${columnsHtml}</div>`;
+        }
+        return '';
+      case 'quote':
+        return `<blockquote style="border-left: 4px solid #ddd; margin: 20px 0; padding-left: 20px; font-style: italic; color: #666;">${block.data?.text || ''}</blockquote>`;
+      case 'code':
+        return `<pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; margin: 20px 0;"><code>${block.data?.code || ''}</code></pre>`;
+      case 'video':
+        return `<div style="margin: 20px 0;"><a href="${block.data?.url}" target="_blank" style="color: #007cba;">📹 Смотреть видео</a></div>`;
+      default:
+        // Если это html-блок или неизвестный, тоже прогоняем через addResizeToSupabaseImages
+        if (block.data?.html) {
+          return addResizeToSupabaseImages(block.data.html);
+        }
+        return '';
+    }
+  }).join('');
+}
+
+// Эта обертка нужна, чтобы наш компонент мог работать на сервере
+const NewsletterEmail = ({ title = 'Тема письма', content = '', unsubscribeUrl }) => {
+  // Конвертируем блочный контент в HTML
+  const contentHtml = blocksToHtml(content);
+
+  return (
+    <Html>
+      <Head />
+      <Preview>{title}</Preview>
+      <Body style={main}>
+        <Container style={container}>
+          {/* Шапка письма — как в хедере сайта */}
+          <Section style={{ textAlign: 'center', marginBottom: 32 }}>
+            <img
+              src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png"
+              alt="Anton Merkurov"
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: '50%',
+                margin: '0 auto 12px',
+                boxShadow: '0 2px 12px 0 rgba(0,0,0,0.07)',
+                display: 'block',
+                background: '#fff',
+              }}
+            />
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 26,
+                letterSpacing: '0.08em',
+                color: '#23272f',
+                marginBottom: 4,
+                textTransform: 'uppercase',
+                fontFamily: 'inherit',
+                lineHeight: 1.1,
+              }}
+            >
+              Anton Merkurov
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                color: '#b08fff',
+                letterSpacing: '0.18em',
+                fontWeight: 500,
+                marginTop: 2,
+                textTransform: 'uppercase',
+                fontFamily: 'inherit',
+                lineHeight: 1.2,
+              }}
+            >
+              Art × Love × Money
+            </div>
+          </Section>
+          <Section>
+            <Heading style={heading}>{title}</Heading>
+            <div dangerouslySetInnerHTML={{ __html: contentHtml }} />
+            <Hr style={hr} />
+            <Text style={footer}>
+              Anton Merkurov | Вы получили это письмо, потому что подписались на рассылку на сайте new.merkurov.love
+            </Text>
+            {unsubscribeUrl && (
+              <div style={{ textAlign: 'center', marginTop: 16 }}>
+                <a href={unsubscribeUrl} style={{ color: '#007cba', textDecoration: 'underline', fontSize: '14px', fontWeight: 500 }}>
+                  Отписаться от рассылки
+                </a>
+              </div>
+            )}
+          </Section>
+        </Container>
+      </Body>
+    </Html>
+  );
+};
+
+export default NewsletterEmail;
+
+// Функция для рендеринга, которую мы будем вызывать в Server Action
+// Теперь принимает unsubscribeUrl
+export const renderNewsletterEmail = (letter, unsubscribeUrl) => {
+  return render(<NewsletterEmail 
+    title={letter.title} 
+    content={letter.content} 
+    unsubscribeUrl={unsubscribeUrl}
+  />);
+};
+
+
+// Стили для письма
+const main = { backgroundColor: '#ffffff', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif' };
+const container = { margin: '0 auto', padding: '20px 0 48px', width: '580px' };
+const heading = { fontSize: '24px', lineHeight: '1.3', fontWeight: '700', color: '#484848' };
+const hr = { borderColor: '#cccccc', margin: '20px 0' };
+const footer = { color: '#8898aa', fontSize: '12px', lineHeight: '16px' };
+
+
+===== FILE: app/api/admin/letters/test-send/route.ts =====
+import { NextResponse } from 'next/server';
+import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSubscriber';
+
+// Test-send endpoint: attempts to run the newsletter send flow for a single
+// test subscriber. This endpoint is safe to call in environments without
+// RESEND or SUPABASE service role keys — the underlying function will
+// perform a dry-run and return `{ status: 'skipped' }` when keys are missing.
+export async function GET(req: Request) {
+  try {
+    // Hardcoded test address per request
+    const email = 'merkurov@gmail.com';
+    const testSubscriber = { id: 'test-subscriber', email };
+    const testLetter = {
+      title: 'Test newsletter from local environment',
+      content: [{ type: 'richText', data: { html: `<p>This is a test preview of the newsletter HTML. Unsubscribe: %UNSUBSCRIBE%</p>` } }],
+    };
+
+    // Allow passing a temporary key via ?key= for iPad debugging (will not be persisted)
+    const url = new URL(req.url);
+    const key = url.searchParams.get('key') || undefined;
+
+    if (!process.env.RESEND_API_KEY && !key) {
+      // Dry-run behavior: return helpful debug info
+      const result = await sendNewsletterToSubscriber(testSubscriber, testLetter, { resendApiKey: undefined });
+      return NextResponse.json({ ok: true, dryRun: true, message: 'RESEND_API_KEY not configured. Dry-run performed.', result });
+    }
+
+    const result = await sendNewsletterToSubscriber(testSubscriber, testLetter, { resendApiKey: key });
+    return NextResponse.json({ ok: true, result });
+  } catch (err: any) {
+    console.error('test-send error', (err && err.stack) || String(err));
+    return NextResponse.json({ ok: false, error: err?.message || String(err) }, { status: 500 });
+  }
+}
+
+export const dynamic = 'force-dynamic';
+
+===== FILE: app/api/admin/letters/test-render/route.ts =====
+import { NextResponse } from 'next/server';
+import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
+
+export async function GET() {
+  try {
+    const testLetter = {
+      title: 'Preview: newsletter HTML',
+      content: [{ type: 'richText', data: { html: '<p>This is a preview of the newsletter HTML.</p>' } }],
+    };
+    const unsubscribeUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-unsubscribe?token=preview-token`;
+    const html = renderNewsletterEmail(testLetter, unsubscribeUrl);
+    return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  } catch (err: any) {
+    console.error('test-render error', err);
+    return NextResponse.json({ ok: false, error: err?.message || String(err) }, { status: 500 });
+  }
+}
+
+export const dynamic = 'force-dynamic';
+
+===== FILE: app/admin/actions.js =====
+"use server";
+
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import { Resend } from 'resend';
+import { createId } from '@paralleldrive/cuid2';
+
+// --- Импорты Helper-функций ---
+import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
+import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSubscriber';
+import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
+import { parseTagNames, upsertTagsAndLink } from '@/lib/tags';
+
+// --- Вспомогательные функции ---
+
+/**
+ * Проверяет, является ли текущий пользователь администратором.
+ */
+async function verifyAdmin() {
+  const buildRequest = () => {
+    const cookieHeader = cookies()
+      .getAll()
+      .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+      .join('; ');
+    return new Request('http://localhost', { headers: { cookie: cookieHeader } });
+  };
+  const user = await requireAdminFromRequest(buildRequest());
+  return { user };
+}
+
+... (app/admin/actions.js is large; full file included in workspace)
+
+===== FILE: app/api/newsletter-confirm/route.ts =====
+export const dynamic = 'force-dynamic';
+import { NextRequest, NextResponse } from 'next/server';
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const token = searchParams.get('token');
+  if (!token) {
+    return NextResponse.json({ error: 'Нет токена подтверждения.' }, { status: 400 });
+  }
+  try {
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+  const { supabase } = await getUserAndSupabaseForRequest((globalThis && (globalThis as any).request) || new Request('http://localhost')) || {};
+    if (!supabase) return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
+    const { data: tokenRow, error: tokenErr } = await supabase.from('subscriber_tokens').select('*').eq('token', token).maybeSingle();
+    if (tokenErr) {
+      console.error('Error fetching token', tokenErr);
+      return NextResponse.json({ error: 'Ошибка подтверждения.' }, { status: 500 });
+    }
+    if (!tokenRow || tokenRow.type !== 'confirm' || tokenRow.used) {
+      return NextResponse.json({ error: 'Некорректный или устаревший токен.' }, { status: 404 });
+    }
+    // Помечаем токен использованным
+    await supabase.from('subscriber_tokens').update({ used: true, usedAt: new Date().toISOString() }).eq('token', token);
+    // Активируем подписчика (double opt-in confirmed)
+    try {
+      await supabase.from('subscribers').update({ isActive: true, confirmedAt: new Date().toISOString() }).eq('id', tokenRow.subscriber_id || tokenRow.subscriberId);
+    } catch (e) {
+      console.warn('Failed to mark subscriber active after confirm:', String(e));
+    }
+    return NextResponse.json({ message: 'Подписка успешно подтверждена!' });
+  } catch (error) {
+    return NextResponse.json({ error: 'Ошибка подтверждения.' }, { status: 500 });
+  }
+}
+
+
+===== FILE: app/api/newsletter-unsubscribe/route.ts =====
+export const dynamic = 'force-dynamic';
+import { NextRequest, NextResponse } from 'next/server';
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const token = searchParams.get('token');
+  if (!token) {
+    return NextResponse.json({ error: 'Нет токена для отписки.' }, { status: 400 });
+  }
+  try {
+  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
+  const { supabase } = await getUserAndSupabaseForRequest((globalThis && (globalThis as any).request) || new Request('http://localhost')) || {};
+    if (!supabase) return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
+    const { data: tokenRow, error: tokenErr } = await supabase.from('subscriber_tokens').select('*').eq('token', token).maybeSingle();
+    if (tokenErr) {
+      console.error('Error fetching token', tokenErr);
+      return NextResponse.json({ error: 'Ошибка при отписке.' }, { status: 500 });
+    }
+    if (!tokenRow || tokenRow.type !== 'unsubscribe' || tokenRow.used) {
+      return NextResponse.json({ error: 'Некорректный или устаревший токен.' }, { status: 404 });
+    }
+    // Помечаем токен использованным
+    await supabase.from('subscriber_tokens').update({ used: true, usedAt: new Date().toISOString() }).eq('token', token);
+    // Soft-delete: помечаем подписчика неактивным и сохраняем время отписки
+    try {
+      await supabase.from('subscribers').update({ isActive: false, unsubscribedAt: new Date().toISOString() }).eq('id', tokenRow.subscriber_id || tokenRow.subscriberId);
+    } catch (e) {
+      console.warn('Failed to mark subscriber as unsubscribed:', String(e));
+    }
+    return NextResponse.json({ message: 'Вы успешно отписались от рассылки.' });
+  } catch (error) {
+    return NextResponse.json({ error: 'Ошибка при отписке.' }, { status: 500 });
+  }
+}
+
+
+===== FILE: components/admin/ContentForm.tsx =====
+"use client";
+
+import { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@/lib/supabase-browser';
+import TagInput from '@/components/admin/TagInput';
+import BlockEditor from '@/components/admin/BlockEditor';
+import { createSeoSlug } from '@/lib/slugUtils';
+
+import { EditorJsBlock } from '@/types/blocks';
+
+
+
+
+interface ContentFormProps {
+  initialData?: any;
+  saveAction: any;
+  type: string;
+}
+
+function parseBlocks(raw: any): EditorJsBlock[] {
+  if (!raw) return [];
+  let arr = Array.isArray(raw) ? raw : (() => { try { return JSON.parse(raw); } catch { return []; } })();
+  // Validate and coerce to EditorJsBlock shape
+  return arr.filter((block: any) => block && typeof block.type === 'string' && block.data && typeof block.data === 'object');
+}
+
+
+export default function ContentForm({ initialData, saveAction, type }: ContentFormProps) {
+  const safeInitial = initialData && typeof initialData === 'object' ? initialData : {};
+  const isEditing = !!safeInitial && !!safeInitial.id;
+  const [title, setTitle] = useState(safeInitial.title || '');
+  const [slug, setSlug] = useState(safeInitial.slug || '');
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false); // Всегда разрешаем автогенерацию
+  const [content, setContent] = useState<EditorJsBlock[]>(parseBlocks(safeInitial.content));
+  const [published, setPublished] = useState(safeInitial.published || false);
+  const [error, setError] = useState('');
+  const [slugError, setSlugError] = useState('');
+  const [isCheckingSlug, setIsCheckingSlug] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [role, setRole] = useState<string | null>(null);
+  useEffect(() => {
+    const supabase = createClient();
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+      setRole(data.user?.user_metadata?.role || null);
+    };
+    getUser();
+    const { data: listener } = supabase.auth.onAuthStateChange(() => getUser());
+    return () => { try { listener?.subscription?.unsubscribe?.(); } catch {} };
+  }, []);
+  const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
+
+  // Функция проверки уникальности slug
+  const checkSlugUniqueness = useCallback(async (slugToCheck: string) => {
+    if (!slugToCheck || isEditing) return; // Для редактирования не проверяем
+
+    setIsCheckingSlug(true);
+    setSlugError('');
+
+    try {
+      const response = await fetch(`/api/admin/validate-slug?slug=${encodeURIComponent(slugToCheck)}&type=letter${isEditing ? `&excludeId=${safeInitial.id}` : ''}`);
+      const data = await response.json();
+      
+      if (!data.available) {
+        setSlugError('Этот URL уже используется. Измените slug.');
+      }
+    } catch (err) {
+      console.error('Ошибка проверки slug:', err);
+    } finally {
+      setIsCheckingSlug(false);
+    }
+  }, [isEditing, safeInitial.id]);
+
+  // Автогенерация slug из title
+  useEffect(() => {
+    if (!slugManuallyEdited && title.trim()) {
+      const generatedSlug = createSeoSlug(title);
+      setSlug(generatedSlug);
+      // Проверяем уникальность только для новых записей
+      if (!isEditing) {
+        checkSlugUniqueness(generatedSlug);
+      }
+    }
+  }, [title, slugManuallyEdited, isEditing, checkSlugUniqueness]);
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTitle(e.target.value);
+  };
+
+  const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newSlug = e.target.value;
+    setSlug(newSlug);
+    setSlugManuallyEdited(true); // Отмечаем, что slug редактировался вручную
+    setSlugError(''); // Сбрасываем ошибку
+    
+    // Проверяем уникальность при ручном вводе
+    if (newSlug.trim()) {
+      checkSlugUniqueness(newSlug);
+    }
+  };
+
+  function validateBlocks(blocks: EditorJsBlock[]) {
+    if (!Array.isArray(blocks) || blocks.length === 0) return false;
+    for (const block of blocks) {
+      if (!block.type || typeof block.type !== 'string') return false;
+      if (!block.data || typeof block.data !== 'object') return false;
+      if (block.type === 'richText' && typeof block.data.html !== 'string') return false;
+      if (block.type === 'gallery' && (!Array.isArray(block.data.images))) return false;
+      if (block.type === 'image' && typeof block.data.url !== 'string') return false;
+      if (block.type === 'code' && typeof block.data.code !== 'string') return false;
+      if (block.type === 'columns') {
+        if (!Array.isArray(block.data.columns)) return false;
+        for (const column of block.data.columns) {
+          if (!column || typeof column.html !== 'string') return false;
+        }
+      }
+      if (block.type === 'quote' && typeof block.data.text !== 'string') return false;
+      if (block.type === 'video' && typeof block.data.url !== 'string') return false;
+    }
+    return true;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    // Do not prevent default here; allow the native form submission to reach
+    // the server action when validation passes. We will call
+    // e.preventDefault() only on failure paths to stop submission.
+    // Perform a server-side role check to avoid relying solely on client-side
+    // metadata which can be stale or blocked by RLS. This endpoint uses the
+    // service-role key (when available) to determine if the current session
+    // belongs to an ADMIN. It is safe to call from the browser (same-origin).
+    setError('');
+    setIsCheckingSlug(true);
+    try {
+      const res = await fetch('/api/user/role', { credentials: 'same-origin' });
+      if (!res.ok) {
+          e.preventDefault();
+          setError('Не удалось проверить привилегии администратора. Попробуйте позже.');
+          setIsCheckingSlug(false);
+          return false;
+      }
+      const body = await res.json();
+      const serverRole = (body && body.role) ? String(body.role).toUpperCase() : 'ANON';
+      if (serverRole !== 'ADMIN') {
+          e.preventDefault();
+          setError('Ошибка: нет прав администратора. Войдите как админ.');
+          setIsCheckingSlug(false);
+          return false;
+      }
+    } catch (err) {
+      console.error('Ошибка проверки роли на сервере:', err);
+        e.preventDefault();
+        setError('Не удалось проверить привилегии администратора. Попробуйте позже.');
+        setIsCheckingSlug(false);
+        return false;
+    } finally {
+      setIsCheckingSlug(false);
+    }
+    if (!validateBlocks(content)) {
+      e.preventDefault();
+      setError('Проверьте структуру блоков: должен быть хотя бы один корректный блок.');
+      return false;
+    }
+    if (slugError) {
+      e.preventDefault();
+      setError('Исправьте ошибки в URL перед сохранением.');
+      return false;
+    }
+    setError('');
+    // Allow the form to proceed (the server-side actions will re-check permissions)
+    return true;
+  }
+
+  // Функция для отправки тестового письма
+  async function handleTestSend() {
+    if (!title || !content.length) {
+      setError('Заполните название и содержание письма для тестовой отправки');
+      return;
+    }
+
+    try {
+      setError('Отправляем тестовое письмо...');
+      
+      const response = await fetch('/api/admin/letters/test-send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title,
+          content,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setError(`✅ ${data.message}`);
+      } else {
+        const data = await response.json();
+        setError(`❌ Ошибка отправки: ${data.error || 'Неизвестная ошибка'}`);
+      }
+    } catch (err) {
+      setError('❌ Ошибка при отправке тестового письма');
+    }
+  }
+
+
+
+
+  return (
+  <form action={saveAction} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
+  {isEditing && <input type="hidden" name="id" value={safeInitial.id} />}
+      <div>
+        <label htmlFor="title" className="block text-sm font-medium text-gray-700">Название</label>
+        <input
+          type="text"
+          name="title"
+          id="title"
+          required
+          value={title}
+          onChange={handleTitleChange}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
+        />
+      </div>
+      <div>
+        <label htmlFor="slug" className="block text-sm font-medium text-gray-700">
+          URL (slug)
+          {!slugManuallyEdited && (
+            <span className="text-xs text-gray-500 ml-2">
+              (автогенерируется из названия)
+            </span>
+          )}
+          {isCheckingSlug && (
+            <span className="text-xs text-blue-500 ml-2">
+              (проверяем уникальность...)
+            </span>
+          )}
+        </label>
+        <input
+          type="text"
+          name="slug"
+          id="slug"
+          required
+          value={slug}
+          onChange={handleSlugChange}
+          className={`mt-1 block w-full rounded-md shadow-sm text-base px-3 py-3 ${
+            slugError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+          }`}
+        />
+        {slugError && (
+          <p className="mt-1 text-sm text-red-600">{slugError}</p>
+        )}
+      </div>
+  <TagInput initialTags={safeInitial.tags} onChange={setTags} />
+  <BlockEditor value={content} onChange={setContent} />
+      <input type="hidden" name="tags" value={JSON.stringify(tags)} />
+  <textarea name="content" value={JSON.stringify(content)} readOnly hidden />
+      {error && <div className="text-red-600 text-sm font-medium">{error}</div>}
+      <div className="flex items-center mt-2 mb-2">
+        <input
+          id="published"
+          name="published"
+          type="checkbox"
+          checked={published}
+          onChange={e => setPublished(e.target.checked)}
+          className="h-6 w-6 rounded border-gray-300 text-blue-600"
+        />
+        <label htmlFor="published" className="ml-3 block text-base text-gray-900">
+          Опубликовано на сайте
+        </label>
+      </div>
+      <p className="text-sm text-gray-600 mb-4">
+        ✓ Опубликованные письма видны на сайте в разделе Letters<br/>
+        📧 Отправка рассылки — отдельная операция (после публикации)
+      </p>
+      <div className="mt-4 space-y-3">
+        <button type="submit" className="w-full flex justify-center py-3 px-4 border rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 min-h-[44px]">
+          {isEditing ? 'Сохранить изменения' : `Создать ${type}`}
+        </button>
+        
+        {/* Кнопка тестовой отправки только для писем */}
+        {type === 'выпуск' && (
+          <button 
+            type="button" 
+            onClick={handleTestSend}
+            disabled={!title || !content.length}
+            className="w-full flex justify-center py-3 px-4 border border-orange-500 rounded-md shadow-sm text-base font-medium text-orange-600 bg-white hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+          >
+            📧 Отправить тест админу
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
