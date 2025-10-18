@@ -73,7 +73,11 @@ export default async function LetterPage({ params }: Props) {
   // duplicating content when the client hydrates and replaces it with
   // the full body for authenticated users. The client component will
   // attempt to fetch the full content when appropriate.
-  const teaser = parsedBlocks.slice(0, 1);
+  // Deep-clone parsed blocks to ensure only plain JSON objects (no
+  // Dates, class instances or null-prototype objects) are passed into
+  // any client components rendered by BlockRenderer (e.g. GalleryGrid).
+  const safeParsed = JSON.parse(JSON.stringify(parsedBlocks || []));
+  const teaser = (safeParsed || []).slice(0, 1);
   const toRender = teaser;
 
   return (
