@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
+import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
 import { safeData } from '@/lib/safeSerialize';
 
@@ -19,7 +20,17 @@ export default async function LetterPage({ params }: Props) {
   // service-role supabase client for the canonical server-side read. Using
   // the service client avoids RLS/anon-key surprises that can cause a
   // false-negative (missing) letter and a 404.
-  const req = (globalThis && (globalThis as any).request) || new Request('http://localhost');
+  // Build a cookie-aware Request so the request-scoped helper can pick up
+  // the user's session during SSR (next/headers provides cookies())
+  let req: Request | null = (globalThis && (globalThis as any).request) || null;
+  if (!req) {
+    const cookieHeader = cookies()
+      .getAll()
+      .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+      .join('; ');
+    req = new Request('http://localhost', { headers: { cookie: cookieHeader } });
+  }
+
   const ctx = await getUserAndSupabaseForRequest(req) || {};
   const { user } = ctx as any;
 
@@ -44,9 +55,10 @@ export default async function LetterPage({ params }: Props) {
   const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
   if (!letter.published && !isOwnerOrAdmin) return notFound();
 
-  // If user is not authenticated, show teaser only
+  // If user is not authenticated, show teaser only (public teaser is the
+  // first block; the rest of the letter requires registration)
   if (!user) {
-    const teaser = typeof letter.content === 'string' ? JSON.parse(letter.content).slice(0, 2) : (Array.isArray(letter.content) ? letter.content.slice(0, 2) : []);
+    const teaser = typeof letter.content === 'string' ? JSON.parse(letter.content).slice(0, 1) : (Array.isArray(letter.content) ? letter.content.slice(0,1) : []);
     return (
       <main className="max-w-3xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-4">{letter.title}</h1>
@@ -54,7 +66,7 @@ export default async function LetterPage({ params }: Props) {
           {teaser.length > 0 ? <BlockRenderer blocks={teaser} /> : <p className="italic text-gray-500">Краткое содержание недоступно.</p>}
         </div>
         <div className="p-4 bg-yellow-50 border border-yellow-100 rounded">
-          <p className="mb-2">Содержание письма доступно только зарегистрированным пользователям.</p>
+          <p className="mb-2">Чтобы прочитать полное письмо, войдите или зарегистрируйтесь — остальная часть письма доступна только для зарегистрированных пользователей.</p>
           <a href="/login" className="text-blue-600 hover:underline">Войти или зарегистрироваться →</a>
         </div>
       </main>
