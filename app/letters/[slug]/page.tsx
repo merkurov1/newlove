@@ -1,49 +1,40 @@
+// ===== ФАЙЛ: app/letters/[slug]/page.tsx =====
+// (ПОЛНЫЙ КОД С ИЗМЕНЕНИЯМИ)
+
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
+// import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest'; // <- УДАЛИТЬ
 import dynamic from 'next/dynamic';
 
 const ReadMoreOrLoginClient = dynamic(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
 import serializeForClient from '@/lib/serializeForClient';
+import { createServerClient } from '@/lib/supabase/server'; // <-- НОВЫЙ ИМПОРТ
 
 type Props = { params: { slug: string } };
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const slug = params.slug;
-  // Minimal metadata while we fetch content
   return sanitizeMetadata({ title: `Письмо — ${slug}` });
 }
 
 export default async function LetterPage({ params }: Props) {
   const { slug } = params;
+  
+  // Новая логика получения пользователя и Supabase
+  const cookieStore = cookies();
+  const supabase = createServerClient(cookieStore);
+  const { data: { user } } = await supabase.auth.getUser();
 
-  // Fetch request-scoped user (if any) for permission checks but use the
-  // service-role supabase client for the canonical server-side read. Using
-  // the service client avoids RLS/anon-key surprises that can cause a
-  // false-negative (missing) letter and a 404.
-  // Build a cookie-aware Request so the request-scoped helper can pick up
-  // the user's session during SSR (next/headers provides cookies())
-  let req: Request | null = (globalThis && (globalThis as any).request) || null;
-  if (!req) {
-    const cookieHeader = cookies()
-      .getAll()
-      .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
-      .join('; ');
-    req = new Request('http://localhost', { headers: { cookie: cookieHeader } });
-  }
-
-  const ctx = await getUserAndSupabaseForRequest(req) || {};
-  const { user } = ctx as any;
-
-  // Use service-role client for reliable server reads
+  // Используем service-role клиент для надежного чтения данных
+  // как и раньше, но с новым хелпером
+  const supabaseService = createServerClient(cookieStore, { useServiceRole: true });
   let letter: any = null;
+  
   try {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const svc = getServerSupabaseClient({ useServiceRole: true });
-    const { data, error } = await svc.from('letters').select('*').eq('slug', slug).maybeSingle();
+    const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
     if (error) {
       console.error('Failed to load letter (service client)', error);
     } else {
@@ -55,12 +46,12 @@ export default async function LetterPage({ params }: Props) {
 
   if (!letter) return notFound();
 
-  // If letter is not published, only allow access to logged-in users (admins/author)
+  // Проверка на владельца/админа (теперь 'user' корректный)
   const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
   if (!letter.published && !isOwnerOrAdmin) return notFound();
 
-
-  // Parse content into blocks (we'll use a teaser for unauthenticated viewers)
+  // ... остальной код файла без изменений ...
+  
   let parsedBlocks: any[] = [];
   try {
     const raw = typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content);
@@ -70,12 +61,10 @@ export default async function LetterPage({ params }: Props) {
     console.error('Failed to parse letter content', e, letter.content);
   }
 
-  // Use centralized serializer to produce plain JSON objects safe for
-  // passing into Client Components.
   const safeParsed = serializeForClient(parsedBlocks || []) || [];
   const teaser = (safeParsed || []).slice(0, 1);
   const toRender = teaser;
-
+  
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-4">{letter.title}</h1>
@@ -87,7 +76,7 @@ export default async function LetterPage({ params }: Props) {
 
       <div className="mt-6">
         <p className="text-sm text-gray-600 mb-3">Для просмотра полного текста и комментариев перейдите на страницу с полным содержимым.</p>
-        {/* Client component decides based on client session whether to show 'Читать дальше' */}
+  
         <div>
           <ReadMoreOrLoginClient slug={slug} />
         </div>

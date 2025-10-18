@@ -1,17 +1,24 @@
+// ===== ФАЙЛ: components/letters/LetterCommentsClient.tsx =====
+// (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+
 "use client";
 
 import { useEffect, useState } from 'react';
-import { createClient as createBrowserClient } from '@/lib/supabase-browser';
+// ИЗМЕНЕНО: Используем новый клиентский хелпер
+import { createClient } from '@/lib/supabase/client'; 
 
 export default function LetterCommentsClient({ slug }: { slug?: string }) {
     const [comments, setComments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const supabase = createBrowserClient();
+    
+    // ИЗМЕНЕНО: Вызываем новую функцию
+    const supabase = createClient(); 
+
     const [hasSession, setHasSession] = useState<boolean | null>(null);
     const [newContent, setNewContent] = useState('');
     const [posting, setPosting] = useState(false);
-
+    
     useEffect(() => {
         let mounted = true;
         async function load() {
@@ -19,25 +26,28 @@ export default function LetterCommentsClient({ slug }: { slug?: string }) {
             try {
                 // derive slug from window location if not provided
                 let theSlug = slug;
+        
                 if (!theSlug && typeof window !== 'undefined') {
                     const parts = window.location.pathname.split('/').filter(Boolean);
                     // expect /letters/:slug or /letters/:slug/full
                     const idx = parts.indexOf('letters');
-                    if (idx >= 0 && parts.length > idx + 1) theSlug = parts[idx + 1];
+               
+                     if (idx >= 0 && parts.length > idx + 1) theSlug = parts[idx + 1];
                 }
                 // Check local client session first; if not authenticated, avoid
                 // hitting the API and show the login prompt.
+                
                 const { data } = await supabase.auth.getSession();
                 const s = (data as any)?.session || null;
                 if (!mounted) return;
                 if (!s || !s.user) {
                     setHasSession(false);
-                    setComments([]);
+             
+                   setComments([]);
                     setError('unauthenticated');
                     return;
                 }
                 setHasSession(true);
-
                 if (!theSlug) {
                     setError('missing_slug');
                     return;
@@ -60,7 +70,8 @@ export default function LetterCommentsClient({ slug }: { slug?: string }) {
         }
         load();
         return () => { mounted = false; };
-    }, [slug]);
+    // ИЗМЕНЕНО: Добавляем 'supabase' в массив зависимостей
+    }, [slug, supabase]); 
 
     async function handlePost(e: any) {
         e.preventDefault();
@@ -109,34 +120,41 @@ export default function LetterCommentsClient({ slug }: { slug?: string }) {
             {loading && <div className="text-sm text-gray-500">Загрузка комментариев...</div>}
             {error === 'unauthenticated' && (
                 <div className="text-sm text-gray-600 mb-3">
-                    Комментарии доступны только для зарегистрированных пользователей. <a href="/you/login" className="text-blue-600 underline">Войдите</a> или <a href="/onboard" className="text-blue-600 underline">зарегистрируйтесь</a>.
+               
+                     Комментарии доступны только для зарегистрированных пользователей. <a href="/you/login" className="text-blue-600 underline">Войдите</a> или <a href="/onboard" className="text-blue-600 underline">зарегистрируйтесь</a>.
                 </div>
             )}
             {error && error !== 'unauthenticated' && <div className="text-sm text-red-600">Ошибка: {error}</div>}
             {!loading && !error && comments.length === 0 && <div className="text-sm text-gray-500 mb-3">Пока нет комментариев — будьте первым!</div>}
 
-            <ul className="space-y-4">
+    
+                 <ul className="space-y-4">
                 {comments.map((c) => (
                     <li key={c.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                         <div className="flex items-center justify-between mb-2">
-                            <div className="text-sm text-gray-700 font-semibold">{c.author_display || 'Аноним'}</div>
+                  
+                           <div className="text-sm text-gray-700 font-semibold">{c.author_display || 'Аноним'}</div>
                             <div className="text-xs text-gray-400">{new Date(c.created_at).toLocaleString()}</div>
                         </div>
                         <div className="text-gray-800">{c.content}</div>
-                    </li>
+                    
+                 </li>
                 ))}
             </ul>
 
             <form onSubmit={handlePost} className="mt-6">
                 <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-md">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Оставить комментарий</label>
-                    <textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} className="w-full p-3 border border-gray-100 rounded-md resize-none focus:ring-2 focus:ring-blue-200" rows={4} placeholder="Поделитесь мыслями или отзывом..." />
+          
+                           <textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} className="w-full p-3 border border-gray-100 rounded-md resize-none focus:ring-2 focus:ring-blue-200" rows={4} placeholder="Поделитесь мыслями или отзывом..." />
                     <div className="mt-3 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <button disabled={posting || error === 'unauthenticated' || hasSession === false} type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md shadow">Отправить</button>
+                     
+                       <button disabled={posting || error === 'unauthenticated' || hasSession === false} type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md shadow">Отправить</button>
                             <button type="button" onClick={() => setNewContent('')} className="px-3 py-2 border rounded-md">Очистить</button>
                         </div>
-                        <div className="text-xs text-gray-500">Будьте вежливы — соблюдайте правила сообщества</div>
+                        <div className="text-xs text-gray-500">Будьте вежливы — соблюдайте правила 
+                        сообщества</div>
                     </div>
                 </div>
             </form>
