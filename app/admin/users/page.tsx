@@ -91,7 +91,7 @@ export default async function AdminUsersPage() {
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <UserActionsClient userId={user.id} currentRole={user.role} onUpdated={() => { /* client can refresh */ }} />
+                  <UserActionsClient userId={user.id} currentRole={user.role} />
                 </td>
               </tr>
             ))}
