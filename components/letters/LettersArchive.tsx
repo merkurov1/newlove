@@ -1,4 +1,5 @@
 'use client';
+// touch: redeploy trigger — updated to force a fresh commit/push
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
