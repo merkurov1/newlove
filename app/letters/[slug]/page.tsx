@@ -1,13 +1,9 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
+import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
-import dynamic from 'next/dynamic';
-
-const LetterFullClient = dynamic(() => import('@/components/letters/LetterFullClient'), { ssr: false });
-const LetterCommentsClient = dynamic(() => import('@/components/letters/LetterCommentsClient'), { ssr: false });
-import { safeData } from '@/lib/safeSerialize';
 
 type Props = { params: { slug: string } };
 
@@ -81,22 +77,21 @@ export default async function LetterPage({ params }: Props) {
     <main className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-4">{letter.title}</h1>
       <div className="prose mb-6">
-        {/* Server-rendered teaser placed in a named container so the client
-            hydrator can replace it (or hide it) without rendering a duplicate
-            copy. */}
-        <div id={`letter-body-server-${slug}`}>
+        <div>
           {toRender.length > 0 ? <BlockRenderer blocks={toRender} /> : <p className="italic text-gray-500">Содержимое отсутствует.</p>}
         </div>
       </div>
 
-      {/* Client will attempt to fetch and replace teaser with full content for authenticated users */}
-      <LetterFullClient slug={slug} serverContainerId={`letter-body-server-${slug}`} />
-
-      {/* Visual separator before comments so they don't blend with the letter text */}
-      <div className="mt-10 mb-6 border-t border-gray-200" />
-
-      {/* Comments (client only) */}
-      <LetterCommentsClient slug={slug} />
+      <div className="mt-6">
+        <p className="text-sm text-gray-600 mb-3">Для просмотра полного текста и комментариев перейдите на страницу с полным содержимым.</p>
+        <div className="flex gap-3">
+          {user ? (
+            <Link href={`/letters/${slug}/full`} className="px-4 py-2 bg-blue-600 text-white rounded">Читать дальше</Link>
+          ) : (
+            <Link href="/you/login" className="px-4 py-2 border rounded">Войти</Link>
+          )}
+        </div>
+      </div>
     </main>
   );
 }
