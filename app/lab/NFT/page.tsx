@@ -19,6 +19,22 @@ export default function NFTLabPageClient() {
             const onboard = getOnboard();
             const selected = await connectWithOnboard();
             if (!selected) {
+                // fallback: try injected provider directly
+                const eth = (window as any).ethereum;
+                if (eth && eth.request) {
+                    try {
+                        await eth.request({ method: 'eth_requestAccounts' });
+                        const provider = new (ethers as any).BrowserProvider(eth as any);
+                        const signer = provider.getSigner();
+                        const a = await signer.getAddress();
+                        setAddress(a);
+                        setIsConnected(true);
+                        setStatus('Кошелёк подключён (fallback)');
+                        return;
+                    } catch (e) {
+                        console.error('fallback connect failed', e);
+                    }
+                }
                 setStatus("Не удалось подключить кошелёк");
                 return;
             }
