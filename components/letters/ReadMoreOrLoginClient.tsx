@@ -44,10 +44,40 @@ export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
         setModalOpen(true);
     };
 
+    // Before navigating to the full page, do a small preflight check to ensure
+    // the server-side route allows access. This prevents the App Router from
+    // mounting a page that would immediately throw because of serialization
+    // or auth issues. The preflight is only used for logged-in users.
+    const handleReadFull = async (e: any) => {
+        e.preventDefault();
+        try {
+            const res = await fetch(`/api/letters/full/${encodeURIComponent(slug)}?_debug=1`, { credentials: 'same-origin' });
+            if (res.status === 200) {
+                // Allowed -> navigate
+                window.location.href = `/letters/${slug}/full`;
+                return;
+            }
+            if (res.status === 401) {
+                // Not actually authenticated server-side -> open login modal
+                handleOpen();
+                return;
+            }
+            if (res.status === 404) {
+                alert('Страница с полным текстом пока недоступна.');
+                return;
+            }
+            // Other errors: open login as fallback
+            handleOpen();
+        } catch (err) {
+            // Network or other errors: fall back to direct navigation
+            try { window.location.href = `/letters/${slug}/full`; } catch (e) { handleOpen(); }
+        }
+    };
+
     return (
         <div className="flex gap-3">
             {hasSession ? (
-                <Link href={`/letters/${slug}/full`} className="px-4 py-2 bg-blue-600 text-white rounded">Читать дальше</Link>
+                <a href={`/letters/${slug}/full`} onClick={handleReadFull} className="px-4 py-2 bg-blue-600 text-white rounded">Читать дальше</a>
             ) : (
                 <>
                     <button onClick={handleOpen} className="px-4 py-2 border rounded">Войти</button>
