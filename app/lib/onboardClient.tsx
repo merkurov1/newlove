@@ -12,9 +12,10 @@ export function getOnboard() {
 
     const injected = injectedModule();
 
-    const chains = [
+        const chains = [
         {
-            id: 137,
+            // Onboard prefers hex chain ids (0x89 == 137)
+            id: '0x89',
             token: 'MATIC',
             label: 'Polygon',
             rpcUrl: process.env.NEXT_PUBLIC_POLYGON_RPC || 'https://polygon-rpc.com'
