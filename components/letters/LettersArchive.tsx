@@ -1,5 +1,4 @@
 'use client';
-// touch: redeploy trigger — updated to force a fresh commit/push
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -45,6 +44,7 @@ export default function LettersArchive() {
           if (wantDebug) {
             try { setDebug(parsed?.debug || parsed); } catch { setDebug(parsed); }
           }
+          console.error('Letters fetch error details:', { status, ok, text, parsed }); // Enhanced debug
           throw new Error('Failed to fetch letters');
         }
 
@@ -54,7 +54,6 @@ export default function LettersArchive() {
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         setError('Не удалось загрузить архив писем — ' + errMsg);
-        // only keep minimal error info in UI
         setLastFetchInfo((lf: any) => lf || { error: errMsg });
         console.error('Letters fetch error:', err);
       } finally {

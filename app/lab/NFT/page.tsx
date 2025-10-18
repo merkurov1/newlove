@@ -17,6 +17,35 @@ export default function NFTLabPageClient() {
     // Debug state exposed in UI for Onboard-only flows
     const [debugState, setDebugState] = useState<Record<string, any>>({});
     const pushDebug = (k: string, v: any) => setDebugState((s) => ({ ...s, [k]: v }));
+    const safeStringify = (obj: any, maxLen = 2000) => {
+        try {
+            const seen = new WeakSet();
+            const s = JSON.stringify(obj, function (k, v) {
+                if (v && typeof v === 'object') {
+                    if (seen.has(v)) return '[Circular]';
+                    seen.add(v);
+                }
+                if (typeof v === 'bigint') return String(v);
+                return v;
+            }, 2);
+            if (s.length > maxLen) return s.slice(0, maxLen) + '...';
+            return s;
+        } catch (e) {
+            try {
+                // Fallback: try extracting common fields
+                if (obj && typeof obj === 'object') {
+                    const out: any = {};
+                    if ('label' in obj) out.label = obj.label;
+                    if ('accounts' in obj) out.accounts = (obj.accounts || []).map((a: any) => a && a.address ? a.address : a);
+                    if ('provider' in obj) out.provider = typeof obj.provider;
+                    return JSON.stringify(out, null, 2);
+                }
+                return String(obj);
+            } catch (e2) {
+                return String(obj);
+            }
+        }
+    };
 
     // Local connect helper (use injected provider directly)
     async function connectWallet() {
@@ -482,13 +511,13 @@ export default function NFTLabPageClient() {
             <details className="mt-6 p-4 bg-black/5 rounded">
                 <summary className="cursor-pointer text-sm font-medium">Debug panel (для разработчика)</summary>
                 <div className="mt-3 text-xs font-mono text-neutral-700 space-y-2">
-                    <div><strong>onboardWallet</strong>: <pre className="whitespace-pre-wrap">{JSON.stringify(debugState.onboard_wallet || onboardWallet, null, 2)}</pre></div>
+                    <div><strong>onboardWallet</strong>: <pre className="whitespace-pre-wrap">{safeStringify(debugState.onboard_wallet || onboardWallet)}</pre></div>
                     <div><strong>onboardInitialized</strong>: {String(debugState.onboard_initialized ?? Boolean(onboardWallet))}</div>
-                    <div><strong>providerNetwork</strong>: <pre>{JSON.stringify(debugState.provider_network || debugState.provider_network_claim || null, null, 2)}</pre></div>
+                    <div><strong>providerNetwork</strong>: <pre className="whitespace-pre-wrap">{safeStringify(debugState.provider_network || debugState.provider_network_claim || null)}</pre></div>
                     <div><strong>signer</strong>: {debugState.signer_address || debugState.claim_signer_address || '—'}</div>
                     <div><strong>contractCode</strong>: <pre className="whitespace-pre-wrap">{String(debugState.contract_code || debugState.contractCode || 'not_checked')}</pre></div>
                     <div><strong>errors</strong>:
-                        <pre className="whitespace-pre-wrap">{JSON.stringify(Object.fromEntries(Object.entries(debugState).filter(([k]) => k.toLowerCase().includes('error') || k.toLowerCase().includes('failed') || k.toLowerCase().includes('mint_error') || k.toLowerCase().includes('claim_error'))), null, 2)}</pre>
+                        <pre className="whitespace-pre-wrap">{safeStringify(Object.fromEntries(Object.entries(debugState).filter(([k]) => k.toLowerCase().includes('error') || k.toLowerCase().includes('failed') || k.toLowerCase().includes('mint_error') || k.toLowerCase().includes('claim_error'))))}</pre>
                     </div>
                 </div>
             </details>
