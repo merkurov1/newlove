@@ -80,6 +80,29 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
           <Link href="/admin/users" className="px-4 py-2 rounded bg-green-600 text-white font-semibold hover:bg-green-700 transition">👥 Пользователи</Link>
         </div>
       </div>
+      {/* Environment diagnostics - show presence of critical keys (masked) */}
+      <div className="mt-6">
+        <h2 className="text-lg font-semibold mb-2">Диагностика окружения</h2>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          {/* Compute masked values server-side */}
+          {
+            (() => {
+              const resendKey = process.env.RESEND_API_KEY || null;
+              const noreply = process.env.NOREPLY_EMAIL || process.env.NEXT_PUBLIC_NOREPLY_EMAIL || null;
+              const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || null;
+              const mask = (k: string | null) => (typeof k === 'string' && k.length > 8 ? `${k.slice(0,4)}...${k.slice(-4)}` : k);
+              return (
+                <div className="space-y-2 text-sm text-gray-700">
+                  <div><strong>Resend API key:</strong> {resendKey ? <span className="font-mono">{mask(resendKey)}</span> : <span className="text-red-600">не настроен</span>}</div>
+                  <div><strong>From (noreply):</strong> {noreply ? <span className="font-mono">{noreply}</span> : <span className="text-yellow-600">по умолчанию будет использован noreply@merkurov.love</span>}</div>
+                  <div><strong>SITE URL:</strong> {siteUrl ? <span className="font-mono">{siteUrl}</span> : <span className="text-yellow-600">используется https://merkurov.love</span>}</div>
+                  <div className="text-xs text-gray-500 mt-2">(Ключ маскируется в целях безопасности. Если ключ есть в Vercel — проверьте, что он доступен на рантайме сервера.)</div>
+                </div>
+              );
+            })()
+          }
+        </div>
+      </div>
       <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
           <h3 className="text-lg font-bold mb-2">Последние статьи</h3>
