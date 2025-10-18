@@ -90,7 +90,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
               const resendKey = process.env.RESEND_API_KEY || null;
               const noreply = process.env.NOREPLY_EMAIL || process.env.NEXT_PUBLIC_NOREPLY_EMAIL || null;
               const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || null;
-              const mask = (k: string | null) => (typeof k === 'string' && k.length > 8 ? `${k.slice(0,4)}...${k.slice(-4)}` : k);
+              const mask = (k: string | null) => (typeof k === 'string' && k.length > 8 ? `${k.slice(0, 4)}...${k.slice(-4)}` : k);
               return (
                 <div className="space-y-2 text-sm text-gray-700">
                   <div><strong>Resend API key:</strong> {resendKey ? <span className="font-mono">{mask(resendKey)}</span> : <span className="text-red-600">не настроен</span>}</div>
