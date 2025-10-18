@@ -25,6 +25,13 @@ export default async function LetterFullPage({ params }: Props) {
     const supabase = createClient(); // Обычный клиент
     const { data: { user } } = await supabase.auth.getUser(); // Получаем user
 
+    // If there's no viewer/session, redirect to login immediately to avoid
+    // creating service-role clients or making extra DB calls for unauthenticated users.
+    if (!user) {
+        const loginUrl = `/you/login?next=${encodeURIComponent(`/letters/${slug}/full`)}`;
+        redirect(loginUrl);
+    }
+
     // Service-role клиент для чтения
     const supabaseService = createClient({ useServiceRole: true });
     let letter: any = null;
@@ -43,11 +50,7 @@ export default async function LetterFullPage({ params }: Props) {
     const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
     if (!letter.published && !isOwnerOrAdmin) return notFound();
 
-    // Эта проверка (на 'user') теперь тоже будет работать
-    if (!user) {
-        const loginUrl = `/you/login?next=${encodeURIComponent(`/letters/${slug}/full`)}`;
-        redirect(loginUrl);
-    }
+    // (user was already checked earlier and redirected if missing)
 
     // ... (остальной код без изменений) ...
     let parsedBlocks: any[] = [];
@@ -68,7 +71,7 @@ export default async function LetterFullPage({ params }: Props) {
                 {safeParsed.length > 0 ? <BlockRenderer blocks={safeParsed} /> : <p className="italic text-gray-500">Содержимое отсутствует.</p>}
             </div>
             <div className="mt-10 mb-6 border-t border-gray-200" />
-           <LetterCommentsClient />
+            <LetterCommentsClient />
         </main>
     );
 }

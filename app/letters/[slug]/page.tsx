@@ -9,7 +9,7 @@ import BlockRenderer from '@/components/BlockRenderer';
 import serializeForClient from '@/lib/serializeForClient';
 
 // ----- НОВЫЙ ИМПОРТ -----
-import { createClient } from '@/lib/supabase/server'; 
+import { createClient } from '@/lib/supabase/server';
 
 const ReadMoreOrLoginClient = dynamicImport(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
 
@@ -30,23 +30,44 @@ export default async function LetterPage({ params }: Props) {
   const supabase = createClient(); // Обычный клиент
   const { data: { user } } = await supabase.auth.getUser(); // Получаем user
 
-  // Service-role клиент для чтения
-  const supabaseService = createClient({ useServiceRole: true });
+  // Fetch viewer/session first. If not present we still need to read public letter
+  // but prefer making a minimal service-role call only when necessary.
   let letter: any = null;
-  
   try {
-    const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
-    if (error) console.error('Failed to load letter (service client)', error);
-    else letter = data || null;
+    // If we have a user session, use service role to allow unpublished access for owners/admins.
+    if (user) {
+      const supabaseService = createClient({ useServiceRole: true });
+      const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
+      if (error) console.error('Failed to load letter (service client)', error);
+      else letter = data || null;
+    } else {
+      // For guests, call Supabase REST directly using the anon key.
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+        const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
+        if (supabaseUrl && anonKey) {
+          const base = supabaseUrl.replace(/\/$/, '');
+          const select = encodeURIComponent('*');
+          const url = `${base}/rest/v1/letters?select=${select}&slug=eq.${encodeURIComponent(slug)}&limit=1`;
+          const res = await fetch(url, { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, Accept: 'application/json' } });
+          if (res.ok) {
+            const pb = await res.json().catch(() => ([]));
+            letter = Array.isArray(pb) && pb.length > 0 ? pb[0] : null;
+          }
+        }
+      } catch (e) {
+        console.error('Guest fallback REST fetch failed', e);
+      }
+    }
   } catch (e) {
-    console.error('Error fetching letter (service client)', e);
+    console.error('Error fetching letter', e);
   }
 
   if (!letter) return notFound();
 
   // Эта проверка теперь будет работать
   const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
-  
+
   if (!letter.published && !isOwnerOrAdmin) return notFound();
 
   // ... (остальной код файла без изменений) ...
@@ -62,7 +83,7 @@ export default async function LetterPage({ params }: Props) {
   const safeParsed = serializeForClient(parsedBlocks || []) || [];
   const teaser = (safeParsed || []).slice(0, 1);
   const toRender = teaser;
-  
+
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-4">{letter.title}</h1>

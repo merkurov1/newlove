@@ -26,6 +26,7 @@ export default function LettersArchive() {
   useEffect(() => {
     const fetchLetters = async () => {
       const url = '/api/letters';
+      const wantDebug = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('debug') === '1';
       try {
         let response: Response | null = null;
         try {
@@ -40,29 +41,20 @@ export default function LettersArchive() {
         const text = await response.text();
         let parsed: any = null;
         try { parsed = JSON.parse(text); } catch { parsed = text; }
-        setLastFetchInfo({ url, status, ok, body: parsed });
-
         if (!ok) {
-          try { setDebug(parsed?.debug || parsed); } catch { setDebug(parsed); }
-          // attempt anonymous fetch to compare behaviour
-          try {
-            const anonRes = await fetch(url);
-            const anonText = await anonRes.text();
-            let anonParsed: any = null;
-            try { anonParsed = JSON.parse(anonText); } catch { anonParsed = anonText; }
-            setAnonAttempt({ status: anonRes.status, ok: anonRes.ok, body: anonParsed });
-          } catch (e) {
-            setAnonAttempt({ error: String(e) });
+          if (wantDebug) {
+            try { setDebug(parsed?.debug || parsed); } catch { setDebug(parsed); }
           }
           throw new Error('Failed to fetch letters');
         }
 
         const data = typeof parsed === 'object' ? parsed : JSON.parse(text);
         setLetters(data.letters || []);
-        if (data.debug) setDebug(data.debug);
+        if (data.debug && wantDebug) setDebug(data.debug);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         setError('Не удалось загрузить архив писем — ' + errMsg);
+        // only keep minimal error info in UI
         setLastFetchInfo((lf: any) => lf || { error: errMsg });
         console.error('Letters fetch error:', err);
       } finally {
