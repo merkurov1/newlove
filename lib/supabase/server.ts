@@ -14,29 +14,30 @@ export function createServerClient(
   options: ServerClientOptions = {}
 ) {
   
-  // Ищем URL в обеих переменных (это мы уже исправляли)
+  // 1. Ищем URL в обеих переменных (это мы уже исправляли)
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   let supabaseKey: string;
 
   const preferServiceRole = !!options.useServiceRole;
 
   if (preferServiceRole) {
-    // Логика для Service Role (она была правильной)
+    // 2. Логика для Service Role (она была правильной)
     supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     if (!supabaseKey) {
       throw new Error('SUPABASE_SERVICE_ROLE_KEY is required when useServiceRole=true');
     }
   } else {
-    // ----- ИСПРАВЛЕНИЕ ЗДЕСЬ -----
+    // 3. ----- ИСПРАВЛЕНИЕ ЗДЕСЬ -----
     // Ищем Anon Key в ДВУХ местах, как это делал старый 'lib/serverAuth.ts'
     supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY!;
   }
 
-  // Проверки (мы их исправляли в прошлый раз)
+  // 4. Проверки (мы их исправляли)
   if (!supabaseUrl) {
     throw new Error('Supabase URL not found. Please set NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL');
   }
   if (!supabaseKey) {
+    // Эта ошибка была из-за того, что 'SUPABASE_KEY' не проверялся
     throw new Error('Supabase key not found. Please set NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_KEY');
   }
 
