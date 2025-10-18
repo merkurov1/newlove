@@ -95,7 +95,7 @@
     "dotenv": "^17.2.3",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5",
-    "hardhat": "^3.0.7",
+    "hardhat": "^2.26.3",
     "pino-pretty": "^10.2.0",
     "postcss": "^8.4.47",
     "stylelint": "^16.25.0",
