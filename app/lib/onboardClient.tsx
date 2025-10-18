@@ -3,11 +3,12 @@
 import Onboard from '@web3-onboard/core';
 import injectedModule from '@web3-onboard/injected-wallets';
 // walletconnect optional: include when NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is set
-import walletConnectModule from '@web3-onboard/walletconnect';
+// walletConnectModule is imported lazily inside getOnboard() when configured to avoid
+// bundling/init-time side effects that can hang the client when WalletConnect is not used.
 
 let onboard: any = null;
 
-export function getOnboard() {
+export async function getOnboard() {
     if (onboard) return onboard;
 
     const injected = injectedModule();
@@ -17,8 +18,20 @@ export function getOnboard() {
     try {
         const wcProject = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || (globalThis as any)?.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
         if (wcProject) {
-            const walletConnect = walletConnectModule({ projectId: wcProject, requiredChains: [137] });
-            wallets.push(walletConnect);
+            try {
+                // dynamic import to avoid bundling or init-time side-effects
+                const module = await import('@web3-onboard/walletconnect');
+                const walletConnectModule = module && (module.default || module);
+                if (typeof walletConnectModule === 'function') {
+                    const walletConnect = walletConnectModule({ projectId: wcProject, requiredChains: [137] });
+                    wallets.push(walletConnect);
+                }
+            } catch (e) {
+                // if dynamic import fails, just skip WalletConnect
+                // this avoids hard failures in environments where the package
+                // cannot be initialized (or when server-side rendering occurs)
+                // console.debug('WalletConnect module not available, skipping', e);
+            }
         }
     } catch (e) {
         // ignore if not available / server-side
@@ -55,10 +68,10 @@ export function getOnboard() {
 }
 
 export async function connectWithOnboard() {
-    const ob = getOnboard();
+    const ob = await getOnboard();
     // web3-onboard has varied APIs across versions: try several possibilities
     // 1) connectWallet() -> returns array
-    if (typeof ob.connectWallet === 'function') {
+    if (ob && typeof ob.connectWallet === 'function') {
         try {
             const wallets = await ob.connectWallet();
             if (wallets && wallets.length > 0) return wallets[0];
@@ -68,7 +81,7 @@ export async function connectWithOnboard() {
     }
 
     // 2) connectWallets() -> older API
-    if (typeof ob.connectWallets === 'function') {
+    if (ob && typeof ob.connectWallets === 'function') {
         try {
             const wallets = await ob.connectWallets();
             if (wallets && wallets.length > 0) return wallets[0];
@@ -78,7 +91,7 @@ export async function connectWithOnboard() {
     }
 
     // 3) connect() generic
-    if (typeof ob.connect === 'function') {
+    if (ob && typeof ob.connect === 'function') {
         try {
             const res = await ob.connect();
             if (Array.isArray(res) && res.length > 0) return res[0];

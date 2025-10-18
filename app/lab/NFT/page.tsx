@@ -14,10 +14,15 @@ export default function NFTLabPageClient() {
     const [isConnected, setIsConnected] = useState(false);
     const [onboardWallet, setOnboardWallet] = useState<any | null>(null);
 
+    // Debug state exposed in UI for Onboard-only flows
+    const [debugState, setDebugState] = useState<Record<string, any>>({});
+    const pushDebug = (k: string, v: any) => setDebugState((s) => ({ ...s, [k]: v }));
+
     // Local connect helper (use injected provider directly)
     async function connectWallet() {
         try {
-            const onboard = getOnboard();
+            const onboard = await getOnboard();
+            pushDebug('onboard_initialized', Boolean(onboard));
             const selected = await connectWithOnboard();
             if (!selected) {
                 // fallback: try injected provider directly
@@ -45,6 +50,7 @@ export default function NFTLabPageClient() {
                 setIsConnected(true);
             }
             setOnboardWallet(selected || null);
+            pushDebug('onboard_wallet', selected || null);
             setStatus("Кошелёк подключён");
         } catch (err: any) {
             console.error(err);
@@ -70,6 +76,8 @@ export default function NFTLabPageClient() {
                 const eth = (window as any).ethereum;
                 if (!eth) return;
                 const provider = new (ethers as any).BrowserProvider(eth as any);
+                try { console.debug('[NFT] loadOnchain raw provider:', eth); } catch (e) { }
+                try { console.debug('[NFT] loadOnchain provider network:', await provider.getNetwork()); } catch (e) { }
                 const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
                 const price = await contract.priceWei();
                 const max = await contract.maxPublicSupply();
@@ -142,6 +150,32 @@ export default function NFTLabPageClient() {
             }
             if (!rawProvider) rawProvider = (window as any).ethereum;
             const provider = new (ethers as any).BrowserProvider(rawProvider as any, 'any');
+            try { console.debug('[NFT] handlePublicMint rawProvider:', rawProvider); } catch (e) { }
+            try { const net = await provider.getNetwork(); console.debug('[NFT] handlePublicMint provider network:', net); pushDebug('provider_network', net); } catch (e) { pushDebug('provider_network_error', String(e)); }
+
+            // Ensure the wallet is on Polygon (chainId 137 / 0x89) so contract calls return valid data
+            try {
+                const chainHex = await (async () => {
+                    try { return await provider.send('eth_chainId', []); } catch { const n = await provider.getNetwork(); return '0x' + n.chainId.toString(16); }
+                })();
+                if (chainHex !== '0x89') {
+                    // try to request switch; if it fails, inform the user
+                    try {
+                        await provider.send('wallet_switchEthereumChain', [{ chainId: '0x89' }]);
+                        setStatus('Переключаю сеть на Polygon (MATIC)...');
+                        pushDebug('switch_attempt', true);
+                        // small pause for wallet to update
+                        await new Promise(r => setTimeout(r, 800));
+                    } catch (switchErr) {
+                        setStatus('Пожалуйста, переключите сеть в кошельке на Polygon (MATIC) и повторите действие.');
+                        pushDebug('switch_failed', String(switchErr));
+                        setProcessing(false);
+                        return;
+                    }
+                }
+            } catch (e) {
+                // non-fatal - continue and let subsequent calls surface clear errors
+            }
             // request accounts (will be a no-op if already connected/approved)
             try { await provider.send("eth_requestAccounts", []); } catch (e) { }
             const signerLocal = await provider.getSigner();
@@ -150,11 +184,24 @@ export default function NFTLabPageClient() {
                 if (a) {
                     setAddress(a);
                     setIsConnected(true);
+                    pushDebug('signer_address', a);
                 }
             } catch (e) {
-                // signer not available
+                pushDebug('signer_error', String(e));
             }
             const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signerLocal);
+            // check contract code presence
+            try {
+                const code = await provider.send('eth_getCode', [CONTRACT_ADDRESS, 'latest']);
+                pushDebug('contract_code', code && code.length > 10 ? code.slice(0, 200) + '...' : code);
+                if (!code || code === '0x' || code === '0x0') {
+                    setStatus('Контракт не найден на этой сети. Проверьте сеть в кошельке.');
+                    setProcessing(false);
+                    return;
+                }
+            } catch (e) {
+                pushDebug('eth_getCode_error', String(e));
+            }
             const price = await contract.priceWei();
             const total = price.mul(qty);
             const tx = await contract.publicMint(qty, { value: total });
@@ -177,6 +224,7 @@ export default function NFTLabPageClient() {
         } catch (err: any) {
             console.error(err);
             setStatus(err?.message || "Ошибка при минте");
+            pushDebug('mint_error', String(err));
         } finally {
             setProcessing(false);
         }
@@ -235,8 +283,31 @@ export default function NFTLabPageClient() {
             }
             if (!rawProvider2) rawProvider2 = (window as any).ethereum;
             const provider = new (ethers as any).BrowserProvider(rawProvider2 as any, 'any');
-            try { await provider.send("eth_requestAccounts", []); } catch (e) { }
+            try { console.debug('[NFT] handleSubscriberClaim rawProvider:', rawProvider2); } catch (e) { }
+            try { const net2 = await provider.getNetwork(); console.debug('[NFT] handleSubscriberClaim provider network:', net2); pushDebug('provider_network_claim', net2); } catch (e) { pushDebug('provider_network_claim_error', String(e)); }
+            try { await provider.send("eth_requestAccounts", []); } catch (e) { pushDebug('eth_requestAccounts_error', String(e)); }
+            // Ensure on Polygon
+            try {
+                const chainHex = await (async () => {
+                    try { return await provider.send('eth_chainId', []); } catch { const n = await provider.getNetwork(); return '0x' + n.chainId.toString(16); }
+                })();
+                if (chainHex !== '0x89') {
+                    try {
+                        await provider.send('wallet_switchEthereumChain', [{ chainId: '0x89' }]);
+                        setStatus('Переключаю сеть на Polygon (MATIC)...');
+                        await new Promise(r => setTimeout(r, 800));
+                    } catch (switchErr) {
+                        setStatus('Пожалуйста, переключите сеть в кошельке на Polygon (MATIC) и повторите действие.');
+                        pushDebug('claim_switch_failed', String(switchErr));
+                        setProcessing(false);
+                        return;
+                    }
+                }
+            } catch (e) {
+                // ignore
+            }
             const signerLocal = await provider.getSigner();
+            try { const sa = await signerLocal.getAddress(); pushDebug('claim_signer_address', sa); } catch (e) { pushDebug('claim_signer_error', String(e)); }
             const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signerLocal);
             setStatus("Транзакция подписана, ожидаю подтверждения...");
             const tx = await contract.claimForSubscriber(signature);
@@ -254,6 +325,7 @@ export default function NFTLabPageClient() {
         } catch (err: any) {
             console.error(err);
             setStatus(err?.message || "Ошибка при получении подписи / минте");
+            pushDebug('claim_error', String(err));
         } finally {
             setProcessing(false);
         }
@@ -406,6 +478,20 @@ export default function NFTLabPageClient() {
 
                 {status && <div className="mt-4 p-3 bg-neutral-100 rounded">{status}</div>}
             </div>
+            {/* Debug panel - visible in-page to help debug Onboard-only flows */}
+            <details className="mt-6 p-4 bg-black/5 rounded">
+                <summary className="cursor-pointer text-sm font-medium">Debug panel (для разработчика)</summary>
+                <div className="mt-3 text-xs font-mono text-neutral-700 space-y-2">
+                    <div><strong>onboardWallet</strong>: <pre className="whitespace-pre-wrap">{JSON.stringify(debugState.onboard_wallet || onboardWallet, null, 2)}</pre></div>
+                    <div><strong>onboardInitialized</strong>: {String(debugState.onboard_initialized ?? Boolean(onboardWallet))}</div>
+                    <div><strong>providerNetwork</strong>: <pre>{JSON.stringify(debugState.provider_network || debugState.provider_network_claim || null, null, 2)}</pre></div>
+                    <div><strong>signer</strong>: {debugState.signer_address || debugState.claim_signer_address || '—'}</div>
+                    <div><strong>contractCode</strong>: <pre className="whitespace-pre-wrap">{String(debugState.contract_code || debugState.contractCode || 'not_checked')}</pre></div>
+                    <div><strong>errors</strong>:
+                        <pre className="whitespace-pre-wrap">{JSON.stringify(Object.fromEntries(Object.entries(debugState).filter(([k]) => k.toLowerCase().includes('error') || k.toLowerCase().includes('failed') || k.toLowerCase().includes('mint_error') || k.toLowerCase().includes('claim_error'))), null, 2)}</pre>
+                    </div>
+                </div>
+            </details>
         </main>
     );
 }
