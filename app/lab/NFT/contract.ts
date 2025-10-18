@@ -1,10 +1,13 @@
-export const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS || "0x0000000000000000000000000000000000000000";
+// Default to the most recent deployed address (can be overridden by NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS)
+export const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS || "0x731799fd24B2B9ceCd513a1E2d91Cd1C4F565A62";
 
-// Minimal ABI consisting of used methods
+// Expanded minimal ABI used by the client page
 export const NFT_ABI = [
     "function priceWei() view returns (uint256)",
     "function maxPublicSupply() view returns (uint256)",
     "function publicMint(uint256 qty) payable",
     "function publicMinted() view returns (uint256)",
     "function claimForSubscriber(bytes signature)",
+    "function hasClaimedOnChain(address) view returns (bool)",
+    "function currentId() view returns (uint256)",
 ];

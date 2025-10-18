@@ -1,0 +1,35 @@
+name: Deploy NeutralHeart to Polygon
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to Polygon
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Hardhat deploy
+        env:
+          DEPLOY_PRIVATE_KEY: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+          POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
+          POLYGONSCAN_API_KEY: ${{ secrets.POLYGONSCAN_API_KEY }}
+          TRUSTED_SIGNER_ADDRESS: ${{ secrets.TRUSTED_SIGNER_ADDRESS }}
+          NEUTRAL_HEART_BASEURI: ${{ secrets.NEUTRAL_HEART_BASEURI }}
+          MAX_PUBLIC: ${{ secrets.MAX_PUBLIC }}
+          PRICE_MATIC: ${{ secrets.PRICE_MATIC }}
+        run: |
+          npx hardhat run --network polygon scripts/deploy_hardhat.js

@@ -1,0 +1,7 @@
+(node:29173) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///workspaces/newlove/scripts/deploy_unified.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /workspaces/newlove/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+Deploying with: 0x59B8cfDA8B75f268213CfB6b46555841820EA7f0 using ethers.js
+NeutralHeart deployed to: 0x731799fd24B2B9ceCd513a1E2d91Cd1C4F565A62

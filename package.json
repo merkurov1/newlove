@@ -13,7 +13,12 @@
     "vercel:logs": "vercel logs --since 60m",
     "vercel:logs:grep": "vercel logs --since 60m | grep -E 'SANITIZE DIAG|Unsupported Server Component type|2153716801' -n -C 5",
     "check:metadata": "node scripts/check_metadata.js",
-    "test:attach-tags": "node scripts/test_attach_tags.js"
+    "test:attach-tags": "node scripts/test_attach_tags.js",
+    "compile:contracts": "npx hardhat compile",
+    "deploy:hardhat": "npx hardhat run --network polygon scripts/deploy_hardhat.js",
+    "mint:transfer": "npx hardhat run --network polygon scripts/mint_and_transfer.js",
+    "deploy:local": "node scripts/deploy_hardhat.js",
+    "mint:local": "node scripts/mint_and_transfer.js"
   },
   "dependencies": {
     "@atproto/api": "^0.17.0",

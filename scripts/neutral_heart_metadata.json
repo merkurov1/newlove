@@ -1,0 +1,47 @@
+[
+    {
+        "name": "Neutral Heart - Основной",
+        "description": "Neutral Heart — основной токен. Сердце, символ выбора.",
+        "image": "https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafybeihnx7kaue4ehbigi4koydoei43ojjykp2mhhh7xwx4qg3tntm5e5e",
+        "attributes": [
+            {
+                "trait_type": "Rarity",
+                "value": "Common"
+            },
+            {
+                "trait_type": "Edition",
+                "value": "Main"
+            }
+        ]
+    },
+    {
+        "name": "Neutral Heart - Ангелочек",
+        "description": "Ангелочек с сердцем — светлая вариация Neutral Heart.",
+        "image": "https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafkreid35oonhrww7kdtdsq353av62cwv4fe2yh2npnyqdqr7r7bfwukjy",
+        "attributes": [
+            {
+                "trait_type": "Rarity",
+                "value": "Uncommon"
+            },
+            {
+                "trait_type": "Edition",
+                "value": "Angel"
+            }
+        ]
+    },
+    {
+        "name": "Neutral Heart - Чертик",
+        "description": "Чертик с сердцем — тёмная вариация Neutral Heart.",
+        "image": "https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafkreicag47zt2us4hcq7dzs2unt4sm4jibno7qwuqggh6udmcfij3yhty",
+        "attributes": [
+            {
+                "trait_type": "Rarity",
+                "value": "Uncommon"
+            },
+            {
+                "trait_type": "Edition",
+                "value": "Devil"
+            }
+        ]
+    }
+]

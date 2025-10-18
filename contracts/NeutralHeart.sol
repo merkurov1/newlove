@@ -4,9 +4,9 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 contract NeutralHeart is ERC721, Ownable {
-    using ECDSA for bytes32;
 
     uint256 public currentId;
     uint256 public maxPublicSupply;
@@ -29,7 +29,7 @@ contract NeutralHeart is ERC721, Ownable {
         string memory symbol_,
         uint256 maxPublicSupply_,
         uint256 priceWei_
-    ) ERC721(name_, symbol_) {
+    ) ERC721(name_, symbol_) Ownable(msg.sender) {
         maxPublicSupply = maxPublicSupply_;
         priceWei = priceWei_;
         currentId = 1; // start token ids at 1
@@ -68,8 +68,10 @@ contract NeutralHeart is ERC721, Ownable {
         require(trustedSigner != address(0), "trusted signer not set");
         require(!hasClaimedOnChain[msg.sender], "already claimed on-chain");
 
-        bytes32 digest = keccak256(abi.encodePacked(address(this), block.chainid, msg.sender));
-        address signer = digest.toEthSignedMessageHash().recover(signature);
+    bytes32 digest = keccak256(abi.encodePacked(address(this), block.chainid, msg.sender));
+    // Use MessageHashUtils to compute the prefixed digest, then recover
+    bytes32 prefixed = MessageHashUtils.toEthSignedMessageHash(digest);
+    address signer = ECDSA.recover(prefixed, signature);
         require(signer == trustedSigner, "invalid signature");
 
         hasClaimedOnChain[msg.sender] = true;
