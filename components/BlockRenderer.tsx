@@ -62,7 +62,9 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
           case 'code':
             return <CodeBlock key={idx} block={block} />;
           case 'image':
-            const imageUrl = block.data.file?.url || block.data.url;
+            // Coerce any url-like values to plain strings to avoid passing
+            // non-plain objects (URL instances, File objects) into client props.
+            const imageUrl = String(block.data.file?.url || block.data.url || '');
             if (!imageUrl) return null;
 
             return (
@@ -70,7 +72,7 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
                 <div className="relative max-w-3xl mx-auto">
                   <SafeImage
                     src={imageUrl}
-                    alt={block.data.caption || 'Изображение статьи'}
+                    alt={String(block.data.caption || 'Изображение статьи')}
                     width={800}
                     height={600}
                     className="rounded shadow w-full h-auto object-cover"
@@ -79,7 +81,7 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
                   />
                 </div>
                 {block.data.caption && (
-                  <p className="text-sm text-gray-500 mt-2 text-center">{block.data.caption}</p>
+                  <p className="text-sm text-gray-500 mt-2 text-center">{String(block.data.caption)}</p>
                 )}
               </div>
             );
@@ -158,9 +160,11 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
           // Обратная совместимость с другими кастомными типами
           case 'gallery':
             if (block.type === 'gallery' && Array.isArray(block.data.images)) {
-              // block.data.images is sanitized by serializeForClient above
-              // @ts-ignore - images prop is provided; allow runtime check in GalleryGrid (client-side)
-              return <GalleryGrid key={idx} images={block.data.images} />;
+              // Pass images as a JSON string to the client component so the
+              // client receives only primitive values from the server.
+              const imagesJson = JSON.stringify(block.data.images || []);
+              // @ts-ignore - imagesJson prop is supported by GalleryGrid
+              return <GalleryGrid key={idx} imagesJson={imagesJson} />;
             }
             return null;
           default:
