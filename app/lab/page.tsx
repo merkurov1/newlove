@@ -64,6 +64,15 @@ const experiments = [
     status: 'Готово',
     href: '/lab/letters'
   }
+  ,
+  {
+    id: 'nft',
+    title: 'NFT / Mint',
+    description: 'Экспериментальная страница для минтинга NFT и интеграции Web3',
+    icon: '🖼️',
+    status: 'В работе',
+    href: '/nft'
+  }
 ];
 
 export default function LabPage() {
