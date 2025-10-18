@@ -25,30 +25,48 @@ export default async function LetterFullPage({ params }: Props) {
     const supabase = createClient(); // Обычный клиент
     const { data: { user } } = await supabase.auth.getUser(); // Получаем user
 
-    // If there's no viewer/session, redirect to login immediately to avoid
-    // creating service-role clients or making extra DB calls for unauthenticated users.
-    if (!user) {
-        const loginUrl = `/you/login?next=${encodeURIComponent(`/letters/${slug}/full`)}`;
-        redirect(loginUrl);
-    }
-
-    // Service-role клиент для чтения
-    const supabaseService = createClient({ useServiceRole: true });
+    // If user is authenticated, fetch the full letter using service-role.
+    // If guest, fetch a public minimal copy (teaser) via REST anon and render
+    // a prompt to login instead of redirecting.
     let letter: any = null;
+    let isOwnerOrAdmin = false;
 
-    try {
-        const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
-        if (error) console.error('Failed to load letter (service client)', error);
-        else letter = data || null;
-    } catch (e) {
-        console.error('Error fetching letter (service client)', e);
+    if (user) {
+        const supabaseService = createClient({ useServiceRole: true });
+        try {
+            const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
+            if (error) console.error('Failed to load letter (service client)', error);
+            else letter = data || null;
+        } catch (e) {
+            console.error('Error fetching letter (service client)', e);
+        }
+
+        if (!letter) return notFound();
+
+        isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
+        if (!letter.published && !isOwnerOrAdmin) return notFound();
+    } else {
+        // guest - fetch minimal public data via REST anon
+        try {
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+            const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
+            if (supabaseUrl && anonKey) {
+                const base = supabaseUrl.replace(/\/$/, '');
+                const select = encodeURIComponent('id,title,slug,published,publishedAt,createdAt,content');
+                const url = `${base}/rest/v1/letters?select=${select}&slug=eq.${encodeURIComponent(slug)}&limit=1`;
+                const res = await fetch(url, { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, Accept: 'application/json' } });
+                if (res.ok) {
+                    const pb = await res.json().catch(() => ([]));
+                    letter = Array.isArray(pb) && pb.length > 0 ? pb[0] : null;
+                }
+            }
+        } catch (e) {
+            console.error('Guest fallback REST fetch failed', e);
+        }
+        if (!letter) return notFound();
+        // ensure we only show teaser if unpublished
+        if (!letter.published) return notFound();
     }
-
-    if (!letter) return notFound();
-
-    // Эта проверка теперь будет работать
-    const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
-    if (!letter.published && !isOwnerOrAdmin) return notFound();
 
     // (user was already checked earlier and redirected if missing)
 
