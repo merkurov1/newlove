@@ -77,7 +77,31 @@ export async function GET(request: Request) {
 			if (!res.ok) {
 				const outDebug = buildSafeDebug(request, { restStatus: res.status, restBody: parsedBody, errors: [String(res.status)] });
 				console.error('letters REST error', res.status, parsedBody);
-				return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? outDebug : undefined }, { status: 500 });
+
+				// If anon REST is forbidden (401) or otherwise fails, attempt a
+				// server-side service-role query as a fallback so public archive
+				// remains available.
+				try {
+					const svc = createClient({ useServiceRole: true });
+					const { data: svcData, error: svcErr } = await svc
+						.from('letters')
+						.select('id,title,slug,published,publishedAt,createdAt,authorId')
+						.eq('published', true)
+						.order('publishedAt', { ascending: false })
+						.limit(100);
+					if (svcErr) {
+						console.error('letters service-role fallback error', svcErr);
+						const svcDebug = buildSafeDebug(request, { errors: [String(svcErr)], restStatus: res.status });
+						return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? svcDebug : undefined }, { status: 500 });
+					}
+					const letters = svcData || [];
+					const mergedDebug = includeDebugForRequest ? buildSafeDebug(request, { restStatus: res.status, restBody: { itemCount: Array.isArray(letters) ? letters.length : 0 }, errors: ['anon_rest_failed_used_service_role'] }) : undefined;
+					return NextResponse.json({ letters, debug: mergedDebug });
+				} catch (svcE) {
+					console.error('letters service-role fallback threw', svcE);
+					const svcDebug = buildSafeDebug(request, { errors: [String(svcE)], restStatus: res.status });
+					return NextResponse.json({ error: 'Failed to fetch letters', debug: includeDebugForRequest ? svcDebug : undefined }, { status: 500 });
+				}
 			}
 
 			// success - ensure we return an array of items only
