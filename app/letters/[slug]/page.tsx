@@ -6,6 +6,7 @@ import BlockRenderer from '@/components/BlockRenderer';
 import dynamic from 'next/dynamic';
 
 const LetterFullClient = dynamic(() => import('@/components/letters/LetterFullClient'), { ssr: false });
+const LetterCommentsClient = dynamic(() => import('@/components/letters/LetterCommentsClient'), { ssr: false });
 import { safeData } from '@/lib/safeSerialize';
 
 type Props = { params: { slug: string } };
@@ -85,7 +86,10 @@ export default async function LetterPage({ params }: Props) {
       </div>
 
       {/* Client will attempt to fetch and replace teaser with full content for authenticated users */}
-      <LetterFullClient slug={slug} initialTeaser={teaser} />
+  <LetterFullClient slug={slug} initialTeaser={teaser} />
+
+  {/* Comments (client only) */}
+  <LetterCommentsClient slug={slug} />
     </main>
   );
 }
