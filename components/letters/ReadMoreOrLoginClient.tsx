@@ -3,9 +3,12 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient as createBrowserClient } from '@/lib/supabase-browser';
+import ModernLoginModal from './ModernLoginModal';
 
 export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
     const [hasSession, setHasSession] = useState<boolean | null>(null);
+    const [modalOpen, setModalOpen] = useState(false);
+
     useEffect(() => {
         let mounted = true;
         async function check() {
@@ -33,12 +36,23 @@ export default function ReadMoreOrLoginClient({ slug }: { slug: string }) {
         );
     }
 
+    const handleOpen = () => {
+        if (typeof window !== 'undefined') {
+            try { localStorage.setItem('login_redirect_path', window.location.pathname + window.location.search); } catch (e) { }
+            try { window.dispatchEvent(new Event('newlove:close-mobile-menu')); } catch (e) { }
+        }
+        setModalOpen(true);
+    };
+
     return (
         <div className="flex gap-3">
             {hasSession ? (
                 <Link href={`/letters/${slug}/full`} className="px-4 py-2 bg-blue-600 text-white rounded">Читать дальше</Link>
             ) : (
-                <Link href="/you/login" className="px-4 py-2 border rounded">Войти</Link>
+                <>
+                    <button onClick={handleOpen} className="px-4 py-2 border rounded">Войти</button>
+                    {modalOpen && <ModernLoginModal onClose={() => setModalOpen(false)} />}
+                </>
             )}
         </div>
     );
