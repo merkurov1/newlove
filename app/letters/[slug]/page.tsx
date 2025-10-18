@@ -2,6 +2,9 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
+import dynamic from 'next/dynamic';
+
+const ReadMoreOrLoginClient = dynamic(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
 
@@ -84,12 +87,9 @@ export default async function LetterPage({ params }: Props) {
 
       <div className="mt-6">
         <p className="text-sm text-gray-600 mb-3">Для просмотра полного текста и комментариев перейдите на страницу с полным содержимым.</p>
-        <div className="flex gap-3">
-          {user ? (
-            <Link href={`/letters/${slug}/full`} className="px-4 py-2 bg-blue-600 text-white rounded">Читать дальше</Link>
-          ) : (
-            <Link href="/you/login" className="px-4 py-2 border rounded">Войти</Link>
-          )}
+        {/* Client component decides based on client session whether to show 'Читать дальше' */}
+        <div>
+          <ReadMoreOrLoginClient slug={slug} />
         </div>
       </div>
     </main>
