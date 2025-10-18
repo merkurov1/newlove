@@ -77,6 +77,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
           <Link href="/admin/articles/new" className="px-4 py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">✍️ Новая статья</Link>
           <Link href="/admin/projects/new" className="px-4 py-2 rounded bg-purple-600 text-white font-semibold hover:bg-purple-700 transition">🚀 Новый проект</Link>
           <Link href="/admin/letters/new" className="px-4 py-2 rounded bg-yellow-500 text-white font-semibold hover:bg-yellow-600 transition">💌 Новое письмо</Link>
+          <Link href="/admin/users" className="px-4 py-2 rounded bg-green-600 text-white font-semibold hover:bg-green-700 transition">👥 Пользователи</Link>
         </div>
       </div>
       <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
