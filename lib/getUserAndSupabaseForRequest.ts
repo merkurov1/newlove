@@ -12,65 +12,71 @@ export async function getUserAndSupabaseForRequest(req?: Request | null): Promis
     const res = await getUserAndSupabaseFromRequestInterop(req as any);
 
     // ----- ИСПРАВЛЕНИЕ ЗДЕСЬ -----
-    // Если старый метод отработал, НО НЕ НАШЕЛ 'user',
-    // мы НЕ возвращаем результат, а проваливаемся дальше
-    // в наш новый 'fallback' блок.
+    // Если старый метод отработал и НАШЕЛ 'user' - отлично, возвращаем.
     if (res && res.supabase && res.user) {
-        // Возвращаем, только если 'user' НАЙДЕН
         return { supabase: res.supabase, user: res.user, isServer: false };
     }
-    // Если res.user 'null', мы игнорируем 'res' и идем в 'catch' блок...
-
-  } catch (e) {
-    // ...либо если 'Interop' упал, мы тоже идем в 'fallback'
-  }
-
-  // 2. Fallback-блок (теперь он будет срабатывать)
-  try {
-    const srv = await import('./serverAuth');
-    const supabase = srv.getServerSupabaseClient({ useServiceRole: true });
     
-    // Пытаемся получить пользователя, используя Request (если он был передан)
-    if (req) {
-       try {
-         const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
-         const res = await getUserAndSupabaseFromRequestInterop(req as Request);
-         if (res && res.user) return { supabase, user: res.user, isServer: true };
-       } catch (e) { /* ignore */ }
+    // ЕСЛИ 'res' есть, НО 'user' в нем 'null' - это НЕ успех.
+    // Мы принудительно выбрасываем ошибку, чтобы
+    // 'catch' блок (Метод 2) мог сработать.
+    if (res && !res.user) {
+        throw new Error("Interop succeeded but found no user, forcing fallback.");
     }
-
-    // Если Request не помог, пытаемся собрать 'user' из next/headers
-    // (Это наш рабочий фикс)
-    try {
-        const { cookies } = await import('next/headers');
-        const cookieHeader = cookies()
-          .getAll()
-          .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
-          .join('; ');
-        const reqFromCookies = new Request('http://localhost', { headers: { cookie: cookieHeader } });
-        
-        const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
-        const res = await getUserAndSupabaseFromRequestInterop(reqFromCookies as any);
-        if (res && res.user) return { supabase, user: res.user, isServer: true };
-    } catch (e) {
-        // ignore и используем 'null'
-    }
-
-    // Если ничего не помогло, возвращаем 'null'
-    return { supabase, user: null, isServer: true } as SupaRequestResult;
+    
+    // Если 'res' вообще не пришел, тоже выбрасываем ошибку.
+    throw new Error("Interop failed, forcing fallback.");
 
   } catch (e) {
-    // Emergency mock fallback
+    // ----- КОНЕЦ ИСПРАВЛЕНИЯ -----
+    
+    // 2. Fallback-блок (теперь он будет срабатывать всегда, когда Метод 1 не нашел user)
     try {
-      if (typeof process !== 'undefined' && process.env && process.env.EMERGENCY_SUPABASE_MOCK === 'true') {
-        const { createMockSupabase } = await import('./mockSupabaseClient');
-        const mock = createMockSupabase();
-        return { supabase: mock as any, isServer: false };
+      const srv = await import('./serverAuth');
+      const supabase = srv.getServerSupabaseClient({ useServiceRole: true });
+      
+      // Пытаемся получить пользователя, используя Request (если он был передан)
+      if (req) {
+         try {
+           const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
+           const res = await getUserAndSupabaseFromRequestInterop(req as Request);
+           if (res && res.user) return { supabase, user: res.user, isServer: true };
+         } catch (e) { /* ignore */ }
       }
-    } catch (e2) {
-      // ignore
+
+      // Если Request не помог, пытаемся собрать 'user' из next/headers
+      // (Это наш рабочий фикс)
+      try {
+          const { cookies } = await import('next/headers');
+          const cookieHeader = cookies()
+            .getAll()
+            .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
+            .join('; ');
+          const reqFromCookies = new Request('http://localhost', { headers: { cookie: cookieHeader } });
+          
+          const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
+          const res = await getUserAndSupabaseFromRequestInterop(reqFromCookies as any);
+          if (res && res.user) return { supabase, user: res.user, isServer: true };
+      } catch (e) {
+          // ignore и используем 'null'
+      }
+
+      // Если ничего не помогло, возвращаем 'null'
+      return { supabase, user: null, isServer: true } as SupaRequestResult;
+
+    } catch (eFallback) {
+      // Emergency mock fallback
+      try {
+        if (typeof process !== 'undefined' && process.env && process.env.EMERGENCY_SUPABASE_MOCK === 'true') {
+          const { createMockSupabase } = await import('./mockSupabaseClient');
+          const mock = createMockSupabase();
+          return { supabase: mock as any, isServer: false };
+        }
+      } catch (e2) {
+        // ignore
+      }
+      return { supabase: null, isServer: false };
     }
-    return { supabase: null, isServer: false };
   }
 }
 
