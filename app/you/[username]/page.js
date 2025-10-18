@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Image from 'next/image';
+import { cookies } from 'next/headers';
 import { Suspense } from 'react';
 import SubscriptionToggle from '@/components/profile/SubscriptionToggle';
 import { getFirstImage } from '@/lib/contentUtils';
@@ -26,7 +27,11 @@ function FallbackAvatar({ name }) {
 // --- 1. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ПРОФИЛЯ ---
 // Находит пользователя по username и подгружает его контент
 async function getUserProfile(username) {
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  // Build a Request that preserves cookies from the current App Router request
+  // so getUserAndSupabaseForRequest can validate the session server-side.
+  const cookieStore = cookies();
+  const cookieHeader = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost', { headers: { cookie: cookieHeader } });
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const ctx = await getUserAndSupabaseForRequest(globalReq) || {};
   const supabase = ctx.supabase;
@@ -116,7 +121,10 @@ async function ProfileContent({ username }) {
   if (!user) return notFound();
 
   // Determine whether current request belongs to the profile owner to show edit controls
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  // Construct a cookie-aware Request to allow server auth helpers to read the session.
+  const cookieStore = cookies();
+  const cookieHeader = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
+  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost', { headers: { cookie: cookieHeader } });
   let viewerIsOwner = false;
   try {
     const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
