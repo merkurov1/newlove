@@ -1,43 +1,44 @@
 // ===== ФАЙЛ: app/api/letters/full/[slug]/route.ts =====
-// (ПОЛНЫЙ КОД С ИСПРАВЛЕНИЯМИ)
+// (ПОЛНЫЙ КОД С ОТКАТОМ К СТАРЫМ ХЕЛПЕРАМ)
 
-// НОВЫЕ ИМПОРТЫ
-import { createServerClient } from '@/lib/supabase/server';
-import { cookies } from 'next/headers';
+import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
+
+// ----- ИСПРАВЛЕНИЕ: Добавляем 'NextResponse' для корректных ответов -----
 import { NextResponse } from 'next/server';
 
-// ----- ВОТ ИСПРАВЛЕНИЕ -----
-// Эта строка заставит API-маршрут всегда рендериться динамически
+// ----- ИСПРАВЛЕНИЕ: Делаем маршрут динамическим -----
 export const dynamic = 'force-dynamic';
-// ------------------------------
 
 export async function GET(req: Request, { params }: { params: { slug: string } }) {
     const slug = params.slug;
     const url = new URL(req.url);
     const wantDebug = url.searchParams.get('_debug') === '1';
 
-    // Новая логика
-    const cookieStore = cookies();
-    const supabase = createServerClient(cookieStore);
-    const { data: { user: viewer } } = await supabase.auth.getUser();
-    
-    // Service-role клиент
-    const supabaseService = createServerClient(cookieStore, { useServiceRole: true });
+    // ----- ИСПРАВЛЕНИЕ: Используем тот же getUserAndSupabaseForRequest, что и страница -----
+    let viewer = null;
+    try {
+        const ctx = await getUserAndSupabaseForRequest(req) || {};
+        viewer = ctx.user || null;
+    } catch (e) {
+        // ignore - viewer remains null
+    }
 
     try {
-        const { data: letter, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
+        const svc = getServerSupabaseClient({ useServiceRole: true });
+        const { data: letter, error } = await svc.from('letters').select('*').eq('slug', slug).maybeSingle();
         
         if (error || !letter) {
             return NextResponse.json({ error: 'not_found' }, { status: 404 });
         }
 
-        // Проверка на владельца/админа
+        // Эта проверка теперь будет работать
         const isOwnerOrAdmin = viewer && (viewer.id === letter.authorId || String((viewer.user_metadata || {}).role || viewer.role || '').toUpperCase() === 'ADMIN');
         if (!letter.published && !isOwnerOrAdmin) {
             return NextResponse.json({ error: 'not_found' }, { status: 404 });
         }
 
-        // Эта проверка теперь будет работать корректно
+        // Эта проверка теперь будет работать
         if (!viewer && !isOwnerOrAdmin) {
             return NextResponse.json({ error: 'unauthenticated', debug: wantDebug ? { viewer: null, isOwnerOrAdmin } : undefined }, { status: 401 });
         }
