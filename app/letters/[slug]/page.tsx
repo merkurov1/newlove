@@ -3,6 +3,9 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
+import dynamic from 'next/dynamic';
+
+const LetterFullClient = dynamic(() => import('@/components/letters/LetterFullClient'), { ssr: false });
 import { safeData } from '@/lib/safeSerialize';
 
 type Props = { params: { slug: string } };
@@ -77,15 +80,12 @@ export default async function LetterPage({ params }: Props) {
     <main className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-4">{letter.title}</h1>
       <div className="prose mb-6">
+        {/* Server-rendered teaser or full content (to be hydrated client-side) */}
         {toRender.length > 0 ? <BlockRenderer blocks={toRender} /> : <p className="italic text-gray-500">Содержимое отсутствует.</p>}
       </div>
 
-      {!showFull && (
-        <div className="p-4 bg-yellow-50 border border-yellow-100 rounded">
-          <p className="mb-2">Полный текст письма доступен только зарегистрированным пользователям.</p>
-          <a href={`/login?next=${encodeURIComponent(`/letters/${slug}`)}`} className="text-blue-600 hover:underline">Войти или зарегистрироваться →</a>
-        </div>
-      )}
+      {/* Client will attempt to fetch and replace teaser with full content for authenticated users */}
+      <LetterFullClient slug={slug} initialTeaser={teaser} />
     </main>
   );
 }
