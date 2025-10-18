@@ -139,14 +139,18 @@ export default function NFTLabPageClient() {
 
             <div className="mt-4 p-4 bg-yellow-50 border-l-4 border-yellow-400">
                 <h3 className="font-semibold">Недостающая информация (пожалуйста, предоставьте позже)</h3>
-                <ul className="mt-2 list-disc pl-5 text-sm text-neutral-700">
-                    <li>Адрес контракта (если уже задеплоен) — установите в NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS</li>
-                    <li>Приватный ключ сервера для подписи ваучеров (ENV: SIGNER_PRIVATE_KEY)</li>
-                    <li>POLYGON RPC URL (ENV: POLYGON_RPC_URL) и POLYGONSCAN API KEY (для верификации/деплоя)</li>
-                    <li>Список изображений/медиаконтента для токенов (IPFS/URL) — baseURI или CID</li>
-                    <li>Таблица Supabase `subscribers` с полями: wallet_address (text), has_claimed (boolean)</li>
-                    <li>Адреса админ-кошельков (для withdraw и trustedSigner), если есть</li>
-                </ul>
+                    <ul className="mt-2 list-disc pl-5 text-sm text-neutral-700">
+                        <li>Run DB migrations: migrations/2025-10-18_add_letter_comments.sql and migrations/2025-10-18_create_subscribers_table.sql (run in Supabase SQL Editor)</li>
+                        <li>Apply RLS policies for comments and subscribers (use DROP POLICY IF EXISTS; CREATE POLICY ...)</li>
+                        <li>Set Vercel env vars: SIGNER_PRIVATE_KEY (server-only), SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS, NEXT_PUBLIC_CHAIN_ID, POLYGON_RPC_URL, POLYGONSCAN_API_KEY, NOREPLY_EMAIL</li>
+                        <li>Deploy contract: run scripts/deploy.js with Hardhat and set NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS</li>
+                        <li>Set trusted signer on-chain: call setTrustedSigner(&lt;address derived from SIGNER_PRIVATE_KEY&gt;) as contract owner</li>
+                        <li>Seed subscribers table with eligible wallet addresses (has_claimed=false)</li>
+                        <li>Upload token assets and set baseURI via setBaseURI()</li>
+                        <li>Install frontend web3 deps (wagmi, viem, @supabase/supabase-js) and wire providers at app root</li>
+                        <li>End-to-end testing: public paid mint and subscriber-claim flow on testnet; verify DB and on-chain states</li>
+                        <li>Optional hardening: add expiry/nonce to vouchers and on-chain verification in /api/mark-claimed</li>
+                    </ul>
             </div>
 
             <div className="mt-6 space-y-4">
