@@ -37,8 +37,37 @@ export function getOnboard() {
 
 export async function connectWithOnboard() {
     const ob = getOnboard();
-    const connected = await ob.connectWallets();
-    if (!connected || connected.length === 0) return null;
-    // connected[0] has shape { label, accounts: [{ address }], provider }
-    return connected[0];
+    // web3-onboard has varied APIs across versions: try several possibilities
+    // 1) connectWallet() -> returns array
+    if (typeof ob.connectWallet === 'function') {
+        try {
+            const wallets = await ob.connectWallet();
+            if (wallets && wallets.length > 0) return wallets[0];
+        } catch (e) {
+            // ignore and try next
+        }
+    }
+
+    // 2) connectWallets() -> older API
+    if (typeof ob.connectWallets === 'function') {
+        try {
+            const wallets = await ob.connectWallets();
+            if (wallets && wallets.length > 0) return wallets[0];
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    // 3) connect() generic
+    if (typeof ob.connect === 'function') {
+        try {
+            const res = await ob.connect();
+            if (Array.isArray(res) && res.length > 0) return res[0];
+            if (res && res.wallet) return res.wallet;
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    return null;
 }
