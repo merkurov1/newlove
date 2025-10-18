@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { formatEther } from "ethers";
 import { CONTRACT_ADDRESS, NFT_ABI } from "./contract";
+import { getOnboard, connectWithOnboard } from "../../lib/onboardClient";
 
 export default function NFTLabPageClient() {
     // wagmi provider is not guaranteed to be present in this app.
@@ -14,20 +15,17 @@ export default function NFTLabPageClient() {
 
     // Local connect helper (use injected provider directly)
     async function connectWallet() {
-        if (!(window as any).ethereum) {
-            setStatus("Пожалуйста, установите и подключите кошелёк (например MetaMask)");
-            return;
-        }
         try {
-            const provider = new (ethers as any).BrowserProvider((window as any).ethereum);
-            await provider.send("eth_requestAccounts", []);
-            const signer = provider.getSigner();
-            try {
-                const a = await signer.getAddress();
-                setAddress(a);
+            const onboard = getOnboard();
+            const selected = await connectWithOnboard();
+            if (!selected) {
+                setStatus("Не удалось подключить кошелёк");
+                return;
+            }
+            const account = selected.accounts && selected.accounts[0];
+            if (account && account.address) {
+                setAddress(account.address);
                 setIsConnected(true);
-            } catch (e) {
-                // signer may not be available immediately — ignore
             }
             setStatus("Кошелёк подключён");
         } catch (err: any) {
