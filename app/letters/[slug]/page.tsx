@@ -1,5 +1,5 @@
 // ===== ФАЙЛ: app/letters/[slug]/page.tsx =====
-// (ПОЛНЫЙ КОД С ИСПРАВЛЕНИЕМ)
+// (ПОЛНЫЙ КОД С ОТКАТОМ К СТАРОМУ ХЕЛПЕРУ)
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -11,39 +11,34 @@ import dynamicImport from 'next/dynamic'; // Было 'import dynamic ...'
 // Используем 'dynamicImport' для загрузки компонента
 const ReadMoreOrLoginClient = dynamicImport(() => import('@/components/letters/ReadMoreOrLoginClient'), { ssr: false });
 
-import { cookies } from 'next/headers';
+// ----- ИСПРАВЛЕНИЕ 2: УДАЛЯЕМ 'cookies' и 'createServerClient' -----
+// import { cookies } from 'next/headers'; 
+// import { createServerClient } from '@/lib/supabase/server'; 
+
+// ----- ИСПРАВЛЕНИЕ 3: ИМПОРТИРУЕМ СТАРЫЙ, РАБОЧИЙ ХЕЛПЕР -----
+import { getServerSupabaseClient } from '@/lib/serverAuth'; // <-- ВОТ ОН
+
 import BlockRenderer from '@/components/BlockRenderer';
 import serializeForClient from '@/lib/serializeForClient';
-// НОВЫЙ ИМПОРТ из наших предыдущих шагов
-import { createServerClient } from '@/lib/supabase/server'; 
 
-// ----- ИСПРАВЛЕНИЕ 2: 'export const dynamic' теперь не конфликтует -----
-// Эта строка заставит страницу всегда рендериться динамически
+// Мы по-прежнему оставляем это, чтобы страница не кешировалась
 export const dynamic = 'force-dynamic';
 
 type Props = { params: { slug: string } };
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const slug = params.slug;
-  // Minimal metadata while we fetch content
   return sanitizeMetadata({ title: `Письмо — ${slug}` });
 }
 
 export default async function LetterPage({ params }: Props) {
   const { slug } = params;
 
-  // Новая логика получения пользователя и Supabase
-  const cookieStore = cookies();
-  const supabase = createServerClient(cookieStore);
-  // Эта функция теперь будет выполняться при каждом запросе
-  const { data: { user } } = await supabase.auth.getUser();
-
-  // Используем service-role клиент для надежного чтения данных
-  const supabaseService = createServerClient(cookieStore, { useServiceRole: true });
+  // ----- ИСПРАВЛЕНИЕ 4: Используем СТАРЫЙ хелпер для загрузки письма -----
   let letter: any = null;
-  
   try {
-    const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
+    const svc = getServerSupabaseClient({ useServiceRole: true }); // <-- СТАРЫЙ ХЕЛПЕР
+    const { data, error } = await svc.from('letters').select('*').eq('slug', slug).maybeSingle();
     if (error) {
       console.error('Failed to load letter (service client)', error);
     } else {
@@ -53,15 +48,18 @@ export default async function LetterPage({ params }: Props) {
     console.error('Error fetching letter (service client)', e);
   }
 
-  if (!letter) return notFound();
+  if (!letter) return notFound(); // <-- Это твой 404
 
-  // Эта проверка теперь будет работать корректно, т.к. 'user' будет актуальным
-  const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
+  // ----- ИСПРАВЛЕНИЕ 5: ВРЕМЕННО УБИРАЕМ ПРОВЕРКУ НА АДМИНА -----
+  // (Потому что старый хелпер не получает 'user' так же легко)
+  // const isOwnerOrAdmin = user && (user.id === letter.authorId || ...);
   
-  // Эта проверка была причиной 404 для тебя
-  if (!letter.published && !isOwnerOrAdmin) return notFound();
+  // Оставляем только проверку на 'published'.
+  // Архив все равно отдает только опубликованные письма.
+  if (!letter.published) return notFound();
 
-  // Parse content into blocks (we'll use a teaser for unauthenticated viewers)
+  // ... остальной код файла без изменений ...
+
   let parsedBlocks: any[] = [];
   try {
     const raw = typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content);
@@ -71,8 +69,6 @@ export default async function LetterPage({ params }: Props) {
     console.error('Failed to parse letter content', e, letter.content);
   }
 
-  // Use centralized serializer to produce plain JSON objects safe for
-  // passing into Client Components.
   const safeParsed = serializeForClient(parsedBlocks || []) || [];
   const teaser = (safeParsed || []).slice(0, 1);
   const toRender = teaser;
@@ -89,7 +85,6 @@ export default async function LetterPage({ params }: Props) {
       <div className="mt-6">
         <p className="text-sm text-gray-600 mb-3">Для просмотра полного текста и комментариев перейдите на страницу с полным содержимым.</p>
   
-        {/* Client component decides based on client session whether to show 'Читать дальше' */}
         <div>
           <ReadMoreOrLoginClient slug={slug} />
         </div>
