@@ -20,15 +20,15 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
         const { data: letter, error: letterErr } = await svc.from('letters').select('id').eq('slug', slug).maybeSingle();
         if (letterErr || !letter) return new Response(JSON.stringify({ comments: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
-    // Read comments table
-    let comments: Array<any> = [];
-    const { data: rows, error } = await svc.from('letter_comments').select('id,content,created_at,user_id,author_display').eq('letter_id', letter.id).order('created_at', { ascending: true });
-    if (!error && Array.isArray(rows)) comments = rows;
+        // Read comments table
+        let comments: Array<any> = [];
+        const { data: rows, error } = await svc.from('letter_comments').select('id,content,created_at,user_id,author_display').eq('letter_id', letter.id).order('created_at', { ascending: true });
+        if (!error && Array.isArray(rows)) comments = rows;
 
-    const payload: any = { comments };
-    if (wantDebug) payload.debug = { viewerId: user.id, viewerRole: user.role || null, letterId: letter.id };
+        const payload: any = { comments };
+        if (wantDebug) payload.debug = { viewerId: user.id, viewerRole: user.role || null, letterId: letter.id };
 
-    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (e) {
         return new Response(JSON.stringify({ comments: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
