@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 
-export default function LetterCommentsClient({ slug }: { slug: string }) {
+export default function LetterCommentsClient({ slug }: { slug?: string }) {
     const [comments, setComments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -17,6 +17,14 @@ export default function LetterCommentsClient({ slug }: { slug: string }) {
         async function load() {
             setLoading(true);
             try {
+                // derive slug from window location if not provided
+                let theSlug = slug;
+                if (!theSlug && typeof window !== 'undefined') {
+                    const parts = window.location.pathname.split('/').filter(Boolean);
+                    // expect /letters/:slug or /letters/:slug/full
+                    const idx = parts.indexOf('letters');
+                    if (idx >= 0 && parts.length > idx + 1) theSlug = parts[idx + 1];
+                }
                 // Check local client session first; if not authenticated, avoid
                 // hitting the API and show the login prompt.
                 const { data } = await supabase.auth.getSession();
@@ -30,7 +38,11 @@ export default function LetterCommentsClient({ slug }: { slug: string }) {
                 }
                 setHasSession(true);
 
-                const res = await fetch(`/api/letters/${encodeURIComponent(slug)}/comments`, { credentials: 'same-origin' });
+                if (!theSlug) {
+                    setError('missing_slug');
+                    return;
+                }
+                const res = await fetch(`/api/letters/${encodeURIComponent(theSlug)}/comments`, { credentials: 'same-origin' });
                 if (res.status === 401) {
                     if (mounted) {
                         setComments([]);
@@ -66,7 +78,19 @@ export default function LetterCommentsClient({ slug }: { slug: string }) {
 
             const optimistic = { id: `tmp-${Date.now()}`, content: newContent, created_at: new Date().toISOString(), author_display: 'Вы' };
             setComments((c) => [...c, optimistic]);
-            const res = await fetch(`/api/letters/${encodeURIComponent(slug)}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: newContent }), credentials: 'same-origin' });
+            // derive slug if missing
+            let postSlug = slug;
+            if (!postSlug && typeof window !== 'undefined') {
+                const parts = window.location.pathname.split('/').filter(Boolean);
+                const idx = parts.indexOf('letters');
+                if (idx >= 0 && parts.length > idx + 1) postSlug = parts[idx + 1];
+            }
+            if (!postSlug) {
+                setError('missing_slug');
+                setPosting(false);
+                return;
+            }
+            const res = await fetch(`/api/letters/${encodeURIComponent(postSlug)}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: newContent }), credentials: 'same-origin' });
             const json = await res.json();
             if (json && json.comment) {
                 setComments((c) => c.map((it) => (it.id === optimistic.id ? json.comment : it)));
