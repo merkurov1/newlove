@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound, redirect } from 'next/navigation';
 import ReadMoreOrLoginClient from '@/components/letters/ReadMoreOrLoginClient';
+import { parseRichTextContent } from '@/lib/contentParser';
 
 interface PageProps {
   params: Promise<{
@@ -33,8 +34,11 @@ export default async function LetterPreviewPage({ params }: PageProps) {
   }
 
   const letterAuthor = Array.isArray(letter.User) ? letter.User[0] : letter.User;
-  const previewContent = letter.content?.slice(0, 300) || '';
-  const hasMore = (letter.content?.length || 0) > 300;
+  
+  // Парсим richText контент
+  const plainContent = parseRichTextContent(letter.content || '');
+  const previewContent = plainContent.slice(0, 300);
+  const hasMore = plainContent.length > 300;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
@@ -58,7 +62,7 @@ export default async function LetterPreviewPage({ params }: PageProps) {
           </header>
 
           <div className="prose prose-lg max-w-none">
-            <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+            <div className="text-gray-700 leading-relaxed">
               {previewContent}
               {hasMore && '...'}
             </div>
