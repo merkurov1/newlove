@@ -576,7 +576,8 @@ export async function deleteLetter(formData) {
       try { (await import('@sentry/nextjs')).captureException(error); } catch (e) { }
 
       if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        throw new Error('Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server.');
+        console.warn('Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server; returning error to caller.');
+        return { status: 'error', message: 'Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server.' };
       }
 
       try {
@@ -585,23 +586,21 @@ export async function deleteLetter(formData) {
         if (retry.error) {
           console.error('Retry with service role failed:', retry.error);
           try { (await import('@sentry/nextjs')).captureException(retry.error); } catch (e) { }
-          throw new Error('Ошибка при удалении письма: permission denied for table letters.\n' +
-            'Убедитесь, что сервисная роль имеет права на таблицу `letters`.\n' +
-            'Рекомендация: выполните `sql/ensure_service_role_grants.sql` в Supabase SQL Editor (или вручную выдайте соответствующие права).');
+          return { status: 'error', message: 'Ошибка при удалении письма: permission denied for table letters. Убедитесь, что сервисная роль имеет права на таблицу `letters`. Рекомендация: выполните sql/ensure_service_role_grants.sql в Supabase SQL Editor (или вручную выдайте соответствующие права).', details: retry.error };
         }
         // success via retry
         error = null;
       } catch (e) {
         console.error('Retry with service role threw:', e);
         try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) { }
-        throw new Error('Не удалось удалить письмо: ' + (e?.message || String(e)) + '\nПроверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql');
+        return { status: 'error', message: 'Не удалось удалить письмо: ' + (e?.message || String(e)) + '. Проверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql', details: e };
       }
     }
 
     if (error) {
       console.error('Supabase delete letter error:', error);
       try { (await import('@sentry/nextjs')).captureException(error); } catch (e) { }
-      throw new Error('Ошибка при удалении письма: ' + (error.message || String(error)) + '\nЕсли это ошибка прав (42501), убедитесь в настройке сервисной роли.');
+      return { status: 'error', message: 'Ошибка при удалении письма: ' + (error.message || String(error)) + '. Если это ошибка прав (42501), убедитесь в настройке сервисной роли.', details: error };
     }
 
     revalidatePath('/admin/letters');

@@ -1,15 +1,13 @@
 // ===== ФАЙЛ: app/letters/[slug]/full/page.tsx =====
-// (ВОЗВРАЩАЕМ НОВЫЙ ХЕЛПЕР)
+// (ВОЗВРАЩАЕМ ОРИГИНАЛЬНЫЙ КОД)
 
 import { notFound, redirect } from 'next/navigation';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { cookies } from 'next/headers';
 import BlockRenderer from '@/components/BlockRenderer';
-import dynamicImport from 'next/dynamic'; // <-- Переименованный импорт
+import dynamicImport from 'next/dynamic';
 import serializeForClient from '@/lib/serializeForClient';
-
-// ----- ВОЗВРАЩАЕМ НОВЫЙ ХЕЛПЕР -----
-import { createServerClient } from '@/lib/supabase/server';
 
 const LetterCommentsClient = dynamicImport(() => import('@/components/letters/LetterCommentsClient'), { ssr: false });
 type Props = { params: { slug: string } };
@@ -21,20 +19,31 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
 export default async function LetterFullPage({ params }: Props) {
     const { slug } = params;
+    
+    let req: Request | null = (globalThis && (globalThis as any).request) || null;
+    if (!req) {
+        const cookieHeader = cookies()
+            .getAll()
+            .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+            .join('; ');
+        req = new Request('http://localhost', { headers: { cookie: cookieHeader } });
+    }
 
-    // ----- ВОЗVРАЩАЕМ НОВУЮ ЛОГИКУ -----
-    const cookieStore = cookies();
-    const supabase = createServerClient(cookieStore); // Обычный клиент
-    const { data: { user } } = await supabase.auth.getUser(); // Получаем user
-
-    // Service-role клиент для чтения
-    const supabaseService = createServerClient(cookieStore, { useServiceRole: true });
+    // Этот хелпер мы починили (Файл 1)
+    const ctx = await getUserAndSupabaseForRequest(req) || {};
+    const { user } = ctx as any;
+    
+    // Use service-role client for reliable server reads
     let letter: any = null;
-
     try {
-        const { data, error } = await supabaseService.from('letters').select('*').eq('slug', slug).maybeSingle();
-        if (error) console.error('Failed to load letter (service client)', error);
-        else letter = data || null;
+        const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+        const svc = getServerSupabaseClient({ useServiceRole: true });
+        const { data, error } = await svc.from('letters').select('*').eq('slug', slug).maybeSingle();
+        if (error) {
+            console.error('Failed to load letter (service client)', error);
+        } else {
+            letter = data || null;
+        }
     } catch (e) {
         console.error('Error fetching letter (service client)', e);
     }
@@ -43,11 +52,9 @@ export default async function LetterFullPage({ params }: Props) {
 
     // Эта проверка теперь будет работать
     const isOwnerOrAdmin = user && (user.id === letter.authorId || String((user.user_metadata || {}).role || user.role || '').toUpperCase() === 'ADMIN');
-    
-    // Это была причина 404 - теперь 'isOwnerOrAdmin' будет true
     if (!letter.published && !isOwnerOrAdmin) return notFound();
 
-    // Эта проверка (на 'user') теперь тоже будет работать
+    // Эта проверка теперь будет работать
     if (!user) {
         const loginUrl = `/you/login?next=${encodeURIComponent(`/letters/${slug}/full`)}`;
         redirect(loginUrl);
@@ -62,7 +69,7 @@ export default async function LetterFullPage({ params }: Props) {
     } catch (e) {
         console.error('Failed to parse letter content', e, letter.content);
     }
-
+    
     const safeParsed = serializeForClient(parsedBlocks || []) || [];
 
     return (
@@ -77,4 +84,4 @@ export default async function LetterFullPage({ params }: Props) {
     );
 }
 
-export const dynamic = 'force-dynamic'; // <-- Делаем динамической
+export const dynamic = 'force-dynamic';
