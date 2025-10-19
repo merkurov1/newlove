@@ -209,18 +209,18 @@ export default function NFTLabPageClient() {
         try {
             // Проверка наличия токена у пользователя
             const eth = (window as any).ethereum;
-            const provider = new (ethers as any).BrowserProvider(eth as any);
-            const signerLocal = await provider.getSigner();
-            const userAddress = await signerLocal.getAddress();
-            const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
+            const providerCheck = new (ethers as any).BrowserProvider(eth as any);
+            const signerCheck = await providerCheck.getSigner();
+            const userAddress = await signerCheck.getAddress();
+            const contractCheck = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, providerCheck);
             let alreadyHasToken = false;
             try {
                 // Используем новый метод tokensOfOwner, если доступен
-                if (contract.tokensOfOwner) {
-                    const tokens = await contract.tokensOfOwner(userAddress);
+                if (contractCheck.tokensOfOwner) {
+                    const tokens = await contractCheck.tokensOfOwner(userAddress);
                     alreadyHasToken = tokens && tokens.length > 0;
                 } else {
-                    const balance = await contract.balanceOf(userAddress);
+                    const balance = await contractCheck.balanceOf(userAddress);
                     alreadyHasToken = Number(balance) > 0;
                 }
             } catch (e) {
@@ -240,7 +240,7 @@ export default function NFTLabPageClient() {
                 rawProvider = null;
             }
             if (!rawProvider) rawProvider = (window as any).ethereum;
-            const provider = new (ethers as any).BrowserProvider(rawProvider as any, 'any');
+            const provider = new (ethers as any).BrowserProvider(rawProvider as any, 'any'); // main provider for mint
             try { console.debug('[NFT] handlePublicMint rawProvider:', rawProvider); } catch (e) { }
             try { const net = await provider.getNetwork(); console.debug('[NFT] handlePublicMint provider network:', net); pushDebug('provider_network', net); } catch (e) { pushDebug('provider_network_error', String(e)); }
 
@@ -269,9 +269,9 @@ export default function NFTLabPageClient() {
             }
             // request accounts (will be a no-op if already connected/approved)
             try { await provider.send("eth_requestAccounts", []); } catch (e) { }
-            const signerLocal = await provider.getSigner();
+            const signerLocalMint = await provider.getSigner();
             try {
-                const a = await signerLocal.getAddress();
+                const a = await signerLocalMint.getAddress();
                 if (a) {
                     setAddress(a);
                     setIsConnected(true);
@@ -280,7 +280,7 @@ export default function NFTLabPageClient() {
             } catch (e) {
                 pushDebug('signer_error', String(e));
             }
-            const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signerLocal);
+            const contractMint = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signerLocalMint);
             // check contract code presence
             try {
                 const code = await provider.send('eth_getCode', [CONTRACT_ADDRESS, 'latest']);
@@ -294,13 +294,13 @@ export default function NFTLabPageClient() {
             } catch (e) {
                 pushDebug('eth_getCode_error', String(e));
             }
-            const price = await contract.priceWei();
+            const price = await contractMint.priceWei();
             // ethers v6 returns bigint for uint256; guard against BigNumber-like objects
             const priceBigInt = typeof price === 'bigint' ? price : BigInt(price);
             const total = priceBigInt * BigInt(qty);
             // Some providers or ethers versions expect hex string for value; send hex for maximum compatibility
             const totalHex = '0x' + total.toString(16);
-            const tx = await contract.publicMint(qty, { value: totalHex });
+            const tx = await contractMint.publicMint(qty, { value: totalHex });
             setStatus("Транзакция отправлена, ожидаю подтверждения...");
             const rec = await tx.wait();
             setStatus("Успех! NFT куплен. Теперь вы увидите ваш нейтральный токен — выберите образ отдельно, когда будете готовы.");
@@ -311,7 +311,7 @@ export default function NFTLabPageClient() {
                 try {
                     const transferTopic = ethers.id('Transfer(address,address,uint256)');
                     const ids: number[] = [];
-                    const normalizedTo = (await signerLocal.getAddress()).toLowerCase();
+                    const normalizedTo = (await signerLocalMint.getAddress()).toLowerCase();
                     for (const l of (rec.logs || [])) {
                         if (!l || !l.topics) continue;
                         if (l.topics[0] !== transferTopic) continue;

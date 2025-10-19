@@ -1,7 +1,6 @@
 {
   "name": "newlove - Codespace [rebuild]",
   // Custom signal to force Codespaces/devcontainer UI to prompt for rebuild when this file changes.
-  "rebuildSignal": "2025-10-19T00:00:00Z",
   // Use the local Dockerfile so the container is built from the project's
   // Dockerfile which ensures the 'vscode' user is present. The previous
   // `image` pointed to an upstream variant that doesn't include the
