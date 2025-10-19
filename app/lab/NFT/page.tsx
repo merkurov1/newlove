@@ -235,7 +235,9 @@ export default function NFTLabPageClient() {
             // ethers v6 returns bigint for uint256; guard against BigNumber-like objects
             const priceBigInt = typeof price === 'bigint' ? price : BigInt(price);
             const total = priceBigInt * BigInt(qty);
-            const tx = await contract.publicMint(qty, { value: total });
+            // Some providers or ethers versions expect hex string for value; send hex for maximum compatibility
+            const totalHex = '0x' + total.toString(16);
+            const tx = await contract.publicMint(qty, { value: totalHex });
             setStatus("Транзакция отправлена, ожидаю подтверждения...");
             await tx.wait();
             setStatus("Успех! NFT куплен. Теперь вы можете выбрать образ — Ангел или Демон.");
