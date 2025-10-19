@@ -34,6 +34,32 @@ export default async function LettersPage({ searchParams }: Props) {
     }
   }
 
+  // Fetch published letters server-side to provide initial data to the client
+  let initialLetters: any[] = [];
+  try {
+    const supabase = createClient({ useServiceRole: true });
+    const { data: lettersData, error } = await supabase
+      .from('letters')
+      .select('id, title, slug, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(id, name, email)')
+      .eq('published', true)
+      .order('publishedAt', { ascending: false })
+      .limit(100);
+    if (!error && Array.isArray(lettersData)) {
+      initialLetters = lettersData.map((l: any) => ({
+        id: l.id,
+        title: l.title,
+        slug: l.slug,
+        publishedAt: l.publishedAt,
+        createdAt: l.createdAt,
+        author: { name: Array.isArray(l.User) ? l.User[0]?.name : l.User?.name }
+      }));
+    } else if (error) {
+      console.error('Server initial letters fetch error', error);
+    }
+  } catch (e) {
+    console.error('Server initial letters fetch unexpected error', e);
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-100 py-8 px-2">
       <div className="max-w-5xl mx-auto">
@@ -63,7 +89,7 @@ export default async function LettersPage({ searchParams }: Props) {
                 </div>
                 <h2 className="text-lg font-medium text-gray-900">Архив рассылки</h2>
               </div>
-              <LettersArchive />
+              <LettersArchive initialLetters={initialLetters} initialDebug={serverDebug} />
             </div>
           </div>
           {/* Правая колонка: Заказ открыток */}

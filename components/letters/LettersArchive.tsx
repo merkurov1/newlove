@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,28 +8,32 @@ interface Letter {
   id: string;
   title: string;
   slug: string;
-  publishedAt: string;
-  createdAt: string;
-  author: {
-    name: string;
-  };
+  publishedAt?: string;
+  createdAt?: string;
+  author?: { name?: string };
 }
 
-export default function LettersArchive() {
-  const [letters, setLetters] = useState<Letter[]>([]);
-  const [debug, setDebug] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+interface Props {
+  initialLetters?: Letter[];
+  initialDebug?: any;
+}
+
+export default function LettersArchive({ initialLetters, initialDebug }: Props) {
+  const [letters, setLetters] = useState<Letter[]>(initialLetters || []);
+  const [debug, setDebug] = useState<any>(initialDebug || null);
+  const [loading, setLoading] = useState<boolean>(initialLetters ? false : true);
   const [error, setError] = useState<string | null>(null);
   const [lastFetchInfo, setLastFetchInfo] = useState<any>(null);
-  const [anonAttempt, setAnonAttempt] = useState<any>(null);
 
   useEffect(() => {
+    // If initial data was provided server-side, skip the client fetch.
+    if (initialLetters && initialLetters.length > 0) return;
+
     const fetchLetters = async () => {
-  const wantDebug = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('debug') === '1';
-  // when debug is requested, also ask the API to include unpublished counts/sample via all=1
-  const url = wantDebug ? '/api/letters?debug=1&all=1' : '/api/letters';
+      const wantDebug = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('debug') === '1';
+      const url = wantDebug ? '/api/letters?debug=1&all=1' : '/api/letters';
       try {
-        let response: Response | null = null;
+        let response: Response;
         try {
           response = await fetch(url, { credentials: 'same-origin' });
         } catch (e) {
@@ -36,16 +41,16 @@ export default function LettersArchive() {
           throw e;
         }
 
-        const status = response.status;
         const ok = response.ok;
         const text = await response.text();
         let parsed: any = null;
         try { parsed = JSON.parse(text); } catch { parsed = text; }
+
         if (!ok) {
           if (wantDebug) {
             try { setDebug(parsed?.debug || parsed); } catch { setDebug(parsed); }
           }
-          console.error('Letters fetch error details:', { status, ok, text, parsed }); // Enhanced debug
+          console.error('Letters fetch error details:', { status: response.status, ok, text, parsed });
           throw new Error('Failed to fetch letters');
         }
 
@@ -63,9 +68,10 @@ export default function LettersArchive() {
     };
 
     fetchLetters();
-  }, []);
+  }, [initialLetters]);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('ru-RU', {
       year: 'numeric',
