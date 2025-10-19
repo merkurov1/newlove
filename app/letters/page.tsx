@@ -15,30 +15,7 @@ interface Props {
 }
 
 export default async function LettersPage({ searchParams }: Props) {
-  const debugParam = Array.isArray(searchParams?.debug) ? searchParams?.debug[0] : (searchParams?.debug as string | undefined);
-  const wantDebug = debugParam === '1';
-
-  // Server-side debug block (temporary): fetch counts/sample using service role
-  let serverDebug: any = {
-    env: {
-      NEXT_PUBLIC_SUPABASE_URL: !!(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL),
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY
-    }
-  };
-  if (wantDebug) {
-    try {
-      const supabase = createClient({ useServiceRole: true });
-      const pubResp = await supabase.from('letters').select('id', { count: 'exact', head: true }).eq('published', true);
-      const unpubResp = await supabase.from('letters').select('id', { count: 'exact', head: true }).eq('published', false);
-      const { data: sampleUnpublished } = await supabase.from('letters').select('id,title,slug,published,publishedAt,createdAt,authorId').eq('published', false).limit(10);
-      serverDebug.publishedCount = pubResp.count ?? 0;
-      serverDebug.unpublishedCount = unpubResp.count ?? 0;
-      serverDebug.sampleUnpublished = sampleUnpublished || [];
-    } catch (e) {
-      serverDebug.serviceRoleError = String(e);
-    }
-  }
+  // NOTE: removed temporary server debug output for production.
 
   // Fetch published letters server-side to provide initial data to the client
   let initialLetters: any[] = [];
@@ -46,13 +23,9 @@ export default async function LettersPage({ searchParams }: Props) {
   try {
     // Use anon client by default so this page renders even when SUPABASE_SERVICE_ROLE_KEY
     // is not configured in the environment. Only use service role when debug is requested.
-    const supabase = createClient({ useServiceRole: wantDebug });
-    // When not in debug/service-role mode avoid joining the `User` table because
-    // anon keys often don't have permission to read that table. Only include
-    // the relation when wantDebug === true (service role available).
-    const selectCols = wantDebug
-      ? 'id, title, slug, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(id, name, email)'
-      : 'id, title, slug, published, publishedAt, createdAt, authorId';
+  const supabase = createClient();
+    // Use anon-safe select columns (don't join protected `User` table here).
+    const selectCols = 'id, title, slug, published, publishedAt, createdAt, authorId';
 
     const { data: lettersData, error } = await supabase
       .from('letters')
@@ -76,15 +49,9 @@ export default async function LettersPage({ searchParams }: Props) {
       }
     } else if (error) {
       console.error('Server initial letters fetch error', error);
-      serverDebug.supabaseError = {
-        message: error.message,
-        code: error.code,
-        details: error.details
-      };
     }
   } catch (e) {
     console.error('Server initial letters fetch unexpected error', e);
-    serverDebug.fetchException = String(e);
   }
 
   return (
@@ -98,12 +65,7 @@ export default async function LettersPage({ searchParams }: Props) {
           </p>
         </div>
 
-        {serverDebug && (
-          <div className="mb-6 p-4 rounded bg-yellow-50 border border-yellow-200">
-            <h3 className="font-medium">Server debug (temporary)</h3>
-            <pre className="whitespace-pre-wrap text-xs mt-2 bg-white p-3 rounded border">{JSON.stringify(serverDebug, null, 2)}</pre>
-          </div>
-        )}
+        {/* server debug removed */}
 
         {/* Основное содержимое в две колонки */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10">
@@ -119,7 +81,7 @@ export default async function LettersPage({ searchParams }: Props) {
               <div className="mb-3 text-sm text-gray-500">
                 {lastUpdated ? `Последнее обновление: ${new Date(lastUpdated).toLocaleString('ru-RU')}` : ''}
               </div>
-              <LettersArchive initialLetters={initialLetters} initialDebug={serverDebug} lastUpdated={lastUpdated} />
+              <LettersArchive initialLetters={initialLetters} lastUpdated={lastUpdated} />
             </div>
           </div>
           {/* Правая колонка: Заказ открыток */}

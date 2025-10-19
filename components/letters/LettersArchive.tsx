@@ -12,15 +12,13 @@ interface Letter {
 
 interface Props {
   initialLetters?: Letter[];
-  initialDebug?: any;
   lastUpdated?: string | null;
 }
 
 const LettersArchiveClient = dynamic(() => import('./LettersArchiveClient'), { ssr: false });
 
-export default function LettersArchive({ initialLetters = [], initialDebug = null, lastUpdated = null }: Props) {
+export default function LettersArchive({ initialLetters = [], lastUpdated = null }: Props) {
   const letters = initialLetters || [];
-  const debug = initialDebug || null;
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
@@ -40,9 +38,7 @@ export default function LettersArchive({ initialLetters = [], initialDebug = nul
         {lastUpdated && (
           <div className="text-xs text-gray-400 mt-2">Последнее обновление: {new Date(lastUpdated).toLocaleString('ru-RU')}</div>
         )}
-        {debug && (
-          <pre className="whitespace-pre-wrap text-xs text-left mt-4 bg-gray-50 p-3 rounded">{JSON.stringify(debug, null, 2)}</pre>
-        )}
+        {/* debug output removed */}
 
         {/* Client-side refresh component as fallback for stale caches */}
         <div className="mt-4">
@@ -73,33 +69,7 @@ export default function LettersArchive({ initialLetters = [], initialDebug = nul
         </article>
       ))}
 
-      {debug && (
-        <div className="mt-4">
-          {lastUpdated && (
-            <div className="text-xs text-gray-400 mb-2">Последнее обновление: {new Date(lastUpdated).toLocaleString('ru-RU')}</div>
-          )}
-          <h4 className="text-sm font-medium text-gray-700">Debug info</h4>
-          <pre className="whitespace-pre-wrap text-xs bg-gray-50 p-3 rounded mt-2">{JSON.stringify(debug, null, 2)}</pre>
-          {debug.extra && (
-            <div className="mt-3 text-sm text-gray-600">
-              <div>Published count: <strong>{debug.extra.publishedCount ?? 0}</strong></div>
-              <div>Unpublished count: <strong>{debug.extra.unpublishedCount ?? 0}</strong></div>
-              {Array.isArray(debug.extra.sampleUnpublished) && debug.extra.sampleUnpublished.length > 0 && (
-                <div className="mt-2">
-                  <div className="font-medium">Sample unpublished:</div>
-                  <ul className="list-disc list-inside text-xs mt-1">
-                    {debug.extra.sampleUnpublished.map((s: any) => (
-                      <li key={s.id}>
-                        <span className="font-medium">{s.title || s.slug}</span> — {String(s.published)} — {s.publishedAt || s.createdAt}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      {/* debug info removed */}
     </div>
   );
 }
