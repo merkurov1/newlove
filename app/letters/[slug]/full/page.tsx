@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
+import BlockRenderer from '@/components/BlockRenderer';
 
 export default async function LetterFullPage({ params }: { params: { slug: string } }) {
   const slug = params.slug;
@@ -36,6 +37,16 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
     .eq('is_public', true)
     .order('created_at', { ascending: true });
 
+  // Parse stored content (EditorJS-style blocks) into an array for BlockRenderer
+  let blocks: any[] = [];
+  try {
+    const raw = typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content);
+    const parsed = JSON.parse(raw || '[]');
+    blocks = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+  } catch (e) {
+    blocks = [];
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <div className="max-w-3xl mx-auto px-4 py-12">
@@ -50,7 +61,11 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
             </div>
           </header>
           <div className="prose prose-lg max-w-none">
-            <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">{letter.content}</div>
+            {blocks && blocks.length > 0 ? (
+              <BlockRenderer blocks={blocks} />
+            ) : (
+              <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">{typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content)}</div>
+            )}
           </div>
         </article>
 
