@@ -3,6 +3,8 @@ import PostcardShop from '@/components/letters/PostcardShop';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { createClient } from '@/lib/supabase/server';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = sanitizeMetadata({
   title: 'Письма и открытки | Anton Merkurov',
   description: 'Архив рассылки и заказ авторских физических открыток',

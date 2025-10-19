@@ -7,6 +7,8 @@ import { parseRichTextContent } from '@/lib/contentParser';
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = sanitizeMetadata({
     title: 'Письма и открытки (combined) | Anton Merkurov',
     description: 'Консолидированная версия страниц архивов и писем для быстрого просмотра',
