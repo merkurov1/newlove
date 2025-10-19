@@ -51,6 +51,8 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
   } catch (e) {
     console.error('Admin dashboard data fetch error:', e);
   }
+  const revalidated = searchParams?.revalidated === '1';
+
   return (
     <div className="p-6 space-y-8">
       <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
@@ -82,6 +84,12 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         </div>
       </div>
       {/* Environment diagnostics - show presence of critical keys (masked) */}
+      {revalidated && (
+        <div className="mb-4 p-3 rounded bg-green-50 border border-green-200 text-green-700">
+          ✅ Переиндексация /letters запрошена. Обновите страницу архива через пару секунд.
+        </div>
+      )}
+
       <div className="mt-6">
         <h2 className="text-lg font-semibold mb-2">Диагностика окружения</h2>
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">

@@ -694,10 +694,11 @@ export async function revalidateLetters() {
   await verifyAdmin();
   try {
     revalidatePath('/letters');
-    return { status: 'success', message: 'Revalidation requested for /letters' };
+    // Redirect back to admin with a query param so UI can show a success banner
+    redirect('/admin?revalidated=1');
   } catch (e) {
     console.error('revalidateLetters error:', e);
-    return { status: 'error', message: String(e) };
+    throw e;
   }
 }
 
