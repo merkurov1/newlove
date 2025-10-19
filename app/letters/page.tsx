@@ -47,9 +47,17 @@ export default async function LettersPage({ searchParams }: Props) {
     // Use anon client by default so this page renders even when SUPABASE_SERVICE_ROLE_KEY
     // is not configured in the environment. Only use service role when debug is requested.
     const supabase = createClient({ useServiceRole: wantDebug });
+    // When not in debug/service-role mode avoid joining the `User` table because
+    // anon keys often don't have permission to read that table. Only include
+    // the relation when wantDebug === true (service role available).
+    const selectCols = wantDebug
+      ? 'id, title, slug, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(id, name, email)'
+      : 'id, title, slug, published, publishedAt, createdAt, authorId';
+
     const { data: lettersData, error } = await supabase
       .from('letters')
-      .select('id, title, slug, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(id, name, email)')
+      // cast to any to avoid TypeScript parsing issues with PostgREST relation syntax
+      .select(selectCols as any)
       .eq('published', true)
       .order('publishedAt', { ascending: false })
       .limit(100);
@@ -60,10 +68,11 @@ export default async function LettersPage({ searchParams }: Props) {
         slug: l.slug,
         publishedAt: l.publishedAt,
         createdAt: l.createdAt,
-        author: { name: Array.isArray(l.User) ? l.User[0]?.name : l.User?.name }
+        author: { name: (Array.isArray(l.User) ? l.User[0]?.name : l.User?.name) || null }
       }));
-      if (lettersData.length > 0) {
-        lastUpdated = lettersData[0].publishedAt || lettersData[0].createdAt || null;
+      if ((lettersData as any).length > 0) {
+        const first = (lettersData as any)[0];
+        lastUpdated = first.publishedAt || first.createdAt || null;
       }
     } else if (error) {
       console.error('Server initial letters fetch error', error);
