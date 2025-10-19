@@ -1,7 +1,8 @@
 
 // Sentry removed - replaced with no-op wrapper to avoid build errors
+// keep signature flexible so callers that pass the NextPageContext won't fail TS checks
 const Sentry = {
-  captureUnderscoreErrorException: async () => {},
+  captureUnderscoreErrorException: async (_ctx?: unknown, ..._rest: unknown[]) => {},
 };
 import type { ErrorProps } from "next/dist/pages/_error";
 import type { NextPageContext } from "next/dist/shared/lib/utils";
