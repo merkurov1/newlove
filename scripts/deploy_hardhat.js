@@ -11,8 +11,13 @@ async function main() {
 
     const NeutralHeart = await hre.ethers.getContractFactory('NeutralHeart');
     const nh = await NeutralHeart.deploy(name, symbol, maxPublic, priceWei);
-    await nh.deployed();
-    console.log('NeutralHeart deployed to:', nh.address);
+    // ethers v6: waitForDeployment replaces deployed()
+    if (typeof nh.waitForDeployment === 'function') {
+        await nh.waitForDeployment();
+    }
+    // contract address may be available as .target (ethers v6) or .address
+    const deployedAddress = nh.target || nh.address || null;
+    console.log('NeutralHeart deployed to:', deployedAddress);
 
     const baseUri = process.env.NEUTRAL_HEART_BASEURI || '';
     if (baseUri) {
