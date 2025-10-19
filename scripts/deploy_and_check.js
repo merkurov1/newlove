@@ -2,19 +2,18 @@ const hre = require('hardhat');
 require('dotenv').config({ path: '.env.deploy.local' });
 
 async function main() {
+  console.log('POLYGON_RPC_URL:', process.env.POLYGON_RPC_URL);
+  console.log('DEPLOY_PRIVATE_KEY:', process.env.DEPLOY_PRIVATE_KEY ? process.env.DEPLOY_PRIVATE_KEY.slice(0,8) + '...' : 'not set');
   console.log('Starting deploy_and_check (network:', hre.network.name, ')');
 
   const maxPublic = process.env.MAX_PUBLIC ? Number(process.env.MAX_PUBLIC) : 1000;
   const priceMatic = process.env.PRICE_MATIC || '1.0';
-  const name = process.env.NEUTRAL_HEART_NAME || 'Необратимый Выбор - Neutral Heart';
-  const symbol = process.env.NEUTRAL_HEART_SYMBOL || 'NHRT';
-
   const priceWei = hre.ethers.parseEther ? hre.ethers.parseEther(priceMatic) : hre.ethers.utils.parseEther(priceMatic);
 
-  console.log('Deploying NeutralHeart with args:', { name, symbol, maxPublic, priceMatic });
+  console.log('Deploying SoulChoiceNFT with args:', { maxPublic, priceMatic });
 
-  const NeutralHeart = await hre.ethers.getContractFactory('NeutralHeart');
-  const nh = await NeutralHeart.deploy(name, symbol, maxPublic, priceWei);
+  const SoulChoiceNFT = await hre.ethers.getContractFactory('SoulChoiceNFT');
+  const nh = await SoulChoiceNFT.deploy(maxPublic, priceWei);
   if (typeof nh.waitForDeployment === 'function') {
     await nh.waitForDeployment();
   }

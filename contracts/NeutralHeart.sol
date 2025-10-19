@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/token/common/ERC2981.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
-contract NeutralHeart is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard, ERC2981 {
+contract SoulChoiceNFT is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard, ERC2981 {
     // Returns all tokenIds owned by an address (for wallets/frontends)
     function tokensOfOwner(address owner) external view returns (uint256[] memory) {
         uint256 balance = balanceOf(owner);
@@ -47,7 +47,7 @@ contract NeutralHeart is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard, ERC
     constructor(
         uint256 maxPublicSupply_,
         uint256 priceWei_
-    ) ERC721("NeutralHeart NFT (2025)", "NHRT25") Ownable(msg.sender) {
+    ) ERC721("SoulChoice NFT (2025)", "SOULC25") Ownable(msg.sender) {
         maxPublicSupply = maxPublicSupply_;
         priceWei = priceWei_;
         currentId = 1; // start token ids at 1

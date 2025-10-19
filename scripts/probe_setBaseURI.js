@@ -26,7 +26,7 @@ async function main(){
   const baseUri = process.env.NEUTRAL_HEART_BASEURI || '';
   console.log('Probing setBaseURI on', addr);
 
-  const c = await hre.ethers.getContractAt('NeutralHeart', addr);
+    const c = await hre.ethers.getContractAt('SoulChoiceNFT', addr);
 
   // 1) callStatic
   try{
