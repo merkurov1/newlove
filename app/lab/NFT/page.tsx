@@ -108,7 +108,23 @@ export default function NFTLabPageClient() {
                 try { console.debug('[NFT] loadOnchain raw provider:', eth); } catch (e) { }
                 try { console.debug('[NFT] loadOnchain provider network:', await provider.getNetwork()); } catch (e) { }
                 const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
-                const price = await contract.priceWei();
+                let price = await contract.priceWei();
+                    // Optional test override: if NEXT_PUBLIC_TEST_PRICE_MATIC is set (e.g. "0.01"), use that instead
+                    try {
+                        const testPrice = (process && (process.env as any) && (process.env.NEXT_PUBLIC_TEST_PRICE_MATIC)) || (globalThis as any)?.NEXT_PUBLIC_TEST_PRICE_MATIC;
+                        if (testPrice) {
+                            try {
+                                // ethers v6: parseEther returns bigint
+                                const parsed = (ethers as any).parseEther(testPrice);
+                            price = parsed;
+                                pushDebug('price_override_matic', testPrice);
+                            } catch (e) {
+                                pushDebug('price_override_parse_error', String(e));
+                            }
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
                 const max = await contract.maxPublicSupply();
                 const minted = await contract.publicMinted();
                 const cid = await provider.getNetwork();
@@ -223,6 +239,7 @@ export default function NFTLabPageClient() {
             try {
                 const code = await provider.send('eth_getCode', [CONTRACT_ADDRESS, 'latest']);
                 pushDebug('contract_code', code && code.length > 10 ? code.slice(0, 200) + '...' : code);
+                    pushDebug('contract_code', code && code.length > 10 ? code.slice(0, 200) + '...' : code);
                 if (!code || code === '0x' || code === '0x0') {
                     setStatus('Контракт не найден на этой сети. Проверьте сеть в кошельке.');
                     setProcessing(false);
