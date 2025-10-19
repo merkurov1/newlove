@@ -104,6 +104,7 @@ export default function NFTLabPageClient() {
     const [hasTransformed, setHasTransformed] = useState<boolean>(false);
     const [mintedTokenIds, setMintedTokenIds] = useState<number[]>([]);
     const [mintedTokenImages, setMintedTokenImages] = useState<string[]>([]);
+    const [mintedTokenVariants, setMintedTokenVariants] = useState<number[]>([]);
     const [lastTxHash, setLastTxHash] = useState<string | null>(null);
     const [contractOwner, setContractOwner] = useState<string | null>(null);
     const [baseUriInput, setBaseUriInput] = useState<string>('');
@@ -270,60 +271,48 @@ export default function NFTLabPageClient() {
             const totalHex = '0x' + total.toString(16);
             const tx = await contract.publicMint(qty, { value: totalHex });
             setStatus("Транзакция отправлена, ожидаю подтверждения...");
-            await tx.wait();
+            const rec = await tx.wait();
             setStatus("Успех! NFT куплен. Теперь вы можете выбрать образ — Ангел или Демон.");
             // show chooser by setting a transient flag (we'll use currentId/mintedTokenId to infer)
             // attempt to determine minted tokenId from receipt events, or fallback to currentId
             try {
-                // parse Transfer event (ERC-721) from receipt logs if present
-                const transferEventTopic = ethers.id("Transfer(address,address,uint256)");
-                let tokenIdFromReceipt: number | null = null;
+                // parse Transfer events from the single receipt to collect all minted token IDs
                 try {
-                    const logs = await tx.wait().then((r: any) => r.logs || []);
-                    for (const l of logs) {
+                    const transferTopic = ethers.id('Transfer(address,address,uint256)');
+                    const ids: number[] = [];
+                    const normalizedTo = (await signerLocal.getAddress()).toLowerCase();
+                    for (const l of (rec.logs || [])) {
                         if (!l || !l.topics) continue;
-                        if (l.topics[0] === transferEventTopic) {
-                            // tokenId is in topics[3]
-                            try { tokenIdFromReceipt = Number(BigInt(l.topics[3])); break; } catch (e) { }
-                        }
+                        if (l.topics[0] !== transferTopic) continue;
+                        try {
+                            // topics[2] is 'to' (indexed)
+                            const topicTo = l.topics[2];
+                            // topicTo is 32-byte hex; compare lowercased last 40 chars
+                            if (!topicTo) continue;
+                            const toAddr = '0x' + topicTo.slice(-40).toLowerCase();
+                            if (toAddr !== normalizedTo) continue;
+                            const id = Number(BigInt(l.topics[3]));
+                            if (!Number.isNaN(id)) ids.push(id);
+                        } catch (e) { /* ignore parse errors */ }
                     }
-                } catch (e) {
-                    // already awaited above; ignore
-                }
-
-                if (!tokenIdFromReceipt) {
-                    try {
-                        const eth = (window as any).ethereum;
-                        if (eth) {
-                            const provider = new (ethers as any).BrowserProvider(eth as any);
-                            const contractRead = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
-                            const cur = await contractRead.currentId();
-                            tokenIdFromReceipt = Number(cur) - 1;
-                        }
-                    } catch (e) { }
-                }
-
-                if (tokenIdFromReceipt) {
-                    // If multiple Transfer events were emitted, tokenIdFromReceipt may be the first one.
-                    // We should parse ALL Transfer events from the receipt and collect token ids.
-                    try {
-                        const rec = await tx.wait();
-                        const transferTopic = ethers.id("Transfer(address,address,uint256)");
-                        const ids: number[] = [];
-                        for (const l of (rec.logs || [])) {
-                            if (!l || !l.topics) continue;
-                            if (l.topics[0] === transferTopic) {
-                                try {
-                                    const id = Number(BigInt(l.topics[3]));
-                                    if (!Number.isNaN(id)) ids.push(id);
-                                } catch (e) { /* ignore parse errors */ }
+                    // fallback: if no ids found, try currentId - 1
+                    if (ids.length === 0) {
+                        try {
+                            const eth = (window as any).ethereum;
+                            if (eth) {
+                                const provider = new (ethers as any).BrowserProvider(eth as any);
+                                const contractRead = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
+                                const cur = await contractRead.currentId();
+                                ids.push(Number(cur) - 1);
                             }
-                        }
-                        // fallback: if no transfer logs found but we have tokenIdFromReceipt, include it
-                        if (ids.length === 0) ids.push(tokenIdFromReceipt);
-                        setMintedTokenIds(ids);
-                        // set currentId to the last minted token so chooser UI appears
-                        setCurrentId(ids[ids.length - 1]);
+                        } catch (e) { }
+                    }
+
+                    // dedupe and set
+                    const unique = Array.from(new Set(ids));
+                    if (unique.length > 0) {
+                        setMintedTokenIds(unique);
+                        setCurrentId(unique[unique.length - 1]);
                         setLastTxHash(tx && tx.hash ? tx.hash : null);
 
                         // fetch metadata images for each token id
@@ -331,27 +320,37 @@ export default function NFTLabPageClient() {
                         const provider = eth ? new (ethers as any).BrowserProvider(eth as any) : new (ethers as any).JsonRpcProvider();
                         const contractRead = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
                         const imgs: string[] = [];
-                        for (const id of ids) {
+                        for (const id of unique) {
                             try {
-                                const uri = await contractRead.tokenURI(id);
-                                if (!uri) { imgs.push(''); continue; }
-                                let fetchUrl = uri;
-                                if (uri.startsWith('ipfs://')) fetchUrl = 'https://ipfs.io/ipfs/' + uri.slice(7);
-                                const meta = await fetch(fetchUrl).then(r => r.json()).catch(() => null);
-                                const image = meta?.image || meta?.image_url || '';
-                                let imageUrl = image || '';
-                                if (imageUrl && imageUrl.startsWith('ipfs://')) imageUrl = 'https://ipfs.io/ipfs/' + imageUrl.slice(7);
-                                // if no imageUrl, push canonical neutral fallback so UI shows image
-                                imgs.push(imageUrl || FALLBACK_NEUTRAL);
+                                let uri = await contractRead.tokenURI(id);
+                                if (!uri) { imgs.push(FALLBACK_NEUTRAL); continue; }
+                                if (typeof uri === 'string' && uri.startsWith('ipfs://')) uri = 'https://ipfs.io/ipfs/' + uri.slice(7);
+                                const meta = uri ? await fetch(uri).then(r => r.json()).catch(() => null) : null;
+                                let image = meta?.image || meta?.image_url || '';
+                                if (image && image.startsWith('ipfs://')) image = 'https://ipfs.io/ipfs/' + image.slice(7);
+                                imgs.push(image || FALLBACK_NEUTRAL);
                             } catch (e) {
                                 imgs.push(FALLBACK_NEUTRAL);
                                 pushDebug('mint_image_error_for_id_' + id, String(e));
                             }
                         }
-                        setMintedTokenImages(imgs.filter((i, idx) => true));
-                    } catch (e) {
-                        pushDebug('mint_tokenid_detect_error', String(e));
+                        setMintedTokenImages(imgs);
+                        // fetch token variants for each id
+                        try {
+                            const variants: number[] = [];
+                            for (const id of unique) {
+                                try {
+                                    const v = await contractRead.tokenVariant(id);
+                                    variants.push(Number(v));
+                                } catch (e) { variants.push(0); }
+                            }
+                            setMintedTokenVariants(variants);
+                        } catch (e) {
+                            pushDebug('fetch_variants_error', String(e));
+                        }
                     }
+                } catch (e) {
+                    pushDebug('mint_tokenid_detect_error', String(e));
                 }
             } catch (e) {
                 pushDebug('mint_tokenid_detect_error', String(e));
@@ -488,9 +487,9 @@ export default function NFTLabPageClient() {
         }
     }
 
-    async function requestVariant(variant: 'Angel' | 'Devil') {
-        // allow caller to pass explicit token id via closure (we'll check currentId as fallback)
-        const tokenIdToUse = (arguments.length > 1 && (arguments as any)[1]) || currentId;
+    async function requestVariant(variant: 'Angel' | 'Devil', tokenIdParam?: number) {
+        // prefer explicit tokenId param, fallback to currentId
+        const tokenIdToUse = tokenIdParam || currentId;
         if (!isConnected || !address || !tokenIdToUse) {
             setStatus('Сначала подключите кошелёк и убедитесь что у вас есть токен');
             return;
@@ -756,6 +755,13 @@ export default function NFTLabPageClient() {
                                             <div className="h-36 flex items-center justify-center bg-neutral-50 text-neutral-500 rounded">Нет изображения</div>
                                         )}
                                         <div className="mt-2 text-sm">Token ID: {id}</div>
+                                        {/* If token is neutral (variant 0), show transform buttons */}
+                                        {mintedTokenVariants && mintedTokenVariants[idx] === 0 ? (
+                                            <div className="mt-2 flex gap-2 justify-center">
+                                                <button className="px-2 py-1 bg-indigo-600 text-white rounded text-sm" onClick={() => requestVariant('Angel', id)}>Ангел</button>
+                                                <button className="px-2 py-1 bg-red-600 text-white rounded text-sm" onClick={() => requestVariant('Devil', id)}>Демон</button>
+                                            </div>
+                                        ) : null}
                                     </div>
                                 );
                             })}

@@ -69,7 +69,8 @@ contract NeutralHeart is ERC721, Ownable {
 
     // PUBLIC MINT (paid)
     function publicMint(uint256 qty) external payable {
-        require(qty > 0 && qty <= 10, "invalid qty");
+        // Restrict public mint to one token per transaction to avoid accidental multi-mints
+        require(qty == 1, "only 1 token per tx");
         require(publicMinted + qty <= maxPublicSupply, "public sold out");
         require(msg.value == priceWei * qty, "incorrect payment");
 
@@ -81,6 +82,11 @@ contract NeutralHeart is ERC721, Ownable {
             emit PublicMint(msg.sender, tokenId);
         }
         publicMinted += qty;
+    }
+
+    // OWNER: update price (in wei)
+    function setPrice(uint256 newPriceWei) external onlyOwner {
+        priceWei = newPriceWei;
     }
 
     // Subscriber free claim using backend signature
