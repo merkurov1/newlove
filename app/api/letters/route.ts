@@ -10,9 +10,10 @@ export async function GET(request: Request) {
   const includeDebugForRequest = debugEnabled || url.searchParams.get('debug') === '1';
 
   try {
-    const supabase = createClient({ useServiceRole: true });
-    
-    const includeUnpublishedSample = includeDebugForRequest && url.searchParams.get('all') === '1';
+  // Use service role only for verbose debug/all requests. In normal operation
+  // prefer the public anon key so the endpoint works without SUPABASE_SERVICE_ROLE_KEY.
+  const includeUnpublishedSample = includeDebugForRequest && url.searchParams.get('all') === '1';
+  const supabase = createClient({ useServiceRole: includeUnpublishedSample });
 
     let lettersQuery = supabase
       .from('letters')
