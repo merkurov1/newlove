@@ -398,7 +398,7 @@ export async function subscribeToNewsletter(prevState, formData) {
   // upsert subscriber; mark inactive until confirmed
   let subscriber;
   try {
-    // Ensure an id is provided on insert. Some DB setups don't set a default
+      console.error('Error syncing user role:', syncErr);
     // value for subscribers.id, so providing one avoids NOT NULL violations.
     const payload = { id: createId(), email, userId: user?.id || null, isActive: false };
     const upsertRes = await svc
@@ -570,7 +570,7 @@ export async function deleteLetter(formData) {
     const { data: letter } = await supabase.from('letters').select('slug, published').eq('id', id).maybeSingle();
     let { error } = await supabase.from('letters').delete().eq('id', id);
 
-    // If permission denied, try to provide a clearer error or retry using explicit service role
+      console.error('Error getting service role client:', e);
     if (error && String(error.code) === '42501') {
       console.error('Supabase delete letter permission denied (42501). Attempting retry with service role client if available.');
       try { (await import('@sentry/nextjs')).captureException(error); } catch (e) { }
@@ -591,7 +591,7 @@ export async function deleteLetter(formData) {
         // success via retry
         error = null;
       } catch (e) {
-        console.error('Retry with service role threw:', e);
+      console.error('Error upserting subscriber:', error);
         try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) { }
         return { status: 'error', message: 'Не удалось удалить письмо: ' + (e?.message || String(e)) + '. Проверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql', details: e };
       }
@@ -611,7 +611,7 @@ export async function deleteLetter(formData) {
   } catch (e) {
     console.error('deleteLetter exception:', e);
     try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) { }
-    throw e instanceof Error ? e : new Error(String(e));
+        console.error('Error inserting confirmation token:', tokenErr);
   }
 }
 
