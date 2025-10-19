@@ -1,10 +1,19 @@
 {
   "name": "newlove - Codespace",
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:0-20",
+  // Use the local Dockerfile so the container is built from the project's
+  // Dockerfile which ensures the 'vscode' user is present. The previous
+  // `image` pointed to an upstream variant that doesn't include the
+  // 'vscode' user in some tags and caused Codespaces to fall back to
+  // recovery mode.
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:1": {}
   },
-  "postCreateCommand": "npm ci || true",
+  // Run npm install but also sanity-check the 'vscode' user and log a helpful
+  // message. This will make failures visible in Codespaces build logs.
+  "postCreateCommand": "npm ci || true; if id vscode >/dev/null 2>&1; then echo 'vscode user exists'; else echo 'ERROR: vscode user missing' >&2; fi",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -15,7 +24,10 @@
       ]
     }
   },
-  "forwardPorts": [3000, 5173],
+  "forwardPorts": [
+    3000,
+    5173
+  ],
   "remoteUser": "vscode",
   "mounts": [
     "source=${localWorkspaceFolder}/.git,target=/workspace/.git,type=bind,consistency=cached"
