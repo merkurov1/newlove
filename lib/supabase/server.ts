@@ -9,7 +9,25 @@ import { cookies } from "next/headers";
 // ----- ИСПРАВЛЕНИЕ 2: Убираем ': SupabaseClient' отсюда,
 // чтобы TypeScript сам определил правильный (более сложный) тип
 export function createClient(options: { useServiceRole?: boolean } = {}) {
-  const cookieStore = cookies();
+  // For service-role usage we don't want to read or persist request cookies
+  // (this ensures we don't accidentally attach a user's anon session to the
+  // service-role client). Provide a no-op cookie store in that case.
+  const cookieStore = options.useServiceRole
+    ? {
+        // match `cookies()` shape: get(name) returns undefined or { value }
+        get(_name: string) {
+          return undefined;
+        },
+        // cookies().set expects a single object parameter { name, value, ...options }
+        set(_cookie: { name: string; value: string } & Partial<CookieOptions>) {
+          /* no-op for service role */
+        },
+        // cookies().delete / cookieStore.delete expects an object parameter
+        delete(_cookie: { name: string } & Partial<CookieOptions>) {
+          /* no-op for service role */
+        },
+      }
+    : cookies();
 
   // Safely read env vars and return clear errors instead of relying on '!'
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
