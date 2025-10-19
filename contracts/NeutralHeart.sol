@@ -19,10 +19,14 @@ contract NeutralHeart is ERC721, Ownable {
     // Track claims on-chain as a safety net
     mapping(address => bool) public hasClaimedOnChain;
 
+    // token variant: 0 = neutral, 1 = angel, 2 = devil
+    mapping(uint256 => uint8) public tokenVariant;
+
     string private _baseTokenURI;
 
     event PublicMint(address indexed to, uint256 indexed tokenId);
     event SubscriberClaim(address indexed to, uint256 indexed tokenId);
+    event Transform(address indexed owner, uint256 indexed burnedId, uint256 indexed newId, uint8 variant);
 
     constructor(
         string memory name_,
@@ -48,6 +52,21 @@ contract NeutralHeart is ERC721, Ownable {
         return _baseTokenURI;
     }
 
+    // Override tokenURI to return one of three JSON filenames (neutral.json / angel.json / devil.json)
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        // Ensure token exists using OpenZeppelin's internal check
+        _requireOwned(tokenId);
+        string memory base = _baseURI();
+        uint8 v = tokenVariant[tokenId];
+        string memory namePart = "neutral.json";
+        if (v == 1) {
+            namePart = "angel.json";
+        } else if (v == 2) {
+            namePart = "devil.json";
+        }
+        return string(abi.encodePacked(base, namePart));
+    }
+
     // PUBLIC MINT (paid)
     function publicMint(uint256 qty) external payable {
         require(qty > 0 && qty <= 10, "invalid qty");
@@ -57,6 +76,8 @@ contract NeutralHeart is ERC721, Ownable {
         for (uint256 i = 0; i < qty; i++) {
             uint256 tokenId = currentId++;
             _safeMint(msg.sender, tokenId);
+            // default variant is neutral
+            tokenVariant[tokenId] = 0;
             emit PublicMint(msg.sender, tokenId);
         }
         publicMinted += qty;
@@ -77,7 +98,27 @@ contract NeutralHeart is ERC721, Ownable {
         hasClaimedOnChain[msg.sender] = true;
         uint256 tokenId = currentId++;
         _safeMint(msg.sender, tokenId);
+        // default to neutral
+        tokenVariant[tokenId] = 0;
         emit SubscriberClaim(msg.sender, tokenId);
+    }
+
+    // Transform a neutral token into a variant (1 = angel, 2 = devil)
+    // Burns the neutral token and mints a new token with the variant set.
+    function transform(uint256 tokenId, uint8 variant) external {
+        require(variant == 1 || variant == 2, "invalid variant");
+        require(ownerOf(tokenId) == msg.sender, "not owner");
+        require(tokenVariant[tokenId] == 0, "only neutral tokens can be transformed");
+
+        // burn the neutral token
+        _burn(tokenId);
+
+        // mint new token and set variant
+        uint256 newId = currentId++;
+        _safeMint(msg.sender, newId);
+        tokenVariant[newId] = variant;
+
+        emit Transform(msg.sender, tokenId, newId, variant);
     }
 
     // Withdraw funds collected from public sale

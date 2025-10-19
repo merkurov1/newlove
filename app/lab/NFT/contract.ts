@@ -11,4 +11,10 @@ export const NFT_ABI = [
     "function claimForSubscriber(bytes signature)",
     "function hasClaimedOnChain(address) view returns (bool)",
     "function currentId() view returns (uint256)",
+    // transform: burn neutral token and mint a new token with variant (0=neutral,1=angel,2=devil)
+    "function transform(uint256,uint8)",
+    "function tokenVariant(uint256) view returns (uint8)",
+    // owner helpers
+    "function owner() view returns (address)",
+    "function setBaseURI(string)"
 ];

@@ -6,6 +6,11 @@ import { formatEther } from "ethers";
 import { CONTRACT_ADDRESS, NFT_ABI } from "./contract";
 import { getOnboard, connectWithOnboard } from "../../lib/onboardClient";
 
+// Fallback / canonical images (provided by user)
+const FALLBACK_NEUTRAL = "https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafybeihnx7kaue4ehbigi4koydoei43ojjykp2mhhh7xwx4qg3tntm5e5e";
+const ANGEL_IMAGE = "https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafkreid35oonhrww7kdtdsq353av62cwv4fe2yh2npnyqdqr7r7bfwukjy";
+const DEVIL_IMAGE = "https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafkreicag47zt2us4hcq7dzs2unt4sm4jibno7qwuqggh6udmcfij3yhty";
+
 export default function NFTLabPageClient() {
     // wagmi provider is not guaranteed to be present in this app.
     // Use local wallet detection using window.ethereum so the page
@@ -97,8 +102,11 @@ export default function NFTLabPageClient() {
     const [hasClaimedOnChain, setHasClaimedOnChain] = useState<boolean | null>(null);
     const [isEligible, setIsEligible] = useState<boolean | null>(null);
     const [hasTransformed, setHasTransformed] = useState<boolean>(false);
-    const [mintedTokenId, setMintedTokenId] = useState<number | null>(null);
-    const [mintedTokenImage, setMintedTokenImage] = useState<string | null>(null);
+    const [mintedTokenIds, setMintedTokenIds] = useState<number[]>([]);
+    const [mintedTokenImages, setMintedTokenImages] = useState<string[]>([]);
+    const [lastTxHash, setLastTxHash] = useState<string | null>(null);
+    const [contractOwner, setContractOwner] = useState<string | null>(null);
+    const [baseUriInput, setBaseUriInput] = useState<string>('');
 
     useEffect(() => {
         // Read on-chain metadata (price, supply)
@@ -140,6 +148,10 @@ export default function NFTLabPageClient() {
                 setPriceEth(formatEther(price));
                 setMaxPublic(Number(max));
                 setPublicMinted(Number(minted));
+                try {
+                    const ownerAddr = await contract.owner();
+                    setContractOwner(ownerAddr);
+                } catch (e) { /* ignore */ }
                 // try to set address if unlocked
                 try {
                     const signer = provider.getSigner();
@@ -260,13 +272,13 @@ export default function NFTLabPageClient() {
             setStatus("Транзакция отправлена, ожидаю подтверждения...");
             await tx.wait();
             setStatus("Успех! NFT куплен. Теперь вы можете выбрать образ — Ангел или Демон.");
-            // show chooser by setting a transient flag (we'll use currentId to infer)
+            // show chooser by setting a transient flag (we'll use currentId/mintedTokenId to infer)
             // attempt to determine minted tokenId from receipt events, or fallback to currentId
             try {
                 // parse Transfer event (ERC-721) from receipt logs if present
                 const transferEventTopic = ethers.id("Transfer(address,address,uint256)");
                 let tokenIdFromReceipt: number | null = null;
-                    try {
+                try {
                     const logs = await tx.wait().then((r: any) => r.logs || []);
                     for (const l of logs) {
                         if (!l || !l.topics) continue;
@@ -292,25 +304,53 @@ export default function NFTLabPageClient() {
                 }
 
                 if (tokenIdFromReceipt) {
-                    setMintedTokenId(tokenIdFromReceipt);
-                    // fetch tokenURI and image
+                    // If multiple Transfer events were emitted, tokenIdFromReceipt may be the first one.
+                    // We should parse ALL Transfer events from the receipt and collect token ids.
                     try {
+                        const rec = await tx.wait();
+                        const transferTopic = ethers.id("Transfer(address,address,uint256)");
+                        const ids: number[] = [];
+                        for (const l of (rec.logs || [])) {
+                            if (!l || !l.topics) continue;
+                            if (l.topics[0] === transferTopic) {
+                                try {
+                                    const id = Number(BigInt(l.topics[3]));
+                                    if (!Number.isNaN(id)) ids.push(id);
+                                } catch (e) { /* ignore parse errors */ }
+                            }
+                        }
+                        // fallback: if no transfer logs found but we have tokenIdFromReceipt, include it
+                        if (ids.length === 0) ids.push(tokenIdFromReceipt);
+                        setMintedTokenIds(ids);
+                        // set currentId to the last minted token so chooser UI appears
+                        setCurrentId(ids[ids.length - 1]);
+                        setLastTxHash(tx && tx.hash ? tx.hash : null);
+
+                        // fetch metadata images for each token id
                         const eth = (window as any).ethereum;
                         const provider = eth ? new (ethers as any).BrowserProvider(eth as any) : new (ethers as any).JsonRpcProvider();
                         const contractRead = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
-                        const uri = await contractRead.tokenURI(tokenIdFromReceipt);
-                        // support ipfs:// and http(s)
-                        let fetchUrl = uri;
-                        if (uri.startsWith('ipfs://')) fetchUrl = 'https://ipfs.io/ipfs/' + uri.slice(7);
-                        const meta = await fetch(fetchUrl).then(r => r.json()).catch(() => null);
-                        const image = meta?.image || meta?.image_url || null;
-                        if (image) {
-                            let imageUrl = image;
-                            if (image.startsWith('ipfs://')) imageUrl = 'https://ipfs.io/ipfs/' + image.slice(7);
-                            setMintedTokenImage(imageUrl);
+                        const imgs: string[] = [];
+                        for (const id of ids) {
+                            try {
+                                const uri = await contractRead.tokenURI(id);
+                                if (!uri) { imgs.push(''); continue; }
+                                let fetchUrl = uri;
+                                if (uri.startsWith('ipfs://')) fetchUrl = 'https://ipfs.io/ipfs/' + uri.slice(7);
+                                const meta = await fetch(fetchUrl).then(r => r.json()).catch(() => null);
+                                const image = meta?.image || meta?.image_url || '';
+                                let imageUrl = image || '';
+                                if (imageUrl && imageUrl.startsWith('ipfs://')) imageUrl = 'https://ipfs.io/ipfs/' + imageUrl.slice(7);
+                                // if no imageUrl, push canonical neutral fallback so UI shows image
+                                imgs.push(imageUrl || FALLBACK_NEUTRAL);
+                            } catch (e) {
+                                imgs.push(FALLBACK_NEUTRAL);
+                                pushDebug('mint_image_error_for_id_' + id, String(e));
+                            }
                         }
+                        setMintedTokenImages(imgs.filter((i, idx) => true));
                     } catch (e) {
-                        pushDebug('mint_image_error', String(e));
+                        pushDebug('mint_tokenid_detect_error', String(e));
                     }
                 }
             } catch (e) {
@@ -449,7 +489,9 @@ export default function NFTLabPageClient() {
     }
 
     async function requestVariant(variant: 'Angel' | 'Devil') {
-        if (!isConnected || !address || !currentId) {
+        // allow caller to pass explicit token id via closure (we'll check currentId as fallback)
+        const tokenIdToUse = (arguments.length > 1 && (arguments as any)[1]) || currentId;
+        if (!isConnected || !address || !tokenIdToUse) {
             setStatus('Сначала подключите кошелёк и убедитесь что у вас есть токен');
             return;
         }
@@ -458,28 +500,107 @@ export default function NFTLabPageClient() {
             return;
         }
         setProcessing(true);
-        setStatus('Запрашиваю желаемый образ у сервера...');
+        setStatus('Подключаюсь к кошельку и выполняю трансформацию на цепочке...');
         try {
-            const res = await fetch('/api/request-variant', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ wallet_address: address, variant, tx_hash: null, token_id: currentId }),
-            });
-            const j = await res.json();
-            if (!res.ok) {
-                if (j.reason === 'server_not_configured') {
-                    setStatus('Сервер не настроен: мы не можем зарезервировать вариант автоматически. Вы можете вручную перевести токен на нужный адрес после получения.');
-                } else {
-                    setStatus(j.error || 'Сервер вернул ошибку при резерве');
-                }
+            // prefer onboard wallet provider, fall back to injected
+            let rawProvider2: any = null;
+            try {
+                if (onboardWallet && onboardWallet.provider) rawProvider2 = onboardWallet.provider;
+                else if (onboardWallet && typeof onboardWallet.getProvider === 'function') rawProvider2 = await onboardWallet.getProvider();
+            } catch (e) { rawProvider2 = null; }
+            if (!rawProvider2) rawProvider2 = (window as any).ethereum;
+            if (!rawProvider2) throw new Error('Не найден провайдер кошелька');
+            const provider = new (ethers as any).BrowserProvider(rawProvider2 as any, 'any');
+            try { await provider.send('eth_requestAccounts', []); } catch (e) { /* ignore */ }
+            const signerLocal = await provider.getSigner();
+            const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signerLocal);
+
+            // map variant string to numeric variant used on-chain: 1 = Angel, 2 = Devil
+            const variantNum = variant === 'Angel' ? 1 : 2;
+            setStatus('Подтвердите транзакцию в кошельке...');
+            const tx = await contract.transform(Number(tokenIdToUse), variantNum);
+            setStatus('Транзакция отправлена, ожидаю подтверждения...');
+            const receipt = await tx.wait();
+            if (!receipt || receipt.status === 0) {
+                setStatus('Транзакция отклонена или не подтверждена.');
+                setProcessing(false);
                 return;
             }
-            // success stub
+            // mark as transformed
             setHasTransformed(true);
-            setStatus(`Вариант ${variant} зарезервирован (заглушка). ВНИМАНИЕ: выбор необратим.`);
+            setStatus('Трансформация выполнена! Обновляю метаданные...');
+
+            // refresh tokenURI for the token(s) we own (the transform might burn old token and mint a new one)
+            try {
+                const providerRead = new (ethers as any).BrowserProvider((window as any).ethereum);
+                const contractRead = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, providerRead);
+                // If contract emits new Transfer with new token id, try to extract it
+                let newTokenId: number | null = null;
+                try {
+                    const transferTopic = ethers.id('Transfer(address,address,uint256)');
+                    for (const l of (receipt.logs || [])) {
+                        if (!l || !l.topics) continue;
+                        if (l.topics[0] === transferTopic) {
+                            try {
+                                const id = Number(BigInt(l.topics[3]));
+                                if (!Number.isNaN(id)) newTokenId = id;
+                            } catch (e) { /* ignore */ }
+                        }
+                    }
+                } catch (e) { /* ignore parse errors */ }
+
+                // if newTokenId not found, fall back to reading currentId and assume last minted
+                if (!newTokenId) {
+                    try {
+                        const cur = await contractRead.currentId();
+                        newTokenId = Number(cur);
+                    } catch (e) { /* ignore */ }
+                }
+
+                // fetch metadata image for the new token id (or refresh older id)
+                const idsToCheck = newTokenId ? [newTokenId] : (mintedTokenIds.length > 0 ? mintedTokenIds : [Number(tokenIdToUse)]);
+                const imgs: string[] = [];
+                for (const id of idsToCheck) {
+                    try {
+                        let uri = await contractRead.tokenURI(id);
+                        if (uri && typeof uri === 'string' && uri.startsWith('ipfs://')) uri = 'https://ipfs.io/ipfs/' + uri.slice(7);
+                        const meta = uri ? await fetch(uri).then(r => r.json()).catch(() => null) : null;
+                        let image = meta?.image || meta?.image_url || '';
+                        if (image && image.startsWith('ipfs://')) image = 'https://ipfs.io/ipfs/' + image.slice(7);
+                        imgs.push(image || (variant === 'Angel' ? ANGEL_IMAGE : DEVIL_IMAGE));
+                    } catch (e) {
+                        imgs.push(variant === 'Angel' ? ANGEL_IMAGE : DEVIL_IMAGE);
+                    }
+                }
+                // Update mintedTokenImages: replace matching token slot or append
+                setMintedTokenImages((prev) => {
+                    try {
+                        const copy = [...prev];
+                        if (mintedTokenIds && mintedTokenIds.length > 0) {
+                            // try to match id slot
+                            for (let i = 0; i < mintedTokenIds.length; i++) {
+                                const id = mintedTokenIds[i];
+                                if (idsToCheck.includes(id)) {
+                                    copy[i] = imgs[0];
+                                    return copy;
+                                }
+                            }
+                            // otherwise, replace last
+                            copy[copy.length - 1] = imgs[0] || copy[copy.length - 1];
+                            return copy;
+                        }
+                        return imgs;
+                    } catch (e) { return prev; }
+                });
+            } catch (e) {
+                pushDebug('transform_refresh_error', String(e));
+            }
+
+            setStatus('Готово — образ обновлён.');
         } catch (e: any) {
             console.error(e);
-            setStatus(e?.message || 'Ошибка при запросе варианта');
+            setStatus(e?.message || 'Ошибка при выполнении трансформации');
+            pushDebug('transform_error', String(e));
         } finally {
             setProcessing(false);
         }
@@ -520,6 +641,53 @@ export default function NFTLabPageClient() {
                 <div>
                     <strong>Адрес контракта:</strong> <code>{CONTRACT_ADDRESS}</code>
                 </div>
+
+                {/* Owner controls: set baseURI so wallets can show images */}
+                {contractOwner && address && contractOwner.toLowerCase() === address.toLowerCase() ? (
+                    <div className="mt-3 p-3 border rounded bg-neutral-50">
+                        <div className="text-sm font-medium">Owner controls</div>
+                        <div className="mt-2">
+                            <input className="px-2 py-1 border rounded w-full" value={baseUriInput} onChange={(e) => setBaseUriInput(e.target.value)} placeholder="Введите baseURI, например ipfs://<cid>/ или https://.../metadata/" />
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                            <button className="px-3 py-2 bg-indigo-600 text-white rounded" onClick={async () => {
+                                if (!baseUriInput) { setStatus('Введите baseURI'); return; }
+                                setProcessing(true);
+                                setStatus('Отправляю setBaseURI транзакцию...');
+                                try {
+                                    const provider = new (ethers as any).BrowserProvider((window as any).ethereum);
+                                    await provider.send('eth_requestAccounts', []);
+                                    const signer = await provider.getSigner();
+                                    const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signer);
+                                    const tx = await contract.setBaseURI(baseUriInput);
+                                    await tx.wait();
+                                    setStatus('BaseURI установлен. Обновляю метаданные...');
+                                    // refresh images for currently minted tokens
+                                    if (mintedTokenIds && mintedTokenIds.length > 0) {
+                                        const imgs: string[] = [];
+                                        const contractRead = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
+                                        for (const id of mintedTokenIds) {
+                                            try {
+                                                let uri = await contractRead.tokenURI(id);
+                                                if (uri && uri.startsWith('ipfs://')) uri = 'https://ipfs.io/ipfs/' + uri.slice(7);
+                                                const meta = uri ? await fetch(uri).then(r => r.json()).catch(() => null) : null;
+                                                let image = meta?.image || meta?.image_url || '';
+                                                if (image && image.startsWith('ipfs://')) image = 'https://ipfs.io/ipfs/' + image.slice(7);
+                                                imgs.push(image || FALLBACK_NEUTRAL);
+                                            } catch (e) { imgs.push(FALLBACK_NEUTRAL); }
+                                        }
+                                        setMintedTokenImages(imgs);
+                                    }
+                                    setProcessing(false);
+                                } catch (e: any) {
+                                    console.error(e);
+                                    setStatus(String(e?.message || e));
+                                    setProcessing(false);
+                                }
+                            }}>Установить baseURI</button>
+                        </div>
+                    </div>
+                ) : null}
 
                 <div className="p-4 border rounded flex gap-4">
                     <div className="w-36 flex-shrink-0">
@@ -572,11 +740,29 @@ export default function NFTLabPageClient() {
                 </div>
 
                 {status && <div className="mt-4 p-3 bg-neutral-100 rounded">{status}</div>}
-                {mintedTokenImage && (
-                    <div className="mt-4 p-4 border rounded text-center">
-                        <h3 className="text-lg font-medium mb-2">Ваш токен</h3>
-                        <img src={mintedTokenImage} alt={`Token ${mintedTokenId}`} className="mx-auto rounded max-w-full" />
-                        <div className="mt-2 text-sm text-neutral-600">Token ID: {mintedTokenId}</div>
+                {mintedTokenIds.length > 0 && (
+                    <div className="mt-4 p-4 border rounded">
+                        <h3 className="text-lg font-medium mb-2">Ваши токены</h3>
+                        <div className="text-sm text-neutral-600 mb-2">Tx: {lastTxHash ?? '—'}</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            {mintedTokenIds.map((id, idx) => {
+                                // If metadata image is missing, fall back to a bundled preview image so user sees something immediately
+                                const img = (mintedTokenImages && mintedTokenImages[idx]) ? mintedTokenImages[idx] : `/scripts/neutral_heart_preview.png`;
+                                return (
+                                    <div key={id} className="text-center p-2 border rounded">
+                                        {img ? (
+                                            <img src={img} alt={`Token ${id}`} className="mx-auto rounded max-w-full" />
+                                        ) : (
+                                            <div className="h-36 flex items-center justify-center bg-neutral-50 text-neutral-500 rounded">Нет изображения</div>
+                                        )}
+                                        <div className="mt-2 text-sm">Token ID: {id}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        {mintedTokenImages.some(i => !i) && (
+                            <div className="mt-3 text-sm text-yellow-700">Часть метаданных пока не настроена на контракте (baseURI). Если изображения пустые — убедитесь, что владелец установил baseURI через setBaseURI.</div>
+                        )}
                     </div>
                 )}
             </div>
