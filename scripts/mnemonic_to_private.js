@@ -3,7 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 const process = require('process');
-const { Wallet } = require('ethers');
+let Wallet;
+try {
+    ({ Wallet } = require('ethers'));
+} catch (e) {
+    console.error('Required module "ethers" is not installed. Run `npm ci` in the project root to install dependencies.');
+    process.exit(2);
+}
 
 function usage() {
     console.log('Usage: node scripts/mnemonic_to_private.js [--out <file>] [--mnemonic "seed phrase"]');

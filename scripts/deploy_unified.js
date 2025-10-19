@@ -27,6 +27,7 @@ async function deployEthers() {
     const wallet = new ethers.Wallet(SEPOLIA_PRIVATE_KEY, provider);
 
     const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+    if (!artifact || !artifact.abi || !artifact.bytecode) throw new Error(`Artifact not found or missing fields at ${artifactPath}`);
     console.log("Deploying with:", wallet.address, "using ethers.js");
     const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, wallet);
     const name = process.env.NEUTRAL_HEART_NAME || 'Необратимый Выбор - Neutral Heart';
@@ -51,9 +52,18 @@ async function deployHre() {
     const [deployer] = await hre.ethers.getSigners();
     console.log("Deployer:", deployer.address);
     const Factory = await hre.ethers.getContractFactory(contractName);
-    const contract = await Factory.deploy(deployer.address, { gasLimit: 6000000 });
-    await contract.deployed();
-    console.log(`${contractName} deployed to: ${contract.address}`);
+    const name = process.env.NEUTRAL_HEART_NAME || 'Необратимый Выбор - Neutral Heart';
+    const symbol = process.env.NEUTRAL_HEART_SYMBOL || 'NHRT';
+    const maxPublic = process.env.MAX_PUBLIC ? Number(process.env.MAX_PUBLIC) : 1000;
+    const priceMatic = process.env.PRICE_MATIC || '1.0';
+    const priceWei = hre.ethers.parseEther ? hre.ethers.parseEther(priceMatic) : hre.ethers.utils.parseEther(priceMatic);
+    const contract = await Factory.deploy(name, symbol, maxPublic, priceWei, { gasLimit: 6000000 });
+    if (typeof contract.waitForDeployment === 'function') {
+        await contract.waitForDeployment();
+    } else {
+        await contract.deployed();
+    }
+    console.log(`${contractName} deployed to: ${contract.target || contract.address}`);
 }
 
 async function deployViem() {
@@ -61,10 +71,15 @@ async function deployViem() {
     const [deployer] = await hre.viem.getWalletClients();
     console.log("Deploying with viem wallet:", deployer.account.address);
     const artifact = await hre.artifacts.readArtifact(contractName);
+    const name = process.env.NEUTRAL_HEART_NAME || 'Необратимый Выбор - Neutral Heart';
+    const symbol = process.env.NEUTRAL_HEART_SYMBOL || 'NHRT';
+    const maxPublic = process.env.MAX_PUBLIC ? Number(process.env.MAX_PUBLIC) : 1000;
+    const priceMatic = process.env.PRICE_MATIC || '1.0';
+    const priceWei = priceMatic ? priceMatic : '1.0';
     const hash = await deployer.deployContract({
         abi: artifact.abi,
         bytecode: artifact.bytecode,
-        args: [deployer.account.address],
+        args: [name, symbol, maxPublic, priceWei],
     });
     const receipt = await hre.viem.getPublicClient().waitForTransactionReceipt({ hash });
     console.log(`${contractName} deployed to: ${receipt.contractAddress}`);

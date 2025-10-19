@@ -69,6 +69,7 @@ export default function NFTLabPageClient() {
                         const a = await signer.getAddress();
                         setAddress(a);
                         setIsConnected(true);
+                        try { localStorage.setItem('connected_address', a); } catch (e) { }
                         setStatus('Кошелёк подключён (fallback)');
                         return;
                     } catch (e) {
@@ -82,6 +83,7 @@ export default function NFTLabPageClient() {
             if (account && account.address) {
                 setAddress(account.address);
                 setIsConnected(true);
+                try { localStorage.setItem('connected_address', account.address); } catch (e) { }
             }
             setOnboardWallet(selected || null);
             pushDebug('onboard_wallet', selected || null);
@@ -122,7 +124,7 @@ export default function NFTLabPageClient() {
                 let price = await contract.priceWei();
                 // Optional test override: if NEXT_PUBLIC_TEST_PRICE_MATIC is set (e.g. "0.01"), use that instead
                 try {
-                    const testPrice = (process && (process.env as any) && (process.env.NEXT_PUBLIC_TEST_PRICE_MATIC)) || (globalThis as any)?.NEXT_PUBLIC_TEST_PRICE_MATIC;
+                    const testPrice = (globalThis as any)?.NEXT_PUBLIC_TEST_PRICE_MATIC;
                     if (testPrice) {
                         try {
                             // ethers v6: parseEther returns bigint
@@ -168,6 +170,11 @@ export default function NFTLabPageClient() {
                 // ignore
             }
         }
+        // Attempt to reuse previously connected address from localStorage for UX
+        try {
+            const stored = localStorage.getItem('connected_address');
+            if (stored) setAddress(stored);
+        } catch (e) { }
         loadOnchain();
     }, []);
 
@@ -272,7 +279,7 @@ export default function NFTLabPageClient() {
             const tx = await contract.publicMint(qty, { value: totalHex });
             setStatus("Транзакция отправлена, ожидаю подтверждения...");
             const rec = await tx.wait();
-            setStatus("Успех! NFT куплен. Теперь вы можете выбрать образ — Ангел или Демон.");
+            setStatus("Успех! NFT куплен. Теперь вы увидите ваш нейтральный токен — выберите образ отдельно, когда будете готовы.");
             // show chooser by setting a transient flag (we'll use currentId/mintedTokenId to infer)
             // attempt to determine minted tokenId from receipt events, or fallback to currentId
             try {
@@ -498,6 +505,9 @@ export default function NFTLabPageClient() {
             setStatus('Этот адрес уже совершил выбор или уже получил токен. Изменение невозможно.');
             return;
         }
+        // explicit irreversible action confirmation
+        const ok = window.confirm('Подтвердите: действие сожжет ваш текущий Neutral токен и создаст новую версию (это необратимо). Продолжить?');
+        if (!ok) return;
         setProcessing(true);
         setStatus('Подключаюсь к кошельку и выполняю трансформацию на цепочке...');
         try {
@@ -581,11 +591,28 @@ export default function NFTLabPageClient() {
                                 const id = mintedTokenIds[i];
                                 if (idsToCheck.includes(id)) {
                                     copy[i] = imgs[0];
+                                    // update the variant slot as well
+                                    setMintedTokenVariants((pv) => {
+                                        try {
+                                            const cp = pv ? [...pv] : [];
+                                            cp[i] = variant === 'Angel' ? 1 : 2;
+                                            return cp;
+                                        } catch (e) { return pv || []; }
+                                    });
                                     return copy;
                                 }
                             }
                             // otherwise, replace last
                             copy[copy.length - 1] = imgs[0] || copy[copy.length - 1];
+                            // also update last variant slot
+                            setMintedTokenVariants((pv) => {
+                                try {
+                                    const cp = pv ? [...pv] : [];
+                                    const idx = cp.length - 1;
+                                    if (idx >= 0) cp[idx] = variant === 'Angel' ? 1 : 2;
+                                    return cp;
+                                } catch (e) { return pv || []; }
+                            });
                             return copy;
                         }
                         return imgs;
@@ -646,7 +673,7 @@ export default function NFTLabPageClient() {
                     <div className="mt-3 p-3 border rounded bg-neutral-50">
                         <div className="text-sm font-medium">Owner controls</div>
                         <div className="mt-2">
-                            <input className="px-2 py-1 border rounded w-full" value={baseUriInput} onChange={(e) => setBaseUriInput(e.target.value)} placeholder="Введите baseURI, например ipfs://<cid>/ или https://.../metadata/" />
+                            <input className="px-2 py-1 border rounded w-full" value={baseUriInput} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBaseUriInput(e.target.value)} placeholder="Введите baseURI, например ipfs://<cid>/ или https://.../metadata/" />
                         </div>
                         <div className="mt-2 flex gap-2">
                             <button className="px-3 py-2 bg-indigo-600 text-white rounded" onClick={async () => {

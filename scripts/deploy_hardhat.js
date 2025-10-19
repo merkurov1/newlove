@@ -26,6 +26,22 @@ async function main() {
         console.log('setBaseURI:', baseUri);
     }
 
+    // If an API key for Polygonscan is provided in env, attempt automatic verification
+    if (process.env.POLYGONSCAN_API_KEY) {
+        try {
+            console.log('POLYGONSCAN_API_KEY detected; attempting contract verification...');
+            // priceWei may be a BigInt; convert to string for verification args
+            const priceArg = priceWei && priceWei.toString ? priceWei.toString() : priceWei;
+            await hre.run("verify:verify", {
+                address: deployedAddress,
+                constructorArguments: [name, symbol, maxPublic, priceArg],
+            });
+            console.log('Verification submitted to Polygonscan');
+        } catch (verErr) {
+            console.warn('Automatic verification failed:', verErr && verErr.message ? verErr.message : verErr);
+        }
+    }
+
     // Optionally set the trusted signer if provided
     if (process.env.TRUSTED_SIGNER_ADDRESS) {
         const tx2 = await nh.setTrustedSigner(process.env.TRUSTED_SIGNER_ADDRESS);

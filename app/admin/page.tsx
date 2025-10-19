@@ -12,7 +12,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
   // helpers can validate the session consistently across runtimes.
   const cookieHeader = cookies()
     .getAll()
-    .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+    .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
     .join('; ');
   const globalReq = new Request('http://localhost', { headers: { cookie: cookieHeader } });
 
@@ -87,9 +87,10 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
           {/* Compute masked values server-side */}
           {
             (() => {
-              const resendKey = process.env.RESEND_API_KEY || null;
-              const noreply = process.env.NOREPLY_EMAIL || process.env.NEXT_PUBLIC_NOREPLY_EMAIL || null;
-              const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || null;
+              const env = ((globalThis as any).process && (globalThis as any).process.env) || {};
+              const resendKey = env.RESEND_API_KEY || null;
+              const noreply = env.NOREPLY_EMAIL || env.NEXT_PUBLIC_NOREPLY_EMAIL || null;
+              const siteUrl = env.NEXT_PUBLIC_SITE_URL || env.NEXT_PUBLIC_VERCEL_URL || null;
               const mask = (k: string | null) => (typeof k === 'string' && k.length > 8 ? `${k.slice(0, 4)}...${k.slice(-4)}` : k);
               return (
                 <div className="space-y-2 text-sm text-gray-700">

@@ -159,7 +159,7 @@ async function FullView({ slug }: { slug: string }) {
                     <h2 className="text-xl font-semibold text-gray-900 mb-6">Комментарии {comments && comments.length > 0 && `(${comments.length})`}</h2>
                     {comments && comments.length > 0 ? (
                         <div className="space-y-6">
-                            {comments.map((comment) => {
+                            {comments.map((comment: any) => {
                                 const commentUser = Array.isArray(comment.User) ? comment.User[0] : comment.User;
                                 return (
                                     <div key={comment.id} className="border-b border-gray-100 last:border-0 pb-6 last:pb-0">
