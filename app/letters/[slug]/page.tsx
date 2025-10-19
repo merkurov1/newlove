@@ -4,6 +4,46 @@ import ReadMoreOrLoginClient from '@/components/letters/ReadMoreOrLoginClient';
 import { parseRichTextContent } from '@/lib/contentParser';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
+export async function generateMetadata({ params }: { params: { slug: string } }) {
+  const slug = params.slug;
+  try {
+    const supabase = createClient({ useServiceRole: true });
+    const { data: letter, error } = await supabase
+      .from('letters')
+      .select('title, content')
+      .eq('slug', slug)
+      .eq('published', true)
+      .single();
+
+    if (error || !letter) return { title: 'Письмо | Anton Merkurov' };
+
+    const title = letter.title || 'Письмо';
+    const description = String(parseRichTextContent(letter.content || '')).slice(0, 160);
+    const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.merkurov.love';
+    const image = `${site}/default-og.png`;
+
+    return {
+      title,
+      description,
+      openGraph: {
+        title,
+        description,
+        url: `${site}/letters/${slug}`,
+        images: [image],
+        type: 'article'
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title,
+        description,
+        images: [image]
+      }
+    };
+  } catch (e) {
+    return { title: 'Письмо | Anton Merkurov' };
+  }
+}
+
 export const metadata = sanitizeMetadata({
   title: 'Письмо | Anton Merkurov',
   description: 'Просмотр письма из рассылки',
