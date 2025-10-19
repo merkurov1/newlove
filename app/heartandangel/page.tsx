@@ -18,10 +18,14 @@ export default function HeartAndAngelPage() {
           <h1 className="text-4xl font-extrabold mb-4">#HEARTANDANGEL</h1>
           <p className="text-lg text-gray-700 mb-6">Heart &amp; Angel — трансмедийная художественная практика, исследующая архетипические образы через призму постгендерной идентичности. Проект деконструирует традиционные представления о дуализме добра и зла, предлагая альтернативную модель взаимодействия символических фигур.</p>
 
+          <div className="text-center mb-8">
+            <a href="/heartandangel/NFT" className="inline-block bg-pink-600 hover:bg-pink-700 text-white font-semibold text-xl px-6 py-3 rounded-full shadow-lg transition-colors">Необратимый выбор</a>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {images.slice(0,2).map((src, i) => (
               <div key={i} className="rounded-lg overflow-hidden shadow-sm bg-gray-50">
-                <Image src={src} alt={`Heart and Angel ${i}`} width={1200} height={800} className="w-full h-auto object-cover" />
+                <Image src={src} alt={`Heart and Angel ${i}`} width={800} height={540} className="w-full h-64 object-cover" />
               </div>
             ))}
           </div>
@@ -35,7 +39,7 @@ export default function HeartAndAngelPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {images.slice(2).map((src, i) => (
               <div key={i} className="rounded-lg overflow-hidden shadow-sm bg-gray-50">
-                <Image src={src} alt={`Heart and Angel ${i+2}`} width={1200} height={800} className="w-full h-auto object-cover" />
+                <Image src={src} alt={`Heart and Angel ${i+2}`} width={800} height={540} className="w-full h-64 object-cover" />
               </div>
             ))}
           </div>
@@ -57,9 +61,7 @@ export default function HeartAndAngelPage() {
             <p>Проект не стремится к дидактическим выводам, но создаёт пространство для рефлексии о природе человеческих связей, исследуя любовь не как романтическую категорию, но как фундаментальный принцип этического отношения к миру.</p>
           </section>
 
-          <div className="text-center mb-16">
-            <a href="/heartandangrel/NFT" className="inline-block bg-pink-600 hover:bg-pink-700 text-white font-semibold text-xl px-8 py-5 rounded-full shadow-lg transition-colors">Необратимы выбор</a>
-          </div>
+          {/* CTA moved to top */}
 
         </div>
       </main>

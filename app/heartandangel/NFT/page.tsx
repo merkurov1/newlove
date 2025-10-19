@@ -718,7 +718,7 @@ export default function NFTLabPageClient() {
     }
 
     return (
-        <main className="mx-auto max-w-prose py-12 px-4">
+    <main className="mx-auto max-w-4xl py-12 px-6">
             <section className="mt-6 p-6 rounded bg-gradient-to-r from-neutral-50 to-neutral-100">
                 <div className="max-w-6xl mx-auto">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
@@ -840,16 +840,13 @@ export default function NFTLabPageClient() {
                     </div>
                 ) : null}
 
-                <div className="p-4 border rounded flex gap-4">
-                    <div className="w-36 flex-shrink-0">
-                            {/* show first minted token image (neutral) if available, otherwise fallback */}
-                            <img src={(mintedTokenImages && mintedTokenImages[0]) ? mintedTokenImages[0] : FALLBACK_NEUTRAL} alt="Neutral Heart preview" className="rounded shadow" />
-                        </div>
+                <div className="p-6 rounded-xl shadow-lg bg-white border border-neutral-100 flex flex-col md:flex-row md:items-center gap-6">
+                    <div className="w-40 flex-shrink-0">
+                        <img src={(mintedTokenImages && mintedTokenImages[0]) ? mintedTokenImages[0] : FALLBACK_NEUTRAL} alt="Neutral Heart preview" className="rounded shadow w-full h-28 object-cover" />
+                    </div>
                     <div className="flex-1">
-                            <div className="mt-0 mb-2">
-                              {/* price shown on CTA button below */}
-                            </div>
-                            <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                            <div className="flex items-center gap-3">
                                 <button
                                     className="px-6 py-3 bg-blue-600 text-white rounded-full text-lg font-semibold shadow-lg disabled:opacity-50"
                                     onClick={() => handlePublicMint(1)}
@@ -864,28 +861,21 @@ export default function NFTLabPageClient() {
                                     {isConnected ? (address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Кошелёк подключён') : 'Подключить кошелёк'}
                                 </button>
                             </div>
-                            <div className="mt-2 text-sm text-neutral-500 flex items-center gap-3">
-                                <div>
+                            <div className="text-sm text-neutral-700 text-right">
+                                <div className="font-medium">
                                     {angelCount !== null || devilCount !== null ? (
-                                        <span className="font-medium">{(angelCount ?? 0)} - Ангелов, {(devilCount ?? 0)} - Демонов</span>
+                                        `${angelCount ?? 0} - Ангелов, ${devilCount ?? 0} - Демонов`
                                     ) : (
-                                        <span className="text-neutral-500">{publicMinted ?? "—"} / {maxPublic ?? "—"} (итого)</span>
+                                        `Доступно: ${publicMinted ?? "—"} / ${maxPublic ?? "—"}`
                                     )}
                                 </div>
-                                <div>
-                                    <button
-                                        className="px-3 py-1 bg-gray-100 border rounded text-sm"
-                                        onClick={() => fetchVariantCounts({ cap: 2000 })}
-                                        disabled={isCounting || !publicMinted}
-                                    >
-                                        {isCounting ? 'Считаю...' : 'Обновить счётчик'}
-                                    </button>
+                                <div className="mt-2">
+                                    <button className="px-3 py-1 bg-gray-100 border rounded text-sm" onClick={() => fetchVariantCounts({ cap: 2000 })} disabled={isCounting || !publicMinted}>{isCounting ? 'Считаю...' : 'Обновить счётчик'}</button>
                                 </div>
-                                {countProgress ? (
-                                    <div className="ml-2 text-xs text-neutral-500">{countProgress.done}/{countProgress.total}</div>
-                                ) : null}
+                                <div className="mt-1 text-xs text-neutral-500">итого: {priceEth ?? '—'} MATIC</div>
                             </div>
                         </div>
+                    </div>
                 </div>
 
                 {/* FAQ section */}
