@@ -25,7 +25,7 @@ export default function HeartAndAngelPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {images.slice(0,2).map((src, i) => (
               <div key={i} className="rounded-lg overflow-hidden shadow-sm bg-gray-50">
-                <Image src={src} alt={`Heart and Angel ${i}`} width={800} height={540} className="w-full h-64 object-cover" />
+                <Image src={src} alt={`Heart and Angel ${i}`} width={800} height={450} className="w-full h-56 object-contain bg-white p-2" />
               </div>
             ))}
           </div>
@@ -39,7 +39,7 @@ export default function HeartAndAngelPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {images.slice(2).map((src, i) => (
               <div key={i} className="rounded-lg overflow-hidden shadow-sm bg-gray-50">
-                <Image src={src} alt={`Heart and Angel ${i+2}`} width={800} height={540} className="w-full h-64 object-cover" />
+                <Image src={src} alt={`Heart and Angel ${i+2}`} width={800} height={450} className="w-full h-56 object-contain bg-white p-2" />
               </div>
             ))}
           </div>
