@@ -13,6 +13,17 @@ import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSub
 import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
 import { parseTagNames, upsertTagsAndLink } from '@/lib/tags';
 
+// --- Revalidation audit helper ---
+async function recordRevalidationAudit(supabase, userId, reason = null) {
+  try {
+    if (!supabase || !supabase.from) return;
+    await supabase.from('revalidation_audit').insert({ id: createId(), user_id: userId || null, reason, created_at: new Date().toISOString() });
+  } catch (e) {
+    // don't block the main flow on audit errors
+    console.warn('recordRevalidationAudit failed:', e);
+  }
+}
+
 // --- Вспомогательные функции ---
 
 /**
@@ -491,7 +502,8 @@ export async function createLetter(formData) {
 
   const parsedTags = parseTagNames(tagsString);
   await upsertTagsAndLink(supabase, 'letter', letterId, parsedTags);
-
+  // Audit and revalidate
+  await recordRevalidationAudit(supabase, user?.id, published ? 'create_published_letter' : 'create_letter');
   revalidatePath('/admin/letters');
   revalidatePath('/letters');
   if (published) revalidatePath(`/letters/${slug}`);
@@ -544,6 +556,8 @@ export async function updateLetter(formData) {
   const parsedTags = parseTagNames(tagsString);
   await upsertTagsAndLink(supabase, 'letter', id, parsedTags);
 
+  // Audit and revalidate
+  await recordRevalidationAudit(supabase, null, published ? 'update_published_letter' : 'update_letter');
   revalidatePath('/admin/letters');
   revalidatePath('/letters');
   revalidatePath(`/admin/letters/edit/${id}`);
@@ -604,8 +618,9 @@ export async function deleteLetter(formData) {
     }
 
     revalidatePath('/admin/letters');
-  console.info('revalidatePath: requesting revalidation for /letters (admin action)');
-  revalidatePath('/letters');
+    console.info('revalidatePath: requesting revalidation for /letters (admin action)');
+    await recordRevalidationAudit(supabase, null, 'delete_letter');
+    revalidatePath('/letters');
     if (letter?.published) revalidatePath(`/letters/${letter.slug}`);
     // server action expects void return on success
     return;
@@ -694,6 +709,14 @@ export async function sendLetter(prevState, formData) {
 export async function revalidateLetters() {
   await verifyAdmin();
   try {
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
+    // Attempt to record who triggered the revalidation
+    try {
+      const user = (await requireAdminFromRequest(new Request('http://localhost'))).user;
+      await recordRevalidationAudit(supabase, user?.id, 'manual_revalidate');
+    } catch (e) {
+      // ignore
+    }
     revalidatePath('/letters');
     // Redirect back to admin with a query param so UI can show a success banner
     redirect('/admin?revalidated=1');

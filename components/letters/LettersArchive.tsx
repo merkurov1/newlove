@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 
 interface Letter {
   id: string;
@@ -15,10 +16,11 @@ interface Props {
   lastUpdated?: string | null;
 }
 
-export default function LettersArchive({ initialLetters = [], initialDebug = null }: Props) {
+const LettersArchiveClient = dynamic(() => import('./LettersArchiveClient'), { ssr: false });
+
+export default function LettersArchive({ initialLetters = [], initialDebug = null, lastUpdated = null }: Props) {
   const letters = initialLetters || [];
   const debug = initialDebug || null;
-  const lastUpdated = (arguments && (arguments[0] as any)?.lastUpdated) || null;
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
@@ -41,6 +43,11 @@ export default function LettersArchive({ initialLetters = [], initialDebug = nul
         {debug && (
           <pre className="whitespace-pre-wrap text-xs text-left mt-4 bg-gray-50 p-3 rounded">{JSON.stringify(debug, null, 2)}</pre>
         )}
+
+        {/* Client-side refresh component as fallback for stale caches */}
+        <div className="mt-4">
+          <LettersArchiveClient initialLetters={initialLetters} initialLastUpdated={lastUpdated} />
+        </div>
       </div>
     );
   }
