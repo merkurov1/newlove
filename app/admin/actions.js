@@ -604,7 +604,8 @@ export async function deleteLetter(formData) {
     }
 
     revalidatePath('/admin/letters');
-    revalidatePath('/letters');
+  console.info('revalidatePath: requesting revalidation for /letters (admin action)');
+  revalidatePath('/letters');
     if (letter?.published) revalidatePath(`/letters/${letter.slug}`);
     // server action expects void return on success
     return;

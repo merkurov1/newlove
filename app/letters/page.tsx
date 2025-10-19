@@ -38,6 +38,7 @@ export default async function LettersPage({ searchParams }: Props) {
 
   // Fetch published letters server-side to provide initial data to the client
   let initialLetters: any[] = [];
+  let lastUpdated: string | null = null;
   try {
     const supabase = createClient({ useServiceRole: true });
     const { data: lettersData, error } = await supabase
@@ -55,6 +56,9 @@ export default async function LettersPage({ searchParams }: Props) {
         createdAt: l.createdAt,
         author: { name: Array.isArray(l.User) ? l.User[0]?.name : l.User?.name }
       }));
+      if (lettersData.length > 0) {
+        lastUpdated = lettersData[0].publishedAt || lettersData[0].createdAt || null;
+      }
     } else if (error) {
       console.error('Server initial letters fetch error', error);
     }
@@ -91,7 +95,10 @@ export default async function LettersPage({ searchParams }: Props) {
                 </div>
                 <h2 className="text-lg font-medium text-gray-900">Архив рассылки</h2>
               </div>
-              <LettersArchive initialLetters={initialLetters} initialDebug={serverDebug} />
+              <div className="mb-3 text-sm text-gray-500">
+                {lastUpdated ? `Последнее обновление: ${new Date(lastUpdated).toLocaleString('ru-RU')}` : ''}
+              </div>
+              <LettersArchive initialLetters={initialLetters} initialDebug={serverDebug} lastUpdated={lastUpdated} />
             </div>
           </div>
           {/* Правая колонка: Заказ открыток */}
