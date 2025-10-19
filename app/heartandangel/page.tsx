@@ -3,6 +3,11 @@ export const dynamic = 'force-dynamic';
 import React from 'react';
 import Image from 'next/image';
 
+export const metadata = {
+  title: '#HEARTANDANGEL',
+  description: 'Heart & Angel — трансмедийный художественный проект о выборе, архетипах и цифровой идентичности.'
+};
+
 const images = [
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759212266765-IMG_0514.png',
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759213959968-IMG_0517.png',
@@ -15,17 +20,17 @@ export default function HeartAndAngelPage() {
     <div className="min-h-screen bg-white">
       <main className="container mx-auto px-4 py-20">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl font-extrabold mb-4">#HEARTANDANGEL</h1>
+          <h1 className="text-5xl sm:text-6xl font-extrabold mb-6">#HEARTANDANGEL</h1>
           <p className="text-lg text-gray-700 mb-6">Heart &amp; Angel — трансмедийная художественная практика, исследующая архетипические образы через призму постгендерной идентичности. Проект деконструирует традиционные представления о дуализме добра и зла, предлагая альтернативную модель взаимодействия символических фигур.</p>
 
           <div className="text-center mb-8">
             <a href="/heartandangel/NFT" className="inline-block bg-pink-600 hover:bg-pink-700 text-white font-semibold text-xl px-6 py-3 rounded-full shadow-lg transition-colors">Необратимый выбор</a>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 items-stretch">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8 items-stretch">
             {images.slice(0,2).map((src, i) => (
-              <div key={i} className="rounded-lg overflow-hidden shadow-sm bg-gray-50 flex items-center justify-center">
-                <Image src={src} alt={`Heart and Angel ${i}`} width={1200} height={900} className="w-full h-64 sm:h-72 md:h-56 object-contain bg-white p-3" />
+              <div key={i} className="rounded-lg overflow-hidden shadow-md bg-gray-50 flex items-center justify-center">
+                <Image src={src} alt={`Heart and Angel ${i}`} width={1600} height={1200} className="w-full h-96 sm:h-[28rem] md:h-[22rem] object-cover bg-white" />
               </div>
             ))}
           </div>
@@ -36,10 +41,10 @@ export default function HeartAndAngelPage() {
             <p>Небинарность персонажей не является декоративным решением, а представляет собой концептуальный жест, направленный на универсализацию человеческого опыта. Проект исследует, как архетипические образы могут функционировать вне патриархальной символической системы, предлагая инклюзивную мифологию для современного контекста.</p>
           </section>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 items-stretch">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8 items-stretch">
             {images.slice(2).map((src, i) => (
-              <div key={i} className="rounded-lg overflow-hidden shadow-sm bg-gray-50 flex items-center justify-center">
-                <Image src={src} alt={`Heart and Angel ${i+2}`} width={1200} height={900} className="w-full h-64 sm:h-72 md:h-56 object-contain bg-white p-3" />
+              <div key={i} className="rounded-lg overflow-hidden shadow-md bg-gray-50 flex items-center justify-center">
+                <Image src={src} alt={`Heart and Angel ${i+2}`} width={1600} height={1200} className="w-full h-96 sm:h-[28rem] md:h-[22rem] object-cover bg-white" />
               </div>
             ))}
           </div>
