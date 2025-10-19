@@ -145,6 +145,10 @@ export default async function RootLayout({ children }) {
   };
   return (
     <html lang="ru">
+      <head>
+        {/* Umami analytics */}
+        <script defer src="https://cloud.umami.is/script.js" data-website-id="87795d47-f53d-4ef8-8e82-3ee195ea997b"></script>
+      </head>
       <body>
         <AuthProvider>
           <Header settings={settings} projects={projects} />
