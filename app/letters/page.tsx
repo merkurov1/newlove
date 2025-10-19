@@ -40,7 +40,9 @@ export default async function LettersPage({ searchParams }: Props) {
   let initialLetters: any[] = [];
   let lastUpdated: string | null = null;
   try {
-    const supabase = createClient({ useServiceRole: true });
+    // Use anon client by default so this page renders even when SUPABASE_SERVICE_ROLE_KEY
+    // is not configured in the environment. Only use service role when debug is requested.
+    const supabase = createClient({ useServiceRole: wantDebug });
     const { data: lettersData, error } = await supabase
       .from('letters')
       .select('id, title, slug, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(id, name, email)')
