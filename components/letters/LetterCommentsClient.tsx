@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 // ----- НОВЫЙ ИМПОРТ -----
 import { createClient } from '@/lib/supabase/client'; 
 
-export default function LetterCommentsClient({ slug }: { slug?: string }) {
+export default function LetterCommentsClient({ slug, serverContainerId }: { slug?: string; serverContainerId?: string }) {
     const [comments, setComments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export default function LetterCommentsClient({ slug }: { slug?: string }) {
                 const { data } = await supabase.auth.getSession();
                 const s = (data as any)?.session || null;
                 if (!mounted) return;
-                if (!s || !s.user) {
+                if (!s || !s.user) { 
                     setHasSession(false);
                     setComments([]);
                     setError('unauthenticated');

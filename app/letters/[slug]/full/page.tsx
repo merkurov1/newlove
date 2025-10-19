@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import BlockRenderer from '@/components/BlockRenderer';
+import LetterCommentsClient from '@/components/letters/LetterCommentsClient';
 
 export default async function LetterFullPage({ params }: { params: { slug: string } }) {
   const slug = params.slug;
@@ -69,7 +70,8 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
           </div>
         </article>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-blue-100 p-8">
+        {/* Server-rendered comments teaser. Client component will hide this on hydrate for authenticated users. */}
+        <div id={`server-comments-${slug}`} className="bg-white rounded-2xl shadow-sm border border-blue-100 p-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Комментарии {comments && comments.length > 0 && `(${comments.length})`}</h2>
           {comments && comments.length > 0 ? (
             <div className="space-y-6">
@@ -94,6 +96,12 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
           ) : (
             <p className="text-gray-500 text-center py-8">Пока нет комментариев. Будьте первым!</p>
           )}
+        </div>
+
+        {/* Client-side comments UI (form + submission). It will hide the server teaser when appropriate. */}
+        <div className="mt-6">
+          {/* @ts-ignore - render client component in a server component */}
+          <LetterCommentsClient slug={slug} serverContainerId={`server-comments-${slug}`} />
         </div>
       </div>
     </div>
