@@ -24,6 +24,8 @@ export default function LettersArchive({ initialLetters, initialDebug }: Props) 
   const [loading, setLoading] = useState<boolean>(initialLetters ? false : true);
   const [error, setError] = useState<string | null>(null);
   const [lastFetchInfo, setLastFetchInfo] = useState<any>(null);
+  const [diag, setDiag] = useState<any>(null);
+  const [diagRunning, setDiagRunning] = useState(false);
 
   useEffect(() => {
     // If initial data was provided server-side, skip the client fetch.
@@ -103,6 +105,46 @@ export default function LettersArchive({ initialLetters, initialDebug }: Props) 
         >
           Попробовать снова
         </button>
+        <div className="mt-4">
+          <button
+            onClick={async () => {
+              setDiagRunning(true);
+              try {
+                const runOne = async (withCreds: boolean) => {
+                  try {
+                    const res = await fetch('/api/letters?debug=1&all=1', withCreds ? { credentials: 'same-origin' } : {} as any);
+                    const text = await res.text();
+                    let parsed: any = null;
+                    try { parsed = JSON.parse(text); } catch { parsed = text; }
+                    return { ok: res.ok, status: res.status, headers: Object.fromEntries(res.headers.entries()), bodyText: text, body: parsed };
+                  } catch (e) {
+                    return { error: String(e) };
+                  }
+                };
+
+                const withCreds = await runOne(true);
+                const withoutCreds = await runOne(false);
+                setDiag({ withCreds, withoutCreds, lastFetchInfo });
+              } finally {
+                setDiagRunning(false);
+              }
+            }}
+            className="mt-3 inline-block px-3 py-2 rounded bg-blue-600 text-white text-sm"
+          >
+            {diagRunning ? 'Running...' : 'Run client fetch diagnostics'}
+          </button>
+
+          {lastFetchInfo && (
+            <pre className="mt-3 text-left text-xs bg-gray-50 p-3 rounded">{JSON.stringify(lastFetchInfo, null, 2)}</pre>
+          )}
+
+          {diag && (
+            <div className="mt-3 text-left text-xs">
+              <h4 className="font-medium">Diagnostics</h4>
+              <pre className="mt-2 bg-white p-3 rounded">{JSON.stringify(diag, null, 2)}</pre>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
