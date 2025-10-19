@@ -772,7 +772,7 @@ export default function NFTLabPageClient() {
                     </div>
                 </div>
             </section>
-            <h1 className="text-3xl font-bold">Необратимый Выбор — получить Neutral Heart</h1>
+            <h1 className="text-3xl font-bold mt-8 text-center">Необратимый Выбор — получить Neutral Heart</h1>
 
 
 
@@ -789,8 +789,15 @@ export default function NFTLabPageClient() {
                         <div className="mt-2 text-sm text-neutral-500">Если сервер не настроен, вы увидите подсказку, как вручную перевести токен.</div>
                     </div>
                 ) : null}
-                <div>
-                    <strong>Адрес контракта:</strong> <code>{CONTRACT_ADDRESS}</code>
+                <div className="flex justify-center items-center gap-2">
+                    <strong>Адрес контракта:</strong>
+                    <code className="font-mono px-2 py-1 bg-neutral-100 rounded text-sm break-all">{CONTRACT_ADDRESS}</code>
+                    <a href={`https://polygonscan.com/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-sm text-neutral-500 hover:text-neutral-800 inline-flex items-center gap-1" title="Открыть в Polygonscan">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zm0 7.2L4.2 7 12 4.8 19.8 7 12 9.2zM2 17l10 5 10-5v-2l-10 5-10-5v2z" />
+                        </svg>
+                        <span className="sr-only">Open in Polygonscan</span>
+                    </a>
                 </div>
 
                 {/* Owner controls: set baseURI so wallets can show images */}
@@ -852,7 +859,7 @@ export default function NFTLabPageClient() {
                                     onClick={() => handlePublicMint(1)}
                                     disabled={isProcessing || (maxPublic !== null && publicMinted !== null && publicMinted >= maxPublic)}
                                 >
-                                    Купить — {priceEth ?? "—"} MATIC
+                                    Купить — 0,0001 MATIC
                                 </button>
                                 <button
                                     className="px-4 py-2 bg-gray-200 rounded"
@@ -878,9 +885,21 @@ export default function NFTLabPageClient() {
                     </div>
                 </div>
 
+                {/* Share buttons */}
+                <div className="mt-6 flex items-center gap-3">
+                    <span className="text-sm text-neutral-600">Поделиться:</span>
+                    <div className="flex items-center gap-2">
+                        <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('Необратимый Выбор — Neutral Heart')}&url=${encodeURIComponent('https://www.merkurov.love/heartandangel/NFT')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-blue-500 text-white rounded text-sm">Twitter</a>
+                        <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent('https://www.merkurov.love/heartandangel/NFT')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-blue-700 text-white rounded text-sm">Facebook</a>
+                        <a href={`https://t.me/share/url?url=${encodeURIComponent('https://www.merkurov.love/heartandangel/NFT')}&text=${encodeURIComponent('Необратимый Выбор — Neutral Heart')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-blue-400 text-white rounded text-sm">Telegram</a>
+                        <a href={`https://fosstodon.org/share?text=${encodeURIComponent('Необратимый Выбор — Neutral Heart')}&url=${encodeURIComponent('https://www.merkurov.love/heartandangel/NFT')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-neutral-800 text-white rounded text-sm">Mastodon</a>
+                        <button onClick={() => { navigator.clipboard?.writeText('https://www.merkurov.love/heartandangel/NFT'); alert('Ссылка скопирована'); }} className="px-3 py-1 bg-gray-100 rounded text-sm">Скопировать ссылку</button>
+                    </div>
+                </div>
+
                 {/* FAQ section */}
                 <div className="mt-6 p-6 bg-white shadow-sm rounded border">
-                    <h2 className="text-2xl font-extrabold mb-4">FAQ — ОТВЕТЫ НА ЧАСТЫЕ ВОПРОСЫ</h2>
+                    <h2 className="text-2xl font-extrabold mb-4 text-center">FAQ — ОТВЕТЫ НА ЧАСТЫЕ ВОПРОСЫ</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-4">
                             <h3 className="text-lg font-semibold">ОБЩИЕ ВОПРОСЫ</h3>
