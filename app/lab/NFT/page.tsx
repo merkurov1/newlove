@@ -97,6 +97,8 @@ export default function NFTLabPageClient() {
     const [hasClaimedOnChain, setHasClaimedOnChain] = useState<boolean | null>(null);
     const [isEligible, setIsEligible] = useState<boolean | null>(null);
     const [hasTransformed, setHasTransformed] = useState<boolean>(false);
+    const [mintedTokenId, setMintedTokenId] = useState<number | null>(null);
+    const [mintedTokenImage, setMintedTokenImage] = useState<string | null>(null);
 
     useEffect(() => {
         // Read on-chain metadata (price, supply)
@@ -109,22 +111,22 @@ export default function NFTLabPageClient() {
                 try { console.debug('[NFT] loadOnchain provider network:', await provider.getNetwork()); } catch (e) { }
                 const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
                 let price = await contract.priceWei();
-                    // Optional test override: if NEXT_PUBLIC_TEST_PRICE_MATIC is set (e.g. "0.01"), use that instead
-                    try {
-                        const testPrice = (process && (process.env as any) && (process.env.NEXT_PUBLIC_TEST_PRICE_MATIC)) || (globalThis as any)?.NEXT_PUBLIC_TEST_PRICE_MATIC;
-                        if (testPrice) {
-                            try {
-                                // ethers v6: parseEther returns bigint
-                                const parsed = (ethers as any).parseEther(testPrice);
+                // Optional test override: if NEXT_PUBLIC_TEST_PRICE_MATIC is set (e.g. "0.01"), use that instead
+                try {
+                    const testPrice = (process && (process.env as any) && (process.env.NEXT_PUBLIC_TEST_PRICE_MATIC)) || (globalThis as any)?.NEXT_PUBLIC_TEST_PRICE_MATIC;
+                    if (testPrice) {
+                        try {
+                            // ethers v6: parseEther returns bigint
+                            const parsed = (ethers as any).parseEther(testPrice);
                             price = parsed;
-                                pushDebug('price_override_matic', testPrice);
-                            } catch (e) {
-                                pushDebug('price_override_parse_error', String(e));
-                            }
+                            pushDebug('price_override_matic', testPrice);
+                        } catch (e) {
+                            pushDebug('price_override_parse_error', String(e));
                         }
-                    } catch (e) {
-                        // ignore
                     }
+                } catch (e) {
+                    // ignore
+                }
                 const max = await contract.maxPublicSupply();
                 const minted = await contract.publicMinted();
                 const cid = await provider.getNetwork();
@@ -239,7 +241,7 @@ export default function NFTLabPageClient() {
             try {
                 const code = await provider.send('eth_getCode', [CONTRACT_ADDRESS, 'latest']);
                 pushDebug('contract_code', code && code.length > 10 ? code.slice(0, 200) + '...' : code);
-                    pushDebug('contract_code', code && code.length > 10 ? code.slice(0, 200) + '...' : code);
+                pushDebug('contract_code', code && code.length > 10 ? code.slice(0, 200) + '...' : code);
                 if (!code || code === '0x' || code === '0x0') {
                     setStatus('Контракт не найден на этой сети. Проверьте сеть в кошельке.');
                     setProcessing(false);
@@ -259,18 +261,61 @@ export default function NFTLabPageClient() {
             await tx.wait();
             setStatus("Успех! NFT куплен. Теперь вы можете выбрать образ — Ангел или Демон.");
             // show chooser by setting a transient flag (we'll use currentId to infer)
-            setTimeout(() => {
-                try {
-                    // attempt to set currentId from chain
-                    const eth = (window as any).ethereum;
-                    if (!eth) return;
-                    const provider = new (ethers as any).BrowserProvider(eth as any);
-                    const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
-                    contract.currentId().then((v: any) => setCurrentId(Number(v) - 1)).catch(() => { });
-                } catch (e) { }
-            }, 2500);
-            // optionally refresh on-chain state
-            setTimeout(() => window.location.reload(), 1200);
+            // attempt to determine minted tokenId from receipt events, or fallback to currentId
+            try {
+                // parse Transfer event (ERC-721) from receipt logs if present
+                const transferEventTopic = ethers.id("Transfer(address,address,uint256)");
+                let tokenIdFromReceipt: number | null = null;
+                    try {
+                    const logs = await tx.wait().then((r: any) => r.logs || []);
+                    for (const l of logs) {
+                        if (!l || !l.topics) continue;
+                        if (l.topics[0] === transferEventTopic) {
+                            // tokenId is in topics[3]
+                            try { tokenIdFromReceipt = Number(BigInt(l.topics[3])); break; } catch (e) { }
+                        }
+                    }
+                } catch (e) {
+                    // already awaited above; ignore
+                }
+
+                if (!tokenIdFromReceipt) {
+                    try {
+                        const eth = (window as any).ethereum;
+                        if (eth) {
+                            const provider = new (ethers as any).BrowserProvider(eth as any);
+                            const contractRead = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
+                            const cur = await contractRead.currentId();
+                            tokenIdFromReceipt = Number(cur) - 1;
+                        }
+                    } catch (e) { }
+                }
+
+                if (tokenIdFromReceipt) {
+                    setMintedTokenId(tokenIdFromReceipt);
+                    // fetch tokenURI and image
+                    try {
+                        const eth = (window as any).ethereum;
+                        const provider = eth ? new (ethers as any).BrowserProvider(eth as any) : new (ethers as any).JsonRpcProvider();
+                        const contractRead = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
+                        const uri = await contractRead.tokenURI(tokenIdFromReceipt);
+                        // support ipfs:// and http(s)
+                        let fetchUrl = uri;
+                        if (uri.startsWith('ipfs://')) fetchUrl = 'https://ipfs.io/ipfs/' + uri.slice(7);
+                        const meta = await fetch(fetchUrl).then(r => r.json()).catch(() => null);
+                        const image = meta?.image || meta?.image_url || null;
+                        if (image) {
+                            let imageUrl = image;
+                            if (image.startsWith('ipfs://')) imageUrl = 'https://ipfs.io/ipfs/' + image.slice(7);
+                            setMintedTokenImage(imageUrl);
+                        }
+                    } catch (e) {
+                        pushDebug('mint_image_error', String(e));
+                    }
+                }
+            } catch (e) {
+                pushDebug('mint_tokenid_detect_error', String(e));
+            }
         } catch (err: any) {
             console.error(err);
             setStatus(err?.message || "Ошибка при минте");
@@ -527,6 +572,13 @@ export default function NFTLabPageClient() {
                 </div>
 
                 {status && <div className="mt-4 p-3 bg-neutral-100 rounded">{status}</div>}
+                {mintedTokenImage && (
+                    <div className="mt-4 p-4 border rounded text-center">
+                        <h3 className="text-lg font-medium mb-2">Ваш токен</h3>
+                        <img src={mintedTokenImage} alt={`Token ${mintedTokenId}`} className="mx-auto rounded max-w-full" />
+                        <div className="mt-2 text-sm text-neutral-600">Token ID: {mintedTokenId}</div>
+                    </div>
+                )}
             </div>
             {/* Debug panel - visible in-page to help debug Onboard-only flows */}
             <details className="mt-6 p-4 bg-black/5 rounded">

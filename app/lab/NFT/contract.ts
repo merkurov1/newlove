@@ -7,6 +7,7 @@ export const NFT_ABI = [
     "function maxPublicSupply() view returns (uint256)",
     "function publicMint(uint256 qty) payable",
     "function publicMinted() view returns (uint256)",
+    "function tokenURI(uint256) view returns (string)",
     "function claimForSubscriber(bytes signature)",
     "function hasClaimedOnChain(address) view returns (bool)",
     "function currentId() view returns (uint256)",
