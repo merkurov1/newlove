@@ -4,15 +4,20 @@ import Link from 'next/link';
 
 export default async function LetterFullPage({ params }: { params: { slug: string } }) {
   const slug = params.slug;
+  // First, use anon client to read the session/user cookie
   const supabase = createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  console.log('Full user:', user ? user.id : 'no user', authError ? authError.message : ''); // Debug log for Vercel
 
+  // If not authenticated, redirect back to archive
   if (authError || !user) {
     redirect(`/letters/${slug}`);
   }
 
-  const { data: letter, error } = await supabase
+  // After we've verified the request is authenticated, use service-role client
+  // for data fetching that may join the protected `User` table.
+  const supabaseSvc = createClient({ useServiceRole: true });
+
+  const { data: letter, error } = await supabaseSvc
     .from('letters')
     .select('id, title, slug, content, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(name, email)')
     .eq('slug', slug)
@@ -25,7 +30,7 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
   }
 
   const letterAuthor = Array.isArray(letter.User) ? letter.User[0] : letter.User;
-  const { data: comments } = await supabase
+  const { data: comments } = await supabaseSvc
     .from('letter_comments')
     .select('id, content, created_at, user_id, author_display, User(name, email)')
     .eq('letter_id', letter.id)
