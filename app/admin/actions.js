@@ -346,7 +346,7 @@ export async function adminUpdateUserRole(userId, role) {
     }
   } catch (syncErr) {
     console.warn('adminUpdateUserRole: failed to sync users/subscribers tables', syncErr);
-    try { (await import('@sentry/nextjs')).captureException(syncErr); } catch (e) { }
+  // Sentry removed
   }
 
   revalidatePath('/admin/users');
@@ -391,7 +391,7 @@ export async function subscribeToNewsletter(prevState, formData) {
     svc = getServerSupabaseClient({ useServiceRole: true });
   } catch (e) {
     console.error('subscribeToNewsletter: service role client not available', e);
-    try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) { }
+  // Sentry removed
     return { status: 'error', message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).', error: String(e) };
   }
 
@@ -412,7 +412,7 @@ export async function subscribeToNewsletter(prevState, formData) {
     }
   } catch (error) {
     console.error('Supabase upsert subscriber error:', error);
-    try { (await import('@sentry/nextjs')).captureException(error); } catch (e) { }
+  // Sentry removed
     // Provide richer error back to client to aid debugging (without leaking secrets)
     const code = error?.code || null;
     const msg = error?.message || String(error) || 'Ошибка при подписке.';
@@ -432,7 +432,7 @@ export async function subscribeToNewsletter(prevState, formData) {
     const { error: tokenErr } = await svc.from('subscriber_tokens').insert({ subscriber_id: subscriber.id, type: 'confirm', token: confirmToken, created_at: new Date().toISOString() });
     if (tokenErr) {
       console.warn('Failed to insert confirm token:', tokenErr.message || tokenErr);
-      try { (await import('@sentry/nextjs')).captureException(tokenErr); } catch (e) { }
+  // Sentry removed
     } else {
       const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-confirm?token=${confirmToken}`;
       console.info('Created confirm token for subscriber', subscriber.email);
@@ -573,7 +573,7 @@ export async function deleteLetter(formData) {
       console.error('Error getting service role client:', e);
     if (error && String(error.code) === '42501') {
       console.error('Supabase delete letter permission denied (42501). Attempting retry with service role client if available.');
-      try { (await import('@sentry/nextjs')).captureException(error); } catch (e) { }
+  // Sentry removed
 
       if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
         console.warn('Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server; returning error to caller.');
@@ -585,21 +585,21 @@ export async function deleteLetter(formData) {
         const retry = await svc.from('letters').delete().eq('id', id);
         if (retry.error) {
           console.error('Retry with service role failed:', retry.error);
-          try { (await import('@sentry/nextjs')).captureException(retry.error); } catch (e) { }
+          // Sentry removed
           return { status: 'error', message: 'Ошибка при удалении письма: permission denied for table letters. Убедитесь, что сервисная роль имеет права на таблицу `letters`. Рекомендация: выполните sql/ensure_service_role_grants.sql в Supabase SQL Editor (или вручную выдайте соответствующие права).', details: retry.error };
         }
         // success via retry
         error = null;
       } catch (e) {
       console.error('Error upserting subscriber:', error);
-        try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) { }
+  // Sentry removed
         return { status: 'error', message: 'Не удалось удалить письмо: ' + (e?.message || String(e)) + '. Проверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql', details: e };
       }
     }
 
     if (error) {
       console.error('Supabase delete letter error:', error);
-      try { (await import('@sentry/nextjs')).captureException(error); } catch (e) { }
+  // Sentry removed
       return { status: 'error', message: 'Ошибка при удалении письма: ' + (error.message || String(error)) + '. Если это ошибка прав (42501), убедитесь в настройке сервисной роли.', details: error };
     }
 
@@ -610,7 +610,7 @@ export async function deleteLetter(formData) {
     return;
   } catch (e) {
     console.error('deleteLetter exception:', e);
-    try { (await import('@sentry/nextjs')).captureException(e); } catch (e2) { }
+  // Sentry removed
         console.error('Error inserting confirmation token:', tokenErr);
   }
 }
