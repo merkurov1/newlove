@@ -956,12 +956,7 @@ export default function NFTLabPageClient() {
                                 <p><strong>Что если все выберут одну сторону?</strong> Это часть эксперимента — дисбаланс тоже результат и даёт данные о коллективных предпочтениях.</p>
                             </div>
 
-                            <h3 className="text-lg font-semibold">КОЛЛЕКЦИОНИРОВАНИЕ &amp; ПОДДЕРЖКА</h3>
                             <div className="text-sm text-gray-700 space-y-2">
-                                <p><strong>Сколько всего NFT в коллекции?</strong> [Укажите лимит или "unlimited"].</p>
-                                <p><strong>Будут ли редкие версии?</strong> Редкость определяется вашим выбором и временем трансформации; ранние трансформации могут иметь ценность для коллекционеров.</p>
-                                <p><strong>Какие права я получаю на изображение?</strong> [Укажите: коммерческие права / личное использование / CC0].</p>
-
                                 <h4 className="font-semibold">Проблемы и поддержка</h4>
                                 <p className="mt-1"><strong>Транзакция не проходит. Что делать?</strong></p>
                                 <ul className="list-disc list-inside ml-4 text-sm text-gray-700">
