@@ -109,14 +109,12 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         <h2 className="text-lg font-semibold mb-2">Админ: ручная переиндексация</h2>
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
           <p className="text-sm text-gray-700 mb-3">Если вы опубликовали письмо и хотите сразу обновить публичную страницу архива, нажмите кнопку ниже.</p>
-          <form action={async () => {
+          <form action={async (formData: FormData) => {
             'use server';
             try {
-              const res = await revalidateLetters();
-              // keep minimal client feedback by redirecting back to admin page with a search param
-              return null;
+              await revalidateLetters();
             } catch (e) {
-              return null;
+              console.error('Admin revalidate button failed:', e);
             }
           }}>
             <button type="submit" className="px-4 py-2 bg-yellow-600 text-white rounded font-semibold hover:bg-yellow-700">Revalidate /letters</button>
