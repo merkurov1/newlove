@@ -1,6 +1,6 @@
 // Default to the most recent deployed address (can be overridden by NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS)
 // Updated to the most recently deployed contract (deployed 2025-10-19)
-export const CONTRACT_ADDRESS = ((globalThis as any)?.NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS) || "0x6b9141E0224B893E6b6864B741DfE19Dd1d3e790";
+export const CONTRACT_ADDRESS = ((globalThis as any)?.NEXT_PUBLIC_NEUTRAL_HEART_ADDRESS) || "0x0E5B6b034012520Ad99EAB4285657504d9F9ad19";
 
 // Expanded minimal ABI used by the client page
 export const NFT_ABI = [

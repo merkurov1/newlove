@@ -1,8 +1,10 @@
 # Simple Dockerfile for Codespaces (uses base JS Node image)
-FROM mcr.microsoft.com/vscode/devcontainers/javascript-node:18
+FROM mcr.microsoft.com/vscode/devcontainers/javascript-node:22-bullseye
 
 # Install git and other utilities
-RUN apt-get update && apt-get install -y git curl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y git curl ca-certificates build-essential python3 python3-distutils pkg-config && \
+    rm -rf /var/lib/apt/lists/*
 
 # Ensure the 'vscode' user exists (some base images may not include it).
 # If it doesn't, create it with a home directory and add to sudo/dialout groups.

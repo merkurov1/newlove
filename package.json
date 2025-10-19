@@ -2,6 +2,9 @@
   "name": "newlove",
   "version": "0.1.1",
   "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -18,7 +21,12 @@
     "deploy:hardhat": "npx hardhat run --network polygon scripts/deploy_hardhat.js",
     "mint:transfer": "npx hardhat run --network polygon scripts/mint_and_transfer.js",
     "deploy:local": "node scripts/deploy_hardhat.js",
-    "mint:local": "node scripts/mint_and_transfer.js"
+    "mint:local": "node scripts/mint_and_transfer.js",
+    "_postinstall:prisma": "node -e \"if(process.env.PRISMA_GENERATE!=='0'){console.log('Running prisma generate...'); require('child_process').spawnSync('npx',['prisma','generate'],{stdio:'inherit'});} else {console.log('Skipping prisma generate (PRISMA_GENERATE=0)');}\"",
+    "postinstall": "npm run _postinstall:prisma || true"
+  },
+  "installConfig": {
+    "scripts-prepend-node-path": true
   },
   "dependencies": {
     "@atproto/api": "^0.17.0",

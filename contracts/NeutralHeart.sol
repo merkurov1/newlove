@@ -4,12 +4,21 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 contract NeutralHeart is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard, ERC2981 {
+    // Returns all tokenIds owned by an address (for wallets/frontends)
+    function tokensOfOwner(address owner) external view returns (uint256[] memory) {
+        uint256 balance = balanceOf(owner);
+        uint256[] memory tokens = new uint256[](balance);
+        for (uint256 i = 0; i < balance; i++) {
+            tokens[i] = tokenOfOwnerByIndex(owner, i);
+        }
+        return tokens;
+    }
 
     uint256 public currentId;
     uint256 public maxPublicSupply;
@@ -36,11 +45,9 @@ contract NeutralHeart is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard, ERC
     event Withdraw(address indexed to, uint256 amount);
 
     constructor(
-        string memory name_,
-        string memory symbol_,
         uint256 maxPublicSupply_,
         uint256 priceWei_
-    ) ERC721(name_, symbol_) Ownable() {
+    ) ERC721("NeutralHeart NFT (2025)", "NHRT25") Ownable(msg.sender) {
         maxPublicSupply = maxPublicSupply_;
         priceWei = priceWei_;
         currentId = 1; // start token ids at 1
@@ -76,8 +83,8 @@ contract NeutralHeart is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard, ERC
 
     // Override tokenURI to return one of three JSON filenames (neutral.json / angel.json / devil.json)
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        // Ensure token exists using OpenZeppelin's internal check
-        _requireMinted(tokenId);
+    // Ensure token exists using OpenZeppelin's internal check
+    _requireOwned(tokenId);
         string memory base = _baseURI();
         uint8 v = tokenVariant[tokenId];
         string memory namePart = "neutral.json";
@@ -174,18 +181,21 @@ contract NeutralHeart is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard, ERC
     }
 
     // The following functions are overrides required by Solidity for multiple inheritance (ERC721 + ERC721Enumerable)
-    function _beforeTokenTransfer(address from, address to, uint256 tokenId, uint256 batchSize)
-        internal
-        override(ERC721, ERC721Enumerable)
-    {
-        super._beforeTokenTransfer(from, to, tokenId, batchSize);
-    }
 
     // ensure tokenVariant storage is cleared when burning
-    function _burn(uint256 tokenId) internal override(ERC721) {
-        super._burn(tokenId);
-        // clear storage to avoid stale variant values
-        delete tokenVariant[tokenId];
+    // Provide required overrides for multiple inheritance (ERC721 + ERC721Enumerable)
+    function _increaseBalance(address account, uint128 value) internal virtual override(ERC721, ERC721Enumerable) {
+        super._increaseBalance(account, value);
+    }
+
+    // Intercept updates to detect burns (to == address(0)) and clear tokenVariant storage
+    function _update(address to, uint256 tokenId, address auth) internal virtual override(ERC721, ERC721Enumerable) returns (address) {
+        address previousOwner = super._update(to, tokenId, auth);
+        if (to == address(0)) {
+            // token burned — clear variant storage
+            delete tokenVariant[tokenId];
+        }
+        return previousOwner;
     }
 
     function supportsInterface(bytes4 interfaceId) public view override(ERC721, ERC721Enumerable, ERC2981) returns (bool) {

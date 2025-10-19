@@ -207,6 +207,30 @@ export default function NFTLabPageClient() {
         setProcessing(true);
         setStatus(null);
         try {
+            // Проверка наличия токена у пользователя
+            const eth = (window as any).ethereum;
+            const provider = new (ethers as any).BrowserProvider(eth as any);
+            const signerLocal = await provider.getSigner();
+            const userAddress = await signerLocal.getAddress();
+            const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
+            let alreadyHasToken = false;
+            try {
+                // Используем новый метод tokensOfOwner, если доступен
+                if (contract.tokensOfOwner) {
+                    const tokens = await contract.tokensOfOwner(userAddress);
+                    alreadyHasToken = tokens && tokens.length > 0;
+                } else {
+                    const balance = await contract.balanceOf(userAddress);
+                    alreadyHasToken = Number(balance) > 0;
+                }
+            } catch (e) {
+                // fallback: не блокируем mint, если не удалось проверить
+            }
+            if (alreadyHasToken) {
+                setStatus("У вас уже есть Neutral Heart NFT. Повторная покупка невозможна.");
+                setProcessing(false);
+                return;
+            }
             // choose provider: prefer onboard wallet.provider, fall back to getProvider(), then injected window.ethereum
             let rawProvider: any = null;
             try {

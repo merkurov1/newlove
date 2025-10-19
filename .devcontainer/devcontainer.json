@@ -1,5 +1,7 @@
 {
-  "name": "newlove - Codespace",
+  "name": "newlove - Codespace [rebuild]",
+  // Custom signal to force Codespaces/devcontainer UI to prompt for rebuild when this file changes.
+  "rebuildSignal": "2025-10-19T00:00:00Z",
   // Use the local Dockerfile so the container is built from the project's
   // Dockerfile which ensures the 'vscode' user is present. The previous
   // `image` pointed to an upstream variant that doesn't include the
@@ -13,7 +15,7 @@
   },
   // Run npm install but also sanity-check the 'vscode' user and log a helpful
   // message. This will make failures visible in Codespaces build logs.
-  "postCreateCommand": "npm ci || true; if id vscode >/dev/null 2>&1; then echo 'vscode user exists'; else echo 'ERROR: vscode user missing' >&2; fi",
+  "postCreateCommand": "echo 'node version:' $(node -v) && echo 'npm version:' $(npm -v) && ./scripts/setup_dev.sh",
   "customizations": {
     "vscode": {
       "extensions": [
