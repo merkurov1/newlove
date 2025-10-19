@@ -19,20 +19,24 @@ export default async function LettersPage({ searchParams }: Props) {
   const wantDebug = debugParam === '1';
 
   // Server-side debug block (temporary): fetch counts/sample using service role
-  let serverDebug: any = null;
+  let serverDebug: any = {
+    env: {
+      NEXT_PUBLIC_SUPABASE_URL: !!(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL),
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY
+    }
+  };
   if (wantDebug) {
     try {
       const supabase = createClient({ useServiceRole: true });
       const pubResp = await supabase.from('letters').select('id', { count: 'exact', head: true }).eq('published', true);
       const unpubResp = await supabase.from('letters').select('id', { count: 'exact', head: true }).eq('published', false);
       const { data: sampleUnpublished } = await supabase.from('letters').select('id,title,slug,published,publishedAt,createdAt,authorId').eq('published', false).limit(10);
-      serverDebug = {
-        publishedCount: pubResp.count ?? 0,
-        unpublishedCount: unpubResp.count ?? 0,
-        sampleUnpublished: sampleUnpublished || []
-      };
+      serverDebug.publishedCount = pubResp.count ?? 0;
+      serverDebug.unpublishedCount = unpubResp.count ?? 0;
+      serverDebug.sampleUnpublished = sampleUnpublished || [];
     } catch (e) {
-      serverDebug = { error: String(e) };
+      serverDebug.serviceRoleError = String(e);
     }
   }
 
@@ -63,9 +67,15 @@ export default async function LettersPage({ searchParams }: Props) {
       }
     } else if (error) {
       console.error('Server initial letters fetch error', error);
+      serverDebug.supabaseError = {
+        message: error.message,
+        code: error.code,
+        details: error.details
+      };
     }
   } catch (e) {
     console.error('Server initial letters fetch unexpected error', e);
+    serverDebug.fetchException = String(e);
   }
 
   return (
@@ -79,7 +89,7 @@ export default async function LettersPage({ searchParams }: Props) {
           </p>
         </div>
 
-        {wantDebug && (
+        {serverDebug && (
           <div className="mb-6 p-4 rounded bg-yellow-50 border border-yellow-200">
             <h3 className="font-medium">Server debug (temporary)</h3>
             <pre className="whitespace-pre-wrap text-xs mt-2 bg-white p-3 rounded border">{JSON.stringify(serverDebug, null, 2)}</pre>
