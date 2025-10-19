@@ -24,8 +24,9 @@ export default function LettersArchive() {
 
   useEffect(() => {
     const fetchLetters = async () => {
-      const url = '/api/letters';
-      const wantDebug = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('debug') === '1';
+  const wantDebug = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('debug') === '1';
+  // when debug is requested, also ask the API to include unpublished counts/sample via all=1
+  const url = wantDebug ? '/api/letters?debug=1&all=1' : '/api/letters';
       try {
         let response: Response | null = null;
         try {
@@ -137,6 +138,24 @@ export default function LettersArchive() {
         <div className="mt-4">
           <h4 className="text-sm font-medium text-gray-700">Debug info</h4>
           <pre className="whitespace-pre-wrap text-xs bg-gray-50 p-3 rounded mt-2">{JSON.stringify(debug, null, 2)}</pre>
+          {debug.extra && (
+            <div className="mt-3 text-sm text-gray-600">
+              <div>Published count: <strong>{debug.extra.publishedCount ?? 0}</strong></div>
+              <div>Unpublished count: <strong>{debug.extra.unpublishedCount ?? 0}</strong></div>
+              {Array.isArray(debug.extra.sampleUnpublished) && debug.extra.sampleUnpublished.length > 0 && (
+                <div className="mt-2">
+                  <div className="font-medium">Sample unpublished:</div>
+                  <ul className="list-disc list-inside text-xs mt-1">
+                    {debug.extra.sampleUnpublished.map((s: any) => (
+                      <li key={s.id}>
+                        <span className="font-medium">{s.title || s.slug}</span> — {String(s.published)} — {s.publishedAt || s.createdAt}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -12,12 +12,19 @@ export async function GET(request: Request) {
   try {
     const supabase = createClient({ useServiceRole: true });
     
-    const { data: letters, error } = await supabase
+    const includeUnpublishedSample = includeDebugForRequest && url.searchParams.get('all') === '1';
+
+    let lettersQuery = supabase
       .from('letters')
       .select('id, title, slug, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(id, name, email)')
-      .eq('published', true)
       .order('publishedAt', { ascending: false })
       .limit(100);
+
+    if (!includeUnpublishedSample) {
+      lettersQuery = lettersQuery.eq('published', true);
+    }
+
+    const { data: letters, error } = await lettersQuery;
 
     if (error) {
       console.error('Letters fetch error:', error);
@@ -49,17 +56,32 @@ export async function GET(request: Request) {
       };
     });
 
-    const outDebug = includeDebugForRequest 
-      ? buildSafeDebug(request, { 
-        restStatus: 200, 
-        restBody: { itemCount: transformedLetters.length } 
-      }) 
-      : undefined;
+    // If debug + all=1, also fetch counts for published/unpublished for diagnosis
+    let extraDebug: any = undefined;
+    if (includeUnpublishedSample) {
+      try {
+        const pubResp = await supabase.from('letters').select('*', { count: 'exact', head: true }).eq('published', true);
+        const unpubResp = await supabase.from('letters').select('*', { count: 'exact', head: true }).eq('published', false);
+        const pubCount = pubResp.count ?? 0;
+        const unpubCount = unpubResp.count ?? 0;
+        // sample a few unpublished rows
+        const { data: sampleUnpublished } = await supabase.from('letters').select('id, title, slug, published, publishedAt, createdAt, authorId').eq('published', false).limit(10);
+        extraDebug = { publishedCount: pubCount, unpublishedCount: unpubCount, sampleUnpublished };
+      } catch (e) {
+        extraDebug = { error: String(e) };
+      }
+    }
 
-    return NextResponse.json({ 
-      letters: transformedLetters, 
-      debug: outDebug 
-    });
+    let outDebug: any = undefined;
+    if (includeDebugForRequest) {
+      outDebug = buildSafeDebug(request, {
+        restStatus: 200,
+        restBody: { itemCount: transformedLetters.length }
+      });
+      if (extraDebug) outDebug.extra = extraDebug;
+    }
+
+    return NextResponse.json({ letters: transformedLetters, debug: outDebug });
 
   } catch (e) {
     console.error('Letters API unexpected error:', e);
