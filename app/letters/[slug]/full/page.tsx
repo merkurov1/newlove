@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 export default async function LetterFullPage({ params }: { params: { slug: string } }) {
   const slug = params.slug;
-  // First, use anon client to read the session/user cookie
+  // Use anon client to check authentication status
   const supabase = createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -13,8 +13,7 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
     redirect(`/letters/${slug}`);
   }
 
-  // After we've verified the request is authenticated, use service-role client
-  // for data fetching that may join the protected `User` table.
+  // Authenticated: use service-role client for protected reads (joins on User table)
   const supabaseSvc = createClient({ useServiceRole: true });
 
   const { data: letter, error } = await supabaseSvc
