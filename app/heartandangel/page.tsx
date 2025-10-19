@@ -22,10 +22,10 @@ export default function HeartAndAngelPage() {
             <a href="/heartandangel/NFT" className="inline-block bg-pink-600 hover:bg-pink-700 text-white font-semibold text-xl px-6 py-3 rounded-full shadow-lg transition-colors">Необратимый выбор</a>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 items-stretch">
             {images.slice(0,2).map((src, i) => (
-              <div key={i} className="rounded-lg overflow-hidden shadow-sm bg-gray-50">
-                <Image src={src} alt={`Heart and Angel ${i}`} width={800} height={450} className="w-full h-56 object-contain bg-white p-2" />
+              <div key={i} className="rounded-lg overflow-hidden shadow-sm bg-gray-50 flex items-center justify-center">
+                <Image src={src} alt={`Heart and Angel ${i}`} width={1200} height={900} className="w-full h-64 sm:h-72 md:h-56 object-contain bg-white p-3" />
               </div>
             ))}
           </div>
@@ -36,10 +36,10 @@ export default function HeartAndAngelPage() {
             <p>Небинарность персонажей не является декоративным решением, а представляет собой концептуальный жест, направленный на универсализацию человеческого опыта. Проект исследует, как архетипические образы могут функционировать вне патриархальной символической системы, предлагая инклюзивную мифологию для современного контекста.</p>
           </section>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 items-stretch">
             {images.slice(2).map((src, i) => (
-              <div key={i} className="rounded-lg overflow-hidden shadow-sm bg-gray-50">
-                <Image src={src} alt={`Heart and Angel ${i+2}`} width={800} height={450} className="w-full h-56 object-contain bg-white p-2" />
+              <div key={i} className="rounded-lg overflow-hidden shadow-sm bg-gray-50 flex items-center justify-center">
+                <Image src={src} alt={`Heart and Angel ${i+2}`} width={1200} height={900} className="w-full h-64 sm:h-72 md:h-56 object-contain bg-white p-3" />
               </div>
             ))}
           </div>

@@ -1,6 +1,6 @@
 export default function Head() {
-  const title = 'Необратимый Выбор — Neutral Heart (NFT)';
-  const description = 'Transform your Neutral Heart into Angel or Demon — irreversible NFT experiment on Polygon.';
+  const title = 'Необратимый Выбор / THE IRREVERSIBLE CHOICE';
+  const description = 'Neutral Heart — трансмедийный NFT‑эксперимент на Polygon. Преобразуйте Neutral Heart в Ангела или Демона.';
   const url = 'https://www.merkurov.love/heartandangel/NFT';
   const image = 'https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafybeihnx7kaue4ehbigi4koydoei43ojjykp2mhhh7xwx4qg3tntm5e5e';
 

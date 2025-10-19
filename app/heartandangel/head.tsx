@@ -1,6 +1,6 @@
 export default function Head() {
-  const title = '#HEARTANDANGEL — Необратимый выбор';
-  const description = 'Heart & Angel — трансмедийный проект и эксперимент о природе выбора. Получите Neutral Heart и сделайте необратимый выбор — трансформируйте его в Ангела или Демона.';
+  const title = '#HEARTANDANGEL';
+  const description = 'Трансмедийный проект Heart & Angel — исследование архетипов и выбора в цифровой культуре.';
   const url = 'https://www.merkurov.love/heartandangel';
   const image = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759212266765-IMG_0514.png';
 

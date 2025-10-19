@@ -104,6 +104,7 @@ export default function NFTLabPageClient() {
     const [hasClaimedOnChain, setHasClaimedOnChain] = useState<boolean | null>(null);
     const [isEligible, setIsEligible] = useState<boolean | null>(null);
     const [hasTransformed, setHasTransformed] = useState<boolean>(false);
+    const [pendingVariantChoice, setPendingVariantChoice] = useState<{ variant: 'Angel' | 'Devil'; tokenId?: number } | null>(null);
     const [mintedTokenIds, setMintedTokenIds] = useState<number[]>([]);
     const [mintedTokenImages, setMintedTokenImages] = useState<string[]>([]);
     const [mintedTokenVariants, setMintedTokenVariants] = useState<number[]>([]);
@@ -590,9 +591,18 @@ export default function NFTLabPageClient() {
             setStatus('Этот адрес уже совершил выбор или уже получил токен. Изменение невозможно.');
             return;
         }
-        // explicit irreversible action confirmation
-        const ok = window.confirm('Подтвердите: действие сожжет ваш текущий Neutral токен и создаст новую версию (это необратимо). Продолжить?');
-        if (!ok) return;
+        // If a pending choice hasn't been confirmed yet, set it and render inline confirmation UI
+        if (!pendingVariantChoice || pendingVariantChoice.variant !== variant || pendingVariantChoice.tokenId !== tokenIdToUse) {
+            setPendingVariantChoice({ variant, tokenId: tokenIdToUse });
+            setStatus('Подтвердите действие: трансформация необратима — нажмите ещё раз для подтверждения.');
+            // Allow user to cancel after 6 seconds
+            setTimeout(() => {
+                setPendingVariantChoice((p) => (p && p.variant === variant && p.tokenId === tokenIdToUse ? null : p));
+            }, 6000);
+            return;
+        }
+        // Clear pending choice now that the user confirmed
+        setPendingVariantChoice(null);
         setProcessing(true);
         setStatus('Подключаюсь к кошельку и выполняю трансформацию на цепочке...');
         try {
@@ -772,7 +782,7 @@ export default function NFTLabPageClient() {
                     </div>
                 </div>
             </section>
-            <h1 className="text-3xl font-bold mt-8 text-center">Необратимый Выбор — получить Neutral Heart</h1>
+            <h1 className="text-3xl font-bold mt-8 text-center">Необратимый Выбор / THE IRREVERSIBLE CHOICE</h1>
 
 
 
@@ -783,8 +793,13 @@ export default function NFTLabPageClient() {
                         <h2 className="text-lg font-semibold">Выбрать образ для токена #{currentId}</h2>
                         <p className="mt-2 text-sm">Выберите ангела или демона. Также можно указать адрес получателя (оставьте пустым — оставим токен себе).</p>
                         <div className="mt-3 flex gap-3">
-                            <button className="px-3 py-2 bg-indigo-600 text-white rounded" onClick={() => requestVariant('Angel')}>Сделать Ангелом</button>
-                            <button className="px-3 py-2 bg-red-600 text-white rounded" onClick={() => requestVariant('Devil')}>Сделать Демоном</button>
+                            <div className="flex items-center gap-2">
+                                <button className="px-3 py-2 bg-indigo-600 text-white rounded" onClick={() => requestVariant('Angel')}>Сделать Ангелом</button>
+                                <button className="px-3 py-2 bg-red-600 text-white rounded" onClick={() => requestVariant('Devil')}>Сделать Демоном</button>
+                                {pendingVariantChoice && pendingVariantChoice.tokenId === currentId ? (
+                                    <div className="ml-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">Подтвердите выбор: нажмите ту же кнопку ещё раз</div>
+                                ) : null}
+                            </div>
                         </div>
                         <div className="mt-2 text-sm text-neutral-500">Если сервер не настроен, вы увидите подсказку, как вручную перевести токен.</div>
                     </div>
@@ -892,8 +907,8 @@ export default function NFTLabPageClient() {
                         <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('Необратимый Выбор — Neutral Heart')}&url=${encodeURIComponent('https://www.merkurov.love/heartandangel/NFT')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-blue-500 text-white rounded text-sm">Twitter</a>
                         <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent('https://www.merkurov.love/heartandangel/NFT')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-blue-700 text-white rounded text-sm">Facebook</a>
                         <a href={`https://t.me/share/url?url=${encodeURIComponent('https://www.merkurov.love/heartandangel/NFT')}&text=${encodeURIComponent('Необратимый Выбор — Neutral Heart')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-blue-400 text-white rounded text-sm">Telegram</a>
-                        <a href={`https://fosstodon.org/share?text=${encodeURIComponent('Необратимый Выбор — Neutral Heart')}&url=${encodeURIComponent('https://www.merkurov.love/heartandangel/NFT')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-neutral-800 text-white rounded text-sm">Mastodon</a>
-                        <button onClick={() => { navigator.clipboard?.writeText('https://www.merkurov.love/heartandangel/NFT'); alert('Ссылка скопирована'); }} className="px-3 py-1 bg-gray-100 rounded text-sm">Скопировать ссылку</button>
+                                {/* Mastodon removed per request */}
+                                <button onClick={async () => { try { await navigator.clipboard?.writeText('https://www.merkurov.love/heartandangel/NFT'); setStatus('Ссылка скопирована'); setTimeout(() => setStatus(null), 2000); } catch (e) { setStatus('Не удалось скопировать ссылку'); setTimeout(() => setStatus(null), 3000); } }} className="px-3 py-1 bg-gray-100 rounded text-sm">Скопировать ссылку</button>
                     </div>
                 </div>
 
@@ -984,9 +999,12 @@ export default function NFTLabPageClient() {
                                         <div className="mt-2 text-sm">Token ID: {id}</div>
                                         {/* If token is neutral (variant 0), show transform buttons */}
                                         {mintedTokenVariants && mintedTokenVariants[idx] === 0 ? (
-                                            <div className="mt-2 flex gap-2 justify-center">
+                                            <div className="mt-2 flex gap-2 justify-center items-center">
                                                 <button className="px-2 py-1 bg-indigo-600 text-white rounded text-sm" onClick={() => requestVariant('Angel', id)}>Ангел</button>
                                                 <button className="px-2 py-1 bg-red-600 text-white rounded text-sm" onClick={() => requestVariant('Devil', id)}>Демон</button>
+                                                {pendingVariantChoice && pendingVariantChoice.tokenId === id ? (
+                                                    <div className="ml-2 text-sm text-yellow-800">Подтвердите: нажмите ещё раз</div>
+                                                ) : null}
                                             </div>
                                         ) : null}
                                     </div>
