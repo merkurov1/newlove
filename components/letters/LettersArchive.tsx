@@ -1,7 +1,3 @@
-
-'use client';
-
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 interface Letter {
@@ -18,59 +14,9 @@ interface Props {
   initialDebug?: any;
 }
 
-export default function LettersArchive({ initialLetters, initialDebug }: Props) {
-  const [letters, setLetters] = useState<Letter[]>(initialLetters || []);
-  const [debug, setDebug] = useState<any>(initialDebug || null);
-  const [loading, setLoading] = useState<boolean>(initialLetters ? false : true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastFetchInfo, setLastFetchInfo] = useState<any>(null);
-  const [diag, setDiag] = useState<any>(null);
-  const [diagRunning, setDiagRunning] = useState(false);
-
-  useEffect(() => {
-    // If initial data was provided server-side, skip the client fetch.
-    if (initialLetters && initialLetters.length > 0) return;
-
-    const fetchLetters = async () => {
-      const wantDebug = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('debug') === '1';
-      const url = wantDebug ? '/api/letters?debug=1&all=1' : '/api/letters';
-      try {
-        let response: Response;
-        try {
-          response = await fetch(url, { credentials: 'same-origin' });
-        } catch (e) {
-          setLastFetchInfo({ error: String(e) });
-          throw e;
-        }
-
-        const ok = response.ok;
-        const text = await response.text();
-        let parsed: any = null;
-        try { parsed = JSON.parse(text); } catch { parsed = text; }
-
-        if (!ok) {
-          if (wantDebug) {
-            try { setDebug(parsed?.debug || parsed); } catch { setDebug(parsed); }
-          }
-          console.error('Letters fetch error details:', { status: response.status, ok, text, parsed });
-          throw new Error('Failed to fetch letters');
-        }
-
-        const data = typeof parsed === 'object' ? parsed : JSON.parse(text);
-        setLetters(data.letters || []);
-        if (data.debug && wantDebug) setDebug(data.debug);
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        setError('Не удалось загрузить архив писем — ' + errMsg);
-        setLastFetchInfo((lf: any) => lf || { error: errMsg });
-        console.error('Letters fetch error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchLetters();
-  }, [initialLetters]);
+export default function LettersArchive({ initialLetters = [], initialDebug = null }: Props) {
+  const letters = initialLetters || [];
+  const debug = initialDebug || null;
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
@@ -81,73 +27,6 @@ export default function LettersArchive({ initialLetters, initialDebug }: Props) 
       day: 'numeric'
     });
   };
-
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="animate-pulse">
-            <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center py-8">
-        <div className="text-red-600 mb-2">⚠️ {error}</div>
-        <button
-          onClick={() => window.location.reload()}
-          className="text-blue-600 hover:underline"
-        >
-          Попробовать снова
-        </button>
-        <div className="mt-4">
-          <button
-            onClick={async () => {
-              setDiagRunning(true);
-              try {
-                const runOne = async (withCreds: boolean) => {
-                  try {
-                    const res = await fetch('/api/letters?debug=1&all=1', withCreds ? { credentials: 'same-origin' } : {} as any);
-                    const text = await res.text();
-                    let parsed: any = null;
-                    try { parsed = JSON.parse(text); } catch { parsed = text; }
-                    return { ok: res.ok, status: res.status, headers: Object.fromEntries(res.headers.entries()), bodyText: text, body: parsed };
-                  } catch (e) {
-                    return { error: String(e) };
-                  }
-                };
-
-                const withCreds = await runOne(true);
-                const withoutCreds = await runOne(false);
-                setDiag({ withCreds, withoutCreds, lastFetchInfo });
-              } finally {
-                setDiagRunning(false);
-              }
-            }}
-            className="mt-3 inline-block px-3 py-2 rounded bg-blue-600 text-white text-sm"
-          >
-            {diagRunning ? 'Running...' : 'Run client fetch diagnostics'}
-          </button>
-
-          {lastFetchInfo && (
-            <pre className="mt-3 text-left text-xs bg-gray-50 p-3 rounded">{JSON.stringify(lastFetchInfo, null, 2)}</pre>
-          )}
-
-          {diag && (
-            <div className="mt-3 text-left text-xs">
-              <h4 className="font-medium">Diagnostics</h4>
-              <pre className="mt-2 bg-white p-3 rounded">{JSON.stringify(diag, null, 2)}</pre>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   if (letters.length === 0) {
     return (

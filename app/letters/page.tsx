@@ -109,3 +109,5 @@ export default async function LettersPage({ searchParams }: Props) {
     </div>
   );
 }
+
+export const revalidate = 60 * 60 * 24 * 7; // revalidate once per week

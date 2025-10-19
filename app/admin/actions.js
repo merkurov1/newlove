@@ -685,6 +685,22 @@ export async function sendLetter(prevState, formData) {
   }
 }
 
+// --- On-demand revalidation helper ---
+/**
+ * Server action to trigger on-demand revalidation of the letters listing page.
+ * Runs under the same admin guard as other actions.
+ */
+export async function revalidateLetters() {
+  await verifyAdmin();
+  try {
+    revalidatePath('/letters');
+    return { status: 'success', message: 'Revalidation requested for /letters' };
+  } catch (e) {
+    console.error('revalidateLetters error:', e);
+    return { status: 'error', message: String(e) };
+  }
+}
+
 // --- Открытки (Postcards) ---
 
 export async function createPostcard(formData) {
