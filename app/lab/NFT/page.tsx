@@ -232,7 +232,9 @@ export default function NFTLabPageClient() {
                 pushDebug('eth_getCode_error', String(e));
             }
             const price = await contract.priceWei();
-            const total = price.mul(qty);
+            // ethers v6 returns bigint for uint256; guard against BigNumber-like objects
+            const priceBigInt = typeof price === 'bigint' ? price : BigInt(price);
+            const total = priceBigInt * BigInt(qty);
             const tx = await contract.publicMint(qty, { value: total });
             setStatus("Транзакция отправлена, ожидаю подтверждения...");
             await tx.wait();
