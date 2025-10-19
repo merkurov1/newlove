@@ -1,13 +1,39 @@
 import LettersArchive from '@/components/letters/LettersArchive';
 import PostcardShop from '@/components/letters/PostcardShop';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { createClient } from '@/lib/supabase/server';
 
 export const metadata = sanitizeMetadata({
   title: 'Письма и открытки | Anton Merkurov',
   description: 'Архив рассылки и заказ авторских физических открыток',
 });
 
-export default function LettersPage() {
+interface Props {
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
+
+export default async function LettersPage({ searchParams }: Props) {
+  const debugParam = Array.isArray(searchParams?.debug) ? searchParams?.debug[0] : (searchParams?.debug as string | undefined);
+  const wantDebug = debugParam === '1';
+
+  // Server-side debug block (temporary): fetch counts/sample using service role
+  let serverDebug: any = null;
+  if (wantDebug) {
+    try {
+      const supabase = createClient({ useServiceRole: true });
+      const pubResp = await supabase.from('letters').select('id', { count: 'exact', head: true }).eq('published', true);
+      const unpubResp = await supabase.from('letters').select('id', { count: 'exact', head: true }).eq('published', false);
+      const { data: sampleUnpublished } = await supabase.from('letters').select('id,title,slug,published,publishedAt,createdAt,authorId').eq('published', false).limit(10);
+      serverDebug = {
+        publishedCount: pubResp.count ?? 0,
+        unpublishedCount: unpubResp.count ?? 0,
+        sampleUnpublished: sampleUnpublished || []
+      };
+    } catch (e) {
+      serverDebug = { error: String(e) };
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-100 py-8 px-2">
       <div className="max-w-5xl mx-auto">
@@ -18,6 +44,14 @@ export default function LettersPage() {
             Архив авторской рассылки и заказ физических открыток с персональными сообщениями
           </p>
         </div>
+
+        {wantDebug && (
+          <div className="mb-6 p-4 rounded bg-yellow-50 border border-yellow-200">
+            <h3 className="font-medium">Server debug (temporary)</h3>
+            <pre className="whitespace-pre-wrap text-xs mt-2 bg-white p-3 rounded border">{JSON.stringify(serverDebug, null, 2)}</pre>
+          </div>
+        )}
+
         {/* Основное содержимое в две колонки */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10">
           {/* Левая колонка: Архив рассылки */}
