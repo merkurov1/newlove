@@ -113,7 +113,7 @@ export default function LetterCommentsClient({ slug, serverContainerId }: { slug
             {loading && <div className="text-sm text-gray-500">Загрузка комментариев...</div>}
             {error === 'unauthenticated' && (
                 <div className="text-sm text-gray-600 mb-3">
-                     Комментарии доступны только для зарегистрированных пользователей. <a href="/you/login" className="text-blue-600 underline">Войдите</a> или <a href="/onboard" className="text-blue-600 underline">зарегистрируйтесь</a>.
+                     Комментарии доступны только для зарегистрированных пользователей. <a href="#" onClick={(e) => { e.preventDefault(); try { window.dispatchEvent(new Event('newlove:open-login')); } catch (er) {} }} className="text-blue-600 underline">Войдите</a> или <a href="#" onClick={(e) => { e.preventDefault(); try { window.dispatchEvent(new Event('newlove:open-login')); } catch (er) {} }} className="text-blue-600 underline">зарегистрируйтесь</a>.
                 </div>
             )}
             {error && error !== 'unauthenticated' && <div className="text-sm text-red-600">Ошибка: {error}</div>}

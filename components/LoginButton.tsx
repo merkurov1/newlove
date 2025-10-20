@@ -10,6 +10,11 @@ export default function LoginButton() {
   const [modalOpen, setModalOpen] = useState(false);
   const { session, signOut } = useAuth() as any;
 
+  // Open modal when other components dispatch a global login event
+  if (typeof window !== 'undefined') {
+    window.addEventListener('newlove:open-login', () => setModalOpen(true));
+  }
+
   if (session?.user) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
