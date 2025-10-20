@@ -20,7 +20,7 @@ export default function HeartAndAngelPage() {
     <div className="min-h-screen bg-white">
       <main className="container mx-auto px-4 py-20">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-5xl sm:text-6xl font-extrabold mb-6">#HEARTANDANGEL</h1>
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold mb-6 break-words leading-tight">#HEARTANDANGEL</h1>
           <p className="text-lg text-gray-700 mb-6">Heart &amp; Angel — трансмедийная художественная практика, исследующая архетипические образы через призму постгендерной идентичности. Проект деконструирует традиционные представления о дуализме добра и зла, предлагая альтернативную модель взаимодействия символических фигур.</p>
 
           <div className="text-center mb-8">
