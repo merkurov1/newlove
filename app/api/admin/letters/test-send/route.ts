@@ -41,7 +41,8 @@ export async function POST(req: Request) {
 
     // 5. Отправляем письмо
     // Функция сама найдет RESEND_API_KEY в process.env
-    const result = await sendNewsletterToSubscriber(testSubscriber, testLetter);
+  // For test sends we avoid modifying subscriber_tokens in the DB.
+  const result = await sendNewsletterToSubscriber(testSubscriber, testLetter, { skipTokenInsert: true });
 
     if (result.status === 'sent' || result.status === 'skipped') {
       const message = result.status === 'skipped' 
@@ -80,11 +81,11 @@ export async function GET(req: Request) {
     const key = url.searchParams.get('key') || undefined;
 
     if (!process.env.RESEND_API_KEY && !key) {
-      const result = await sendNewsletterToSubscriber(testSubscriber, testLetter, { resendApiKey: undefined });
+    const result = await sendNewsletterToSubscriber(testSubscriber, testLetter, { resendApiKey: undefined, skipTokenInsert: true });
       return NextResponse.json({ ok: true, dryRun: true, message: 'RESEND_API_KEY not configured. Dry-run performed.', result });
     }
 
-    const result = await sendNewsletterToSubscriber(testSubscriber, testLetter, { resendApiKey: key });
+  const result = await sendNewsletterToSubscriber(testSubscriber, testLetter, { resendApiKey: key, skipTokenInsert: true });
     return NextResponse.json({ ok: true, result });
   } catch (err: any) {
     console.error('test-send GET error', (err && err.stack) || String(err));

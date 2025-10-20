@@ -44,10 +44,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   }
 }
 
-export const metadata = sanitizeMetadata({
-  title: 'Письмо | Anton Merkurov',
-  description: 'Просмотр письма из рассылки',
-});
+// metadata is provided dynamically via generateMetadata above.
 
 export default async function LetterPage({ params }: { params: { slug: string } }) {
   const slug = params.slug;
