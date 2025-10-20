@@ -3,6 +3,11 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  // Protect debug endpoints from production use
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
+
   const out: any = { timestamp: new Date().toISOString(), service: null, request: null };
   // Try service-role client first
   try {

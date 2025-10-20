@@ -3,6 +3,9 @@ import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export async function GET(req: Request) {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
     // Snapshot incoming headers for diagnostics
     const headers: Record<string, string | null> = {};
     for (const k of Array.from(req.headers.keys())) headers[k] = req.headers.get(k);

@@ -3,6 +3,9 @@ import { getServerSupabaseClient } from '@/lib/serverAuth';
 
 export async function GET() {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
     const svc = getServerSupabaseClient({ useServiceRole: true });
 
     // 1) Test SELECT

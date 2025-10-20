@@ -6,6 +6,10 @@ import { getServerSupabaseClient } from '@/lib/serverAuth';
 // for the currently authenticated user, or for a provided `user_id` query param.
 export async function GET(req: Request) {
   try {
+    // Protect debug endpoints from being used in production
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
     const url = new URL(req.url);
     const queryUserId = url.searchParams.get('user_id');
 

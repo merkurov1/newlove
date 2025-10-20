@@ -3,6 +3,9 @@ import getUserAndSupabaseForRequest from '@/lib/getUserAndSupabaseForRequest';
 
 export async function GET(req: Request) {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
     const headersObj: Record<string, string | null> = {};
     for (const [k, v] of Array.from(req.headers.entries())) {
       // Hide long secrets

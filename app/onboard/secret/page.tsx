@@ -4,6 +4,11 @@ import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 const supabase = createBrowserClient();
 
 export default function OnboardSecretPage() {
+  // Hide this debug page in production
+  if (process.env.NODE_ENV === 'production') {
+    return <div style={{ color: 'red', margin: 40, fontSize: 22 }}>Not Found</div>;
+  }
+
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
