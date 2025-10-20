@@ -74,7 +74,9 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
       }
       const wallet = wallets[0];
       const address = wallet.accounts[0].address;
-      const ethersProvider = new ethers.BrowserProvider(wallet.provider, 'any');
+      const ethersProvider = (typeof (ethers as any).BrowserProvider === 'function')
+        ? new (ethers as any).BrowserProvider(wallet.provider, 'any')
+        : new (ethers as any).JsonRpcProvider();
       const signer = await ethersProvider.getSigner();
 
       const domain = window.location.host;

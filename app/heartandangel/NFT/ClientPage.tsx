@@ -122,7 +122,9 @@ export default function NFTLabPageClient() {
             try {
                 const eth = (window as any).ethereum;
                 if (!eth) return;
-                const provider = new (ethers as any).BrowserProvider(eth as any);
+                const provider = (typeof (ethers as any).BrowserProvider === 'function')
+                    ? new (ethers as any).BrowserProvider(eth as any)
+                    : new (ethers as any).JsonRpcProvider();
                 try { console.debug('[NFT] loadOnchain raw provider:', eth); } catch (e) { }
                 try { console.debug('[NFT] loadOnchain provider network:', await provider.getNetwork()); } catch (e) { }
                 const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
@@ -249,7 +251,9 @@ export default function NFTLabPageClient() {
             try {
                 const eth = (window as any).ethereum;
                 if (!eth) return;
-                const provider = new (ethers as any).BrowserProvider(eth as any);
+                const provider = (typeof (ethers as any).BrowserProvider === 'function')
+                    ? new (ethers as any).BrowserProvider(eth as any)
+                    : new (ethers as any).JsonRpcProvider();
                 const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
                 const claimed = await contract.hasClaimedOnChain(address);
                 setHasClaimedOnChain(Boolean(claimed));
@@ -302,7 +306,9 @@ export default function NFTLabPageClient() {
                 rawProvider = null;
             }
             if (!rawProvider) rawProvider = (window as any).ethereum;
-            const provider = new (ethers as any).BrowserProvider(rawProvider as any, 'any'); // main provider for mint
+            const provider = (typeof (ethers as any).BrowserProvider === 'function')
+                ? new (ethers as any).BrowserProvider(rawProvider as any, 'any')
+                : new (ethers as any).JsonRpcProvider(); // main provider for mint
             try { console.debug('[NFT] handlePublicMint rawProvider:', rawProvider); } catch (e) { }
             try { const net = await provider.getNetwork(); console.debug('[NFT] handlePublicMint provider network:', net); pushDebug('provider_network', net); } catch (e) { pushDebug('provider_network_error', String(e)); }
 

@@ -17,7 +17,11 @@ export default function ConnectWalletButton({ onConnected }: { onConnected?: (ad
         try {
             const ethersMod = await import('ethers');
             const { ethers } = ethersMod as any;
-            const provider = new ethers.BrowserProvider((window as any).ethereum);
+            // Create provider defensively: BrowserProvider exists in modern ethers/browsers,
+            // but in some bundler/runtime shapes it may be missing. Fallback to JsonRpcProvider.
+            const provider = (typeof (ethers as any).BrowserProvider === 'function')
+                ? new (ethers as any).BrowserProvider((window as any).ethereum)
+                : new (ethers as any).JsonRpcProvider();
             await provider.send('eth_requestAccounts', []);
             const signer = await provider.getSigner();
             const a = await signer.getAddress();

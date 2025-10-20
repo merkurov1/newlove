@@ -45,7 +45,9 @@ export default function OnboardLoginPage() {
       }
       const wallet = wallets[0];
     const address = wallet.accounts[0].address;
-    const ethersProvider = new ethers.BrowserProvider(wallet.provider, 'any');
+    const ethersProvider = (typeof (ethers as any).BrowserProvider === 'function')
+      ? new (ethers as any).BrowserProvider(wallet.provider, 'any')
+      : new (ethers as any).JsonRpcProvider();
     const signer = await ethersProvider.getSigner();
     // Формируем SIWE message по стандарту EIP-4361 (6+ строк, все обязательные поля)
     const domain = window.location.host;
