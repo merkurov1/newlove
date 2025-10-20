@@ -1,7 +1,7 @@
 // components/LoginButton.tsx
 
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import ModernLoginModal from "./ModernLoginModal";
 import Image from "next/image";
 import { useAuth } from '@/components/AuthContext';
@@ -11,9 +11,14 @@ export default function LoginButton() {
   const { session, signOut } = useAuth() as any;
 
   // Open modal when other components dispatch a global login event
-  if (typeof window !== 'undefined') {
-    window.addEventListener('newlove:open-login', () => setModalOpen(true));
-  }
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => setModalOpen(true);
+    window.addEventListener('newlove:open-login', handler);
+    return () => {
+      try { window.removeEventListener('newlove:open-login', handler); } catch (e) {}
+    };
+  }, []);
 
   if (session?.user) {
     return (
