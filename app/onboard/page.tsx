@@ -126,9 +126,7 @@ export default function OnboardLoginPage() {
       <button onClick={handleOnboardWeb3Login} disabled={loading} style={{ width: '100%', padding: 12, fontSize: 18, background: '#00B386', color: '#fff', border: 'none', borderRadius: 8 }}>
         {loading ? 'Вход через Onboard...' : 'Войти через Onboard (Web3)'}
       </button>
-      <a href="/onboard/secret/" target="_blank" rel="noopener noreferrer" style={{ display: 'block', margin: '16px 0', color: '#2979FF', textAlign: 'center', textDecoration: 'underline', fontWeight: 600 }}>
-        Перейти к /onboard/secret/ (тест в приватной вкладке)
-      </a>
+        {/* Secret onboard helper link removed: /onboard is experimental and should not be linked from the app UI. */}
       {error && <div style={{ color: "red", marginTop: 16 }}>{error}</div>}
       {user && (
         <pre style={{ marginTop: 24, background: "#f8f8f8", padding: 12, borderRadius: 8 }}>{JSON.stringify(user, null, 2)}</pre>
