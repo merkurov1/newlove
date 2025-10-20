@@ -866,21 +866,21 @@ export default function NFTLabPageClient() {
                     </div>
                     <div className="flex-1">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <div className="flex items-center gap-3">
-                                <button
-                                    className="px-6 py-3 bg-blue-600 text-white rounded-full text-lg font-semibold shadow-lg disabled:opacity-50"
-                                    onClick={() => handlePublicMint(1)}
-                                    disabled={isProcessing || (maxPublic !== null && publicMinted !== null && publicMinted >= maxPublic)}
-                                >
-                                    Купить — 0,0001 MATIC
-                                </button>
-                                <button
-                                    className="px-4 py-2 bg-gray-200 rounded"
-                                    onClick={() => connectWallet()}
-                                >
-                                    {isConnected ? (address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Кошелёк подключён') : 'Подключить кошелёк'}
-                                </button>
-                            </div>
+                            <div className="flex flex-col sm:flex-row items-center gap-3">
+                                    <button
+                                        className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-full text-lg font-semibold shadow-lg disabled:opacity-50"
+                                        onClick={() => handlePublicMint(1)}
+                                        disabled={isProcessing || (maxPublic !== null && publicMinted !== null && publicMinted >= maxPublic)}
+                                    >
+                                        Купить — 0,0001 MATIC
+                                    </button>
+                                    <button
+                                        className="w-full sm:w-auto px-4 py-2 bg-gray-200 rounded"
+                                        onClick={() => connectWallet()}
+                                    >
+                                        {isConnected ? (address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Кошелёк подключён') : 'Подключить кошелёк'}
+                                    </button>
+                                </div>
                             <div className="text-sm text-neutral-700 text-right">
                                 <div className="font-medium">
                                     {angelCount !== null || devilCount !== null ? (
@@ -946,7 +946,7 @@ export default function NFTLabPageClient() {
                                 <p><strong>Где я могу увидеть свой NFT?</strong> После получения или трансформации ваш NFT появится в кошельке и будет виден на OpenSea, Rarible и других маркетплейсах, поддерживающих ERC‑721.</p>
                                 <p><strong>Можно ли продать или передать NFT?</strong> Да — Neutral Heart и трансформированные версии можно продавать, дарить или передавать, как любой другой NFT.</p>
                                 <p><strong>Что такое “сжигание” (burn) Neutral Heart?</strong> Технически ваш оригинальный Neutral Heart перезаписывается/удаляется на уровне контракта при трансформации — результатом является новая запись с новыми метаданными.</p>
-                                <p><strong>Безопасен ли смарт‑контракт?</strong> Контракт [прошёл аудит/открыт для проверки — укажите статус]. Адрес контракта: <code>{CONTRACT_ADDRESS}</code>. Вы можете проверить код на обозревателе сети.</p>
+                                <p><strong>Безопасен ли смарт‑контракт?</strong> Контракт [прошёл аудит/открыт для проверки — укажите статус]. Адрес контракта: <code className="break-all">{CONTRACT_ADDRESS}</code>. Вы можете проверить код на обозревателе сети.</p>
                             </div>
 
                             <h3 className="text-lg font-semibold">ФИЛОСОФИЯ ПРОЕКТА</h3>
