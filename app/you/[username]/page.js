@@ -172,24 +172,28 @@ async function ProfileContent({ username }) {
           )}
         </div>
 
-        {/* Edit profile button visible only to the owner */}
-        {viewerIsOwner && (
+        {/* Edit profile button visible to owner. If server couldn't verify owner via session,
+            fall back to client-side wallet ownership check (ProfileOwnerControls). */}
+        {viewerIsOwner ? (
           <div className="mt-4 flex items-center gap-4">
-            {/* Use a client-side link that forces navigation when needed */}
             <ProfileEditLink className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" />
-            {/* Subscription toggle for owner (email required) */}
             {user.email && (
               // @ts-expect-error client component
               <Suspense fallback={null}>
-                {/* removed obsolete eslint-disable to avoid unknown rule warning */}
                 {/* @ts-ignore */}
                 <SubscriptionToggle initialSubscribed={user.isSubscribed} email={user.email} />
               </Suspense>
             )}
-            {/* Connect wallet button (client component) - load dynamically */}
-            {/** Client component imported dynamically to avoid server import issues */}
-            {/* client-only connect wallet button */}
             <ConnectWalletButton />
+          </div>
+        ) : (
+          // Render client-side owner controls which will show the edit link when
+          // the connected wallet matches the profile wallet address.
+          // @ts-expect-error client component
+          <div className="mt-4">
+            {/* Lazy-load client-only controls */}
+            {/* @ts-ignore */}
+            <ProfileOwnerControls wallet={user.wallet} viewerIsOwner={viewerIsOwner} />
           </div>
         )}
       </div>
