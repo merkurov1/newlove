@@ -11,7 +11,12 @@ const nextConfig = {
   // Allow disabling heavy build features locally via env to reduce memory use during builds
   experimental: (process.env.DISABLE_OPTIMIZE_CSS === '1') ? {} : {
     // Оптимизация для production
-    optimizeCss: true,
+     // NOTE: `next` may require `critters` when `optimizeCss` is enabled which can
+     // cause runtime MODULE_NOT_FOUND errors in some deployment environments where
+     // node_modules are pruned. Keep this feature opt-in via ENABLE_OPTIMIZE_CSS to
+     // avoid runtime failures (set ENABLE_OPTIMIZE_CSS=1 in your build environment
+     // to enable it if you also ensure `critters` is installed).
+     optimizeCss: (process.env.ENABLE_OPTIMIZE_CSS === '1') ? true : false,
   },
   // Конфигурация изображений
   images: {
