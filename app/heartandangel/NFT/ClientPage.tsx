@@ -394,6 +394,56 @@ export default function NFTLabPageClient() {
             const total = priceBigInt * BigInt(qty);
             // Some providers or ethers versions expect hex string for value; send hex for maximum compatibility
             const totalHex = '0x' + total.toString(16);
+
+            // Check wallet balance (include gas estimate) so we can show a clear message if funds are insufficient
+            try {
+                const balance = await provider.getBalance(userAddress).catch(() => null);
+                pushDebug('balance_raw', balance ? String(balance) : null);
+                // Try to estimate gas and fee to compute approximate required amount
+                let gasEstimate: any = null;
+                try {
+                    // populate transaction data and ask provider to estimate gas
+                    const populated = await (contractMint as any).populateTransaction.publicMint(qty, { value: totalHex });
+                    if (populated && typeof provider.estimateGas === 'function') {
+                        try {
+                            gasEstimate = await provider.estimateGas({ to: populated.to, data: populated.data, value: populated.value, from: userAddress });
+                            pushDebug('gasEstimate', String(gasEstimate));
+                        } catch (e) {
+                            pushDebug('provider_estimateGas_error', String(e));
+                            gasEstimate = null;
+                        }
+                    }
+                } catch (e) {
+                    pushDebug('populate_tx_error', String(e));
+                    gasEstimate = null;
+                }
+                const feeData = await provider.getFeeData().catch(() => ({} as any));
+                const gasPrice = feeData?.gasPrice || feeData?.maxFeePerGas || null;
+                pushDebug('feeData', { gasPrice: gasPrice ? String(gasPrice) : null });
+                let estimatedGasCost = BigInt(0);
+                if (gasEstimate && gasPrice) {
+                    try {
+                        estimatedGasCost = BigInt(String(gasEstimate)) * BigInt(String(gasPrice));
+                    } catch (e) {
+                        estimatedGasCost = BigInt(0);
+                    }
+                }
+                // small buffer to account for fluctuations
+                const buffer = BigInt('500000000000000'); // 0.0005 MATIC
+                const required = total + estimatedGasCost + buffer;
+                pushDebug('required_total', String(required));
+                if (balance && BigInt(String(balance)) < required) {
+                    const have = balance ? formatEther(balance) : '0';
+                    const need = formatEther(required);
+                    setStatus(`У вас недостаточно MATIC на кошельке для покупки и газа. Баланс: ${have} MATIC, требуется примерно: ${need} MATIC. Пополните кошелёк и повторите.`);
+                    setProcessing(false);
+                    return;
+                }
+            } catch (e) {
+                pushDebug('balance_check_error', String(e));
+                // continue — we'll let the provider surface the actual error when sending
+            }
+
             try {
                 pushDebug('sending_tx', { qty, totalHex });
                 setStatus('Отправляю транзакцию... Проверьте окно кошелька.');
