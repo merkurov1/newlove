@@ -115,6 +115,8 @@ export default function NFTLabPageClient() {
     const [contractOwner, setContractOwner] = useState<string | null>(null);
     const [baseUriInput, setBaseUriInput] = useState<string>('');
     const [pendingVariantChoice, setPendingVariantChoice] = useState<{ variant: 'Angel' | 'Devil'; tokenId?: number } | null>(null);
+    const [requiredAmountDisplay, setRequiredAmountDisplay] = useState<string | null>(null);
+    const [isCheckingBalance, setIsCheckingBalance] = useState(false);
 
     useEffect(() => {
         // Read on-chain metadata (price, supply)
@@ -542,6 +544,65 @@ export default function NFTLabPageClient() {
         }
     }
 
+    async function checkRequiredAmount(qty = 1) {
+        setRequiredAmountDisplay(null);
+        setIsCheckingBalance(true);
+        try {
+            // create provider similar to handlePublicMint
+            let rawProvider: any = null;
+            try {
+                if (onboardWallet && onboardWallet.provider) rawProvider = onboardWallet.provider;
+                else if (onboardWallet && typeof onboardWallet.getProvider === 'function') rawProvider = await onboardWallet.getProvider();
+            } catch (e) { rawProvider = null; }
+            if (!rawProvider) rawProvider = (window as any).ethereum;
+            let provider: any = null;
+            try {
+                if (typeof (ethers as any).BrowserProvider === 'function') provider = new (ethers as any).BrowserProvider(rawProvider as any, 'any');
+            } catch (e) { provider = new (ethers as any).JsonRpcProvider(); }
+
+            // get price from contract via read provider
+            const contractRead = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
+            const price = await contractRead.priceWei();
+            const priceBigInt = typeof price === 'bigint' ? price : BigInt(price);
+            const total = priceBigInt * BigInt(qty);
+
+            // get user address if available
+            let userAddr: string | null = address;
+            try {
+                if (!userAddr) {
+                    const signer = await provider.getSigner();
+                    userAddr = await signer.getAddress();
+                }
+            } catch (e) { userAddr = userAddr || null; }
+
+            // populate tx and estimate gas
+            let estimatedGasCost = BigInt(0);
+            try {
+                const populated = await (contractRead as any).populateTransaction.publicMint(qty, { value: '0x' + total.toString(16) });
+                if (populated && typeof provider.estimateGas === 'function') {
+                    const gasEstimate = await provider.estimateGas({ to: populated.to, data: populated.data, value: populated.value, from: userAddr });
+                    const feeData = await provider.getFeeData().catch(() => ({} as any));
+                    const gasPrice = feeData?.gasPrice || feeData?.maxFeePerGas || null;
+                    if (gasEstimate && gasPrice) {
+                        estimatedGasCost = BigInt(String(gasEstimate)) * BigInt(String(gasPrice));
+                    }
+                }
+            } catch (e) {
+                pushDebug('check_required_populate_error', String(e));
+            }
+
+            const buffer = BigInt('500000000000000'); // 0.0005 MATIC
+            const required = total + estimatedGasCost + buffer;
+            setRequiredAmountDisplay(`${formatEther(required)} MATIC (примерно — включая буфер)`);
+            pushDebug('check_required_result', { total: String(total), estimatedGasCost: String(estimatedGasCost), required: String(required) });
+        } catch (e) {
+            pushDebug('check_required_error', String(e));
+            setRequiredAmountDisplay('Не удалось оценить требуемую сумму');
+        } finally {
+            setIsCheckingBalance(false);
+        }
+    }
+
     async function handleSubscriberClaim() {
         // Ensure we have accounts available; try to request if needed
         if (!(window as any).ethereum) {
@@ -961,12 +1022,22 @@ export default function NFTLabPageClient() {
                                         Купить — 0,0001 MATIC
                                     </button>
                                     <button
+                                        className="w-full sm:w-auto px-4 py-2 bg-gray-100 rounded ml-2 text-sm"
+                                        onClick={() => checkRequiredAmount(1)}
+                                        disabled={isCheckingBalance}
+                                    >
+                                        {isCheckingBalance ? 'Проверяю...' : 'Проверить баланс'}
+                                    </button>
+                                    <button
                                         className="w-full sm:w-auto px-4 py-2 bg-gray-200 rounded"
                                         onClick={() => connectWallet()}
                                     >
                                         {isConnected ? (address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Кошелёк подключён') : 'Подключить кошелёк'}
                                     </button>
                                 </div>
+                                {requiredAmountDisplay ? (
+                                    <div className="mt-2 text-sm text-yellow-700">Требуется: {requiredAmountDisplay}</div>
+                                ) : null}
                             <div className="text-sm text-neutral-700 text-right">
                                 <div className="font-medium">
                                     {angelCount !== null || devilCount !== null ? (
