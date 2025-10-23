@@ -1,0 +1,21 @@
+total 92
+drwxrwxrwx+ 14 node root  4096 Sep 29 09:29 .
+drwxrwxrwx+ 12 node root  4096 Sep 29 10:07 ..
+drwxrwxrwx+  5 node root  4096 Sep 29 05:31 admin
+drwxrwxrwx+  7 node root  4096 Sep 29 05:31 api
+drwxrwxrwx+  3 node root  4096 Sep 29 05:31 articles
+drwxrwxrwx+  3 node root  4096 Sep 29 05:31 auth
+drwxrwxrwx+  3 node root  4096 Sep 29 05:31 digest
+-rw-rw-rw-   1 node root 15406 Sep 29 05:31 favicon.ico
+-rw-rw-rw-   1 node root  3173 Sep 29 09:32 layout.js
+-rw-rw-rw-   1 node root   773 Sep 29 05:31 main.css
+-rw-rw-rw-   1 node root  4667 Sep 29 09:36 page.js
+drwxrwxrwx+  2 node node  4096 Sep 29 07:51 profile
+drwxrwxrwx+  3 node root  4096 Sep 29 05:31 projects
+-rw-rw-rw-   1 node root     0 Sep 29 05:31 root-fix.module.css
+-rw-rw-rw-   1 node root  1533 Sep 29 05:31 sitemap.ts
+drwxrwxrwx+  2 node root  4096 Sep 29 05:31 [...slug]
+drwxrwxrwx+  2 node root  4096 Sep 29 05:31 [slug]
+drwxrwxrwx+  3 node node  4096 Sep 29 08:20 tags
+drwxrwxrwx+  2 node root  4096 Sep 29 05:31 talks
+drwxrwxrwx+  3 node node  4096 Sep 29 09:29 you

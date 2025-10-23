@@ -1,0 +1,36 @@
+{
+  "name": "newlove - Codespace [rebuild]",
+  // Custom signal to force Codespaces/devcontainer UI to prompt for rebuild when this file changes.
+  // Use the local Dockerfile so the container is built from the project's
+  // Dockerfile which ensures the 'vscode' user is present. The previous
+  // `image` pointed to an upstream variant that doesn't include the
+  // 'vscode' user in some tags and caused Codespaces to fall back to
+  // recovery mode.
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:1": {}
+  },
+  // Run npm install but also sanity-check the 'vscode' user and log a helpful
+  // message. This will make failures visible in Codespaces build logs.
+  "postCreateCommand": "echo 'node version:' $(node -v) && echo 'npm version:' $(npm -v) && ./scripts/setup_dev.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "ms-azuretools.vscode-docker",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  },
+  "forwardPorts": [
+    3000,
+    5173
+  ],
+  "remoteUser": "vscode",
+  "mounts": [
+    "source=${localWorkspaceFolder}/.git,target=/workspace/.git,type=bind,consistency=cached"
+  ]
+}

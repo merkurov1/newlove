@@ -1,0 +1,268 @@
+'use client';
+import { useState, useEffect } from 'react';
+import { formatDistanceToNow } from 'date-fns';
+import { ru } from 'date-fns/locale';
+
+interface BlueskyAuthor {
+  did: string;
+  handle: string;
+  displayName: string;
+  avatar?: string;
+}
+
+interface BlueskyPost {
+  uri: string;
+  cid: string;
+  author: BlueskyAuthor;
+  text: string;
+  createdAt: string;
+  indexedAt: string;
+  replyCount: number;
+  repostCount: number;
+  likeCount: number;
+  embed?: any;
+  reason?: any;
+  reply?: any;
+}
+
+interface BlueskyFeedProps {
+  initialPosts?: BlueskyPost[];
+}
+
+export default function BlueskyFeed({ initialPosts = [] }: BlueskyFeedProps) {
+  const [posts, setPosts] = useState<BlueskyPost[]>(initialPosts);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+
+  const fetchPosts = async (loadMore = false) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const params = new URLSearchParams({
+        limit: '10',
+        ...(loadMore && cursor ? { cursor } : {})
+      });
+
+      const response = await fetch(`/api/bluesky/posts?${params}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch posts');
+      }
+
+      if (loadMore) {
+        setPosts(prev => [...prev, ...data.posts]);
+      } else {
+        setPosts(data.posts);
+      }
+
+      setCursor(data.cursor);
+      setHasMore(data.hasMore);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (initialPosts.length === 0) {
+      fetchPosts();
+    }
+  }, []);
+
+  const renderEmbed = (embed: any) => {
+    if (!embed) return null;
+
+    // Обработка изображений
+    if (embed.$type === 'app.bsky.embed.images#view' && embed.images) {
+      return (
+        <div className="mt-3 grid grid-cols-1 gap-2">
+          {embed.images.map((image: any, index: number) => (
+            <div key={index} className="rounded-lg overflow-hidden">
+              <img
+                src={image.fullsize || image.thumb}
+                alt={image.alt || ''}
+                className="w-full h-auto object-cover"
+                loading="lazy"
+              />
+              {image.alt && (
+                <p className="text-xs text-gray-500 mt-1 px-2">{image.alt}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // Обработка ссылок
+    if (embed.$type === 'app.bsky.embed.external#view' && embed.external) {
+      const external = embed.external;
+      return (
+        <div className="mt-3 border border-gray-200 rounded-lg overflow-hidden">
+          {external.thumb && (
+            <img
+              src={external.thumb}
+              alt=""
+              className="w-full h-32 object-cover"
+              loading="lazy"
+            />
+          )}
+          <div className="p-3">
+            <h4 className="font-medium text-gray-900 line-clamp-2">
+              {external.title}
+            </h4>
+            {external.description && (
+              <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                {external.description}
+              </p>
+            )}
+            <a
+              href={external.uri}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-600 hover:text-blue-800 mt-2 inline-block"
+            >
+              {new URL(external.uri).hostname}
+            </a>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const formatPostText = (text: string) => {
+    // Простая обработка ссылок и упоминаний
+    return text
+      .replace(/@([a-zA-Z0-9\\.]+)/g, '<span class="text-blue-600">@$1</span>')
+      .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener" class="text-blue-600 hover:underline">$1</a>');
+  };
+
+  if (error && posts.length === 0) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="flex items-center">
+          <svg className="w-5 h-5 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+          </svg>
+          <span className="text-red-800">Ошибка загрузки постов: {error}</span>
+        </div>
+        <button
+          onClick={() => fetchPosts()}
+          className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+        >
+          Попробовать еще раз
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {posts.map((post) => (
+        <div key={post.uri} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+          {/* Автор */}
+          <div className="flex items-center space-x-3 mb-3">
+            {post.author.avatar ? (
+              <img
+                src={post.author.avatar}
+                alt={post.author.displayName}
+                className="w-10 h-10 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <span className="text-blue-600 font-medium text-sm">
+                  {post.author.displayName[0]?.toUpperCase() || '👤'}
+                </span>
+              </div>
+            )}
+            <div className="flex-1">
+              <div className="flex items-center space-x-2">
+                <h3 className="font-medium text-gray-900">
+                  {post.author.displayName}
+                </h3>
+                <span className="text-sm text-gray-500">
+                  @{post.author.handle}
+                </span>
+              </div>
+              <time className="text-xs text-gray-500">
+                {formatDistanceToNow(new Date(post.createdAt), { 
+                  addSuffix: true, 
+                  locale: ru 
+                })}
+              </time>
+            </div>
+            <a
+              href={`https://bsky.app/profile/${post.author.handle}/post/${post.uri.split('/').pop()}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800"
+              title="Открыть в Bluesky"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+              </path>
+            </svg>
+          </a>
+          </div>
+
+          {/* Контент поста */}
+          <div className="mb-3">
+            <p 
+              className="text-gray-900 whitespace-pre-wrap"
+              dangerouslySetInnerHTML={{ __html: formatPostText(post.text) }}
+            />
+            {renderEmbed(post.embed)}
+          </div>
+
+          {/* Статистика */}
+          <div className="flex items-center space-x-6 text-sm text-gray-500">
+            <div className="flex items-center space-x-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <span>{post.replyCount}</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>{post.repostCount}</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              <span>{post.likeCount}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {/* Кнопка "Загрузить еще" */}
+      {hasMore && (
+        <div className="text-center pt-4">
+          <button
+            onClick={() => fetchPosts(true)}
+            disabled={loading}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? 'Загрузка...' : 'Загрузить еще'}
+          </button>
+        </div>
+      )}
+
+      {loading && posts.length === 0 && (
+        <div className="text-center py-8">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="text-gray-600 mt-2">Загрузка постов...</p>
+        </div>
+      )}
+    </div>
+  );
+}
