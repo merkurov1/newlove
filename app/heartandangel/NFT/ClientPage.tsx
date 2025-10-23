@@ -269,9 +269,10 @@ export default function NFTLabPageClient() {
             setStatus("Пожалуйста, установите и подключите кошелёк (например MetaMask)");
             return;
         }
-
+        // optimistic UI update so user sees action started immediately
         setProcessing(true);
-        setStatus(null);
+        setStatus('Инициализация покупки...');
+        pushDebug('handlePublicMint_start', { qty });
         try {
             // Проверка наличия токена у пользователя
             const eth = (window as any).ethereum;
@@ -306,11 +307,35 @@ export default function NFTLabPageClient() {
                 rawProvider = null;
             }
             if (!rawProvider) rawProvider = (window as any).ethereum;
-            const provider = (typeof (ethers as any).BrowserProvider === 'function')
-                ? new (ethers as any).BrowserProvider(rawProvider as any, 'any')
-                : new (ethers as any).JsonRpcProvider(); // main provider for mint
+            // Create a BrowserProvider where possible; if it fails, fall back to injected window.ethereum or JsonRpcProvider
+            let provider: any = null;
+            try {
+                if (typeof (ethers as any).BrowserProvider === 'function') {
+                    provider = new (ethers as any).BrowserProvider(rawProvider as any, 'any');
+                }
+            } catch (e) {
+                pushDebug('browserprovider_creation_error', String(e));
+                // if we tried an onboard wallet provider, retry with injected provider
+                if (rawProvider !== (window as any).ethereum && (window as any).ethereum) {
+                    try {
+                        rawProvider = (window as any).ethereum;
+                        provider = new (ethers as any).BrowserProvider(rawProvider as any, 'any');
+                        pushDebug('browserprovider_retry_with_injected', true);
+                    } catch (e2) {
+                        pushDebug('browserprovider_retry_failed', String(e2));
+                        provider = null;
+                    }
+                }
+            }
+            if (!provider) provider = new (ethers as any).JsonRpcProvider(); // main provider for mint
             try { console.debug('[NFT] handlePublicMint rawProvider:', rawProvider); } catch (e) { }
-            try { const net = await provider.getNetwork(); console.debug('[NFT] handlePublicMint provider network:', net); pushDebug('provider_network', net); } catch (e) { pushDebug('provider_network_error', String(e)); }
+            try {
+                const net = await provider.getNetwork();
+                console.debug('[NFT] handlePublicMint provider network:', net);
+                pushDebug('provider_network', net);
+            } catch (e) {
+                pushDebug('provider_network_error', String(e));
+            }
 
             // Ensure the wallet is on Polygon (chainId 137 / 0x89) so contract calls return valid data
             try {
@@ -363,19 +388,22 @@ export default function NFTLabPageClient() {
                 pushDebug('eth_getCode_error', String(e));
             }
             const price = await contractMint.priceWei();
+            pushDebug('price_raw', String(price));
             // ethers v6 returns bigint for uint256; guard against BigNumber-like objects
             const priceBigInt = typeof price === 'bigint' ? price : BigInt(price);
             const total = priceBigInt * BigInt(qty);
             // Some providers or ethers versions expect hex string for value; send hex for maximum compatibility
             const totalHex = '0x' + total.toString(16);
-            const tx = await contractMint.publicMint(qty, { value: totalHex });
-            setStatus("Транзакция отправлена, ожидаю подтверждения...");
-            const rec = await tx.wait();
-            setStatus("Успех! NFT куплен. Теперь вы увидите ваш нейтральный токен — выберите образ отдельно, когда будете готовы.");
-            // show chooser by setting a transient flag (we'll use currentId/mintedTokenId to infer)
-            // attempt to determine minted tokenId from receipt events, or fallback to currentId
             try {
-                // parse Transfer events from the single receipt to collect all minted token IDs
+                pushDebug('sending_tx', { qty, totalHex });
+                setStatus('Отправляю транзакцию... Проверьте окно кошелька.');
+                const tx = await contractMint.publicMint(qty, { value: totalHex });
+                setStatus("Транзакция отправлена, ожидаю подтверждения...");
+                const rec = await tx.wait();
+                setStatus("Успех! NFT куплен. Теперь вы увидите ваш нейтральный токен — выберите образ отдельно, когда будете готовы.");
+                pushDebug('tx_receipt', rec);
+
+                // parse Transfer events from the receipt to collect minted token IDs
                 try {
                     const transferTopic = ethers.id('Transfer(address,address,uint256)');
                     const ids: number[] = [];
@@ -384,9 +412,7 @@ export default function NFTLabPageClient() {
                         if (!l || !l.topics) continue;
                         if (l.topics[0] !== transferTopic) continue;
                         try {
-                            // topics[2] is 'to' (indexed)
                             const topicTo = l.topics[2];
-                            // topicTo is 32-byte hex; compare lowercased last 40 chars
                             if (!topicTo) continue;
                             const toAddr = '0x' + topicTo.slice(-40).toLowerCase();
                             if (toAddr !== normalizedTo) continue;
@@ -394,6 +420,7 @@ export default function NFTLabPageClient() {
                             if (!Number.isNaN(id)) ids.push(id);
                         } catch (e) { /* ignore parse errors */ }
                     }
+
                     // fallback: if no ids found, try currentId - 1
                     if (ids.length === 0) {
                         try {
@@ -406,6 +433,7 @@ export default function NFTLabPageClient() {
                             }
                         } catch (e) { }
                     }
+
                     // dedupe and set
                     const unique = Array.from(new Set(ids));
                     if (unique.length > 0) {
@@ -433,6 +461,7 @@ export default function NFTLabPageClient() {
                             }
                         }
                         setMintedTokenImages(imgs);
+
                         // fetch token variants for each id
                         try {
                             const variants: number[] = [];
@@ -451,7 +480,8 @@ export default function NFTLabPageClient() {
                     pushDebug('mint_tokenid_detect_error', String(e));
                 }
             } catch (e) {
-                pushDebug('mint_tokenid_detect_error', String(e));
+                // bubble up to outer catch
+                throw e;
             }
         } catch (err: any) {
             console.error(err);
@@ -1014,7 +1044,18 @@ export default function NFTLabPageClient() {
                     </div>
                 )}
             </div>
-            {/* debug panel removed per request */}
+            {/* Optional debug panel: visible when URL contains ?debug=1 */}
+            {typeof window !== 'undefined' && window.location.search.includes('debug=1') ? (
+                <div className="mt-6 p-4 bg-black text-white rounded">
+                    <div className="flex items-center justify-between">
+                        <div className="font-mono">DEBUG PANEL (debug=1)</div>
+                        <div className="text-sm">
+                            <button className="px-2 py-1 bg-white text-black rounded" onClick={async () => { try { await navigator.clipboard.writeText(JSON.stringify({ status, lastTxHash, debugState }, null, 2)); setStatus('Debug copied to clipboard'); setTimeout(() => setStatus(null), 1500); } catch (e) { setStatus('Failed to copy debug'); setTimeout(() => setStatus(null), 1500); } }}>Copy</button>
+                        </div>
+                    </div>
+                    <pre className="mt-2 text-xs whitespace-pre-wrap break-words">{safeStringify({ status, lastTxHash, debugState }, 4000)}</pre>
+                </div>
+            ) : null}
         </main>
     );
 }
