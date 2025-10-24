@@ -28,36 +28,84 @@ const API_PAGE_SIZE = 15;
 const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, includeTag }) => {
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(initialArticles.length >= PAGE_SIZE);
+  const [hasMore, setHasMore] = useState(initialArticles.length >= API_PAGE_SIZE);
   const [offset, setOffset] = useState(initialArticles.length);
-  const loaderRef = useRef<HTMLDivElement>(null);
+  const loaderRef = useRef<HTMLDivElement | null>(null);
   const [infiniteDone, setInfiniteDone] = useState(false);
+  // refs to avoid stale closures inside observer callback
+  const offsetRef = useRef(offset);
+  const loadingRef = useRef(loading);
+  const hasMoreRef = useRef(hasMore);
 
   // Логика подгрузки без изменений
+  // Reset feed when include/exclude tag or initialArticles change
   useEffect(() => {
-    if (infiniteDone || !hasMore) return;
-    const handleScroll = () => {
-      if (!loaderRef.current) return;
-      const rect = loaderRef.current.getBoundingClientRect();
-      if (rect.top < window.innerHeight && !loading) {
-        setLoading(true);
-        const query = new URLSearchParams({ offset: String(offset), limit: String(API_PAGE_SIZE) });
-        if (excludeTag) query.set('excludeTag', excludeTag);
-        if (includeTag) query.set('includeTag', includeTag);
-        fetch(`/api/articles?${query.toString()}`)
-          .then((res) => res.json())
-          .then((data) => {
-            setArticles((prev) => [...prev, ...data]);
-            setOffset((prev) => prev + data.length);
-            setLoading(false);
-            if (data.length < API_PAGE_SIZE) setHasMore(false);
-            if (data.length === 0) setInfiniteDone(true);
-          });
-      }
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [offset, loading, infiniteDone, hasMore, excludeTag, includeTag]);
+    setArticles(initialArticles);
+    setOffset(initialArticles.length);
+    setHasMore(initialArticles.length >= API_PAGE_SIZE);
+    setInfiniteDone(false);
+    offsetRef.current = initialArticles.length;
+    loadingRef.current = false;
+    hasMoreRef.current = initialArticles.length >= API_PAGE_SIZE;
+    // debug: indicate feed reset (helpful in dev to see tag changes)
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.debug('[ArticlesFeed] reset', { includeTag, excludeTag, initialCount: initialArticles.length });
+    }
+  }, [includeTag, excludeTag, initialArticles]);
+
+  // IntersectionObserver based infinite loading (more reliable than scroll handlers)
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+
+  useEffect(() => {
+    if (infiniteDone) return;
+    const node = loaderRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && !loadingRef.current && hasMoreRef.current) {
+          if (process.env.NODE_ENV !== 'production') {
+            // eslint-disable-next-line no-console
+            console.debug('[ArticlesFeed] loading more', { offset: offsetRef.current, includeTag, excludeTag });
+          }
+          // start loading
+          setLoading(true);
+          const q = new URLSearchParams({ offset: String(offsetRef.current), limit: String(API_PAGE_SIZE) });
+          if (excludeTag) q.set('excludeTag', excludeTag);
+          if (includeTag) q.set('includeTag', includeTag);
+          fetch(`/api/articles?${q.toString()}`)
+            .then((res) => res.json())
+            .then((data) => {
+              if (!Array.isArray(data) || data.length === 0) {
+                setInfiniteDone(true);
+                setHasMore(false);
+                return;
+              }
+              setArticles((prev) => [...prev, ...data]);
+              setOffset((prev) => prev + data.length);
+              if (data.length < API_PAGE_SIZE) setHasMore(false);
+            })
+            .catch(() => {
+              // swallow fetch errors for now
+            })
+            .finally(() => setLoading(false));
+        }
+      });
+    }, { rootMargin: '300px' });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [excludeTag, includeTag, infiniteDone]);
 
   return (
     <div className="w-full">
@@ -118,7 +166,10 @@ const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, incl
           );
         })}
       </div>
-      {/* ... (остальная часть компонента для подгрузки) ... */}
+      {/* sentinel for intersection observer to trigger loading more */}
+      <div ref={loaderRef} aria-hidden className="w-full h-8 mt-6 flex items-center justify-center">
+        {loading && <div className="text-gray-500 text-sm">Загрузка...</div>}
+      </div>
     </div>
   );
 };

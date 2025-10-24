@@ -1,6 +1,6 @@
  'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import SafeImage from '@/components/SafeImage';
 
@@ -47,26 +47,52 @@ export default function FlowFeed({ limit = 8 }: FlowFeedProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-    const fetchFlow = async () => {
-      try {
-        const res = await fetch('/api/flow');
-        if (!res.ok) throw new Error('Failed to fetch flow');
-        const data = await res.json();
-        if (mounted) setItems(data.items?.slice(0, limit) || []);
-      } catch (err) {
-        console.error('Flow fetch error:', err);
-        if (mounted) setError('Не удалось загрузить ленту');
-      } finally {
-        if (mounted) setLoading(false);
+  const fetchFlow = useRef<() => Promise<void>>();
+
+  fetchFlow.current = async () => {
+    setLoading(true);
+    try {
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.debug('[FlowFeed] fetching flow', { limit });
       }
+      const res = await fetch(`/api/flow?limit=${limit}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        // merge new items avoiding duplicates (by id)
+        setItems((prev) => {
+          const existingIds = new Set(prev.map((i) => i.id));
+          const merged = [...data.filter((i) => !existingIds.has(i.id)), ...prev];
+          // keep sorted by whatever origin order; here we prefer newest first
+          return merged.slice(0, Math.max(merged.length, limit));
+        });
+      }
+      setError(null);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // initial fetch
+    fetchFlow.current?.();
+
+    // poll every 60s while mounted
+    const interval = setInterval(() => fetchFlow.current?.(), 60_000);
+
+    // refetch when tab becomes visible
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchFlow.current?.();
     };
-    fetchFlow();
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
-      mounted = false;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [limit]);
+    }, [limit]);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
