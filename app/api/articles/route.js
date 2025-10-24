@@ -20,6 +20,7 @@ export async function GET(request) {
   const offset = parseInt(searchParams.get('offset') || '0', 10);
   const limit = parseInt(searchParams.get('limit') || '15', 10);
   const excludeTag = searchParams.get('excludeTag') || null;
+  const includeTag = searchParams.get('includeTag') || null;
 
     if (limit <= 0) {
       return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -46,32 +47,45 @@ export async function GET(request) {
       }
     }
 
-    // Try to exclude soft-deleted rows if the deployment has `deletedAt` column.
+    // If includeTag is provided, use RPC to fetch articles for that tag (server-side)
     let data, error;
-    for (const col of ['deletedAt', 'deleted_at', 'deleted', null]) {
+    if (includeTag) {
       try {
-        let q = supabase
-          .from('articles')
-          .select('id,title,slug,content,publishedAt')
-          .eq('published', true)
-          .order('publishedAt', { ascending: false })
-          .range(offset, offset + limit - 1);
-        if (col) q = q.is(col, null);
-        if (excludedIds.length > 0) {
-          const quoted = excludedIds.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
-          q = q.not('id', 'in', `(${quoted})`);
-        }
-        const resp = await q;
+        // Use the existing RPC function to get articles for a tag
+        const resp = await supabase.rpc('get_articles_by_tag_slug', { tag_slug_param: includeTag }).range(offset, offset + limit - 1);
         data = resp.data;
         error = resp.error;
-        if (error) throw error;
-        // success
-        break;
       } catch (e) {
-        // try next deleted col variant
         data = null;
         error = e;
-        continue;
+      }
+    } else {
+      // Try to exclude soft-deleted rows if the deployment has `deletedAt` column.
+      for (const col of ['deletedAt', 'deleted_at', 'deleted', null]) {
+        try {
+          let q = supabase
+            .from('articles')
+            .select('id,title,slug,content,publishedAt')
+            .eq('published', true)
+            .order('publishedAt', { ascending: false })
+            .range(offset, offset + limit - 1);
+          if (col) q = q.is(col, null);
+          if (excludedIds.length > 0) {
+            const quoted = excludedIds.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
+            q = q.not('id', 'in', `(${quoted})`);
+          }
+          const resp = await q;
+          data = resp.data;
+          error = resp.error;
+          if (error) throw error;
+          // success
+          break;
+        } catch (e) {
+          // try next deleted col variant
+          data = null;
+          error = e;
+          continue;
+        }
       }
     }
 
@@ -84,9 +98,9 @@ export async function GET(request) {
     try {
       const { getFirstImage } = await import('@/lib/contentUtils');
       const enriched = await Promise.all((data || []).map(async (a) => {
-        let previewImage = null;
-        try { previewImage = a.content ? await getFirstImage(a.content) : null; } catch (e) { previewImage = null; }
-        return { id: a.id, title: a.title, slug: a.slug, content: a.content, publishedAt: a.publishedAt, previewImage };
+        let preview_image = null;
+        try { preview_image = a.content ? await getFirstImage(a.content) : null; } catch (e) { preview_image = null; }
+        return { id: a.id, title: a.title, slug: a.slug, content: a.content, publishedAt: a.publishedAt, preview_image };
       }));
       return new Response(JSON.stringify(enriched), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (e) {
