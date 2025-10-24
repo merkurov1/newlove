@@ -1,6 +1,6 @@
  'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import SafeImage from '@/components/SafeImage';
 
@@ -47,54 +47,26 @@ export default function FlowFeed({ limit = 8 }: FlowFeedProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchFlow = useRef<() => Promise<void>>();
-
-  fetchFlow.current = async () => {
-    setLoading(true);
-    try {
-      if (process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-console
-        console.debug('[FlowFeed] fetching flow', { limit });
-      }
-      const res = await fetch(`/api/flow?limit=${limit}`);
-      const data = await res.json();
-      // API may return either an array or an object { items: [...] }
-  const list: FlowItem[] = Array.isArray(data) ? data : (Array.isArray((data as any).items) ? (data as any).items : []);
-      if (list.length > 0) {
-        // merge new items avoiding duplicates (by id)
-        setItems((prev) => {
-          const existingIds = new Set(prev.map((i) => i.id));
-          const merged = [...list.filter((i) => !existingIds.has(i.id)), ...prev];
-          // keep latest items first and cap by limit
-          return merged.slice(0, Math.max(merged.length, limit));
-        });
-      }
-      setError(null);
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    // initial fetch
-    fetchFlow.current?.();
-
-    // poll every 60s while mounted
-    const interval = setInterval(() => fetchFlow.current?.(), 60_000);
-
-    // refetch when tab becomes visible
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') fetchFlow.current?.();
+    let mounted = true;
+    const fetchFlow = async () => {
+      try {
+        const res = await fetch('/api/flow');
+        if (!res.ok) throw new Error('Failed to fetch flow');
+        const data = await res.json();
+        if (mounted) setItems(data.items?.slice(0, limit) || []);
+      } catch (err) {
+        console.error('Flow fetch error:', err);
+        if (mounted) setError('Не удалось загрузить ленту');
+      } finally {
+        if (mounted) setLoading(false);
+      }
     };
-    document.addEventListener('visibilitychange', onVisibility);
-
+    fetchFlow();
     return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisibility);
+      mounted = false;
     };
-    }, [limit]);
+  }, [limit]);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
@@ -160,8 +132,8 @@ export default function FlowFeed({ limit = 8 }: FlowFeedProps) {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
-      <div className="grid gap-4 sm:gap-6 overflow-x-hidden" style={{gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))'}}>
+    <div className="w-full px-2 md:px-8 2xl:px-32">
+      <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
         {items.slice(0, Math.min(8, items.length)).map((item) => {
           const imageSrc = item.linkPreview?.image || item.thumbnail || (item.images && item.images[0]);
           return (
@@ -204,14 +176,7 @@ export default function FlowFeed({ limit = 8 }: FlowFeedProps) {
                 <div className="mt-auto flex items-center justify-between text-sm text-gray-500">
                   <div className="flex items-center gap-3">
                     {item.authorAvatar ? (
-                      <SafeImage
-                        src={item.authorAvatar}
-                        alt={item.author ? `Аватар автора: ${item.author}` : 'Аватар автора'}
-                        width={28}
-                        height={28}
-                        className="rounded-full object-cover"
-                        unoptimized
-                      />
+                      <img src={item.authorAvatar} alt={item.author || ''} className="w-7 h-7 rounded-full object-cover" />
                     ) : (
                       <div className="w-7 h-7 rounded-full bg-gray-200" />
                     )}
