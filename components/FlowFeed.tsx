@@ -58,12 +58,14 @@ export default function FlowFeed({ limit = 8 }: FlowFeedProps) {
       }
       const res = await fetch(`/api/flow?limit=${limit}`);
       const data = await res.json();
-      if (Array.isArray(data)) {
+      // API may return either an array or an object { items: [...] }
+  const list: FlowItem[] = Array.isArray(data) ? data : (Array.isArray((data as any).items) ? (data as any).items : []);
+      if (list.length > 0) {
         // merge new items avoiding duplicates (by id)
         setItems((prev) => {
           const existingIds = new Set(prev.map((i) => i.id));
-          const merged = [...data.filter((i) => !existingIds.has(i.id)), ...prev];
-          // keep sorted by whatever origin order; here we prefer newest first
+          const merged = [...list.filter((i) => !existingIds.has(i.id)), ...prev];
+          // keep latest items first and cap by limit
           return merged.slice(0, Math.max(merged.length, limit));
         });
       }

@@ -107,6 +107,49 @@ const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, incl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [excludeTag, includeTag, infiniteDone]);
 
+  // Periodically revalidate the initial articles (so homepage updates when new articles arrive)
+  const fetchInitial = useRef<() => Promise<void>>();
+  fetchInitial.current = async () => {
+    try {
+      const q = new URLSearchParams({ offset: '0', limit: String(API_PAGE_SIZE) });
+      if (excludeTag) q.set('excludeTag', excludeTag);
+      if (includeTag) q.set('includeTag', includeTag);
+      const res = await fetch(`/api/articles?${q.toString()}`);
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        // Put newest items first, keep previous items that are not in the fresh page
+        setArticles((prev) => {
+          const incomingIds = new Set(data.map((a: Article) => a.id));
+          const remaining = prev.filter((p) => !incomingIds.has(p.id));
+          return [...data, ...remaining];
+        });
+        setOffset((prev) => Math.max(prev, data.length));
+        setHasMore(data.length >= API_PAGE_SIZE);
+      }
+    } catch (e) {
+      // swallow errors — keep current list
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.debug('[ArticlesFeed] revalidate failed', e);
+      }
+    }
+  };
+
+  useEffect(() => {
+    // initial revalidate shortly after mount
+    fetchInitial.current?.();
+    const interval = setInterval(() => fetchInitial.current?.(), 60_000);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchInitial.current?.();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeTag, excludeTag]);
+
   return (
     <div className="w-full">
       {/* ИЗМЕНЕНИЕ: Оптимизированная сетка для лучшего вида на планшетах */}
