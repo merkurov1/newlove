@@ -32,8 +32,8 @@ export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel
         >
           {images.map((src, i) => (
             <SwiperSlide key={i}>
-              <div className="relative w-full h-[48vh] sm:h-[56vh] md:h-[44vh] lg:h-[36rem]">
-                <Image src={src} alt={`Heart and Angel ${i}`} fill className="object-cover" />
+              <div className="relative w-full h-[48vh] sm:h-[56vh] md:h-[44vh] lg:h-[36rem] flex items-center justify-center bg-white">
+                <Image src={src} alt={`Heart and Angel ${i}`} fill className="object-contain object-center" />
               </div>
             </SwiperSlide>
           ))}
