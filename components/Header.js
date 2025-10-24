@@ -164,6 +164,12 @@ export default function Header({ projects, settings }) {
 
           <nav className="hidden items-center md:flex">
             <ul className="list-none flex items-center justify-center gap-6 text-xs font-semibold uppercase tracking-[0.2em]">
+              <li>
+                <Link href="/heartandangel" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
+                  #HEARTANDANGEL
+                  <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{ transitionProperty: 'transform' }}></span>
+                </Link>
+              </li>
               {/* Магазин временно убран - будет добавлен позже */}
               {Array.isArray(projects) && projects.map((project) => (
                 <li key={project.id}>
@@ -279,6 +285,12 @@ export default function Header({ projects, settings }) {
             <li>
               <Link href="/heartandangel" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">#HEARTANDANGEL</Link>
             </li>
+            {/* Projects follow after the Heart & Angel link */}
+            {Array.isArray(projects) && projects.map((project) => (
+              <li key={project.id}>
+                <Link href={`/${project.slug}`} onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">{project.title}</Link>
+              </li>
+            ))}
             {/* Ссылки из UserSidebar перенесены сюда */}
             {status === 'authenticated' && (
               (() => {
