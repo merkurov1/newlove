@@ -1,28 +1,30 @@
-export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+
+// Return a simple array of published projects: { id, slug, title }
 export async function GET() {
   try {
-    let supabase;
-    try {
-      const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-      supabase = (await getUserAndSupabaseForRequest(new Request('http://localhost')))?.supabase;
-    } catch (e) {
-      // Fallback to server client. Explicitly opt into the service-role key
-      // because this endpoint performs server-only reads of `projects` which
-      // may be protected by RLS and require elevated privileges.
-      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-      try { supabase = getServerSupabaseClient({ useServiceRole: true }); } catch (err) { supabase = null; }
-    }
-    if (!supabase) return NextResponse.json({ success: true, count: 0, projects: [] });
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
+    if (!supabase) return NextResponse.json([], { status: 200 });
 
-  const { data: projects, error } = await supabase.from('projects').select('id,title,slug,published').order('createdAt', { ascending: false });
+    const { data: projects, error } = await supabase
+      .from('projects')
+      .select('id,slug,title,published')
+      .eq('published', true)
+      .order('publishedAt', { ascending: false })
+      .limit(50);
+
     if (error) {
-      console.error('Supabase fetch projects error', error);
-      return NextResponse.json({ success: false, error: error.message });
+      console.error('[api/projects] supabase error', error);
+      return NextResponse.json([], { status: 200 });
     }
 
-    return NextResponse.json({ success: true, count: (projects || []).length, projects });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    const out = Array.isArray(projects) ? projects.map(p => ({ id: p.id, slug: p.slug, title: p.title })) : [];
+    return NextResponse.json(out, { status: 200 });
+  } catch (e) {
+    console.error('[api/projects] Failed to fetch projects', e);
+    return NextResponse.json([], { status: 200 });
   }
 }
+
+export const dynamic = 'force-dynamic';

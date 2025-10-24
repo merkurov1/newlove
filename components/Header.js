@@ -72,6 +72,9 @@ export default function Header({ projects, settings }) {
   // Простая и чистая логика: settings (правильный URL) -> локальный fallback
   const logoUrl = settings?.logo_url || '/images/logo.svg';
 
+  // Local projects state: initialize from server-provided `projects` prop
+  const [projectsState, setProjectsState] = useState(Array.isArray(projects) ? projects : []);
+
   // Умный скролл
   useEffect(() => {
     let ticking = false;
@@ -105,6 +108,29 @@ export default function Header({ projects, settings }) {
       // force re-render
       try { setTick(t => t + 1); } catch (e) { }
     };
+    // Keep client copy of projects fresh: fetch latest published projects on mount
+    let mounted = true;
+    const fetchProjects = async () => {
+      try {
+        const res = await fetch('/api/projects');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!mounted) return;
+        if (Array.isArray(data)) {
+          // Only update when different to avoid unnecessary re-renders
+          try {
+            const same = JSON.stringify(data) === JSON.stringify(projectsState);
+            if (!same) setProjectsState(data);
+          } catch (e) {
+            setProjectsState(data);
+          }
+        }
+      } catch (e) {
+        console.debug('[Header] failed to refresh projects', e);
+      }
+    };
+    fetchProjects();
+    const onProjectsUpdated = () => fetchProjects();
     window.addEventListener('resize', handleResize);
     window.addEventListener('supabase:session-changed', onSessionChanged);
     // Close mobile menu when other UI needs to open modal (e.g., web3/onboard login)
@@ -114,6 +140,8 @@ export default function Header({ projects, settings }) {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('supabase:session-changed', onSessionChanged);
       window.removeEventListener('newlove:close-mobile-menu', closeMenuHandler);
+      window.removeEventListener('newlove:projects-updated', onProjectsUpdated);
+      mounted = false;
     };
   }, []);
 
@@ -171,7 +199,7 @@ export default function Header({ projects, settings }) {
                 </Link>
               </li>
               {/* Магазин временно убран - будет добавлен позже */}
-              {Array.isArray(projects) && projects.map((project) => (
+              {Array.isArray(projectsState) && projectsState.map((project) => (
                 <li key={project.id}>
                   <Link href={`/${project.slug}`} className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
                     {project.title}
@@ -195,12 +223,6 @@ export default function Header({ projects, settings }) {
               <li>
                 <Link href="/letters" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
                   Letters
-                  <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{ transitionProperty: 'transform' }}></span>
-                </Link>
-              </li>
-              <li>
-                <Link href="/heartandangel" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
-                  #HEARTANDANGEL
                   <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{ transitionProperty: 'transform' }}></span>
                 </Link>
               </li>
@@ -263,8 +285,12 @@ export default function Header({ projects, settings }) {
       <div className={`fixed inset-0 z-40 transform bg-white/90 backdrop-blur-md pt-24 transition-transform duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`} style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}>
         <nav className="container mx-auto px-4">
           <ul className="list-none flex flex-col items-center gap-6 text-sm font-semibold uppercase tracking-[0.2em]">
-            {/* Магазин временно убран - будет добавлен позже */}
-            {Array.isArray(projects) && projects.map((project) => (
+            {/* Сначала ставим #HEARTANDANGEL, как в десктопе */}
+            <li>
+              <Link href="/heartandangel" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">#HEARTANDANGEL</Link>
+            </li>
+            {/* Затем проекты (каждый один раз) */}
+            {Array.isArray(projectsState) && projectsState.map((project) => (
               <li key={project.id}>
                 <Link href={`/${project.slug}`} onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">{project.title}</Link>
               </li>
@@ -282,15 +308,6 @@ export default function Header({ projects, settings }) {
             <li>
               <Link href="/letters" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Letters</Link>
             </li>
-            <li>
-              <Link href="/heartandangel" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">#HEARTANDANGEL</Link>
-            </li>
-            {/* Projects follow after the Heart & Angel link */}
-            {Array.isArray(projects) && projects.map((project) => (
-              <li key={project.id}>
-                <Link href={`/${project.slug}`} onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">{project.title}</Link>
-              </li>
-            ))}
             {/* Ссылки из UserSidebar перенесены сюда */}
             {status === 'authenticated' && (
               (() => {
