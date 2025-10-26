@@ -85,6 +85,19 @@ function blocksToHtml(blocks) {
         return `<pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; margin: 20px 0;"><code>${block.data?.code || ''}</code></pre>`;
       case 'video':
         return `<div style="margin: 20px 0;"><a href="${block.data?.url}" target="_blank" style="color: #007cba;">📹 Смотреть видео</a></div>`;
+      case 'paragraph': {
+        // Editor.js paragraph blocks
+        let txt = block.data?.text || block.data?.html || '';
+        txt = addResizeToSupabaseImages(txt);
+        txt = sanitizeLinksInHtml(txt);
+        return `<p>${txt}</p>`;
+      }
+      case 'link': {
+        // Editor.js LinkTool block
+        const href = sanitizeLinksInHtml(String(block.data?.link || block.data?.url || ''));
+        const label = (block.data?.meta && (block.data.meta.title || block.data.meta.url)) || href;
+        return `<p><a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#007cba;">${label}</a></p>`;
+      }
       default:
         // Если это html-блок или неизвестный, тоже прогоняем через addResizeToSupabaseImages
         if (block.data?.html) {
@@ -95,10 +108,72 @@ function blocksToHtml(blocks) {
   }).join('');
 }
 
+// Утилиты для нормализации ссылок внутри HTML письма
+function decodeHtmlEntities(str) {
+  if (!str || typeof str !== 'string') return str;
+  return str.replace(/&quot;|&ldquo;|&rdquo;|&amp;|&lt;|&gt;/g, (m) => {
+    switch (m) {
+      case '&quot;': return '"';
+      case '&ldquo;': return '"';
+      case '&rdquo;': return '"';
+      case '&amp;': return '&';
+      case '&lt;': return '<';
+      case '&gt;': return '>';
+      default: return m;
+    }
+  });
+}
+
+function stripSurroundingQuotes(s) {
+  if (!s || typeof s !== 'string') return s;
+  // Trim whitespace and remove surrounding ASCII or smart quotes
+  let t = s.trim();
+  // Remove ASCII quotes and smart quotes at the start/end
+  t = t.replace(/^["'`\u2018\u2019\u201C\u201D]+/, '');
+  t = t.replace(/["'`\u2018\u2019\u201C\u201D]+$/, '');
+  return t;
+}
+
+function normalizeUrlScheme(u) {
+  if (!u || typeof u !== 'string') return u;
+  // Fix common broken schemes like https:/www.example -> https://www.example
+  u = u.replace(/^(https?:)\/([^/])/i, '$1//$2');
+  // If URL starts with 'www.' or similar without scheme, add https://
+  if (/^www\./i.test(u)) u = 'https://' + u;
+  return u;
+}
+
+function sanitizeLinksInHtml(html) {
+  if (!html || typeof html !== 'string') return html;
+  // First decode common HTML entities we expect inside attributes
+  let out = decodeHtmlEntities(html);
+
+  // Fix href attributes: capture href=\"...\" or href='...'
+  out = out.replace(/href=(['"])(.*?)\1/gi, (match, q, url) => {
+    let cleaned = decodeHtmlEntities(url || '');
+    cleaned = stripSurroundingQuotes(cleaned);
+    cleaned = normalizeUrlScheme(cleaned);
+    return `href=${q}${cleaned}${q}`;
+  });
+
+  // Also fix plain-text occurrences of smart-quoted links like “https:/... ”
+  out = out.replace(/[\u201C\u201D\u2018\u2019]+\s*(https?:\/[^\s"'<>]+)\s*[\u201C\u201D\u2018\u2019]+/gi, (m, url) => {
+    let cleaned = stripSurroundingQuotes(url);
+    cleaned = normalizeUrlScheme(cleaned);
+    return cleaned;
+  });
+
+  // Fix accidental single-slash schemes that may have been produced: https:/path -> https://path
+  out = out.replace(/https?:\/([^/\s])/gi, (m) => m.replace(':\/', '://'));
+
+  return out;
+}
+
 // Эта обертка нужна, чтобы наш компонент мог работать на сервере
 const NewsletterEmail = ({ title = 'Тема письма', content = '', unsubscribeUrl }) => {
   // Конвертируем блочный контент в HTML
   const contentHtml = blocksToHtml(content);
+  const contentHtmlSanitized = sanitizeLinksInHtml(contentHtml);
 
   return (
     <Html>
@@ -152,7 +227,7 @@ const NewsletterEmail = ({ title = 'Тема письма', content = '', unsubs
           </Section>
           <Section>
             <Heading style={heading}>{title}</Heading>
-            <div dangerouslySetInnerHTML={{ __html: contentHtml }} />
+            <div dangerouslySetInnerHTML={{ __html: contentHtmlSanitized }} />
             <Hr style={hr} />
             <Text style={footer}>
               Anton Merkurov | Вы получили это письмо, потому что подписались на рассылку на сайте new.merkurov.love

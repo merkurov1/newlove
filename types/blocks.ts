@@ -13,4 +13,6 @@ export type EditorJsBlock =
   | { type: 'gallery'; data: { images: GalleryImage[] } }
   | { type: 'columns'; data: { columns: Array<{ html: string }> } }
   | { type: 'quote'; data: { text: string; author?: string; source?: string } }
-  | { type: 'video'; data: { url: string; caption?: string; platform?: 'youtube' | 'vimeo' | 'other' } };
+  | { type: 'video'; data: { url: string; caption?: string; platform?: 'youtube' | 'vimeo' | 'other' } }
+  | { type: 'link'; data: { link: string; meta?: { title?: string; url?: string } } };
+

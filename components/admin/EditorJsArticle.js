@@ -6,6 +6,7 @@ import Header from '@editorjs/header';
 import List from '@editorjs/list';
 import Embed from '@editorjs/embed';
 import ImageTool from '@editorjs/image';
+import LinkTool from '@editorjs/link';
 import { uploadImage, validateImageFile } from './editorUtils';
 
 
@@ -17,10 +18,12 @@ export default function EditorJsArticle({ value, onChange }) {
     if (!editorRef.current) {
       editorRef.current = new EditorJS({
         holder: holder.current,
+        inlineToolbar: true,
         tools: {
           header: Header,
           list: List,
           embed: Embed,
+          link: LinkTool,
           image: {
             class: ImageTool,
             config: {

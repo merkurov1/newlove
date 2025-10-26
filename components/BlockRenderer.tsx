@@ -92,6 +92,15 @@ export default function BlockRenderer({ blocks }: { blocks: EditorJsBlock[] }) {
                 <div dangerouslySetInnerHTML={{ __html: block.data.html || '' }} />
               </div>
             );
+          case 'link':
+            // Support Editor.js LinkTool block
+            const href = String(block.data?.link || '');
+            const label = (block.data?.meta && (block.data.meta.title || block.data.meta.url)) || href;
+            return (
+              <div key={idx} className="mb-4">
+                <p className="text-gray-800 leading-relaxed"><a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600">{label}</a></p>
+              </div>
+            );
           // Поддержка колоночной верстки
           case 'columns':
             return (
