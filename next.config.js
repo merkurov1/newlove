@@ -84,7 +84,13 @@ const nextConfig = {
     ],
     // Поддержка локальных изображений из /public/uploads
     domains: ['nzasvblckrwsnlxsqfma.supabase.co', 'txvkqcitalfbjytmnawq.supabase.co'],
-    unoptimized: false,
+  // Временно отключаем встроенный оптимизатор изображений Next.js / Vercel.
+  // Это предотвратит дальнейшие "Image Optimization - Cache Writes" на Vercel
+  // и быстро уменьшит потребление бесплатной квоты. В долгосрочной перспективе
+  // рекомендую либо настроить внешний CDN/прокси для изображений, пред-генерировать
+  // превью и миниатюры в хранилище, либо понизить использование next/image
+  // для внешних/динамических источников.
+  unoptimized: true,
     formats: ['image/webp', 'image/avif'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
