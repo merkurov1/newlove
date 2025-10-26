@@ -5,17 +5,30 @@ import tokenUtils from '@/lib/auth/tokenUtils';
 
 export async function GET(req: Request) {
   try {
-    // Диагностика: логируем Authorization заголовок и результат авторизации
+    // Диагностика: логируем Authorization заголовок и наличие токена в cookie
     try {
       const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || null;
-      if (authHeader && typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')) {
-        const token = authHeader.slice(7).trim();
-        console.debug('[api/user/role] Authorization header present, token prefix=', token.slice(0, 8));
+      const cookieHeader = req.headers.get('cookie') || null;
+      if (authHeader && typeof authHeader === 'string') {
+        if (authHeader.toLowerCase().startsWith('bearer ')) {
+          const token = authHeader.slice(7).trim();
+          console.debug('[api/user/role] Authorization header present (Bearer), token prefix=', token.slice(0, 8));
+        } else {
+          console.debug('[api/user/role] Authorization header present but not Bearer (will try cookies). header=', authHeader.slice(0, 40));
+        }
       } else {
-        console.debug('[api/user/role] Authorization header present:', Boolean(authHeader));
+        // Try to detect Supabase-style access token in cookies for clearer diagnostics
+        let cookieTokenPreview = null;
+        try {
+          const res = tokenUtils.extractTokenFromCookieHeader(cookieHeader || '');
+          if (res && res.token) cookieTokenPreview = String(res.token).slice(0, 12) + '…';
+        } catch (ee) {
+          // ignore
+        }
+        console.debug('[api/user/role] No Authorization header; cookie present=', Boolean(cookieHeader), 'cookie token preview=', cookieTokenPreview);
       }
     } catch (e) {
-      console.debug('[api/user/role] cannot read authorization header', e);
+      console.debug('[api/user/role] cannot read authorization header or cookies', e);
     }
 
     // Try to extract user id from Authorization header or cookies first.
