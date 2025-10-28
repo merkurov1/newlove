@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
+import AuctionSlider from '@/components/AuctionSlider';
 
 // --- 1. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ---
 // Находит тег по его slug и подгружает все связанные с ним статьи.
@@ -76,16 +77,31 @@ export default async function TagPage({ params }) {
     return match ? match[1] : null;
   }
 
+  // Специальная обработка для тега "Auction" - показываем полноэкранный слайдер
+  const isAuctionTag = params.slug.toLowerCase() === 'auction';
+
+  if (isAuctionTag && articles.length > 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-100 py-12 px-4">
-        <div className="max-w-4xl mx-auto mb-12">
-          <p className="text-lg text-gray-500 mb-2">Материалы по тегу</p>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-500 to-pink-400 bg-clip-text text-transparent"># {tag.name}</h1>
+      <div className="min-h-screen bg-black">
+        {/* Полноэкранный слайдер без отступов */}
+        <div className="w-full h-screen">
+          <AuctionSlider articles={articles} />
         </div>
+      </div>
+    );
+  }
+
+  // Обычное отображение для других тегов
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-100 py-12 px-4">
+      <div className="max-w-4xl mx-auto mb-12">
+        <p className="text-lg text-gray-500 mb-2">Материалы по тегу</p>
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-purple-500 to-pink-400 bg-clip-text text-transparent"># {tag.name}</h1>
+      </div>
 
       {/* --- СЕТКА СТАТЕЙ (аналогично главной странице) --- */}
       {articles.length > 0 ? (
-          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-2">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-2">
           {articles.map((article) => {
             const previewImage = getFirstImage(article.content);
             return (
