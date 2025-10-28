@@ -102,8 +102,7 @@ const nextConfig = {
         pathname: '/**',
       }
     ],
-    // Legacy domains config (deprecated in favor of remotePatterns)
-    domains: ['nzasvblckrwsnlxsqfma.supabase.co', 'txvkqcitalfbjytmnawq.supabase.co'],
+
     // Enable image optimization for better performance
     // Use environment variable to disable if needed: NEXT_PUBLIC_DISABLE_IMAGE_OPTIMIZATION=1
     unoptimized: process.env.NEXT_PUBLIC_DISABLE_IMAGE_OPTIMIZATION === '1',
