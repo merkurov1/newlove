@@ -3,6 +3,8 @@
 import { NextResponse } from 'next/server';
 // dynamic import to avoid circular/interop build issues
 
+export const dynamic = 'force-dynamic';
+
 // Вспомогательная функция для генерации URL-дружественного слага из заголовка
 // Я добавил транслитерацию для кириллических символов
 const generateSlug = (title: string): string => {

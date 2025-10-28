@@ -94,7 +94,7 @@ export default async function TagPage({ params }) {
       <div className="min-h-screen bg-black">
         {/* Полноэкранный слайдер без отступов */}
         <div className="w-full h-screen">
-          <AuctionSlider articles={articlesWithImages} />
+          <AuctionSlider articles={articlesWithImages} fullscreen={true} />
         </div>
       </div>
     );

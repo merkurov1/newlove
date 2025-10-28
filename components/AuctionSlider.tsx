@@ -3,6 +3,9 @@ import React, { FC } from 'react';
 import Image from 'next/image';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 import 'swiper/css/effect-fade';
 
 type Article = {
@@ -15,15 +18,16 @@ type Article = {
 
 interface AuctionSliderProps {
   articles: Article[];
+  fullscreen?: boolean;
 }
 
-const AuctionSlider: FC<AuctionSliderProps> = ({ articles }) => {
+const AuctionSlider: FC<AuctionSliderProps> = ({ articles, fullscreen = false }) => {
   if (!Array.isArray(articles) || articles.length === 0) return null;
 
   const mapSlug = (a: Article) => (a?.slug || a?.id || '').toString();
 
   return (
-    <div className="auction-slider-single w-full h-full">
+    <div className={fullscreen ? "auction-slider-single w-full h-full" : "auction-slider-single"}>
       <Swiper
         modules={[Navigation, Pagination, Autoplay, EffectFade]}
         navigation
@@ -33,19 +37,18 @@ const AuctionSlider: FC<AuctionSliderProps> = ({ articles }) => {
         spaceBetween={0}
         effect="fade"
         loop={true}
-        className="w-full h-full"
+        className={fullscreen ? "w-full h-full" : "py-1"}
       >
         {articles.map((a) => (
-            <SwiperSlide key={String(a.id || a.slug)} className="w-full h-full">
-              <a href={`/${mapSlug(a)}`} className="block w-full h-full bg-black group">
-                {/* Полноэкранное изображение */}
-                <div className="w-full h-full relative">
+            <SwiperSlide key={String(a.id || a.slug)} className={fullscreen ? "w-full h-full" : ""}>
+              <a href={`/${mapSlug(a)}`} className={fullscreen ? "block w-full h-full bg-black group" : "block rounded-xl overflow-hidden shadow-lg bg-white dark:bg-neutral-900 group"}>
+                <div className={fullscreen ? "w-full h-full relative" : "w-full bg-gray-100 dark:bg-neutral-800 relative aspect-[4/3] sm:aspect-video lg:aspect-[2/1]"}>
                   {a.preview_image ? (
                     <Image
                       src={a.preview_image}
                       alt={a.title || ''}
                       fill
-                      sizes="100vw"
+                      sizes={fullscreen ? "100vw" : "(max-width: 768px) 100vw, 80vw"}
                       className="object-cover transition-transform duration-300 group-hover:scale-105"
                       draggable={false}
                       priority={true}
@@ -55,10 +58,18 @@ const AuctionSlider: FC<AuctionSliderProps> = ({ articles }) => {
                       <span className="text-lg text-neutral-500">Нет изображения</span>
                     </div>
                   )}
-                  {/* Градиент и текст поверх изображения */}
-                  <div className="absolute bottom-0 left-0 w-full h-2/3 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 sm:p-12 md:p-16 flex flex-col justify-end">
-                    <h3 className="text-2xl sm:text-4xl md:text-6xl font-bold text-white drop-shadow-2xl mb-4">{a.title}</h3>
-                    {a.excerpt && <p className="mt-2 text-base sm:text-xl md:text-2xl text-gray-200 drop-shadow-lg line-clamp-3 max-w-4xl">{a.excerpt}</p>}
+                  <div className={fullscreen 
+                    ? "absolute bottom-0 left-0 w-full h-2/3 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 sm:p-12 md:p-16 flex flex-col justify-end"
+                    : "absolute bottom-0 left-0 w-full h-2/3 bg-gradient-to-t from-black/80 via-black/50 to-transparent p-4 sm:p-8 flex flex-col justify-end"
+                  }>
+                    <h3 className={fullscreen 
+                      ? "text-2xl sm:text-4xl md:text-6xl font-bold text-white drop-shadow-2xl mb-4"
+                      : "text-xl sm:text-3xl font-bold text-white drop-shadow-lg"
+                    }>{a.title}</h3>
+                    {a.excerpt && <p className={fullscreen
+                      ? "mt-2 text-base sm:text-xl md:text-2xl text-gray-200 drop-shadow-lg line-clamp-3 max-w-4xl"
+                      : "mt-2 text-sm sm:text-base text-gray-200 drop-shadow-md line-clamp-2"
+                    }>{a.excerpt}</p>}
                   </div>
                 </div>
               </a>
