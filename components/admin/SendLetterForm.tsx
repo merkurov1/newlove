@@ -1,38 +1,23 @@
 "use client";
 
-import React from 'react';
+import { useState } from 'react';
 import { sendLetter } from '@/app/admin/actions';
 
-interface Letter {
-  id: string;
-  title: string;
-  sentAt?: Date | null;
-}
+export default function SendLetterForm({ letter }) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [testEmail, setTestEmail] = useState('');
 
-interface SendLetterFormProps {
-  letter: Letter;
-}
-
-export default function SendLetterForm({ letter }: SendLetterFormProps) {
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [message, setMessage] = React.useState('');
-  const [providerDetails, setProviderDetails] = React.useState(null as any);
-  const [testEmail, setTestEmail] = React.useState('');
-
-  async function handleSendLetter(formData: FormData) {
+  async function handleSendLetter(formData) {
     setIsLoading(true);
     setMessage('');
-
     try {
-      // append testEmail if set
       if (testEmail) formData.set('testEmail', testEmail);
       const result = await sendLetter(null, formData);
-      setProviderDetails(result.providerResponse || null);
-
-      if (result.status === 'success') {
+      if (result?.status === 'success') {
         setMessage(`✅ ${result.message}`);
       } else {
-        setMessage(`❌ ${result.message}`);
+        setMessage(`❌ ${result?.message || 'Ошибка'}`);
       }
     } catch (error) {
       setMessage('❌ Произошла ошибка при отправке рассылки');
@@ -41,8 +26,7 @@ export default function SendLetterForm({ letter }: SendLetterFormProps) {
     }
   }
 
-  // Если письмо уже отправлено
-  if (letter.sentAt) {
+  if (letter?.sentAt) {
     return (
       <div className="text-green-700">
         ✅ Рассылка уже отправлена: {new Date(letter.sentAt).toLocaleString('ru-RU')}
@@ -54,8 +38,10 @@ export default function SendLetterForm({ letter }: SendLetterFormProps) {
     <div>
       <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
         <p className="text-yellow-800 text-sm">
-          <strong>📝 Публикация ≠ Отправка рассылки</strong><br />
-          • Публикация = письмо появляется на сайте<br />
+          <strong>📝 Публикация ≠ Отправка рассылки</strong>
+          <br />
+          • Публикация = письмо появляется на сайте
+          <br />
           • Отправка рассылки = письмо приходит подписчикам на email
         </p>
       </div>
@@ -65,14 +51,7 @@ export default function SendLetterForm({ letter }: SendLetterFormProps) {
       </p>
 
       {message && (
-        <div className="mb-4 p-3 bg-white border rounded-md">
-          {message}
-          {providerDetails && (
-            <pre className="mt-3 p-2 bg-gray-50 rounded text-xs overflow-auto text-left">
-              {JSON.stringify(providerDetails, null, 2)}
-            </pre>
-          )}
-        </div>
+        <div className="mb-4 p-3 bg-white border rounded-md">{message}</div>
       )}
 
       <form action={handleSendLetter} className="flex gap-3 flex-col md:flex-row">
@@ -83,7 +62,7 @@ export default function SendLetterForm({ letter }: SendLetterFormProps) {
             type="email"
             name="testEmail"
             value={testEmail}
-            onChange={(e: any) => setTestEmail(e.target.value)}
+            onChange={(e) => setTestEmail(e.target.value)}
             placeholder="Тестовый email (опционально)"
             className="px-3 py-2 border rounded-md mr-2"
           />

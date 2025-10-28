@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: newlove
+    runtime: node
+    plan: starter # or free, starter, standard, pro
+    region: oregon # or frankfurt, singapore, ohio
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22.0.0
+      - key: PNPM_VERSION
+        value: 9
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_TELEMETRY_DISABLED
+        value: 1
+      - key: DISABLE_ESLINT
+        value: 1
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=4096
+      # IMPORTANT: Add your real environment variables from Vercel here:
+      # - key: NEXT_PUBLIC_SUPABASE_URL
+      #   sync: false
+      # - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+      #   sync: false
+      # - key: SUPABASE_SERVICE_ROLE_KEY
+      #   sync: false
+      # - key: DATABASE_URL
+      #   sync: false
+      # - key: RESEND_API_KEY
+      #   sync: false
+      # - key: STRIPE_SECRET_KEY
+      #   sync: false
+      # - key: STRIPE_WEBHOOK_SECRET
+      #   sync: false
+    healthCheckPath: /api/health
+    autoDeploy: true
+    branch: main

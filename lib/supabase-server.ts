@@ -1,112 +1,96 @@
-import { getServerSupabaseClient } from '@/lib/serverAuth';
+// lib/supabase-server.js
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+
+export function createClient() {
+  const cookieStore = cookies();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || null;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || null;
+
+  if (!supabaseUrl || !anonKey) {
+    // Provide a clear debug message — in production avoid throwing sensitive data,
+    // but log enough to diagnose missing configuration.
+    console.error('createClient: missing Supabase env vars', { supabaseUrl: !!supabaseUrl, anonKey: !!anonKey });
+  }
+
+  return createServerClient(
+    supabaseUrl,
+    anonKey,
+    {
+      cookies: {
+        get(name) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name, value, options) {
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            // Ошибка может возникать в Server Actions, это нормально
+          }
+        },
+        remove(name, options) {
+          try {
+            cookieStore.set({ name, value: '', ...options });
+          } catch (error) {
+            // Ошибка может возникать в Server Actions, это нормально
+          }
+        },
+      },
+    }
+  );
+}
 
 // Lightweight helper to get the current user from an App Router Request.
 // Accepts the standard Request and reads cookies to validate the session
 // using a centralized server-side Supabase client.
-export async function getUserAndSupabaseFromRequest(req: Request) {
-  const cookieHeader = (req as any).headers?.get?.('cookie') || '';
-  const cookies = Object.fromEntries(
+export async function getUserAndSupabaseFromRequest(req) {
+  const cookieHeader = (req && req.headers && req.headers.get && req.headers.get('cookie')) || '';
+  const cookiesObj = Object.fromEntries(
     cookieHeader
       .split(';')
-      .map((s: string) => {
+      .map((s) => {
         const [k, ...v] = s.split('=');
-        return [k?.trim(), decodeURIComponent((v || []).join('='))];
+        return [k && k.trim(), decodeURIComponent((v || []).join('='))];
       })
       .filter(Boolean)
   );
 
-  let accessToken = cookies['sb-access-token'] || cookies['supabase-access-token'] || '';
-  // Some Supabase client builds (or different storage adapters) may store a
-  // base64-encoded JSON blob in a cookie named like `sb-<project>-auth-token.0`.
-  // Example value: base64(JSON.stringify({ access_token: '...', expires_at: ... }))
-  // Support that format as a fallback so server can read the token from cookies
-  // produced by different client adapters.
-  if (!accessToken) {
-    try {
-      for (const [k, v] of Object.entries(cookies)) {
-        if (/^sb-[^-]+-auth-token(\.|$)/.test(k) && typeof v === 'string' && v.trim()) {
-          try {
-            // Decode base64 (may be URL-encoded in cookie)
-            let raw = decodeURIComponent(v);
-            // Some clients prefix the value with 'base64-' or 'base64:'
-            if (raw.startsWith('base64-')) raw = raw.slice('base64-'.length);
-            if (raw.startsWith('base64:')) raw = raw.slice('base64:'.length);
-            const json = Buffer.from(raw, 'base64').toString('utf8');
-            const parsed = JSON.parse(json || '{}');
-            if (parsed && parsed.access_token) {
-              // prefer this token
-              cookies['sb-access-token'] = parsed.access_token;
-              accessToken = parsed.access_token;
-              break;
-            }
-          } catch (e) {
-            // ignore parse errors and continue
-          }
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-  if (!accessToken) return { user: null, supabase: null };
-
   let supabase = null;
   try {
-    // Use the default server client (anon/SUPABASE_KEY) for session validation.
-    // We only use the service-role client later when checking `user_roles`.
-    supabase = getServerSupabaseClient();
+    supabase = createClient();
   } catch (e) {
     console.error('Unable to create server supabase client', e);
     return { user: null, supabase: null };
   }
 
+  const accessToken = cookiesObj['sb-access-token'] || cookiesObj['supabase-access-token'] || '';
+  // Дополнительно поддерживаем передачу токена через заголовок Authorization: Bearer <token>
+  const authHeader = (req && req.headers && req.headers.get && (req.headers.get('authorization') || req.headers.get('Authorization'))) || '';
+  let finalAccessToken = '';
+  if (authHeader && typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')) {
+    finalAccessToken = authHeader.slice(7).trim();
+    // небольшая диагностика
+    console.debug('supabase-server: using Authorization Bearer token from request header');
+  }
+  if (!finalAccessToken) finalAccessToken = accessToken;
+  if (!finalAccessToken) {
+    // Нет токена — публичный запрос, возвращаем supabase для публичных данных
+    return { user: null, supabase };
+  }
+
   try {
-    const {
-      data: { user },
-      error,
-    } = (await supabase.auth.getUser(accessToken as string)) as any;
+  // Передаём токен (из cookie или Authorization заголовка) в supabase.auth.getUser
+  const { data: { user }, error } = await supabase.auth.getUser(finalAccessToken);
     if (error) {
       console.error('Supabase getUser error', error);
       return { user: null, supabase };
     }
-    if (!user) return { user: null, supabase };
-
-    // SSR RBAC: Проверяем user_roles/roles для ADMIN
-    let role = user.user_metadata?.role || user.role || 'USER';
-    if (role !== 'ADMIN') {
-      try {
-        // Используем service role для доступа к user_roles
-        const serviceSupabase = getServerSupabaseClient({ useServiceRole: true });
-        const { data: rolesData, error: rolesError } = await serviceSupabase
-          .from('user_roles')
-          .select('role_id,roles(name)')
-          .eq('user_id', user.id);
-        if (!rolesError && Array.isArray(rolesData)) {
-          const hasAdmin = rolesData.some(r => {
-            const roleList: any = r.roles;
-            if (Array.isArray(roleList)) return roleList.some((roleObj: any) => roleObj.name === 'ADMIN');
-            return roleList?.name === 'ADMIN';
-          });
-          if (hasAdmin) role = 'ADMIN';
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-    // Возвращаем user с корректной ролью
-    return {
-      user: {
-        ...user,
-        role,
-      },
-      supabase,
-    };
+    return { user, supabase };
   } catch (e) {
     console.error('Error validating supabase token', e);
     return { user: null, supabase };
   }
 }
 
-// Provide a default export as well to be resilient to different import styles
-// and to help with circular-import/interop resolution in built bundles.
+// Provide a default export as well for interop
 export default getUserAndSupabaseFromRequest;

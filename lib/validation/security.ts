@@ -42,8 +42,10 @@ export function validateSlug(slug: string): boolean {
   return slugRegex.test(slug);
 }
 
-// Санитизация HTML-контента
-export function sanitizeHtml(html: string): string {
+// Санитизация HTML-контента - базовая версия
+// Для полноценной санитизации используйте: import { sanitizeHtml } from '@/lib/sanitizeHtml'
+// которая использует DOMPurify
+export function sanitizeHtmlBasic(html: string): string {
   // Базовая санитизация - удаление опасных тегов
   return html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
@@ -51,6 +53,9 @@ export function sanitizeHtml(html: string): string {
     .replace(/javascript:/gi, '')
     .replace(/on\w+="[^"]*"/gi, '');
 }
+
+// Deprecated: используйте sanitizeHtmlBasic или @/lib/sanitizeHtml
+export const sanitizeHtml = sanitizeHtmlBasic;
 
 // Валидация размера файла
 export function validateFileSize(file: File, maxSizeInMB: number = 5): boolean {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { addSecurityHeaders, addDevSecurityHeaders } from '@/lib/middleware/securityHeaders';
 
-// Middleware to protect /admin routes server-side.
+// Middleware to protect /admin routes server-side and add security headers.
 // NOTE: running full server-side helpers from Edge middleware can be brittle
 // (different runtimes, missing Node APIs). Instead, call the internal
 // API `/api/user/role` which already performs a robust, service-role-backed
@@ -55,12 +56,22 @@ export async function middleware(request: NextRequest) {
     }
 
     // Do not force a redirect here; let the page or API handle unauthorized state.
-    return NextResponse.next();
+    const response = NextResponse.next();
+    return process.env.NODE_ENV === 'production'
+      ? addSecurityHeaders(response)
+      : addDevSecurityHeaders(response);
   }
 
-  return NextResponse.next();
+  // Add security headers to all responses
+  const response = NextResponse.next();
+  return process.env.NODE_ENV === 'production'
+    ? addSecurityHeaders(response)
+    : addDevSecurityHeaders(response);
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/admin'],
+  matcher: [
+    // Match all paths except static files
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };

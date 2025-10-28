@@ -9,6 +9,7 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+.pnpm-store/
 
 # testing
 /coverage
@@ -47,3 +48,39 @@ next-env.d.ts
 # Sentry Config File
 .env.sentry-build-plugin
 patches/
+
+# Temporary files and artifacts
+*.log
+*.out
+*.zip
+*.patch
+*.bak
+*.backup
+*.old
+*.tmp
+*.temp
+.build_pid
+
+# Text dumps and structure files
+*-structure.txt
+project_info.txt
+tsc-output.txt
+
+# Cache directories
+cache/
+.cache/
+logs/
+
+# Editor and IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
