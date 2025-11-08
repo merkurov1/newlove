@@ -11,6 +11,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import NextDynamic from 'next/dynamic';
 const UserSidebar = NextDynamic(() => import('@/components/UserSidebar'), { ssr: false });
+const NewsletterModal = NextDynamic(() => import('@/components/NewsletterModal'), { ssr: false });
 
 // --- SEO: Корректный шаблон заголовка и метаданных ---
 export const metadata = sanitizeMetadata({
@@ -158,6 +159,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {children}
           </main>
           <Footer subscriberCount={Number(subscriberCount) || 0} />
+          {/* Newsletter subscription modal - shows once per 24h for non-subscribers */}
+          <NewsletterModal />
         </AuthProvider>
       </body>
     </html>
