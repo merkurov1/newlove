@@ -71,12 +71,32 @@ export default async function TagPage({ params }) {
   }
   const articles = tag.articles;
 
-  // Функция для получения превью-картинки (можно вынести в утилиты)
+  // Функция для получения превью-картинки из JSON-контента
   function getFirstImage(content) {
-    if (!content) return null;
-    const regex = /!\[.*?\]\((.*?)\)/;
-    const match = content.match(regex);
-    return match ? match[1] : null;
+    if (!content || typeof content !== 'string') return null;
+    try {
+        const contentArray = JSON.parse(content);
+        if (Array.isArray(contentArray)) {
+            for (const block of contentArray) {
+                const html = block?.data?.html;
+                if (html && typeof html === 'string') {
+                    const match = html.match(/<img[^>]+src="([^"]+)"/);
+                    if (match && match[1]) {
+                        return match[1].replace(/([^:]\/)\/+/g, "$1");
+                    }
+                }
+            }
+        }
+    } catch (e) { /* Игнорируем ошибку парсинга JSON */ }
+    
+    // Fallback для HTML и markdown
+    const fallbackMatch = content.match(/<img[^>]+src="([^"]+)"/);
+    if (fallbackMatch && fallbackMatch[1]) {
+        return fallbackMatch[1].replace(/([^:]\/)\/+/g, "$1");
+    }
+    
+    const mdMatch = content.match(/!\[.*?\]\((.*?)\)/);
+    return mdMatch ? mdMatch[1] : null;
   }
 
   // Специальная обработка для тега "Auction" - показываем полноэкранный слайдер
