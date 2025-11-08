@@ -28,19 +28,25 @@ export const ROLE_DESCRIPTIONS = {
   [Role.SPONSOR]: 'Главный спонсор ❤️‍🔥',
 } as const;
 
-export function getRoleEmoji(role?: Role | null): string {
+export function getRoleEmoji(role?: Role | string | null): string {
   if (!role) return '';
-  return ROLE_EMOJIS[role] || '';
+  // Normalize to lowercase to match enum values
+  const normalizedRole = String(role).toLowerCase() as Role;
+  return ROLE_EMOJIS[normalizedRole] || '';
 }
 
-export function getRoleName(role?: Role | null): string {
+export function getRoleName(role?: Role | string | null): string {
   if (!role) return 'Гость';
-  return ROLE_NAMES[role] || 'Неизвестная роль';
+  // Normalize to lowercase to match enum values
+  const normalizedRole = String(role).toLowerCase() as Role;
+  return ROLE_NAMES[normalizedRole] || 'Неизвестная роль';
 }
 
-export function getRoleDescription(role?: Role | null): string {
+export function getRoleDescription(role?: Role | string | null): string {
   if (!role) return 'Не авторизован';
-  return ROLE_DESCRIPTIONS[role] || 'Описание недоступно';
+  // Normalize to lowercase to match enum values
+  const normalizedRole = String(role).toLowerCase() as Role;
+  return ROLE_DESCRIPTIONS[normalizedRole] || 'Описание недоступно';
 }
 
 // Проверка иерархии ролей (для будущего использования)
