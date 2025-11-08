@@ -689,7 +689,55 @@ export async function subscribeToNewsletter(prevState, formData) {
     } else {
       const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-confirm?token=${confirmToken}`;
       console.info('Created confirm token for subscriber', subscriber.email);
-      // TODO: send confirmation email (dry-run if RESEND not configured)
+      
+      // Send confirmation email
+      const apiKey = process.env.RESEND_API_KEY;
+      if (apiKey) {
+        try {
+          const resend = new Resend(apiKey);
+          const fromEmail = process.env.NOREPLY_EMAIL || 'noreply@merkurov.love';
+          const fromDisplay = process.env.NOREPLY_DISPLAY || 'Anton Merkurov';
+          
+          await resend.emails.send({
+            from: `${fromDisplay} <${fromEmail}>`,
+            to: email,
+            subject: 'Подтвердите подписку на рассылку',
+            html: `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta charset="utf-8">
+                <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+                  .button { display: inline-block; padding: 12px 24px; background: #0070f3; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+                  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 14px; color: #666; }
+                </style>
+              </head>
+              <body>
+                <h1>Подтвердите подписку</h1>
+                <p>Привет!</p>
+                <p>Спасибо за интерес к моим письмам о искусстве, инвестициях и культуре.</p>
+                <p>Чтобы начать получать рассылку, подтвердите свой email:</p>
+                <a href="${confirmUrl}" class="button">Подтвердить подписку</a>
+                <p>Или скопируйте эту ссылку в браузер:</p>
+                <p style="background: #f5f5f5; padding: 10px; border-radius: 4px; word-break: break-all;">${confirmUrl}</p>
+                <div class="footer">
+                  <p>Если вы не подписывались на рассылку, просто проигнорируйте это письмо.</p>
+                  <p>С уважением,<br>Антон Меркуров<br><a href="https://merkurov.love">merkurov.love</a></p>
+                </div>
+              </body>
+              </html>
+            `
+          });
+          console.info('Confirmation email sent to', email);
+        } catch (emailErr) {
+          console.error('Failed to send confirmation email:', emailErr);
+          // Don't fail the subscription, token is already created
+        }
+      } else {
+        console.warn('RESEND_API_KEY not configured, confirmation email not sent');
+      }
+      
       return { status: 'success', message: 'Проверьте почту для подтверждения подписки.', confirmUrl };
     }
   } catch (e) {
@@ -920,27 +968,67 @@ export async function sendLetter(prevState, formData) {
     // table may not exist — fallthrough to limited send
   }
 
-  // Safe fallback: send to a limited number of subscribers (avoid large sends in dev)
+  // Safe fallback: send to a limited number of subscribers
+  // TODO: Implement proper background job processing with newsletter_jobs table
+  const SEND_LIMIT = parseInt(process.env.NEWSLETTER_SEND_LIMIT || '100'); // Increased from 20 to 100
+  
   try {
-    const { data: subs, error: subsErr } = await supabase.from('subscribers').select('id,email').eq('isActive', true).limit(20);
+    const { data: subs, error: subsErr } = await supabase
+      .from('subscribers')
+      .select('id,email')
+      .eq('isActive', true)
+      .limit(SEND_LIMIT);
+    
     if (subsErr) {
       console.error('sendLetter: failed to load subscribers', subsErr);
       return { status: 'error', message: 'Не удалось получить список подписчиков.' };
     }
 
+    if (!subs || subs.length === 0) {
+      return { status: 'error', message: 'Нет активных подписчиков для отправки.' };
+    }
+
+    console.info(`Starting newsletter send to ${subs.length} subscribers (limit: ${SEND_LIMIT})`);
+    
     let sent = 0;
-    for (const s of subs || []) {
+    let failed = 0;
+    
+    for (const s of subs) {
       try {
         const r = await sendNewsletterToSubscriber(s, letterObj);
-        if (r.status === 'sent' || r.status === 'skipped') sent++;
+        if (r.status === 'sent' || r.status === 'skipped') {
+          sent++;
+        } else {
+          failed++;
+          console.warn(`Failed to send to ${s.email}:`, r.error);
+        }
       } catch (e) {
+        failed++;
         console.warn('sendLetter: send to subscriber failed', e);
       }
     }
-    return { status: 'success', message: `Отправлено ${sent} подписчикам (ограничено).` };
+    
+    // Mark letter as sent
+    await supabase
+      .from('letters')
+      .update({ sentAt: new Date().toISOString() })
+      .eq('id', letterId);
+    
+    const message = failed > 0 
+      ? `✅ Отправлено ${sent} из ${subs.length} подписчикам. ❌ Ошибок: ${failed}` 
+      : `✅ Успешно отправлено ${sent} подписчикам`;
+    
+    if (subs.length >= SEND_LIMIT) {
+      return { 
+        status: 'success', 
+        message: `${message}\n⚠️ Достигнут лимит ${SEND_LIMIT} писем. Для большей аудитории создайте таблицу newsletter_jobs.`
+      };
+    }
+    
+    return { status: 'success', message };
   } catch (e) {
     console.error('sendLetter fallback failed', e);
-    return { status: 'error', message: 'Не удалось отправить рассылку.' };
+    return { status: 'error', message: 'Не удалось отправить рассылку: ' + (e?.message || String(e)) };
   }
 }
 
