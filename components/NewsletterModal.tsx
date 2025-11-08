@@ -52,14 +52,21 @@ export default function NewsletterModal() {
 
   // Логика показа модального окна
   useEffect(() => {
-    if (hasCheckedRef.current) return;
-    hasCheckedRef.current = true;
-
-    // Не показываем если проверяем подписку
-    if (checkingSubscription) return;
+    // Не показываем если еще проверяем подписку
+    if (checkingSubscription) {
+      console.log('[NewsletterModal] Still checking subscription...');
+      return;
+    }
 
     // Не показываем подписанным пользователям
-    if (isSubscribed) return;
+    if (isSubscribed) {
+      console.log('[NewsletterModal] User is subscribed, not showing');
+      return;
+    }
+
+    // Проверяем только один раз
+    if (hasCheckedRef.current) return;
+    hasCheckedRef.current = true;
 
     // Проверяем когда последний раз показывали
     const lastShown = localStorage.getItem(MODAL_STORAGE_KEY);
@@ -69,12 +76,17 @@ export default function NewsletterModal() {
       const timeSinceLastShown = now - parseInt(lastShown, 10);
       if (timeSinceLastShown < SHOW_INTERVAL_MS) {
         // Еще не прошло 24 часа
+        const hoursLeft = Math.ceil((SHOW_INTERVAL_MS - timeSinceLastShown) / (1000 * 60 * 60));
+        console.log(`[NewsletterModal] Skipping - shown recently. Will show again in ${hoursLeft} hours`);
+        console.log('[NewsletterModal] To test now, run: localStorage.removeItem("newsletter_modal_last_shown"); location.reload();');
         return;
       }
     }
 
     // Показываем модалку с небольшой задержкой для UX
+    console.log('[NewsletterModal] Will show modal in 2 seconds');
     const timer = setTimeout(() => {
+      console.log('[NewsletterModal] Showing modal now');
       setIsOpen(true);
       localStorage.setItem(MODAL_STORAGE_KEY, now.toString());
     }, 2000); // 2 секунды после загрузки страницы
