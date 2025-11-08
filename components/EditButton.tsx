@@ -74,6 +74,18 @@ export default function EditButton({
     }
     
     if (pathname && (pathname.startsWith('/projects/') || pathname.includes('project'))) {
+      // Detect nested article under a project: /projects/:projectSlug/:articleSlug
+      try {
+        const segments = pathname.split('/').filter(Boolean); // removes empty leading ''
+        // segments[0] === 'projects'
+        if (segments[0] === 'projects' && segments.length >= 3) {
+          // treat last segment as article slug and route to article editor
+          const articleSlug = finalSlug || segments[segments.length - 1];
+          return `/admin/articles${articleSlug ? `?slug=${articleSlug}` : ''}`;
+        }
+      } catch (e) {
+        // fallback to previous behavior
+      }
       const slugFromPath = finalSlug || pathname.split('/').pop();
       return `/admin/projects${slugFromPath ? `?slug=${slugFromPath}` : ''}`;
     }
