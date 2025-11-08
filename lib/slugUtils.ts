@@ -1,5 +1,5 @@
 // Утилита для генерации slug из заголовка
-export function generateSlug(title) {
+export function generateSlug(title: string) {
   if (!title) return '';
 
   return title
@@ -19,8 +19,8 @@ export function generateSlug(title) {
 }
 
 // Транслитерация кириллицы для SEO-friendly URL
-export function transliterate(text) {
-  const map = {
+export function transliterate(text: string) {
+  const map: Record<string, string> = {
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh',
     'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
     'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
@@ -37,7 +37,7 @@ export function transliterate(text) {
 }
 
 // Комбинированная функция для создания SEO-friendly slug
-export function createSeoSlug(title) {
+export function createSeoSlug(title: string) {
   if (!title) return '';
   
   // Сначала транслитерируем кириллицу
@@ -53,7 +53,7 @@ export function createSeoSlug(title) {
  * @param {number} maxLength - максимальная длина слага
  * @returns {string} уникальный слаг
  */
-export function generateUniqueSlug(title, existingSlugs = [], maxLength = 50) {
+export function generateUniqueSlug(title: string, existingSlugs: string[] = [], maxLength = 50) {
   const baseSlug = createSeoSlug(title).substring(0, maxLength - 4); // оставляем место для суффикса
   
   if (!existingSlugs.includes(baseSlug)) {
@@ -77,7 +77,7 @@ export function generateUniqueSlug(title, existingSlugs = [], maxLength = 50) {
  * @param {string} slug - слаг для проверки
  * @returns {boolean} true если слаг валидный
  */
-export function isValidSlug(slug) {
+export function isValidSlug(slug: string) {
   if (!slug) return false;
   
   // Слаг должен содержать только буквы, цифры и дефисы
@@ -93,7 +93,7 @@ export function isValidSlug(slug) {
  * @param {string[]} existingSlugs - существующие слаги
  * @returns {string} слаг для письма
  */
-export function generateLetterSlug(subject, existingSlugs = []) {
+export function generateLetterSlug(subject: string, existingSlugs: string[] = []) {
   return generateUniqueSlug(subject, existingSlugs, 60);
 }
 
@@ -103,6 +103,6 @@ export function generateLetterSlug(subject, existingSlugs = []) {
  * @param {string[]} existingSlugs - существующие слаги
  * @returns {string} слаг для открытки
  */
-export function generatePostcardSlug(title, existingSlugs = []) {
+export function generatePostcardSlug(title: string, existingSlugs: string[] = []) {
   return generateUniqueSlug(title, existingSlugs, 50);
 }

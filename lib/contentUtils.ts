@@ -1,4 +1,5 @@
 // lib/contentUtils.js
+// @ts-nocheck
 
 /**
  * Находит URL первого изображения в Markdown-контенте.

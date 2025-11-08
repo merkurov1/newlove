@@ -5,8 +5,8 @@ import { deleteLetter } from '../actions';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminLettersPage() {
-  let letters = [];
-  let error = null;
+  let letters: any[] = [];
+  let error: string | null = null;
 
   try {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');

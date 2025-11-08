@@ -263,7 +263,7 @@ export async function GET() {
         }
 
         // Получаем превью для ссылки (если есть)
-        let linkPreview = null;
+        let linkPreview: LinkPreview | null = null;
         if (embedUrl) {
           linkPreview = await fetchLinkPreview(embedUrl);
         }
@@ -298,7 +298,7 @@ export async function GET() {
 
     if (mediumData.articles) {
       for (const article of mediumData.articles) {
-        let linkPreview = null;
+        let linkPreview: LinkPreview | null = null;
         try {
           linkPreview = await fetchLinkPreview(article.link);
         } catch (e) {
@@ -326,7 +326,7 @@ export async function GET() {
 
     if (youtubeData.videos) {
       for (const video of youtubeData.videos) {
-        let linkPreview = null;
+        let linkPreview: LinkPreview | null = null;
         try {
           linkPreview = await fetchLinkPreview(`https://www.youtube.com/watch?v=${video.id}`);
         } catch (e) {

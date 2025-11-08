@@ -158,8 +158,8 @@ export default function Header({ projects, settings }) {
           <div style={{ marginTop: 6, opacity: 0.85 }}>
             <div style={{ fontWeight: 600 }}>Recent events:</div>
             <div style={{ maxHeight: 120, overflow: 'auto', marginTop: 6 }}>
-              {typeof window !== 'undefined' && (window.__newloveAuth || {}).history ? (
-                (window.__newloveAuth.history || []).slice().reverse().map((h, i) => (
+        {typeof window !== 'undefined' && ((window as any).__newloveAuth || {}).history ? (
+          ((window as any).__newloveAuth.history || []).slice().reverse().map((h, i) => (
                   <div key={i} style={{ fontSize: 11, opacity: 0.95, paddingTop: 4 }}>{new Date(h.ts).toLocaleTimeString()} {h.status} {h.short ? ` — ${h.short}` : ''}</div>
                 ))
               ) : (

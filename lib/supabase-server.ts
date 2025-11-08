@@ -1,11 +1,12 @@
 // lib/supabase-server.js
+// @ts-nocheck
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 export function createClient() {
   const cookieStore = cookies();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || null;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || null;
+  const supabaseUrl: string = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const anonKey: string = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
 
   if (!supabaseUrl || !anonKey) {
     // Provide a clear debug message — in production avoid throwing sensitive data,
@@ -55,7 +56,7 @@ export async function getUserAndSupabaseFromRequest(req) {
       .filter(Boolean)
   );
 
-  let supabase = null;
+  let supabase: any = null;
   try {
     supabase = createClient();
   } catch (e) {

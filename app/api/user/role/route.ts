@@ -18,7 +18,7 @@ export async function GET(req: Request) {
         }
       } else {
         // Try to detect Supabase-style access token in cookies for clearer diagnostics
-        let cookieTokenPreview = null;
+  let cookieTokenPreview: string | null = null;
         try {
           const res = tokenUtils.extractTokenFromCookieHeader(cookieHeader || '');
           if (res && res.token) cookieTokenPreview = String(res.token).slice(0, 12) + '…';

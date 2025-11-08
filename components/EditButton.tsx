@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/components/AuthContext';
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useEditContext } from './EditContext';
@@ -35,7 +35,6 @@ export default function EditButton({
 }: EditButtonProps) {
   const { session, roles } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   const [isHovered, setIsHovered] = useState(false);
   
   // Получаем контекст редактирования (если доступен)
@@ -138,13 +137,9 @@ export default function EditButton({
 
   const editRoute = getEditRoute();
 
-  const handleClick = () => {
-    router.push(editRoute);
-  };
-
   return (
-    <button
-      onClick={handleClick}
+    <Link
+      href={editRoute}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={`${getVariantClasses()} ${className}`}
@@ -170,6 +165,6 @@ export default function EditButton({
           {variant === 'compact' ? 'Править' : 'Редактировать'}
         </span>
       )}
-    </button>
+    </Link>
   );
 }

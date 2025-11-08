@@ -25,7 +25,7 @@ interface ArticlesFeedProps {
 const PAGE_SIZE = 15;
 const API_PAGE_SIZE = 15;
 
-const ArticlesFeed: FC<ArticlesFeedProps> = ({ initialArticles, excludeTag, includeTag }) => {
+const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any) => {
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(initialArticles.length >= API_PAGE_SIZE);

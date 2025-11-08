@@ -24,11 +24,11 @@ export default function Footer({ subscriberCount }) {
   const { session } = useAuth();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [checkingSubscription, setCheckingSubscription] = useState(true);
-  const formRef = useRef(null);
+  const formRef = useRef<any>(null);
 
   // Начальное состояние для useFormState
-  const initialState = { message: null, status: null };
-  const [state, formAction] = useFormState(subscribeToNewsletter, initialState);
+  const initialState: any = { message: null, status: null };
+  const [state, formAction]: any = useFormState(subscribeToNewsletter, initialState);
 
   // Проверяем статус подписки для залогиненных пользователей
   useEffect(() => {
