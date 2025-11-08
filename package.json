@@ -14,7 +14,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "prepare": "node -e \"try { require('husky').install() } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e }\"",
+    "prepare": "if [ -d .git ]; then husky install 2>/dev/null || true; fi",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "vercel:login": "vercel login",
