@@ -45,8 +45,9 @@ function extractFirstImage(content: any) {
 
 async function getArticlesByTag(supabase, tagSlug, limit = 50) {
   const { data, error } = await supabase.rpc('get_articles_by_tag_slug', {
-    tag_slug_param: tagSlug
-  }).limit(limit);
+    tag_slug: tagSlug,
+    limit_param: limit
+  });
 
   if (error) {
     console.error(`Ошибка при получении статей с тегом "${tagSlug}":`, error);
