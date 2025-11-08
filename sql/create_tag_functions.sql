@@ -1,6 +1,13 @@
 -- SQL миграция для создания RPC функций для работы с тегами
 -- Дата: 2025-11-08
 
+-- Удаляем старые версии функций если они есть
+DROP FUNCTION IF EXISTS get_tag_by_slug(TEXT);
+DROP FUNCTION IF EXISTS get_articles_by_tag(TEXT);
+DROP FUNCTION IF EXISTS get_articles_by_tag(TEXT, INT);
+DROP FUNCTION IF EXISTS get_articles_by_tag_slug(TEXT);
+DROP FUNCTION IF EXISTS get_articles_by_tag_slug(TEXT, INT);
+
 -- Функция для получения тега по slug
 CREATE OR REPLACE FUNCTION get_tag_by_slug(tag_slug_param TEXT)
 RETURNS TABLE (
