@@ -296,9 +296,9 @@ export async function deleteProject(formData) {
 // --- Профиль пользователя (User-Context) ---
 // Использует правильный паттерн для Server Actions - createClient() + auth.getUser()
 export async function updateProfile(prevState, formData) {
-  // Get authenticated user from server-side Supabase client
-  const supabase = createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  // Get authenticated user from anon client (to verify session)
+  const anonClient = createClient();
+  const { data: { user }, error: authError } = await anonClient.auth.getUser();
   
   if (authError || !user?.id) {
     return { status: 'error', message: 'Вы не авторизованы.' };
@@ -313,6 +313,8 @@ export async function updateProfile(prevState, formData) {
     return { status: 'error', message: 'Username может содержать только строчные буквы, цифры, _ и .' };
   }
 
+  // Use service-role client for updating users table (anon doesn't have UPDATE permission)
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
   const { data: updatedUser, error } = await supabase
     .from('users')
     .update({
