@@ -44,43 +44,19 @@ function extractFirstImage(content: any) {
 }
 
 async function getArticlesByTag(supabase, tagSlug, limit = 50) {
-  try {
-    // Try direct query first for reliability
-    const { data: articles, error } = await supabase
-      .from('articles')
-      .select('id, title, slug, content, publishedAt, updatedAt, previewImage')
-      .order('publishedAt', { ascending: false })
-      .limit(limit);
+  const { data, error } = await supabase.rpc('get_articles_by_tag_slug', {
+    tag_slug_param: tagSlug
+  }).limit(limit);
 
-    if (error) {
-      console.error(`[getArticlesByTag] Error fetching articles:`, error);
-      return [];
-    }
-
-    if (!articles || articles.length === 0) {
-      console.warn(`[getArticlesByTag] No articles found with tag "${tagSlug}"`);
-      return [];
-    }
-
-    console.log(`[getArticlesByTag] Found ${articles.length} articles for tag "${tagSlug}"`);
-
-    return articles.map((article: any) => {
-      const previewImg = article.previewImage || article.preview_image || extractFirstImage(article.content);
-      return {
-        id: article.id,
-        title: article.title,
-        slug: article.slug,
-        content: article.content,
-        publishedAt: article.publishedAt,
-        updatedAt: article.updatedAt,
-        preview_image: previewImg,
-        previewImage: previewImg,
-      };
-    });
-  } catch (error) {
-    console.error(`[getArticlesByTag] Exception:`, error);
+  if (error) {
+    console.error(`Ошибка при получении статей с тегом "${tagSlug}":`, error);
     return [];
   }
+
+  return (data || []).map(article => ({
+      ...article,
+      preview_image: extractFirstImage(article.content)
+  }));
 }
 
 export default async function Home() {
@@ -89,14 +65,6 @@ export default async function Home() {
 
   const auctionArticles = await getArticlesByTag(supabase, 'auction', 20);
   const newsArticles = await getArticlesByTag(supabase, 'news', 15);
-  
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('[HomePage] auctionArticles count:', auctionArticles?.length || 0);
-    console.log('[HomePage] newsArticles count:', newsArticles?.length || 0);
-    if (auctionArticles?.[0]) {
-      console.log('[HomePage] auctionArticles[0] keys:', Object.keys(auctionArticles[0]));
-    }
-  }
 
   return (
     <main className="relative overflow-hidden py-8 sm:py-12">
