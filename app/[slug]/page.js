@@ -20,6 +20,8 @@ import EditButton from '@/components/EditButton';
 import { EditProvider } from '@/components/EditContext';
 import DebugEditButton from '@/components/DebugEditButton';
 
+const RelatedArticles = dynamic(() => import('@/components/RelatedArticles'), { ssr: false });
+
 async function getContent(slug) {
   console.log('🔍 getContent called for slug:', slug);
 
@@ -250,6 +252,13 @@ function ArticleComponent({ article }) {
             description={generateDescription(article.content)}
           />
         </article>
+
+        {/* Related Articles */}
+        <RelatedArticles 
+          currentArticleId={article.id}
+          tags={article.tags}
+          limit={3}
+        />
 
         {/* Floating Edit Button - автоматически получает контекст */}
         <EditButton variant="floating" />
