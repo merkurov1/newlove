@@ -7,7 +7,7 @@ import { safeData } from '@/lib/safeSerialize';
 
 const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { ssr: false });
 const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
-const ArticlesFeed = nextDynamic(() => import('@/components/ArticlesFeed'), { ssr: false });
+const BentoArticlesFeed = nextDynamic(() => import('@/components/BentoArticlesFeed'), { ssr: false });
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 const BackgroundShapes = nextDynamic(() => import('@/components/BackgroundShapes'), { ssr: false });
 
@@ -84,7 +84,7 @@ export default async function Home() {
         )}
 
         <section id="articles">
-          <ArticlesFeed initialArticles={safeData(newsArticles)} includeTag="news" />
+          <BentoArticlesFeed initialArticles={safeData(newsArticles)} includeTag="news" />
         </section>
 
         <section>
