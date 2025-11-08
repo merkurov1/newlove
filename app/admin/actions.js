@@ -366,7 +366,8 @@ export async function adminUpdateUserRole(userId, role) {
       const email = userRow?.email || null;
       if (email) {
         // Upsert by email to avoid duplicates; set userId so it's linked
-        const upsertPayload = { email, userId, isActive: true };
+        // Add id to avoid NOT NULL violations on subscribers.id
+        const upsertPayload = { id: createId(), email, userId, isActive: true };
         await supabase.from('subscribers').upsert(upsertPayload, { onConflict: 'email' });
       }
     }
@@ -383,6 +384,23 @@ export async function adminDeleteUser(userId) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!userId) throw new Error('User ID обязателен.');
+
+  // First, unlink or delete subscriber records associated with this user
+  try {
+    // Option 1: Nullify userId to keep email subscription active but unlinked
+    // Option 2: Delete subscriber entirely
+    // Using Option 1 (safer - keeps subscription but unlinks from deleted user)
+    const { error: subError } = await supabase
+      .from('subscribers')
+      .update({ userId: null })
+      .eq('userId', userId);
+    
+    if (subError) {
+      console.warn('adminDeleteUser: failed to unlink subscribers', subError);
+    }
+  } catch (e) {
+    console.warn('adminDeleteUser: error cleaning up subscribers', e);
+  }
 
   const { error } = await supabase.auth.admin.deleteUser(userId);
   if (error) {

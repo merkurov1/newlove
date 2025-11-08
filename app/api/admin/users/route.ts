@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
+import { adminDeleteUser, adminUpdateUserRole } from '@/app/admin/actions';
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,5 +33,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    await requireAdminFromRequest(request as Request);
+    const body = await request.json();
+    const { action, userId, role } = body;
+
+    if (!action || !userId) {
+      return NextResponse.json({ status: 'error', message: 'Missing action or userId' }, { status: 400 });
+    }
+
+    if (action === 'updateRole') {
+      if (!role) {
+        return NextResponse.json({ status: 'error', message: 'Missing role' }, { status: 400 });
+      }
+      const result = await adminUpdateUserRole(userId, role);
+      return NextResponse.json(result);
+    }
+
+    if (action === 'deleteUser') {
+      const result = await adminDeleteUser(userId);
+      return NextResponse.json(result);
+    }
+
+    return NextResponse.json({ status: 'error', message: 'Unknown action' }, { status: 400 });
+  } catch (error) {
+    console.error('Error in POST /api/admin/users:', error);
+    if (String(error).includes('Unauthorized')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json({ status: 'error', message: String(error) }, { status: 500 });
   }
 }

@@ -1,0 +1,530 @@
+"use client";
+import React, { FC } from 'react';
+import Image from 'next/image';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
+import 'swiper/css/effect-fade';
+
+type Article = {
+  id?: string | number;
+  title?: string;
+  slug?: string;
+  preview_image?: string | null;
+  excerpt?: string | null;
+};
+
+interface AuctionSliderProps {
+  articles: Article[];
+  fullscreen?: boolean;
+}
+
+const AuctionSlider: FC<AuctionSliderProps> = ({ articles, fullscreen = false }) => {
+  if (!Array.isArray(articles) || articles.length === 0) return null;
+
+  const mapSlug = (a: Article) => (a?.slug || a?.id || '').toString();
+
+  return (
+    <div className={fullscreen ? "auction-slider-single w-full h-full" : "auction-slider-single"}>
+      <Swiper
+        modules={[Navigation, Pagination, Autoplay, EffectFade]}
+        navigation
+        pagination={{ clickable: true }}
+        autoplay={{ delay: 5000, pauseOnMouseEnter: true }}
+        slidesPerView={1}
+        spaceBetween={0}
+        effect="fade"
+        loop={true}
+        className={fullscreen ? "w-full h-full" : "py-1"}
+      >
+        {articles.map((a) => (
+            <SwiperSlide key={String(a.id || a.slug)} className={fullscreen ? "w-full h-full" : ""}>
+              <a href={`/${mapSlug(a)}`} className={fullscreen ? "block w-full h-full bg-black group" : "block rounded-xl overflow-hidden shadow-lg bg-white dark:bg-neutral-900 group"}>
+                <div className={fullscreen ? "w-full h-full relative" : "w-full bg-gray-100 dark:bg-neutral-800 relative aspect-[4/3] sm:aspect-video lg:aspect-[2/1]"}>
+                  {a.preview_image ? (
+                    <Image
+                      src={a.preview_image}
+                      alt={a.title || ''}
+                      fill
+                      sizes={fullscreen ? "100vw" : "(max-width: 768px) 100vw, 80vw"}
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                      draggable={false}
+                      priority={true}
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-br from-pink-50 to-yellow-50 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
+                      <span className="text-lg text-neutral-500">Нет изображения</span>
+                    </div>
+                  )}
+                  <div className={fullscreen 
+                    ? "absolute bottom-0 left-0 w-full h-2/3 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 sm:p-12 md:p-16 flex flex-col justify-end"
+                    : "absolute bottom-0 left-0 w-full h-2/3 bg-gradient-to-t from-black/80 via-black/50 to-transparent p-4 sm:p-8 flex flex-col justify-end"
+                  }>
+                    <h3 className={fullscreen 
+                      ? "text-2xl sm:text-4xl md:text-6xl font-bold text-white drop-shadow-2xl mb-4"
+                      : "text-xl sm:text-3xl font-bold text-white drop-shadow-lg"
+                    }>{a.title}</h3>
+                    {a.excerpt && <p className={fullscreen
+                      ? "mt-2 text-base sm:text-xl md:text-2xl text-gray-200 drop-shadow-lg line-clamp-3 max-w-4xl"
+                      : "mt-2 text-sm sm:text-base text-gray-200 drop-shadow-md line-clamp-2"
+                    }>{a.excerpt}</p>}
+                  </div>
+                </div>
+              </a>
+            </SwiperSlide>
+          ))}
+      </Swiper>
+    </div>
+  );
+};
+
+export default AuctionSlider;
+"use client";
+
+import { useEffect, useState, useRef, FC } from "react";
+import Link from "next/link";
+import SafeImage from "@/components/SafeImage";
+import EditButton from '@/components/EditButton';
+
+// Вспомогательная функция больше не нужна, так как page.js готовит данные
+
+interface Article {
+  id: string;
+  title: string;
+  slug: string;
+  preview_image?: string | null;
+  description?: string;
+  excerpt?: string | null;
+}
+
+interface ArticlesFeedProps {
+  initialArticles: Article[];
+  excludeTag?: string | null;
+  includeTag?: string | null;
+}
+
+const PAGE_SIZE = 15;
+const API_PAGE_SIZE = 15;
+
+const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any) => {
+  const [articles, setArticles] = useState<Article[]>(initialArticles);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(initialArticles.length >= API_PAGE_SIZE);
+  const [offset, setOffset] = useState(initialArticles.length);
+  const loaderRef = useRef<HTMLDivElement | null>(null);
+  const [infiniteDone, setInfiniteDone] = useState(false);
+  // refs to avoid stale closures inside observer callback
+  const offsetRef = useRef(offset);
+  const loadingRef = useRef(loading);
+  const hasMoreRef = useRef(hasMore);
+
+  // Логика подгрузки без изменений
+  // Reset feed when include/exclude tag or initialArticles change
+  useEffect(() => {
+    setArticles(initialArticles);
+    setOffset(initialArticles.length);
+    setHasMore(initialArticles.length >= API_PAGE_SIZE);
+    setInfiniteDone(false);
+    offsetRef.current = initialArticles.length;
+    loadingRef.current = false;
+    hasMoreRef.current = initialArticles.length >= API_PAGE_SIZE;
+    // debug: indicate feed reset (helpful in dev to see tag changes)
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.debug('[ArticlesFeed] reset', { includeTag, excludeTag, initialCount: initialArticles.length });
+    }
+  }, [includeTag, excludeTag, initialArticles]);
+
+  // IntersectionObserver based infinite loading (more reliable than scroll handlers)
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+
+  useEffect(() => {
+    if (infiniteDone) return;
+    const node = loaderRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && !loadingRef.current && hasMoreRef.current) {
+          if (process.env.NODE_ENV !== 'production') {
+            // eslint-disable-next-line no-console
+            console.debug('[ArticlesFeed] loading more', { offset: offsetRef.current, includeTag, excludeTag });
+          }
+          // start loading
+          setLoading(true);
+          const q = new URLSearchParams({ offset: String(offsetRef.current), limit: String(API_PAGE_SIZE) });
+          if (excludeTag) q.set('excludeTag', excludeTag);
+          if (includeTag) q.set('includeTag', includeTag);
+          fetch(`/api/articles?${q.toString()}`)
+            .then((res) => res.json())
+            .then((data) => {
+              if (!Array.isArray(data) || data.length === 0) {
+                setInfiniteDone(true);
+                setHasMore(false);
+                return;
+              }
+              setArticles((prev) => [...prev, ...data]);
+              setOffset((prev) => prev + data.length);
+              if (data.length < API_PAGE_SIZE) setHasMore(false);
+            })
+            .catch(() => {
+              // swallow fetch errors for now
+            })
+            .finally(() => setLoading(false));
+        }
+      });
+    }, { rootMargin: '300px' });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [excludeTag, includeTag, infiniteDone]);
+
+  // Periodically revalidate the initial articles (so homepage updates when new articles arrive)
+  const fetchInitial = useRef<() => Promise<void>>();
+  fetchInitial.current = async () => {
+    try {
+      const q = new URLSearchParams({ offset: '0', limit: String(API_PAGE_SIZE) });
+      if (excludeTag) q.set('excludeTag', excludeTag);
+      if (includeTag) q.set('includeTag', includeTag);
+      const res = await fetch(`/api/articles?${q.toString()}`);
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        // Put newest items first, keep previous items that are not in the fresh page
+        setArticles((prev) => {
+          const incomingIds = new Set(data.map((a: Article) => a.id));
+          const remaining = prev.filter((p) => !incomingIds.has(p.id));
+          return [...data, ...remaining];
+        });
+        setOffset((prev) => Math.max(prev, data.length));
+        setHasMore(data.length >= API_PAGE_SIZE);
+      }
+    } catch (e) {
+      // swallow errors — keep current list
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.debug('[ArticlesFeed] revalidate failed', e);
+      }
+    }
+  };
+
+  useEffect(() => {
+    // initial revalidate shortly after mount
+    fetchInitial.current?.();
+    const interval = setInterval(() => fetchInitial.current?.(), 60_000);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchInitial.current?.();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeTag, excludeTag]);
+
+  return (
+    <div className="w-full">
+      {/* ИЗМЕНЕНИЕ: Оптимизированная сетка для лучшего вида на планшетах */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {articles.map((article) => {
+          const imageUrl = article.preview_image; // Данные уже подготовлены в page.js
+
+          return (
+            <article
+              key={article.id}
+              // ИЗМЕНЕНИЕ: Добавлены тени, скругления и эффекты для консистентности
+              className="relative flex flex-col group overflow-hidden rounded-xl shadow-md bg-white dark:bg-neutral-900 transition-transform duration-300 ease-in-out hover:-translate-y-1"
+              role="listitem"
+            >
+              <div className="absolute top-3 right-3 z-20">
+                <EditButton contentType="article" contentId={article.id} variant="compact" />
+              </div>
+              
+              <Link
+                href={`/${article.slug}`}
+                className="block relative w-full"
+                aria-label={`Читать статью: ${article.title}`}
+              >
+                {/* Контейнер для изображения с фиксированным соотношением сторон */}
+                <div className="aspect-video relative overflow-hidden">
+                  {imageUrl ? (
+                    <SafeImage
+                      src={imageUrl}
+                      alt={`Изображение к статье: ${article.title}`}
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      // ИЗМЕНЕНИЕ: object-cover заполняет все пространство, убирая белые поля
+                      className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
+                      <div className="text-4xl text-gray-300">📰</div>
+                    </div>
+                  )}
+                </div>
+              </Link>
+
+              {/* ИЗМЕНЕНИЕ: flex-grow заставляет этот блок растягиваться, выравнивая все карточки по высоте */}
+              <div className="flex flex-col flex-grow p-4">
+                <Link href={`/${article.slug}`} className="flex-grow">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-2 line-clamp-2 leading-snug group-hover:text-pink-600 dark:group-hover:text-pink-400">
+                    {article.title}
+                  </h3>
+                </Link>
+                {(article.excerpt || article.description) && (
+                  <p className="text-gray-600 dark:text-neutral-300 text-sm line-clamp-3 mt-auto">
+                    {article.excerpt || article.description}
+                  </p>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {/* sentinel for intersection observer to trigger loading more */}
+      <div ref={loaderRef} aria-hidden className="w-full h-8 mt-6 flex items-center justify-center">
+        {loading && <div className="text-gray-500 text-sm">Загрузка...</div>}
+      </div>
+    </div>
+  );
+};
+
+export default ArticlesFeed;
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx}",
+  ],
+  safelist: [
+    'prose',
+    'prose-lg',
+    'prose-xl',
+    'gallery-grid',
+    'not-prose',
+    'animate-fade-in-up',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        primary: '#2563eb',
+        "rose-50-custom": '#fff0f6',
+        "pink-50-soft": '#fff7fb',
+        brand: {
+          50: '#fff5f7',
+          100: '#ffe9f0',
+          200: '#ffcee2',
+          300: '#f9a8d4',
+          400: '#f472b6',
+          500: '#ec4899',
+          600: '#db2777',
+          700: '#be185d',
+        }
+      },
+      // --- НОВЫЙ БЛОК ДЛЯ НАСТРОЙКИ ТИПОГРАФИКИ ---
+      typography: ({ theme }) => ({
+        DEFAULT: {
+          css: {
+            '--tw-prose-body': theme('colors.gray[700]'),
+            '--tw-prose-headings': theme('colors.gray[900]'),
+            '--tw-prose-lead': theme('colors.gray[600]'),
+            '--tw-prose-links': theme('colors.primary'),
+            '--tw-prose-bold': theme('colors.gray[900]'),
+            '--tw-prose-counters': theme('colors.gray[500]'),
+            '--tw-prose-bullets': theme('colors.gray[300]'),
+            '--tw-prose-hr': theme('colors.gray[200]'),
+            '--tw-prose-quotes': theme('colors.gray[900]'),
+            '--tw-prose-quote-borders': theme('colors.gray[200]'),
+            '--tw-prose-captions': theme('colors.gray[500]'),
+            '--tw-prose-code': theme('colors.gray[900]'),
+            '--tw-prose-pre-code': theme('colors.gray[200]'),
+            '--tw-prose-pre-bg': theme('colors.gray[800]'),
+            '--tw-prose-th-borders': theme('colors.gray[300]'),
+            '--tw-prose-td-borders': theme('colors.gray[200]'),
+            
+            // Убираем кавычки у цитат
+            'blockquote p:first-of-type::before': { content: 'none' },
+            'blockquote p:first-of-type::after': { content: 'none' },
+          },
+        },
+      }),
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        float: {
+          '0%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-8px)' },
+          '100%': { transform: 'translateY(0px)' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        gradientMove: {
+          '0%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+          '100%': { backgroundPosition: '0% 50%' },
+        },
+      },
+      animation: {
+        fadeIn: 'fadeIn 400ms ease-out forwards',
+        'fade-in-up': 'fadeIn 400ms cubic-bezier(.16,.84,.24,1) forwards',
+        float: 'float 6s ease-in-out infinite',
+        shimmer: 'shimmer 1.6s linear infinite',
+        gradientMove: 'gradientMove 8s ease infinite',
+      },
+      backgroundImage: {
+        'soft-gradient': 'linear-gradient(135deg, rgba(254, 215, 232, 0.6), rgba(237, 85, 156, 0.6))',
+        'glass-shimmer': 'linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 100%)'
+      }
+    },
+  },
+  darkMode: 'class',
+  plugins: [require('@tailwindcss/typography')],
+};
+{
+  "name": "newlove",
+  "version": "0.1.1",
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "lint:css": "stylelint \"app/**/*.css\"",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "prepare": "if [ -d .git ]; then husky install 2>/dev/null || true; fi",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "vercel:login": "vercel login",
+    "vercel:deploy": "vercel --prod",
+    "vercel:logs": "vercel logs --since 60m",
+    "vercel:logs:grep": "vercel logs --since 60m | grep -E 'SANITIZE DIAG|Unsupported Server Component type|2153716801' -n -C 5",
+    "render:logs": "echo 'Check logs at https://dashboard.render.com'",
+    "render:shell": "echo 'Use Render Dashboard → Shell to access container'",
+    "check:metadata": "node scripts/check_metadata.js",
+    "test:attach-tags": "node scripts/test_attach_tags.js",
+    "compile:contracts": "npx hardhat compile",
+    "deploy:hardhat": "npx hardhat run --network polygon scripts/deploy_hardhat.js",
+    "mint:transfer": "npx hardhat run --network polygon scripts/mint_and_transfer.js",
+    "deploy:local": "node scripts/deploy_hardhat.js",
+    "mint:local": "node scripts/mint_and_transfer.js"
+  },
+  "installConfig": {
+    "scripts-prepend-node-path": true
+  },
+  "dependencies": {
+    "@atproto/api": "^0.17.5",
+    "@editorjs/code": "^2.9.3",
+    "@editorjs/editorjs": "^2.31.0",
+    "@editorjs/embed": "^2.7.6",
+    "@editorjs/header": "^2.8.8",
+    "@editorjs/image": "^2.10.3",
+    "@editorjs/link": "^2.6.0",
+    "@editorjs/list": "^2.0.8",
+    "@nomicfoundation/solidity-analyzer-linux-x64-gnu": "^0.1.2",
+    "@paralleldrive/cuid2": "^2.2.2",
+    "@react-email/components": "^0.0.22",
+    "@react-email/render": "^0.0.16",
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/ssr": "^0.4.1",
+    "@supabase/supabase-js": "^2.76.1",
+    "@tailwindcss/typography": "^0.5.18",
+    "@tiptap/extension-code-block-lowlight": "^3.9.0",
+    "@tiptap/extension-highlight": "^3.9.0",
+    "@tiptap/extension-image": "^3.9.0",
+    "@tiptap/extension-link": "^3.9.0",
+    "@tiptap/extension-table": "^3.9.0",
+    "@tiptap/extension-table-cell": "^3.9.0",
+    "@tiptap/extension-table-header": "^3.9.0",
+    "@tiptap/extension-table-row": "^3.9.0",
+    "@tiptap/html": "^3.9.0",
+    "@tiptap/react": "^3.9.0",
+    "@tiptap/starter-kit": "^3.9.0",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@vercel/analytics": "^1.5.0",
+    "@web3-onboard/core": "^2.24.1",
+    "@web3-onboard/injected-wallets": "^2.11.3",
+    "@web3-onboard/walletconnect": "^2.6.3",
+    "dompurify": "^3.2.7",
+    "ethers": "^6.15.0",
+    "express-rate-limit": "^8.1.0",
+    "framer-motion": "^12.23.24",
+    "glob": "^11.0.3",
+    "html-react-parser": "^5.2.6",
+    "jsdom": "^27.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "lowlight": "^3.3.0",
+    "markdown-it": "^14.1.0",
+    "markdown-it-attrs": "^4.3.1",
+    "markdown-it-highlightjs": "^4.2.0",
+    "markdown-it-katex": "^2.0.3",
+    "markdown-it-link-attributes": "^4.0.1",
+    "marked": "^16.3.0",
+    "next": "14.2.5",
+    "node-fetch": "^2.7.0",
+    "pg": "^8.11.0",
+    "pino": "^10.1.0",
+    "pino-pretty": "^9.2.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-dropzone": "^14.3.8",
+    "react-email": "^2.1.6",
+    "react-markdown": "^10.1.0",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.0",
+    "resend": "^3.5.0",
+    "rimraf": "^6.0.1",
+    "rss-parser": "^3.13.0",
+    "sanitize-html": "^2.17.0",
+    "sharp": "^0.34.4",
+    "stripe": "^18.5.0",
+    "swiper": "^12.0.3",
+    "tailwindcss": "^3.4.17",
+    "viem": "^2.38.5",
+    "wagmi": "^2.19.0",
+    "yet-another-react-lightbox": "^3.25.0",
+    "zod": "^4.1.11"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@swc/jest": "^0.2.39",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/jest": "^30.0.0",
+    "eslint-config-next": "^16.0.0",
+    "husky": "^9.1.7",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "lint-staged": "^16.2.6",
+    "postcss-nesting": "^13.0.2",
+    "prettier": "^3.6.2"
+  }
+}
