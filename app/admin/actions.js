@@ -7,6 +7,7 @@ import { Resend } from 'resend';
 import { createId } from '@paralleldrive/cuid2';
 
 // --- Импорты Helper-функций ---
+import { createClient } from '@/lib/supabase/server';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSubscriber';

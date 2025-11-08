@@ -1,5 +1,6 @@
 // app/profile/page.js
 
+import { createClient } from '@/lib/supabase/server';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import ProfileForm from '@/components/profile/ProfileForm';
 import SubscriptionToggle from '@/components/profile/SubscriptionToggle';
@@ -7,8 +8,8 @@ import SubscriptionToggle from '@/components/profile/SubscriptionToggle';
 export const dynamic = 'force-dynamic';
 
 export default async function ProfilePage() {
-  // Use server-side Supabase client
-  const supabase = getServerSupabaseClient();
+  // Use cookie-based client for auth check
+  const supabase = createClient();
   
   // Get current user from session
   const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
