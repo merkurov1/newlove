@@ -365,10 +365,21 @@ export async function adminUpdateUserRole(userId, role) {
     if (String(role).toUpperCase() === 'SUBSCRIBER') {
       const email = userRow?.email || null;
       if (email) {
-        // Upsert by email to avoid duplicates; set userId so it's linked
-        // Add id to avoid NOT NULL violations on subscribers.id
-        const upsertPayload = { id: createId(), email, userId, isActive: true };
-        await supabase.from('subscribers').upsert(upsertPayload, { onConflict: 'email' });
+        // Check if subscriber exists first to avoid foreign key conflicts
+        const { data: existingSub } = await supabase
+          .from('subscribers')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+
+        if (existingSub) {
+          // Update existing subscriber
+          await supabase.from('subscribers').update({ userId, isActive: true }).eq('id', existingSub.id);
+        } else {
+          // Create new subscriber
+          const insertPayload = { id: createId(), email, userId, isActive: true };
+          await supabase.from('subscribers').insert(insertPayload);
+        }
       }
     }
   } catch (syncErr) {
@@ -439,22 +450,40 @@ export async function subscribeToNewsletter(prevState, formData) {
     return { status: 'error', message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).', error: String(e) };
   }
 
-  // upsert subscriber; mark inactive until confirmed
+  // Check if subscriber already exists to avoid foreign key conflicts
   let subscriber;
   try {
-    // value for subscribers.id, so providing one avoids NOT NULL violations.
-    const payload = { id: createId(), email, userId: user?.id || null, isActive: false };
-    const upsertRes = await svc
+    // First, try to find existing subscriber by email
+    const { data: existingSub } = await svc
       .from('subscribers')
-      .upsert(payload, { onConflict: 'email' })
-      .select()
-      .single();
-    subscriber = upsertRes.data;
-    if (upsertRes.error) {
-      throw upsertRes.error;
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existingSub) {
+      // Update existing subscriber
+      subscriber = existingSub;
+      // Update userId if user is logged in
+      if (user?.id && subscriber.userId !== user.id) {
+        await svc.from('subscribers').update({ userId: user.id }).eq('id', subscriber.id);
+        subscriber.userId = user.id;
+      }
+    } else {
+      // Create new subscriber with new ID
+      const payload = { id: createId(), email, userId: user?.id || null, isActive: false };
+      const insertRes = await svc
+        .from('subscribers')
+        .insert(payload)
+        .select()
+        .single();
+      
+      if (insertRes.error) {
+        throw insertRes.error;
+      }
+      subscriber = insertRes.data;
     }
   } catch (error) {
-    console.error('Supabase upsert subscriber error:', error);
+    console.error('Supabase subscriber error:', error);
   // Sentry removed
     // Provide richer error back to client to aid debugging (without leaking secrets)
     const code = error?.code || null;
