@@ -6,8 +6,7 @@ import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSub
 import { requireAdminFromRequest } from '@/lib/serverAuth'; // Импортируем для проверки прав
 import { cookies } from 'next/headers';
 
-export const dynamic = 'force-dynamic';
-
+// NOTE: `dynamic` is already exported above; avoid duplicate exports
 // -----------------------------------------------------------------
 // НОВЫЙ POST ОБРАБОТЧИК (для кнопки в админке)
 // -----------------------------------------------------------------
