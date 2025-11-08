@@ -101,7 +101,7 @@ export default function NewsletterModal() {
       setIsSubscribed(true);
       // Закрываем через 3 секунды чтобы пользователь увидел сообщение
       setTimeout(() => {
-        setIsOpen(false);
+        handleClose();
       }, 3000);
     }
   }, [state]);
@@ -109,14 +109,38 @@ export default function NewsletterModal() {
   const handleClose = () => {
     // Ставим метку времени при закрытии модалки (неважно как - через крестик или фон)
     localStorage.setItem(MODAL_STORAGE_KEY, Date.now().toString());
+    console.log('[NewsletterModal] Closing modal, setting timestamp');
     setIsOpen(false);
   };
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Проверяем что клик именно по backdrop, а не по содержимому
     if (e.target === e.currentTarget) {
+      console.log('[NewsletterModal] Backdrop clicked, closing');
       handleClose();
     }
   };
+
+  // Закрытие по нажатию Escape и блокировка скролла
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        console.log('[NewsletterModal] Escape pressed, closing');
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      // Блокируем скролл страницы когда модалка открыта
+      document.body.style.overflow = 'hidden';
+      window.addEventListener('keydown', handleEscape);
+      
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleEscape);
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -124,8 +148,14 @@ export default function NewsletterModal() {
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 animate-fadeIn"
       onClick={handleBackdropClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="newsletter-modal-title"
     >
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-slideUp">
+      <div 
+        className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-slideUp"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Кнопка закрытия */}
         <button
           onClick={handleClose}
@@ -150,7 +180,7 @@ export default function NewsletterModal() {
           </div>
 
           {/* Заголовок */}
-          <h2 className="text-2xl font-bold text-center text-gray-900 mb-3">
+          <h2 id="newsletter-modal-title" className="text-2xl font-bold text-center text-gray-900 mb-3">
             Подпишитесь на рассылку
           </h2>
 
