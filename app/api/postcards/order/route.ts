@@ -5,7 +5,8 @@ import Stripe from 'stripe';
 
 // Temporary: use a minimal Stripe client. In a follow-up we'll wire a server-side
 // Supabase/Onboard auth client and persist orders to the DB.
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+const stripeKey = process.env.STRIPE_SECRET_KEY || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'sk_test_placeholder';
+const stripe = new Stripe(stripeKey, {
   apiVersion: '2025-08-27.basil',
 });
 

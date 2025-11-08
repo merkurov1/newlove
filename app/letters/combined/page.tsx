@@ -70,7 +70,7 @@ async function PreviewView({ slug }: { slug: string }) {
     const supabasePublic = createClient({ useServiceRole: true });
     const { data: letter, error } = await supabasePublic
         .from('letters')
-        .select('id, title, slug, content, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(name, email)')
+        .select('id, title, slug, content, published, publishedAt, createdAt, authorId, users!letters_authorId_fkey(name, email)')
         .eq('slug', slug)
         .eq('published', true)
         .single();
@@ -80,7 +80,7 @@ async function PreviewView({ slug }: { slug: string }) {
         notFound();
     }
 
-    const letterAuthor = Array.isArray(letter.User) ? letter.User[0] : letter.User;
+    const letterAuthor = Array.isArray(letter.users) ? letter.users[0] : letter.users;
     const plainContent = parseRichTextContent(letter.content || '');
     const previewContent = plainContent.slice(0, 300);
     const hasMore = plainContent.length > 300;
@@ -121,7 +121,7 @@ async function FullView({ slug }: { slug: string }) {
 
     const { data: letter, error } = await supabase
         .from('letters')
-        .select('id, title, slug, content, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(name, email)')
+        .select('id, title, slug, content, published, publishedAt, createdAt, authorId, users!letters_authorId_fkey(name, email)')
         .eq('slug', slug)
         .eq('published', true)
         .single();
@@ -131,10 +131,10 @@ async function FullView({ slug }: { slug: string }) {
         notFound();
     }
 
-    const letterAuthor = Array.isArray(letter.User) ? letter.User[0] : letter.User;
+    const letterAuthor = Array.isArray(letter.users) ? letter.users[0] : letter.users;
     const { data: comments } = await supabase
         .from('letter_comments')
-        .select('id, content, created_at, user_id, author_display, User(name, email)')
+        .select('id, content, created_at, user_id, author_display, users(name, email)')
         .eq('letter_id', letter.id)
         .eq('is_public', true)
         .order('created_at', { ascending: true });

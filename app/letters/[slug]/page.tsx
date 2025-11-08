@@ -60,7 +60,7 @@ export default async function LetterPage({ params }: { params: { slug: string } 
   const supabasePublic = createClient({ useServiceRole: true });
   const { data: letter, error } = await supabasePublic
     .from('letters')
-    .select('id, title, slug, content, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(name, email)')
+    .select('id, title, slug, content, published, publishedAt, createdAt, authorId, users!letters_authorId_fkey(name, email)')
     .eq('slug', slug)
     .eq('published', true)
     .single();
@@ -70,7 +70,7 @@ export default async function LetterPage({ params }: { params: { slug: string } 
     notFound();
   }
 
-  const letterAuthor = Array.isArray(letter.User) ? letter.User[0] : letter.User;
+  const letterAuthor = Array.isArray(letter.users) ? letter.users[0] : letter.users;
   const plainContent = parseRichTextContent(letter.content || '');
   const previewContent = plainContent.slice(0, 300);
   const hasMore = plainContent.length > 300;

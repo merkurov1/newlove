@@ -20,7 +20,7 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
 
   const { data: letter, error } = await supabaseSvc
     .from('letters')
-    .select('id, title, slug, content, published, publishedAt, createdAt, authorId, User!letters_authorId_fkey(name, email)')
+    .select('id, title, slug, content, published, publishedAt, createdAt, authorId, users!letters_authorId_fkey(name, email)')
     .eq('slug', slug)
     .eq('published', true)
     .single();
@@ -30,10 +30,10 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
     notFound();
   }
 
-  const letterAuthor = Array.isArray(letter.User) ? letter.User[0] : letter.User;
+  const letterAuthor = Array.isArray(letter.users) ? letter.users[0] : letter.users;
   const { data: comments } = await supabaseSvc
     .from('letter_comments')
-    .select('id, content, created_at, user_id, author_display, User(name, email)')
+    .select('id, content, created_at, user_id, author_display, users(name, email)')
     .eq('letter_id', letter.id)
     .eq('is_public', true)
     .order('created_at', { ascending: true });
