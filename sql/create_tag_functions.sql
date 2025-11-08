@@ -14,9 +14,8 @@ RETURNS TABLE (
   id TEXT,
   name TEXT,
   slug TEXT,
-  description TEXT,
-  created_at TIMESTAMP WITH TIME ZONE,
-  updated_at TIMESTAMP WITH TIME ZONE
+  "createdAt" TIMESTAMP,
+  "updatedAt" TIMESTAMP
 ) 
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -27,12 +26,10 @@ BEGIN
     t.id,
     t.name,
     t.slug,
-    t.description,
-    t."createdAt" as created_at,
-    t."updatedAt" as updated_at
+    t."createdAt",
+    t."updatedAt"
   FROM "Tag" t
   WHERE t.slug = tag_slug_param
-    AND (t."deletedAt" IS NULL OR t."deletedAt" > NOW())
   LIMIT 1;
 END;
 $$;
@@ -44,10 +41,10 @@ RETURNS TABLE (
   title TEXT,
   slug TEXT,
   content TEXT,
-  "publishedAt" TIMESTAMP WITH TIME ZONE,
-  "updatedAt" TIMESTAMP WITH TIME ZONE,
-  author JSONB,
-  "previewImage" TEXT
+  published BOOLEAN,
+  "publishedAt" TIMESTAMP,
+  "updatedAt" TIMESTAMP,
+  author JSONB
 ) 
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -59,21 +56,19 @@ BEGIN
     a.title,
     a.slug,
     a.content,
+    a.published,
     a."publishedAt",
     a."updatedAt",
     jsonb_build_object(
       'id', u.id,
       'name', u.name,
       'email', u.email
-    ) as author,
-    a."previewImage"
+    ) as author
   FROM "articles" a
   INNER JOIN "_ArticleToTag" att ON a.id = att."A"
   INNER JOIN "Tag" t ON t.id = att."B"
   LEFT JOIN "User" u ON a."authorId" = u.id
   WHERE t.slug = tag_slug_param
-    AND (a."deletedAt" IS NULL OR a."deletedAt" > NOW())
-    AND (t."deletedAt" IS NULL OR t."deletedAt" > NOW())
   ORDER BY a."publishedAt" DESC NULLS LAST, a."updatedAt" DESC NULLS LAST
   LIMIT limit_param;
 END;
@@ -86,10 +81,10 @@ RETURNS TABLE (
   title TEXT,
   slug TEXT,
   content TEXT,
-  "publishedAt" TIMESTAMP WITH TIME ZONE,
-  "updatedAt" TIMESTAMP WITH TIME ZONE,
-  author JSONB,
-  "previewImage" TEXT
+  published BOOLEAN,
+  "publishedAt" TIMESTAMP,
+  "updatedAt" TIMESTAMP,
+  author JSONB
 ) 
 LANGUAGE plpgsql
 SECURITY DEFINER
