@@ -27,6 +27,7 @@ const RelatedArticles = ({ currentArticleId, tags = [], limit = 3 }: RelatedArti
   useEffect(() => {
     const fetchRelatedArticles = async () => {
       if (!tags || tags.length === 0) {
+        console.log('[RelatedArticles] No tags provided');
         setLoading(false);
         return;
       }
@@ -34,20 +35,37 @@ const RelatedArticles = ({ currentArticleId, tags = [], limit = 3 }: RelatedArti
       try {
         // Берем первый тег для поиска похожих статей
         const primaryTag = tags[0];
-        const tagSlug = primaryTag.slug || primaryTag.name;
+        // Используем slug если есть, иначе name (приводим к lowercase)
+        const tagSlug = (primaryTag.slug || primaryTag.name || '').toLowerCase();
         
+        if (!tagSlug) {
+          console.log('[RelatedArticles] Empty tag slug');
+          setLoading(false);
+          return;
+        }
+        
+        console.log('[RelatedArticles] Fetching articles for tag:', tagSlug);
         const response = await fetch(`/api/articles?includeTag=${encodeURIComponent(tagSlug)}&limit=${limit + 5}`);
+        
+        if (!response.ok) {
+          console.error('[RelatedArticles] API error:', response.status);
+          setLoading(false);
+          return;
+        }
+        
         const data = await response.json();
+        console.log('[RelatedArticles] Received articles:', data?.length || 0);
         
         if (Array.isArray(data)) {
           // Исключаем текущую статью и берем только нужное количество
           const filtered = data
             .filter(article => article.id !== currentArticleId)
             .slice(0, limit);
+          console.log('[RelatedArticles] Filtered articles:', filtered.length);
           setArticles(filtered);
         }
       } catch (error) {
-        console.error('Error fetching related articles:', error);
+        console.error('[RelatedArticles] Error fetching related articles:', error);
       } finally {
         setLoading(false);
       }

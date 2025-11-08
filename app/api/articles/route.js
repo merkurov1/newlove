@@ -52,9 +52,17 @@ export async function GET(request) {
     if (includeTag) {
       try {
         // Use the existing RPC function to get articles for a tag
-        const resp = await supabase.rpc('get_articles_by_tag_slug', { tag_slug_param: includeTag }).range(offset, offset + limit - 1);
+        const resp = await supabase.rpc('get_articles_by_tag_slug', { 
+          tag_slug: includeTag, 
+          limit_param: limit + 5 // Запрашиваем чуть больше для фильтрации
+        });
         data = resp.data;
         error = resp.error;
+        
+        // Применяем offset вручную, так как RPC не поддерживает .range()
+        if (data && Array.isArray(data)) {
+          data = data.slice(offset, offset + limit);
+        }
       } catch (e) {
         data = null;
         error = e;
