@@ -11,16 +11,24 @@ export default function ProjectEditorPage({ params }: { params: { id: string } }
   const router = useRouter();
 
   useEffect(() => {
-    fetch(`/api/projects/${params.id}`)
-      .then(res => res.json())
-      .then(data => {
+    const loadProject = async () => {
+      try {
+        const res = await fetch(`/api/projects/${params.id}`);
+        const data = await res.json();
         setProject(data);
         setLoading(false);
-      })
-      .catch(error => {
+        
+        // Обновляем Header после загрузки проекта
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('newlove:projects-updated'));
+        }
+      } catch (error) {
         console.error('Error loading project:', error);
         setLoading(false);
-      });
+      }
+    };
+    
+    loadProject();
   }, [params.id]);
 
   if (loading) {

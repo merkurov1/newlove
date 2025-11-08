@@ -151,7 +151,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <AuthProvider>
-          <Header settings={settings} projects={projects} />
+          <Header settings={safeData(settings)} projects={safeData(projects)} />
           {/* client-only sidebar should appear immediately under the header for logged-in users */}
           <UserSidebar />
           <main>

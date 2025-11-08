@@ -215,8 +215,14 @@ export async function createProject(formData) {
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   await upsertTagsAndLink(supabase, 'project', projectId, parsedTags);
 
+  // Ревалидация всех страниц, где отображаются проекты
   revalidatePath('/admin/projects');
   revalidatePath(`/admin/projects/edit/${projectId}`);
+  revalidatePath('/', 'layout'); // Ревалидация root layout для обновления Header
+  if (published) {
+    revalidatePath(`/${slug}`); // Ревалидация публичной страницы проекта
+  }
+  
   redirect(`/admin/projects/edit/${projectId}`);
 }
 
@@ -257,8 +263,14 @@ export async function updateProject(formData) {
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   await upsertTagsAndLink(supabase, 'project', id, parsedTags);
 
+  // Ревалидация всех страниц, где отображаются проекты
   revalidatePath('/admin/projects');
-  revalidatePath(`/${slug}`);
+  revalidatePath(`/admin/projects/edit/${id}`);
+  revalidatePath('/', 'layout'); // Ревалидация root layout для обновления Header
+  if (published) {
+    revalidatePath(`/${slug}`); // Ревалидация публичной страницы проекта
+  }
+  
   redirect('/admin/projects');
 }
 
@@ -277,6 +289,7 @@ export async function deleteProject(formData) {
   }
 
   revalidatePath('/admin/projects');
+  revalidatePath('/', 'layout'); // Ревалидация root layout для обновления Header
   if (project) revalidatePath(`/${project.slug}`);
 }
 
