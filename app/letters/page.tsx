@@ -55,46 +55,78 @@ export default async function LettersPage({ searchParams }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-100 py-8 px-2">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8 px-4">
+      <div className="max-w-7xl mx-auto">
         {/* Заголовок страницы */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl md:text-3xl font-medium text-gray-900 mb-2">📮 Письма и открытки</h1>
-          <p className="text-base text-gray-600 max-w-2xl mx-auto">
+        <div className="text-center mb-12">
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">📮 Письма и открытки</h1>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Архив авторской рассылки и заказ физических открыток с персональными сообщениями
           </p>
         </div>
 
-        {/* server debug removed */}
-
-        {/* Основное содержимое в две колонки */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10">
-          {/* Левая колонка: Архив рассылки */}
-          <div className="space-y-6">
-            <div className="bg-white/90 backdrop-blur-sm border border-blue-50 rounded-2xl shadow-sm hover:shadow-md p-5 transition-all duration-200">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <span className="text-2xl">📧</span>
+        {/* Основное содержимое - Bento Grid стиль */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 auto-rows-auto">
+          {/* Открытки - первая (слева, большая карточка) */}
+          <div className="lg:col-span-2 lg:row-span-2">
+            <div className="group relative h-full bg-gradient-to-br from-orange-50 via-white to-pink-50 rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-orange-100">
+              {/* Декоративный элемент */}
+              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-200/30 to-pink-200/30 rounded-full blur-3xl -z-0"></div>
+              
+              <div className="relative z-10 p-6 md:p-8 h-full flex flex-col">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-14 h-14 bg-gradient-to-br from-orange-400 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
+                    <span className="text-3xl">🎨</span>
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Авторские открытки</h2>
+                    <p className="text-sm text-gray-600">Физические открытки с персональными сообщениями</p>
+                  </div>
                 </div>
-                <h2 className="text-lg font-medium text-gray-900">Архив рассылки</h2>
+                
+                <div className="flex-1">
+                  <PostcardShop />
+                </div>
               </div>
-              <div className="mb-3 text-sm text-gray-500">
-                {lastUpdated ? `Последнее обновление: ${new Date(lastUpdated).toLocaleString('ru-RU')}` : ''}
-              </div>
-              <LettersArchive initialLetters={initialLetters} lastUpdated={lastUpdated} />
             </div>
           </div>
-          {/* Правая колонка: Заказ открыток */}
-          <div className="space-y-6">
-            <div className="bg-white/90 backdrop-blur-sm border border-orange-50 rounded-2xl shadow-sm hover:shadow-md p-5 transition-all duration-200">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <span className="text-2xl">🎨</span>
+
+          {/* Архив рассылки - справа */}
+          <div className="lg:col-span-1 lg:row-span-2">
+            <div className="group relative h-full bg-gradient-to-br from-blue-50 via-white to-indigo-50 rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-blue-100">
+              {/* Декоративный элемент */}
+              <div className="absolute top-0 left-0 w-48 h-48 bg-gradient-to-br from-blue-200/30 to-indigo-200/30 rounded-full blur-3xl -z-0"></div>
+              
+              <div className="relative z-10 p-6 h-full flex flex-col">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
+                    <span className="text-2xl">📧</span>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">Архив рассылки</h2>
+                  </div>
                 </div>
-                <h2 className="text-lg font-medium text-gray-900">Авторские открытки</h2>
+                
+                {lastUpdated && (
+                  <div className="mb-4 text-xs text-gray-500 bg-blue-50/50 rounded-lg px-3 py-2">
+                    Обновлено: {new Date(lastUpdated).toLocaleDateString('ru-RU')}
+                  </div>
+                )}
+                
+                <div className="flex-1 overflow-auto">
+                  <LettersArchive initialLetters={initialLetters} lastUpdated={lastUpdated} />
+                </div>
               </div>
-              <PostcardShop />
             </div>
+          </div>
+        </div>
+
+        {/* Информационный блок внизу */}
+        <div className="mt-8 text-center">
+          <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-full px-6 py-3 shadow-sm border border-gray-100">
+            <span className="text-sm text-gray-600">
+              💌 Все письма доставляются с любовью через физическую почту
+            </span>
           </div>
         </div>
       </div>
