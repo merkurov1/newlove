@@ -342,28 +342,32 @@ export async function getArticlesByTag(supabase, tagSlugOrName, limit = 50) {
       '*'
     ];
     const publishedCandidates = ['published', 'is_published', 'published_at', 'publishedAt', null];
+    const articleTableCandidates = ['articles', 'Article', 'article'];
   let arts: any[] = [];
-    for (const sel of selectCandidates) {
-      for (const pubCol of publishedCandidates) {
-        for (const col of [...DELETED_COLS, null]) {
-          try {
-            let q = supabase.from('articles')
-              .select(sel)
-              .in('id', ids)
-              .order('publishedAt', { ascending: false })
-              .limit(limit);
-            if (pubCol) {
-              try { q = q.eq(pubCol, true); } catch (e) { /* ignore if col absent */ }
+    for (const tbl of articleTableCandidates) {
+      for (const sel of selectCandidates) {
+        for (const pubCol of publishedCandidates) {
+          for (const col of [...DELETED_COLS, null]) {
+            try {
+              let q = supabase.from(tbl)
+                .select(sel)
+                .in('id', ids)
+                .order('publishedAt', { ascending: false })
+                .limit(limit);
+              if (pubCol) {
+                try { q = q.eq(pubCol, true); } catch (e) { /* ignore if col absent */ }
+              }
+              if (col) q = q.is(col, null);
+              const res = await q;
+              if (res && !res.error && Array.isArray(res.data) && res.data.length > 0) {
+                arts = res.data;
+                break;
+              }
+            } catch (e) {
+              continue;
             }
-            if (col) q = q.is(col, null);
-            const res = await q;
-            if (res && !res.error && Array.isArray(res.data) && res.data.length > 0) {
-              arts = res.data;
-              break;
-            }
-          } catch (e) {
-            continue;
           }
+          if (arts.length) break;
         }
         if (arts.length) break;
       }
