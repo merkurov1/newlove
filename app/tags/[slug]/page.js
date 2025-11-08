@@ -8,7 +8,7 @@ import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
 import dynamic from 'next/dynamic';
 
-const AuctionSlider = dynamic(() => import('@/components/AuctionSlider'), { ssr: false });
+const AuctionGrid = dynamic(() => import('@/components/AuctionGrid'), { ssr: false });
 
 // --- 1. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ---
 // Находит тег по его slug и подгружает все связанные с ним статьи.
@@ -103,21 +103,14 @@ export default async function TagPage({ params }) {
   const isAuctionTag = params.slug.toLowerCase() === 'auction';
 
   if (isAuctionTag && articles.length > 0) {
-    // Подготавливаем статьи для слайдера - добавляем preview_image
+    // Подготавливаем статьи для сетки - добавляем preview_image
     const articlesWithImages = articles.map(article => ({
       ...article,
       preview_image: getFirstImage(article.content) || null,
       excerpt: article.excerpt || null
     }));
 
-    return (
-      <div className="min-h-screen bg-black">
-        {/* Полноэкранный слайдер без отступов */}
-        <div className="w-full h-screen">
-          <AuctionSlider articles={articlesWithImages} fullscreen={true} />
-        </div>
-      </div>
-    );
+    return <AuctionGrid articles={articlesWithImages} />;
   }
 
   // Обычное отображение для других тегов
