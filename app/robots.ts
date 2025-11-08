@@ -11,11 +11,14 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
         disallow: [
           '/admin',
+          '/admin/*',
           '/api/',
+          '/api/*',
           '/auth/',
+          '/auth/*',
           '/profile',
-          '/you/',
-          '/users'
+          '/debug-auth',
+          '/debug-auth/*'
         ],
       },
       {
@@ -23,8 +26,13 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
         disallow: [
           '/admin',
+          '/admin/*',
           '/api/',
-          '/auth/'
+          '/api/*',
+          '/auth/',
+          '/auth/*',
+          '/debug-auth',
+          '/debug-auth/*'
         ],
       },
       {
@@ -32,8 +40,13 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
         disallow: [
           '/admin',
-          '/api/', 
-          '/auth/'
+          '/admin/*',
+          '/api/',
+          '/api/*',
+          '/auth/',
+          '/auth/*',
+          '/debug-auth',
+          '/debug-auth/*'
         ],
       }
     ],
