@@ -1,6 +1,6 @@
 // app/profile/page.js
 
-import { createClient } from '@/lib/supabase/server';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
 import ProfileForm from '@/components/profile/ProfileForm';
 import SubscriptionToggle from '@/components/profile/SubscriptionToggle';
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function ProfilePage() {
   // Use server-side Supabase client
-  const supabase = createClient();
+  const supabase = getServerSupabaseClient();
   
   // Get current user from session
   const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
@@ -32,7 +32,9 @@ export default async function ProfilePage() {
       console.error('Supabase fetch user error', error);
     } else if (!data) {
       // User doesn't exist in public.users yet - create from auth.users
-      const { data: newUser, error: insertError } = await supabase
+      // Use service-role for INSERT (anon doesn't have permission)
+      const supabaseAdmin = getServerSupabaseClient({ useServiceRole: true });
+      const { data: newUser, error: insertError } = await supabaseAdmin
         .from('users')
         .insert({
           id: authUser.id,
