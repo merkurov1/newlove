@@ -105,7 +105,8 @@ export async function createArticle(formData) {
   await upsertTagsAndLink(supabase, 'article', articleId, parsedTags);
 
   revalidatePath('/admin/articles');
-  redirect('/admin/articles');
+  revalidatePath(`/admin/articles/edit/${articleId}`);
+  redirect(`/admin/articles/edit/${articleId}`);
 }
 
 export async function updateArticle(formData) {
@@ -215,7 +216,8 @@ export async function createProject(formData) {
   await upsertTagsAndLink(supabase, 'project', projectId, parsedTags);
 
   revalidatePath('/admin/projects');
-  redirect('/admin/projects');
+  revalidatePath(`/admin/projects/edit/${projectId}`);
+  redirect(`/admin/projects/edit/${projectId}`);
 }
 
 export async function updateProject(formData) {
@@ -506,8 +508,9 @@ export async function createLetter(formData) {
   await recordRevalidationAudit(supabase, user?.id, published ? 'create_published_letter' : 'create_letter');
   revalidatePath('/admin/letters');
   revalidatePath('/letters');
+  revalidatePath(`/admin/letters/edit/${letterId}`);
   if (published) revalidatePath(`/letters/${slug}`);
-  redirect('/admin/letters');
+  redirect(`/admin/letters/edit/${letterId}`);
 }
 
 export async function updateLetter(formData) {
