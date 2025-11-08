@@ -23,10 +23,22 @@ export function getServerSupabaseClient(options: ServerAuthOptions = {}): Supaba
   }
 
   if (!supabaseUrl || !supabaseKey) {
+    // If a service-role client was explicitly requested but the service role
+    // key is not present, allow a non-production fallback so local builds
+    // and CI environments without secrets do not hard-fail while developing.
+    // NOTE: This only falls back when NODE_ENV !== 'production'. In prod we
+    // still require the service role key to avoid accidental permission issues.
     if (preferServiceRole && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('SUPABASE_SERVICE_ROLE_KEY is required when useServiceRole=true but is not configured in the environment');
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('SUPABASE_SERVICE_ROLE_KEY is required when useServiceRole=true but is not configured in the environment');
+      }
+      // Development/CI: attempt to use anon key as a best-effort fallback
+      supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
     }
-    throw new Error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL|SUPABASE_URL and a Supabase key are required');
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL|SUPABASE_URL and a Supabase key are required');
+    }
   }
   return createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
 }
