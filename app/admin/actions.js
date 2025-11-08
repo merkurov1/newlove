@@ -294,11 +294,13 @@ export async function deleteProject(formData) {
 }
 
 // --- Профиль пользователя (User-Context) ---
-// В этой функции используется getUserAndSupabaseForRequest, и это ПРАВИЛЬНО.
-// Она работает от имени текущего пользователя, а не администратора.
+// Использует правильный паттерн для Server Actions - createClient() + auth.getUser()
 export async function updateProfile(prevState, formData) {
-  const { user, supabase } = await getUserAndSupabaseForRequest(new Request('http://localhost'));
-  if (!user) {
+  // Get authenticated user from server-side Supabase client
+  const supabase = createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !user?.id) {
     return { status: 'error', message: 'Вы не авторизованы.' };
   }
 

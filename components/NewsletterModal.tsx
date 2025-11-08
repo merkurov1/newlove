@@ -88,7 +88,7 @@ export default function NewsletterModal() {
     const timer = setTimeout(() => {
       console.log('[NewsletterModal] Showing modal now');
       setIsOpen(true);
-      localStorage.setItem(MODAL_STORAGE_KEY, now.toString());
+      // НЕ ставим метку здесь - только при закрытии
     }, 2000); // 2 секунды после загрузки страницы
 
     return () => clearTimeout(timer);
@@ -107,6 +107,8 @@ export default function NewsletterModal() {
   }, [state]);
 
   const handleClose = () => {
+    // Ставим метку времени при закрытии модалки (неважно как - через крестик или фон)
+    localStorage.setItem(MODAL_STORAGE_KEY, Date.now().toString());
     setIsOpen(false);
   };
 
