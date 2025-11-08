@@ -44,19 +44,18 @@ function extractFirstImage(content: any) {
 }
 
 async function getArticlesByTag(supabase, tagSlug, limit = 50) {
-  const { data, error } = await supabase.rpc('get_articles_by_tag_slug', {
-    tag_slug_param: tagSlug
-  }).limit(limit);
-
-  if (error) {
+  // Use tagHelpers which has fallback to direct table queries if RPC is missing
+  const { getArticlesByTag: getArticlesByTagHelper } = await import('@/lib/tagHelpers');
+  try {
+    const articles = await getArticlesByTagHelper(supabase, tagSlug, limit);
+    return (articles || []).map((article: any) => ({
+        ...article,
+        preview_image: article.previewImage || extractFirstImage(article.content)
+    }));
+  } catch (error) {
     console.error(`Ошибка при получении статей с тегом "${tagSlug}":`, error);
     return [];
   }
-
-  return (data || []).map(article => ({
-      ...article,
-      preview_image: extractFirstImage(article.content)
-  }));
 }
 
 export default async function Home() {
