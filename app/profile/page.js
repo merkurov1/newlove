@@ -30,11 +30,48 @@ export default async function ProfilePage() {
     
     if (error) {
       console.error('Supabase fetch user error', error);
+    } else if (!data) {
+      // User doesn't exist in public.users yet - create from auth.users
+      const { data: newUser, error: insertError } = await supabase
+        .from('users')
+        .insert({
+          id: authUser.id,
+          email: authUser.email,
+          name: authUser.user_metadata?.name || authUser.email?.split('@')[0],
+        })
+        .select()
+        .single();
+      
+      if (insertError) {
+        console.error('Error creating user profile:', insertError);
+        // Fallback to auth data
+        userData = {
+          id: authUser.id,
+          email: authUser.email,
+          name: authUser.user_metadata?.name || '',
+          username: null,
+          bio: null,
+          website: null,
+          is_subscribed: false,
+        };
+      } else {
+        userData = newUser;
+      }
     } else {
       userData = data;
     }
   } catch (e) {
     console.error('Error fetching user data:', e);
+    // Fallback to auth data
+    userData = {
+      id: authUser.id,
+      email: authUser.email,
+      name: authUser.user_metadata?.name || '',
+      username: null,
+      bio: null,
+      website: null,
+      is_subscribed: false,
+    };
   }
 
   return (

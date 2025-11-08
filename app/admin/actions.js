@@ -522,14 +522,38 @@ export async function adminToggleUserSubscription(userId, subscribe) {
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
   try {
-    // Get user data
-    const { data: userData } = await supabase
+    // Get user data from public.users first
+    let userData = await supabase
       .from('users')
       .select('email')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
-    if (!userData?.email) {
+    // If user doesn't exist in public.users, get from auth.users and create
+    if (!userData?.data?.email) {
+      const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+      if (!authUser?.user?.email) {
+        return { status: 'error', message: 'У пользователя нет email.' };
+      }
+      
+      // Create user in public.users
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert({
+          id: userId,
+          email: authUser.user.email,
+          name: authUser.user.user_metadata?.name || authUser.user.email.split('@')[0],
+        });
+      
+      if (insertError && insertError.code !== '23505') { // Ignore duplicate key error
+        console.error('Error creating user in public.users:', insertError);
+      }
+      
+      userData = { data: { email: authUser.user.email } };
+    }
+
+    const email = userData.data?.email;
+    if (!email) {
       return { status: 'error', message: 'У пользователя нет email.' };
     }
 
@@ -538,7 +562,7 @@ export async function adminToggleUserSubscription(userId, subscribe) {
       const { data: existingSub } = await supabase
         .from('subscribers')
         .select('*')
-        .eq('email', userData.email)
+        .eq('email', email)
         .maybeSingle();
 
       if (existingSub) {
@@ -551,7 +575,7 @@ export async function adminToggleUserSubscription(userId, subscribe) {
           .from('subscribers')
           .insert({
             id: createId(),
-            email: userData.email,
+            email: email,
             userId,
             isActive: true
           });

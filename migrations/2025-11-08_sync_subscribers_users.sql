@@ -1,88 +1,39 @@
--- Migration: Sync subscribers table with users table
+-- Migration: Create public.users table and sync with subscribers
 -- Date: 2025-11-08
--- Purpose: Add necessary columns to subscribers for proper user-subscriber sync
+-- Purpose: Create user profiles table and subscription management
 
--- Ensure subscribers table has all necessary columns
-DO $$
-BEGIN
-  -- Add email column if missing
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'subscribers' AND column_name = 'email'
-  ) THEN
-    ALTER TABLE public.subscribers ADD COLUMN email TEXT;
-  END IF;
+-- Create public.users table
+CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE,
+  name TEXT,
+  bio TEXT,
+  website TEXT,
+  is_subscribed BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
-  -- Add userId column if missing (links to auth.users.id)
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'subscribers' AND column_name = 'userId'
-  ) THEN
-    ALTER TABLE public.subscribers ADD COLUMN "userId" TEXT;
-  END IF;
+-- Populate public.users from auth.users
+INSERT INTO public.users (id, email, name, created_at)
+SELECT 
+  id::text,
+  email,
+  raw_user_meta_data->>'name',
+  created_at
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
 
-  -- Add isActive column if missing
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'subscribers' AND column_name = 'isActive'
-  ) THEN
-    ALTER TABLE public.subscribers ADD COLUMN "isActive" BOOLEAN NOT NULL DEFAULT false;
-  END IF;
+-- Create indexes
+CREATE INDEX IF NOT EXISTS users_email_idx ON public.users (email);
+CREATE INDEX IF NOT EXISTS users_username_idx ON public.users (username);
+CREATE INDEX IF NOT EXISTS users_is_subscribed_idx ON public.users (is_subscribed);
 
-  -- Add id column as TEXT if it's currently BIGINT
-  -- First check if id is BIGINT and convert if needed
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' 
-    AND table_name = 'subscribers' 
-    AND column_name = 'id' 
-    AND data_type = 'bigint'
-  ) THEN
-    -- This is a destructive operation - only run if you can lose subscriber data!
-    -- Comment out if you have important data
-    -- TRUNCATE TABLE public.subscribers;
-    -- ALTER TABLE public.subscribers DROP COLUMN id;
-    -- ALTER TABLE public.subscribers ADD COLUMN id TEXT PRIMARY KEY;
-    
-    -- Safe alternative: add text_id column and migrate later
-    IF NOT EXISTS (
-      SELECT 1 FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'subscribers' AND column_name = 'text_id'
-    ) THEN
-      ALTER TABLE public.subscribers ADD COLUMN text_id TEXT;
-    END IF;
-  END IF;
-END $$;
-
--- Create unique index on email
-CREATE UNIQUE INDEX IF NOT EXISTS subscribers_email_unique_idx 
-  ON public.subscribers (email) 
-  WHERE email IS NOT NULL;
-
--- Create index on userId for faster lookups
-CREATE INDEX IF NOT EXISTS subscribers_userId_idx 
-  ON public.subscribers ("userId");
-
--- Create index on isActive for filtering
-CREATE INDEX IF NOT EXISTS subscribers_isActive_idx 
-  ON public.subscribers ("isActive");
-
--- Add users table subscription status if missing
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'is_subscribed'
-  ) THEN
-    ALTER TABLE public.users ADD COLUMN is_subscribed BOOLEAN NOT NULL DEFAULT false;
-  END IF;
-END $$;
-
--- Create trigger to sync users.is_subscribed with subscribers.isActive
+-- Create trigger to sync subscription status
 CREATE OR REPLACE FUNCTION sync_user_subscription_status()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- When subscriber is activated/deactivated, update users table
   IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
     IF NEW."userId" IS NOT NULL THEN
       UPDATE public.users 
@@ -94,24 +45,47 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Drop trigger if exists and recreate
+-- Create trigger on subscribers table
 DROP TRIGGER IF EXISTS sync_user_subscription_trigger ON public.subscribers;
 CREATE TRIGGER sync_user_subscription_trigger
   AFTER INSERT OR UPDATE ON public.subscribers
   FOR EACH ROW
   EXECUTE FUNCTION sync_user_subscription_status();
 
--- Sync existing data: update users.is_subscribed based on subscribers
+-- Sync existing subscription data
 UPDATE public.users u
 SET is_subscribed = true
 FROM public.subscribers s
 WHERE s."userId" = u.id AND s."isActive" = true;
 
--- Grant necessary permissions
-GRANT SELECT, INSERT, UPDATE ON public.subscribers TO authenticated;
-GRANT SELECT, UPDATE (is_subscribed) ON public.users TO authenticated;
+-- Enable RLS
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
-COMMENT ON COLUMN public.users.is_subscribed IS 'Auto-synced with subscribers.isActive via trigger';
-COMMENT ON COLUMN public.subscribers.userId IS 'Links to auth.users.id (if user is registered)';
-COMMENT ON COLUMN public.subscribers.email IS 'Subscriber email address';
-COMMENT ON COLUMN public.subscribers.isActive IS 'Whether subscription is active (confirmed)';
+-- RLS Policies (drop and recreate to ensure idempotency)
+DROP POLICY IF EXISTS "Users can view all profiles" ON public.users;
+CREATE POLICY "Users can view all profiles"
+  ON public.users FOR SELECT
+  TO authenticated, anon
+  USING (true);
+
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.users;
+CREATE POLICY "Users can insert own profile"
+  ON public.users FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid()::text = id);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
+CREATE POLICY "Users can update own profile"
+  ON public.users FOR UPDATE
+  TO authenticated
+  USING (auth.uid()::text = id)
+  WITH CHECK (auth.uid()::text = id);
+
+-- Grant permissions
+GRANT SELECT ON public.users TO authenticated, anon;
+GRANT INSERT, UPDATE (username, name, bio, website, is_subscribed) ON public.users TO authenticated;
+GRANT ALL ON public.users TO service_role;
+
+COMMENT ON TABLE public.users IS 'User profiles and metadata';
+COMMENT ON COLUMN public.users.id IS 'Links to auth.users.id';
+COMMENT ON COLUMN public.users.is_subscribed IS 'Synced with subscribers.isActive via trigger';
