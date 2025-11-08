@@ -29,7 +29,7 @@ BEGIN
     t."createdAt",
     t."updatedAt"
   FROM "Tag" t
-  WHERE t.slug = tag_slug_param
+  WHERE LOWER(t.slug) = LOWER(tag_slug_param)
   LIMIT 1;
 END;
 $$;
@@ -68,7 +68,7 @@ BEGIN
   INNER JOIN "_ArticleToTag" att ON a.id = att."A"
   INNER JOIN "Tag" t ON t.id = att."B"
   LEFT JOIN "User" u ON a."authorId" = u.id
-  WHERE t.slug = tag_slug_param
+  WHERE LOWER(t.slug) = LOWER(tag_slug_param)
   ORDER BY a."publishedAt" DESC NULLS LAST, a."updatedAt" DESC NULLS LAST
   LIMIT limit_param;
 END;
