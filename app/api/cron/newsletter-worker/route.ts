@@ -188,13 +188,16 @@ async function handleWorker(request: Request) {
           const unsubToken = createId();
           
           // Insert token first
+          const now = new Date();
+          const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
           const { error: tokenError } = await supabase
             .from('subscriber_tokens')
             .insert({
               subscriber_id: subscriber.id,
               type: 'unsubscribe',
               token: unsubToken,
-              created_at: new Date().toISOString()
+              created_at: now.toISOString(),
+              expires_at: expiresAt.toISOString()
             });
 
           if (tokenError) {

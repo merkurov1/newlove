@@ -682,7 +682,15 @@ export async function subscribeToNewsletter(prevState, formData) {
   // generate confirmation token and insert into subscriber_tokens
   try {
     const confirmToken = createId();
-    const { error: tokenErr } = await svc.from('subscriber_tokens').insert({ subscriber_id: subscriber.id, type: 'confirm', token: confirmToken, created_at: new Date().toISOString() });
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const { error: tokenErr } = await svc.from('subscriber_tokens').insert({ 
+      subscriber_id: subscriber.id, 
+      type: 'confirm', 
+      token: confirmToken, 
+      created_at: now.toISOString(),
+      expires_at: expiresAt.toISOString()
+    });
     if (tokenErr) {
       console.warn('Failed to insert confirm token:', tokenErr.message || tokenErr);
   // Sentry removed

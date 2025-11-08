@@ -1,6 +1,15 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
+
 export async function GET(req: NextRequest) {
+  // Rate limiting: 5 requests per 15 minutes per IP
+  const clientIp = getClientIp(req);
+  const rateLimitResponse = checkRateLimit(clientIp, RATE_LIMITS.NEWSLETTER);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   const { searchParams } = new URL(req.url);
   const token = searchParams.get('token');
   if (!token) {
@@ -15,8 +24,14 @@ export async function GET(req: NextRequest) {
       console.error('Error fetching token', tokenErr);
       return NextResponse.json({ error: 'Ошибка подтверждения.' }, { status: 500 });
     }
+    // Check if token is valid, unused, and not expired
     if (!tokenRow || tokenRow.type !== 'confirm' || tokenRow.used) {
       return NextResponse.json({ error: 'Некорректный или устаревший токен.' }, { status: 404 });
+    }
+
+    // Check token expiry (7 days)
+    if (tokenRow.expires_at && new Date(tokenRow.expires_at) < new Date()) {
+      return NextResponse.json({ error: 'Токен истёк. Пожалуйста, подпишитесь заново.' }, { status: 410 });
     }
     // Помечаем токен использованным
     await supabase.from('subscriber_tokens').update({ used: true, usedAt: new Date().toISOString() }).eq('token', token);

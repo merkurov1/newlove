@@ -2,12 +2,27 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { z } from 'zod';
 
 // Temporary: use a minimal Stripe client. In a follow-up we'll wire a server-side
 // Supabase/Onboard auth client and persist orders to the DB.
 const stripeKey = process.env.STRIPE_SECRET_KEY || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'sk_test_placeholder';
 const stripe = new Stripe(stripeKey, {
   apiVersion: '2025-08-27.basil',
+});
+
+// Validation schema
+const PostcardOrderSchema = z.object({
+  postcardId: z.string().min(1, 'Postcard ID is required'),
+  recipientName: z.string().min(2, 'Recipient name must be at least 2 characters').max(100),
+  streetAddress: z.string().min(5, 'Street address must be at least 5 characters').max(200),
+  addressLine2: z.string().max(200).optional(),
+  city: z.string().min(2, 'City must be at least 2 characters').max(100),
+  stateProvince: z.string().max(100).optional(),
+  postalCode: z.string().min(3, 'Postal code must be at least 3 characters').max(20),
+  country: z.string().min(2, 'Country must be at least 2 characters').max(100),
+  phone: z.string().max(30).optional(),
+  customMessage: z.string().max(500, 'Message must be less than 500 characters').optional(),
 });
 
 export async function POST(request: Request) {
@@ -24,6 +39,19 @@ export async function POST(request: Request) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
+    
+    // Validate input
+    const validation = PostcardOrderSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { 
+          error: 'Validation failed', 
+          details: validation.error.flatten().fieldErrors 
+        }, 
+        { status: 400 }
+      );
+    }
+
     const {
       postcardId,
       recipientName,
@@ -35,11 +63,7 @@ export async function POST(request: Request) {
       country,
       phone,
       customMessage,
-    } = body || {};
-
-    if (!postcardId || !recipientName || !streetAddress || !city || !postalCode || !country) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
+    } = validation.data;
 
     // Mock postcards catalog until DB model is ready
     const mockPostcards: Record<string, { id: string; price: number; available: boolean; title: string }> = {

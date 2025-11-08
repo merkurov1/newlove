@@ -37,7 +37,15 @@ export async function sendNewsletterToSubscriber(subscriber: any, letter: any, o
     try {
       const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
       if (serverSupabase) {
-        const tokenRow = { subscriber_id: subscriber.id, type: 'unsubscribe', token: unsubscribeToken, created_at: new Date().toISOString() };
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+        const tokenRow = { 
+          subscriber_id: subscriber.id, 
+          type: 'unsubscribe', 
+          token: unsubscribeToken, 
+          created_at: now.toISOString(),
+          expires_at: expiresAt.toISOString()
+        };
         const { error: tokenErr } = await serverSupabase.from('subscriber_tokens').insert(tokenRow);
         if (tokenErr) {
           console.warn('subscriber_tokens insert warning:', tokenErr.message || String(tokenErr));
