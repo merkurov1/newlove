@@ -20,7 +20,7 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
 
   const { data: letter, error } = await supabaseSvc
     .from('letters')
-    .select('id, title, slug, content, published, publishedAt, createdAt, authorId, users!letters_authorId_fkey(name, email)')
+    .select('id, title, slug, content, published, publishedAt, createdAt, authorId, users(name, email)')
     .eq('slug', slug)
     .eq('published', true)
     .single();

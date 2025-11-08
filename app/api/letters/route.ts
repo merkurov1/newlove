@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
     let lettersQuery = supabase
       .from('letters')
-      .select('id, title, slug, published, publishedAt, createdAt, authorId, users!letters_authorId_fkey(id, name, email)')
+      .select('id, title, slug, published, publishedAt, createdAt, authorId, users(id, name, email)')
       .order('publishedAt', { ascending: false })
       .limit(100);
 

@@ -70,7 +70,7 @@ async function PreviewView({ slug }: { slug: string }) {
     const supabasePublic = createClient({ useServiceRole: true });
     const { data: letter, error } = await supabasePublic
         .from('letters')
-        .select('id, title, slug, content, published, publishedAt, createdAt, authorId, users!letters_authorId_fkey(name, email)')
+        .select('id, title, slug, content, published, publishedAt, createdAt, authorId, users(name, email)')
         .eq('slug', slug)
         .eq('published', true)
         .single();
@@ -121,7 +121,7 @@ async function FullView({ slug }: { slug: string }) {
 
     const { data: letter, error } = await supabase
         .from('letters')
-        .select('id, title, slug, content, published, publishedAt, createdAt, authorId, users!letters_authorId_fkey(name, email)')
+        .select('id, title, slug, content, published, publishedAt, createdAt, authorId, users(name, email)')
         .eq('slug', slug)
         .eq('published', true)
         .single();
