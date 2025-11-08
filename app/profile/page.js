@@ -1,50 +1,39 @@
 // app/profile/page.js
 
-// We'll use a dynamic import here to avoid build-time circular/interop issues
-import { redirect } from 'next/navigation';
-import ProfileForm from '@/components/profile/ProfileForm'; // Мы создадим этот компонент на след. шаге
+import { createClient } from '@/lib/supabase/server';
+import ProfileForm from '@/components/profile/ProfileForm';
+
+export const dynamic = 'force-dynamic';
 
 export default async function ProfilePage() {
-  const globalReq = globalThis?.request || new Request('http://localhost');
-  // Import the canonical helper directly to avoid interop/export shape issues
-  // that sometimes occur when the build produces different module formats.
-  let user = null;
-  let supabase = null;
-  try {
-    const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-    const res = await getUserAndSupabaseForRequest(globalReq) || {};
-    user = res.user || null;
-    supabase = res.supabase || null;
-  } catch (e) {
-    // If the helper fails during build/runtime, log and redirect to home so
-    // the page doesn't crash the whole prerender process. We'll still allow
-    // the client to surface an error if needed.
-    console.error('profile/page: failed to obtain supabase/user for request', e);
-    // Avoid redirect here; render guest prompt instead. Redirecting during
-    // build/prerender can cause the entire page to fail. We'll let the
-    // guest UI handle prompting to login.
-    user = null;
-  }
-  // Если user не найден, показываем клиентский компонент с приглашением войти
-  // вместо строгого редиректа — это даёт лучший UX: пользователь увидит
-  // кнопку входа/модальное и сможет вернуться после логина.
-  if (!user?.id) {
-    // Render a lightweight client-side guest prompt — import dynamically
+  // Use server-side Supabase client
+  const supabase = createClient();
+  
+  // Get current user from session
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !authUser?.id) {
+    // User not logged in - show guest prompt
     const { default: ProfileGuest } = await import('@/components/profile/ProfileGuest');
-    return (
-      // @ts-expect-error ServerComponent returning a Client Component
-      <ProfileGuest />
-    );
+    return <ProfileGuest />;
   }
 
+  // Fetch user data from users table
   let userData = null;
-  if (supabase) {
-    const { data, error } = await supabase.from('users').select('*').eq('id', user.id).maybeSingle();
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', authUser.id)
+      .maybeSingle();
+    
     if (error) {
       console.error('Supabase fetch user error', error);
     } else {
       userData = data;
     }
+  } catch (e) {
+    console.error('Error fetching user data:', e);
   }
 
   return (
