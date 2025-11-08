@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdminFromRequest, requireUser } from '@/lib/serverAuth';
+import { requireAdminFromRequest, requireUser, getServerSupabaseClient } from '@/lib/serverAuth';
+import { attachTagsToArticles } from '@/lib/attachTagsToArticles';
 
 // GET - Получить проект по ID (для админки)
 export async function GET(
@@ -8,19 +9,48 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
+    
     // Только админы могут получать любые проекты (включая неопубликованные)
     try {
       await requireAdminFromRequest(request as Request);
-      // TODO: fetch project by id (any status) from Supabase
-      // const { data: project, error } = await supabase.from('projects').select(...)
-      // For now, return a mock project
-      const project = { id: params.id, title: 'Mock Project', published: true };
-      return NextResponse.json(project);
+      
+      // Fetch project by id (any status) from Supabase
+      const { data: project, error } = await supabase
+        .from('projects')
+        .select('*, author:authorId(name,email)')
+        .eq('id', params.id)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Supabase error fetching project:', error);
+        return NextResponse.json({ error: 'Ошибка загрузки проекта' }, { status: 500 });
+      }
+      
+      if (!project) {
+        return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
+      }
+      
+      // Attach tags
+      const projectsWithTags = await attachTagsToArticles(supabase, [project]);
+      return NextResponse.json(projectsWithTags[0] || project);
+      
     } catch {
       // Обычные пользователи видят только опубликованные проекты
-      // TODO: fetch published project by id from Supabase
-      const project = { id: params.id, title: 'Mock Project', published: true };
-      return NextResponse.json(project);
+      const { data: project, error } = await supabase
+        .from('projects')
+        .select('*, author:authorId(name,email)')
+        .eq('id', params.id)
+        .eq('published', true)
+        .maybeSingle();
+      
+      if (error || !project) {
+        return NextResponse.json({ error: 'Проект не найден' }, { status: 404 });
+      }
+      
+      // Attach tags
+      const projectsWithTags = await attachTagsToArticles(supabase, [project]);
+      return NextResponse.json(projectsWithTags[0] || project);
     }
     
   } catch (error) {
