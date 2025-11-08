@@ -258,12 +258,28 @@ export async function getArticlesByTag(supabase, tagSlugOrName, limit = 50) {
     }
 
     // Attempt RPC; but we'll also fetch junction-based ids and combine them to be tolerant
+    // Try several RPC names/param shapes to be tolerant across DB deployments
     let rpcData = [];
     try {
-      const rpc = await supabase.rpc('get_articles_by_tag', { tag_slug: tagSlugOrName });
-      rpcData = (rpc && (rpc.data || rpc)) || [];
+      try {
+        const rpc = await supabase.rpc('get_articles_by_tag', { tag_slug: tagSlugOrName });
+        rpcData = (rpc && (rpc.data || rpc)) || [];
+      } catch (e) {
+        // try alternate rpc name used in some deployments
+        try {
+          const rpc2 = await supabase.rpc('get_articles_by_tag_slug', { tag_slug_param: tagSlugOrName });
+          rpcData = (rpc2 && (rpc2.data || rpc2)) || [];
+        } catch (e2) {
+          try {
+            const rpc3 = await supabase.rpc('get_articles_by_tag_slug', { tag_slug: tagSlugOrName });
+            rpcData = (rpc3 && (rpc3.data || rpc3)) || [];
+          } catch (e3) {
+            rpcData = [];
+          }
+        }
+      }
     } catch (e) {
-      // rpc absent or failed: continue to fallback
+      // ultimate fallback: no rpc available
       rpcData = [];
     }
 
