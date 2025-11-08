@@ -44,11 +44,27 @@ function extractFirstImage(content: any) {
 }
 
 async function getArticlesByTag(supabase, tagSlug, limit = 50) {
-  // Use tagHelpers which has fallback to direct table queries if RPC is missing
-  const { getArticlesByTag: getArticlesByTagHelper } = await import('@/lib/tagHelpers');
   try {
-    const articles = await getArticlesByTagHelper(supabase, tagSlug, limit);
-    return (articles || []).map((article: any) => {
+    // Try direct query first for reliability
+    const { data: articles, error } = await supabase
+      .from('articles')
+      .select('id, title, slug, content, publishedAt, updatedAt, previewImage')
+      .order('publishedAt', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error(`[getArticlesByTag] Error fetching articles:`, error);
+      return [];
+    }
+
+    if (!articles || articles.length === 0) {
+      console.warn(`[getArticlesByTag] No articles found with tag "${tagSlug}"`);
+      return [];
+    }
+
+    console.log(`[getArticlesByTag] Found ${articles.length} articles for tag "${tagSlug}"`);
+
+    return articles.map((article: any) => {
       const previewImg = article.previewImage || article.preview_image || extractFirstImage(article.content);
       return {
         id: article.id,
@@ -57,13 +73,12 @@ async function getArticlesByTag(supabase, tagSlug, limit = 50) {
         content: article.content,
         publishedAt: article.publishedAt,
         updatedAt: article.updatedAt,
-        author: article.author,
         preview_image: previewImg,
         previewImage: previewImg,
       };
     });
   } catch (error) {
-    console.error(`Ошибка при получении статей с тегом "${tagSlug}":`, error);
+    console.error(`[getArticlesByTag] Exception:`, error);
     return [];
   }
 }
