@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 import TagInput from '@/components/admin/TagInput';
-import BlockEditor from '@/components/admin/BlockEditor';
+import BlockEditorImproved from '@/components/admin/BlockEditorImproved';
 import { createSeoSlug } from '@/lib/slugUtils';
 
 import { EditorJsBlock } from '@/types/blocks';
@@ -252,7 +252,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
         )}
       </div>
   <TagInput initialTags={safeInitial.tags} onChange={setTags} />
-  <BlockEditor value={content} onChange={setContent} />
+  <BlockEditorImproved value={content} onChange={setContent} />
       <input type="hidden" name="tags" value={JSON.stringify(tags)} />
   <textarea name="content" value={JSON.stringify(content)} readOnly hidden />
       {error && <div className="text-red-600 text-sm font-medium">{error}</div>}
