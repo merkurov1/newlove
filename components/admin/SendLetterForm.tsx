@@ -2,20 +2,27 @@
 
 import { useState } from 'react';
 import { sendLetter } from '@/app/admin/actions';
+import NewsletterJobStatus from './NewsletterJobStatus';
 
 export default function SendLetterForm({ letter }) {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [testEmail, setTestEmail] = useState('');
+  const [jobId, setJobId] = useState<string | null>(null);
 
   async function handleSendLetter(formData) {
     setIsLoading(true);
     setMessage('');
+    setJobId(null);
     try {
       if (testEmail) formData.set('testEmail', testEmail);
       const result = await sendLetter(null, formData);
       if (result?.status === 'success') {
         setMessage(`✅ ${result.message}`);
+        // If result contains jobId, show job status component
+        if (result.jobId) {
+          setJobId(result.jobId);
+        }
       } else {
         setMessage(`❌ ${result?.message || 'Ошибка'}`);
       }
@@ -50,8 +57,17 @@ export default function SendLetterForm({ letter }) {
         Письмо готово к отправке. Убедитесь что содержимое корректное, затем нажмите кнопку ниже.
       </p>
 
-      {message && (
+      {message && !jobId && (
         <div className="mb-4 p-3 bg-white border rounded-md">{message}</div>
+      )}
+
+      {jobId && (
+        <div className="mb-4">
+          <NewsletterJobStatus jobId={jobId} onComplete={() => {
+            // Refresh page after completion to show updated sentAt
+            window.location.reload();
+          }} />
+        </div>
       )}
 
       <form action={handleSendLetter} className="flex gap-3 flex-col md:flex-row">

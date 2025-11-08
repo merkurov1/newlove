@@ -960,11 +960,28 @@ export async function sendLetter(prevState, formData) {
 
   // Try to enqueue the letter for background sending if a jobs table exists
   try {
-    const { error: jobErr } = await supabase.from('newsletter_jobs').insert({ letter_id: letterId, status: 'pending', created_at: new Date().toISOString() });
+    const jobId = createId();
+    const { error: jobErr } = await supabase
+      .from('newsletter_jobs')
+      .insert({ 
+        id: jobId,
+        letter_id: letterId, 
+        status: 'pending', 
+        created_at: new Date().toISOString() 
+      });
+    
     if (!jobErr) {
-      return { status: 'success', message: 'Письмо поставлено в очередь на отправку.' };
+      console.info(`Newsletter job ${jobId} created for letter ${letterId}`);
+      return { 
+        status: 'success', 
+        message: 'Письмо поставлено в очередь на отправку. Обработка начнется в течение минуты.',
+        jobId 
+      };
+    } else {
+      console.warn('Failed to create newsletter job, falling back to direct send:', jobErr);
     }
   } catch (e) {
+    console.warn('newsletter_jobs table not available, using fallback:', e?.message);
     // table may not exist — fallthrough to limited send
   }
 
