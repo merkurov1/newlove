@@ -267,12 +267,12 @@ export async function getArticlesByTag(supabase, tagSlugOrName, limit = 50) {
   let rpcData: any[] = [];
     try {
       try {
-        const rpc = await supabase.rpc('get_articles_by_tag', { tag_slug: tagSlugOrName });
+        const rpc = await supabase.rpc('get_articles_by_tag_slug', { tag_slug: tagSlugOrName, limit_param: limit });
         rpcData = (rpc && (rpc.data || rpc)) || [];
       } catch (e) {
         // try alternate rpc name used in some deployments
         try {
-          const rpc2 = await supabase.rpc('get_articles_by_tag_slug', { tag_slug_param: tagSlugOrName });
+          const rpc2 = await supabase.rpc('get_articles_by_tag', { tag_slug_param: tagSlugOrName, limit_param: limit });
           rpcData = (rpc2 && (rpc2.data || rpc2)) || [];
         } catch (e2) {
           try {
@@ -395,6 +395,18 @@ export async function getArticlesByTag(supabase, tagSlugOrName, limit = 50) {
 
 export async function getTagBySlug(supabase, slug) {
   if (!supabase) return null;
+  
+  // Try RPC function first (case-insensitive)
+  try {
+    const rpc = await supabase.rpc('get_tag_by_slug', { tag_slug_param: slug });
+    const rpcData = (rpc && (rpc.data || rpc)) || [];
+    if (Array.isArray(rpcData) && rpcData.length > 0 && rpcData[0]) {
+      return rpcData[0];
+    }
+  } catch (e) {
+    // RPC not available, fallback to direct queries
+  }
+  
   const configured = (typeof process !== 'undefined' && process.env && process.env.TAGS_TABLE_NAME) || null;
   const tables = configured ? [configured, ...TABLE_CANDIDATES] : TABLE_CANDIDATES;
   const slugVariants = Array.from(new Set([String(slug || '').trim(), String(slug || '').toLowerCase()].filter(Boolean)));
