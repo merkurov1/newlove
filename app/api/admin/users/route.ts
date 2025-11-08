@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireAdminFromRequest(request as Request);
     const body = await request.json();
-    const { action, userId, role } = body;
+    const { action, userId, role, subscribe } = body;
 
     if (!action || !userId) {
       return NextResponse.json({ status: 'error', message: 'Missing action or userId' }, { status: 400 });
@@ -56,6 +56,12 @@ export async function POST(request: NextRequest) {
 
     if (action === 'deleteUser') {
       const result = await adminDeleteUser(userId);
+      return NextResponse.json(result);
+    }
+
+    if (action === 'toggleSubscription') {
+      const { adminToggleUserSubscription } = await import('@/app/admin/actions');
+      const result = await adminToggleUserSubscription(userId, subscribe);
       return NextResponse.json(result);
     }
 

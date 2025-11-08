@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import ProfileForm from '@/components/profile/ProfileForm';
+import SubscriptionToggle from '@/components/profile/SubscriptionToggle';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,8 +42,13 @@ export default async function ProfilePage() {
       <h1 className="text-3xl font-bold text-gray-900 mb-2">Ваш профиль</h1>
       <p className="text-gray-600 mb-8">Здесь вы можете обновить свою публичную информацию.</p>
       
-      {/* Передаем данные пользователя в клиентский компонент формы */}
-      <ProfileForm user={userData} />
+      <div className="space-y-6">
+        {/* Subscription Toggle */}
+        <SubscriptionToggle initialSubscribed={userData?.is_subscribed || false} />
+        
+        {/* Profile Form */}
+        <ProfileForm user={userData} />
+      </div>
     </div>
   );
 }

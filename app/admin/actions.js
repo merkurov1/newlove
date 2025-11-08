@@ -426,6 +426,158 @@ export async function adminDeleteUser(userId) {
   return { status: 'success' };
 }
 
+// --- Управление подпиской пользователя ---
+
+/**
+ * Toggle user subscription status (subscribe/unsubscribe)
+ * Can be called from profile page or admin panel
+ */
+export async function toggleUserSubscription(prevState, formData) {
+  // Get authenticated user
+  const anonClient = createClient();
+  const { data: { user }, error: authError } = await anonClient.auth.getUser();
+  
+  if (authError || !user?.id) {
+    return { status: 'error', message: 'Вы не авторизованы.' };
+  }
+
+  const action = formData.get('action')?.toString(); // 'subscribe' or 'unsubscribe'
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
+  try {
+    // Get user data
+    const { data: userData } = await supabase
+      .from('users')
+      .select('email, is_subscribed')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData?.email) {
+      return { status: 'error', message: 'У пользователя нет email адреса.' };
+    }
+
+    if (action === 'subscribe') {
+      // Check if subscriber exists
+      const { data: existingSub } = await supabase
+        .from('subscribers')
+        .select('*')
+        .eq('email', userData.email)
+        .maybeSingle();
+
+      if (existingSub) {
+        // Update existing
+        await supabase
+          .from('subscribers')
+          .update({ userId: user.id, isActive: true })
+          .eq('id', existingSub.id);
+      } else {
+        // Create new
+        await supabase
+          .from('subscribers')
+          .insert({
+            id: createId(),
+            email: userData.email,
+            userId: user.id,
+            isActive: true
+          });
+      }
+
+      // Update users table (trigger will do it, but for immediate feedback)
+      await supabase
+        .from('users')
+        .update({ is_subscribed: true })
+        .eq('id', user.id);
+
+      revalidatePath('/profile');
+      return { status: 'success', message: 'Вы успешно подписались на рассылку!' };
+    } else if (action === 'unsubscribe') {
+      // Deactivate subscription
+      await supabase
+        .from('subscribers')
+        .update({ isActive: false })
+        .eq('userId', user.id);
+
+      // Update users table
+      await supabase
+        .from('users')
+        .update({ is_subscribed: false })
+        .eq('id', user.id);
+
+      revalidatePath('/profile');
+      return { status: 'success', message: 'Вы отписались от рассылки.' };
+    }
+
+    return { status: 'error', message: 'Неизвестное действие.' };
+  } catch (error) {
+    console.error('toggleUserSubscription error:', error);
+    return { status: 'error', message: 'Произошла ошибка при изменении подписки.' };
+  }
+}
+
+/**
+ * Admin action: toggle subscription for any user
+ */
+export async function adminToggleUserSubscription(userId, subscribe) {
+  await verifyAdmin();
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
+  try {
+    // Get user data
+    const { data: userData } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', userId)
+      .single();
+
+    if (!userData?.email) {
+      return { status: 'error', message: 'У пользователя нет email.' };
+    }
+
+    if (subscribe) {
+      // Subscribe user
+      const { data: existingSub } = await supabase
+        .from('subscribers')
+        .select('*')
+        .eq('email', userData.email)
+        .maybeSingle();
+
+      if (existingSub) {
+        await supabase
+          .from('subscribers')
+          .update({ userId, isActive: true })
+          .eq('id', existingSub.id);
+      } else {
+        await supabase
+          .from('subscribers')
+          .insert({
+            id: createId(),
+            email: userData.email,
+            userId,
+            isActive: true
+          });
+      }
+    } else {
+      // Unsubscribe user
+      await supabase
+        .from('subscribers')
+        .update({ isActive: false })
+        .eq('userId', userId);
+    }
+
+    // Update users table
+    await supabase
+      .from('users')
+      .update({ is_subscribed: subscribe })
+      .eq('id', userId);
+
+    revalidatePath('/admin/users');
+    return { status: 'success', message: subscribe ? 'Пользователь подписан.' : 'Пользователь отписан.' };
+  } catch (error) {
+    console.error('adminToggleUserSubscription error:', error);
+    return { status: 'error', message: error.message };
+  }
+}
+
 // --- Рассылки и подписки (User-Context) ---
 
 export async function subscribeToNewsletter(prevState, formData) {

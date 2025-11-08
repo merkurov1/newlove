@@ -91,7 +91,11 @@ export default async function AdminUsersPage() {
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <UserActionsClient userId={user.id} currentRole={user.role} />
+                  <UserActionsClient 
+                    userId={user.id} 
+                    currentRole={user.role} 
+                    isSubscribed={subsByUser[user.id]?.isActive || false} 
+                  />
                 </td>
               </tr>
             ))}
