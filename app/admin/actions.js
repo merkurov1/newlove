@@ -424,7 +424,6 @@ export async function subscribeToNewsletter(prevState, formData) {
   // upsert subscriber; mark inactive until confirmed
   let subscriber;
   try {
-      console.error('Error syncing user role:', syncErr);
     // value for subscribers.id, so providing one avoids NOT NULL violations.
     const payload = { id: createId(), email, userId: user?.id || null, isActive: false };
     const upsertRes = await svc
