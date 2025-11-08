@@ -48,10 +48,20 @@ async function getArticlesByTag(supabase, tagSlug, limit = 50) {
   const { getArticlesByTag: getArticlesByTagHelper } = await import('@/lib/tagHelpers');
   try {
     const articles = await getArticlesByTagHelper(supabase, tagSlug, limit);
-    return (articles || []).map((article: any) => ({
-        ...article,
-        preview_image: article.previewImage || extractFirstImage(article.content)
-    }));
+    return (articles || []).map((article: any) => {
+      const previewImg = article.previewImage || article.preview_image || extractFirstImage(article.content);
+      return {
+        id: article.id,
+        title: article.title,
+        slug: article.slug,
+        content: article.content,
+        publishedAt: article.publishedAt,
+        updatedAt: article.updatedAt,
+        author: article.author,
+        preview_image: previewImg,
+        previewImage: previewImg,
+      };
+    });
   } catch (error) {
     console.error(`Ошибка при получении статей с тегом "${tagSlug}":`, error);
     return [];
@@ -64,6 +74,14 @@ export default async function Home() {
 
   const auctionArticles = await getArticlesByTag(supabase, 'auction', 20);
   const newsArticles = await getArticlesByTag(supabase, 'news', 15);
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[HomePage] auctionArticles count:', auctionArticles?.length || 0);
+    console.log('[HomePage] newsArticles count:', newsArticles?.length || 0);
+    if (auctionArticles?.[0]) {
+      console.log('[HomePage] auctionArticles[0] keys:', Object.keys(auctionArticles[0]));
+    }
+  }
 
   return (
     <main className="relative overflow-hidden py-8 sm:py-12">
