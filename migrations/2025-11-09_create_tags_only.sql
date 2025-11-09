@@ -29,6 +29,11 @@ ALTER TABLE "Tag" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "_ArticleToTag" ENABLE ROW LEVEL SECURITY;
 
 -- 4. Create policies - public read, authenticated write
+-- NOTE: These policies allow ANY authenticated user to manage tags
+-- If you want admin-only, first add 'role' column to users table:
+-- ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';
+-- Then use: auth.uid() IN (SELECT id FROM users WHERE role = 'admin')
+
 CREATE POLICY "Public read tags" ON "Tag"
   FOR SELECT USING (true);
 
