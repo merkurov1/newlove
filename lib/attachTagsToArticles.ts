@@ -5,7 +5,7 @@
 // - Always return JSON-serializable results (JSON round-trip)
 // - On DB error (except permission-related attempts), log and return empty tags
 // - Does not mutate input objects
-export async function attachTagsToArticles(supabase, articles) {
+export async function attachTagsToArticles(supabase: any, articles: any[]): Promise<any[]> {
   // Defensive: ensure articles is an array
   if (!Array.isArray(articles) || articles.length === 0) return [];
 
@@ -36,7 +36,7 @@ export async function attachTagsToArticles(supabase, articles) {
 
     // Helper to run a SELECT ... IN(...) query in a defensive way across
     // different supabase-like client shapes and lightweight mocks.
-    async function runSelectIn(client, table, selectCols, inColumn, inValues) {
+  async function runSelectIn(client: any, table: string, selectCols: string, inColumn: string, inValues: any[]) {
       if (!client || typeof client.from !== 'function') {
         return { data: null, error: new Error('supabase.from is not a function') };
       }
@@ -75,7 +75,7 @@ export async function attachTagsToArticles(supabase, articles) {
         }
 
         return { data: null, error: new Error('unexpected_supabase_shape') };
-      } catch (e) {
+      } catch (e: any) {
         return { data: null, error: e && e.message ? new Error(String(e.message)) : e };
       }
     }
@@ -83,8 +83,8 @@ export async function attachTagsToArticles(supabase, articles) {
     // Query junction table and tags using canonical column names.
     // The schema uses columns "A" (article id) and "B" (tag id) in _ArticleToTag
     const relRes = await runSelectIn(supabase, '_ArticleToTag', 'A,B', 'A', articleIds);
-    let relations = relRes.data;
-    let relErr = relRes.error;
+  let relations: any[] | null = relRes.data;
+  let relErr: any = relRes.error;
 
     if (relErr) {
       console.error('attachTagsToArticles: failed to fetch _ArticleToTag relations', relErr);
@@ -118,9 +118,9 @@ export async function attachTagsToArticles(supabase, articles) {
     }
 
   // Normalize relation IDs to strings (DB may store UUID or integer)
-  const tagIds = Array.from(new Set((relations || []).map((r) => (r && r.B ? String(r.B) : null)).filter(Boolean)));
+  const tagIds = Array.from(new Set(((relations || []) as any[]).map((r: any) => (r && r.B ? String(r.B) : null)).filter(Boolean)));
 
-    let tagsById = {};
+  let tagsById: Record<string, any> = {};
     if (tagIds.length > 0) {
       // Use configured tags table name (default "Tag") to fetch tag rows.
       const TAGS_TABLE = (typeof process !== 'undefined' && process.env && process.env.TAGS_TABLE_NAME) || 'Tag';
@@ -130,8 +130,8 @@ export async function attachTagsToArticles(supabase, articles) {
           console.error('attachTagsToArticles: failed to fetch tags from table ' + TAGS_TABLE, tagRes.error);
           return JSON.parse(JSON.stringify(articles.map((a) => ({ ...a, tags: [] }))));
         }
-        const tags = tagRes.data || [];
-        tagsById = (tags || []).reduce((acc, t) => {
+        const tags: any[] = tagRes.data || [];
+        tagsById = (tags || []).reduce((acc: Record<string, any>, t: any) => {
           const key = t && t.id ? String(t.id) : null;
           if (key) acc[key] = t;
           return acc;
@@ -143,7 +143,7 @@ export async function attachTagsToArticles(supabase, articles) {
     }
 
     // Build tags list per article
-    const tagsMap = (relations || []).reduce((acc, rel) => {
+    const tagsMap: Record<string, any[]> = ((relations || []) as any[]).reduce((acc: Record<string, any[]>, rel: any) => {
       const aid = rel && rel.A ? String(rel.A) : null;
       const tid = rel && rel.B ? String(rel.B) : null;
       if (!aid || !tid) return acc;
@@ -151,10 +151,10 @@ export async function attachTagsToArticles(supabase, articles) {
       const tag = tagsById[tid];
       if (tag) acc[aid].push(tag);
       return acc;
-    }, {});
+    }, {} as Record<string, any[]>);
 
     // Attach tags, do not mutate original objects
-    const result = articles.map((a) => {
+    const result = articles.map((a: any) => {
       const aid = a && (a.id ?? a._id ?? a.articleId);
       const attached = tagsMap[aid] || [];
       return { ...a, tags: attached };

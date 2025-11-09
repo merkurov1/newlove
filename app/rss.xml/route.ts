@@ -20,16 +20,19 @@ export async function GET() {
   const safeArticles = safeData(articles || []);
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love';
-  const feedItems = safeArticles.map((a) => `
+  const feedItems = safeArticles.map((a: any) => {
+    const authorName = Array.isArray(a.author) ? (a.author[0]?.name || 'Автор') : (a.author?.name || 'Автор');
+    return `
     <item>
       <title>${escape(a.title)}</title>
       <link>${siteUrl}/${a.slug}</link>
       <guid>${siteUrl}/${a.slug}</guid>
       <pubDate>${new Date(a.publishedAt).toUTCString()}</pubDate>
       <description><![CDATA[${truncate(stripMd(a.content), 300)}]]></description>
-      <author>${escape(a.author?.name || 'Автор')}</author>
+      <author>${escape(authorName)}</author>
     </item>
-  `).join('');
+  `;
+  }).join('');
 
   const rss = `<?xml version="1.0" encoding="UTF-8" ?>
   <rss version="2.0">
@@ -49,12 +52,14 @@ export async function GET() {
   });
 }
 
-function stripMd(md) {
-  return md.replace(/[#_*`>\[\]!\(\)]/g, '').replace(/\n+/g, ' ');
+function stripMd(md: string): string {
+  return String(md || '').replace(/[#_*`>\[\]!\(\)]/g, '').replace(/\n+/g, ' ');
 }
-function truncate(str,n: any) {
-  return str.length > n ? str.slice(0, n - 1) + '…' : str;
+function truncate(str: string, n: number): string {
+  const s = String(str || '');
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
-function escape(str) {
-  return str.replace(/[&<>]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function escape(str: string): string {
+  const s = String(str || '');
+  return s.replace(/[&<>]/g, (c: string) => ({'&':'&amp;','<':'&lt;','>':'&gt;'} as Record<string,string>)[c]);
 }

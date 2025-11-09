@@ -43,12 +43,12 @@ export function createClient() {
 // Lightweight helper to get the current user from an App Router Request.
 // Accepts the standard Request and reads cookies to validate the session
 // using a centralized server-side Supabase client.
-export async function getUserAndSupabaseFromRequest(req) {
+export async function getUserAndSupabaseFromRequest(req: any) {
   const cookieHeader = (req && req.headers && req.headers.get && req.headers.get('cookie')) || '';
   const cookiesObj = Object.fromEntries(
     cookieHeader
       .split(';')
-      .map((s) => {
+      .map((s: string) => {
         const [k, ...v] = s.split('=');
         return [k && k.trim(), decodeURIComponent((v || []).join('='))];
       })
@@ -58,7 +58,7 @@ export async function getUserAndSupabaseFromRequest(req) {
   let supabase: any = null;
   try {
     supabase = createClient();
-  } catch (e) {
+  } catch (e: any) {
     console.error('Unable to create server supabase client', e);
     return { user: null, supabase: null };
   }

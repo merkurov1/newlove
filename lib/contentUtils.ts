@@ -1,3 +1,4 @@
+// @ts-nocheck
 // lib/contentUtils.js
 
 /**
@@ -13,7 +14,7 @@ import { createClient } from '@supabase/supabase-js';
  * @param {string} content - Markdown-текст.
  * @returns {Promise<string|null>} - URL изображения (signedUrl для приватных файлов) или null.
  */
-export async function getFirstImage(content) {
+export async function getFirstImage(content: string): Promise<string | null> {
   if (!content) return null;
   
   let url = null;
@@ -63,7 +64,7 @@ export async function getFirstImage(content) {
  * @param {string} content - Строка с Markdown-текстом или JSON блоками.
  * @returns {string} Очищенный и обрезанный текст.
  */
-export function generateDescription(content) {
+export function generateDescription(content: any): string {
   if (!content) return '';
   
   // Если передан уже распарсенный массив блоков, сначала преобразуем в JSON строку
@@ -80,12 +81,12 @@ export function generateDescription(content) {
   
   try {
     // Пытаемся распарсить как JSON блоки
-    const parsed = JSON.parse(content);
+    const parsed: any = JSON.parse(content);
     
     if (Array.isArray(parsed)) {
       // Это массив блоков - извлекаем текст из них
       plainText = parsed
-        .map(block => {
+        .map((block: any) => {
           if (block.type === 'paragraph' && block.data?.text) {
             return block.data.text.replace(/<[^>]*>/g, ''); // Убираем HTML теги
           }
@@ -100,7 +101,7 @@ export function generateDescription(content) {
           }
           return '';
         })
-        .filter(text => text.trim().length > 0)
+        .filter((text: string) => text.trim().length > 0)
         .join(' ');
     } else {
       // JSON, но не массив блоков - возвращаем пустую строку

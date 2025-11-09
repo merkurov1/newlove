@@ -6,7 +6,7 @@ import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import SafeImage from '@/components/SafeImage';
 
-export default function GalleryGrid({ images, imagesJson }) {
+export default function GalleryGrid({ images, imagesJson }: { images?: any[]; imagesJson?: string }) {
   // If imagesJson is provided (server-side passed JSON string), parse it
   let parsedImages = images;
   if (!parsedImages && imagesJson) {
@@ -32,7 +32,7 @@ export default function GalleryGrid({ images, imagesJson }) {
   })();
 
   // Готовим слайды для лайтбокса
-  const slides = safeImages.map(item => ({
+  const slides = safeImages.map((item: any) => ({
     src: item.url,
     width: 800, // можно добавить width/height в GalleryImage при необходимости
     height: 600,
@@ -47,7 +47,7 @@ export default function GalleryGrid({ images, imagesJson }) {
           gap: '1rem', margin: '2rem 0',
         }}
       >
-        {safeImages.map((item, i) => (
+  {safeImages.map((item: any, i: number) => (
           <div
             key={item.url || i}
             onClick={() => setIndex(i)}

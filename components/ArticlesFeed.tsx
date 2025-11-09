@@ -91,7 +91,7 @@ const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any)
                 return;
               }
               setArticles((prev) => [...prev, ...data]);
-              setOffset((prev) => prev + data.length);
+              setOffset((prev: number) => prev + data.length);
               if (data.length < API_PAGE_SIZE) setHasMore(false);
             })
             .catch(() => {
@@ -123,7 +123,7 @@ const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any)
           const remaining = prev.filter((p) => !incomingIds.has(p.id));
           return [...data, ...remaining];
         });
-        setOffset((prev) => Math.max(prev, data.length));
+        setOffset((prev: number) => Math.max(prev, data.length));
         setHasMore(data.length >= API_PAGE_SIZE);
       }
     } catch (e) {
