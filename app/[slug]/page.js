@@ -101,25 +101,66 @@ export async function generateMetadata({ params }) {
 
     // JSON-LD для Article
     let jsonLd = null;
+    let breadcrumbSchema = null;
+    
     if (type === 'article') {
+      // Enhanced Article Schema
       jsonLd = {
         '@context': 'https://schema.org',
         '@type': 'Article',
         'headline': content.title,
-        'author': { '@type': 'Person', 'name': content.author?.name || 'Anton Merkurov' },
+        'author': { 
+          '@type': 'Person', 
+          'name': content.author?.name || 'Anton Merkurov',
+          'url': baseUrl
+        },
         'datePublished': content.publishedAt,
         'dateModified': content.updatedAt || content.publishedAt,
         'image': previewImage ? [previewImage] : [],
         'description': description,
-        'mainEntityOfPage': `${baseUrl}/${content.slug}`,
+        'mainEntityOfPage': {
+          '@type': 'WebPage',
+          '@id': `${baseUrl}/${content.slug}`
+        },
         'publisher': {
-          '@type': 'Organization',
+          '@type': 'Person',
           'name': 'Anton Merkurov',
           'logo': {
             '@type': 'ImageObject',
-            'url': 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png'
+            'url': 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
+            'width': 64,
+            'height': 64
           }
-        }
+        },
+        'articleSection': content.tags?.[0]?.name || 'Blog',
+        'keywords': content.tags?.map(t => t.name).join(', ') || '',
+        'inLanguage': 'ru-RU'
+      };
+
+      // BreadcrumbList Schema for better Google display
+      breadcrumbSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        'itemListElement': [
+          {
+            '@type': 'ListItem',
+            'position': 1,
+            'name': 'Главная',
+            'item': baseUrl
+          },
+          {
+            '@type': 'ListItem',
+            'position': 2,
+            'name': 'Статьи',
+            'item': `${baseUrl}/articles`
+          },
+          {
+            '@type': 'ListItem',
+            'position': 3,
+            'name': content.title,
+            'item': `${baseUrl}/${content.slug}`
+          }
+        ]
       };
     }
 
@@ -139,11 +180,10 @@ export async function generateMetadata({ params }) {
         description: description,
         images: previewImage ? [previewImage] : [],
       },
-      ...(jsonLd && {
-        other: {
-          'application/ld+json': JSON.stringify(jsonLd)
-        }
-      })
+      other: {
+        ...(jsonLd && { 'script:ld+json:article': JSON.stringify(jsonLd) }),
+        ...(breadcrumbSchema && { 'script:ld+json:breadcrumb': JSON.stringify(breadcrumbSchema) })
+      }
     };
 
     // Ensure metadata contains only serializable values (no React elements/functions)

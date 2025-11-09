@@ -48,6 +48,22 @@ export default function robots(): MetadataRoute.Robots {
           '/debug-auth',
           '/debug-auth/*'
         ],
+      },
+      // AI Crawlers - Allow access for LLM training and AI search
+      {
+        userAgent: ['GPTBot', 'ChatGPT-User', 'Claude-Web', 'ClaudeBot', 'PerplexityBot', 'Applebot-Extended', 'anthropic-ai', 'cohere-ai'],
+        allow: '/',
+        disallow: [
+          '/admin',
+          '/admin/*',
+          '/api/',
+          '/api/*',
+          '/auth/',
+          '/auth/*',
+          '/profile',
+          '/debug-auth',
+          '/debug-auth/*'
+        ],
       }
     ],
     sitemap: `${baseUrl}/sitemap.xml`,

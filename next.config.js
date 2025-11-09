@@ -106,11 +106,11 @@ const nextConfig = {
     // Enable image optimization for better performance
     // Use environment variable to disable if needed: NEXT_PUBLIC_DISABLE_IMAGE_OPTIMIZATION=1
     unoptimized: process.env.NEXT_PUBLIC_DISABLE_IMAGE_OPTIMIZATION === '1',
-    formats: ['image/webp', 'image/avif'],
+    formats: ['image/avif', 'image/webp'], // AVIF first for best compression
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    // Limit concurrent image optimization to prevent memory issues
-    minimumCacheTTL: 60,
+    // Long cache TTL for better CDN performance (1 year)
+    minimumCacheTTL: 31536000,
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
