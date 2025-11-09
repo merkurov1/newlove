@@ -42,7 +42,7 @@ function extractFirstImage(content: any) {
     return null;
 }
 
-async function getArticlesByTag(supabase, tagSlug, limit = 50) {
+async function getArticlesByTag(supabase: any, tagSlug: string, limit = 50) {
   const { data, error } = await supabase.rpc('get_articles_by_tag_slug', {
     tag_slug: tagSlug,
     limit_param: limit
@@ -53,7 +53,7 @@ async function getArticlesByTag(supabase, tagSlug, limit = 50) {
     return [];
   }
 
-  return (data || []).map(article => ({
+  return (data || []).map((article: any) => ({
       ...article,
       preview_image: extractFirstImage(article.content)
   }));
@@ -133,17 +133,18 @@ export default async function Home() {
         )}
 
         <section id="articles">
-          <BentoArticlesFeed initialArticles={safeData(newsArticles)} includeTag="news" />
+          <Suspense fallback={<div className="animate-pulse h-96 bg-gray-200 rounded-xl" />}>
+            <BentoArticlesFeed initialArticles={safeData(newsArticles)} includeTag="news" />
+          </Suspense>
         </section>
 
         <section>
-          <div className="flex items-center justify-between mb-6">
+          <div className="mb-6">
             <h2 className="text-2xl sm:text-3xl font-semibold">🌊 Flow</h2>
-            <Link href="/lab/feed" className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition-colors">Сводная лента →</Link>
           </div>
-          <div>
+          <Suspense fallback={<div className="animate-pulse h-64 bg-gray-200 rounded-xl" />}>
             <FlowFeed limit={12} />
-          </div>
+          </Suspense>
         </section>
       </div>
     </main>

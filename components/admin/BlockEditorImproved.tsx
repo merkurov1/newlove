@@ -153,7 +153,7 @@ function BlockContent({ block, index, onBlockChange }: any) {
       return (
         <TiptapEditor
           value={block.data.html}
-          onChange={(html) => handleChange({ html })}
+          onChange={(html: any) => handleChange({ html })}
         />
       );
 
@@ -161,7 +161,7 @@ function BlockContent({ block, index, onBlockChange }: any) {
       return (
         <GalleryBlockEditor
           images={block.data.images}
-          onChange={(imgs) => handleChange({ images: imgs })}
+          onChange={(imgs: any) => handleChange({ images: imgs })}
         />
       );
 
@@ -254,7 +254,7 @@ function BlockContent({ block, index, onBlockChange }: any) {
                 </label>
                 <TiptapEditor
                   value={column.html}
-                  onChange={(html) => {
+                  onChange={(html: any) => {
                     const newColumns = [...block.data.columns];
                     newColumns[colIdx] = { html };
                     handleChange({ columns: newColumns });

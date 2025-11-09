@@ -1,5 +1,3 @@
-// app/profile/page.js
-
 import { createClient } from '@/lib/supabase/server';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import ProfileForm from '@/components/profile/ProfileForm';

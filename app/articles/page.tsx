@@ -1,10 +1,5 @@
-// app/articles/page.js
-
-
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-// dynamic import to avoid circular/interop build issues
-// Framer Motion удалён, только Tailwind
 
 // --- БЛОК МЕТАДАННЫХ ---
 export const metadata = sanitizeMetadata({
@@ -15,7 +10,7 @@ export const metadata = sanitizeMetadata({
 export const dynamic = 'force-dynamic';
 
 export default async function ArticlesPage() {
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost');
+  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
   const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
   let { supabase } = await getSupabaseForRequest(globalReq) || {};
   if (!supabase) {
@@ -48,8 +43,8 @@ export default async function ArticlesPage() {
           Публикации
         </h1>
         <div className="space-y-4">
-          {articles.length > 0 ? (
-            articles.map(article => (
+          {articles && articles.length > 0 ? (
+            articles.map((article: any) => (
               <Link key={article.id} href={`/${article.slug}`} className="block rounded-xl bg-white/70 hover:bg-pink-50 transition-colors px-5 py-4">
                 <div className="flex flex-col">
                   <span className="text-lg font-semibold text-gray-900 mb-1 truncate">{article.title}</span>

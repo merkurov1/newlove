@@ -3,7 +3,6 @@
   Temporary: disable TypeScript checking for this legacy, very dynamic
   helper to speed up unblocking the build. We'll add proper types in a follow-up.
 */
-// @ts-nocheck
 import { getFirstImage } from '@/lib/contentUtils';
 
 // Module-wide debug flag. Some builds/minifiers expect DEBUG to exist at module scope;
@@ -14,7 +13,7 @@ const TABLE_CANDIDATES = ['Tag', 'tags', 'tag', 'Tags'];
 const DELETED_COLS = ['deletedAt', 'deleted_at', 'deleted', 'deletedAtAt', 'removed_at'];
 const JUNCTION_CANDIDATES = ['_ArticleToTag', 'ArticleToTag', 'article_to_tag', 'article_tags', 'article_tag', 'articletotag'];
 
-async function readArticleRelationsForTag(supabase, tagId) {
+async function readArticleRelationsForTag(supabase: any, tagId: any) {
   if (!supabase || !tagId) return [];
   try {
     for (const tbl of JUNCTION_CANDIDATES) {
@@ -51,7 +50,7 @@ async function readArticleRelationsForTag(supabase, tagId) {
   return [];
 }
 
-export async function readArticleRelationsForTagStrict(supabase, tagId) {
+export async function readArticleRelationsForTagStrict(supabase: any, tagId: any) {
   if (!supabase || !tagId) return [];
   const tbl = '_ArticleToTag';
   try {
@@ -77,7 +76,7 @@ export async function readArticleRelationsForTagStrict(supabase, tagId) {
         const filterExpr = `or=(B.eq.${encodeURIComponent(String(tagId))},b.eq.${encodeURIComponent(String(tagId))},tag_id.eq.${encodeURIComponent(String(tagId))},tag.eq.${encodeURIComponent(String(tagId))})`;
         const url = `${restBase}/rest/v1/${encodeURIComponent(tbl)}?select=A,B&${filterExpr}&limit=2000`;
         const anonKey = (typeof process !== 'undefined' && process.env && (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY)) || null;
-        const headers = { Accept: 'application/json' };
+        const headers: Record<string, string> = { Accept: 'application/json' };
         if (anonKey) headers['apikey'] = anonKey;
         const resp = await fetch(url, { method: 'GET', headers });
         if (resp && resp.ok) {
@@ -113,7 +112,7 @@ export async function readArticleRelationsForTagStrict(supabase, tagId) {
   } catch (e) { return []; }
 }
 
-function extractArticleIdFromRelRow(row) {
+function extractArticleIdFromRelRow(row: any) {
   // Candidate keys that may contain article id
   const candidates = ['A', 'a', 'article_id', 'articleId', 'article', 'A_id', 'a_id', 'articleId1', 'article_id1', 'article_ref', 'article_uuid', 'articleId0'];
   for (const k of candidates) {
@@ -167,7 +166,7 @@ function extractArticleIdFromRelRow(row) {
   return null;
 }
 
-async function normalizeArticle(a) {
+async function normalizeArticle(a: any) {
   if (!a || typeof a !== 'object') return null;
   let preview = null;
   try {
@@ -195,7 +194,7 @@ async function normalizeArticle(a) {
   };
 }
 
-function extractIdFromArticleLike(obj) {
+function extractIdFromArticleLike(obj: any) {
   if (!obj || typeof obj !== 'object') return null;
   if (obj.id) return obj.id;
   if (obj.article_id) return obj.article_id;
@@ -216,7 +215,7 @@ function extractIdFromArticleLike(obj) {
 }
 
 // Try RPC first, then fallback to junction table lookup using _ArticleToTag
-export async function getArticlesByTag(supabase, tagSlugOrName, limit = 50) {
+export async function getArticlesByTag(supabase: any, tagSlugOrName: any, limit = 50) {
   if (!supabase) return [];
   try {
     // Prefer service-role deterministic join when available (server environment).
@@ -393,7 +392,7 @@ export async function getArticlesByTag(supabase, tagSlugOrName, limit = 50) {
   }
 }
 
-export async function getTagBySlug(supabase, slug) {
+export async function getTagBySlug(supabase: any, slug: any) {
   if (!supabase) return null;
   
   // Try RPC function first (case-insensitive)
@@ -431,7 +430,7 @@ export async function getTagBySlug(supabase, slug) {
 }
 
 // Strict: return only articles that are associated to the tag via junction table
-export async function getArticlesByTagStrict(supabase, tagSlugOrName, limit = 50) {
+export async function getArticlesByTagStrict(supabase: any, tagSlugOrName: any, limit = 50) {
   if (!supabase) return [];
   try {
     const tag = await getTagBySlug(supabase, tagSlugOrName);
@@ -565,7 +564,7 @@ export async function getArticlesByTagStrict(supabase, tagSlugOrName, limit = 50
 }
 
 // Additional fallback: search articles table for columns that may embed tag ids/slugs
-async function findArticlesByArticleColumns(supabase, tag, limit = 50) {
+async function findArticlesByArticleColumns(supabase: any, tag: any, limit = 50) {
   if (!supabase || !tag) return [];
   const colCandidates = ['tags', 'tag_ids', 'tagIds', 'tag', 'tag_slugs', 'tagSlugs', 'tag_list', 'category_ids', 'categories'];
   for (const col of colCandidates) {
@@ -625,7 +624,7 @@ async function findArticlesByArticleColumns(supabase, tag, limit = 50) {
 
 // Return articles that are NOT associated with the given tag (by slug or name).
 // Useful for homepage main feed when we want to exclude auction-tagged articles.
-export async function getArticlesExcludingTag(supabase, tagSlugOrName, limit = 15) {
+export async function getArticlesExcludingTag(supabase: any, tagSlugOrName: any, limit = 15) {
   if (!supabase) return [];
   try {
     // 1) determine article IDs that belong to the tag
@@ -654,7 +653,7 @@ export async function getArticlesExcludingTag(supabase, tagSlugOrName, limit = 1
             try {
               const rpc2 = await supabase.rpc('get_articles_by_tag', { tag_slug: tagSlugOrName });
               const rpcData2 = (rpc2 && (rpc2.data || rpc2)) || [];
-              const rpcIds2 = Array.from(new Set((rpcData2 || []).map(d => d && (d.id || d.article_id)).filter(Boolean)));
+              const rpcIds2 = Array.from(new Set((rpcData2 || []).map((d: any) => d && (d.id || d.article_id)).filter(Boolean)));
               tagArticleIds = Array.from(new Set([...tagArticleIds.map(String), ...rpcIds2.map(String)]));
             } catch (e) {
               // ignore
@@ -713,7 +712,7 @@ export async function getArticlesExcludingTag(supabase, tagSlugOrName, limit = 1
     // filter out excluded ids in-process. This avoids subtle DB/driver quirks
     // or RLS behaviors that block .not / IN queries.
     const excludedSet = new Set(excluded.map(String));
-    const ensureFiltered = async (rows) => {
+    const ensureFiltered = async (rows: any) => {
       if (!Array.isArray(rows) || rows.length === 0) return [];
       const filtered = rows.filter(r => r && r.id && !excludedSet.has(String(r.id)));
       return filtered;

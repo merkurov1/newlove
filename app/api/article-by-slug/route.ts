@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req) {
+export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const slug = searchParams.get('slug');
   if (!slug) return NextResponse.json({ error: 'No slug' }, { status: 400 });

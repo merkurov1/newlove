@@ -1,16 +1,8 @@
-// app/[slug]/page.js
-// Avoid static import to handle different module export shapes (named vs default)
-// and to prevent build-time import errors when the helper is implemented in .js vs .ts.
-async function getUserAndSupabaseFromRequest(req) {
-  const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-  return getUserAndSupabaseForRequest(req);
-}
 import { safeData } from '@/lib/safeSerialize';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-
 import Image from 'next/image';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 import { attachTagsToArticles } from '@/lib/attachTagsToArticles';
@@ -19,21 +11,23 @@ import SocialShare from '@/components/SocialShare';
 import EditButton from '@/components/EditButton';
 import { EditProvider } from '@/components/EditContext';
 import DebugEditButton from '@/components/DebugEditButton';
+import type { Metadata } from 'next';
 
 const RelatedArticles = dynamic(() => import('@/components/RelatedArticles'), { ssr: false });
 
-async function getContent(slug) {
-  console.log('🔍 getContent called for slug:', slug);
+type ContentResult = {
+  type: 'article' | 'project';
+  content: any;
+} | null;
 
+async function getContent(slug: string): Promise<ContentResult> {
   // Исключаем статические маршруты
   const staticRoutes = ['admin', 'api', 'articles', 'auth', 'digest', 'profile', 'projects', 'rss.xml', 'sentry-example-page', 'tags', 'users', 'you', 'roles-demo'];
   if (staticRoutes.includes(slug)) {
-    console.log('⏭️ Skipping static route:', slug);
     return null;
   }
 
   try {
-    console.log('📰 Searching for article with slug:', slug);
     // Сначала ищем статью (используем server service-role client для публичных запросов,
     // чтобы RLS для request-scoped клиентов не блокировал доступ к опубликованным материалам)
     let article = null;
@@ -41,54 +35,43 @@ async function getContent(slug) {
       const { getServerSupabaseClient } = await import('@/lib/serverAuth');
       const srv = getServerSupabaseClient({ useServiceRole: true });
       const { data, error } = await srv.from('articles').select('*, author:authorId(name)').eq('slug', slug).eq('published', true).maybeSingle();
-      if (error) {
-        console.error('Supabase (service) fetch article error', error);
-      } else if (data) {
+      if (data) {
         // attach tags via helper if nested relation not available
         const attached = await attachTagsToArticles(srv, Array.isArray(data) ? data : [data]);
         article = Array.isArray(attached) ? attached[0] || null : (attached && attached[0]) ? attached[0] : (Array.isArray(data) ? data[0] : data);
       }
     } catch (e) {
-      console.error('Failed to fetch article via server client', e);
+      // Silent failure for articles
     }
 
     if (article) {
-      console.log('✅ Found article:', article.title);
       return { type: 'article', content: safeData(article) };
     }
 
-    console.log('📁 Searching for project with slug:', slug);
     // Если статья не найдена, ищем проект (используем service-role client для публичных проектов)
     let project = null;
     if (!article) {
       try {
         const { getServerSupabaseClient } = await import('@/lib/serverAuth');
         const srv = getServerSupabaseClient({ useServiceRole: true });
-        const { data: p, error: pErr } = await srv.from('projects').select('*').eq('slug', slug).eq('published', true).maybeSingle();
-        if (pErr) console.error('Supabase (service) fetch project error', pErr);
+        const { data: p } = await srv.from('projects').select('*').eq('slug', slug).eq('published', true).maybeSingle();
         project = p;
       } catch (e) {
-        console.error('Failed to fetch project via server client', e);
         project = null;
       }
     }
 
     if (project) {
-      console.log('✅ Found project:', project.title);
       return { type: 'project', content: safeData(project) };
     }
 
-    console.log('❌ No content found for slug:', slug);
     return null;
   } catch (error) {
-    console.error('💥 Error in getContent:', error);
     throw error;
   }
 }
 
-export async function generateMetadata({ params }) {
-  console.log('🏷️ generateMetadata called for slug:', params.slug);
-
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   try {
     const result = await getContent(params.slug);
     if (!result) {
@@ -133,7 +116,7 @@ export async function generateMetadata({ params }) {
           }
         },
         'articleSection': content.tags?.[0]?.name || 'Blog',
-        'keywords': content.tags?.map(t => t.name).join(', ') || '',
+        'keywords': content.tags?.map((t: any) => t.name).join(', ') || '',
         'inLanguage': 'ru-RU'
       };
 
@@ -283,10 +266,7 @@ export async function generateMetadata({ params }) {
 }
 
 
-// Динамический импорт клиентского компонента
-
-
-export default async function ContentPage({ params }) {
+export default async function ContentPage({ params }: { params: { slug: string } }) {
   const result = await getContent(params.slug);
   if (!result) notFound();
   const { type, content } = result;
@@ -294,23 +274,15 @@ export default async function ContentPage({ params }) {
   return <ArticleComponent article={content} />;
 }
 
-
-function ArticleComponent({ article }) {
-  console.log('📰 Rendering ArticleComponent:', article.title);
-
+function ArticleComponent({ article }: { article: any }) {
   let blocks = [];
   try {
     if (article.content) {
       const raw = typeof article.content === 'string' ? article.content : JSON.stringify(article.content);
       const parsed = JSON.parse(raw);
       blocks = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
-      console.log('📦 Parsed article blocks:', blocks.length, 'blocks');
-    } else {
-      console.log('⚠️ No content found for article');
     }
   } catch (error) {
-    console.error('💥 Error parsing article content:', error);
-    console.log('📋 Raw content:', article.content);
     blocks = [];
   }
 
@@ -349,7 +321,7 @@ function ArticleComponent({ article }) {
 
             {article.tags && article.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-6">
-                {article.tags.map((tag) => (
+                {article.tags.map((tag: any) => (
                   <Link
                     key={tag.id}
                     href={`/tags/${tag.name}`}
@@ -394,22 +366,15 @@ function ArticleComponent({ article }) {
   );
 }
 
-function ProjectComponent({ project }) {
-  console.log('📁 Rendering ProjectComponent:', project.title);
-
+function ProjectComponent({ project }: { project: any }) {
   let blocks = [];
   try {
     if (project.content) {
       const raw = typeof project.content === 'string' ? project.content : JSON.stringify(project.content);
       const parsed = JSON.parse(raw);
       blocks = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
-      console.log('📦 Parsed project blocks:', blocks.length, 'blocks');
-    } else {
-      console.log('⚠️ No content found for project');
     }
   } catch (error) {
-    console.error('💥 Error parsing project content:', error);
-    console.log('📋 Raw content:', project.content);
     blocks = [];
   }
 

@@ -9,42 +9,20 @@
  * @returns {Promise<{success: boolean, url?: string, error?: string}>}
  */
 export async function uploadImage(file, componentName = 'Editor', useSupabase = true) {
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`🖼️ ${componentName}: Начинаю загрузку изображения:`, file.name);
-    console.log(`📊 ${componentName}: Детали файла:`, {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      lastModified: file.lastModified,
-      useSupabase
-    });
-  }
-  
   // Используем новый унифицированный API endpoint
   const endpoint = '/api/media/upload';
   const formData = new FormData();
   formData.append('files', file);
   
   try {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`🚀 ${componentName}: Отправляю запрос на ${endpoint}`);
-    }
     const res = await fetch(endpoint, {
       method: 'POST',
       body: formData,
       // NextAuth автоматически передает cookies с сессией
     });
     
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`📡 ${componentName}: Ответ сервера статус:`, res.status);
-      console.log(`📋 ${componentName}: Заголовки ответа:`, Object.fromEntries(res.headers.entries()));
-    }
-    
     if (!res.ok) {
       const errorText = await res.text();
-      if (process.env.NODE_ENV === 'development') {
-        console.error(`❌ ${componentName}: Ошибка HTTP`, res.status, errorText);
-      }
       
       // Попытаемся распарсить JSON из ошибки
       try {
@@ -62,10 +40,6 @@ export async function uploadImage(file, componentName = 'Editor', useSupabase = 
     }
 
     const data = await res.json();
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`✅ ${componentName}: Успешный ответ:`, data);
-    }
 
     // Проверяем результат загрузки из нового API
     if (data.results && data.results.length > 0) {
@@ -73,10 +47,6 @@ export async function uploadImage(file, componentName = 'Editor', useSupabase = 
       if (uploadResult.success) {
         // Формируем публичный URL
         const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media/${uploadResult.fileName}`;
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`🎯 ${componentName}: Изображение загружено:`, publicUrl);
-        }
         
         return { success: true, url: publicUrl };
       } else {

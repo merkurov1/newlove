@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 type ServerAuthOptions = {
@@ -11,7 +10,7 @@ type ServerAuthOptions = {
  * requested via options.useServiceRole. This avoids accidentally using
  * the service_role key in runtime paths that shouldn't have elevated privileges.
  */
-export function getServerSupabaseClient(options: ServerAuthOptions = {}): any {
+export function getServerSupabaseClient(options: ServerAuthOptions = {}): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const preferServiceRole = !!options.useServiceRole;
   // When requesting a service-role client, require the SUPABASE_SERVICE_ROLE_KEY explicitly.

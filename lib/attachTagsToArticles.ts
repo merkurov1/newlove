@@ -1,5 +1,4 @@
 // lib/attachTagsToArticles.js
-// @ts-nocheck
 // Refactored implementation:
 // - No service-role fallback attempts (do not try srvSupabase on 42501)
 // - Assume RLS is configured to allow SELECT on ArticleToTag and tags

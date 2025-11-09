@@ -1,12 +1,11 @@
-// app/digest/[slug]/page.js
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import BlockRenderer from '@/components/BlockRenderer';
+import type { Metadata } from 'next';
 
-// Эта функция получает данные для одного конкретного дайджеста по его slug
-async function getDigestBySlug(slug) {
+async function getDigestBySlug(slug: string) {
   const { supabase } = await getUserAndSupabaseForRequest();
   const supabaseClient = supabase;
 
@@ -33,8 +32,7 @@ async function getDigestBySlug(slug) {
   return data;
 }
 
-// Эта функция устанавливает метаданные страницы (например, заголовок во вкладке браузера)
-export async function generateMetadata({ params }) {
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const digest = await getDigestBySlug(params.slug);
   return sanitizeMetadata({
     title: digest?.title || 'Дайджест не найден',
@@ -42,8 +40,7 @@ export async function generateMetadata({ params }) {
 }
 
 
-// Сама страница
-export default async function DigestPage({ params }) {
+export default async function DigestPage({ params }: { params: { slug: string } }) {
   const digest = await getDigestBySlug(params.slug);
   
   // Additional safety check: if digest is null/undefined, show 404

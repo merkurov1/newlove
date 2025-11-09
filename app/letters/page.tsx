@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import LettersArchive from '@/components/letters/LettersArchive';
 import PostcardShop from '@/components/letters/PostcardShop';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
@@ -121,7 +122,9 @@ export default async function LettersPage({ searchParams }: Props) {
                 )}
 
                 <div className="flex-1 overflow-auto">
-                  <LettersArchive initialLetters={initialLetters} lastUpdated={lastUpdated} />
+                  <Suspense fallback={<div className="animate-pulse space-y-4">{[1,2,3].map(i => <div key={i} className="h-20 bg-gray-200 rounded-lg" />)}</div>}>
+                    <LettersArchive initialLetters={initialLetters} lastUpdated={lastUpdated} />
+                  </Suspense>
                 </div>
               </div>
             </div>

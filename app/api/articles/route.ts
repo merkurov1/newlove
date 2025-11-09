@@ -1,10 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-// Use dynamic import to avoid circular-import / ESM interop issues during build
-// (some bundles may not expose named exports reliably when circular imports exist).
-
-
-export async function GET(request) {
+export async function GET(request: Request) {
   try {
   // Use server service-role client for public article listing
   let supabase = null;
@@ -34,10 +30,10 @@ export async function GET(request) {
     let excludedIds = [];
     if (excludeTag) {
       try {
-        const { getTagBySlug, readArticleRelationsForTag } = await import('@/lib/tagHelpers');
+        const { getTagBySlug, readArticleRelationsForTagStrict } = await import('@/lib/tagHelpers');
         const tag = await getTagBySlug(supabase, excludeTag);
         if (tag && tag.id) {
-          const rel = await readArticleRelationsForTag(supabase, tag.id);
+          const rel = await readArticleRelationsForTagStrict(supabase, tag.id);
           if (rel && Array.isArray(rel)) {
             excludedIds = Array.from(new Set(rel.map(r => r && (r.A || r.article_id || r.articleId || r.a || r.article || null)).filter(Boolean)));
           }
@@ -105,7 +101,7 @@ export async function GET(request) {
     // Enrich with previewImage server-side so client infinite scroll get thumbnails
     try {
       const { getFirstImage } = await import('@/lib/contentUtils');
-      const enriched = await Promise.all((data || []).map(async (a) => {
+      const enriched = await Promise.all((data || []).map(async (a: any) => {
         let preview_image = null;
         try { preview_image = a.content ? await getFirstImage(a.content) : null; } catch (e) { preview_image = null; }
         return { id: a.id, title: a.title, slug: a.slug, content: a.content, publishedAt: a.publishedAt, preview_image };

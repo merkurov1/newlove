@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { Resend } from 'resend';
 import { createId } from '@paralleldrive/cuid2';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // --- Импорты Helper-функций ---
 import { createClient } from '@/lib/supabase/server';
@@ -14,12 +15,20 @@ import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSub
 import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
 import { parseTagNames, upsertTagsAndLink } from '@/lib/tags';
 
+// --- Types ---
+type ActionResult = {
+  status?: 'success' | 'error';
+  message?: string;
+  error?: string;
+  data?: any;
+};
+
 // --- Revalidation audit helper ---
-async function recordRevalidationAudit(supabase, userId, reason = null) {
+async function recordRevalidationAudit(supabase: SupabaseClient | null, userId: string | null, reason: string | null = null): Promise<void> {
   try {
     if (!supabase || !supabase.from) return;
     await supabase.from('revalidation_audit').insert({ id: createId(), user_id: userId || null, reason, created_at: new Date().toISOString() });
-  } catch (e) {
+  } catch (e: any) {
     // don't block the main flow on audit errors
     console.warn('recordRevalidationAudit failed:', e);
   }
@@ -52,7 +61,7 @@ async function getSupabaseForAction(useServiceRole = false) {
   try {
     const { supabase } = await getUserAndSupabaseForRequest(new Request('http://localhost'));
     if (supabase) return supabase;
-  } catch (e) {
+  } catch (e: any) {
     // ignore and fallback
   }
   return getServerSupabaseClient({ useServiceRole });
@@ -61,7 +70,7 @@ async function getSupabaseForAction(useServiceRole = false) {
 
 // --- Статьи (Article) ---
 
-export async function createArticle(formData) {
+export async function createArticle(formData: any) {
   const { user } = await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
@@ -80,7 +89,7 @@ export async function createArticle(formData) {
   let validBlocks;
   try {
     const blocks = JSON.parse(contentRaw);
-    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
     throw new Error('Контент имеет неверный JSON формат.');
@@ -110,7 +119,7 @@ export async function createArticle(formData) {
   redirect(`/admin/articles/edit/${articleId}`);
 }
 
-export async function updateArticle(formData) {
+export async function updateArticle(formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
@@ -125,7 +134,7 @@ export async function updateArticle(formData) {
   let validBlocks;
   try {
     const blocks = JSON.parse(contentRaw);
-    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
     throw new Error('Контент имеет неверный JSON формат.');
@@ -152,7 +161,7 @@ export async function updateArticle(formData) {
   redirect('/admin/articles');
 }
 
-export async function deleteArticle(formData) {
+export async function deleteArticle(formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   const id = formData.get('id')?.toString();
@@ -172,7 +181,7 @@ export async function deleteArticle(formData) {
 
 // --- Проекты (Project) ---
 
-export async function createProject(formData) {
+export async function createProject(formData: any) {
   const { user } = await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
@@ -191,7 +200,7 @@ export async function createProject(formData) {
   let validBlocks;
   try {
     const blocks = JSON.parse(contentRaw);
-    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
     throw new Error('Контент имеет неверный JSON формат.');
@@ -227,7 +236,7 @@ export async function createProject(formData) {
   redirect(`/admin/projects/edit/${projectId}`);
 }
 
-export async function updateProject(formData) {
+export async function updateProject(formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
@@ -242,7 +251,7 @@ export async function updateProject(formData) {
   let validBlocks;
   try {
     const blocks = JSON.parse(contentRaw);
-    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
     throw new Error('Контент имеет неверный JSON формат.');
@@ -275,7 +284,7 @@ export async function updateProject(formData) {
   redirect('/admin/projects');
 }
 
-export async function deleteProject(formData) {
+export async function deleteProject(formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   const id = formData.get('id')?.toString();
@@ -296,7 +305,7 @@ export async function deleteProject(formData) {
 
 // --- Профиль пользователя (User-Context) ---
 // Использует правильный паттерн для Server Actions - createClient() + auth.getUser()
-export async function updateProfile(prevState, formData) {
+export async function updateProfile(prevState: any, formData: any) {
   // Get authenticated user from anon client (to verify session)
   const anonClient = createClient();
   const { data: { user }, error: authError } = await anonClient.auth.getUser();
@@ -344,7 +353,7 @@ export async function updateProfile(prevState, formData) {
 
 // --- Админские действия с пользователями ---
 
-export async function adminUpdateUserRole(userId, role) {
+export async function adminUpdateUserRole(userId: any, role: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!userId || !role) throw new Error('User ID и Role обязательны.');
@@ -396,7 +405,7 @@ export async function adminUpdateUserRole(userId, role) {
   return { status: 'success' };
 }
 
-export async function adminDeleteUser(userId) {
+export async function adminDeleteUser(userId: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!userId) throw new Error('User ID обязателен.');
@@ -414,7 +423,7 @@ export async function adminDeleteUser(userId) {
     if (subError) {
       console.warn('adminDeleteUser: failed to unlink subscribers', subError);
     }
-  } catch (e) {
+  } catch (e: any) {
     console.warn('adminDeleteUser: error cleaning up subscribers', e);
   }
 
@@ -433,7 +442,7 @@ export async function adminDeleteUser(userId) {
  * Toggle user subscription status (subscribe/unsubscribe)
  * Can be called from profile page or admin panel
  */
-export async function toggleUserSubscription(prevState, formData) {
+export async function toggleUserSubscription(prevState: any, formData: any) {
   // Get authenticated user
   const anonClient = createClient();
   const { data: { user }, error: authError } = await anonClient.auth.getUser();
@@ -518,7 +527,7 @@ export async function toggleUserSubscription(prevState, formData) {
 /**
  * Admin action: toggle subscription for any user
  */
-export async function adminToggleUserSubscription(userId, subscribe) {
+export async function adminToggleUserSubscription(userId: any, subscribe: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
@@ -550,7 +559,7 @@ export async function adminToggleUserSubscription(userId, subscribe) {
         console.error('Error creating user in public.users:', insertError);
       }
       
-      userData = { data: { email: authUser.user.email } };
+      userData = { data: { email: authUser.user.email } } as any;
     }
 
     const email = userData.data?.email;
@@ -597,7 +606,7 @@ export async function adminToggleUserSubscription(userId, subscribe) {
 
     revalidatePath('/admin/users');
     return { status: 'success', message: subscribe ? 'Пользователь подписан.' : 'Пользователь отписан.' };
-  } catch (error) {
+  } catch (error: any) {
     console.error('adminToggleUserSubscription error:', error);
     return { status: 'error', message: error.message };
   }
@@ -605,7 +614,7 @@ export async function adminToggleUserSubscription(userId, subscribe) {
 
 // --- Рассылки и подписки (User-Context) ---
 
-export async function subscribeToNewsletter(prevState, formData) {
+export async function subscribeToNewsletter(prevState: any, formData: any) {
   const email = formData.get('email')?.toString().trim();
   if (!email || !/\S+@\S+\.\S+/.test(email)) {
     return { status: 'error', message: 'Введите корректный email адрес.' };
@@ -616,16 +625,10 @@ export async function subscribeToNewsletter(prevState, formData) {
   // Use service-role client for writes (in case RLS prevents anon/request client from inserting)
   let svc;
   try {
-    // Log presence of critical env vars to help diagnose missing-key issues in prod logs
-    try {
-      console.info('subscribeToNewsletter env', {
-        hasServiceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-        supabaseUrl: !!(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL),
-      });
-    } catch (e) { }
+
 
     svc = getServerSupabaseClient({ useServiceRole: true });
-  } catch (e) {
+  } catch (e: any) {
     console.error('subscribeToNewsletter: service role client not available', e);
   // Sentry removed
     return { status: 'error', message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).', error: String(e) };
@@ -663,10 +666,8 @@ export async function subscribeToNewsletter(prevState, formData) {
       }
       subscriber = insertRes.data;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Supabase subscriber error:', error);
-  // Sentry removed
-    // Provide richer error back to client to aid debugging (without leaking secrets)
     const code = error?.code || null;
     const msg = error?.message || String(error) || 'Ошибка при подписке.';
     if (String(code) === '42501') {
@@ -748,7 +749,7 @@ export async function subscribeToNewsletter(prevState, formData) {
       
       return { status: 'success', message: 'Проверьте почту для подтверждения подписки.', confirmUrl };
     }
-  } catch (e) {
+  } catch (e: any) {
     console.warn('subscribeToNewsletter: token insert failed', e?.message || e);
   }
 
@@ -757,7 +758,7 @@ export async function subscribeToNewsletter(prevState, formData) {
 
 // --- Письма (Letter) ---
 
-export async function createLetter(formData) {
+export async function createLetter(formData: any) {
   const { user } = await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
@@ -774,9 +775,9 @@ export async function createLetter(formData) {
   let validBlocks;
   try {
     const blocks = JSON.parse(rawContent);
-    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
-  } catch (e) {
+  } catch (e: any) {
     throw new Error('Контент имеет неверный JSON формат: ' + e.message);
   }
 
@@ -809,7 +810,7 @@ export async function createLetter(formData) {
   redirect(`/admin/letters/edit/${letterId}`);
 }
 
-export async function updateLetter(formData) {
+export async function updateLetter(formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
@@ -830,9 +831,9 @@ export async function updateLetter(formData) {
   let validBlocks;
   try {
     const blocks = JSON.parse(rawContent);
-    validBlocks = blocks.filter(b => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
-  } catch (e) {
+  } catch (e: any) {
     throw new Error('Контент имеет неверный JSON формат: ' + e.message);
   }
 
@@ -873,7 +874,7 @@ export async function updateLetter(formData) {
  * @param {FormData} formData
  * @returns {Promise<void>}
  */
-export async function deleteLetter(formData) {
+export async function deleteLetter(formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   const id = formData.get('id')?.toString();
@@ -883,7 +884,6 @@ export async function deleteLetter(formData) {
     const { data: letter } = await supabase.from('letters').select('slug, published').eq('id', id).maybeSingle();
     let { error } = await supabase.from('letters').delete().eq('id', id);
 
-      console.error('Error getting service role client:', e);
     if (error && String(error.code) === '42501') {
       console.error('Supabase delete letter permission denied (42501). Attempting retry with service role client if available.');
   // Sentry removed
@@ -903,7 +903,7 @@ export async function deleteLetter(formData) {
         }
         // success via retry
         error = null;
-      } catch (e) {
+      } catch (e: any) {
       console.error('Error upserting subscriber:', error);
   // Sentry removed
         return { status: 'error', message: 'Не удалось удалить письмо: ' + (e?.message || String(e)) + '. Проверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql', details: e };
@@ -923,14 +923,12 @@ export async function deleteLetter(formData) {
     if (letter?.published) revalidatePath(`/letters/${letter.slug}`);
     // server action expects void return on success
     return;
-  } catch (e) {
+  } catch (e: any) {
     console.error('deleteLetter exception:', e);
-  // Sentry removed
-        console.error('Error inserting confirmation token:', tokenErr);
   }
 }
 
-export async function sendLetter(prevState, formData) {
+export async function sendLetter(prevState: any, formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   const letterId = formData.get('letterId')?.toString();
@@ -961,7 +959,7 @@ export async function sendLetter(prevState, formData) {
     title: letter.title,
     content: letter.content,
     html: (() => {
-      try { return renderNewsletterEmail(letter, ''); } catch (e) { return ''; }
+      try { return renderNewsletterEmail(letter, ''); } catch (e: any) { return ''; }
     })(),
   };
 
@@ -997,7 +995,7 @@ export async function sendLetter(prevState, formData) {
     } else {
       console.warn('Failed to create newsletter job, falling back to direct send:', jobErr);
     }
-  } catch (e) {
+  } catch (e: any) {
     console.warn('newsletter_jobs table not available, using fallback:', e?.message);
     // table may not exist — fallthrough to limited send
   }
@@ -1036,7 +1034,7 @@ export async function sendLetter(prevState, formData) {
           failed++;
           console.warn(`Failed to send to ${s.email}:`, r.error);
         }
-      } catch (e) {
+      } catch (e: any) {
         failed++;
         console.warn('sendLetter: send to subscriber failed', e);
       }
@@ -1060,7 +1058,7 @@ export async function sendLetter(prevState, formData) {
     }
     
     return { status: 'success', message };
-  } catch (e) {
+  } catch (e: any) {
     console.error('sendLetter fallback failed', e);
     return { status: 'error', message: 'Не удалось отправить рассылку: ' + (e?.message || String(e)) };
   }
@@ -1079,13 +1077,13 @@ export async function revalidateLetters() {
     try {
       const user = (await requireAdminFromRequest(new Request('http://localhost'))).user;
       await recordRevalidationAudit(supabase, user?.id, 'manual_revalidate');
-    } catch (e) {
+    } catch (e: any) {
       // ignore
     }
     revalidatePath('/letters');
     // Redirect back to admin with a query param so UI can show a success banner
     redirect('/admin?revalidated=1');
-  } catch (e) {
+  } catch (e: any) {
     console.error('revalidateLetters error:', e);
     throw e;
   }
@@ -1093,7 +1091,7 @@ export async function revalidateLetters() {
 
 // --- Открытки (Postcards) ---
 
-export async function createPostcard(formData) {
+export async function createPostcard(formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
@@ -1124,7 +1122,7 @@ export async function createPostcard(formData) {
   revalidatePath('/letters'); // Обновляем страницу с открытками
 }
 
-export async function updatePostcard(formData) {
+export async function updatePostcard(formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
@@ -1159,7 +1157,7 @@ export async function updatePostcard(formData) {
   revalidatePath('/letters');
 }
 
-export async function deletePostcard(formData) {
+export async function deletePostcard(formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   const id = formData.get('id')?.toString();
@@ -1171,7 +1169,7 @@ export async function deletePostcard(formData) {
     .select('*', { count: 'exact', head: true })
     .eq('postcardId', id);
 
-  if (count > 0) {
+  if (count && count > 0) {
     throw new Error('Нельзя удалить открытку с существующими заказами.');
   }
 

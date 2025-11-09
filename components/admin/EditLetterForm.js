@@ -3,7 +3,13 @@
 import { useFormState, useFormStatus } from 'react-dom';
 import { updateLetter, sendLetter } from '@/app/admin/actions';
 import { useState, useEffect } from 'react';
-import EditorJsArticle from '@/components/admin/EditorJsArticle';
+import dynamic from 'next/dynamic';
+
+// Dynamic import for EditorJS - only loads in admin panel
+const EditorJsArticle = dynamic(() => import('@/components/admin/EditorJsArticle'), {
+  ssr: false,
+  loading: () => <div className="animate-pulse bg-gray-100 rounded-lg h-64 flex items-center justify-center text-gray-500">Загрузка редактора...</div>
+});
 
 export default function EditLetterForm({ letter, subscriberCount }) {
   const [sendState, sendFormAction] = useFormState(sendLetter, { message: null, status: null });

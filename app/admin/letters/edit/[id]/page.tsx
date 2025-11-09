@@ -1,16 +1,12 @@
-// Это теперь чистый Серверный Компонент. Директива 'use client' здесь не нужна.
-// dynamic import to avoid circular/interop build issues
 import { notFound } from 'next/navigation';
-
 import ContentForm from '@/components/admin/ContentForm';
 import { updateLetter } from '../../../actions';
 import SendLetterForm from '@/components/admin/SendLetterForm';
 import dynamic from 'next/dynamic';
 
-// Client-only closeable hero (shows for public, closable for logged-in users, always for admins)
 const CloseableHero = dynamic(() => import('@/components/CloseableHero'), { ssr: false });
 
-export default async function EditLetterPage({ params }) {
+export default async function EditLetterPage({ params }: { params: { id: string } }) {
   const letterId = params.id;
   const { cookies } = await import('next/headers');
   const cookieHeader = cookies()

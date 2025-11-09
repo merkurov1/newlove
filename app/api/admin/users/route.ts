@@ -2,6 +2,24 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
 import { adminDeleteUser, adminUpdateUserRole } from '@/app/admin/actions';
+import { z } from 'zod';
+
+const AdminUserActionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('updateRole'),
+    userId: z.string().uuid('Invalid user ID'),
+    role: z.enum(['USER', 'ADMIN'], { message: 'Role must be USER or ADMIN' }),
+  }),
+  z.object({
+    action: z.literal('deleteUser'),
+    userId: z.string().uuid('Invalid user ID'),
+  }),
+  z.object({
+    action: z.literal('toggleSubscription'),
+    userId: z.string().uuid('Invalid user ID'),
+    subscribe: z.boolean(),
+  }),
+]);
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,17 +58,24 @@ export async function POST(request: NextRequest) {
   try {
     await requireAdminFromRequest(request as Request);
     const body = await request.json();
-    const { action, userId, role, subscribe } = body;
-
-    if (!action || !userId) {
-      return NextResponse.json({ status: 'error', message: 'Missing action or userId' }, { status: 400 });
+    
+    // Validate input with Zod
+    const validation = AdminUserActionSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { 
+          status: 'error', 
+          message: 'Validation failed', 
+          details: validation.error.flatten().fieldErrors 
+        }, 
+        { status: 400 }
+      );
     }
+    
+    const { action, userId } = validation.data;
 
     if (action === 'updateRole') {
-      if (!role) {
-        return NextResponse.json({ status: 'error', message: 'Missing role' }, { status: 400 });
-      }
-      const result = await adminUpdateUserRole(userId, role);
+      const result = await adminUpdateUserRole(userId, validation.data.role);
       return NextResponse.json(result);
     }
 
@@ -61,7 +86,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'toggleSubscription') {
       const { adminToggleUserSubscription } = await import('@/app/admin/actions');
-      const result = await adminToggleUserSubscription(userId, subscribe);
+      const result = await adminToggleUserSubscription(userId, validation.data.subscribe);
       return NextResponse.json(result);
     }
 

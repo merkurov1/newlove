@@ -1,7 +1,3 @@
-// app/you/[username]/page.js
-
-
-// Supabase helper is loaded dynamically inside getUserProfile to avoid build-time issues
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
@@ -12,10 +8,11 @@ import SubscriptionToggle from '@/components/profile/SubscriptionToggle';
 import { getFirstImage } from '@/lib/contentUtils';
 import ProfileEditLink from '@/components/profile/ProfileEditLink';
 import dynamic from 'next/dynamic';
+import type { Metadata } from 'next';
+
 const ConnectWalletButton = dynamic(() => import('@/components/profile/ConnectWalletButton'), { ssr: false });
 
-// Fallback-аватар по первой букве
-function FallbackAvatar({ name }) {
+function FallbackAvatar({ name }: { name: string }) {
   const letter = (name || '?').charAt(0).toUpperCase();
   return (
     <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-3xl sm:text-5xl font-bold mb-4 shadow-lg">
@@ -24,14 +21,10 @@ function FallbackAvatar({ name }) {
   );
 }
 
-// --- 1. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ПРОФИЛЯ ---
-// Находит пользователя по username и подгружает его контент
-async function getUserProfile(username) {
-  // Build a Request that preserves cookies from the current App Router request
-  // so getUserAndSupabaseForRequest can validate the session server-side.
+async function getUserProfile(username: string) {
   const cookieStore = cookies();
   const cookieHeader = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost', { headers: { cookie: cookieHeader } });
+  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost', { headers: { cookie: cookieHeader } });
   const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
   const ctx = await getUserAndSupabaseForRequest(globalReq) || {};
   const supabase = ctx.supabase;
@@ -83,8 +76,7 @@ async function getUserProfile(username) {
   };
 }
 
-// --- 2. ГЕНЕРИРУЕМ МЕТАДАННЫЕ ДЛЯ SEO ---
-export async function generateMetadata({ params }) {
+export async function generateMetadata({ params }: { params: { username: string } }): Promise<Metadata> {
   const user = await getUserProfile(params.username);
   const meta = {
     title: `Профиль: ${user.name}`,
@@ -116,15 +108,13 @@ function ProfileSkeleton() {
   );
 }
 
-async function ProfileContent({ username }) {
+async function ProfileContent({ username }: { username: string }) {
   const user = await getUserProfile(username);
   if (!user) return notFound();
 
-  // Determine whether current request belongs to the profile owner to show edit controls
-  // Construct a cookie-aware Request to allow server auth helpers to read the session.
   const cookieStore = cookies();
   const cookieHeader = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ');
-  const globalReq = (globalThis && globalThis.request) || new Request('http://localhost', { headers: { cookie: cookieHeader } });
+  const globalReq = ((globalThis as any)?.request) || new Request('http://localhost', { headers: { cookie: cookieHeader } });
   let viewerIsOwner = false;
   try {
     const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
@@ -172,28 +162,15 @@ async function ProfileContent({ username }) {
           )}
         </div>
 
-        {/* Edit profile button visible to owner. If server couldn't verify owner via session,
-            fall back to client-side wallet ownership check (ProfileOwnerControls). */}
-        {viewerIsOwner ? (
+        {viewerIsOwner && (
           <div className="mt-4 flex items-center gap-4">
             <ProfileEditLink className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" />
             {user.email && (
-              // @ts-expect-error client component
               <Suspense fallback={null}>
-                {/* @ts-ignore */}
-                <SubscriptionToggle initialSubscribed={user.isSubscribed} email={user.email} />
+                <SubscriptionToggle initialSubscribed={user.isSubscribed} />
               </Suspense>
             )}
             <ConnectWalletButton />
-          </div>
-        ) : (
-          // Render client-side owner controls which will show the edit link when
-          // the connected wallet matches the profile wallet address.
-          // @ts-expect-error client component
-          <div className="mt-4">
-            {/* Lazy-load client-only controls */}
-            {/* @ts-ignore */}
-            <ProfileOwnerControls wallet={user.wallet} viewerIsOwner={viewerIsOwner} />
           </div>
         )}
       </div>
@@ -205,7 +182,7 @@ async function ProfileContent({ username }) {
             <h2 className="text-2xl font-bold text-gray-800 mb-8">Публикации</h2>
             <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
               {/* Используем вёрстку карточек с главной страницы */}
-              {await Promise.all(user.articles.map(async (article) => {
+              {await Promise.all(user.articles.map(async (article: any) => {
                 const previewImage = await getFirstImage(article.content);
                 return (
                   <div key={article.id} className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden">
@@ -220,7 +197,7 @@ async function ProfileContent({ username }) {
                       </Link>
                       {article.tags.length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {article.tags.map(t => (<Link key={t.id} href={`/tags/${t.slug}`} className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full hover:bg-gray-200">{t.name}</Link>))}
+                          {article.tags.map((t: any) => (<Link key={t.id} href={`/tags/${t.slug}`} className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full hover:bg-gray-200">{t.name}</Link>))}
                         </div>
                       )}
                     </div>
@@ -237,11 +214,10 @@ async function ProfileContent({ username }) {
   );
 }
 
-export default function UserProfilePage({ params }) {
+export default function UserProfilePage({ params }: { params: { username: string } }) {
   const { username } = params;
   return (
     <Suspense fallback={<ProfileSkeleton />}>
-      {/* @ts-expect-error Server Component */}
       <ProfileContent username={username} />
     </Suspense>
   );

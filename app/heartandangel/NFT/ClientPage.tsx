@@ -1,10 +1,26 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ethers } from "ethers";
-import { formatEther } from "ethers";
 import { CONTRACT_ADDRESS, NFT_ABI } from "./contract";
-import { getOnboard, connectWithOnboard } from "../../lib/onboardClient";
+
+// Dynamic imports for Web3 libraries to reduce initial bundle size
+let ethers: any = null;
+let formatEther: any = null;
+let getOnboard: any = null;
+let connectWithOnboard: any = null;
+
+async function loadWeb3Dependencies() {
+  if (!ethers) {
+    const ethersModule = await import("ethers");
+    ethers = ethersModule.ethers;
+    formatEther = ethersModule.formatEther;
+  }
+  if (!getOnboard) {
+    const onboardModule = await import("../../lib/onboardClient");
+    getOnboard = onboardModule.getOnboard;
+    connectWithOnboard = onboardModule.connectWithOnboard;
+  }
+}
 
 // Fallback / canonical images (provided by user)
 const FALLBACK_NEUTRAL = "https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafybeihnx7kaue4ehbigi4koydoei43ojjykp2mhhh7xwx4qg3tntm5e5e";
@@ -52,9 +68,9 @@ export default function NFTLabPageClient() {
         }
     };
 
-    // Local connect helper (use injected provider directly)
     async function connectWallet() {
         try {
+            await loadWeb3Dependencies();
             const onboard = await getOnboard();
             pushDebug('onboard_initialized', Boolean(onboard));
             const selected = await connectWithOnboard();
@@ -119,16 +135,14 @@ export default function NFTLabPageClient() {
     const [isCheckingBalance, setIsCheckingBalance] = useState(false);
 
     useEffect(() => {
-        // Read on-chain metadata (price, supply)
         async function loadOnchain() {
             try {
+                await loadWeb3Dependencies();
                 const eth = (window as any).ethereum;
                 if (!eth) return;
                 const provider = (typeof (ethers as any).BrowserProvider === 'function')
                     ? new (ethers as any).BrowserProvider(eth as any)
                     : new (ethers as any).JsonRpcProvider();
-                try { console.debug('[NFT] loadOnchain raw provider:', eth); } catch (e) { }
-                try { console.debug('[NFT] loadOnchain provider network:', await provider.getNetwork()); } catch (e) { }
                 const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
                 let price = await contract.priceWei();
                 // Optional test override: if NEXT_PUBLIC_TEST_PRICE_MATIC is set (e.g. "0.01"), use that instead
@@ -266,17 +280,15 @@ export default function NFTLabPageClient() {
     }, [address]);
 
     async function handlePublicMint(qty = 1) {
-        // If user isn't flagged as connected, try to request accounts from injected provider.
         if (!(window as any).ethereum) {
             setStatus("Пожалуйста, установите и подключите кошелёк (например MetaMask)");
             return;
         }
-        // optimistic UI update so user sees action started immediately
         setProcessing(true);
         setStatus('Инициализация покупки...');
         pushDebug('handlePublicMint_start', { qty });
         try {
-            // Проверка наличия токена у пользователя
+            await loadWeb3Dependencies();
             const eth = (window as any).ethereum;
             const providerCheck = new (ethers as any).BrowserProvider(eth as any);
             const signerCheck = await providerCheck.getSigner();
@@ -330,10 +342,8 @@ export default function NFTLabPageClient() {
                 }
             }
             if (!provider) provider = new (ethers as any).JsonRpcProvider(); // main provider for mint
-            try { console.debug('[NFT] handlePublicMint rawProvider:', rawProvider); } catch (e) { }
             try {
                 const net = await provider.getNetwork();
-                console.debug('[NFT] handlePublicMint provider network:', net);
                 pushDebug('provider_network', net);
             } catch (e) {
                 pushDebug('provider_network_error', String(e));
@@ -604,13 +614,13 @@ export default function NFTLabPageClient() {
     }
 
     async function handleSubscriberClaim() {
-        // Ensure we have accounts available; try to request if needed
         if (!(window as any).ethereum) {
             setStatus("Пожалуйста, установите и подключите кошелёк (например MetaMask)");
             return;
         }
         if (!isConnected || !address) {
             try {
+                await loadWeb3Dependencies();
                 const provider = new (ethers as any).BrowserProvider((window as any).ethereum);
                 await provider.send('eth_requestAccounts', []);
                 const signer = provider.getSigner();
@@ -656,8 +666,7 @@ export default function NFTLabPageClient() {
             }
             if (!rawProvider2) rawProvider2 = (window as any).ethereum;
             const provider = new (ethers as any).BrowserProvider(rawProvider2 as any, 'any');
-            try { console.debug('[NFT] handleSubscriberClaim rawProvider:', rawProvider2); } catch (e) { }
-            try { const net2 = await provider.getNetwork(); console.debug('[NFT] handleSubscriberClaim provider network:', net2); pushDebug('provider_network_claim', net2); } catch (e) { pushDebug('provider_network_claim_error', String(e)); }
+            try { const net2 = await provider.getNetwork(); pushDebug('provider_network_claim', net2); } catch (e) { pushDebug('provider_network_claim_error', String(e)); }
             try { await provider.send("eth_requestAccounts", []); } catch (e) { pushDebug('eth_requestAccounts_error', String(e)); }
             // Ensure on Polygon
             try {
@@ -727,7 +736,7 @@ export default function NFTLabPageClient() {
     }
 
     async function requestVariant(variant: 'Angel' | 'Devil', tokenIdParam?: number) {
-        // prefer explicit tokenId param, fallback to currentId
+        await loadWeb3Dependencies();
         const tokenIdToUse = tokenIdParam || currentId;
         if (!isConnected || !address || !tokenIdToUse) {
             setStatus('Сначала подключите кошелёк и убедитесь что у вас есть токен');

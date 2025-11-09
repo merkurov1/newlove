@@ -7,15 +7,15 @@ import { useState, useCallback } from 'react';
  * Безопасный компонент изображения с fallback
  * Архитектурно правильная реализация без конфликтов пропсов
  */
-export default function SafeImage(props) {
-  const { 
-    src, 
-    alt = 'Изображение', 
-    width, 
-    height, 
+export default function SafeImage(props: any) {
+  const {
+    src,
+    alt = 'Изображение',
+    width,
+    height,
     fill = false,
-    sizes, 
-    className = '', 
+    sizes,
+    className = '',
     priority = false,
     style,
     ...imageProps // Только валидные пропсы Image
@@ -39,7 +39,7 @@ export default function SafeImage(props) {
 
     if (fill) {
       return (
-        <div 
+        <div
           className={`absolute inset-0 bg-gray-100 flex items-center justify-center ${className}`}
           style={style}
         >
@@ -49,10 +49,10 @@ export default function SafeImage(props) {
     }
 
     return (
-      <div 
+      <div
         className={`bg-gray-100 flex items-center justify-center ${className}`}
-        style={{ 
-          width: width || 'auto', 
+        style={{
+          width: width || 'auto',
           height: height || 'auto',
           minWidth: width ? `${width}px` : '40px',
           minHeight: height ? `${height}px` : '40px',
@@ -89,7 +89,7 @@ export default function SafeImage(props) {
       priority={priority}
       style={style}
       onError={handleImageError}
-      // НЕ используем ...imageProps чтобы избежать переписывания onError
+    // НЕ используем ...imageProps чтобы избежать переписывания onError
     />
   );
 }

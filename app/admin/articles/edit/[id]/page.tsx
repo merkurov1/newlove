@@ -1,10 +1,8 @@
-// app/admin/articles/edit/[id]/page.js
-// dynamic import to avoid circular/interop build issues
 import { notFound } from 'next/navigation';
 import ContentForm from '@/components/admin/ContentForm';
 import { updateArticle } from '../../../actions';
 
-async function getArticle(id) {
+async function getArticle(id: any) {
   const { cookies } = await import('next/headers');
   const cookieHeader = cookies()
     .getAll()
@@ -32,7 +30,7 @@ async function getArticle(id) {
   return article;
 }
 
-export default async function EditArticlePage({ params }) {
+export default async function EditArticlePage({ params }: { params: { id: string } }) {
   const article = await getArticle(params.id);
 
   return (

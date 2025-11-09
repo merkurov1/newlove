@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Resend } from 'resend';
 import { createId } from '@paralleldrive/cuid2';
 // Note: getUserAndSupabaseFromRequest is not used here; avoid importing to prevent build errors
@@ -53,7 +52,7 @@ export async function sendNewsletterToSubscriber(subscriber: any, letter: any, o
           console.info('Inserted unsubscribe token for', subscriber.email);
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Failed to insert unsubscribe token (non-fatal):', (e && e.message) || String(e));
     }
   }
@@ -71,7 +70,7 @@ export async function sendNewsletterToSubscriber(subscriber: any, letter: any, o
       safeLetter.content = typeof letter.content === 'string' ? letter.content : String(letter.content || '');
     }
     emailHtml = renderNewsletterEmail(safeLetter, unsubscribeUrl) || '';
-  } catch (e) {
+  } catch (e: any) {
     console.warn('Newsletter render failed, falling back to basic layout:', e?.message || e);
     emailHtml = `<p>${letter.title}</p><p>To unsubscribe click <a href="${unsubscribeUrl}">here</a></p>`;
   }
@@ -110,26 +109,20 @@ export async function sendNewsletterToSubscriber(subscriber: any, letter: any, o
     // - { data: { id, ... }, error: ... }
     // Normalize common fields when present.
     // Normalize id and status from different SDK shapes
-    const extractedId = resp?.id ?? resp?.data?.id ?? (resp && resp.raw && resp.raw.data && resp.raw.data.id) ?? (resp && resp.raw && resp.raw.id) ?? null;
-    const extractedStatus = resp?.status ?? resp?.data?.status ?? (resp && resp.raw && resp.raw.data && resp.raw.data.status) ?? (resp && resp.raw && resp.raw.status) ?? null;
+    const extractedId = (resp as any)?.id ?? resp?.data?.id ?? ((resp as any)?.raw?.data?.id) ?? ((resp as any)?.raw?.id) ?? null;
+    const extractedStatus = (resp as any)?.status ?? ((resp as any)?.data?.status) ?? ((resp as any)?.raw?.data?.status) ?? ((resp as any)?.raw?.status) ?? null;
     // If we have an id but status is missing, default to 'unknown' to avoid returning null
     const finalStatus = extractedStatus ?? (extractedId ? 'unknown' : null);
     const providerResponse = { id: extractedId, status: finalStatus, raw: resp };
     console.info('Resend provider response', { to: subscriber.email, providerResponse });
     return { status: 'sent', unsubscribeUrl, providerResponse };
-  } catch (sendErr) {
-  // Sentry removed
+  } catch (sendErr: any) {
     console.error('Failed to send newsletter email:', (sendErr && sendErr.message) || String(sendErr));
-    // Attempt to extract provider response / HTTP body from common shapes
     let providerDetails = undefined;
     try {
-      // axios-like
       if (sendErr && sendErr.response) providerDetails = sendErr.response;
-      // fetch-like (node-fetch) may have .body
       else if (sendErr && sendErr.body) providerDetails = sendErr.body;
-      // Resend SDK may attach rawError or data
       else if (sendErr && sendErr.rawError) providerDetails = sendErr.rawError;
-      // Some libs attach status/code
       if (sendErr && sendErr.status) providerDetails = { ...(providerDetails || {}), status: sendErr.status };
       if (sendErr && sendErr.code) providerDetails = { ...(providerDetails || {}), code: sendErr.code };
     } catch (ex) {

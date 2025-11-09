@@ -79,7 +79,6 @@ export default async function LetterPage({ params }: { params: { slug: string } 
   const slug = params.slug;
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  console.log('Preview user:', user ? user.id : 'no user'); // Debug log for Vercel
 
   // If user logged in, redirect to full
   if (user) {
@@ -95,7 +94,6 @@ export default async function LetterPage({ params }: { params: { slug: string } 
     .single();
 
   if (error || !letter) {
-    console.error('Letter fetch error:', error);
     notFound();
   }
 

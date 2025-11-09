@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect, useState } from "react";
@@ -27,7 +26,6 @@ const RelatedArticles = ({ currentArticleId, tags = [], limit = 3 }: RelatedArti
   useEffect(() => {
     const fetchRelatedArticles = async () => {
       if (!tags || tags.length === 0) {
-        console.log('[RelatedArticles] No tags provided');
         setLoading(false);
         return;
       }
@@ -37,31 +35,27 @@ const RelatedArticles = ({ currentArticleId, tags = [], limit = 3 }: RelatedArti
         const primaryTag = tags[0];
         // Используем slug если есть, иначе name (приводим к lowercase)
         const tagSlug = (primaryTag.slug || primaryTag.name || '').toLowerCase();
-        
+
         if (!tagSlug) {
-          console.log('[RelatedArticles] Empty tag slug');
           setLoading(false);
           return;
         }
-        
-        console.log('[RelatedArticles] Fetching articles for tag:', tagSlug);
+
         const response = await fetch(`/api/articles?includeTag=${encodeURIComponent(tagSlug)}&limit=${limit + 5}`);
-        
+
         if (!response.ok) {
           console.error('[RelatedArticles] API error:', response.status);
           setLoading(false);
           return;
         }
-        
+
         const data = await response.json();
-        console.log('[RelatedArticles] Received articles:', data?.length || 0);
-        
+
         if (Array.isArray(data)) {
           // Исключаем текущую статью и берем только нужное количество
           const filtered = data
             .filter(article => article.id !== currentArticleId)
             .slice(0, limit);
-          console.log('[RelatedArticles] Filtered articles:', filtered.length);
           setArticles(filtered);
         }
       } catch (error) {
@@ -102,7 +96,7 @@ const RelatedArticles = ({ currentArticleId, tags = [], limit = 3 }: RelatedArti
       <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
         Похожие материалы
       </h2>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {articles.map((article) => (
           <Link
@@ -126,23 +120,23 @@ const RelatedArticles = ({ currentArticleId, tags = [], limit = 3 }: RelatedArti
                     <span className="text-4xl text-gray-300 dark:text-gray-600">📰</span>
                   </div>
                 )}
-                
+
                 {/* Overlay gradient */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </div>
-              
+
               {/* Content */}
               <div className="p-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2 mb-2 group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors">
                   {article.title}
                 </h3>
-                
+
                 {article.excerpt && (
                   <p className="text-sm text-gray-600 dark:text-neutral-400 line-clamp-2">
                     {article.excerpt}
                   </p>
                 )}
-                
+
                 {/* Tags */}
                 {article.tags && article.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-3">

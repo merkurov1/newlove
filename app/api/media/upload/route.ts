@@ -1,4 +1,3 @@
-// @ts-nocheck
 export const dynamic = 'force-dynamic';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { cookies } from 'next/headers';

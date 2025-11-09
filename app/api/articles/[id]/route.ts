@@ -1,9 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-// Use dynamic import to avoid ESM interop issues
 
-// Эта функция будет вызываться по GET запросу на /api/articles/[id]
-export async function GET(request, { params }) {
+export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     // Prefer server service-role client for article retrieval
     const articleId = params.id;

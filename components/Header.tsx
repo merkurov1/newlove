@@ -14,7 +14,7 @@ import LoginButton from './LoginButton';
 
 
 
-export default function Header({ projects, settings }) {
+export default function Header({ projects, settings }: { projects?: any; settings?: any }) {
   const { session, isLoading } = useAuth();
   const status = isLoading ? 'loading' : (session ? 'authenticated' : 'unauthenticated');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -34,7 +34,7 @@ export default function Header({ projects, settings }) {
   );
 
   // Extract possible wallet address from session (support multiple shapes)
-  const getWalletAddress = (sess) => {
+  const getWalletAddress = (sess: any) => {
     try {
       const u = sess?.user;
       if (!u) return null;
@@ -60,7 +60,7 @@ export default function Header({ projects, settings }) {
   };
 
   const walletAddress = getWalletAddress(session);
-  const shorten = (addr) => {
+  const shorten = (addr: any) => {
     if (!addr || typeof addr !== 'string') return addr;
     if (addr.length <= 10) return addr;
     return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -126,7 +126,7 @@ export default function Header({ projects, settings }) {
           }
         }
       } catch (e) {
-        console.debug('[Header] failed to refresh projects', e);
+        // Failed to refresh projects
       }
     };
     fetchProjects();
@@ -159,7 +159,7 @@ export default function Header({ projects, settings }) {
             <div style={{ fontWeight: 600 }}>Recent events:</div>
             <div style={{ maxHeight: 120, overflow: 'auto', marginTop: 6 }}>
         {typeof window !== 'undefined' && ((window as any).__newloveAuth || {}).history ? (
-          ((window as any).__newloveAuth.history || []).slice().reverse().map((h, i) => (
+          ((window as any).__newloveAuth.history || []).slice().reverse().map((h: any, i: number) => (
                   <div key={i} style={{ fontSize: 11, opacity: 0.95, paddingTop: 4 }}>{new Date(h.ts).toLocaleTimeString()} {h.status} {h.short ? ` — ${h.short}` : ''}</div>
                 ))
               ) : (
@@ -207,18 +207,7 @@ export default function Header({ projects, settings }) {
                   </Link>
                 </li>
               ))}
-              {/* Защищённые разделы только для авторизованных, кроме Letters */}
-              {status === 'authenticated' && (
-                <>
-                  <li>
-                    <Link href="/lab" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
-                      Lab
-                      <span className="pointer-events-none absolute left-0 -bottom-0.5 h-[2.5px] w-full origin-left scale-x-0 bg-gradient-to-r from-pink-400 via-rose-400 to-pink-400 transition-transform duration-300 group-hover:scale-x-100" style={{ transitionProperty: 'transform' }}></span>
-                    </Link>
-                  </li>
-                  {/* Kit удалён */}
-                </>
-              )}
+              {/* Lab и Kit разделы удалены */}
               {/* Letters теперь виден всем */}
               <li>
                 <Link href="/letters" className="group py-2 text-gray-500 transition-colors duration-300 hover:text-gray-900 relative">
@@ -295,16 +284,8 @@ export default function Header({ projects, settings }) {
                 <Link href={`/${project.slug}`} onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">{project.title}</Link>
               </li>
             ))}
-            {/* Защищенные разделы только для авторизованных */}
-            {status === 'authenticated' && (
-              <>
-                <li>
-                  <Link href="/lab" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Lab</Link>
-                </li>
-                {/* Kit удалён */}
-              </>
-            )}
-            {/* Letters теперь виден всем */}
+            {/* Lab и Kit разделы удалены */}
+            {/* Letters виден всем */}
             <li>
               <Link href="/letters" onClick={() => setIsMenuOpen(false)} className="py-2 text-gray-500 hover:text-gray-900">Letters</Link>
             </li>

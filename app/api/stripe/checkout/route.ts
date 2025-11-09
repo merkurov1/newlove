@@ -3,10 +3,10 @@ export const dynamic = 'force-dynamic';
 import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2022-11-15',
+  apiVersion: '2025-08-27.basil' as any,
 });
 
-export async function POST(req) {
+export async function POST(req: any) {
   try {
     const { amount, currency = 'usd', successUrl, cancelUrl } = await req.json();
     if (!amount || !successUrl || !cancelUrl) {
@@ -31,7 +31,7 @@ export async function POST(req) {
       cancel_url: cancelUrl,
     });
     return new Response(JSON.stringify({ id: session.id, url: session.url }), { status: 200 });
-  } catch (error) {
+  } catch (error: any) {
     return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   }
 }

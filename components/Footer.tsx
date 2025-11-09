@@ -2,7 +2,7 @@
 
 import DonateButton from './DonateButton';
 
-export default function Footer({ subscriberCount }) {
+export default function Footer({ subscriberCount }: { subscriberCount?: number }) {
 
   return (
     <footer className="border-t border-gray-200 bg-gray-50">

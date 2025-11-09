@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createId } from '@paralleldrive/cuid2';
 import { createClient } from '@/lib/supabase/server';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { z } from 'zod';
+
+const CommentSchema = z.object({
+    content: z.string()
+        .min(1, 'Comment cannot be empty')
+        .max(2000, 'Comment must be less than 2000 characters')
+        .trim(),
+});
 
 // GET: list comments for a letter (public)
 // POST: create a comment (authenticated users only)
@@ -38,6 +47,17 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
 }
 
 export async function POST(req: Request, { params }: { params: { slug: string } }) {
+    // Rate limiting: 10 comments per 15 minutes per IP
+    const clientIp = getClientIp(req);
+    const rateLimitResponse = checkRateLimit(clientIp, {
+        interval: 15 * 60 * 1000, // 15 minutes
+        maxRequests: 10,
+        keyPrefix: 'comments',
+    });
+    if (rateLimitResponse) {
+        return rateLimitResponse;
+    }
+
     const slug = params.slug;
     try {
         // Validate user from incoming request (cookies)
@@ -47,8 +67,20 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
         if (authError || !user?.id) return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
 
         const body = await req.json().catch(() => ({}));
-        const content = (body && String(body.content || '').trim()) || '';
-        if (!content) return new Response(JSON.stringify({ error: 'empty' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        
+        // Validate input with Zod
+        const validation = CommentSchema.safeParse(body);
+        if (!validation.success) {
+            return new Response(
+                JSON.stringify({ 
+                    error: 'Validation failed', 
+                    details: validation.error.flatten().fieldErrors 
+                }), 
+                { status: 400, headers: { 'Content-Type': 'application/json' } }
+            );
+        }
+        
+        const { content } = validation.data;
 
         const { getServerSupabaseClient } = await import('@/lib/serverAuth');
         const svc = getServerSupabaseClient({ useServiceRole: true });

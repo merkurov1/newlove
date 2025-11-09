@@ -1,51 +1,40 @@
-// app/tags/[slug]/page.js
-
-// (helper loaded dynamically inside getTagData)
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
 import dynamic from 'next/dynamic';
+import type { Metadata } from 'next';
 
 const AuctionGrid = dynamic(() => import('@/components/AuctionGrid'), { ssr: false });
 
-// --- 1. ФУНКЦИЯ ДЛЯ ЗАГРУЗКИ ДАННЫХ ---
-// Находит тег по его slug и подгружает все связанные с ним статьи.
-// Используем service-role server client для публичных данных (без привязки к конкретному request)
-async function getTagData(slug) {
+async function getTagData(slug: string) {
   const normalized = String(slug || '').trim();
   const { getServerSupabaseClient } = await import('@/lib/serverAuth');
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-  const debug = typeof process !== 'undefined' && process.env && process.env.TAG_PAGE_DEBUG === 'true';
-  if (debug) console.debug('[tags page] using service-role client for slug=', normalized);
 
   const { getTagBySlug, getArticlesByTag } = await import('@/lib/tagHelpers');
   // Find tag (tolerant lookup inside helper)
   const tag = await getTagBySlug(supabase, normalized);
   if (!tag) {
-    if (debug) console.debug('[tags page] tag not found for', normalized);
     notFound();
   }
 
   const lookupKey = tag.slug || tag.name || normalized;
   const articles = await getArticlesByTag(supabase, lookupKey, 50);
-  if (debug) console.debug('[tags page] found articles count=', (articles || []).length, 'for tag', lookupKey);
 
   // Attach tags to fetched articles for UI (best effort)
   try {
     const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
     tag.articles = await attachTagsToArticles(supabase, articles || []);
   } catch (e) {
-    if (debug) console.debug('[tags page] attachTagsToArticles failed', e);
     tag.articles = articles || [];
   }
   if (!Array.isArray(tag.articles)) tag.articles = [];
   return tag;
 }
 
-// --- 2. ГЕНЕРИРУЕМ МЕТАДАННЫЕ ДЛЯ SEO ---
-export async function generateMetadata({ params }) {
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const tag = await getTagData(params.slug);
   const meta = {
     title: `Материалы по тегу: ${tag.name}`,
@@ -54,8 +43,7 @@ export async function generateMetadata({ params }) {
   return sanitizeMetadata(meta);
 }
 
-// --- 3. САМ КОМПОНЕНТ СТРАНИЦЫ ---
-export default async function TagPage({ params }) {
+export default async function TagPage({ params }: { params: { slug: string } }) {
   let tag;
   try {
     tag = await getTagData(params.slug);
@@ -71,8 +59,7 @@ export default async function TagPage({ params }) {
   }
   const articles = tag.articles;
 
-  // Функция для получения превью-картинки из JSON-контента
-  function getFirstImage(content) {
+  function getFirstImage(content: any) {
     if (!content || typeof content !== 'string') return null;
     try {
         const contentArray = JSON.parse(content);
@@ -103,8 +90,7 @@ export default async function TagPage({ params }) {
   const isAuctionTag = params.slug.toLowerCase() === 'auction';
 
   if (isAuctionTag && articles.length > 0) {
-    // Подготавливаем статьи для сетки - добавляем preview_image
-    const articlesWithImages = articles.map(article => ({
+    const articlesWithImages = articles.map((article: any) => ({
       ...article,
       preview_image: getFirstImage(article.content) || null,
       excerpt: article.excerpt || null
@@ -124,7 +110,7 @@ export default async function TagPage({ params }) {
       {/* --- СЕТКА СТАТЕЙ (аналогично главной странице) --- */}
       {articles.length > 0 ? (
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-2">
-          {articles.map((article) => {
+          {articles.map((article: any) => {
             const previewImage = getFirstImage(article.content);
             return (
               <div key={article.id} className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 border border-gray-100 flex flex-col group overflow-hidden">
@@ -139,7 +125,7 @@ export default async function TagPage({ params }) {
                   </Link>
                   {article.tags && article.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
-                      {article.tags.map(t => (
+                      {article.tags.map((t: any) => (
                         <Link key={t.id} href={`/tags/${t.slug}`} className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full hover:bg-gray-200">{t.name}</Link>
                       ))}
                     </div>

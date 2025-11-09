@@ -1,8 +1,3 @@
-// app/tags/page.js
-
-// Заглушка для корректной работы вложенных маршрутов /tags/[slug]
-// Можно сделать редирект или просто показать сообщение
-
 export default function TagsIndexPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-center p-8">

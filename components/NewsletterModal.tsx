@@ -53,16 +53,10 @@ export default function NewsletterModal() {
   // Логика показа модального окна
   useEffect(() => {
     // Не показываем если еще проверяем подписку
-    if (checkingSubscription) {
-      console.log('[NewsletterModal] Still checking subscription...');
-      return;
-    }
+    if (checkingSubscription) return;
 
     // Не показываем подписанным пользователям
-    if (isSubscribed) {
-      console.log('[NewsletterModal] User is subscribed, not showing');
-      return;
-    }
+    if (isSubscribed) return;
 
     // Проверяем только один раз
     if (hasCheckedRef.current) return;
@@ -76,17 +70,12 @@ export default function NewsletterModal() {
       const timeSinceLastShown = now - parseInt(lastShown, 10);
       if (timeSinceLastShown < SHOW_INTERVAL_MS) {
         // Еще не прошло 24 часа
-        const hoursLeft = Math.ceil((SHOW_INTERVAL_MS - timeSinceLastShown) / (1000 * 60 * 60));
-        console.log(`[NewsletterModal] Skipping - shown recently. Will show again in ${hoursLeft} hours`);
-        console.log('[NewsletterModal] To test now, run: localStorage.removeItem("newsletter_modal_last_shown"); location.reload();');
         return;
       }
     }
 
     // Показываем модалку с небольшой задержкой для UX
-    console.log('[NewsletterModal] Will show modal in 2 seconds');
     const timer = setTimeout(() => {
-      console.log('[NewsletterModal] Showing modal now');
       setIsOpen(true);
       // НЕ ставим метку здесь - только при закрытии
     }, 2000); // 2 секунды после загрузки страницы
@@ -109,23 +98,20 @@ export default function NewsletterModal() {
   const handleClose = () => {
     // Ставим метку времени при закрытии модалки (неважно как - через крестик или фон)
     localStorage.setItem(MODAL_STORAGE_KEY, Date.now().toString());
-    console.log('[NewsletterModal] Closing modal, setting timestamp');
     setIsOpen(false);
   };
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     // Проверяем что клик именно по backdrop, а не по содержимому
-    if (e.target === e.currentTarget) {
-      console.log('[NewsletterModal] Backdrop clicked, closing');
-      handleClose();
-    }
+      if (e.target === e.currentTarget) {
+        handleClose();
+      }
   };
 
   // Закрытие по нажатию Escape и блокировка скролла
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        console.log('[NewsletterModal] Escape pressed, closing');
         handleClose();
       }
     };

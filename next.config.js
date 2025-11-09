@@ -8,9 +8,8 @@ const nextConfig = {
     ignoreDuringBuilds: process.env.DISABLE_ESLINT === '1',
   },
   typescript: {
-    // Temporarily ignore TypeScript errors during build
-    // TODO: Fix all TypeScript errors and re-enable strict checking
-    ignoreBuildErrors: true,
+    // TypeScript strict mode enabled - errors will block builds
+    ignoreBuildErrors: false,
   },
   // Output mode - required for Render and other Node.js hosting platforms
   // Vercel doesn't need this, but Render does

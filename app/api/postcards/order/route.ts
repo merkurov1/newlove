@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { z } from 'zod';
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rateLimit';
 
 // Temporary: use a minimal Stripe client. In a follow-up we'll wire a server-side
 // Supabase/Onboard auth client and persist orders to the DB.
@@ -26,6 +27,17 @@ const PostcardOrderSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // Rate limiting: 10 orders per hour per IP
+  const clientIp = getClientIp(request);
+  const rateLimitResponse = checkRateLimit(clientIp, {
+    interval: 60 * 60 * 1000, // 1 hour
+    maxRequests: 10,
+    keyPrefix: 'postcards',
+  });
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     // Try Supabase session first, fall back to x-user-id header for transition
     let userId = request.headers.get('x-user-id');

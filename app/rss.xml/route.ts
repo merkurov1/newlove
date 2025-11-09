@@ -52,7 +52,7 @@ export async function GET() {
 function stripMd(md) {
   return md.replace(/[#_*`>\[\]!\(\)]/g, '').replace(/\n+/g, ' ');
 }
-function truncate(str, n) {
+function truncate(str,n: any) {
   return str.length > n ? str.slice(0, n - 1) + '…' : str;
 }
 function escape(str) {

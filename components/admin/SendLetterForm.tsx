@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { sendLetter } from '@/app/admin/actions';
 import NewsletterJobStatus from './NewsletterJobStatus';
 
-export default function SendLetterForm({ letter }) {
+export default function SendLetterForm({ letter }: { letter: any }) {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [testEmail, setTestEmail] = useState('');
   const [jobId, setJobId] = useState<string | null>(null);
 
-  async function handleSendLetter(formData) {
+  async function handleSendLetter(formData: FormData) {
     // Prevent double-send if already loading
     if (isLoading) {
       console.warn('Отправка уже в процессе, игнорируем повторный клик');
