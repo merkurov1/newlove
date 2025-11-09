@@ -44,6 +44,7 @@ interface NewsletterLog {
 
 const BATCH_SIZE = 10; // Send 10 emails per batch
 const BATCH_DELAY_MS = 2000; // 2 second delay between batches (rate limiting)
+const EMAIL_DELAY_MS = 600; // 600ms delay between each email (allows ~1.6 emails/sec, under 2/sec limit)
 
 export async function GET(request: Request) {
   return handleWorker(request);
@@ -181,8 +182,9 @@ async function handleWorker(request: Request) {
       const batch = subscribers.slice(i, i + BATCH_SIZE);
       console.info(`[Newsletter Worker] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}, subscribers ${i + 1}-${Math.min(i + BATCH_SIZE, subscribers.length)}`);
 
-      // Send emails in parallel within batch
-      const batchPromises = batch.map(async (subscriber) => {
+      // Send emails SEQUENTIALLY with delay to respect Resend rate limit (2 req/sec)
+      // Changed from parallel Promise.all to sequential loop with delay
+      for (const subscriber of batch) {
         try {
           // Generate unique unsubscribe token
           const unsubToken = createId();
@@ -249,9 +251,11 @@ async function handleWorker(request: Request) {
             sent_at: new Date().toISOString()
           });
         }
-      });
 
-      await Promise.all(batchPromises);
+        // Add delay between emails to respect Resend rate limit (2 req/sec)
+        // Wait 600ms between each send (allows ~1.6 emails/sec)
+        await new Promise(resolve => setTimeout(resolve, EMAIL_DELAY_MS));
+      }
 
       // Insert logs for this batch
       if (logs.length > 0) {

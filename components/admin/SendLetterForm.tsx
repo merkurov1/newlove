@@ -11,6 +11,12 @@ export default function SendLetterForm({ letter }) {
   const [jobId, setJobId] = useState<string | null>(null);
 
   async function handleSendLetter(formData) {
+    // Prevent double-send if already loading
+    if (isLoading) {
+      console.warn('Отправка уже в процессе, игнорируем повторный клик');
+      return;
+    }
+    
     setIsLoading(true);
     setMessage('');
     setJobId(null);
@@ -101,9 +107,19 @@ export default function SendLetterForm({ letter }) {
         </div>
       </form>
 
-      <p className="text-sm text-gray-600 mt-2">
-        ⚠️ После отправки отменить нельзя. Письмо будет доставлено всем активным подписчикам.
-      </p>
+      <div className="text-sm text-gray-600 mt-3 p-3 bg-gray-50 border border-gray-200 rounded-md">
+        <p className="font-semibold mb-2">ℹ️ Важная информация о рассылке:</p>
+        <ul className="list-disc list-inside space-y-1">
+          <li>⚠️ После отправки отменить нельзя</li>
+          <li>✉️ Письмо будет доставлено только <strong>активным</strong> подписчикам (isActive=true)</li>
+          <li>🔒 Подписчики становятся активными только после подтверждения email</li>
+          <li>❌ Неподтвержденные подписчики (isActive=false) НЕ получат письмо</li>
+          <li>🚫 Повторная отправка той же рассылки заблокирована системой</li>
+        </ul>
+        <p className="mt-2 text-xs text-gray-500">
+          💡 Чтобы увидеть список всех подписчиков и их статусы, используйте SQL запрос из файла migrations/2025-11-09_check_subscribers.sql
+        </p>
+      </div>
     </div>
   );
 }

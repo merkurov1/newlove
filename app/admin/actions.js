@@ -940,10 +940,19 @@ export async function sendLetter(prevState, formData) {
     return { status: 'error', message: 'Не указан ID письма.' };
   }
 
-  const { data: letter, error: letterErr } = await supabase.from('letters').select('id,title,slug,content,published').eq('id', letterId).maybeSingle();
+  const { data: letter, error: letterErr } = await supabase.from('letters').select('id,title,slug,content,published,sentAt').eq('id', letterId).maybeSingle();
   if (letterErr || !letter) {
     console.error('sendLetter: failed to load letter', letterErr);
     return { status: 'error', message: 'Письмо не найдено.' };
+  }
+
+  // Prevent accidental re-sending of already sent newsletters (unless it's a test email)
+  if (!testEmail && letter.sentAt) {
+    console.warn(`Attempted to re-send letter ${letterId} that was already sent at ${letter.sentAt}`);
+    return { 
+      status: 'error', 
+      message: `❌ Эта рассылка уже была отправлена ${new Date(letter.sentAt).toLocaleString('ru-RU')}. Повторная отправка запрещена для избежания дублирования писем.` 
+    };
   }
 
   // Normalize letter object for sendNewsletterToSubscriber
