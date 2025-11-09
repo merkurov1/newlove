@@ -130,7 +130,7 @@ function blocksToHtml(blocks) {
 // Утилиты для нормализации ссылок внутри HTML письма
 function decodeHtmlEntities(str) {
   if (!str || typeof str !== 'string') return str;
-  return str.replace(/&quot;|&ldquo;|&rdquo;|&amp;|&lt;|&gt;/g, (m) => {
+  return str.replace(/&quot;|&ldquo;|&rdquo;|&amp;|&lt;|&gt;|&apos;|&#39;|&#x27;/g, (m) => {
     switch (m) {
       case '&quot;': return '"';
       case '&ldquo;': return '"';
@@ -138,6 +138,9 @@ function decodeHtmlEntities(str) {
       case '&amp;': return '&';
       case '&lt;': return '<';
       case '&gt;': return '>';
+      case '&apos;': return "'";
+      case '&#39;': return "'";
+      case '&#x27;': return "'";
       default: return m;
     }
   });
@@ -167,12 +170,17 @@ function sanitizeLinksInHtml(html) {
   // First decode common HTML entities we expect inside attributes
   let out = decodeHtmlEntities(html);
 
-  // Fix href attributes: capture href=\"...\" or href='...'
-  out = out.replace(/href=(['"])(.*?)\1/gi, (match, q, url) => {
-    let cleaned = decodeHtmlEntities(url || '');
+  // Fix href attributes: capture href="..." or href='...' or href=unquoted
+  out = out.replace(/href\s*=\s*(?:(['"])(.*?)\1|([^\s>]+))/gi, (match, q, quotedUrl, unquotedUrl) => {
+    let raw = quotedUrl || unquotedUrl || '';
+    let cleaned = decodeHtmlEntities(raw || '');
     cleaned = stripSurroundingQuotes(cleaned);
+    // Fix only obvious single-slash mistakes like https:/example -> https://example
+    cleaned = cleaned.replace(/^(https?:)\/([^/])/i, '$1//$2');
     cleaned = normalizeUrlScheme(cleaned);
-    return `href=${q}${cleaned}${q}`;
+    // Reuse original quoting style if present
+    if (q) return `href=${q}${cleaned}${q}`;
+    return `href="${cleaned}"`;
   });
 
   // Also fix plain-text occurrences of smart-quoted links like “https:/... ”
@@ -182,8 +190,7 @@ function sanitizeLinksInHtml(html) {
     return cleaned;
   });
 
-  // Fix accidental single-slash schemes that may have been produced: https:/path -> https://path
-  out = out.replace(/https?:\/([^/\s])/gi, (m) => m.replace(':\/', '://'));
+  // Do not perform broad global replacements on arbitrary text - we've fixed common broken schemes above per-URL.
 
   return out;
 }
