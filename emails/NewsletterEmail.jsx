@@ -30,16 +30,28 @@ function addResizeToSupabaseImages(html, width = 600, quality = 70) {
 }
 
 function blocksToHtml(blocks) {
-  // Если это строка (html или markdown), всегда прогоняем через addResizeToSupabaseImages
+  // Если это строка, сначала пытаемся распарсить как JSON
   if (typeof blocks === 'string') {
-    return addResizeToSupabaseImages(blocks);
+    // Проверяем, похоже ли это на JSON (начинается с [ или {)
+    const trimmed = blocks.trim();
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        blocks = JSON.parse(trimmed);
+      } catch {
+        // Если не парсится как JSON — значит это HTML или markdown, прогоняем через addResizeToSupabaseImages
+        return addResizeToSupabaseImages(blocks);
+      }
+    } else {
+      // Не JSON — это HTML или plain text
+      return addResizeToSupabaseImages(blocks);
+    }
   }
   // Если это не массив, пробуем распарсить как JSON
   if (!Array.isArray(blocks)) {
     try {
       blocks = JSON.parse(blocks);
     } catch {
-      // Если не парсится — возвращаем пустую строку (или можно вернуть addResizeToSupabaseImages(blocks || ''))
+      // Если не парсится — возвращаем пустую строку
       return '';
     }
   }
@@ -103,6 +115,13 @@ function blocksToHtml(blocks) {
         if (block.data?.html) {
           return addResizeToSupabaseImages(block.data.html);
         }
+        // Fallback для неизвестных блоков - выводим text если есть
+        if (block.data?.text) {
+          const text = addResizeToSupabaseImages(String(block.data.text));
+          return `<p>${text}</p>`;
+        }
+        // Если блок пустой или неизвестный - не выводим его вообще
+        console.warn('Unknown block type:', block.type, 'Data keys:', Object.keys(block.data || {}));
         return '';
     }
   }).join('');

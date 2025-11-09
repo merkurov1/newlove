@@ -127,7 +127,11 @@ async function getSubscriberCount() {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
     if (!supabase) return 0;
-    const res = await supabase.from('subscribers').select('id', { count: 'exact', head: true });
+    // Count only active subscribers (isActive=true) since only they receive newsletters
+    const res = await supabase
+      .from('subscribers')
+      .select('id', { count: 'exact', head: true })
+      .eq('isActive', true);
     return res && typeof res.count === 'number' ? Number(res.count) : 0;
   } catch (e) {
     console.error('Failed to fetch subscriber count for layout', e);
