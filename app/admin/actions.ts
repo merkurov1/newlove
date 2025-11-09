@@ -878,7 +878,7 @@ export async function deleteLetter(formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   const id = formData.get('id')?.toString();
-  if (!id) return { status: 'error', message: 'Letter ID is required.' };
+  if (!id) throw new Error('Letter ID is required.');
 
   try {
     const { data: letter } = await supabase.from('letters').select('slug, published').eq('id', id).maybeSingle();
@@ -889,8 +889,8 @@ export async function deleteLetter(formData: any) {
   // Sentry removed
 
       if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        console.warn('Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server; returning error to caller.');
-        return { status: 'error', message: 'Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server.' };
+        console.warn('Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server; throwing error.');
+        throw new Error('Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server.');
       }
 
       try {
@@ -899,21 +899,21 @@ export async function deleteLetter(formData: any) {
         if (retry.error) {
           console.error('Retry with service role failed:', retry.error);
           // Sentry removed
-          return { status: 'error', message: 'Ошибка при удалении письма: permission denied for table letters. Убедитесь, что сервисная роль имеет права на таблицу `letters`. Рекомендация: выполните sql/ensure_service_role_grants.sql в Supabase SQL Editor (или вручную выдайте соответствующие права).', details: retry.error };
+          throw new Error('Ошибка при удалении письма: permission denied for table letters. Убедитесь, что сервисная роль имеет права на таблицу `letters`. Рекомендация: выполните sql/ensure_service_role_grants.sql в Supabase SQL Editor (или вручную выдайте соответствующие права).');
         }
         // success via retry
         error = null;
       } catch (e: any) {
       console.error('Error upserting subscriber:', error);
   // Sentry removed
-        return { status: 'error', message: 'Не удалось удалить письмо: ' + (e?.message || String(e)) + '. Проверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql', details: e };
+        throw new Error('Не удалось удалить письмо: ' + (e?.message || String(e)) + '. Проверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql');
       }
     }
 
     if (error) {
       console.error('Supabase delete letter error:', error);
   // Sentry removed
-      return { status: 'error', message: 'Ошибка при удалении письма: ' + (error.message || String(error)) + '. Если это ошибка прав (42501), убедитесь в настройке сервисной роли.', details: error };
+      throw new Error('Ошибка при удалении письма: ' + (error.message || String(error)) + '. Если это ошибка прав (42501), убедитесь в настройке сервисной роли.');
     }
 
     revalidatePath('/admin/letters');
@@ -925,6 +925,7 @@ export async function deleteLetter(formData: any) {
     return;
   } catch (e: any) {
     console.error('deleteLetter exception:', e);
+    throw e;
   }
 }
 
