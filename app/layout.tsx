@@ -13,6 +13,17 @@ import NextDynamic from 'next/dynamic';
 const UserSidebar = NextDynamic(() => import('@/components/UserSidebar'), { ssr: false });
 const NewsletterModal = NextDynamic(() => import('@/components/NewsletterModal'), { ssr: false });
 
+// Optimize fonts with next/font
+import { Inter } from 'next/font/google';
+
+const inter = Inter({ 
+  subsets: ['latin', 'cyrillic'],
+  display: 'swap', // Prevent CLS
+  preload: true,
+  variable: '--font-inter',
+  weight: ['400', '500', '600', '700']
+});
+
 // --- SEO: Корректный шаблон заголовка и метаданных ---
 export const metadata = sanitizeMetadata({
   title: {
@@ -73,6 +84,11 @@ export const metadata = sanitizeMetadata({
       'application/rss+xml': 'https://merkurov.love/rss.xml',
     },
   },
+  other: {
+    // AI & Performance optimization
+    'google': 'notranslate',
+    'format-detection': 'telephone=no',
+  }
 });
 
 // Force dynamic rendering for the entire app during this migration/debug pass.
@@ -149,12 +165,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     logo_url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png'
   };
   return (
-    <html lang="ru">
+    <html lang="ru" className={inter.variable}>
       <head>
+        {/* Performance: Preconnect to Supabase for faster image loading */}
+        <link rel="preconnect" href="https://txvkqcitalfbjytmnawq.supabase.co" />
+        <link rel="dns-prefetch" href="https://txvkqcitalfbjytmnawq.supabase.co" />
+        
         {/* Umami analytics */}
         <script defer src="https://cloud.umami.is/script.js" data-website-id="87795d47-f53d-4ef8-8e82-3ee195ea997b"></script>
       </head>
-      <body>
+      <body className={inter.className}>
         <AuthProvider>
           <Header settings={safeData(settings)} projects={safeData(projects)} />
           {/* client-only sidebar should appear immediately under the header for logged-in users */}

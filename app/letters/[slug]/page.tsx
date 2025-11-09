@@ -19,8 +19,34 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
     const title = letter.title || 'Письмо';
     const description = String(parseRichTextContent(letter.content || '')).slice(0, 160);
-    const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.merkurov.love';
+    const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love';
     const image = `${site}/default-og.png`;
+
+    // BreadcrumbList Schema for better SEO
+    const breadcrumbSchema = {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      'itemListElement': [
+        {
+          '@type': 'ListItem',
+          'position': 1,
+          'name': 'Главная',
+          'item': site
+        },
+        {
+          '@type': 'ListItem',
+          'position': 2,
+          'name': 'Письма',
+          'item': `${site}/letters`
+        },
+        {
+          '@type': 'ListItem',
+          'position': 3,
+          'name': title,
+          'item': `${site}/letters/${slug}`
+        }
+      ]
+    };
 
     return {
       title,
@@ -37,6 +63,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
         title,
         description,
         images: [image]
+      },
+      other: {
+        'script:ld+json:breadcrumb': JSON.stringify(breadcrumbSchema)
       }
     };
   } catch (e) {
