@@ -12,8 +12,8 @@ async function getDigestBySlug(slug) {
 
   if (!supabaseClient) {
     // If we couldn't get a supabase client from the request or server fallback,
-    // avoid throwing and surface a notFound for safety in generateMetadata.
-    return null;
+    // throw notFound to avoid returning null (which breaks Google Search Console)
+    notFound();
   }
 
   const { data, error } = await supabaseClient
@@ -45,6 +45,11 @@ export async function generateMetadata({ params }) {
 // Сама страница
 export default async function DigestPage({ params }) {
   const digest = await getDigestBySlug(params.slug);
+  
+  // Additional safety check: if digest is null/undefined, show 404
+  if (!digest) {
+    notFound();
+  }
 
   let blocks = [];
   if (typeof digest.content === 'string') {
