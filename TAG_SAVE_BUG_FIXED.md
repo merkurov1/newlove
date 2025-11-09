@@ -14,6 +14,7 @@ Tags were not saving when editing articles in admin panel.
 **Duplicate hidden form fields with same name:**
 
 1. **TagInput.js** (line 60):
+
    ```javascript
    <input type="hidden" name="tags" value={hiddenInputValue} />
    ```
@@ -26,6 +27,7 @@ Tags were not saving when editing articles in admin panel.
 When a form has two inputs with the same `name` attribute, browsers typically only send **one value** (usually the first encountered in DOM order).
 
 This caused:
+
 - Either the wrong value was sent
 - Or an empty value was sent
 - `formData.get('tags')` in `updateArticle()` received incorrect data
@@ -35,15 +37,15 @@ This caused:
 ## 📝 Additional Issue
 
 **Type mismatch in TagInput.js** (line 8):
+
 ```javascript
-const [tags, setTags] = useState(() => (initialTags || []).map(t => t.name));
+const [tags, setTags] = useState(() => (initialTags || []).map((t) => t.name));
 ```
 
 But `ContentForm.tsx` (line 53) already converts to string array:
+
 ```tsx
-const [tags, setTags] = useState<string[]>(() => 
-  (safeInitial.tags || []).map((t: any) => t.name)
-);
+const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
 ```
 
 So `TagInput` received `["tag1", "tag2"]` but tried to call `.name` on strings, causing errors.
@@ -55,6 +57,7 @@ So `TagInput` received `["tag1", "tag2"]` but tried to call `.name` on strings, 
 ### Changed File: `components/admin/TagInput.js`
 
 **1. Removed duplicate hidden input (line 60)**
+
 ```diff
        />
      </div>
@@ -65,6 +68,7 @@ So `TagInput` received `["tag1", "tag2"]` but tried to call `.name` on strings, 
 ```
 
 **2. Fixed type handling for initialTags (lines 6-21)**
+
 ```diff
 export default function TagInput({ initialTags, onChange }) {
 - const [tags, setTags] = useState(() => (initialTags || []).map(t => t.name));
@@ -92,6 +96,7 @@ export default function TagInput({ initialTags, onChange }) {
 ## 🎯 How It Works Now
 
 **Flow:**
+
 1. User types tags in `TagInput` component
 2. `onChange` callback updates `tags` state in `ContentForm`
 3. `ContentForm` renders ONE hidden input:
@@ -104,6 +109,7 @@ export default function TagInput({ initialTags, onChange }) {
 7. `upsertTagsAndLink()` saves tags to database
 
 **Type safety:**
+
 - `initialTags` can be:
   - `[{name: "tag1"}, {name: "tag2"}]` (from database)
   - `["tag1", "tag2"]` (from parent state)
@@ -126,8 +132,9 @@ export default function TagInput({ initialTags, onChange }) {
    - Should save successfully
 
 3. ✅ Check database
+
    ```sql
-   SELECT 
+   SELECT
      a.title,
      t.name as tag_name
    FROM articles a
@@ -145,12 +152,14 @@ export default function TagInput({ initialTags, onChange }) {
 ## 📊 Database Status
 
 **RLS Policies:** ✅ Correct (confirmed in diagnostics)
+
 ```
 Tag table: auth.uid() IS NOT NULL - allows ALL for authenticated
 _ArticleToTag: auth.uid() IS NOT NULL - allows ALL for authenticated
 ```
 
 **Tables:** ✅ Exist
+
 - `Tag` table exists
 - `_ArticleToTag` junction table exists
 - Proper indexes exist

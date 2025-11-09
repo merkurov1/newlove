@@ -40,7 +40,7 @@ async function getContent(slug) {
     try {
       const { getServerSupabaseClient } = await import('@/lib/serverAuth');
       const srv = getServerSupabaseClient({ useServiceRole: true });
-      const { data, error } = await srv.from('articles').select('*, author:authorId(name,image)').eq('slug', slug).eq('published', true).maybeSingle();
+      const { data, error } = await srv.from('articles').select('*, author:authorId(name)').eq('slug', slug).eq('published', true).maybeSingle();
       if (error) {
         console.error('Supabase (service) fetch article error', error);
       } else if (data) {
