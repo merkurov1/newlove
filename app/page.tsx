@@ -2,7 +2,6 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import nextDynamic from 'next/dynamic';
-import { PersonSchema, WebsiteSchema, BlogSchema } from '@/components/SEO/StructuredData';
 import { safeData } from '@/lib/safeSerialize';
 
 const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { ssr: false });
@@ -67,9 +66,59 @@ export default async function Home() {
   const auctionArticles = await getArticlesByTag(supabase, 'auction', 20);
   const newsArticles = await getArticlesByTag(supabase, 'news', 15);
 
+  const personSchema = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": "Anton Merkurov",
+    "url": "https://merkurov.love",
+    "image": "https://merkurov.love/avatar.jpg",
+    "jobTitle": "Artist, Developer, Entrepreneur",
+    "description": "Медиа, технологии и искусство",
+    "sameAs": [
+      "https://twitter.com/merkurov",
+      "https://github.com/merkurov1"
+    ]
+  };
+
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "Website",
+    "name": "Anton Merkurov",
+    "url": "https://merkurov.love",
+    "description": "Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.",
+    "author": {
+      "@type": "Person",
+      "name": "Anton Merkurov",
+      "url": "https://merkurov.love"
+    },
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": "https://merkurov.love/search?q={search_term_string}"
+      },
+      "query-input": "required name=search_term_string"
+    }
+  };
+
+  const blogSchema = {
+    "@context": "https://schema.org",
+    "@type": "Blog",
+    "name": "Anton Merkurov",
+    "url": "https://merkurov.love",
+    "description": "Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.",
+    "author": {
+      "@type": "Person",
+      "name": "Anton Merkurov",
+      "url": "https://merkurov.love"
+    }
+  };
+
   return (
     <main className="relative overflow-hidden py-8 sm:py-12">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify([PersonSchema, WebsiteSchema, BlogSchema]) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(personSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(blogSchema) }} />
       <BackgroundShapes />
       
       <div className="max-w-5xl mx-auto px-4 space-y-12 sm:space-y-16">
