@@ -4,20 +4,23 @@ import { useState, useEffect } from 'react';
 
 
 export default function TagInput({ initialTags, onChange }) {
-  // Безопасная инициализация состояния, даже если initialTags не передан
-  const [tags, setTags] = useState(() => (initialTags || []).map(t => t.name));
+  // Безопасная инициализация состояния
+  // initialTags может быть массивом объектов [{name: "tag"}] или массивом строк ["tag"]
+  const [tags, setTags] = useState(() => {
+    const arr = initialTags || [];
+    return arr.map(t => typeof t === 'string' ? t : t.name);
+  });
   const [inputValue, setInputValue] = useState('');
 
-  // Синхронизация с невидимым полем для отправки на сервер
-  const [hiddenInputValue, setHiddenInputValue] = useState(JSON.stringify(tags));
+  // Синхронизация с родительским компонентом через onChange
   useEffect(() => {
-    setHiddenInputValue(JSON.stringify(tags));
     if (onChange) onChange(tags);
   }, [tags, onChange]);
 
   // Этот useEffect синхронизирует состояние, если initialTags изменятся (важно для редактирования)
   useEffect(() => {
-    setTags((initialTags || []).map(t => t.name));
+    const arr = initialTags || [];
+    setTags(arr.map(t => typeof t === 'string' ? t : t.name));
   }, [initialTags]);
 
   const handleKeyDown = (e) => {
@@ -54,7 +57,7 @@ export default function TagInput({ initialTags, onChange }) {
           className="flex-grow bg-transparent border-none focus:ring-0"
         />
       </div>
-      <input type="hidden" name="tags" value={hiddenInputValue} />
+      {/* Hidden input REMOVED - parent ContentForm handles form submission */}
     </div>
   );
 }

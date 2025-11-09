@@ -3,11 +3,13 @@
 ## Step 1: Run Full Database Diagnostic
 
 **Run this in Supabase SQL Editor:**
+
 ```sql
 \i migrations/2025-11-09_FULL_DATABASE_DIAGNOSTIC.sql
 ```
 
 **Share ALL results from these sections:**
+
 1. All tables list
 2. Users table structure (all columns)
 3. Roles/permissions tables (if any exist)
@@ -15,7 +17,7 @@
 5. ALL RLS policies
 6. Tag-related tables (do they exist?)
 7. Tag table structure
-8. _ArticleToTag structure
+8. \_ArticleToTag structure
 9. Indexes on Tag tables
 10. Count of tags
 11. Sample users
@@ -25,6 +27,7 @@
 ## Step 2: Test Tag Creation Manually
 
 **In Supabase SQL Editor:**
+
 ```sql
 -- Try to insert a tag as current user
 INSERT INTO "Tag" (id, name, slug, "createdAt", "updatedAt")
@@ -55,17 +58,20 @@ SELECT * FROM "Tag" WHERE name = 'test-tag';
 ## Step 4: Check Server Logs
 
 After trying to save tags, check if there are errors in:
+
 - Vercel deployment logs
 - Or look for console.error in admin actions
 
 ## Step 5: Current Code Review
 
 **lib/tags.ts lines 50-90:**
+
 - Uses `TAGS_TABLE_NAME` env var (default: "Tag")
 - Uses service-role client on permission error
 - Writes to `_ArticleToTag` junction table
 
 **app/admin/actions.js line 147-148:**
+
 ```javascript
 const parsedTags = parseTagNames(formData.get('tags')?.toString());
 await upsertTagsAndLink(supabase, 'article', id, parsedTags);
@@ -80,6 +86,7 @@ await upsertTagsAndLink(supabase, 'article', id, parsedTags);
 5. **Is upsertTagsAndLink being called?** (add console.log?)
 
 ## DO NOT APPLY ANY MIGRATIONS UNTIL:
+
 - ✅ All diagnostic results reviewed
 - ✅ Root cause identified
 - ✅ Solution confirmed to NOT break existing data
@@ -87,7 +94,8 @@ await upsertTagsAndLink(supabase, 'article', id, parsedTags);
 ---
 
 **Current Status:**
-- Tag and _ArticleToTag tables: ✅ EXIST (confirmed)
+
+- Tag and \_ArticleToTag tables: ✅ EXIST (confirmed)
 - RLS policies: ❓ UNKNOWN (need full diagnostic)
 - Users table has 'role' column: ❌ NO
 - Tags visible on site: ❌ NO (all articles show 0 tags)
