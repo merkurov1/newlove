@@ -82,7 +82,7 @@ const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any)
           const q = new URLSearchParams({ offset: String(offsetRef.current), limit: String(API_PAGE_SIZE) });
           if (excludeTag) q.set('excludeTag', excludeTag);
           if (includeTag) q.set('includeTag', includeTag);
-          fetch(`/api/articles?${q.toString()}`)
+          fetch(`/api/articles?${q.toString()}`, { cache: 'no-store' })
             .then((res) => res.json())
             .then((data) => {
               if (!Array.isArray(data) || data.length === 0) {
@@ -114,17 +114,18 @@ const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any)
       const q = new URLSearchParams({ offset: '0', limit: String(API_PAGE_SIZE) });
       if (excludeTag) q.set('excludeTag', excludeTag);
       if (includeTag) q.set('includeTag', includeTag);
-      const res = await fetch(`/api/articles?${q.toString()}`);
+      const res = await fetch(`/api/articles?${q.toString()}`, { cache: 'no-store' });
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         // Put newest items first, keep previous items that are not in the fresh page
         setArticles((prev) => {
           const incomingIds = new Set(data.map((a: Article) => a.id));
           const remaining = prev.filter((p) => !incomingIds.has(p.id));
-          return [...data, ...remaining];
+          const merged = [...data, ...remaining];
+          setOffset(merged.length);
+          setHasMore(data.length >= API_PAGE_SIZE);
+          return merged;
         });
-        setOffset((prev: number) => Math.max(prev, data.length));
-        setHasMore(data.length >= API_PAGE_SIZE);
       }
     } catch (e) {
       // swallow errors — keep current list

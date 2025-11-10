@@ -137,7 +137,7 @@ const BentoArticlesFeed: FC<BentoArticlesFeedProps> = ({ initialArticles, exclud
           if (excludeTag) q.set('excludeTag', excludeTag);
           if (includeTag) q.set('includeTag', includeTag);
           
-          fetch(`/api/articles?${q.toString()}`)
+          fetch(`/api/articles?${q.toString()}`, { cache: 'no-store' })
             .then((res) => res.json())
             .then((data) => {
               if (!Array.isArray(data) || data.length === 0) {
@@ -168,16 +168,18 @@ const BentoArticlesFeed: FC<BentoArticlesFeedProps> = ({ initialArticles, exclud
       const q = new URLSearchParams({ offset: '0', limit: String(API_PAGE_SIZE) });
       if (excludeTag) q.set('excludeTag', excludeTag);
       if (includeTag) q.set('includeTag', includeTag);
-      const res = await fetch(`/api/articles?${q.toString()}`);
+      const res = await fetch(`/api/articles?${q.toString()}`, { cache: 'no-store' });
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         setArticles((prev) => {
           const incomingIds = new Set(data.map((a: Article) => a.id));
           const remaining = prev.filter((p) => !incomingIds.has(p.id));
-          return [...data, ...remaining];
+          const merged = [...data, ...remaining];
+          // keep offset in sync with merged array length
+          setOffset(merged.length);
+          setHasMore(data.length >= API_PAGE_SIZE);
+          return merged;
         });
-        setOffset((prev) => Math.max(prev, data.length));
-        setHasMore(data.length >= API_PAGE_SIZE);
       }
     } catch (e) {
       if (process.env.NODE_ENV !== 'production') {
