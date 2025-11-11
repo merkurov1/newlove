@@ -7,25 +7,94 @@ import GuessEstimateQuiz from '@/components/GuessEstimateQuiz'
 // pick up to 10 random items that contain a parseable estimate and render the client quiz.
 
 function parseEstimateFromContent(content: any): number | null {
-  if (!content || typeof content !== 'string') return null
-  try {
-    // Look for common patterns like "Estimate: 1,000", "Estimate — $1,000", "Estimate — 1000 ₽"
-    const re = /(?:Estimate|Estimated|Est\.?|Price|Стоимость)[:\-–—\s]*\$?\s*([0-9\s,\.]+)(?:\s*(₽|rub|RUB|USD|EUR|€|£)?)?/i
-    const m = content.match(re)
-    if (m && m[1]) {
-      const raw = m[1].replace(/[\s,]/g, '')
-      const n = Number(raw)
-      if (!Number.isNaN(n) && Number.isFinite(n)) return n
+  if (!content) return null
+
+  // Normalize: if content is JSON-like (Editor.js), extract text/html fields
+  let text = ''
+  if (typeof content === 'string') {
+    text = content
+  } else {
+    try {
+      text = JSON.stringify(content)
+    } catch (e) {
+      try {
+        text = String(content)
+      } catch (e2) {
+        text = ''
+      }
     }
-    // fallback: any standalone number like "Estimate 1000"
-    const m2 = content.match(/(?:Estimate|Est\.?|Стоимость)[:\-–—\s]*([0-9]{3,}(?:[0-9,\s]*))/i)
-    if (m2 && m2[1]) {
-      const raw2 = m2[1].replace(/[\s,]/g, '')
-      const n2 = Number(raw2)
-      if (!Number.isNaN(n2) && Number.isFinite(n2)) return n2
+  }
+  if (!text) return null
+
+  // Helper: parse a numeric string like "1 000", "1,000", "1.000" or "1.2k" / "1k" / "1 тыс"
+  function parseNumberToken(token: string): number | null {
+    if (!token) return null
+    let s = String(token).trim()
+    // handle k / тыс / т
+    let multiplier = 1
+    const kMatch = s.match(/(\d[\d\s,\.]*)\s*(k|K|тыс|тыс\.|т\.|тыс)$/i)
+    if (kMatch) {
+      s = kMatch[1]
+      multiplier = 1000
+    }
+    // remove non-digit except dot and comma
+    s = s.replace(/[^0-9.,]/g, '')
+    // if contains both comma and dot, assume comma thousands, dot decimal -> remove commas
+    if (s.indexOf(',') !== -1 && s.indexOf('.') !== -1) {
+      s = s.replace(/,/g, '')
+    } else {
+      // prefer remove spaces and commas as thousand separators
+      s = s.replace(/[\s,]/g, '')
+    }
+    // Replace comma as decimal separator (e.g., 1,5 -> 1.5)
+    if (s.indexOf('.') === -1 && s.indexOf(',') !== -1) s = s.replace(',', '.')
+    const n = Number(s)
+    if (!Number.isNaN(n) && Number.isFinite(n)) return Math.round(n * multiplier)
+    return null
+  }
+
+  try {
+    // 1) Ranges like "1,000 - 2,000" or "1000–2000" or "from 1 000 to 2 000" -> take midpoint
+    const rangeRe = /([0-9][0-9\s,\.]*)(?:\s*(?:-|–|—|to|до|—|−)\s*)([0-9][0-9\s,\.]*)/i
+    const rangeMatch = text.match(rangeRe)
+    if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
+      const a = parseNumberToken(rangeMatch[1])
+      const b = parseNumberToken(rangeMatch[2])
+      if (a !== null && b !== null) return Math.round((a + b) / 2)
+    }
+
+    // 2) Look for labels + currency/number combos (Estimate, Estimated, Price, Стоимость, Оценка, Цена)
+    const labelRe = /(?:Estimate|Estimated|Est\.?|Price|Стоимость|Оценка|Цена)[:\-–—\s]*([^\n<]{3,80})/i
+    const labelMatch = text.match(labelRe)
+    if (labelMatch && labelMatch[1]) {
+      // try to extract first numeric token from the capture
+      const tokenRe = /([0-9][0-9\s,\.]*\s*(?:k|K|тыс\.?|т\.?|))|(?:\$|€|£|₽)\s*([0-9][0-9\s,\.]*)/i
+      const tmatch = labelMatch[1].match(tokenRe)
+      if (tmatch) {
+        const token = (tmatch[1] || tmatch[2] || '').trim()
+        const parsed = parseNumberToken(token)
+        if (parsed !== null) return parsed
+      }
+    }
+
+    // 3) Currency symbol before/after number anywhere
+    const currencyRe = /(?:\$|€|£|₽)\s*([0-9][0-9\s,\.]*)|([0-9][0-9\s,\.]*)\s*(?:₽|rub|RUB|usd|USD|eur|EUR)/i
+    const cMatch = text.match(currencyRe)
+    if (cMatch) {
+      const token = (cMatch[1] || cMatch[2] || '').trim()
+      const p = parseNumberToken(token)
+      if (p !== null) return p
+    }
+
+    // 4) Any standalone large number (>= 3 digits) probably an estimate
+    const anyNumRe = /(?:\b|\D)([0-9]{3}[0-9\s,\.]*)(?:\b|\D)/
+    const anyMatch = text.match(anyNumRe)
+    if (anyMatch && anyMatch[1]) {
+      const p = parseNumberToken(anyMatch[1])
+      if (p !== null) return p
     }
   } catch (e) {
-    // ignore
+    // ignore parsing errors
   }
   return null
 }

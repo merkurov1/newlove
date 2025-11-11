@@ -41,8 +41,13 @@ const AuctionGrid: React.FC<AuctionGridProps> = ({ articles: initialArticles }) 
                 setHasMore(false);
                 return;
               }
-              setArticles((prev) => [...prev, ...data]);
-              setOffset((prev) => prev + data.length);
+              setArticles((prev) => {
+                const existing = new Set(prev.map((p) => String(p.id)));
+                const deduped = data.filter((d: any) => !existing.has(String(d.id)));
+                const merged = [...prev, ...deduped];
+                setOffset(merged.length);
+                return merged;
+              });
               if (data.length < 10) setHasMore(false);
             })
             .catch(() => {

@@ -145,8 +145,15 @@ const BentoArticlesFeed: FC<BentoArticlesFeedProps> = ({ initialArticles, exclud
                 setHasMore(false);
                 return;
               }
-              setArticles((prev) => [...prev, ...data]);
-              setOffset((prev) => prev + data.length);
+              setArticles((prev) => {
+                // dedupe by normalized id (string)
+                const existing = new Set(prev.map((p) => String(p.id)));
+                const deduped = data.filter((d: any) => !existing.has(String(d.id)));
+                const merged = [...prev, ...deduped];
+                // sync offset with merged length
+                setOffset(merged.length);
+                return merged;
+              });
               if (data.length < API_PAGE_SIZE) setHasMore(false);
             })
             .catch(() => {
@@ -172,8 +179,8 @@ const BentoArticlesFeed: FC<BentoArticlesFeedProps> = ({ initialArticles, exclud
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         setArticles((prev) => {
-          const incomingIds = new Set(data.map((a: Article) => a.id));
-          const remaining = prev.filter((p) => !incomingIds.has(p.id));
+          const incomingIds = new Set(data.map((a: Article) => String(a.id)));
+          const remaining = prev.filter((p) => !incomingIds.has(String(p.id)));
           const merged = [...data, ...remaining];
           // keep offset in sync with merged array length
           setOffset(merged.length);

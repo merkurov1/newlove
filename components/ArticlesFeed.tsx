@@ -90,8 +90,13 @@ const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any)
                 setHasMore(false);
                 return;
               }
-              setArticles((prev) => [...prev, ...data]);
-              setOffset((prev: number) => prev + data.length);
+              setArticles((prev) => {
+                const existing = new Set(prev.map((p) => String(p.id)));
+                const deduped = data.filter((d: any) => !existing.has(String(d.id)));
+                const merged = [...prev, ...deduped];
+                setOffset(merged.length);
+                return merged;
+              });
               if (data.length < API_PAGE_SIZE) setHasMore(false);
             })
             .catch(() => {
@@ -119,8 +124,8 @@ const ArticlesFeed: FC<any> = ({ initialArticles, excludeTag, includeTag }: any)
       if (Array.isArray(data) && data.length > 0) {
         // Put newest items first, keep previous items that are not in the fresh page
         setArticles((prev) => {
-          const incomingIds = new Set(data.map((a: Article) => a.id));
-          const remaining = prev.filter((p) => !incomingIds.has(p.id));
+          const incomingIds = new Set(data.map((a: Article) => String(a.id)));
+          const remaining = prev.filter((p) => !incomingIds.has(String(p.id)));
           const merged = [...data, ...remaining];
           setOffset(merged.length);
           setHasMore(data.length >= API_PAGE_SIZE);
