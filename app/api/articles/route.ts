@@ -63,6 +63,18 @@ export async function GET(request: Request) {
         data = null;
         error = e;
       }
+      // If RPC returned nothing or clearly incomplete, try tolerant helper as a fallback
+      if ((!data || !Array.isArray(data) || data.length === 0) || (Array.isArray(data) && data.length < Math.min(3, limit))) {
+        try {
+          const { getArticlesByTag } = await import('@/lib/tagHelpers');
+          const alt = await getArticlesByTag(supabase, includeTag, limit);
+          if (Array.isArray(alt) && alt.length > 0) {
+            data = alt;
+          }
+        } catch (e) {
+          // ignore fallback errors
+        }
+      }
     } else {
       // Try to exclude soft-deleted rows if the deployment has `deletedAt` column.
       for (const col of ['deletedAt', 'deleted_at', 'deleted', null]) {
