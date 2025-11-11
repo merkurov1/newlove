@@ -26,6 +26,28 @@ function parseEstimateFromContent(content: any): number | null {
   }
   if (!text) return null
 
+  // If content looks like HTML (server-side rendered), strip tags to get plain text
+  function stripHtml(html: string) {
+    // remove tags
+    let s = html.replace(/<[^>]+>/g, ' ')
+    // decode a few common HTML entities
+    s = s.replace(/&nbsp;|\u00A0/g, ' ')
+    s = s.replace(/&amp;/g, '&')
+    s = s.replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    // collapse whitespace
+    s = s.replace(/\s+/g, ' ').trim()
+    return s
+  }
+
+  // If text contains angle brackets, treat as HTML and strip
+  if (text.indexOf('<') !== -1 && text.indexOf('>') !== -1) {
+    try {
+      text = stripHtml(text)
+    } catch (e) {
+      // fallback: leave original text
+    }
+  }
+
   // Helper: parse a numeric string like "1 000", "1,000", "1.000" or "1.2k" / "1k" / "1 тыс"
   function parseNumberToken(token: string): number | null {
     if (!token) return null
@@ -55,7 +77,7 @@ function parseEstimateFromContent(content: any): number | null {
 
   try {
     // 1) Ranges like "1,000 - 2,000" or "1000–2000" or "from 1 000 to 2 000" -> take midpoint
-    const rangeRe = /([0-9][0-9\s,\.]*)(?:\s*(?:-|–|—|to|до|—|−)\s*)([0-9][0-9\s,\.]*)/i
+    const rangeRe = /([0-9][0-9\s,\.]*)\s*(?:-|–|—|to|до|−)\s*([0-9][0-9\s,\.]*)/i
     const rangeMatch = text.match(rangeRe)
     if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
       const a = parseNumberToken(rangeMatch[1])
@@ -64,11 +86,12 @@ function parseEstimateFromContent(content: any): number | null {
     }
 
     // 2) Look for labels + currency/number combos (Estimate, Estimated, Price, Стоимость, Оценка, Цена)
-    const labelRe = /(?:Estimate|Estimated|Est\.?|Price|Стоимость|Оценка|Цена)[:\-–—\s]*([^\n<]{3,80})/i
+    // allow an optional emoji prefix (💸) and capture up to a generous window after the label
+    const labelRe = /(?:💸\s*)?(?:Estimate|Estimated|Est\.?|Price|Стоимость|Оценка|Цена)[:\-–—\s]*([^\n]{0,120})/i
     const labelMatch = text.match(labelRe)
     if (labelMatch && labelMatch[1]) {
       // try to extract first numeric token from the capture
-      const tokenRe = /([0-9][0-9\s,\.]*\s*(?:k|K|тыс\.?|т\.?|))|(?:\$|€|£|₽)\s*([0-9][0-9\s,\.]*)/i
+      const tokenRe = /([0-9][0-9\s,\.]*\s*(?:k|K|тыс\.?|т\.?))|(?:\$|€|£|₽|USD|EUR|RUB)\s*([0-9][0-9\s,\.]*)/i
       const tmatch = labelMatch[1].match(tokenRe)
       if (tmatch) {
         const token = (tmatch[1] || tmatch[2] || '').trim()
@@ -78,7 +101,7 @@ function parseEstimateFromContent(content: any): number | null {
     }
 
     // 3) Currency symbol before/after number anywhere
-    const currencyRe = /(?:\$|€|£|₽)\s*([0-9][0-9\s,\.]*)|([0-9][0-9\s,\.]*)\s*(?:₽|rub|RUB|usd|USD|eur|EUR)/i
+    const currencyRe = /(?:\$|€|£|₽)\s*([0-9][0-9\s,\.]*)|([0-9][0-9\s,\.]*)\s*(?:₽|rub|RUB|usd|USD|eur|EUR|USD\b|EUR\b|RUB\b)/i
     const cMatch = text.match(currencyRe)
     if (cMatch) {
       const token = (cMatch[1] || cMatch[2] || '').trim()

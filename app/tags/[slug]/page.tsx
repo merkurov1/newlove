@@ -22,13 +22,47 @@ async function getTagData(slug: string) {
 
   const lookupKey = tag.slug || tag.name || normalized;
   const articles = await getArticlesByTag(supabase, lookupKey, 50);
-
   // Attach tags to fetched articles for UI (best effort)
   try {
     const { attachTagsToArticles } = await import('@/lib/attachTagsToArticles');
     tag.articles = await attachTagsToArticles(supabase, articles || []);
   } catch (e) {
     tag.articles = articles || [];
+  }
+
+  // Fallbacks: if helper/RPC returned empty result, try stricter/junction-based reads
+  if ((!Array.isArray(tag.articles) || tag.articles.length === 0)) {
+    try {
+      const { getArticlesByTagStrict, readArticleRelationsForTagStrict } = await import('@/lib/tagHelpers');
+      // Try strict junction-based fetch first
+      const strict = await getArticlesByTagStrict(supabase, lookupKey, 50).catch(() => []);
+      if (Array.isArray(strict) && strict.length > 0) {
+        tag.articles = strict;
+      } else {
+        // If strict didn't work, try reading junction relations to surface IDs
+        const th = await import('@/lib/tagHelpers');
+        const tagRow = await th.getTagBySlug(supabase, lookupKey);
+        if (tagRow && tagRow.id) {
+          const rels = await readArticleRelationsForTagStrict(supabase, tagRow.id).catch(() => []);
+          const ids = Array.from(new Set((rels || []).map((r: any) => (r && (r.A || r.a || r.article_id || r.articleId || (r.article && (r.article.id || r.article._id)) || null))).filter(Boolean).map(String)));
+          if (ids && ids.length > 0) {
+            // Fetch articles by ids via supabase (tolerant select shapes)
+            try {
+              const res = await supabase.from('articles').select('*').in('id', ids).limit(50);
+              const rows = (res && res.data) ? res.data : (Array.isArray(res) ? res : []);
+              if (Array.isArray(rows) && rows.length > 0) {
+                const { getFirstImage } = await import('@/lib/contentUtils');
+                tag.articles = rows.map((a: any) => ({ ...a, preview_image: a.previewImage || a.preview_image || (a.content ? getFirstImage(a.content) : null) }));
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // ignore overall fallback errors
+    }
   }
   if (!Array.isArray(tag.articles)) tag.articles = [];
   return tag;
