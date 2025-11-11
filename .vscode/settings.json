@@ -1,9 +1,13 @@
 {
-    "css.validate": false,
-    "less.validate": false,
-    "scss.validate": false,
-    "editor.codeActionsOnSave": {
-        "source.fixAll": "always"
-    },
-    "editor.formatOnSave": true
+  // Temporarily disable ESLint in the workspace Problems panel while we fix the root cause
+  "eslint.enable": false,
+  // Keep TypeScript validations enabled
+  "typescript.validate.enable": true,
+  "css.validate": false,
+  "less.validate": false,
+  "scss.validate": false,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "always"
+  },
+  "editor.formatOnSave": true
 }

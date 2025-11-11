@@ -141,6 +141,42 @@ export default async function Page() {
     }
   }
 
+  // If very few matches found, run a direct keyword search fallback across articles
+  // to find pages that explicitly include 'Estimate', '💸', 'Оценка', 'Цена' in content or title.
+  if (withEstimates.length < 5) {
+    try {
+      const keywords = ['Estimate', '💸', 'Оценка', 'Цена', 'Estimate:']
+      // build or-clause for supabase .or() expects comma-separated conditions
+      const clauses: string[] = []
+      for (const k of keywords) {
+        // search in content and title
+        clauses.push(`content.ilike.%${k}%`)
+        clauses.push(`title.ilike.%${k}%`)
+      }
+      const orExpr = clauses.join(',')
+      const q = supabase.from('articles').select('id,title,slug,content,preview_image,previewImage').or(orExpr).limit(200)
+      const resp = await q
+      const docs = Array.isArray(resp) ? resp : (resp && resp.data ? resp.data : [])
+      if (Array.isArray(docs) && docs.length > 0) {
+        for (const d of docs) {
+          try {
+            const id = d.id || d._id || d.article_id || d.articleId || null
+            // avoid duplicates
+            if (withEstimates.find(x => String(x.id) === String(id))) continue
+            const est = parseEstimateFromContent(d.content || d)
+            if (est !== null) {
+              withEstimates.push({ id: id, title: d.title || '', slug: d.slug || '/', previewImage: d.previewImage || d.preview_image || null, estimate: est })
+            }
+          } catch (e) {
+            continue
+          }
+        }
+      }
+    } catch (e) {
+      // ignore fallback errors
+    }
+  }
+
   // Shuffle and pick up to 10
   for (let i = withEstimates.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))

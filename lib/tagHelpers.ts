@@ -228,7 +228,8 @@ export async function getArticlesByTag(supabase: any, tagSlugOrName: any, limit 
         // Find tag id first using the regular supabase client (server side should have access)
         const tag = await getTagBySlug(supabase, tagSlugOrName);
         if (tag && tag.id) {
-          const jUrl = `${restBase}/rest/v1/_ArticleToTag?select=A,B&${encodeURIComponent(`B=eq.${String(tag.id)}`)}&limit=2000`;
+          // Build REST URL: encode only the tag id value, not the entire filter expression.
+          const jUrl = `${restBase}/rest/v1/_ArticleToTag?select=A,B&B=eq.${encodeURIComponent(String(tag.id))}&limit=2000`;
           const jHeaders = { Accept: 'application/json', apikey: svcKey, Authorization: `Bearer ${svcKey}` };
           const jResp = await fetch(jUrl, { method: 'GET', headers: jHeaders });
           if (jResp && jResp.ok) {
@@ -239,7 +240,8 @@ export async function getArticlesByTag(supabase: any, tagSlugOrName: any, limit 
                 // fetch articles via service role
                 const quoted = ids.map(id => `"${String(id).replace(/"/g, '\\"')}"`).join(',');
                 const select = 'id,title,slug,content,publishedAt,updatedAt,author';
-                const aUrl = `${restBase}/rest/v1/articles?select=${encodeURIComponent(select)}&id=in.(${encodeURIComponent(quoted)})&limit=${encodeURIComponent(String(limit))}`;
+                // For PostgREST, keep the in(...) list intact and only encode overall URL components where needed.
+                const aUrl = `${restBase}/rest/v1/articles?select=${encodeURIComponent(select)}&id=in.(${quoted})&limit=${encodeURIComponent(String(limit))}`;
                 const aHeaders = { Accept: 'application/json', apikey: svcKey, Authorization: `Bearer ${svcKey}` };
                 const aResp = await fetch(aUrl, { method: 'GET', headers: aHeaders });
                 if (aResp && aResp.ok) {
@@ -447,7 +449,7 @@ export async function getArticlesByTagStrict(supabase: any, tagSlugOrName: any, 
         const select = 'id,title,slug,content,publishedAt,updatedAt,author';
         // Use PostgREST RPC-style filter: filter articles by id via subselect on junction
         // Note: PostgREST doesn't allow subselects in URL easily; instead fetch junction rows first using service-role key
-        const jUrl = `${restBase}/rest/v1/_ArticleToTag?select=A,B&${encodeURIComponent(`B=eq.${String(tag.id)}`)}&limit=2000`;
+  const jUrl = `${restBase}/rest/v1/_ArticleToTag?select=A,B&B=eq.${encodeURIComponent(String(tag.id))}&limit=2000`;
         const jHeaders = { Accept: 'application/json', apikey: svcKey, Authorization: `Bearer ${svcKey}` };
         const jResp = await fetch(jUrl, { method: 'GET', headers: jHeaders });
         if (jResp && jResp.ok) {
