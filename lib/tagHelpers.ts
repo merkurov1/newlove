@@ -9,9 +9,10 @@ import { getFirstImage } from '@/lib/contentUtils';
 // define it here to avoid ReferenceError in production bundles when code references DEBUG.
 const DEBUG = !!(typeof process !== 'undefined' && process.env && process.env.TAG_HELPERS_DEBUG);
 
-const TABLE_CANDIDATES = ['Tag', 'tags', 'tag', 'Tags'];
-const DELETED_COLS = ['deletedAt', 'deleted_at', 'deleted', 'deletedAtAt', 'removed_at'];
-const JUNCTION_CANDIDATES = ['_ArticleToTag', 'ArticleToTag', 'article_to_tag', 'article_tags', 'article_tag', 'articletotag'];
+// Canonical table names for your deployment: Tag, _ArticleToTag, articles
+const TABLE_CANDIDATES = ['Tag'];
+const DELETED_COLS = ['deletedAt', 'deleted_at', 'deleted', 'removed_at'];
+const JUNCTION_CANDIDATES = ['_ArticleToTag'];
 
 async function readArticleRelationsForTag(supabase: any, tagId: any) {
   if (!supabase || !tagId) return [];
@@ -182,14 +183,78 @@ async function normalizeArticle(a: any) {
   } catch (e) {
     preview = a.previewImage || a.preview_image || null;
   }
+  // Helper: try to find a nested candidate object that represents the article
+  function findArticleObj(obj: any) {
+    if (!obj || typeof obj !== 'object') return null;
+    const candidates = ['article', 'Article', 'A', 'a', 'data', 'payload', 'value'];
+    for (const k of candidates) {
+      if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] && typeof obj[k] === 'object') return obj[k];
+    }
+    // if object itself looks like an article (has content/title/slug/id), return it
+    const looksLikeArticle = ('content' in obj) || ('title' in obj) || ('slug' in obj) || ('id' in obj) || ('_id' in obj);
+    if (looksLikeArticle) return obj;
+    return null;
+  }
+
+  function extractContentFrom(obj: any) {
+    if (!obj) return null;
+    // prefer a plain string content
+    if (typeof obj === 'string') return obj;
+    if (obj.content && typeof obj.content === 'string') return obj.content;
+    if (obj.body && typeof obj.body === 'string') return obj.body;
+    // blocks might be an array of rich text blocks; try to extract textual parts
+    if (Array.isArray(obj.blocks) && obj.blocks.length > 0) {
+      try {
+        const texts: string[] = [];
+        for (const b of obj.blocks) {
+          if (!b) continue;
+          if (typeof b === 'string') texts.push(b);
+          else if (typeof b === 'object') {
+            if (typeof b.text === 'string') texts.push(b.text);
+            else if (Array.isArray(b.children)) {
+              for (const c of b.children) {
+                if (c && typeof c.text === 'string') texts.push(c.text);
+              }
+            }
+          }
+        }
+        if (texts.length > 0) return texts.join('\n\n');
+      } catch (e) { /* fallthrough */ }
+    }
+    // fallback: if obj has a nested article, try recursively
+    const nested = findArticleObj(obj);
+    if (nested && nested !== obj) return extractContentFrom(nested);
+    return null;
+  }
+
+  function extractTitleFrom(obj: any) {
+    if (!obj) return '';
+    if (typeof obj.title === 'string') return obj.title;
+    if (typeof obj.name === 'string') return obj.name;
+    const nested = findArticleObj(obj);
+    if (nested && nested !== obj) return extractTitleFrom(nested);
+    return '';
+  }
+
+  function extractSlugFrom(obj: any) {
+    if (!obj) return '/';
+    if (typeof obj.slug === 'string') return obj.slug;
+    if (typeof obj.path === 'string') return obj.path;
+    const nested = findArticleObj(obj);
+    if (nested && nested !== obj) return extractSlugFrom(nested);
+    return '/';
+  }
+
+  const articleObj = findArticleObj(a) || a;
+  const content = extractContentFrom(articleObj) || null;
   return {
-    id: a.id || a._id || a.article_id || a.articleId || null,
-    title: a.title || (a.article && a.article.title) || '',
-    slug: a.slug || (a.article && a.article.slug) || '/',
-    content: a.content || null,
-    publishedAt: a.publishedAt || a.updatedAt || null,
-    updatedAt: a.updatedAt || null,
-    author: a.author || null,
+    id: a.id || a._id || a.article_id || a.articleId || (articleObj && (articleObj.id || articleObj._id)) || null,
+    title: a.title || extractTitleFrom(articleObj) || '',
+    slug: a.slug || extractSlugFrom(articleObj) || '/',
+    content,
+    publishedAt: a.publishedAt || a.updatedAt || (articleObj && (articleObj.publishedAt || articleObj.published_at || articleObj.published)) || null,
+    updatedAt: a.updatedAt || (articleObj && (articleObj.updatedAt || articleObj.updated_at)) || null,
+    author: a.author || (articleObj && (articleObj.author || articleObj.authorId)) || null,
     previewImage: preview,
   };
 }
