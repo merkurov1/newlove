@@ -3,15 +3,31 @@ import { MetadataRoute } from 'next';
 import { createClient } from '@/lib/supabase/server';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://merkurov.love';
+  // Use canonical host with www to match deployed site and avoid non-www -> www temporary redirects
+  const baseUrl = 'https://www.merkurov.love';
   const supabase = createClient();
 
   // Статические страницы
   const staticPages: MetadataRoute.Sitemap = [
     { url: baseUrl, lastModified: new Date(), changeFrequency: 'weekly', priority: 1.0 },
-    { url: `${baseUrl}/articles`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.9 },
-    { url: `${baseUrl}/projects`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${baseUrl}/letters`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.7 },
+    {
+      url: `${baseUrl}/articles`,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.9,
+    },
+    {
+      url: `${baseUrl}/projects`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/letters`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.7,
+    },
     { url: `${baseUrl}/tags`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.6 },
   ];
 
@@ -61,10 +77,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Страницы тегов
   let tagPages: MetadataRoute.Sitemap = [];
   try {
-    const { data: tags } = await supabase
-      .from('Tag')
-      .select('slug, name')
-      .limit(200);
+    const { data: tags } = await supabase.from('Tag').select('slug, name').limit(200);
 
     if (tags) {
       tagPages = tags.map((tag) => ({
@@ -104,13 +117,3 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600; // Revalidate every hour
-
-
-
-
-
-
-
-
-
-

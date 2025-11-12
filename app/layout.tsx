@@ -16,12 +16,12 @@ const NewsletterModal = NextDynamic(() => import('@/components/NewsletterModal')
 // Optimize fonts with next/font
 import { Inter } from 'next/font/google';
 
-const inter = Inter({ 
+const inter = Inter({
   subsets: ['latin', 'cyrillic'],
   display: 'swap', // Prevent CLS
   preload: true,
   variable: '--font-inter',
-  weight: ['400', '500', '600', '700']
+  weight: ['400', '500', '600', '700'],
 });
 
 // --- SEO: Корректный шаблон заголовка и метаданных ---
@@ -31,7 +31,16 @@ export const metadata = sanitizeMetadata({
     template: '%s | Anton Merkurov',
   },
   description: 'Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.',
-  keywords: ['Антон Меркуров', 'медиа', 'технологии', 'digital', 'искусство', 'блог', 'статьи', 'маркетинг'],
+  keywords: [
+    'Антон Меркуров',
+    'медиа',
+    'технологии',
+    'digital',
+    'искусство',
+    'блог',
+    'статьи',
+    'маркетинг',
+  ],
   authors: [{ name: 'Anton Merkurov', url: 'https://merkurov.love' }],
   creator: 'Anton Merkurov',
   publisher: 'Anton Merkurov',
@@ -56,7 +65,9 @@ export const metadata = sanitizeMetadata({
     card: 'summary_large_image',
     title: 'Anton Merkurov | Art x Love x Money',
     description: 'Медиа, технологии и искусство',
-    images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png'],
+    images: [
+      'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
+    ],
     creator: '@merkurov',
     site: '@merkurov',
   },
@@ -76,19 +87,20 @@ export const metadata = sanitizeMetadata({
   },
   verification: {},
   alternates: {
-    canonical: 'https://merkurov.love',
+    // Use canonical www host to match production and sitemap entries
+    canonical: 'https://www.merkurov.love',
     languages: {
-      'ru-RU': 'https://merkurov.love',
+      'ru-RU': 'https://www.merkurov.love',
     },
     types: {
-      'application/rss+xml': 'https://merkurov.love/rss.xml',
+      'application/rss+xml': 'https://www.merkurov.love/rss.xml',
     },
   },
   other: {
     // AI & Performance optimization
-    'google': 'notranslate',
+    google: 'notranslate',
     'format-detection': 'telephone=no',
-  }
+  },
 });
 
 // Force dynamic rendering for the entire app during this migration/debug pass.
@@ -96,8 +108,6 @@ export const metadata = sanitizeMetadata({
 // due to runtime serialization of complex server values. We'll narrow this
 // later and re-enable static rendering per-route where safe.
 export const dynamic = 'force-dynamic';
-
-
 
 import { safeData } from '@/lib/safeSerialize';
 
@@ -108,13 +118,23 @@ async function getPublicProjects() {
     const supabase = getServerSupabaseClient({ useServiceRole: true });
     let projects: any[] = [];
     if (supabase) {
-      const res = await supabase.from('projects').select('id,slug,title,publishedAt').eq('published', true).order('publishedAt', { ascending: false }).limit(10);
+      const res = await supabase
+        .from('projects')
+        .select('id,slug,title,publishedAt')
+        .eq('published', true)
+        .order('publishedAt', { ascending: false })
+        .limit(10);
       projects = res && res.data ? res.data : [];
     } else {
       try {
         const { getServerSupabaseClient } = await import('@/lib/serverAuth');
         const srv = getServerSupabaseClient({ useServiceRole: true });
-        const res = await srv.from('projects').select('id,slug,title,publishedAt').eq('published', true).order('publishedAt', { ascending: false }).limit(10);
+        const res = await srv
+          .from('projects')
+          .select('id,slug,title,publishedAt')
+          .eq('published', true)
+          .order('publishedAt', { ascending: false })
+          .limit(10);
         projects = res && res.data ? res.data : [];
       } catch (e) {
         console.error('Failed to fetch projects for layout via server client', e);
@@ -126,7 +146,7 @@ async function getPublicProjects() {
       return [];
     }
     // Guarantee shape for the component
-    return projects.map(p => ({
+    return projects.map((p) => ({
       id: p.id,
       slug: p.slug,
       title: p.title,
@@ -162,7 +182,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const settings = {
     site_name: 'Anton Merkurov',
     slogan: 'Art x Love x Money',
-    logo_url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png'
+    logo_url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
   };
   return (
     <html lang="ru" className={inter.variable}>
@@ -170,15 +190,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Performance: Preconnect to Supabase for faster image loading */}
         <link rel="preconnect" href="https://txvkqcitalfbjytmnawq.supabase.co" />
         <link rel="dns-prefetch" href="https://txvkqcitalfbjytmnawq.supabase.co" />
-        
+
         {/* Umami analytics */}
-        <script defer src="https://cloud.umami.is/script.js" data-website-id="87795d47-f53d-4ef8-8e82-3ee195ea997b"></script>
+        <script
+          defer
+          src="https://cloud.umami.is/script.js"
+          data-website-id="87795d47-f53d-4ef8-8e82-3ee195ea997b"
+        ></script>
       </head>
       <body className={inter.className}>
         <AuthProvider>
           {/* Accessibility: Skip to main content link */}
-          <a 
-            href="#main-content" 
+          <a
+            href="#main-content"
             className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             Перейти к основному содержанию
@@ -186,9 +210,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Header settings={safeData(settings)} projects={safeData(projects)} />
           {/* client-only sidebar should appear immediately under the header for logged-in users */}
           <UserSidebar />
-          <main id="main-content">
-            {children}
-          </main>
+          <main id="main-content">{children}</main>
           <Footer subscriberCount={Number(subscriberCount) || 0} />
           {/* Newsletter subscription modal - shows once per 24h for non-subscribers */}
           <NewsletterModal />
