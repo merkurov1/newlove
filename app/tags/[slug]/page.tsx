@@ -15,7 +15,7 @@ async function getTagData(slug: string) {
 
   const { getTagBySlug, getArticlesByTag } = await import('@/lib/tagHelpers');
   // Find tag (tolerant lookup inside helper)
-  const tag = await getTagBySlug(supabase, normalized);
+  const tag: any = await getTagBySlug(supabase, normalized);
   if (!tag) {
     notFound();
   }
@@ -33,7 +33,9 @@ async function getTagData(slug: string) {
   // Fallbacks: if helper/RPC returned empty result, try stricter/junction-based reads
   if ((!Array.isArray(tag.articles) || tag.articles.length === 0)) {
     try {
-      const { getArticlesByTagStrict, readArticleRelationsForTagStrict } = await import('@/lib/tagHelpers');
+      const thMod: any = await import('@/lib/tagHelpers');
+      const getArticlesByTagStrict = thMod.getArticlesByTagStrict;
+      const readArticleRelationsForTagStrict = thMod.readArticleRelationsForTagStrict;
       // Try strict junction-based fetch first
       const strict = await getArticlesByTagStrict(supabase, lookupKey, 50).catch(() => []);
       if (Array.isArray(strict) && strict.length > 0) {
