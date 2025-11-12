@@ -10,7 +10,12 @@ export function sanitizeMetadata(input: any): any {
     const out: any = {};
     if (typeof input.title === 'string' && input.title.trim().length > 0) {
       out.title = input.title;
-    } else if (input.title && typeof input.title === 'object' && input.title.default && typeof input.title.default === 'string') {
+    } else if (
+      input.title &&
+      typeof input.title === 'object' &&
+      input.title.default &&
+      typeof input.title.default === 'string'
+    ) {
       // support `{ default, template }` shape from root layout
       out.title = input.title.default;
     }
@@ -21,7 +26,8 @@ export function sanitizeMetadata(input: any): any {
     if (input.openGraph && typeof input.openGraph === 'object') {
       out.openGraph = {};
       if (typeof input.openGraph.title === 'string') out.openGraph.title = input.openGraph.title;
-      if (typeof input.openGraph.description === 'string') out.openGraph.description = input.openGraph.description;
+      if (typeof input.openGraph.description === 'string')
+        out.openGraph.description = input.openGraph.description;
       if (Array.isArray(input.openGraph.images)) {
         out.openGraph.images = input.openGraph.images
           .filter((i: any) => {
@@ -34,6 +40,34 @@ export function sanitizeMetadata(input: any): any {
       }
     }
 
+    // Preserve canonical alternate URL when provided so Next can emit a <link rel="canonical"> tag.
+    if (input.alternates && typeof input.alternates === 'object') {
+      if (typeof input.alternates.canonical === 'string' && input.alternates.canonical.trim()) {
+        out.alternates = { canonical: input.alternates.canonical };
+      }
+    }
+
+    // Preserve robots hints (index/follow) when explicitly provided. Next will render proper meta tags.
+    if (input.robots && typeof input.robots === 'object') {
+      // Only copy simple primitive values to avoid React elements or functions
+      const robotsOut: any = {};
+      if (typeof input.robots.index === 'boolean') robotsOut.index = input.robots.index;
+      if (typeof input.robots.follow === 'boolean') robotsOut.follow = input.robots.follow;
+      if (input.robots.googleBot && typeof input.robots.googleBot === 'object') {
+        robotsOut.googleBot = {};
+        for (const k of [
+          'index',
+          'follow',
+          'max-snippet',
+          'max-image-preview',
+          'max-video-preview',
+        ]) {
+          if (k in input.robots.googleBot) robotsOut.googleBot[k] = input.robots.googleBot[k];
+        }
+      }
+      if (Object.keys(robotsOut).length > 0) out.robots = robotsOut;
+    }
+
     // Fallback to minimal metadata when nothing useful found
     if (!out.title) out.title = 'Untitled';
     if (!out.description) out.description = '';
@@ -43,4 +77,3 @@ export function sanitizeMetadata(input: any): any {
     return { title: 'Untitled', description: '' };
   }
 }
-
