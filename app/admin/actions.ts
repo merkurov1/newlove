@@ -1,4 +1,4 @@
-"use server";
+'use server';
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -15,6 +15,14 @@ import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSub
 import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
 import { parseTagNames, upsertTagsAndLink } from '@/lib/tags';
 
+// Local helper to produce tag slugs for revalidation paths
+const slugifyTag = (s: string) =>
+  (s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/--+/g, '-');
+
 // --- Types ---
 type ActionResult = {
   status?: 'success' | 'error';
@@ -24,10 +32,19 @@ type ActionResult = {
 };
 
 // --- Revalidation audit helper ---
-async function recordRevalidationAudit(supabase: SupabaseClient | null, userId: string | null, reason: string | null = null): Promise<void> {
+async function recordRevalidationAudit(
+  supabase: SupabaseClient | null,
+  userId: string | null,
+  reason: string | null = null
+): Promise<void> {
   try {
     if (!supabase || !supabase.from) return;
-    await supabase.from('revalidation_audit').insert({ id: createId(), user_id: userId || null, reason, created_at: new Date().toISOString() });
+    await supabase.from('revalidation_audit').insert({
+      id: createId(),
+      user_id: userId || null,
+      reason,
+      created_at: new Date().toISOString(),
+    });
   } catch (e: any) {
     // don't block the main flow on audit errors
     console.warn('recordRevalidationAudit failed:', e);
@@ -67,7 +84,6 @@ async function getSupabaseForAction(useServiceRole = false) {
   return getServerSupabaseClient({ useServiceRole });
 }
 
-
 // --- Статьи (Article) ---
 
 export async function createArticle(formData: any) {
@@ -81,7 +97,11 @@ export async function createArticle(formData: any) {
 
   if (!title || !contentRaw || !slug) throw new Error('Все поля обязательны.');
 
-  const { data: existingSlug } = await supabase.from('articles').select('id').eq('slug', slug).maybeSingle();
+  const { data: existingSlug } = await supabase
+    .from('articles')
+    .select('id')
+    .eq('slug', slug)
+    .maybeSingle();
   if (existingSlug) {
     throw new Error('Статья с таким slug уже существует.');
   }
@@ -89,7 +109,9 @@ export async function createArticle(formData: any) {
   let validBlocks;
   try {
     const blocks = JSON.parse(contentRaw);
-    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter(
+      (b: any) => b && typeof b.type === 'string' && typeof b.data === 'object'
+    );
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
     throw new Error('Контент имеет неверный JSON формат.');
@@ -114,8 +136,19 @@ export async function createArticle(formData: any) {
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   await upsertTagsAndLink(supabase, 'article', articleId, parsedTags);
 
-  revalidatePath('/admin/articles');
-  revalidatePath(`/admin/articles/edit/${articleId}`);
+  // Revalidate tag pages and root so tag listing / sliders update immediately
+  try {
+    for (const t of parsedTags || []) {
+      const slug = slugifyTag(t);
+      if (slug) revalidatePath(`/tags/${slug}`);
+    }
+    revalidatePath('/');
+    revalidatePath('/admin/articles');
+    revalidatePath(`/admin/articles/edit/${articleId}`);
+  } catch (e) {
+    console.warn('Tag revalidation failed:', e);
+  }
+
   redirect(`/admin/articles/edit/${articleId}`);
 }
 
@@ -134,19 +167,24 @@ export async function updateArticle(formData: any) {
   let validBlocks;
   try {
     const blocks = JSON.parse(contentRaw);
-    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter(
+      (b: any) => b && typeof b.type === 'string' && typeof b.data === 'object'
+    );
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
     throw new Error('Контент имеет неверный JSON формат.');
   }
 
-  const { error } = await supabase.from('articles').update({
-    title,
-    content: JSON.stringify(validBlocks),
-    slug,
-    published,
-    publishedAt: published ? new Date().toISOString() : null,
-  }).eq('id', id);
+  const { error } = await supabase
+    .from('articles')
+    .update({
+      title,
+      content: JSON.stringify(validBlocks),
+      slug,
+      published,
+      publishedAt: published ? new Date().toISOString() : null,
+    })
+    .eq('id', id);
 
   if (error) {
     console.error('Supabase update article error:', error);
@@ -155,6 +193,16 @@ export async function updateArticle(formData: any) {
 
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   await upsertTagsAndLink(supabase, 'article', id, parsedTags);
+
+  try {
+    for (const t of parsedTags || []) {
+      const slug = slugifyTag(t);
+      if (slug) revalidatePath(`/tags/${slug}`);
+    }
+    revalidatePath('/');
+  } catch (e) {
+    console.warn('Tag revalidation failed:', e);
+  }
 
   revalidatePath('/admin/articles');
   revalidatePath(`/${slug}`);
@@ -167,7 +215,11 @@ export async function deleteArticle(formData: any) {
   const id = formData.get('id')?.toString();
   if (!id) throw new Error('Article ID is required.');
 
-  const { data: article } = await supabase.from('articles').select('slug').eq('id', id).maybeSingle();
+  const { data: article } = await supabase
+    .from('articles')
+    .select('slug')
+    .eq('id', id)
+    .maybeSingle();
   const { error } = await supabase.from('articles').delete().eq('id', id);
 
   if (error) {
@@ -192,7 +244,11 @@ export async function createProject(formData: any) {
 
   if (!title || !contentRaw || !slug) throw new Error('Все поля обязательны.');
 
-  const { data: existing } = await supabase.from('projects').select('id').eq('slug', slug).maybeSingle();
+  const { data: existing } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('slug', slug)
+    .maybeSingle();
   if (existing) {
     throw new Error('Проект с таким slug уже существует.');
   }
@@ -200,7 +256,9 @@ export async function createProject(formData: any) {
   let validBlocks;
   try {
     const blocks = JSON.parse(contentRaw);
-    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter(
+      (b: any) => b && typeof b.type === 'string' && typeof b.data === 'object'
+    );
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
     throw new Error('Контент имеет неверный JSON формат.');
@@ -225,14 +283,24 @@ export async function createProject(formData: any) {
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   await upsertTagsAndLink(supabase, 'project', projectId, parsedTags);
 
+  // Revalidate tag pages + project pages
+  try {
+    for (const t of parsedTags || []) {
+      const slug = slugifyTag(t);
+      if (slug) revalidatePath(`/tags/${slug}`);
+    }
+    revalidatePath('/', 'layout');
+  } catch (e) {
+    console.warn('Tag revalidation failed:', e);
+  }
+
   // Ревалидация всех страниц, где отображаются проекты
   revalidatePath('/admin/projects');
   revalidatePath(`/admin/projects/edit/${projectId}`);
-  revalidatePath('/', 'layout'); // Ревалидация root layout для обновления Header
   if (published) {
     revalidatePath(`/${slug}`); // Ревалидация публичной страницы проекта
   }
-  
+
   redirect(`/admin/projects/edit/${projectId}`);
 }
 
@@ -251,19 +319,24 @@ export async function updateProject(formData: any) {
   let validBlocks;
   try {
     const blocks = JSON.parse(contentRaw);
-    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter(
+      (b: any) => b && typeof b.type === 'string' && typeof b.data === 'object'
+    );
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch {
     throw new Error('Контент имеет неверный JSON формат.');
   }
 
-  const { error } = await supabase.from('projects').update({
-    title,
-    content: JSON.stringify(validBlocks),
-    slug,
-    published,
-    publishedAt: published ? new Date().toISOString() : null,
-  }).eq('id', id);
+  const { error } = await supabase
+    .from('projects')
+    .update({
+      title,
+      content: JSON.stringify(validBlocks),
+      slug,
+      published,
+      publishedAt: published ? new Date().toISOString() : null,
+    })
+    .eq('id', id);
 
   if (error) {
     console.error('Supabase update project error:', error);
@@ -273,14 +346,23 @@ export async function updateProject(formData: any) {
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   await upsertTagsAndLink(supabase, 'project', id, parsedTags);
 
+  try {
+    for (const t of parsedTags || []) {
+      const slug = slugifyTag(t);
+      if (slug) revalidatePath(`/tags/${slug}`);
+    }
+    revalidatePath('/', 'layout');
+  } catch (e) {
+    console.warn('Tag revalidation failed:', e);
+  }
+
   // Ревалидация всех страниц, где отображаются проекты
   revalidatePath('/admin/projects');
   revalidatePath(`/admin/projects/edit/${id}`);
-  revalidatePath('/', 'layout'); // Ревалидация root layout для обновления Header
   if (published) {
     revalidatePath(`/${slug}`); // Ревалидация публичной страницы проекта
   }
-  
+
   redirect('/admin/projects');
 }
 
@@ -290,7 +372,11 @@ export async function deleteProject(formData: any) {
   const id = formData.get('id')?.toString();
   if (!id) throw new Error('Project ID is required.');
 
-  const { data: project } = await supabase.from('projects').select('slug').eq('id', id).maybeSingle();
+  const { data: project } = await supabase
+    .from('projects')
+    .select('slug')
+    .eq('id', id)
+    .maybeSingle();
   const { error } = await supabase.from('projects').delete().eq('id', id);
 
   if (error) {
@@ -308,8 +394,11 @@ export async function deleteProject(formData: any) {
 export async function updateProfile(prevState: any, formData: any) {
   // Get authenticated user from anon client (to verify session)
   const anonClient = createClient();
-  const { data: { user }, error: authError } = await anonClient.auth.getUser();
-  
+  const {
+    data: { user },
+    error: authError,
+  } = await anonClient.auth.getUser();
+
   if (authError || !user?.id) {
     return { status: 'error', message: 'Вы не авторизованы.' };
   }
@@ -320,7 +409,10 @@ export async function updateProfile(prevState: any, formData: any) {
     return { status: 'error', message: 'Имя и username обязательны.' };
   }
   if (!/^[a-z0-9_.]+$/.test(username)) {
-    return { status: 'error', message: 'Username может содержать только строчные буквы, цифры, _ и .' };
+    return {
+      status: 'error',
+      message: 'Username может содержать только строчные буквы, цифры, _ и .',
+    };
   }
 
   // Use service-role client for updating users table (anon doesn't have UPDATE permission)
@@ -338,7 +430,8 @@ export async function updateProfile(prevState: any, formData: any) {
     .single();
 
   if (error) {
-    if (error.code === '23505') { // Unique constraint violation
+    if (error.code === '23505') {
+      // Unique constraint violation
       return { status: 'error', message: 'Этот username уже занят.' };
     }
     console.error('Supabase update user error:', error);
@@ -368,7 +461,11 @@ export async function adminUpdateUserRole(userId: any, role: any) {
   try {
     // Keep the users table in sync if it exists in the project schema.
     // Merge existing user_metadata to avoid clobbering other fields.
-    const { data: userRow } = await supabase.from('users').select('user_metadata,email').eq('id', userId).maybeSingle();
+    const { data: userRow } = await supabase
+      .from('users')
+      .select('user_metadata,email')
+      .eq('id', userId)
+      .maybeSingle();
     const existingMeta = (userRow && userRow.user_metadata) || {};
     const mergedMeta = { ...existingMeta, role };
     if (userRow) {
@@ -388,7 +485,10 @@ export async function adminUpdateUserRole(userId: any, role: any) {
 
         if (existingSub) {
           // Update existing subscriber
-          await supabase.from('subscribers').update({ userId, isActive: true }).eq('id', existingSub.id);
+          await supabase
+            .from('subscribers')
+            .update({ userId, isActive: true })
+            .eq('id', existingSub.id);
         } else {
           // Create new subscriber
           const insertPayload = { id: createId(), email, userId, isActive: true };
@@ -398,7 +498,7 @@ export async function adminUpdateUserRole(userId: any, role: any) {
     }
   } catch (syncErr) {
     console.warn('adminUpdateUserRole: failed to sync users/subscribers tables', syncErr);
-  // Sentry removed
+    // Sentry removed
   }
 
   revalidatePath('/admin/users');
@@ -419,7 +519,7 @@ export async function adminDeleteUser(userId: any) {
       .from('subscribers')
       .update({ userId: null })
       .eq('userId', userId);
-    
+
     if (subError) {
       console.warn('adminDeleteUser: failed to unlink subscribers', subError);
     }
@@ -445,8 +545,11 @@ export async function adminDeleteUser(userId: any) {
 export async function toggleUserSubscription(prevState: any, formData: any) {
   // Get authenticated user
   const anonClient = createClient();
-  const { data: { user }, error: authError } = await anonClient.auth.getUser();
-  
+  const {
+    data: { user },
+    error: authError,
+  } = await anonClient.auth.getUser();
+
   if (authError || !user?.id) {
     return { status: 'error', message: 'Вы не авторизованы.' };
   }
@@ -482,36 +585,25 @@ export async function toggleUserSubscription(prevState: any, formData: any) {
           .eq('id', existingSub.id);
       } else {
         // Create new
-        await supabase
-          .from('subscribers')
-          .insert({
-            id: createId(),
-            email: userData.email,
-            userId: user.id,
-            isActive: true
-          });
+        await supabase.from('subscribers').insert({
+          id: createId(),
+          email: userData.email,
+          userId: user.id,
+          isActive: true,
+        });
       }
 
       // Update users table (trigger will do it, but for immediate feedback)
-      await supabase
-        .from('users')
-        .update({ is_subscribed: true })
-        .eq('id', user.id);
+      await supabase.from('users').update({ is_subscribed: true }).eq('id', user.id);
 
       revalidatePath('/profile');
       return { status: 'success', message: 'Вы успешно подписались на рассылку!' };
     } else if (action === 'unsubscribe') {
       // Deactivate subscription
-      await supabase
-        .from('subscribers')
-        .update({ isActive: false })
-        .eq('userId', user.id);
+      await supabase.from('subscribers').update({ isActive: false }).eq('userId', user.id);
 
       // Update users table
-      await supabase
-        .from('users')
-        .update({ is_subscribed: false })
-        .eq('id', user.id);
+      await supabase.from('users').update({ is_subscribed: false }).eq('id', user.id);
 
       revalidatePath('/profile');
       return { status: 'success', message: 'Вы отписались от рассылки.' };
@@ -533,11 +625,7 @@ export async function adminToggleUserSubscription(userId: any, subscribe: any) {
 
   try {
     // Get user data from public.users first
-    let userData = await supabase
-      .from('users')
-      .select('email')
-      .eq('id', userId)
-      .maybeSingle();
+    let userData = await supabase.from('users').select('email').eq('id', userId).maybeSingle();
 
     // If user doesn't exist in public.users, get from auth.users and create
     if (!userData?.data?.email) {
@@ -545,20 +633,19 @@ export async function adminToggleUserSubscription(userId: any, subscribe: any) {
       if (!authUser?.user?.email) {
         return { status: 'error', message: 'У пользователя нет email.' };
       }
-      
+
       // Create user in public.users
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert({
-          id: userId,
-          email: authUser.user.email,
-          name: authUser.user.user_metadata?.name || authUser.user.email.split('@')[0],
-        });
-      
-      if (insertError && insertError.code !== '23505') { // Ignore duplicate key error
+      const { error: insertError } = await supabase.from('users').insert({
+        id: userId,
+        email: authUser.user.email,
+        name: authUser.user.user_metadata?.name || authUser.user.email.split('@')[0],
+      });
+
+      if (insertError && insertError.code !== '23505') {
+        // Ignore duplicate key error
         console.error('Error creating user in public.users:', insertError);
       }
-      
+
       userData = { data: { email: authUser.user.email } } as any;
     }
 
@@ -581,31 +668,26 @@ export async function adminToggleUserSubscription(userId: any, subscribe: any) {
           .update({ userId, isActive: true })
           .eq('id', existingSub.id);
       } else {
-        await supabase
-          .from('subscribers')
-          .insert({
-            id: createId(),
-            email: email,
-            userId,
-            isActive: true
-          });
+        await supabase.from('subscribers').insert({
+          id: createId(),
+          email: email,
+          userId,
+          isActive: true,
+        });
       }
     } else {
       // Unsubscribe user
-      await supabase
-        .from('subscribers')
-        .update({ isActive: false })
-        .eq('userId', userId);
+      await supabase.from('subscribers').update({ isActive: false }).eq('userId', userId);
     }
 
     // Update users table
-    await supabase
-      .from('users')
-      .update({ is_subscribed: subscribe })
-      .eq('id', userId);
+    await supabase.from('users').update({ is_subscribed: subscribe }).eq('id', userId);
 
     revalidatePath('/admin/users');
-    return { status: 'success', message: subscribe ? 'Пользователь подписан.' : 'Пользователь отписан.' };
+    return {
+      status: 'success',
+      message: subscribe ? 'Пользователь подписан.' : 'Пользователь отписан.',
+    };
   } catch (error: any) {
     console.error('adminToggleUserSubscription error:', error);
     return { status: 'error', message: error.message };
@@ -625,13 +707,15 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
   // Use service-role client for writes (in case RLS prevents anon/request client from inserting)
   let svc;
   try {
-
-
     svc = getServerSupabaseClient({ useServiceRole: true });
   } catch (e: any) {
     console.error('subscribeToNewsletter: service role client not available', e);
-  // Sentry removed
-    return { status: 'error', message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).', error: String(e) };
+    // Sentry removed
+    return {
+      status: 'error',
+      message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).',
+      error: String(e),
+    };
   }
 
   // Check if subscriber already exists to avoid foreign key conflicts
@@ -655,12 +739,8 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
     } else {
       // Create new subscriber with new ID
       const payload = { id: createId(), email, userId: user?.id || null, isActive: false };
-      const insertRes = await svc
-        .from('subscribers')
-        .insert(payload)
-        .select()
-        .single();
-      
+      const insertRes = await svc.from('subscribers').insert(payload).select().single();
+
       if (insertRes.error) {
         throw insertRes.error;
       }
@@ -671,7 +751,13 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
     const code = error?.code || null;
     const msg = error?.message || String(error) || 'Ошибка при подписке.';
     if (String(code) === '42501') {
-      return { status: 'error', message: 'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.', code, details: error };
+      return {
+        status: 'error',
+        message:
+          'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.',
+        code,
+        details: error,
+      };
     }
     return { status: 'error', message: msg, code, details: error };
   }
@@ -685,20 +771,20 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
     const confirmToken = createId();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
-    const { error: tokenErr } = await svc.from('subscriber_tokens').insert({ 
-      subscriber_id: subscriber.id, 
-      type: 'confirm', 
-      token: confirmToken, 
+    const { error: tokenErr } = await svc.from('subscriber_tokens').insert({
+      subscriber_id: subscriber.id,
+      type: 'confirm',
+      token: confirmToken,
       created_at: now.toISOString(),
-      expires_at: expiresAt.toISOString()
+      expires_at: expiresAt.toISOString(),
     });
     if (tokenErr) {
       console.warn('Failed to insert confirm token:', tokenErr.message || tokenErr);
-  // Sentry removed
+      // Sentry removed
     } else {
       const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-confirm?token=${confirmToken}`;
       console.info('Created confirm token for subscriber', subscriber.email);
-      
+
       // Send confirmation email
       const apiKey = process.env.RESEND_API_KEY;
       if (apiKey) {
@@ -706,7 +792,7 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
           const resend = new Resend(apiKey);
           const fromEmail = process.env.NOREPLY_EMAIL || 'noreply@merkurov.love';
           const fromDisplay = process.env.NOREPLY_DISPLAY || 'Anton Merkurov';
-          
+
           await resend.emails.send({
             from: `${fromDisplay} <${fromEmail}>`,
             to: email,
@@ -736,7 +822,7 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
                 </div>
               </body>
               </html>
-            `
+            `,
           });
           console.info('Confirmation email sent to', email);
         } catch (emailErr) {
@@ -746,8 +832,12 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
       } else {
         console.warn('RESEND_API_KEY not configured, confirmation email not sent');
       }
-      
-      return { status: 'success', message: 'Проверьте почту для подтверждения подписки.', confirmUrl };
+
+      return {
+        status: 'success',
+        message: 'Проверьте почту для подтверждения подписки.',
+        confirmUrl,
+      };
     }
   } catch (e: any) {
     console.warn('subscribeToNewsletter: token insert failed', e?.message || e);
@@ -775,7 +865,9 @@ export async function createLetter(formData: any) {
   let validBlocks;
   try {
     const blocks = JSON.parse(rawContent);
-    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter(
+      (b: any) => b && typeof b.type === 'string' && typeof b.data === 'object'
+    );
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch (e: any) {
     throw new Error('Контент имеет неверный JSON формат: ' + e.message);
@@ -801,8 +893,22 @@ export async function createLetter(formData: any) {
 
   const parsedTags = parseTagNames(tagsString);
   await upsertTagsAndLink(supabase, 'letter', letterId, parsedTags);
+  // Revalidate tag pages + Audit
+  try {
+    for (const t of parsedTags || []) {
+      const slug = slugifyTag(t);
+      if (slug) revalidatePath(`/tags/${slug}`);
+    }
+    revalidatePath('/');
+  } catch (e) {
+    console.warn('Tag revalidation failed:', e);
+  }
   // Audit and revalidate
-  await recordRevalidationAudit(supabase, user?.id, published ? 'create_published_letter' : 'create_letter');
+  await recordRevalidationAudit(
+    supabase,
+    user?.id,
+    published ? 'create_published_letter' : 'create_letter'
+  );
   revalidatePath('/admin/letters');
   revalidatePath('/letters');
   revalidatePath(`/admin/letters/edit/${letterId}`);
@@ -825,25 +931,34 @@ export async function updateLetter(formData: any) {
     throw new Error('Заполните все обязательные поля.');
   }
 
-  const { data: existingLetter } = await supabase.from('letters').select('slug, published').eq('id', id).single();
+  const { data: existingLetter } = await supabase
+    .from('letters')
+    .select('slug, published')
+    .eq('id', id)
+    .single();
   if (!existingLetter) throw new Error('Письмо не найдено.');
 
   let validBlocks;
   try {
     const blocks = JSON.parse(rawContent);
-    validBlocks = blocks.filter((b: any) => b && typeof b.type === 'string' && typeof b.data === 'object');
+    validBlocks = blocks.filter(
+      (b: any) => b && typeof b.type === 'string' && typeof b.data === 'object'
+    );
     if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
   } catch (e: any) {
     throw new Error('Контент имеет неверный JSON формат: ' + e.message);
   }
 
-  const { error } = await supabase.from('letters').update({
-    title,
-    slug,
-    content: JSON.stringify(validBlocks),
-    published,
-    updatedAt: new Date().toISOString(),
-  }).eq('id', id);
+  const { error } = await supabase
+    .from('letters')
+    .update({
+      title,
+      slug,
+      content: JSON.stringify(validBlocks),
+      published,
+      updatedAt: new Date().toISOString(),
+    })
+    .eq('id', id);
 
   if (error) {
     if (error.code === '23505') {
@@ -856,8 +971,22 @@ export async function updateLetter(formData: any) {
   const parsedTags = parseTagNames(tagsString);
   await upsertTagsAndLink(supabase, 'letter', id, parsedTags);
 
+  try {
+    for (const t of parsedTags || []) {
+      const slug = slugifyTag(t);
+      if (slug) revalidatePath(`/tags/${slug}`);
+    }
+    revalidatePath('/');
+  } catch (e) {
+    console.warn('Tag revalidation failed:', e);
+  }
+
   // Audit and revalidate
-  await recordRevalidationAudit(supabase, null, published ? 'update_published_letter' : 'update_letter');
+  await recordRevalidationAudit(
+    supabase,
+    null,
+    published ? 'update_published_letter' : 'update_letter'
+  );
   revalidatePath('/admin/letters');
   revalidatePath('/letters');
   revalidatePath(`/admin/letters/edit/${id}`);
@@ -881,16 +1010,26 @@ export async function deleteLetter(formData: any) {
   if (!id) throw new Error('Letter ID is required.');
 
   try {
-    const { data: letter } = await supabase.from('letters').select('slug, published').eq('id', id).maybeSingle();
+    const { data: letter } = await supabase
+      .from('letters')
+      .select('slug, published')
+      .eq('id', id)
+      .maybeSingle();
     let { error } = await supabase.from('letters').delete().eq('id', id);
 
     if (error && String(error.code) === '42501') {
-      console.error('Supabase delete letter permission denied (42501). Attempting retry with service role client if available.');
-  // Sentry removed
+      console.error(
+        'Supabase delete letter permission denied (42501). Attempting retry with service role client if available.'
+      );
+      // Sentry removed
 
       if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        console.warn('Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server; throwing error.');
-        throw new Error('Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server.');
+        console.warn(
+          'Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server; throwing error.'
+        );
+        throw new Error(
+          'Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server.'
+        );
       }
 
       try {
@@ -899,21 +1038,31 @@ export async function deleteLetter(formData: any) {
         if (retry.error) {
           console.error('Retry with service role failed:', retry.error);
           // Sentry removed
-          throw new Error('Ошибка при удалении письма: permission denied for table letters. Убедитесь, что сервисная роль имеет права на таблицу `letters`. Рекомендация: выполните sql/ensure_service_role_grants.sql в Supabase SQL Editor (или вручную выдайте соответствующие права).');
+          throw new Error(
+            'Ошибка при удалении письма: permission denied for table letters. Убедитесь, что сервисная роль имеет права на таблицу `letters`. Рекомендация: выполните sql/ensure_service_role_grants.sql в Supabase SQL Editor (или вручную выдайте соответствующие права).'
+          );
         }
         // success via retry
         error = null;
       } catch (e: any) {
-      console.error('Error upserting subscriber:', error);
-  // Sentry removed
-        throw new Error('Не удалось удалить письмо: ' + (e?.message || String(e)) + '. Проверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql');
+        console.error('Error upserting subscriber:', error);
+        // Sentry removed
+        throw new Error(
+          'Не удалось удалить письмо: ' +
+            (e?.message || String(e)) +
+            '. Проверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql'
+        );
       }
     }
 
     if (error) {
       console.error('Supabase delete letter error:', error);
-  // Sentry removed
-      throw new Error('Ошибка при удалении письма: ' + (error.message || String(error)) + '. Если это ошибка прав (42501), убедитесь в настройке сервисной роли.');
+      // Sentry removed
+      throw new Error(
+        'Ошибка при удалении письма: ' +
+          (error.message || String(error)) +
+          '. Если это ошибка прав (42501), убедитесь в настройке сервисной роли.'
+      );
     }
 
     revalidatePath('/admin/letters');
@@ -939,7 +1088,11 @@ export async function sendLetter(prevState: any, formData: any) {
     return { status: 'error', message: 'Не указан ID письма.' };
   }
 
-  const { data: letter, error: letterErr } = await supabase.from('letters').select('id,title,slug,content,published,sentAt').eq('id', letterId).maybeSingle();
+  const { data: letter, error: letterErr } = await supabase
+    .from('letters')
+    .select('id,title,slug,content,published,sentAt')
+    .eq('id', letterId)
+    .maybeSingle();
   if (letterErr || !letter) {
     console.error('sendLetter: failed to load letter', letterErr);
     return { status: 'error', message: 'Письмо не найдено.' };
@@ -947,10 +1100,12 @@ export async function sendLetter(prevState: any, formData: any) {
 
   // Prevent accidental re-sending of already sent newsletters (unless it's a test email)
   if (!testEmail && letter.sentAt) {
-    console.warn(`Attempted to re-send letter ${letterId} that was already sent at ${letter.sentAt}`);
-    return { 
-      status: 'error', 
-      message: `❌ Эта рассылка уже была отправлена ${new Date(letter.sentAt).toLocaleString('ru-RU')}. Повторная отправка запрещена для избежания дублирования писем.` 
+    console.warn(
+      `Attempted to re-send letter ${letterId} that was already sent at ${letter.sentAt}`
+    );
+    return {
+      status: 'error',
+      message: `❌ Эта рассылка уже была отправлена ${new Date(letter.sentAt).toLocaleString('ru-RU')}. Повторная отправка запрещена для избежания дублирования писем.`,
     };
   }
 
@@ -960,38 +1115,50 @@ export async function sendLetter(prevState: any, formData: any) {
     title: letter.title,
     content: letter.content,
     html: (() => {
-      try { return renderNewsletterEmail(letter, ''); } catch (e: any) { return ''; }
+      try {
+        return renderNewsletterEmail(letter, '');
+      } catch (e: any) {
+        return '';
+      }
     })(),
   };
 
   // If a testEmail is provided, send a single test email and return result
   if (testEmail) {
     const testSubscriber = { id: createId(), email: testEmail };
-    const res = await sendNewsletterToSubscriber(testSubscriber, letterObj, { skipTokenInsert: true });
+    const res = await sendNewsletterToSubscriber(testSubscriber, letterObj, {
+      skipTokenInsert: true,
+    });
     if (res.status === 'sent' || res.status === 'skipped') {
-      return { status: 'success', message: `Тестовое письмо отправлено на ${testEmail}`, providerResponse: res.providerResponse };
+      return {
+        status: 'success',
+        message: `Тестовое письмо отправлено на ${testEmail}`,
+        providerResponse: res.providerResponse,
+      };
     }
-    return { status: 'error', message: res.error || 'Ошибка при отправке тестового письма', details: res };
+    return {
+      status: 'error',
+      message: res.error || 'Ошибка при отправке тестового письма',
+      details: res,
+    };
   }
 
   // Try to enqueue the letter for background sending if a jobs table exists
   try {
     const jobId = createId();
-    const { error: jobErr } = await supabase
-      .from('newsletter_jobs')
-      .insert({ 
-        id: jobId,
-        letter_id: letterId, 
-        status: 'pending', 
-        created_at: new Date().toISOString() 
-      });
-    
+    const { error: jobErr } = await supabase.from('newsletter_jobs').insert({
+      id: jobId,
+      letter_id: letterId,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    });
+
     if (!jobErr) {
       console.info(`Newsletter job ${jobId} created for letter ${letterId}`);
-      return { 
-        status: 'success', 
+      return {
+        status: 'success',
         message: 'Письмо поставлено в очередь на отправку. Обработка начнется в течение минуты.',
-        jobId 
+        jobId,
       };
     } else {
       console.warn('Failed to create newsletter job, falling back to direct send:', jobErr);
@@ -1004,14 +1171,14 @@ export async function sendLetter(prevState: any, formData: any) {
   // Safe fallback: send to a limited number of subscribers
   // TODO: Implement proper background job processing with newsletter_jobs table
   const SEND_LIMIT = parseInt(process.env.NEWSLETTER_SEND_LIMIT || '100'); // Increased from 20 to 100
-  
+
   try {
     const { data: subs, error: subsErr } = await supabase
       .from('subscribers')
       .select('id,email')
       .eq('isActive', true)
       .limit(SEND_LIMIT);
-    
+
     if (subsErr) {
       console.error('sendLetter: failed to load subscribers', subsErr);
       return { status: 'error', message: 'Не удалось получить список подписчиков.' };
@@ -1022,10 +1189,10 @@ export async function sendLetter(prevState: any, formData: any) {
     }
 
     console.info(`Starting newsletter send to ${subs.length} subscribers (limit: ${SEND_LIMIT})`);
-    
+
     let sent = 0;
     let failed = 0;
-    
+
     for (const s of subs) {
       try {
         const r = await sendNewsletterToSubscriber(s, letterObj);
@@ -1040,28 +1207,29 @@ export async function sendLetter(prevState: any, formData: any) {
         console.warn('sendLetter: send to subscriber failed', e);
       }
     }
-    
+
     // Mark letter as sent
-    await supabase
-      .from('letters')
-      .update({ sentAt: new Date().toISOString() })
-      .eq('id', letterId);
-    
-    const message = failed > 0 
-      ? `✅ Отправлено ${sent} из ${subs.length} подписчикам. ❌ Ошибок: ${failed}` 
-      : `✅ Успешно отправлено ${sent} подписчикам`;
-    
+    await supabase.from('letters').update({ sentAt: new Date().toISOString() }).eq('id', letterId);
+
+    const message =
+      failed > 0
+        ? `✅ Отправлено ${sent} из ${subs.length} подписчикам. ❌ Ошибок: ${failed}`
+        : `✅ Успешно отправлено ${sent} подписчикам`;
+
     if (subs.length >= SEND_LIMIT) {
-      return { 
-        status: 'success', 
-        message: `${message}\n⚠️ Достигнут лимит ${SEND_LIMIT} писем. Для большей аудитории создайте таблицу newsletter_jobs.`
+      return {
+        status: 'success',
+        message: `${message}\n⚠️ Достигнут лимит ${SEND_LIMIT} писем. Для большей аудитории создайте таблицу newsletter_jobs.`,
       };
     }
-    
+
     return { status: 'success', message };
   } catch (e: any) {
     console.error('sendLetter fallback failed', e);
-    return { status: 'error', message: 'Не удалось отправить рассылку: ' + (e?.message || String(e)) };
+    return {
+      status: 'error',
+      message: 'Не удалось отправить рассылку: ' + (e?.message || String(e)),
+    };
   }
 }
 

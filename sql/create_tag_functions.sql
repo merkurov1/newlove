@@ -65,9 +65,11 @@ BEGIN
       'email', u.email
     ) as author
   FROM "articles" a
-  INNER JOIN "_ArticleToTag" att ON a.id = att."A"
-  INNER JOIN "Tag" t ON t.id = att."B"
-  LEFT JOIN "User" u ON a."authorId" = u.id
+  -- Use normalized view to avoid depending on internal column names of _ArticleToTag.
+  -- The view `public.article_to_tag_view` exposes `article_id` and `tag_id` columns.
+  INNER JOIN public.article_to_tag_view v ON a.id::text = v.article_id::text
+  INNER JOIN "Tag" t ON t.id::text = v.tag_id::text
+  LEFT JOIN public.users u ON a."authorId" = u.id
   WHERE LOWER(t.slug) = LOWER(tag_slug_param)
   ORDER BY a."publishedAt" DESC NULLS LAST, a."updatedAt" DESC NULLS LAST
   LIMIT limit_param;
