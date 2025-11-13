@@ -28,6 +28,11 @@ export function sanitizeMetadata(input: any): any {
       if (typeof input.openGraph.title === 'string') out.openGraph.title = input.openGraph.title;
       if (typeof input.openGraph.description === 'string')
         out.openGraph.description = input.openGraph.description;
+      // Preserve canonical URL and type if provided (useful for social scrapers)
+      if (typeof input.openGraph.url === 'string' && input.openGraph.url.trim())
+        out.openGraph.url = input.openGraph.url;
+      if (typeof input.openGraph.type === 'string' && input.openGraph.type.trim())
+        out.openGraph.type = input.openGraph.type;
       if (Array.isArray(input.openGraph.images)) {
         out.openGraph.images = input.openGraph.images
           .filter((i: any) => {
@@ -36,6 +41,23 @@ export function sanitizeMetadata(input: any): any {
             if (i && typeof i === 'object' && typeof i.url === 'string') return true;
             return false;
           })
+          .slice(0, 3);
+      }
+    }
+
+    // Twitter card images: preserve if provided
+    if (input.twitter && typeof input.twitter === 'object') {
+      out.twitter = {};
+      if (typeof input.twitter.card === 'string') out.twitter.card = input.twitter.card;
+      if (typeof input.twitter.title === 'string') out.twitter.title = input.twitter.title;
+      if (typeof input.twitter.description === 'string')
+        out.twitter.description = input.twitter.description;
+      if (Array.isArray(input.twitter.images)) {
+        out.twitter.images = input.twitter.images
+          .filter(
+            (i: any) =>
+              typeof i === 'string' || (i && typeof i === 'object' && typeof i.url === 'string')
+          )
           .slice(0, 3);
       }
     }
