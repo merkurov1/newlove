@@ -5,18 +5,20 @@ export function addSecurityHeaders(response: NextResponse): NextResponse {
   // Content Security Policy
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live https://va.vercel-scripts.com",
+    // Allow Umami analytics hosts so the analytics script can load and send events
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live https://va.vercel-scripts.com https://cloud.umami.is https://analytics.umami.is",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co https://vercel.live wss://*.supabase.co",
+    // Allow analytics endpoint for Umami and Supabase connections
+    "connect-src 'self' https://*.supabase.co https://vercel.live wss://*.supabase.co https://cloud.umami.is https://analytics.umami.is",
     "frame-src 'self' https://www.youtube.com https://player.vimeo.com",
     "media-src 'self' https:",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "upgrade-insecure-requests",
+    'upgrade-insecure-requests',
   ].join('; ');
 
   // Set security headers
@@ -29,12 +31,9 @@ export function addSecurityHeaders(response: NextResponse): NextResponse {
     'Permissions-Policy',
     'camera=(), microphone=(), geolocation=(), interest-cohort=()'
   );
-  
+
   // HSTS (HTTP Strict Transport Security)
-  response.headers.set(
-    'Strict-Transport-Security',
-    'max-age=31536000; includeSubDomains; preload'
-  );
+  response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
 
   return response;
 }

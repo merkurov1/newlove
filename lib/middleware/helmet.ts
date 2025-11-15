@@ -8,7 +8,11 @@ export function withHelmet(handler: Function) {
       res.headers.set('X-Content-Type-Options', 'nosniff');
       res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
       res.headers.set('X-XSS-Protection', '1; mode=block');
-      res.headers.set('Content-Security-Policy', "default-src 'self'; img-src * data:; script-src 'self'; style-src 'self' 'unsafe-inline';");
+      // Allow Umami analytics hosts so the analytics script can load in contexts
+      res.headers.set(
+        'Content-Security-Policy',
+        "default-src 'self'; img-src * data:; script-src 'self' https://cloud.umami.is https://analytics.umami.is; style-src 'self' 'unsafe-inline';"
+      );
     }
     return res;
   };
