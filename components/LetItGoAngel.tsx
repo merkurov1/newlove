@@ -36,8 +36,8 @@ export default function LetItGoAngel() {
         <Image
           src={isLettingGo ? ANGEL_WITHOUT_HEART : ANGEL_WITH_HEART}
           alt="Angel"
-          width={200}
-          height={200}
+          width={600}
+          height={600}
           className="angel-image"
           priority
         />
