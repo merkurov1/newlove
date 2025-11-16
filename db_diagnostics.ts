@@ -1,4 +1,4 @@
-const { Client } = require('pg');
+import { Client } from 'pg';
 
 const connectionString =
   'postgresql://postgres.txvkqcitalfbjytmnawq:honhu4-hejkoS-rixwyt@aws-1-eu-north-1.pooler.supabase.com:6543/postgres?pgbouncer=true';
@@ -200,7 +200,7 @@ async function runDiagnostics() {
         console.log(JSON.stringify(res.rows, null, 2));
       } catch (err) {
         console.error(`--- ERROR EXECUTING QUERY: ${query.title} ---`);
-        console.error(err.message);
+        console.error(err);
       }
     }
   } catch (err) {

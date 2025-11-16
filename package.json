@@ -29,7 +29,8 @@
     "deploy:hardhat": "npx hardhat run --network polygon scripts/deploy_hardhat.js",
     "mint:transfer": "npx hardhat run --network polygon scripts/mint_and_transfer.js",
     "deploy:local": "node scripts/deploy_hardhat.js",
-    "mint:local": "node scripts/mint_and_transfer.js"
+    "mint:local": "node scripts/mint_and_transfer.js",
+    "db:diag": "tsc db_diagnostics.ts && node db_diagnostics.js"
   },
   "installConfig": {
     "scripts-prepend-node-path": true
