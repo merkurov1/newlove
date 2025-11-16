@@ -2,8 +2,8 @@
 import { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://merkurov.love';
-  
+  const baseUrl = 'https://www.merkurov.love';
+
   return {
     rules: [
       {
@@ -18,7 +18,7 @@ export default function robots(): MetadataRoute.Robots {
           '/auth/*',
           '/profile',
           '/debug-auth',
-          '/debug-auth/*'
+          '/debug-auth/*',
         ],
       },
       {
@@ -32,7 +32,7 @@ export default function robots(): MetadataRoute.Robots {
           '/auth/',
           '/auth/*',
           '/debug-auth',
-          '/debug-auth/*'
+          '/debug-auth/*',
         ],
       },
       {
@@ -46,12 +46,21 @@ export default function robots(): MetadataRoute.Robots {
           '/auth/',
           '/auth/*',
           '/debug-auth',
-          '/debug-auth/*'
+          '/debug-auth/*',
         ],
       },
       // AI Crawlers - Allow access for LLM training and AI search
       {
-        userAgent: ['GPTBot', 'ChatGPT-User', 'Claude-Web', 'ClaudeBot', 'PerplexityBot', 'Applebot-Extended', 'anthropic-ai', 'cohere-ai'],
+        userAgent: [
+          'GPTBot',
+          'ChatGPT-User',
+          'Claude-Web',
+          'ClaudeBot',
+          'PerplexityBot',
+          'Applebot-Extended',
+          'anthropic-ai',
+          'cohere-ai',
+        ],
         allow: '/',
         disallow: [
           '/admin',
@@ -62,9 +71,9 @@ export default function robots(): MetadataRoute.Robots {
           '/auth/*',
           '/profile',
           '/debug-auth',
-          '/debug-auth/*'
+          '/debug-auth/*',
         ],
-      }
+      },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,
     host: baseUrl,

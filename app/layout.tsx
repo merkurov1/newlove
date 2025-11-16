@@ -41,14 +41,14 @@ export const metadata = sanitizeMetadata({
     'статьи',
     'маркетинг',
   ],
-  authors: [{ name: 'Anton Merkurov', url: 'https://merkurov.love' }],
+  authors: [{ name: 'Anton Merkurov', url: 'https://www.merkurov.love' }],
   creator: 'Anton Merkurov',
   publisher: 'Anton Merkurov',
   category: 'Technology',
   openGraph: {
     title: 'Anton Merkurov | Art x Love x Money',
     description: 'Медиа, технологии и искусство.',
-    url: 'https://merkurov.love',
+    url: 'https://www.merkurov.love',
     siteName: 'Anton Merkurov',
     images: [
       {
