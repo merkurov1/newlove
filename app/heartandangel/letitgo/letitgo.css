@@ -26,6 +26,10 @@
   position: absolute;
   width: 150px !important;
   height: 150px !important;
+  min-width: 150px !important;
+  min-height: 150px !important;
+  max-width: 150px !important;
+  max-height: 150px !important;
   background-image: url('https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0920.png');
   background-size: contain;
   background-repeat: no-repeat;
@@ -81,9 +85,13 @@
     bottom: 10px;
   }
 
-  .heart {
-    width: 75px;
-    height: 75px;
+  .letitgo-container .heart {
+    width: 75px !important;
+    height: 75px !important;
+    min-width: 75px !important;
+    min-height: 75px !important;
+    max-width: 75px !important;
+    max-height: 75px !important;
     animation-name: float-away-mobile;
   }
 }
@@ -112,9 +120,13 @@
     bottom: 15px;
   }
 
-  .heart {
-    width: 110px;
-    height: 110px;
+  .letitgo-container .heart {
+    width: 110px !important;
+    height: 110px !important;
+    min-width: 110px !important;
+    min-height: 110px !important;
+    max-width: 110px !important;
+    max-height: 110px !important;
     animation-name: float-away-tablet;
   }
 }
