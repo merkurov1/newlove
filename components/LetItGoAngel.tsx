@@ -43,7 +43,18 @@ export default function LetItGoAngel() {
         />
       </div>
       {hearts.map((heart) => (
-        <div key={heart.id} className="heart" />
+        <div
+          key={heart.id}
+          className="heart"
+          style={{
+            width: 150,
+            height: 150,
+            minWidth: 150,
+            minHeight: 150,
+            maxWidth: 150,
+            maxHeight: 150,
+          }}
+        />
       ))}
     </>
   );
