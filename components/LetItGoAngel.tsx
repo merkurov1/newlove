@@ -22,7 +22,7 @@ export default function LetItGoAngel() {
 
     setTimeout(() => {
       setIsLettingGo(false);
-    }, 500); // Angel returns to original state after 0.5s
+    }, 5000); // Angel returns to original state after 5s
 
     setTimeout(() => {
       setHearts((prevHearts) => prevHearts.slice(1)); // Remove the oldest heart after animation

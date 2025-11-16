@@ -71,3 +71,33 @@
   background-color: #90ee90; /* Light Green */
   z-index: 0;
 }
+
+@media (max-width: 768px) {
+  .angel-container {
+    width: 300px;
+    height: 300px;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 10px;
+  }
+
+  .heart {
+    width: 75px;
+    height: 75px;
+  }
+
+  @keyframes float-away {
+    0% {
+      bottom: 180px;
+      left: 50%;
+      transform: translateX(-50%) scale(1);
+      opacity: 1;
+    }
+    100% {
+      bottom: 120vh;
+      left: 110vw;
+      opacity: 0;
+      transform: scale(0.5) rotate(45deg);
+    }
+  }
+}
