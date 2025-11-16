@@ -1,0 +1,73 @@
+.letitgo-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #87ceeb; /* Light Blue */
+}
+
+.angel-container {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  width: 200px;
+  height: 200px;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.angel-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.heart {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  background-image: url('https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0920.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  z-index: 5;
+  animation: float-away 5s forwards;
+}
+
+@keyframes float-away {
+  0% {
+    bottom: 120px;
+    left: 100px;
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    bottom: 120vh;
+    left: 110vw;
+    opacity: 0;
+    transform: scale(0.5) rotate(45deg);
+  }
+}
+
+.click-counter {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+  background-color: rgba(255, 255, 255, 0.7);
+  padding: 10px 20px;
+  border-radius: 10px;
+  z-index: 20;
+}
+
+.letitgo-container::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100px;
+  background-color: #90ee90; /* Light Green */
+  z-index: 0;
+}
