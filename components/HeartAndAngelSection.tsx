@@ -17,9 +17,8 @@ interface Props {
 export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel/NFT' }: Props) {
   return (
     <section className="w-full flex flex-col items-center">
-      <div className="text-center mb-4">
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-2 text-black">The Heart & Angel</h2>
-        <div className="text-lg sm:text-xl text-neutral-700 font-serif mb-6 italic">A universal mythology for a fragmented world.</div>
+      <div className="text-center mb-8">
+        <div className="text-lg sm:text-xl text-neutral-700 font-serif italic">A universal mythology for a fragmented world.</div>
       </div>
 
       {/* Gallery */}

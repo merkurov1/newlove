@@ -81,7 +81,7 @@ export default async function SelectionPage() {
             articles.map((article: any) => {
               const previewImage = extractFirstImage(article.content);
               return (
-                <Link key={article.id} href={`/${article.slug}`} className="block group border border-neutral-200 bg-white hover:bg-neutral-50 transition-colors p-0 rounded-none overflow-hidden">
+                <Link key={article.id} href={`/selection/${article.slug}`} className="block group border border-neutral-200 bg-white hover:bg-neutral-50 transition-colors p-0 rounded-none overflow-hidden">
                   <div className="aspect-[3/2] w-full bg-gray-100 relative" style={{ minHeight: 220 }}>
                     {previewImage ? (
                       <Image
