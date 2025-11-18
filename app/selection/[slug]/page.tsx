@@ -76,61 +76,64 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
   const previewImage = extractFirstImage(content);
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center py-10 px-2">
-      {/* Hero Image */}
-      {previewImage ? (
-        <div className="w-full flex justify-center mb-8">
-          <div className="w-full max-w-4xl" style={{ width: '80vw' }}>
-            <Image
-              src={previewImage}
-              alt={title || artist}
-              width={1200}
-              height={900}
-              className="w-full h-auto object-contain rounded-none shadow-none"
-              priority
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="w-full flex justify-center mb-8">
-          <div className="w-full max-w-4xl flex items-center justify-center text-gray-300 text-6xl" style={{ width: '80vw', height: 300 }}>
-            —
-          </div>
+    <div className="min-h-screen bg-white flex flex-col items-center py-16 px-4">
+      {/* Component 1: The Visual - Max width 1200px */}
+      {previewImage && (
+        <div className="w-full max-w-[1200px] mb-12">
+          <Image
+            src={previewImage}
+            alt={title || artist}
+            width={1200}
+            height={900}
+            className="w-full h-auto object-contain"
+            priority
+          />
         </div>
       )}
-      {/* Heading */}
-      <div className="text-center mb-6">
+      
+      {/* Component 2: The Header - Centered, max-width 800px */}
+      <div className="w-full max-w-[800px] text-center mb-12">
         {artist && (
-          <div className="font-serif text-[2.5rem] text-black leading-tight">{artist}</div>
+          <h1 className="font-serif text-[2.5rem] text-black leading-tight mb-2">{artist}</h1>
         )}
         {title && (
-          <div className="font-serif italic text-[1.5rem] text-neutral-700 mt-2">{title}</div>
+          <h2 className="font-serif italic text-[1.5rem] text-gray-700">{title}</h2>
         )}
       </div>
-      {/* Curator's Note */}
-      <div className="w-full flex justify-center mb-8">
-        <div className="max-w-xl w-full font-serif text-[1.1rem] leading-[1.6] text-neutral-900 text-justify">
-          {curatorNote && <div className="whitespace-pre-wrap">{curatorNote}</div>}
-          {quote && (
-            <blockquote className="italic border-l-4 border-neutral-300 pl-4 my-6 text-neutral-700">
-              {quote}
-            </blockquote>
-          )}
-        </div>
+      
+      {/* Component 3: The Essay - Left/Justified, max-width 600px */}
+      <div className="w-full max-w-[600px] mb-12">
+        {curatorNote && (
+          <div className="font-serif text-[1.1rem] leading-[1.7] text-black text-left whitespace-pre-wrap mb-8">
+            {curatorNote}
+          </div>
+        )}
+        {quote && (
+          <blockquote className="font-serif italic text-[1.1rem] leading-[1.7] text-gray-700 border-l-2 border-gray-300 pl-6 my-8">
+            {quote}
+          </blockquote>
+        )}
       </div>
-      {/* Specs */}
+      
+      {/* Component 4: The Data - Monospace, small, max-width 600px */}
       {specs && (
-        <div className="mt-2 mb-8 text-[0.85rem] font-mono text-[#555] text-center whitespace-pre-wrap">
-          {specs}
-        </div>
+        <>
+          <div className="w-full max-w-[600px] border-t border-gray-200 my-8"></div>
+          <div className="w-full max-w-[600px] mb-12">
+            <div className="font-mono text-[0.9rem] text-gray-600 whitespace-pre-wrap">
+              {specs}
+            </div>
+          </div>
+        </>
       )}
+      
       {/* Call to Action */}
-      <div className="mt-10 mb-2">
+      <div className="w-full max-w-[600px] text-center">
         <a
           href="mailto:studio@merkurov.love?subject=Enquiry about artwork"
-          className="text-base font-semibold text-blue-700 hover:underline"
+          className="inline-block text-sm font-semibold text-blue-700 hover:underline"
         >
-          Enquire about this work &rarr;
+          Enquire about this work →
         </a>
       </div>
     </div>

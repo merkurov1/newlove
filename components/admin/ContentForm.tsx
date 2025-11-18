@@ -245,8 +245,9 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           id="curatorNote"
           value={curatorNote}
           onChange={e => setCuratorNote(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3 min-h-[80px]"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3 min-h-[120px] font-serif"
         />
+        <p className="mt-1 text-xs text-gray-500">Используйте переносы строк для форматирования</p>
       </div>
       <div>
         <label htmlFor="quote" className="block text-sm font-medium text-gray-700">Artist Quote</label>
@@ -255,8 +256,9 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           id="quote"
           value={quote}
           onChange={e => setQuote(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3 min-h-[60px]"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3 min-h-[80px] italic"
         />
+        <p className="mt-1 text-xs text-gray-500">Используйте переносы строк для форматирования</p>
       </div>
       <div>
         <label htmlFor="specs" className="block text-sm font-medium text-gray-700">Specs (Material, Dimensions, Context)</label>
