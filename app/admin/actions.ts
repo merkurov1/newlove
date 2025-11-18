@@ -131,6 +131,7 @@ export async function createArticle(formData: any) {
     publishedAt: published ? new Date().toISOString() : null,
     authorId: user.id,
     artist,
+    preview_image: previewImage,
     curatorNote,
     quote,
     specs,
@@ -170,6 +171,7 @@ export async function updateArticle(formData: any) {
   const slug = formData.get('slug')?.toString();
   const published = formData.get('published') === 'on';
   const artist = formData.get('artist')?.toString() || '';
+  const previewImage = formData.get('preview_image')?.toString() || null;
   const curatorNote = formData.get('curatorNote')?.toString() || '';
   const quote = formData.get('quote')?.toString() || '';
   const specs = formData.get('specs')?.toString() || '';
@@ -196,6 +198,7 @@ export async function updateArticle(formData: any) {
       published,
       publishedAt: published ? new Date().toISOString() : null,
       artist,
+      preview_image: previewImage,
       curatorNote,
       quote,
       specs,
