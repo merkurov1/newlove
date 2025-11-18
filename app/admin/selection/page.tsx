@@ -17,12 +17,34 @@ export default async function AdminSelectionPage() {
 
   let articles: any[] = [];
   try {
-    const { data, error } = await supabase.from('articles').select('id,title,slug,published,author:authorId(name)').order('createdAt', { ascending: false });
+    const { data, error } = await supabase.from('articles').select('id,title,slug,published,artist,content,author:authorId(name)').order('createdAt', { ascending: false });
     if (error) console.error('Supabase fetch admin articles error', error);
     articles = safeData(data || []);
   } catch (e) {
     console.error('Failed to fetch admin articles via supabase client', e);
     articles = [];
+  }
+
+  // Helper: extract first image from content
+  function extractFirstImage(content: any): string | null {
+    if (!content) return null;
+    try {
+      const blocks = Array.isArray(content) ? content : JSON.parse(content);
+      for (const block of blocks) {
+        if (block?.type === 'image' && block?.data?.file?.url) {
+          return block.data.file.url;
+        }
+        if (block?.type === 'richText' && block?.data?.html) {
+          const imgMatch = block.data.html.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+          if (imgMatch) return imgMatch[1];
+        }
+      }
+    } catch {
+      const str = String(content);
+      const imgMatch = str.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+      if (imgMatch) return imgMatch[1];
+    }
+    return null;
   }
 
   return (
@@ -43,26 +65,39 @@ export default async function AdminSelectionPage() {
         {articles.length === 0 ? (
           <div className="col-span-full p-6 text-center text-gray-400 bg-white rounded-xl border shadow-sm">Пока нет ни одной публикации.</div>
         ) : (
-          articles.map((article: any) => (
-            <div key={article.id} className="bg-white rounded-xl border shadow-sm p-5 flex flex-col gap-2 hover:shadow-md transition-shadow group">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`h-2.5 w-2.5 rounded-full ${article.published ? 'bg-green-500' : 'bg-gray-400'}`} title={article.published ? 'Опубликовано' : 'Черновик'}></span>
-                <h3 className="text-lg font-semibold text-gray-900 truncate group-hover:text-blue-700 transition-colors">{article.title}</h3>
+          articles.map((article: any) => {
+            const previewImage = extractFirstImage(article.content);
+            return (
+              <div key={article.id} className="bg-white rounded-xl border shadow-sm overflow-hidden hover:shadow-md transition-shadow group">
+                {previewImage && (
+                  <div className="w-full h-40 bg-gray-100 relative">
+                    <img src={previewImage} alt={article.artist || article.title} className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="p-5 flex flex-col gap-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`h-2.5 w-2.5 rounded-full ${article.published ? 'bg-green-500' : 'bg-gray-400'}`} title={article.published ? 'Опубликовано' : 'Черновик'}></span>
+                    <h3 className="text-lg font-semibold text-gray-900 truncate group-hover:text-blue-700 transition-colors">{article.artist || article.title}</h3>
+                  </div>
+                  {article.title && article.artist && (
+                    <p className="text-sm text-gray-600 italic truncate">{article.title}</p>
+                  )}
+                  <p className="text-xs text-gray-500 truncate">/{article.slug}</p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <Link href={`/admin/selection/edit/${article.id}`} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-blue-50 text-blue-700 font-medium hover:bg-blue-100 transition-all text-sm">
+                      ✏️ Редактировать
+                    </Link>
+                    <form action={deleteArticle} className="inline">
+                      <input type="hidden" name="id" value={article.id} />
+                      <button type="submit" className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-red-50 text-red-700 font-medium hover:bg-red-100 transition-all text-sm">
+                        🗑️ Удалить
+                      </button>
+                    </form>
+                  </div>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 truncate">/{article.slug} &middot; Автор: {article.author.name || 'Неизвестен'}</p>
-              <div className="flex items-center gap-3 mt-2">
-                <Link href={`/admin/selection/edit/${article.id}`} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-blue-50 text-blue-700 font-medium hover:bg-blue-100 transition-all text-sm">
-                  ✏️ Редактировать
-                </Link>
-                <form action={deleteArticle} className="inline">
-                  <input type="hidden" name="id" value={article.id} />
-                  <button type="submit" className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-red-50 text-red-700 font-medium hover:bg-red-100 transition-all text-sm">
-                    🗑️ Удалить
-                  </button>
-                </form>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

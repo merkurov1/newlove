@@ -31,6 +31,7 @@ async function getContent(slug: string): Promise<ContentResult> {
     'profile',
     'projects',
     'rss.xml',
+    'selection',
     'sentry-example-page',
     'tags',
     'users',
