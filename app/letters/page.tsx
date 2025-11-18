@@ -1,3 +1,4 @@
+import NewsletterSubscribe from '@/components/letters/NewsletterSubscribe';
 import { Suspense } from 'react';
 import LettersArchive from '@/components/letters/LettersArchive';
 import PostcardShop from '@/components/letters/PostcardShop';
