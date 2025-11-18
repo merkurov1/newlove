@@ -38,13 +38,24 @@ export default async function SelectionPage() {
       );
     }
   }
-  const { data: articles = [], error } = await supabase.from('articles').select('id,title,slug,publishedAt,preview_image').eq('published', true).order('publishedAt', { ascending: false });
+  const { data: articles = [], error } = await supabase.from('articles').select('id,title,slug,publishedAt,preview_image,content').eq('published', true).order('publishedAt', { ascending: false });
   if (error) {
     console.error('Supabase fetch articles error', error);
   }
 
+
+  // Helper: extract first image from content
+  function extractFirstImage(content: string): string | null {
+    if (!content) return null;
+    const imgMatch = content.match(/<img[^>]+src=['\"]([^'\"]+)['\"]/i);
+    if (imgMatch) return imgMatch[1];
+    const mdMatch = content.match(/!\[[^\]]*\]\(([^)]+)\)/);
+    if (mdMatch) return mdMatch[1];
+    return null;
+  }
+
   // Show a Swiper carousel at the top for articles with images (up to 8), then the grid below as before
-  const featured = (articles || []).filter((a: any) => a.preview_image).slice(0, 8);
+  const featured = (articles || []).filter((a: any) => a.preview_image || extractFirstImage(a.content)).slice(0, 8);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-blue-100 py-10 px-2">
@@ -55,35 +66,58 @@ export default async function SelectionPage() {
             <AuctionSlider articles={featured} />
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10">
           {articles && articles.length > 0 ? (
-            articles.map((article: any) => (
-              <Link key={article.id} href={`/${article.slug}`} className="group block rounded-2xl bg-white/90 hover:bg-pink-50 transition-colors overflow-hidden border border-gray-200 shadow-sm">
-                <div className="aspect-[3/2] w-full bg-gray-100 relative" style={{ minHeight: 220 }}>
-                  {article.preview_image ? (
-                    <Image
-                      src={article.preview_image}
-                      alt={article.title}
-                      fill
-                      className="object-cover transition-transform duration-300 group-hover:scale-105"
-                      sizes="(max-width: 1024px) 100vw, 25vw"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-300 text-4xl">—</div>
-                  )}
-                </div>
-                <div className="flex flex-col px-5 py-4">
-                  <span className="text-lg font-semibold text-black mb-1 truncate">{article.title}</span>
-                  <span className="text-xs text-gray-600">
-                    {new Date(article.publishedAt).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </span>
-                </div>
-              </Link>
-            ))
+            articles.map((article: any) => {
+              const previewImage = article.preview_image || extractFirstImage(article.content);
+              return (
+                <Link key={article.id} href={`/${article.slug}`} className="block group border border-neutral-200 bg-white hover:bg-neutral-50 transition-colors p-0 rounded-none overflow-hidden">
+                  <div className="aspect-[3/2] w-full bg-gray-100 relative" style={{ minHeight: 220 }}>
+                    {previewImage ? (
+                      <Image
+                        src={previewImage}
+                        alt={article.title}
+                        fill
+                        className="object-contain w-full h-full"
+                        sizes="(max-width: 1024px) 100vw, 25vw"
+                        priority={false}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-300 text-4xl">—</div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2 px-4 py-5">
+                    {article.artist && (
+                      <div className="font-serif text-[1.35rem] text-black leading-tight font-bold tracking-tight truncate">{article.artist}</div>
+                    )}
+                    {article.title && (
+                      <div className="font-serif italic text-[1.05rem] text-neutral-700 truncate">{article.title}</div>
+                    )}
+                    {article.specs && (
+                      <div className="font-mono text-[0.95rem] text-[#444] leading-snug mt-2 whitespace-pre-line">
+                        {article.specs.split(/\n{2,}/).map((p: string, i: number) => (
+                          <p key={i} className="mb-1 whitespace-pre-line">{p.trim()}</p>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-3">
+                      <span className="text-xs text-gray-500">
+                        {new Date(article.publishedAt).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })}
+                      </span>
+                    </div>
+                    <div className="mt-4">
+                      <span className="inline-block text-xs font-semibold text-blue-700 group-hover:underline">
+                        Enquire &rarr;
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })
           ) : (
             <p className="text-gray-400 text-center mt-12 col-span-full">Nothing here yet. Coming soon!</p>
           )}
