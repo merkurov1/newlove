@@ -10,8 +10,8 @@ const NewsletterBanner = nextDynamic(() => import('@/components/NewsletterBanner
 export const dynamic = 'force-dynamic';
 
 export const metadata = sanitizeMetadata({
-  title: 'Letters & Postcards | Anton Merkurov',
-  description: 'Newsletter archive and order of original physical postcards',
+  title: 'JOURNAL | Anton Merkurov',
+  description: 'Chronicles of the unframed. Notes on art, tech, and the void.',
 });
 
 interface Props {
@@ -61,99 +61,58 @@ export default async function LettersPage({ searchParams }: Props) {
 
   return (
     <>
-      {/* Баннер подписки на рассылку */}
-      <NewsletterBanner />
-
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8 px-4">
-        <div className="max-w-7xl mx-auto">
-          {/* Заголовок страницы */}
-          <div className="text-center mb-12">
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-              📮 Письма и открытки
-            </h1>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Архив авторской рассылки и заказ физических открыток с персональными сообщениями
-            </p>
+      <main className="min-h-screen bg-white text-black flex flex-col items-center px-4 pt-16 pb-0">
+        {/* Header */}
+        <header className="w-full max-w-2xl mx-auto text-center mb-12">
+          <h1
+            className="text-4xl md:text-5xl font-serif font-bold tracking-wide leading-tight mb-2"
+            style={{ fontFamily: 'Playfair Display, Times New Roman, serif' }}
+          >
+            JOURNAL
+          </h1>
+          <div
+            className="text-lg md:text-xl font-serif italic text-gray-500 mb-2"
+            style={{ fontFamily: 'Playfair Display, Times New Roman, serif' }}
+          >
+            Chronicles of the unframed. Notes on art, tech, and the void.
           </div>
+        </header>
 
-          {/* Основное содержимое - Bento Grid стиль */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 auto-rows-auto">
-            {/* Открытки - первая (слева, большая карточка) */}
-            <div className="lg:col-span-2 lg:row-span-2">
-              <div className="group relative h-full bg-gradient-to-br from-orange-50 via-white to-pink-50 rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-orange-100">
-                {/* Декоративный элемент */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-200/30 to-pink-200/30 rounded-full blur-3xl -z-0"></div>
+        {/* Table of Contents */}
+        <section className="w-full max-w-2xl mx-auto flex-1">
+          <ul className="flex flex-col gap-10">
+            {initialLetters.map((letter) => (
+              <li key={letter.id}>
+                <a href={`/letters/${letter.slug}`} className="block group">
+                  <span
+                    className="block text-2xl md:text-3xl font-serif font-bold text-black group-hover:underline tracking-wide leading-snug"
+                    style={{ fontFamily: 'Playfair Display, Times New Roman, serif' }}
+                  >
+                    {letter.title}
+                  </span>
+                  <span
+                    className="block text-xs text-gray-400 mt-1 tracking-widest"
+                    style={{ letterSpacing: '0.12em' }}
+                  >
+                    {letter.publishedAt ? new Date(letter.publishedAt).getFullYear() : ''}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-                <div className="relative z-10 p-6 md:p-8 h-full flex flex-col">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-14 h-14 bg-gradient-to-br from-orange-400 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
-                      <span className="text-3xl">🎨</span>
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">Авторские открытки</h2>
-                      <p className="text-sm text-gray-600">
-                        Физические открытки с персональными сообщениями
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex-1">
-                    <PostcardShop />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Архив рассылки - справа */}
-            <div className="lg:col-span-1 lg:row-span-2">
-              <div className="group relative h-full bg-gradient-to-br from-blue-50 via-white to-indigo-50 rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-blue-100">
-                {/* Декоративный элемент */}
-                <div className="absolute top-0 left-0 w-48 h-48 bg-gradient-to-br from-blue-200/30 to-indigo-200/30 rounded-full blur-3xl -z-0"></div>
-
-                <div className="relative z-10 p-6 h-full flex flex-col">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
-                      <span className="text-2xl">📧</span>
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">Архив рассылки</h2>
-                    </div>
-                  </div>
-
-                  {lastUpdated && (
-                    <div className="mb-4 text-xs text-gray-500 bg-blue-50/50 rounded-lg px-3 py-2">
-                      Обновлено: {new Date(lastUpdated).toLocaleDateString('ru-RU')}
-                    </div>
-                  )}
-
-                  <div className="flex-1 overflow-auto">
-                    <Suspense
-                      fallback={
-                        <div className="animate-pulse space-y-4">
-                          {[1, 2, 3].map((i) => (
-                            <div key={i} className="h-20 bg-gray-200 rounded-lg" />
-                          ))}
-                        </div>
-                      }
-                    >
-                      <LettersArchive initialLetters={initialLetters} lastUpdated={lastUpdated} />
-                    </Suspense>
-                  </div>
-                </div>
+        {/* Minimalist Newsletter Subscribe at the very bottom */}
+        <footer className="w-full max-w-2xl mx-auto mt-20 mb-8 flex flex-col items-center">
+          <div className="w-full border-t border-gray-200 pt-8">
+            <div className="w-full flex flex-col items-center">
+              <div className="w-full max-w-md">
+                <NewsletterSubscribe />
               </div>
             </div>
           </div>
-
-          {/* Информационный блок внизу */}
-          <div className="mt-8 text-center">
-            <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-full px-6 py-3 shadow-sm border border-gray-100">
-              <span className="text-sm text-gray-600">
-                💌 Все письма доставляются с любовью через физическую почту
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+        </footer>
+      </main>
     </>
   );
 }

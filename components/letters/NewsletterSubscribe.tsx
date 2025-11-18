@@ -7,11 +7,11 @@ import { useEffect, useRef, useState } from 'react';
 
 function SubmitButton() {
   return (
-    <button 
-      type="submit" 
+    <button
+      type="submit"
       className="flex-shrink-0 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
     >
-      Подписаться
+      Receive Signals
     </button>
   );
 }
@@ -71,40 +71,42 @@ export default function NewsletterSubscribe() {
             <span className="text-2xl">💌</span>
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-bold text-gray-900 mb-1">
-              Получайте письма на почту
-            </h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Get new letters by email</h3>
             <p className="text-sm text-gray-600">
-              Подпишитесь на рассылку, чтобы получать новые письма, статьи и инсайты медиарынка. Без спама, только качественный контент.
+              Subscribe to receive new journal entries, articles, and insights. No spam, just
+              thoughtful content.
             </p>
           </div>
         </div>
 
         <form ref={formRef} action={formAction} className="space-y-3">
           <div className="flex flex-col sm:flex-row gap-3">
-            <input 
-              type="email" 
+            <input
+              type="email"
               name="email"
-              placeholder="your.email@example.com" 
-              required 
+              placeholder="your.email@example.com"
+              required
               className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
             />
             <SubmitButton />
           </div>
 
           {state?.message && (
-            <div className={`text-sm p-3 rounded-lg ${
-              state.status === 'error' 
-                ? 'bg-red-50 text-red-700 border border-red-200' 
-                : 'bg-green-50 text-green-700 border border-green-200'
-            }`}>
+            <div
+              className={`text-sm p-3 rounded-lg ${
+                state.status === 'error'
+                  ? 'bg-red-50 text-red-700 border border-red-200'
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}
+            >
               {state.message}
             </div>
           )}
         </form>
 
         <p className="text-xs text-gray-500 mt-3">
-          Нажимая "Подписаться", вы соглашаетесь получать письма. Отписаться можно в любое время.
+          By clicking "Receive Signals" you agree to receive emails. You can unsubscribe at any
+          time.
         </p>
       </div>
     </div>

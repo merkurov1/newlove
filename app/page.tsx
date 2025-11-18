@@ -192,7 +192,7 @@ export default function Home() {
         className="w-full text-center py-8 text-xs text-gray-500 font-mono tracking-widest border-t border-gray-200"
         style={{ fontFamily: 'Roboto Mono, Courier New, monospace', letterSpacing: '0.08em' }}
       >
-        © 2025 Anton Merkurov
+        © 2025 Anton Merkurov. London — Nowhere.
       </footer>
     </main>
   );

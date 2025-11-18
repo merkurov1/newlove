@@ -23,20 +23,18 @@ export default function LettersArchive({ initialLetters = [], lastUpdated = null
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleDateString('ru-RU', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    return date.getFullYear();
   };
 
   if (letters.length === 0) {
     return (
       <div className="text-center py-8">
-        <div className="text-gray-600 mb-2">📭 Архив пуст</div>
-        <div className="text-sm text-gray-500">Письма появятся здесь после публикации</div>
+        <div className="text-gray-600 mb-2">📭 Archive is empty</div>
+        <div className="text-sm text-gray-500">Letters will appear here after publication</div>
         {lastUpdated && (
-          <div className="text-xs text-gray-400 mt-2">Последнее обновление: {new Date(lastUpdated).toLocaleString('ru-RU')}</div>
+          <div className="text-xs text-gray-400 mt-2">
+            Last update: {new Date(lastUpdated).toLocaleString('en-US')}
+          </div>
         )}
         {/* debug output removed */}
 
