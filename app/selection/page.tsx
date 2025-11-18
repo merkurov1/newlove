@@ -38,7 +38,7 @@ export default async function SelectionPage() {
       );
     }
   }
-  const { data: articles = [], error } = await supabase.from('articles').select('id,title,slug,publishedAt,preview_image,content').eq('published', true).order('publishedAt', { ascending: false });
+  const { data: articles = [], error } = await supabase.from('articles').select('id,title,slug,publishedAt,preview_image,content,artist,curatorNote,quote,specs').eq('published', true).order('publishedAt', { ascending: false });
   if (error) {
     console.error('Supabase fetch articles error', error);
   }
@@ -60,12 +60,6 @@ export default async function SelectionPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-blue-100 py-10 px-2">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold text-black mb-8 text-center tracking-tight">Selection</h1>
-        {featured.length > 0 && (
-          <div className="mb-10">
-            <AuctionSlider articles={featured} />
-          </div>
-        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10">
           {articles && articles.length > 0 ? (
             articles.map((article: any) => {
@@ -76,7 +70,7 @@ export default async function SelectionPage() {
                     {previewImage ? (
                       <Image
                         src={previewImage}
-                        alt={article.title}
+                        alt="Artwork preview"
                         fill
                         className="object-contain w-full h-full"
                         sizes="(max-width: 1024px) 100vw, 25vw"
@@ -85,35 +79,6 @@ export default async function SelectionPage() {
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-300 text-4xl">—</div>
                     )}
-                  </div>
-                  <div className="flex flex-col gap-2 px-4 py-5">
-                    {article.artist && (
-                      <div className="font-serif text-[1.35rem] text-black leading-tight font-bold tracking-tight truncate">{article.artist}</div>
-                    )}
-                    {article.title && (
-                      <div className="font-serif italic text-[1.05rem] text-neutral-700 truncate">{article.title}</div>
-                    )}
-                    {article.specs && (
-                      <div className="font-mono text-[0.95rem] text-[#444] leading-snug mt-2 whitespace-pre-line">
-                        {article.specs.split(/\n{2,}/).map((p: string, i: number) => (
-                          <p key={i} className="mb-1 whitespace-pre-line">{p.trim()}</p>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-3">
-                      <span className="text-xs text-gray-500">
-                        {new Date(article.publishedAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                    <div className="mt-4">
-                      <span className="inline-block text-xs font-semibold text-blue-700 group-hover:underline">
-                        Enquire &rarr;
-                      </span>
-                    </div>
                   </div>
                 </Link>
               );
