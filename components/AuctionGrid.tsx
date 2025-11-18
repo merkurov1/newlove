@@ -34,7 +34,7 @@ const AuctionGrid: React.FC<AuctionGridProps> = ({ articles: initialArticles }) 
         if (entries[0].isIntersecting && !loading && hasMore) {
           setLoading(true);
           
-          fetch(`/api/articles?includeTag=auction&offset=${offset}&limit=10`)
+          fetch(`/api/selection?includeTag=auction&offset=${offset}&limit=10`)
             .then((res) => res.json())
             .then((data) => {
               if (!Array.isArray(data) || data.length === 0) {

@@ -105,10 +105,10 @@ export default function Home() {
                 </div>
               </a>
             </li>
-            {/* SELECTION second, link to /articles */}
+            {/* SELECTION second, link to /selection */}
             <li>
               <a
-                href="/articles"
+                href="/selection"
                 className="block text-center no-underline hover:opacity-60 transition"
                 style={{ textDecoration: 'none' }}
               >

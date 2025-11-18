@@ -1,4 +1,4 @@
-// app/admin/articles/new/page.js
+// app/admin/selection/new/page.js
 import ContentForm from '@/components/admin/ContentForm';
 import { createArticle } from '../../actions';
 

@@ -58,7 +58,7 @@ export default function EditButton({
     if (finalContentType && finalContentId) {
       switch (finalContentType) {
         case 'article':
-          return `/admin/articles/edit/${finalContentId}`;
+          return `/admin/selection/edit/${finalContentId}`;
         case 'project':
           return `/admin/projects/edit/${finalContentId}`;
         default:
@@ -67,9 +67,9 @@ export default function EditButton({
     }
 
     // Автоматическое определение по URL
-    if (pathname && (pathname.startsWith('/articles/') || pathname.includes('article'))) {
+    if (pathname && (pathname.startsWith('/selection/') || pathname.includes('article'))) {
       const slugFromPath = finalSlug || pathname.split('/').pop();
-      return `/admin/articles${slugFromPath ? `?slug=${slugFromPath}` : ''}`;
+      return `/admin/selection${slugFromPath ? `?slug=${slugFromPath}` : ''}`;
     }
     
     if (pathname && (pathname.startsWith('/projects/') || pathname.includes('project'))) {
@@ -80,7 +80,7 @@ export default function EditButton({
         if (segments[0] === 'projects' && segments.length >= 3) {
           // treat last segment as article slug and route to article editor
           const articleSlug = finalSlug || segments[segments.length - 1];
-          return `/admin/articles${articleSlug ? `?slug=${articleSlug}` : ''}`;
+          return `/admin/selection${articleSlug ? `?slug=${articleSlug}` : ''}`;
         }
       } catch (e) {
         // fallback to previous behavior

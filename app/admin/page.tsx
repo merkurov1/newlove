@@ -57,7 +57,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
     <div className="p-6 space-y-8">
       <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        <Link href="/admin/articles" className="block bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
+        <Link href="/admin/selection" className="block bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition">
           <div className="text-2xl font-bold text-blue-700">{stats.articles}</div>
           <div className="text-gray-700 mt-1">Статьи</div>
         </Link>
@@ -77,7 +77,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
       <div className="mt-8 space-y-2">
         <h2 className="text-lg font-semibold">Быстрые ссылки</h2>
         <div className="flex flex-wrap gap-3">
-          <Link href="/admin/articles/new" className="px-4 py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">✍️ Новая статья</Link>
+          <Link href="/admin/selection/new" className="px-4 py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">✍️ Новая публикация</Link>
           <Link href="/admin/projects/new" className="px-4 py-2 rounded bg-purple-600 text-white font-semibold hover:bg-purple-700 transition">🚀 Новый проект</Link>
           <Link href="/admin/letters/new" className="px-4 py-2 rounded bg-yellow-500 text-white font-semibold hover:bg-yellow-600 transition">💌 Новое письмо</Link>
           <Link href="/admin/users" className="px-4 py-2 rounded bg-green-600 text-white font-semibold hover:bg-green-700 transition">👥 Пользователи</Link>
@@ -135,7 +135,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
           <ul className="space-y-2">
             {recentArticles.map((a) => (
               <li key={a.id} className="flex items-center gap-2">
-                <Link href={`/admin/articles/edit/${a.id}`} className="text-blue-700 hover:underline font-medium">{a.title}</Link>
+                <Link href={`/admin/selection/edit/${a.id}`} className="text-blue-700 hover:underline font-medium">{a.title}</Link>
                 <span className="text-xs text-gray-400">/{a.slug}</span>
                 {a.published ? <span className="ml-2 text-green-600 text-xs">● опубликовано</span> : <span className="ml-2 text-gray-400 text-xs">черновик</span>}
                 <span className="ml-2 text-xs text-gray-500">{a.author?.name || ''}</span>

@@ -171,7 +171,7 @@ export async function generateMetadata({
             '@type': 'ListItem',
             position: 2,
             name: 'Статьи',
-            item: `${baseUrl}/articles`,
+            item: `${baseUrl}/selection`,
           },
           {
             '@type': 'ListItem',

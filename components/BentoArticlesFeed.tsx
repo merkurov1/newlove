@@ -137,7 +137,7 @@ const BentoArticlesFeed: FC<BentoArticlesFeedProps> = ({ initialArticles, exclud
           if (excludeTag) q.set('excludeTag', excludeTag);
           if (includeTag) q.set('includeTag', includeTag);
           
-          fetch(`/api/articles?${q.toString()}`, { cache: 'no-store' })
+          fetch(`/api/selection?${q.toString()}`, { cache: 'no-store' })
             .then((res) => res.json())
             .then((data) => {
               if (!Array.isArray(data) || data.length === 0) {
@@ -175,7 +175,7 @@ const BentoArticlesFeed: FC<BentoArticlesFeedProps> = ({ initialArticles, exclud
       const q = new URLSearchParams({ offset: '0', limit: String(API_PAGE_SIZE) });
       if (excludeTag) q.set('excludeTag', excludeTag);
       if (includeTag) q.set('includeTag', includeTag);
-      const res = await fetch(`/api/articles?${q.toString()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/selection?${q.toString()}`, { cache: 'no-store' });
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         setArticles((prev) => {

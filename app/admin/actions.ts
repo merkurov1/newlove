@@ -204,9 +204,9 @@ export async function updateArticle(formData: any) {
     console.warn('Tag revalidation failed:', e);
   }
 
-  revalidatePath('/admin/articles');
+  revalidatePath('/admin/selection');
   revalidatePath(`/${slug}`);
-  redirect('/admin/articles');
+  redirect('/admin/selection');
 }
 
 export async function deleteArticle(formData: any) {
@@ -227,7 +227,7 @@ export async function deleteArticle(formData: any) {
     throw new Error('Ошибка при удалении статьи.');
   }
 
-  revalidatePath('/admin/articles');
+  revalidatePath('/admin/selection');
   if (article) revalidatePath(`/${article.slug}`);
 }
 

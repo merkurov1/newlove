@@ -169,7 +169,7 @@ export default function WelcomeBanner({ onClose, variant, forceShow = false }: W
                   Мой профиль
                 </Link>
                 <Link 
-                  href="/articles"
+                  href="/selection"
                   className="text-rose-600 hover:text-rose-800 px-4 py-2 text-sm transition-colors border border-rose-200 rounded-lg hover:bg-rose-50 text-center"
                 >
                   Читать статьи

@@ -35,7 +35,7 @@ export default async function AdminArticlesPage() {
           <p className="text-gray-500 text-base">Все ваши публикации и черновики.</p>
         </div>
         <Link
-          href="/admin/articles/new"
+          href="/admin/selection/new"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition-all"
         >
           ✍️ Новая статья
@@ -53,7 +53,7 @@ export default async function AdminArticlesPage() {
               </div>
               <p className="text-xs text-gray-500 truncate">/{article.slug} &middot; Автор: {article.author.name || 'Неизвестен'}</p>
               <div className="flex items-center gap-3 mt-2">
-                <Link href={`/admin/articles/edit/${article.id}`} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-blue-50 text-blue-700 font-medium hover:bg-blue-100 transition-all text-sm">
+                <Link href={`/admin/selection/edit/${article.id}`} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-blue-50 text-blue-700 font-medium hover:bg-blue-100 transition-all text-sm">
                   ✏️ Редактировать
                 </Link>
                 <form action={deleteArticle} className="inline">

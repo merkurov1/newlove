@@ -69,7 +69,7 @@ export default function CloseableHero({ className = '' }) {
           <p className="mt-4 text-lg text-gray-700 dark:text-gray-300 max-w-2xl mx-auto">Вы управляете контентом. Здесь быстрые ссылки на редактор.</p>
           <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
             <a href="/admin" className="px-6 py-3 bg-pink-700 text-white rounded-lg font-semibold shadow-sm hover:bg-pink-800 transition-colors">Перейти в админку</a>
-            <a href="/admin/articles" className="px-6 py-3 bg-white/50 dark:bg-white/10 border border-white/20 text-gray-800 dark:text-white rounded-lg font-semibold hover:bg-white/80 dark:hover:bg-white/20 transition-colors">Редактировать статьи</a>
+            <a href="/admin/selection" className="px-6 py-3 bg-white/50 dark:bg-white/10 border border-white/20 text-gray-800 dark:text-white rounded-lg font-semibold hover:bg-white/80 dark:hover:bg-white/20 transition-colors">Редактировать selection</a>
           </div>
         </>
       );

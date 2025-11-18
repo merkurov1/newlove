@@ -38,7 +38,7 @@ export default function NotFound() {
           </Link>
 
           <Link
-            href="/articles"
+            href="/selection"
             className="inline-flex items-center gap-2 px-6 py-3 bg-white text-gray-700 rounded-xl shadow hover:shadow-lg border border-gray-200 hover:border-gray-300 transition-all font-semibold"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

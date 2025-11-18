@@ -41,7 +41,7 @@ const RelatedArticles = ({ currentArticleId, tags = [], limit = 3 }: RelatedArti
           return;
         }
 
-        const response = await fetch(`/api/articles?includeTag=${encodeURIComponent(tagSlug)}&limit=${limit + 5}`);
+        const response = await fetch(`/api/selection?includeTag=${encodeURIComponent(tagSlug)}&limit=${limit + 5}`);
 
         if (!response.ok) {
           console.error('[RelatedArticles] API error:', response.status);
