@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import './swiper-init';
 
