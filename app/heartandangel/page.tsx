@@ -5,7 +5,7 @@ import Image from 'next/image';
 import HeartAndAngelSection from '@/components/HeartAndAngelSection';
 
 export const metadata = {
-  title: '#HEARTANDANGEL',
+  title: 'Heart & Angel',
   description: 'Heart & Angel — a transmedia art project about choice, archetypes, and digital identity.'
 };
 
@@ -21,7 +21,7 @@ export default function HeartAndAngelPage() {
     <div className="min-h-screen bg-white">
       <main className="container mx-auto px-4 py-20">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold mb-6 break-words leading-tight">#HEARTANDANGEL</h1>
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold mb-6 break-words leading-tight">Heart & Angel</h1>
           <HeartAndAngelSection images={images} />
 
         </div>

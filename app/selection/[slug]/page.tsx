@@ -37,15 +37,18 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
   const article = await getArticle(params.slug);
   if (!article) return notFound();
 
+
   // Destructure fields for layout
   const {
     preview_image,
     artist = '',
     title = '',
-    curatorNote = article.curatorNote ?? article.curatornote ?? '',
     quote = '',
     specs = '',
   } = article;
+
+  // Robust curatorNote fallback for legacy and new fields
+  const curatorNote = article.curatorNote ?? article.curatornote ?? '';
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-10 px-2">
