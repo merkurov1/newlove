@@ -324,93 +324,100 @@ export default async function ContentPage({ params }: { params: { slug: string }
 }
 
 function ArticleComponent({ article }: { article: any }) {
-  let blocks = [];
-  try {
-    if (article.content) {
-      const raw =
-        typeof article.content === 'string' ? article.content : JSON.stringify(article.content);
-      const parsed = JSON.parse(raw);
-      blocks = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+  const {
+    artist = '',
+    title = '',
+    quote = '',
+    specs = '',
+    content = '',
+  } = article;
+  const curatorNote = article.curatorNote ?? article.curatornote ?? '';
+
+  // Extract first image from content (EditorJS blocks or string)
+  function extractFirstImage(content: any): string | null {
+    if (!content) return null;
+    try {
+      const blocks = Array.isArray(content) ? content : JSON.parse(content);
+      for (const block of blocks) {
+        if (block?.type === 'image' && block?.data?.file?.url) {
+          return block.data.file.url;
+        }
+        if (block?.type === 'richText' && block?.data?.html) {
+          const imgMatch = block.data.html.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+          if (imgMatch) return imgMatch[1];
+        }
+      }
+    } catch {
+      const str = String(content);
+      const imgMatch = str.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+      if (imgMatch) return imgMatch[1];
+      const mdMatch = str.match(/!\[[^\]]*\]\(([^)]+)\)/);
+      if (mdMatch) return mdMatch[1];
     }
-  } catch (error) {
-    blocks = [];
+    return null;
   }
 
+  const previewImage = extractFirstImage(content);
+
   return (
-    <EditProvider
-      value={{
-        contentType: 'article',
-        contentId: article.id,
-        slug: article.slug,
-        title: article.title,
-        isEditable: true,
-      }}
-    >
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <article>
-          <header className="mb-8">
-            <div className="flex justify-between items-start mb-4">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 flex-1">
-                {article.title}
-              </h1>
-              <EditButton variant="inline" showLabel={true} className="ml-4 flex-shrink-0" />
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0 text-sm text-gray-600 mb-6">
-              {article.author?.image && (
-                <Image
-                  src={article.author.image}
-                  alt={article.author.name || 'Автор'}
-                  width={32}
-                  height={32}
-                  className="rounded-full"
-                />
-              )}
-              <span>Автор: {article.author?.name || 'Неизвестен'}</span>
-              <span>•</span>
-              <time dateTime={article.createdAt}>
-                {new Date(article.createdAt).toLocaleDateString('ru-RU')}
-              </time>
-            </div>
-
-            {article.tags && article.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-6">
-                {article.tags.map((tag: any) => (
-                  <Link
-                    key={tag.id}
-                    href={`/tags/${tag.name}`}
-                    className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full hover:bg-blue-200"
-                  >
-                    #{tag.name}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </header>
-
-          <div className="prose prose-lg max-w-none">
-            {blocks.length > 0 ? (
-              <BlockRenderer blocks={blocks} />
-            ) : (
-              <div className="text-gray-500 italic py-8">Содержимое статьи пока не добавлено.</div>
-            )}
+    <div className="min-h-screen bg-white flex flex-col items-center py-10 px-2">
+      {/* Hero Image */}
+      {previewImage ? (
+        <div className="w-full flex justify-center mb-8">
+          <div className="w-full max-w-4xl" style={{ width: '80vw' }}>
+            <Image
+              src={previewImage}
+              alt={title || artist}
+              width={1200}
+              height={900}
+              className="w-full h-auto object-contain rounded-none shadow-none"
+              priority
+            />
           </div>
-
-          <SocialShare
-            title={article.title}
-            url={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/${article.slug}`}
-            description={generateDescription(article.content)}
-          />
-        </article>
-
-        {/* Related Articles */}
-        <RelatedArticles currentArticleId={article.id} tags={article.tags} limit={3} />
-
-        {/* Floating Edit Button - автоматически получает контекст */}
-        <EditButton variant="floating" />
-        <DebugEditButton />
+        </div>
+      ) : (
+        <div className="w-full flex justify-center mb-8">
+          <div className="w-full max-w-4xl flex items-center justify-center text-gray-300 text-6xl" style={{ width: '80vw', height: 300 }}>
+            —
+          </div>
+        </div>
+      )}
+      {/* Heading */}
+      <div className="text-center mb-6">
+        {artist && (
+          <div className="font-serif text-[2.5rem] text-black leading-tight">{artist}</div>
+        )}
+        {title && (
+          <div className="font-serif italic text-[1.5rem] text-neutral-700 mt-2">{title}</div>
+        )}
       </div>
-    </EditProvider>
+      {/* Curator's Note */}
+      <div className="w-full flex justify-center mb-8">
+        <div className="max-w-xl w-full font-serif text-[1.1rem] leading-[1.6] text-neutral-900 text-justify">
+          {curatorNote && <div className="whitespace-pre-wrap">{curatorNote}</div>}
+          {quote && (
+            <blockquote className="italic border-l-4 border-neutral-300 pl-4 my-6 text-neutral-700">
+              {quote}
+            </blockquote>
+          )}
+        </div>
+      </div>
+      {/* Specs */}
+      {specs && (
+        <div className="mt-2 mb-8 text-[0.85rem] font-mono text-[#555] text-center whitespace-pre-wrap">
+          {specs}
+        </div>
+      )}
+      {/* Call to Action */}
+      <div className="mt-10 mb-2">
+        <a
+          href="mailto:studio@merkurov.love?subject=Enquiry about artwork"
+          className="text-base font-semibold text-blue-700 hover:underline"
+        >
+          Enquire about this work &rarr;
+        </a>
+      </div>
+    </div>
   );
 }
 

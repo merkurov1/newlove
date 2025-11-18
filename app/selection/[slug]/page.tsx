@@ -37,17 +37,6 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
   const article = await getArticle(params.slug);
   if (!article) return notFound();
 
-  // DEBUG: Log article data
-  console.log('Article data:', {
-    artist: article.artist,
-    title: article.title,
-    curatorNote: article.curatorNote,
-    quote: article.quote,
-    specs: article.specs,
-    hasContent: !!article.content,
-    contentType: Array.isArray(article.content) ? 'array' : typeof article.content
-  });
-
   // Destructure fields for layout
   const {
     artist = '',
@@ -88,17 +77,6 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-10 px-2">
-      {/* DEBUG INFO - Remove after testing */}
-      <div style={{ background: '#f0f0f0', padding: '20px', margin: '20px', fontFamily: 'monospace', fontSize: '12px', width: '80%', overflow: 'auto' }}>
-        <strong>DEBUG DATA:</strong><br/>
-        artist: {JSON.stringify(artist)}<br/>
-        title: {JSON.stringify(title)}<br/>
-        curatorNote: {JSON.stringify(curatorNote)}<br/>
-        quote: {JSON.stringify(quote)}<br/>
-        specs: {JSON.stringify(specs)}<br/>
-        hasContent: {JSON.stringify(!!content)}<br/>
-        previewImage: {JSON.stringify(previewImage)}<br/>
-      </div>
       {/* Hero Image */}
       {previewImage ? (
         <div className="w-full flex justify-center mb-8">
@@ -132,7 +110,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       {/* Curator's Note */}
       <div className="w-full flex justify-center mb-8">
         <div className="max-w-xl w-full font-serif text-[1.1rem] leading-[1.6] text-neutral-900 text-justify">
-          {curatorNote && <div>{curatorNote}</div>}
+          {curatorNote && <div className="whitespace-pre-wrap">{curatorNote}</div>}
           {quote && (
             <blockquote className="italic border-l-4 border-neutral-300 pl-4 my-6 text-neutral-700">
               {quote}
@@ -142,13 +120,8 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       </div>
       {/* Specs */}
       {specs && (
-        <div className="mt-2 mb-8 text-[0.85rem] font-mono text-[#555] text-center whitespace-pre-line">
-          {specs.split('|').map((line: string, i: number) => (
-            <span key={i}>
-              {line.trim()}
-              {i < specs.split('|').length - 1 && <span className="mx-2">|</span>}
-            </span>
-          ))}
+        <div className="mt-2 mb-8 text-[0.85rem] font-mono text-[#555] text-center whitespace-pre-wrap">
+          {specs}
         </div>
       )}
       {/* Call to Action */}
