@@ -1,3 +1,4 @@
+
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
@@ -37,8 +38,6 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
   const article = await getArticle(params.slug);
   if (!article) return notFound();
 
-
-
   // Destructure fields for layout
   const {
     preview_image,
@@ -47,15 +46,13 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
     quote = '',
     specs = '',
   } = article;
-
-  // curatorNote: only from article.curatorNote (DB field)
-  const curatorNote = article.curatorNote ?? '';
+    const curatorNote = article.curatorNote ?? article.curatornote ?? '';
 
   // Extract first image from content if preview_image is missing
   function extractFirstImage(content: string): string | null {
     if (!content) return null;
     // HTML <img src="...">
-    const imgMatch = content.match(/<img[^>]+src=['\"]([^'\"]+)['\"]/i);
+    const imgMatch = content.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
     if (imgMatch) return imgMatch[1];
     // Markdown ![](url)
     const mdMatch = content.match(/!\[[^\]]*\]\(([^)]+)\)/);
@@ -68,17 +65,31 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-10 px-2">
       {/* Hero Image */}
-      {preview_image && (
+      {previewImage ? (
         <div className="w-full flex justify-center mb-8">
           <div className="w-full max-w-4xl" style={{ width: '80vw' }}>
             <Image
-              src={preview_image}
+              src={previewImage}
               alt={title || artist}
               width={1200}
               height={900}
               className="w-full h-auto object-contain rounded-none shadow-none"
               priority
+              onError={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.display = 'none';
+                // @ts-ignore
+                if (e.currentTarget.parentElement) {
+                  e.currentTarget.parentElement.innerHTML = '<div class=\'w-full h-full flex items-center justify-center text-gray-300 text-6xl\'>—</div>';
+                }
+              }}
             />
+          </div>
+        </div>
+      ) : (
+        <div className="w-full flex justify-center mb-8">
+          <div className="w-full max-w-4xl flex items-center justify-center text-gray-300 text-6xl" style={{ width: '80vw', height: 300 }}>
+            —
           </div>
         </div>
       )}
