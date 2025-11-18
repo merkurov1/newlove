@@ -118,3 +118,7 @@ async function PreviewView({ slug }: { slug: string }) {
     </div>
   );
 }
+
+export default function Page() {
+  return <ArchiveView />;
+}
