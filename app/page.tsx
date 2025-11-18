@@ -67,21 +67,23 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-white text-[#333]">
       <div className="max-w-[900px] mx-auto px-5 flex flex-col items-center">
-        {/* HERO SECTION REMOVED as requested */}
+        {/* Add whitespace between header and main block */}
+        <div style={{ height: 100 }} />
 
         {/* NAVIGATION - THE THREE PILLARS */}
-        <nav className="w-full flex flex-col gap-12 mt-20 mb-32">
-          <ul className="flex flex-col gap-12">
+        <nav className="w-full flex flex-col gap-16 mb-32">
+          <ul className="flex flex-col gap-16">
             <li>
               <a
-                href="/heartandangel"
+                href="/art"
                 className="block text-center no-underline hover:opacity-60 transition"
                 style={{ textDecoration: 'none' }}
               >
                 <span
-                  className="text-4xl md:text-5xl font-normal"
+                  className="block"
                   style={{
-                    fontFamily: 'Cormorant Garamond, serif',
+                    fontFamily: 'Cormorant Garamond, Playfair Display, serif',
+                    fontSize: '4rem',
                     color: '#000',
                     letterSpacing: '-0.02em',
                     lineHeight: 1.1,
@@ -90,10 +92,15 @@ export default function Home() {
                   [ ART ]
                 </span>
                 <div
-                  className="mt-2 text-base font-mono text-[#333]"
-                  style={{ fontFamily: 'Inter, Space Mono, monospace', lineHeight: 1.8 }}
+                  className="mt-2"
+                  style={{
+                    fontFamily: 'Space Mono, Courier Prime, monospace',
+                    color: '#000',
+                    fontSize: 14,
+                    letterSpacing: 1,
+                  }}
                 >
-                  Heart & Angel. The digital ritual.
+                  The digital ritual
                 </div>
               </a>
             </li>
@@ -104,9 +111,10 @@ export default function Home() {
                 style={{ textDecoration: 'none' }}
               >
                 <span
-                  className="text-4xl md:text-5xl font-normal"
+                  className="block"
                   style={{
-                    fontFamily: 'Cormorant Garamond, serif',
+                    fontFamily: 'Cormorant Garamond, Playfair Display, serif',
+                    fontSize: '4rem',
                     color: '#000',
                     letterSpacing: '-0.02em',
                     lineHeight: 1.1,
@@ -115,10 +123,15 @@ export default function Home() {
                   [ ADVISING ]
                 </span>
                 <div
-                  className="mt-2 text-base font-mono text-[#333]"
-                  style={{ fontFamily: 'Inter, Space Mono, monospace', lineHeight: 1.8 }}
+                  className="mt-2"
+                  style={{
+                    fontFamily: 'Space Mono, Courier Prime, monospace',
+                    color: '#000',
+                    fontSize: 14,
+                    letterSpacing: 1,
+                  }}
                 >
-                  Silence & Clarity. Private art acquisition.
+                  Private art acquisition
                 </div>
               </a>
             </li>
@@ -129,19 +142,25 @@ export default function Home() {
                 style={{ textDecoration: 'none' }}
               >
                 <span
-                  className="text-4xl md:text-5xl font-normal"
+                  className="block"
                   style={{
-                    fontFamily: 'Cormorant Garamond, serif',
+                    fontFamily: 'Cormorant Garamond, Playfair Display, serif',
+                    fontSize: '4rem',
                     color: '#000',
                     letterSpacing: '-0.02em',
                     lineHeight: 1.1,
                   }}
                 >
-                  [ SELECTION ]
+                  [ JOURNAL ]
                 </span>
                 <div
-                  className="mt-2 text-base font-mono text-[#333]"
-                  style={{ fontFamily: 'Inter, Space Mono, monospace', lineHeight: 1.8 }}
+                  className="mt-2"
+                  style={{
+                    fontFamily: 'Space Mono, Courier Prime, monospace',
+                    color: '#000',
+                    fontSize: 14,
+                    letterSpacing: 1,
+                  }}
                 >
                   Curated works. Buffet & Non-conformists.
                 </div>
@@ -153,8 +172,15 @@ export default function Home() {
         {/* MANIFESTO */}
         <section className="w-full" style={{ marginBottom: 120 }}>
           <div
-            className="text-left text-base md:text-lg font-mono"
-            style={{ fontFamily: 'Inter, Space Mono, monospace', color: '#333', lineHeight: 1.8 }}
+            className="mx-auto"
+            style={{
+              maxWidth: 600,
+              fontFamily: 'Space Mono, Courier Prime, monospace',
+              color: '#222',
+              fontSize: 14,
+              lineHeight: 1.8,
+              textAlign: 'center',
+            }}
           >
             <p className="mb-6">
               I spent 20 years building digital networks. Now I build human connections.
