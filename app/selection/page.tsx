@@ -11,7 +11,7 @@ const AuctionSlider = dynamic(() => import('@/components/AuctionSlider'), { ssr:
 // --- БЛОК МЕТАДАННЫХ ---
 export const metadata = sanitizeMetadata({
   title: 'Selection',
-  description: 'Curated selection of works and articles by Anton Merkurov.',
+  description: 'Curated selection of works and articles.',
 });
 
 // export const dynamic = 'force-dynamic';

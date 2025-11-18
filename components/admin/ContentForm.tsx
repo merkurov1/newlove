@@ -77,17 +77,18 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     }
   }, [isEditing, safeInitial.id]);
 
-  // Автогенерация slug из title
+  // Автогенерация slug из artist и title
   useEffect(() => {
-    if (!slugManuallyEdited && title.trim()) {
-      const generatedSlug = createSeoSlug(title);
+    if (!slugManuallyEdited && (artist.trim() || title.trim())) {
+      const base = [artist, title].filter(Boolean).join(' ');
+      const generatedSlug = createSeoSlug(base);
       setSlug(generatedSlug);
       // Проверяем уникальность только для новых записей
       if (!isEditing) {
         checkSlugUniqueness(generatedSlug);
       }
     }
-  }, [title, slugManuallyEdited, isEditing, checkSlugUniqueness]);
+  }, [artist, title, slugManuallyEdited, isEditing, checkSlugUniqueness]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);

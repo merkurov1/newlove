@@ -8,7 +8,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   // Optionally, fetch metadata for SEO
   return sanitizeMetadata({
     title: 'Selection',
-    description: 'Curated selection of works and articles by Anton Merkurov.'
+    description: 'Curated selection of works and articles.'
   });
 }
 
