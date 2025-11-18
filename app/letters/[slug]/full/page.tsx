@@ -79,7 +79,7 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
             )}
           </div>
         </article>
-        <LetterCommentsClient letterId={letter.id} />
+        <LetterCommentsClient slug={slug} />
       </div>
     </div>
   );
