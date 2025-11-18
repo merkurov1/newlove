@@ -38,6 +38,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
   if (!article) return notFound();
 
 
+
   // Destructure fields for layout
   const {
     preview_image,
@@ -47,8 +48,22 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
     specs = '',
   } = article;
 
-    // curatorNote: only from article.curatorNote (DB field)
-    const curatorNote = article.curatorNote ?? '';
+  // curatorNote: only from article.curatorNote (DB field)
+  const curatorNote = article.curatorNote ?? '';
+
+  // Extract first image from content if preview_image is missing
+  function extractFirstImage(content: string): string | null {
+    if (!content) return null;
+    // HTML <img src="...">
+    const imgMatch = content.match(/<img[^>]+src=['\"]([^'\"]+)['\"]/i);
+    if (imgMatch) return imgMatch[1];
+    // Markdown ![](url)
+    const mdMatch = content.match(/!\[[^\]]*\]\(([^)]+)\)/);
+    if (mdMatch) return mdMatch[1];
+    return null;
+  }
+
+  const previewImage = preview_image || extractFirstImage(article.content);
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-10 px-2">
