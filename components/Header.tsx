@@ -5,6 +5,9 @@ import { useState, useEffect, useRef } from 'react';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [hideOnScroll, setHideOnScroll] = useState(false);
+  const lastScrollY = useRef(0);
 
   // Умный скролл
   useEffect(() => {
