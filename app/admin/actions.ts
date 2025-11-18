@@ -94,6 +94,10 @@ export async function createArticle(formData: any) {
   const contentRaw = formData.get('content')?.toString();
   const slug = formData.get('slug')?.toString();
   const published = formData.get('published') === 'on';
+  const artist = formData.get('artist')?.toString() || '';
+  const curatorNote = formData.get('curatorNote')?.toString() || '';
+  const quote = formData.get('quote')?.toString() || '';
+  const specs = formData.get('specs')?.toString() || '';
 
   if (!title || !contentRaw || !slug) throw new Error('Все поля обязательны.');
 
@@ -126,6 +130,10 @@ export async function createArticle(formData: any) {
     published,
     publishedAt: published ? new Date().toISOString() : null,
     authorId: user.id,
+    artist,
+    curatorNote,
+    quote,
+    specs,
   });
 
   if (error) {
@@ -161,6 +169,10 @@ export async function updateArticle(formData: any) {
   const contentRaw = formData.get('content')?.toString();
   const slug = formData.get('slug')?.toString();
   const published = formData.get('published') === 'on';
+  const artist = formData.get('artist')?.toString() || '';
+  const curatorNote = formData.get('curatorNote')?.toString() || '';
+  const quote = formData.get('quote')?.toString() || '';
+  const specs = formData.get('specs')?.toString() || '';
 
   if (!id || !title || !contentRaw || !slug) throw new Error('Все поля обязательны.');
 
@@ -183,6 +195,10 @@ export async function updateArticle(formData: any) {
       slug,
       published,
       publishedAt: published ? new Date().toISOString() : null,
+      artist,
+      curatorNote,
+      quote,
+      specs,
     })
     .eq('id', id);
 

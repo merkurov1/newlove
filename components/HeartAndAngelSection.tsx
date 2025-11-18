@@ -21,13 +21,13 @@ export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel
           href={ctaHref}
           className="inline-block bg-pink-600 hover:bg-pink-700 text-white font-semibold text-xl px-6 py-3 rounded-full shadow-lg transition-colors"
         >
-          Необратимый выбор
+          Irreversible Choice
         </a>
         <a
           href="/heartandangel/letitgo"
           className="ml-4 inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xl px-6 py-3 rounded-full shadow-lg transition-colors"
         >
-          Отпусти Сердце
+          Let the Heart Go
         </a>
       </div>
 
@@ -56,8 +56,8 @@ export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel
         </Swiper>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-        <div className="prose max-w-none">
+      <div className="mb-10 flex justify-center">
+        <div className="prose max-w-2xl w-full">
           <h2>Heart & Angel</h2>
           <p>
             Heart & Angel is a transmedia art practice exploring archetypal imagery through the lens
@@ -89,39 +89,6 @@ export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel
             <li>Editioned Prints: Prints for wide distribution</li>
             <li>Video Content: YouTube videos to reach the digital audience</li>
             <li>Other Multimedia Formats</li>
-          </ul>
-        </div>
-
-        <div className="prose max-w-none">
-          <h2>Heart &amp; Angel</h2>
-          <p>
-            Heart &amp; Angel — трансмедийная художественная практика, исследующая архетипические
-            образы через призму постгендерной идентичности. Проект деконструирует традиционные
-            представления о дуализме добра и зла, предлагая альтернативную модель взаимодействия
-            символических фигур.
-          </p>
-
-          <h3>Концептуальная рамка</h3>
-          <p>
-            В основе работы лежит критическое переосмысление классических архетипов Ангела и Демона,
-            освобождённых от гендерных маркеров и бинарных оппозиций. Третий элемент — Сердце в
-            множественных репрезентациях — функционирует как медиатор, создающий пространство для
-            диалога между полюсами.
-          </p>
-          <p>
-            Небинарность персонажей не является декоративным решением, а представляет собой
-            концептуальный жест, направленный на универсализацию человеческого опыта. Проект
-            исследует, как архетипические образы могут функционировать вне патриархальной
-            символической системы, предлагая инклюзивную мифологию для современного контекста.
-          </p>
-
-          <h3>Художественные медиа</h3>
-          <ul>
-            <li>Традиционная живопись: работы тушью, акварелью и акрилом</li>
-            <li>Цифровые технологии: дополненная реальность, создающая интерактивный опыт</li>
-            <li>Тиражная графика: принты для широкого распространения</li>
-            <li>Видеоконтент: ролики на YouTube для охвата цифровой аудитории</li>
-            <li>Другие мультимедийные форматы</li>
           </ul>
         </div>
       </div>
