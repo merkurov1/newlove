@@ -1,3 +1,4 @@
+// Minor change for Vercel redeploy
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Image from 'next/image';
