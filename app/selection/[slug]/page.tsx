@@ -47,8 +47,8 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
     specs = '',
   } = article;
 
-  // Robust curatorNote fallback for legacy and new fields
-  const curatorNote = article.curatorNote ?? article.curatornote ?? '';
+    // curatorNote: only from article.curatorNote (DB field)
+    const curatorNote = article.curatorNote ?? '';
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-10 px-2">
