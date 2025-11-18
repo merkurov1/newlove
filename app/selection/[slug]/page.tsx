@@ -42,7 +42,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
     preview_image,
     artist = '',
     title = '',
-    curatorNote = '',
+    curatorNote = article.curatorNote ?? article.curatornote ?? '',
     quote = '',
     specs = '',
   } = article;
