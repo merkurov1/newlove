@@ -30,6 +30,10 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   const safeInitial = initialData && typeof initialData === 'object' ? initialData : {};
   const isEditing = !!safeInitial && !!safeInitial.id;
   const [title, setTitle] = useState(safeInitial.title || '');
+  const [artist, setArtist] = useState(safeInitial.artist || '');
+  const [curatorNote, setCuratorNote] = useState(safeInitial.curatorNote || '');
+  const [quote, setQuote] = useState(safeInitial.quote || '');
+  const [specs, setSpecs] = useState(safeInitial.specs || '');
   const [slug, setSlug] = useState(safeInitial.slug || '');
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false); // Всегда разрешаем автогенерацию
   const [content, setContent] = useState<EditorJsBlock[]>(parseBlocks(safeInitial.content));
@@ -211,7 +215,18 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   <form action={saveAction} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
   {isEditing && <input type="hidden" name="id" value={safeInitial.id} />}
       <div>
-        <label htmlFor="title" className="block text-sm font-medium text-gray-700">Название</label>
+        <label htmlFor="artist" className="block text-sm font-medium text-gray-700">Artist Name</label>
+        <input
+          type="text"
+          name="artist"
+          id="artist"
+          value={artist}
+          onChange={e => setArtist(e.target.value)}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
+        />
+      </div>
+      <div>
+        <label htmlFor="title" className="block text-sm font-medium text-gray-700">Artwork Title</label>
         <input
           type="text"
           name="title"
@@ -220,6 +235,38 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           value={title}
           onChange={handleTitleChange}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
+        />
+      </div>
+      <div>
+        <label htmlFor="curatorNote" className="block text-sm font-medium text-gray-700">Curator's Note</label>
+        <textarea
+          name="curatorNote"
+          id="curatorNote"
+          value={curatorNote}
+          onChange={e => setCuratorNote(e.target.value)}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3 min-h-[80px]"
+        />
+      </div>
+      <div>
+        <label htmlFor="quote" className="block text-sm font-medium text-gray-700">Artist Quote</label>
+        <textarea
+          name="quote"
+          id="quote"
+          value={quote}
+          onChange={e => setQuote(e.target.value)}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3 min-h-[60px]"
+        />
+      </div>
+      <div>
+        <label htmlFor="specs" className="block text-sm font-medium text-gray-700">Specs (Material, Dimensions, Context)</label>
+        <input
+          type="text"
+          name="specs"
+          id="specs"
+          value={specs}
+          onChange={e => setSpecs(e.target.value)}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
+          placeholder="Material: Oil on masonite | Dimensions: 51 x 60 cm | Context: Rossini, Paris | €40k Est."
         />
       </div>
       <div>
@@ -251,10 +298,14 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           <p className="mt-1 text-sm text-red-600">{slugError}</p>
         )}
       </div>
-  <TagInput initialTags={safeInitial.tags} onChange={setTags} />
-  <BlockEditorImproved value={content} onChange={setContent} />
+    <TagInput initialTags={safeInitial.tags} onChange={setTags} />
+    <BlockEditorImproved value={content} onChange={setContent} />
       <input type="hidden" name="tags" value={JSON.stringify(tags)} />
-  <textarea name="content" value={JSON.stringify(content)} readOnly hidden />
+      <textarea name="content" value={JSON.stringify(content)} readOnly hidden />
+      <input type="hidden" name="artist" value={artist} />
+      <input type="hidden" name="curatorNote" value={curatorNote} />
+      <input type="hidden" name="quote" value={quote} />
+      <input type="hidden" name="specs" value={specs} />
       {error && <div className="text-red-600 text-sm font-medium">{error}</div>}
       <div className="flex items-center mt-2 mb-2">
         <input

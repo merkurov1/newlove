@@ -14,7 +14,7 @@ export const metadata = sanitizeMetadata({
   description: 'Curated selection of works and articles by Anton Merkurov.',
 });
 
-export const dynamic = 'force-dynamic';
+// export const dynamic = 'force-dynamic';
 
 export default async function SelectionPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
