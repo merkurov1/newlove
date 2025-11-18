@@ -88,6 +88,17 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-10 px-2">
+      {/* DEBUG INFO - Remove after testing */}
+      <div style={{ background: '#f0f0f0', padding: '20px', margin: '20px', fontFamily: 'monospace', fontSize: '12px', width: '80%', overflow: 'auto' }}>
+        <strong>DEBUG DATA:</strong><br/>
+        artist: {JSON.stringify(artist)}<br/>
+        title: {JSON.stringify(title)}<br/>
+        curatorNote: {JSON.stringify(curatorNote)}<br/>
+        quote: {JSON.stringify(quote)}<br/>
+        specs: {JSON.stringify(specs)}<br/>
+        hasContent: {JSON.stringify(!!content)}<br/>
+        previewImage: {JSON.stringify(previewImage)}<br/>
+      </div>
       {/* Hero Image */}
       {previewImage ? (
         <div className="w-full flex justify-center mb-8">
@@ -99,14 +110,6 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
               height={900}
               className="w-full h-auto object-contain rounded-none shadow-none"
               priority
-              onError={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.display = 'none';
-                // @ts-ignore
-                if (e.currentTarget.parentElement) {
-                  e.currentTarget.parentElement.innerHTML = '<div class=\'w-full h-full flex items-center justify-center text-gray-300 text-6xl\'>—</div>';
-                }
-              }}
             />
           </div>
         </div>
