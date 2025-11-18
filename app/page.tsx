@@ -73,9 +73,10 @@ export default function Home() {
         {/* NAVIGATION - THE THREE PILLARS */}
         <nav className="w-full flex flex-col gap-16 mb-32">
           <ul className="flex flex-col gap-16">
+            {/* ART first */}
             <li>
               <a
-                href="/art"
+                href="/heartandangel"
                 className="block text-center no-underline hover:opacity-60 transition"
                 style={{ textDecoration: 'none' }}
               >
@@ -104,6 +105,39 @@ export default function Home() {
                 </div>
               </a>
             </li>
+            {/* SELECTION second, link to /articles */}
+            <li>
+              <a
+                href="/articles"
+                className="block text-center no-underline hover:opacity-60 transition"
+                style={{ textDecoration: 'none' }}
+              >
+                <span
+                  className="block"
+                  style={{
+                    fontFamily: 'Cormorant Garamond, Playfair Display, serif',
+                    fontSize: '4rem',
+                    color: '#000',
+                    letterSpacing: '-0.02em',
+                    lineHeight: 1.1,
+                  }}
+                >
+                  [ SELECTION ]
+                </span>
+                <div
+                  className="mt-2"
+                  style={{
+                    fontFamily: 'Space Mono, Courier Prime, monospace',
+                    color: '#000',
+                    fontSize: 14,
+                    letterSpacing: 1,
+                  }}
+                >
+                  Curated works. Buffet & Non-conformists.
+                </div>
+              </a>
+            </li>
+            {/* ADVISING third */}
             <li>
               <a
                 href="/advising"
@@ -135,37 +169,6 @@ export default function Home() {
                 </div>
               </a>
             </li>
-            <li>
-              <a
-                href="/articles"
-                className="block text-center no-underline hover:opacity-60 transition"
-                style={{ textDecoration: 'none' }}
-              >
-                <span
-                  className="block"
-                  style={{
-                    fontFamily: 'Cormorant Garamond, Playfair Display, serif',
-                    fontSize: '4rem',
-                    color: '#000',
-                    letterSpacing: '-0.02em',
-                    lineHeight: 1.1,
-                  }}
-                >
-                  [ JOURNAL ]
-                </span>
-                <div
-                  className="mt-2"
-                  style={{
-                    fontFamily: 'Space Mono, Courier Prime, monospace',
-                    color: '#000',
-                    fontSize: 14,
-                    letterSpacing: 1,
-                  }}
-                >
-                  Curated works. Buffet & Non-conformists.
-                </div>
-              </a>
-            </li>
           </ul>
         </nav>
 
@@ -183,13 +186,15 @@ export default function Home() {
             }}
           >
             <p className="mb-6">
-              I spent 20 years building digital networks. Now I build human connections.
-              <br />
-              I traded complexity for truth. My art is a return to the fundamental source code of
-              humanity. No politics, no borders, no social burden. Just the raw, unfiltered
-              transmission of empathy.
-              <br />
-              Love is necessary. Love is never enough.
+              <span style={{ textWrap: 'balance' }}>
+                I spent 20 years building digital networks. Now I build human connections.
+                <br />
+                I traded complexity for truth. My art is a return to the fundamental source code of
+                humanity. No politics, no borders, no social burden. Just the raw, unfiltered
+                transmission of empathy.
+                <br />
+                Love is necessary. Love is never enough.
+              </span>
             </p>
           </div>
         </section>

@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import dynamic from 'next/dynamic';
+import Image from 'next/image';
+import './swiper-init';
 
 // --- БЛОК МЕТАДАННЫХ ---
 export const metadata = sanitizeMetadata({
@@ -42,11 +45,25 @@ export default async function ArticlesPage() {
         <h1 className="text-3xl sm:text-4xl font-bold text-transparent bg-gradient-to-r from-pink-400 via-blue-400 to-purple-400 bg-clip-text mb-8 text-center">
           Публикации
         </h1>
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
           {articles && articles.length > 0 ? (
             articles.map((article: any) => (
-              <Link key={article.id} href={`/${article.slug}`} className="block rounded-xl bg-white/70 hover:bg-pink-50 transition-colors px-5 py-4">
-                <div className="flex flex-col">
+              <Link key={article.id} href={`/${article.slug}`} className="group block rounded-xl bg-white/70 hover:bg-pink-50 transition-colors overflow-hidden border border-gray-200">
+                <div className="aspect-[4/3] w-full bg-gray-100 relative">
+                  {/* Здесь можно добавить превьюшку, если появится поле preview_image */}
+                  {article.preview_image ? (
+                    <Image
+                      src={article.preview_image}
+                      alt={article.title}
+                      fill
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-300 text-4xl">—</div>
+                  )}
+                </div>
+                <div className="flex flex-col px-4 py-3">
                   <span className="text-lg font-semibold text-gray-900 mb-1 truncate">{article.title}</span>
                   <span className="text-xs text-gray-400">
                     {new Date(article.publishedAt).toLocaleDateString('ru-RU', {
@@ -59,7 +76,7 @@ export default async function ArticlesPage() {
               </Link>
             ))
           ) : (
-            <p className="text-gray-400 text-center mt-12">Здесь пока ничего нет. Но скоро появится!</p>
+            <p className="text-gray-400 text-center mt-12 col-span-full">Здесь пока ничего нет. Но скоро появится!</p>
           )}
         </div>
       </div>

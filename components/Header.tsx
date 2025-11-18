@@ -74,18 +74,18 @@ export default function Header() {
           <nav className="flex items-center">
             <ul className="flex gap-10 text-base font-semibold uppercase tracking-widest">
               <li>
-                <Link href="/art" className="hover:opacity-60 transition">
+                <Link href="/heartandangel" className="hover:opacity-60 transition">
                   ART
+                </Link>
+              </li>
+              <li>
+                <Link href="/selection" className="hover:opacity-60 transition">
+                  SELECTION
                 </Link>
               </li>
               <li>
                 <Link href="/advising" className="hover:opacity-60 transition">
                   ADVISING
-                </Link>
-              </li>
-              <li>
-                <Link href="/letters" className="hover:opacity-60 transition">
-                  JOURNAL
                 </Link>
               </li>
             </ul>
@@ -102,11 +102,20 @@ export default function Header() {
           <ul className="flex flex-col items-end gap-8 text-2xl font-semibold uppercase tracking-widest">
             <li>
               <Link
-                href="/art"
+                href="/heartandangel"
                 onClick={() => setIsMenuOpen(false)}
                 className="hover:opacity-60 transition"
               >
                 ART
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/selection"
+                onClick={() => setIsMenuOpen(false)}
+                className="hover:opacity-60 transition"
+              >
+                SELECTION
               </Link>
             </li>
             <li>
@@ -116,15 +125,6 @@ export default function Header() {
                 className="hover:opacity-60 transition"
               >
                 ADVISING
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/letters"
-                onClick={() => setIsMenuOpen(false)}
-                className="hover:opacity-60 transition"
-              >
-                JOURNAL
               </Link>
             </li>
           </ul>
