@@ -46,6 +46,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
     quote = '',
     specs = '',
   } = article;
+    const content = article.content ?? '';
     const curatorNote = article.curatorNote ?? article.curatornote ?? '';
 
   // Extract first image from content if preview_image is missing
@@ -60,7 +61,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
     return null;
   }
 
-  const previewImage = preview_image || extractFirstImage(article.content);
+    const previewImage = preview_image || extractFirstImage(content);
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-10 px-2">
