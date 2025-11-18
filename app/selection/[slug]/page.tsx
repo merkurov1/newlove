@@ -1,4 +1,3 @@
-
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
@@ -45,9 +44,9 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
     title = '',
     quote = '',
     specs = '',
+    content = '',
   } = article;
-    const content = article.content ?? '';
-    const curatorNote = article.curatorNote ?? article.curatornote ?? '';
+  const curatorNote = article.curatorNote ?? article.curatornote ?? '';
 
   // Extract first image from content if preview_image is missing
   function extractFirstImage(content: string): string | null {
@@ -61,7 +60,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
     return null;
   }
 
-    const previewImage = preview_image || extractFirstImage(content);
+  const previewImage = preview_image || extractFirstImage(content);
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-10 px-2">
