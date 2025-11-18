@@ -6,7 +6,7 @@ import HeartAndAngelSection from '@/components/HeartAndAngelSection';
 
 export const metadata = {
   title: '#HEARTANDANGEL',
-  description: 'Heart & Angel — трансмедийный художественный проект о выборе, архетипах и цифровой идентичности.'
+  description: 'Heart & Angel — a transmedia art project about choice, archetypes, and digital identity.'
 };
 
 const images = [

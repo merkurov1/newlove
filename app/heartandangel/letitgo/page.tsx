@@ -2,13 +2,13 @@ import LetItGoAngel from '@/components/LetItGoAngel';
 import './letitgo.css';
 
 export const metadata = {
-  title: 'Отпусти Сердце — Heart & Angel',
+  title: 'Let the Heart Go — Heart & Angel',
   description:
-    'Интерактивная страница: ангел отпускает сердце. Кликайте на ангела и наблюдайте за анимацией!',
+    'Interactive page: the angel lets the heart go. Click the angel and watch the animation!',
   openGraph: {
-    title: 'Отпусти Сердце — Heart & Angel',
+    title: 'Let the Heart Go — Heart & Angel',
     description:
-      'Интерактивная страница: ангел отпускает сердце. Кликайте на ангела и наблюдайте за анимацией!',
+      'Interactive page: the angel lets the heart go. Click the angel and watch the animation!',
     url: '/heartandangel/letitgo',
     type: 'website',
     images: [
@@ -16,7 +16,7 @@ export const metadata = {
         url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png',
         width: 600,
         height: 600,
-        alt: 'Ангел отпускает сердце',
+        alt: 'Angel lets the heart go',
       },
     ],
   },

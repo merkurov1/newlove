@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Image from 'next/image';
 import './swiper-init';
+import dynamic from 'next/dynamic';
+
+const AuctionSlider = dynamic(() => import('@/components/AuctionSlider'), { ssr: false });
 
 // --- БЛОК МЕТАДАННЫХ ---
 export const metadata = sanitizeMetadata({
@@ -35,15 +38,23 @@ export default async function SelectionPage() {
       );
     }
   }
-  const { data: articles = [], error } = await supabase.from('articles').select('id,title,slug,publishedAt').eq('published', true).order('publishedAt', { ascending: false });
+  const { data: articles = [], error } = await supabase.from('articles').select('id,title,slug,publishedAt,preview_image').eq('published', true).order('publishedAt', { ascending: false });
   if (error) {
     console.error('Supabase fetch articles error', error);
   }
+
+  // Show a Swiper carousel at the top for articles with images (up to 8), then the grid below as before
+  const featured = (articles || []).filter((a: any) => a.preview_image).slice(0, 8);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-blue-100 py-10 px-2">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-4xl font-bold text-black mb-8 text-center tracking-tight">Selection</h1>
+        {featured.length > 0 && (
+          <div className="mb-10">
+            <AuctionSlider articles={featured} />
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
           {articles && articles.length > 0 ? (
             articles.map((article: any) => (

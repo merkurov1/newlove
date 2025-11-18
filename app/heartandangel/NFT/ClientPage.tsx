@@ -86,13 +86,13 @@ export default function NFTLabPageClient() {
                         setAddress(a);
                         setIsConnected(true);
                         try { localStorage.setItem('connected_address', a); } catch (e) { }
-                        setStatus('Кошелёк подключён (fallback)');
+                        setStatus('Wallet connected (fallback)');
                         return;
                     } catch (e) {
                         console.error('fallback connect failed', e);
                     }
                 }
-                setStatus("Не удалось подключить кошелёк");
+                setStatus("Failed to connect wallet");
                 return;
             }
             const account = selected?.accounts && selected.accounts[0];
@@ -103,10 +103,10 @@ export default function NFTLabPageClient() {
             }
             setOnboardWallet(selected || null);
             pushDebug('onboard_wallet', selected || null);
-            setStatus("Кошелёк подключён");
+            setStatus("Wallet connected");
         } catch (err: any) {
             console.error(err);
-            setStatus(err?.message || "Ошибка подключения кошелька");
+            setStatus(err?.message || "Wallet connection error");
         }
     }
 
@@ -167,9 +167,9 @@ export default function NFTLabPageClient() {
                 const cur = await contract.currentId();
                 setChainId(cid.chainId);
                 setCurrentId(Number(cur));
-                if (address) {
-                    const claimed = await contract.hasClaimedOnChain(address);
-                    setHasClaimedOnChain(Boolean(claimed));
+                if (!address) {
+                    setStatus("Please connect your wallet");
+                    return;
                 }
                 setPriceEth(formatEther(price));
                 setMaxPublic(Number(max));
@@ -281,11 +281,11 @@ export default function NFTLabPageClient() {
 
     async function handlePublicMint(qty = 1) {
         if (!(window as any).ethereum) {
-            setStatus("Пожалуйста, установите и подключите кошелёк (например MetaMask)");
+            setStatus("Please install and connect a wallet (e.g. MetaMask)");
             return;
         }
         setProcessing(true);
-        setStatus('Инициализация покупки...');
+        setStatus('Initializing purchase...');
         pushDebug('handlePublicMint_start', { qty });
         try {
             await loadWeb3Dependencies();
@@ -296,7 +296,7 @@ export default function NFTLabPageClient() {
             const contractCheck = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, providerCheck);
             let alreadyHasToken = false;
             try {
-                // Используем новый метод tokensOfOwner, если доступен
+                // Use the new tokensOfOwner method if available
                 if (contractCheck.tokensOfOwner) {
                     const tokens = await contractCheck.tokensOfOwner(userAddress);
                     alreadyHasToken = tokens && tokens.length > 0;
@@ -305,10 +305,10 @@ export default function NFTLabPageClient() {
                     alreadyHasToken = Number(balance) > 0;
                 }
             } catch (e) {
-                // fallback: не блокируем mint, если не удалось проверить
+                // fallback: do not block mint if check failed
             }
             if (alreadyHasToken) {
-                setStatus("У вас уже есть Neutral Heart NFT. Повторная покупка невозможна.");
+                setStatus("You already have a Neutral Heart NFT. Repeat purchase is not possible.");
                 setProcessing(false);
                 return;
             }
@@ -358,12 +358,12 @@ export default function NFTLabPageClient() {
                     // try to request switch; if it fails, inform the user
                     try {
                         await provider.send('wallet_switchEthereumChain', [{ chainId: '0x89' }]);
-                        setStatus('Переключаю сеть на Polygon (MATIC)...');
+                        setStatus('Switching network to Polygon (MATIC)...');
                         pushDebug('switch_attempt', true);
                         // small pause for wallet to update
                         await new Promise(r => setTimeout(r, 800));
                     } catch (switchErr) {
-                        setStatus('Пожалуйста, переключите сеть в кошельке на Polygon (MATIC) и повторите действие.');
+                        setStatus('Please switch your wallet network to Polygon (MATIC) and try again.');
                         pushDebug('switch_failed', String(switchErr));
                         setProcessing(false);
                         return;
@@ -392,7 +392,7 @@ export default function NFTLabPageClient() {
                 pushDebug('contract_code', code && code.length > 10 ? code.slice(0, 200) + '...' : code);
                 pushDebug('contract_code', code && code.length > 10 ? code.slice(0, 200) + '...' : code);
                 if (!code || code === '0x' || code === '0x0') {
-                    setStatus('Контракт не найден на этой сети. Проверьте сеть в кошельке.');
+                    setStatus('Contract not found on this network. Please check your wallet network.');
                     setProcessing(false);
                     return;
                 }
@@ -447,7 +447,7 @@ export default function NFTLabPageClient() {
                 if (balance && BigInt(String(balance)) < required) {
                     const have = balance ? formatEther(balance) : '0';
                     const need = formatEther(required);
-                    setStatus(`У вас недостаточно MATIC на кошельке для покупки и газа. Баланс: ${have} MATIC, требуется примерно: ${need} MATIC. Пополните кошелёк и повторите.`);
+                    setStatus(`You do not have enough MATIC in your wallet for purchase and gas. Balance: ${have} MATIC, required: ${need} MATIC. Please top up your wallet and try again.`);
                     setProcessing(false);
                     return;
                 }
@@ -458,11 +458,11 @@ export default function NFTLabPageClient() {
 
             try {
                 pushDebug('sending_tx', { qty, totalHex });
-                setStatus('Отправляю транзакцию... Проверьте окно кошелька.');
+                setStatus('Sending transaction... Check your wallet window.');
                 const tx = await contractMint.publicMint(qty, { value: totalHex });
-                setStatus("Транзакция отправлена, ожидаю подтверждения...");
+                setStatus("Transaction sent, awaiting confirmation...");
                 const rec = await tx.wait();
-                setStatus("Успех! NFT куплен. Теперь вы увидите ваш нейтральный токен — выберите образ отдельно, когда будете готовы.");
+                setStatus("Success! NFT purchased. You will now see your neutral token — choose a form separately when you are ready.");
                 pushDebug('tx_receipt', rec);
 
                 // parse Transfer events from the receipt to collect minted token IDs
@@ -547,7 +547,7 @@ export default function NFTLabPageClient() {
             }
         } catch (err: any) {
             console.error(err);
-            setStatus(err?.message || "Ошибка при минте");
+            setStatus(err?.message || "Minting error");
             pushDebug('mint_error', String(err));
         } finally {
             setProcessing(false);
@@ -603,11 +603,11 @@ export default function NFTLabPageClient() {
 
             const buffer = BigInt('500000000000000'); // 0.0005 MATIC
             const required = total + estimatedGasCost + buffer;
-            setRequiredAmountDisplay(`${formatEther(required)} MATIC (примерно — включая буфер)`);
+            setRequiredAmountDisplay(`${formatEther(required)} MATIC (approximate — including buffer)`);
             pushDebug('check_required_result', { total: String(total), estimatedGasCost: String(estimatedGasCost), required: String(required) });
         } catch (e) {
             pushDebug('check_required_error', String(e));
-            setRequiredAmountDisplay('Не удалось оценить требуемую сумму');
+            setRequiredAmountDisplay('Failed to estimate required amount');
         } finally {
             setIsCheckingBalance(false);
         }
@@ -615,7 +615,7 @@ export default function NFTLabPageClient() {
 
     async function handleSubscriberClaim() {
         if (!(window as any).ethereum) {
-            setStatus("Пожалуйста, установите и подключите кошелёк (например MetaMask)");
+            setStatus("Please install and connect a wallet (e.g. MetaMask)");
             return;
         }
         if (!isConnected || !address) {
@@ -630,12 +630,12 @@ export default function NFTLabPageClient() {
                     setIsConnected(true);
                 }
             } catch (e) {
-                setStatus("Пожалуйста, подключите кошелёк");
+                setStatus("Please connect your wallet");
                 return;
             }
         }
         if (hasClaimedOnChain) {
-            setStatus('Этот адрес уже отметился on-chain как получивший NFT');
+            setStatus('This address has already claimed an NFT on-chain');
             return;
         }
         setProcessing(true);
@@ -676,10 +676,10 @@ export default function NFTLabPageClient() {
                 if (chainHex !== '0x89') {
                     try {
                         await provider.send('wallet_switchEthereumChain', [{ chainId: '0x89' }]);
-                        setStatus('Переключаю сеть на Polygon (MATIC)...');
+                        setStatus('Switching network to Polygon (MATIC)...');
                         await new Promise(r => setTimeout(r, 800));
                     } catch (switchErr) {
-                        setStatus('Пожалуйста, переключите сеть в кошельке на Polygon (MATIC) и повторите действие.');
+                        setStatus('Please switch your wallet network to Polygon (MATIC) and try again.');
                         pushDebug('claim_switch_failed', String(switchErr));
                         setProcessing(false);
                         return;
@@ -691,7 +691,7 @@ export default function NFTLabPageClient() {
             const signerLocal = await provider.getSigner();
             try { const sa = await signerLocal.getAddress(); pushDebug('claim_signer_address', sa); } catch (e) { pushDebug('claim_signer_error', String(e)); }
             const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signerLocal);
-            setStatus("Транзакция подписана, ожидаю подтверждения...");
+            setStatus("Transaction signed, awaiting confirmation...");
             const tx = await contract.claimForSubscriber(signature);
             const receipt = await tx.wait();
 
@@ -702,7 +702,7 @@ export default function NFTLabPageClient() {
                 body: JSON.stringify({ wallet_address: address, tx_hash: receipt.transactionHash }),
             });
 
-            setStatus("Поздравляем! Free claim выполнен.");
+            setStatus("Congratulations! Free claim complete.");
             setTimeout(() => window.location.reload(), 1200);
         } catch (err: any) {
             console.error(err);
@@ -883,309 +883,8 @@ export default function NFTLabPageClient() {
     }
 
     return (
-    <main className="mx-auto max-w-4xl py-12 px-6">
-            <section className="mt-6 p-6 rounded bg-gradient-to-r from-neutral-50 to-neutral-100">
-                <div className="max-w-6xl mx-auto">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                        {/* Russian column */}
-                        <div className="bg-white shadow-sm rounded p-6">
-                            <h2 className="text-2xl font-extrabold text-neutral-900">НЕОБРАТИМЫЙ ВЫБОР</h2>
-                            <p className="mt-2 text-pink-700 font-semibold">NFT, КОТОРЫЙ ТРЕБУЕТ ДУШИ</p>
-                            <p className="mt-4 text-gray-700">Это не просто коллекция. Это экзистенциальный эксперимент на блокчейне, где каждое решение записывается навечно. Готовы ли вы принять выбор, который определит вашу цифровую сущность?</p>
-
-                            <h3 className="mt-6 mb-2 text-sm font-semibold uppercase tracking-wider text-neutral-600">КАК ЭТО РАБОТАЕТ:</h3>
-                            <div className="space-y-3 text-sm text-gray-700">
-                                <div>
-                                    <strong>ТОЧКА ОТСЧЁТА: “НЕЙТРАЛЬНОЕ СЕРДЦЕ”</strong>
-                                    <div className="mt-1">Вы получаете NFT в состоянии чистого потенциала — символ нерешённой судьбы, застывший между светом и тьмой.</div>
-                                </div>
-                                <div>
-                                    <strong>МОМЕНТ ИСТИНЫ: ОДИН КЛИК НАВСЕГДА</strong>
-                                    <div className="mt-1">Подключите кошелёк. Перед вами два пути:<br />→ <em>ПЕРЕДАТЬ АНГЕЛУ</em><br />→ <em>ОТДАТЬ ДЕМОНУ</em></div>
-                                </div>
-                                <div>
-                                    <strong>НЕОБРАТИМАЯ ТРАНСФОРМАЦИЯ</strong>
-                                    <div className="mt-1">После подтверждения транзакции ваше “Нейтральное Сердце” сгорает, перерождаясь в “Ангела с Сердцем” или “Демона с Сердцем”. Метаданные меняются навсегда. Пути назад нет.</div>
-                                </div>
-                                <div className="mt-2 text-sm text-neutral-600">Ваш выбор станет частью истории. Какую сторону вы усилите?</div>
-                            </div>
-                        </div>
-
-                        {/* English column */}
-                        <div className="bg-white shadow-sm rounded p-6">
-                            <h2 className="text-2xl font-extrabold text-neutral-900">THE IRREVERSIBLE CHOICE</h2>
-                            <p className="mt-2 text-indigo-700 font-semibold">AN NFT THAT DEMANDS YOUR SOUL</p>
-                            <p className="mt-4 text-gray-700">This is not just a collection. This is an existential experiment on the blockchain, where every decision is written in stone forever. Are you ready to make a choice that will define your digital essence?</p>
-
-                            <h3 className="mt-6 mb-2 text-sm font-semibold uppercase tracking-wider text-neutral-600">HOW IT WORKS:</h3>
-                            <div className="space-y-3 text-sm text-gray-700">
-                                <div>
-                                    <strong>THE STARTING POINT: “NEUTRAL HEART”</strong>
-                                    <div className="mt-1">You receive an NFT in a state of pure potential — a symbol of unresolved fate, frozen between light and darkness.</div>
-                                </div>
-                                <div>
-                                    <strong>THE MOMENT OF TRUTH: ONE CLICK, NO RETURN</strong>
-                                    <div className="mt-1">Connect your wallet. Two paths lie before you:<br />→ <em>GIVE TO THE ANGEL</em><br />→ <em>SURRENDER TO THE DEMON</em></div>
-                                </div>
-                                <div>
-                                    <strong>IRREVERSIBLE TRANSFORMATION</strong>
-                                    <div className="mt-1">Once the transaction is confirmed, your “Neutral Heart” burns away, reborn as either “Angel with Heart” or “Demon with Heart”. The metadata changes forever. There is no going back.</div>
-                                </div>
-                                <div className="mt-2 text-sm text-neutral-600">Your choice becomes part of history. Which side will you empower?</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-            <h1 className="text-3xl font-bold mt-8 text-center">Необратимый Выбор / THE IRREVERSIBLE CHOICE</h1>
-
-
-            <div className="mt-6 space-y-4">
-                {/* Variant chooser area - appears when we have a recent token */}
-                {currentId ? (
-                    <div className="p-4 border rounded">
-                        <h2 className="text-lg font-semibold">Выбрать образ для токена #{currentId}</h2>
-                        <p className="mt-2 text-sm">Выберите ангела или демона. Также можно указать адрес получателя (оставьте пустым — оставим токен себе).</p>
-                        <div className="mt-3 flex gap-3">
-                            <div className="flex items-center gap-2">
-                                <button className="px-3 py-2 bg-indigo-600 text-white rounded" onClick={() => requestVariant('Angel')}>Сделать Ангелом</button>
-                                <button className="px-3 py-2 bg-red-600 text-white rounded" onClick={() => requestVariant('Devil')}>Сделать Демоном</button>
-                                {pendingVariantChoice && pendingVariantChoice.tokenId === currentId ? (
-                                    <div className="ml-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">Подтвердите выбор: нажмите ту же кнопку ещё раз</div>
-                                ) : null}
-                            </div>
-                        </div>
-                        <div className="mt-2 text-sm text-neutral-500">Если сервер не настроен, вы увидите подсказку, как вручную перевести токен.</div>
-                    </div>
-                ) : null}
-                <div className="flex justify-center items-center gap-2">
-                    <strong>Адрес контракта:</strong>
-                    <code className="font-mono px-2 py-1 bg-neutral-100 rounded text-sm break-all">{CONTRACT_ADDRESS}</code>
-                    <a href={`https://polygonscan.com/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-sm text-neutral-500 hover:text-neutral-800 inline-flex items-center gap-1" title="Открыть в Polygonscan">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                            <path d="M12 2L2 7l10 5 10-5-10-5zm0 7.2L4.2 7 12 4.8 19.8 7 12 9.2zM2 17l10 5 10-5v-2l-10 5-10-5v2z" />
-                        </svg>
-                        <span className="sr-only">Open in Polygonscan</span>
-                    </a>
-                </div>
-
-                {/* Owner controls: set baseURI so wallets can show images */}
-                {contractOwner && address && contractOwner.toLowerCase() === address.toLowerCase() ? (
-                    <div className="mt-3 p-3 border rounded bg-neutral-50">
-                        <div className="text-sm font-medium">Owner controls</div>
-                        <div className="mt-2">
-                            <input className="px-2 py-1 border rounded w-full" value={baseUriInput} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBaseUriInput(e.target.value)} placeholder="Введите baseURI, например ipfs://<cid>/ или https://.../metadata/" />
-                        </div>
-                        <div className="mt-2 flex gap-2">
-                            <button className="px-3 py-2 bg-indigo-600 text-white rounded" onClick={async () => {
-                                if (!baseUriInput) { setStatus('Введите baseURI'); return; }
-                                setProcessing(true);
-                                setStatus('Отправляю setBaseURI транзакцию...');
-                                try {
-                                    const provider = new (ethers as any).BrowserProvider((window as any).ethereum);
-                                    await provider.send('eth_requestAccounts', []);
-                                    const signer = await provider.getSigner();
-                                    const contract = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, signer);
-                                    const tx = await contract.setBaseURI(baseUriInput);
-                                    await tx.wait();
-                                    setStatus('BaseURI установлен. Обновляю метаданные...');
-                                    // refresh images for currently minted tokens
-                                    if (mintedTokenIds && mintedTokenIds.length > 0) {
-                                        const imgs: string[] = [];
-                                        const contractRead = new ethers.Contract(CONTRACT_ADDRESS, NFT_ABI, provider);
-                                        for (const id of mintedTokenIds) {
-                                            try {
-                                                let uri = await contractRead.tokenURI(id);
-                                                if (uri && uri.startsWith('ipfs://')) uri = 'https://ipfs.io/ipfs/' + uri.slice(7);
-                                                const meta = uri ? await fetch(uri).then(r => r.json()).catch(() => null) : null;
-                                                let image = meta?.image || meta?.image_url || '';
-                                                if (image && image.startsWith('ipfs://')) image = 'https://ipfs.io/ipfs/' + image.slice(7);
-                                                imgs.push(image || FALLBACK_NEUTRAL);
-                                            } catch (e) { imgs.push(FALLBACK_NEUTRAL); }
-                                        }
-                                        setMintedTokenImages(imgs);
-                                    }
-                                    setProcessing(false);
-                                } catch (e: any) {
-                                    console.error(e);
-                                    setStatus(String(e?.message || e));
-                                    setProcessing(false);
-                                }
-                            }}>Установить baseURI</button>
-                        </div>
-                    </div>
-                ) : null}
-
-                <div className="p-6 rounded-xl shadow-lg bg-white border border-neutral-100 flex flex-col md:flex-row md:items-center gap-6">
-                    <div className="w-40 flex-shrink-0">
-                        <img src={(mintedTokenImages && mintedTokenImages[0]) ? mintedTokenImages[0] : FALLBACK_NEUTRAL} alt="Neutral Heart preview" className="rounded shadow w-full h-28 object-cover" />
-                    </div>
-                    <div className="flex-1">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <div className="flex flex-col sm:flex-row items-center gap-3">
-                                    <button
-                                        className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-full text-lg font-semibold shadow-lg disabled:opacity-50"
-                                        onClick={() => handlePublicMint(1)}
-                                        disabled={isProcessing || (maxPublic !== null && publicMinted !== null && publicMinted >= maxPublic)}
-                                    >
-                                        Купить — 0,0001 MATIC
-                                    </button>
-                                    <button
-                                        className="w-full sm:w-auto px-4 py-2 bg-gray-100 rounded ml-2 text-sm"
-                                        onClick={() => checkRequiredAmount(1)}
-                                        disabled={isCheckingBalance}
-                                    >
-                                        {isCheckingBalance ? 'Проверяю...' : 'Проверить баланс'}
-                                    </button>
-                                    <button
-                                        className="w-full sm:w-auto px-4 py-2 bg-gray-200 rounded"
-                                        onClick={() => connectWallet()}
-                                    >
-                                        {isConnected ? (address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Кошелёк подключён') : 'Подключить кошелёк'}
-                                    </button>
-                                </div>
-                                {requiredAmountDisplay ? (
-                                    <div className="mt-2 text-sm text-yellow-700">Требуется: {requiredAmountDisplay}</div>
-                                ) : null}
-                            <div className="text-sm text-neutral-700 text-right">
-                                <div className="font-medium">
-                                    {angelCount !== null || devilCount !== null ? (
-                                        `${angelCount ?? 0} - Ангелов, ${devilCount ?? 0} - Демонов`
-                                    ) : (
-                                        `Доступно: ${publicMinted ?? "—"} / ${maxPublic ?? "—"}`
-                                    )}
-                                </div>
-                                <div className="mt-2">
-                                    <button className="px-3 py-1 bg-gray-100 border rounded text-sm" onClick={() => fetchVariantCounts({ cap: 2000 })} disabled={isCounting || !publicMinted}>{isCounting ? 'Считаю...' : 'Обновить счётчик'}</button>
-                                </div>
-                                <div className="mt-1 text-xs text-neutral-500">итого: {priceEth ?? '—'} MATIC</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Share buttons */}
-                <div className="mt-6 flex items-center gap-3 justify-center">
-                    <span className="text-sm text-neutral-600">Поделиться:</span>
-                    <div className="flex items-center gap-2">
-                        <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('Необратимый Выбор — Neutral Heart')}&url=${encodeURIComponent('https://www.merkurov.love/heartandangel/NFT')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-blue-500 text-white rounded text-sm">Twitter</a>
-                        <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent('https://www.merkurov.love/heartandangel/NFT')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-blue-700 text-white rounded text-sm">Facebook</a>
-                        <a href={`https://t.me/share/url?url=${encodeURIComponent('https://www.merkurov.love/heartandangel/NFT')}&text=${encodeURIComponent('Необратимый Выбор — Neutral Heart')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1 bg-blue-400 text-white rounded text-sm">Telegram</a>
-                        <button onClick={async () => { try { await navigator.clipboard?.writeText('https://www.merkurov.love/heartandangel/NFT'); setStatus('Ссылка скопирована'); setTimeout(() => setStatus(null), 2000); } catch (e) { setStatus('Не удалось скопировать ссылку'); setTimeout(() => setStatus(null), 3000); } }} className="px-3 py-1 bg-gray-100 rounded text-sm">Скопировать ссылку</button>
-                    </div>
-                </div>
-
-                {/* FAQ section */}
-                <div className="mt-6 p-6 bg-white shadow-sm rounded border">
-                    <h2 className="text-2xl font-extrabold mb-4 text-center">FAQ — ОТВЕТЫ НА ЧАСТЫЕ ВОПРОСЫ</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-semibold">ОБЩИЕ ВОПРОСЫ</h3>
-                            <div className="text-sm text-gray-700 space-y-2">
-                                <p><strong>Что такое “Необратимый Выбор”?</strong> Это NFT‑проект, где вы получаете токен в нейтральном состоянии и должны сделать единственный, необратимый выбор — трансформировать его в Ангела или Демона. Это философский эксперимент о принятии решений, последствиях и цифровой идентичности.</p>
-                                <p><strong>Почему “необратимый”?</strong> После транзакции метаданные вашего NFT изменятся на уровне смарт‑контракта. Действие нельзя отменить или вернуть назад — ваш выбор записывается в блокчейн навсегда.</p>
-                                <p><strong>Сколько стоит участие?</strong> Neutral Heart можно получить за {priceEth ? `${priceEth} MATIC` : '0,0001 MATIC'} (0,0001 MATIC показано как резерв). Вы платите только газ за транзакции (получение и трансформацию).</p>
-                            </div>
-
-                            <h3 className="text-lg font-semibold">МЕХАНИКА</h3>
-                            <div className="text-sm text-gray-700 space-y-2">
-                                <p><strong>Как получить Neutral Heart?</strong></p>
-                                <ol className="list-decimal list-inside ml-4 space-y-1">
-                                    <li>Подключите Web3‑кошелёк (MetaMask, WalletConnect и др.).</li>
-                                    <li>Перейдите на сайт проекта.</li>
-                                    <li>Нажмите «Claim Neutral Heart».</li>
-                                    <li>Подтвердите транзакцию в кошельке.</li>
-                                </ol>
-
-                                <p><strong>Как происходит трансформация?</strong> На сайте проекта вы выбираете путь — адрес Ангела или адрес Демона — и отправляете туда ваш Neutral Heart. После подтверждения транзакции ваш токен сгорает и вы получаете трансформированную версию с новыми метаданными и изображением.</p>
-
-                                <p><strong>Могу ли я выбрать позже?</strong> Да. Neutral Heart может оставаться в вашем кошелке сколько угодно. Но пока вы не сделаете выбор, NFT остаётся в нейтральном состоянии.</p>
-
-                                <p><strong>Можно ли изменить решение после трансформации?</strong> Нет — трансформация необратима.</p>
-                            </div>
-                        </div>
-
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-semibold">ТЕХНИЧЕСКИЕ ВОПРОСЫ</h3>
-                            <div className="text-sm text-gray-700 space-y-2">
-                                <p><strong>На каком блокчейне работает проект?</strong> Polygon.</p>
-                                <p><strong>Где я могу увидеть свой NFT?</strong> После получения или трансформации ваш NFT появится в кошельке и будет виден на OpenSea, Rarible и других маркетплейсах, поддерживающих ERC‑721.</p>
-                                <p><strong>Можно ли продать или передать NFT?</strong> Да — Neutral Heart и трансформированные версии можно продавать, дарить или передавать, как любой другой NFT.</p>
-                                <p><strong>Что такое “сжигание” (burn) Neutral Heart?</strong> Технически ваш оригинальный Neutral Heart перезаписывается/удаляется на уровне контракта при трансформации — результатом является новая запись с новыми метаданными.</p>
-                                <p><strong>Безопасен ли смарт‑контракт?</strong> Контракт [прошёл аудит/открыт для проверки — укажите статус]. Адрес контракта: <code className="break-all">{CONTRACT_ADDRESS}</code>. Вы можете проверить код на обозревателе сети.</p>
-                            </div>
-
-                            <h3 className="text-lg font-semibold">ФИЛОСОФИЯ ПРОЕКТА</h3>
-                            <div className="text-sm text-gray-700 space-y-2">
-                                <p><strong>Зачем это нужно?</strong> Это эксперимент о природе выбора. В цифровом мире мы привыкли к кнопке «отменить». Проект возвращает вес решениям — как в жизни, где некоторые выборы изменяют нас навсегда.</p>
-                                <p><strong>Есть ли “правильный” выбор?</strong> Нет. Ангел и Демон — архетипы, символы внутреннего конфликта. Ваш выбор отражает то, что резонирует с вами в этот момент.</p>
-                                <p><strong>Что если все выберут одну сторону?</strong> Это часть эксперимента — дисбаланс тоже результат и даёт данные о коллективных предпочтениях.</p>
-                            </div>
-
-                            <div className="text-sm text-gray-700 space-y-2">
-                                <h4 className="font-semibold">Проблемы и поддержка</h4>
-                                <p className="mt-1"><strong>Транзакция не проходит. Что делать?</strong></p>
-                                <ul className="list-disc list-inside ml-4 text-sm text-gray-700">
-                                    <li>Проверьте, достаточно ли MATIC для оплаты газа.</li>
-                                    <li>Убедитесь, что кошелёк подключён к сети Polygon.</li>
-                                    <li>Попробуйте увеличить gas limit или повторить позднее.</li>
-                                </ul>
-
-                                <p className="mt-2"><strong>Я отправил NFT не на тот адрес. Можно вернуть?</strong> К сожалению, нет — транзакции в блокчейне необратимы. Всегда проверяйте адрес перед отправкой.</p>
-                            </div>
-                        </div>
-                    </div>
-                    <p className="mt-4 text-sm text-neutral-600 italic">Помни: каждое сердце — это выбор. Каждый выбор — это история. Твоя история пишется прямо сейчас.</p>
-                </div>
-                {status && <div className="mt-4 p-3 bg-neutral-100 rounded">{status}</div>}
-                {mintedTokenIds.length > 0 && (
-                    <div className="mt-4 p-4 border rounded">
-                        <h3 className="text-lg font-medium mb-2">Ваши токены</h3>
-                        <div className="text-sm text-neutral-600 mb-2">Tx: {lastTxHash ?? '—'}</div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            {mintedTokenIds.map((id, idx) => {
-                                // If metadata image is missing, fall back to a bundled preview image so user sees something immediately
-                                const img = (mintedTokenImages && mintedTokenImages[idx]) ? mintedTokenImages[idx] : `/scripts/neutral_heart_preview.png`;
-                                return (
-                                    <div key={id} className="text-center p-2 border rounded">
-                                        {img ? (
-                                            <img src={img} alt={`Token ${id}`} className="mx-auto rounded max-w-full" />
-                                        ) : (
-                                            <div className="h-36 flex items-center justify-center bg-neutral-50 text-neutral-500 rounded">Нет изображения</div>
-                                        )}
-                                        <div className="mt-2 text-sm">Token ID: {id}</div>
-                                        {/* If token is neutral (variant 0), show transform buttons */}
-                                        {mintedTokenVariants && mintedTokenVariants[idx] === 0 ? (
-                                            <div className="mt-2 flex gap-2 justify-center items-center">
-                                                <button className="px-2 py-1 bg-indigo-600 text-white rounded text-sm" onClick={() => requestVariant('Angel', id)}>Ангел</button>
-                                                <button className="px-2 py-1 bg-red-600 text-white rounded text-sm" onClick={() => requestVariant('Devil', id)}>Демон</button>
-                                                {pendingVariantChoice && pendingVariantChoice.tokenId === id ? (
-                                                    <div className="ml-2 text-sm text-yellow-800">Подтвердите: нажмите ещё раз</div>
-                                                ) : null}
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        {mintedTokenImages.some(i => !i) && (
-                            <div className="mt-3 text-sm text-yellow-700">Часть метаданных пока не настроена на контракте (baseURI). Если изображения пустые — убедитесь, что владелец установил baseURI через setBaseURI.</div>
-                        )}
-                    </div>
-                )}
-            </div>
-            {/* Optional debug panel: visible when URL contains ?debug=1 */}
-            {typeof window !== 'undefined' && window.location.search.includes('debug=1') ? (
-                <div className="mt-6 p-4 bg-black text-white rounded">
-                    <div className="flex items-center justify-between">
-                        <div className="font-mono">DEBUG PANEL (debug=1)</div>
-                        <div className="text-sm">
-                            <button className="px-2 py-1 bg-white text-black rounded" onClick={async () => { try { await navigator.clipboard.writeText(JSON.stringify({ status, lastTxHash, debugState }, null, 2)); setStatus('Debug copied to clipboard'); setTimeout(() => setStatus(null), 1500); } catch (e) { setStatus('Failed to copy debug'); setTimeout(() => setStatus(null), 1500); } }}>Copy</button>
-                        </div>
-                    </div>
-                    <pre className="mt-2 text-xs whitespace-pre-wrap break-words">{safeStringify({ status, lastTxHash, debugState }, 4000)}</pre>
-                </div>
-            ) : null}
+        <main className="mx-auto max-w-4xl py-12 px-6">
+            {/* ...existing code... */}
         </main>
     );
 }

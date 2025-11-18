@@ -1,7 +1,7 @@
 import dynamic from 'next/dynamic';
 
-const title = 'Необратимый Выбор / THE IRREVERSIBLE CHOICE';
-const description = 'Neutral Heart — трансмедийный NFT‑эксперимент на Polygon. Преобразуйте Neutral Heart в Ангела или Демона.';
+const title = 'THE IRREVERSIBLE CHOICE';
+const description = 'Neutral Heart — a transmedia NFT experiment on Polygon. Transform Neutral Heart into an Angel or a Demon.';
 const url = 'https://www.merkurov.love/heartandangel/NFT';
 const image = 'https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafybeihnx7kaue4ehbigi4koydoei43ojjykp2mhhh7xwx4qg3tntm5e5e';
 
@@ -16,7 +16,7 @@ export const metadata = {
     images: [
       {
         url: image,
-        alt: 'Neutral Heart — Необратимый Выбор',
+        alt: 'Neutral Heart — The Irreversible Choice',
         width: 1200,
         height: 630
       }

@@ -1,6 +1,6 @@
 export default function Head() {
   const title = '#HEARTANDANGEL';
-  const description = 'Трансмедийный проект Heart & Angel — исследование архетипов и выбора в цифровой культуре.';
+  const description = 'Heart & Angel is a transmedia project exploring archetypes and choice in digital culture.';
   const url = 'https://www.merkurov.love/heartandangel';
   const image = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759212266765-IMG_0514.png';
 

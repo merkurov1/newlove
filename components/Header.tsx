@@ -88,6 +88,16 @@ export default function Header() {
                   ADVISING
                 </Link>
               </li>
+              <li>
+                <Link href="/love-is-a-key-for-all" className="hover:opacity-60 transition">
+                  ABOUT
+                </Link>
+              </li>
+              <li>
+                <Link href="/journal" className="hover:opacity-60 transition">
+                  JOURNAL
+                </Link>
+              </li>
             </ul>
           </nav>
         </div>
@@ -125,6 +135,24 @@ export default function Header() {
                 className="hover:opacity-60 transition"
               >
                 ADVISING
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/love-is-a-key-for-all"
+                onClick={() => setIsMenuOpen(false)}
+                className="hover:opacity-60 transition"
+              >
+                ABOUT
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/journal"
+                onClick={() => setIsMenuOpen(false)}
+                className="hover:opacity-60 transition"
+              >
+                JOURNAL
               </Link>
             </li>
           </ul>
