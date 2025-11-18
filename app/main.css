@@ -1,23 +1,57 @@
+/* Brutalist/High-End Global Styles */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+body {
+  background: #fff;
+  color: #333;
+  font-family: var(--font-inter, Inter, 'Space Mono', Arial, sans-serif);
+}
+a {
+  color: #111;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+a:hover,
+a:focus {
+  opacity: 0.6;
+  text-decoration: none;
+}
+button {
+  background: none;
+  border: none;
+  color: #111;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+button:hover,
+button:focus {
+  opacity: 0.6;
+}
 /* --- Мобильная адаптивность карточек статей на главной --- */
 .article-card {
-	min-width: 0;
-	max-width: 100%;
-	word-break: break-word;
+  min-width: 0;
+  max-width: 100%;
+  word-break: break-word;
 }
 
 @media (max-width: 640px) {
-	.article-card {
-		padding: 0.75rem !important;
-		font-size: 1rem;
-	}
-	.article-card h3 {
-		font-size: 1.05rem;
-		line-height: 1.2;
-		margin-bottom: 0.25rem;
-	}
-	.article-card .object-cover {
-		border-radius: 0.5rem;
-	}
+  .article-card {
+    padding: 0.75rem !important;
+    font-size: 1rem;
+  }
+  .article-card h3 {
+    font-size: 1.05rem;
+    line-height: 1.2;
+    margin-bottom: 0.25rem;
+  }
+  .article-card .object-cover {
+    border-radius: 0.5rem;
+  }
 }
 /* src/styles/main.css (или ваш глобальный CSS файл) */
 
@@ -40,7 +74,7 @@
   aspect-ratio: 4/3;
   object-fit: cover;
   border-radius: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   background: #f8fafc;
   display: block;
   cursor: pointer;
@@ -55,67 +89,75 @@
 
 /* Галерея проектов: таблицы с изображениями */
 .prose table {
-	width: 100%;
-	table-layout: fixed;
-	border-collapse: separate;
-	border-spacing: 16px 16px;
-	margin-bottom: 2rem;
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 16px 16px;
+  margin-bottom: 2rem;
 }
 
 .prose table td {
-	padding: 0;
-	vertical-align: top;
-	background: none;
-	border: none;
+  padding: 0;
+  vertical-align: top;
+  background: none;
+  border: none;
 }
 
 .prose table td img {
-	display: block;
-	width: 100%;
-	height: auto;
-	margin: 0 auto;
-	border-radius: 0.5rem;
-	box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-	background: #f8fafc;
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  background: #f8fafc;
 }
 
 @media (max-width: 900px) {
-	.prose table, .prose table tr, .prose table td {
-		display: block;
-		width: 100%;
-	}
-	.prose table td {
-		margin-bottom: 1rem;
-	}
+  .prose table,
+  .prose table tr,
+  .prose table td {
+    display: block;
+    width: 100%;
+  }
+  .prose table td {
+    margin-bottom: 1rem;
+  }
 }
 
 /* Анимация появления (fade-in) */
 .animate-fade-in {
-	animation: fadeIn 0.25s ease;
+  animation: fadeIn 0.25s ease;
 }
 
 @keyframes fadeIn {
-	from { opacity: 0; transform: translateY(16px); }
-	to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Исправление для columns блоков внутри prose */
 .prose .grid {
-	display: grid !important;
+  display: grid !important;
 }
 
 .prose .grid-cols-1 {
-	grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
 }
 
 @media (min-width: 768px) {
-	.prose .md\:grid-cols-2 {
-		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-	}
-	
-	.prose .md\:grid-cols-3 {
-		grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-	}
+  .prose .md\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .prose .md\:grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
 }
 
 /* Site background: light pink in day, slightly darker in dark mode */

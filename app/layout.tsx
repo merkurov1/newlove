@@ -13,14 +13,20 @@ import NextDynamic from 'next/dynamic';
 const UserSidebar = NextDynamic(() => import('@/components/UserSidebar'), { ssr: false });
 
 // Optimize fonts with next/font
-import { Inter } from 'next/font/google';
+
+import { Inter, Cormorant_Garamond } from 'next/font/google';
 
 const inter = Inter({
-  subsets: ['latin', 'cyrillic'],
-  display: 'swap', // Prevent CLS
-  preload: true,
+  subsets: ['latin'],
+  display: 'swap',
+  weight: ['300', '400'],
   variable: '--font-inter',
-  weight: ['400', '500', '600', '700'],
+});
+const cormorant = Cormorant_Garamond({
+  subsets: ['latin'],
+  display: 'swap',
+  weight: ['400', '600'],
+  variable: '--font-cormorant',
 });
 
 // --- SEO: Корректный шаблон заголовка и метаданных ---
@@ -197,7 +203,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           data-website-id="87795d47-f53d-4ef8-8e82-3ee195ea997b"
         ></script>
       </head>
-      <body className={inter.className}>
+      <body
+        className={inter.className + ' ' + cormorant.className}
+        style={{ background: '#fff', color: '#333' }}
+      >
         <AuthProvider>
           {/* Accessibility: Skip to main content link */}
           <a
