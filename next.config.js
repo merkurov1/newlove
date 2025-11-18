@@ -1,6 +1,16 @@
 // next.config.js
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'merkurov.love' }],
+        destination: 'https://www.merkurov.love/:path*',
+        permanent: true,
+      },
+    ];
+  },
   reactStrictMode: true,
   eslint: {
     // Enable ESLint during builds to catch errors early
@@ -14,7 +24,7 @@ const nextConfig = {
   // Output mode - required for Render and other Node.js hosting platforms
   // Vercel doesn't need this, but Render does
   output: 'standalone',
-  
+
   // Webpack configuration
   webpack: (config, { isServer }) => {
     // Disable webpack cache warnings in production
@@ -23,20 +33,23 @@ const nextConfig = {
         level: 'error',
       };
     }
-    
+
     return config;
   },
-  
+
   // Allow disabling heavy build features locally via env to reduce memory use during builds
-  experimental: (process.env.DISABLE_OPTIMIZE_CSS === '1') ? {} : {
-    // Оптимизация для production
-     // NOTE: `next` may require `critters` when `optimizeCss` is enabled which can
-     // cause runtime MODULE_NOT_FOUND errors in some deployment environments where
-     // node_modules are pruned. Keep this feature opt-in via ENABLE_OPTIMIZE_CSS to
-     // avoid runtime failures (set ENABLE_OPTIMIZE_CSS=1 in your build environment
-     // to enable it if you also ensure `critters` is installed).
-     optimizeCss: (process.env.ENABLE_OPTIMIZE_CSS === '1') ? true : false,
-  },
+  experimental:
+    process.env.DISABLE_OPTIMIZE_CSS === '1'
+      ? {}
+      : {
+          // Оптимизация для production
+          // NOTE: `next` may require `critters` when `optimizeCss` is enabled which can
+          // cause runtime MODULE_NOT_FOUND errors in some deployment environments where
+          // node_modules are pruned. Keep this feature opt-in via ENABLE_OPTIMIZE_CSS to
+          // avoid runtime failures (set ENABLE_OPTIMIZE_CSS=1 in your build environment
+          // to enable it if you also ensure `critters` is installed).
+          optimizeCss: process.env.ENABLE_OPTIMIZE_CSS === '1' ? true : false,
+        },
   // Конфигурация изображений
   images: {
     remotePatterns: [
@@ -99,7 +112,7 @@ const nextConfig = {
         hostname: 'i.ibb.co', // Для изображений открыток
         port: '',
         pathname: '/**',
-      }
+      },
     ],
 
     // Enable image optimization for better performance
