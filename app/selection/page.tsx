@@ -91,14 +91,6 @@ export default async function SelectionPage() {
                         className="object-contain w-full h-full"
                         sizes="(max-width: 1024px) 100vw, 25vw"
                         priority={false}
-                        onError={(e) => {
-                          // @ts-ignore
-                          e.currentTarget.style.display = 'none';
-                          // @ts-ignore
-                          if (e.currentTarget.parentElement) {
-                            e.currentTarget.parentElement.innerHTML = '<div class=\'w-full h-full flex items-center justify-center text-gray-300 text-4xl\'>—</div>';
-                          }
-                        }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-300 text-4xl">—</div>
