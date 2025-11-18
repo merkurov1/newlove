@@ -37,9 +37,19 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
   const article = await getArticle(params.slug);
   if (!article) return notFound();
 
+  // DEBUG: Log article data
+  console.log('Article data:', {
+    artist: article.artist,
+    title: article.title,
+    curatorNote: article.curatorNote,
+    quote: article.quote,
+    specs: article.specs,
+    hasContent: !!article.content,
+    contentType: Array.isArray(article.content) ? 'array' : typeof article.content
+  });
+
   // Destructure fields for layout
   const {
-    preview_image,
     artist = '',
     title = '',
     quote = '',
@@ -48,19 +58,33 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
   } = article;
   const curatorNote = article.curatorNote ?? article.curatornote ?? '';
 
-  // Extract first image from content if preview_image is missing
-  function extractFirstImage(content: string): string | null {
+  // Extract first image from content (EditorJS blocks or string)
+  function extractFirstImage(content: any): string | null {
     if (!content) return null;
-    // HTML <img src="...">
-    const imgMatch = content.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
-    if (imgMatch) return imgMatch[1];
-    // Markdown ![](url)
-    const mdMatch = content.match(/!\[[^\]]*\]\(([^)]+)\)/);
-    if (mdMatch) return mdMatch[1];
+    try {
+      // If content is array of EditorJS blocks
+      const blocks = Array.isArray(content) ? content : JSON.parse(content);
+      for (const block of blocks) {
+        if (block?.type === 'image' && block?.data?.file?.url) {
+          return block.data.file.url;
+        }
+        if (block?.type === 'richText' && block?.data?.html) {
+          const imgMatch = block.data.html.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+          if (imgMatch) return imgMatch[1];
+        }
+      }
+    } catch {
+      // Fallback: try as HTML/Markdown string
+      const str = String(content);
+      const imgMatch = str.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+      if (imgMatch) return imgMatch[1];
+      const mdMatch = str.match(/!\[[^\]]*\]\(([^)]+)\)/);
+      if (mdMatch) return mdMatch[1];
+    }
     return null;
   }
 
-  const previewImage = preview_image || extractFirstImage(content);
+  const previewImage = extractFirstImage(content);
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-10 px-2">

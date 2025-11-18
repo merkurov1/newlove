@@ -44,13 +44,29 @@ export default async function SelectionPage() {
   }
 
 
-  // Helper: extract first image from content
-  function extractFirstImage(content: string): string | null {
+  // Helper: extract first image from content (EditorJS blocks or string)
+  function extractFirstImage(content: any): string | null {
     if (!content) return null;
-    const imgMatch = content.match(/<img[^>]+src=['\"]([^'\"]+)['\"]/i);
-    if (imgMatch) return imgMatch[1];
-    const mdMatch = content.match(/!\[[^\]]*\]\(([^)]+)\)/);
-    if (mdMatch) return mdMatch[1];
+    try {
+      // If content is array of EditorJS blocks
+      const blocks = Array.isArray(content) ? content : JSON.parse(content);
+      for (const block of blocks) {
+        if (block?.type === 'image' && block?.data?.file?.url) {
+          return block.data.file.url;
+        }
+        if (block?.type === 'richText' && block?.data?.html) {
+          const imgMatch = block.data.html.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+          if (imgMatch) return imgMatch[1];
+        }
+      }
+    } catch {
+      // Fallback: try as HTML/Markdown string
+      const str = String(content);
+      const imgMatch = str.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+      if (imgMatch) return imgMatch[1];
+      const mdMatch = str.match(/!\[[^\]]*\]\(([^)]+)\)/);
+      if (mdMatch) return mdMatch[1];
+    }
     return null;
   }
 
@@ -63,7 +79,7 @@ export default async function SelectionPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10">
           {articles && articles.length > 0 ? (
             articles.map((article: any) => {
-              const previewImage = article.preview_image || extractFirstImage(article.content);
+              const previewImage = extractFirstImage(article.content);
               return (
                 <Link key={article.id} href={`/${article.slug}`} className="block group border border-neutral-200 bg-white hover:bg-neutral-50 transition-colors p-0 rounded-none overflow-hidden">
                   <div className="aspect-[3/2] w-full bg-gray-100 relative" style={{ minHeight: 220 }}>

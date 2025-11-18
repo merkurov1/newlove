@@ -31,7 +31,6 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   const isEditing = !!safeInitial && !!safeInitial.id;
   const [title, setTitle] = useState(safeInitial.title || '');
   const [artist, setArtist] = useState(safeInitial.artist || '');
-  const [previewImage, setPreviewImage] = useState(safeInitial.preview_image || '');
   const [curatorNote, setCuratorNote] = useState(safeInitial.curatorNote || '');
   const [quote, setQuote] = useState(safeInitial.quote || '');
   const [specs, setSpecs] = useState(safeInitial.specs || '');
@@ -238,19 +237,6 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           onChange={handleTitleChange}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
         />
-      </div>
-      <div>
-        <label htmlFor="previewImage" className="block text-sm font-medium text-gray-700">Preview Image URL</label>
-        <input
-          type="url"
-          name="preview_image"
-          id="previewImage"
-          value={previewImage}
-          onChange={e => setPreviewImage(e.target.value)}
-          placeholder="https://example.com/image.jpg"
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
-        />
-        <p className="mt-1 text-xs text-gray-500">Если не указано, будет использована первая картинка из content</p>
       </div>
       <div>
         <label htmlFor="curatorNote" className="block text-sm font-medium text-gray-700">Curator's Note</label>
