@@ -6,40 +6,44 @@ import { safeData } from '@/lib/safeSerialize';
 
 const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { ssr: false });
 const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
-const BentoArticlesFeed = nextDynamic(() => import('@/components/BentoArticlesFeed'), { ssr: false });
+const BentoArticlesFeed = nextDynamic(() => import('@/components/BentoArticlesFeed'), {
+  ssr: false,
+});
 const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
 const BackgroundShapes = nextDynamic(() => import('@/components/BackgroundShapes'), { ssr: false });
 
 export const metadata = {
-  title: 'Главная | Anton Merkurov',
-  description: 'Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.'
+  title: 'Anton Merkurov | Digital Temple',
+  description: 'A conceptual portal by Anton Merkurov. Art, advising, and curated selection.',
 };
 
 const AuctionSkeleton = () => (
-    <div className="aspect-[2/1] w-full animate-pulse rounded-xl bg-gray-300 dark:bg-neutral-800"></div>
+  <div className="aspect-[2/1] w-full animate-pulse rounded-xl bg-gray-300 dark:bg-neutral-800"></div>
 );
 
 function extractFirstImage(content: any) {
-    if (!content || typeof content !== 'string') return null;
-    try {
-        const contentArray = JSON.parse(content);
-        if (Array.isArray(contentArray)) {
-            for (const block of contentArray) {
-                const html = block?.data?.html;
-                if (html && typeof html === 'string') {
-                    const match = html.match(/<img[^>]+src="([^"]+)"/);
-                    if (match && match[1]) {
-                        return match[1].replace(/([^:]\/)\/+/g, "$1");
-                    }
-                }
-            }
+  if (!content || typeof content !== 'string') return null;
+  try {
+    const contentArray = JSON.parse(content);
+    if (Array.isArray(contentArray)) {
+      for (const block of contentArray) {
+        const html = block?.data?.html;
+        if (html && typeof html === 'string') {
+          const match = html.match(/<img[^>]+src="([^"]+)"/);
+          if (match && match[1]) {
+            return match[1].replace(/([^:]\/)\/+/g, '$1');
+          }
         }
-    } catch (e) { /* Игнорируем ошибку */ }
-    const fallbackMatch = content.match(/<img[^>]+src="([^"]+)"/);
-    if (fallbackMatch && fallbackMatch[1]) {
-        return fallbackMatch[1].replace(/([^:]\/)\/+/g, "$1");
+      }
     }
-    return null;
+  } catch (e) {
+    /* Игнорируем ошибку */
+  }
+  const fallbackMatch = content.match(/<img[^>]+src="([^"]+)"/);
+  if (fallbackMatch && fallbackMatch[1]) {
+    return fallbackMatch[1].replace(/([^:]\/)\/+/g, '$1');
+  }
+  return null;
 }
 
 async function getArticlesByTag(supabase: any, tagSlug: string, limit = 50) {
@@ -50,7 +54,8 @@ async function getArticlesByTag(supabase: any, tagSlug: string, limit = 50) {
     return (articles || []).map((article: any) => ({
       ...article,
       // normalize preview image key to preview_image expected by components
-      preview_image: article.previewImage || article.preview_image || extractFirstImage(article.content)
+      preview_image:
+        article.previewImage || article.preview_image || extractFirstImage(article.content),
     }));
   } catch (e) {
     console.error(`Ошибка при получении статей с тегом "${tagSlug}" через helper:`, e);
@@ -58,94 +63,137 @@ async function getArticlesByTag(supabase: any, tagSlug: string, limit = 50) {
   }
 }
 
-export default async function Home() {
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  const supabase = getServerSupabaseClient({ useServiceRole: true });
-
-  const auctionArticles = await getArticlesByTag(supabase, 'auction', 20);
-  const newsArticles = await getArticlesByTag(supabase, 'news', 15);
-
-  const personSchema = {
-    "@context": "https://schema.org",
-    "@type": "Person",
-    "name": "Anton Merkurov",
-    "url": "https://merkurov.love",
-    "image": "https://merkurov.love/avatar.jpg",
-    "jobTitle": "Artist, Developer, Entrepreneur",
-    "description": "Медиа, технологии и искусство",
-    "sameAs": [
-      "https://twitter.com/merkurov",
-      "https://github.com/merkurov1"
-    ]
-  };
-
-  const websiteSchema = {
-    "@context": "https://schema.org",
-    "@type": "Website",
-    "name": "Anton Merkurov",
-    "url": "https://merkurov.love",
-    "description": "Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.",
-    "author": {
-      "@type": "Person",
-      "name": "Anton Merkurov",
-      "url": "https://merkurov.love"
-    },
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": {
-        "@type": "EntryPoint",
-        "urlTemplate": "https://merkurov.love/search?q={search_term_string}"
-      },
-      "query-input": "required name=search_term_string"
-    }
-  };
-
-  const blogSchema = {
-    "@context": "https://schema.org",
-    "@type": "Blog",
-    "name": "Anton Merkurov",
-    "url": "https://merkurov.love",
-    "description": "Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.",
-    "author": {
-      "@type": "Person",
-      "name": "Anton Merkurov",
-      "url": "https://merkurov.love"
-    }
-  };
-
+export default function Home() {
   return (
-    <main className="relative overflow-hidden py-8 sm:py-12">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(personSchema) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(blogSchema) }} />
-      <BackgroundShapes />
-      
-      <div className="max-w-5xl mx-auto px-4 space-y-12 sm:space-y-16">
-        <CloseableHero />
-
-        {Array.isArray(auctionArticles) && auctionArticles.length > 0 && (
-          <section aria-label="Аукционные статьи">
-            <Suspense fallback={<AuctionSkeleton />}>
-              <AuctionSlider articles={safeData(auctionArticles)} />
-            </Suspense>
-          </section>
-        )}
-
-        <section id="articles">
-          <Suspense fallback={<div className="animate-pulse h-96 bg-gray-200 rounded-xl" />}>
-            <BentoArticlesFeed initialArticles={safeData(newsArticles)} includeTag="news" />
-          </Suspense>
-        </section>
-
-        <section>
-          <div className="mb-6">
-            <h2 className="text-2xl sm:text-3xl font-semibold">🌊 Flow</h2>
+    <main className="min-h-screen flex flex-col justify-center items-center bg-white text-black">
+      {/* HERO SECTION */}
+      <section className="flex flex-col items-center justify-center flex-1 w-full">
+        <div className="flex flex-col items-center justify-center">
+          {/* Heart Symbol */}
+          <span
+            aria-label="Heart Symbol"
+            className="text-[7rem] md:text-[10rem] select-none"
+            style={{ fontFamily: 'serif', lineHeight: 1 }}
+          >
+            ❤️
+          </span>
+          {/* Tagline */}
+          <h1
+            className="mt-6 text-center text-3xl md:text-5xl font-serif font-bold tracking-wide leading-tight"
+            style={{
+              fontFamily: 'Playfair Display, Times New Roman, serif',
+              letterSpacing: '0.04em',
+            }}
+          >
+            Love is a key for all.
+          </h1>
+          {/* Subtext */}
+          <div
+            className="mt-2 text-center text-xs md:text-sm font-mono text-gray-500 tracking-widest uppercase"
+            style={{ fontFamily: 'Roboto Mono, Courier New, monospace', letterSpacing: '0.12em' }}
+          >
+            Unframed by Merkurov
           </div>
-          <Suspense fallback={<div className="animate-pulse h-64 bg-gray-200 rounded-xl" />}>
-            <FlowFeed limit={12} />
-          </Suspense>
-        </section>
-      </div>
+        </div>
+      </section>
+
+      {/* MANIFESTO */}
+      <section className="w-full max-w-2xl mx-auto mt-10 mb-8 px-4">
+        <div
+          className="text-center md:text-justify text-base md:text-lg font-mono text-gray-800 leading-loose tracking-wide"
+          style={{ fontFamily: 'Roboto Mono, Courier New, monospace', letterSpacing: '0.04em' }}
+        >
+          <p className="mb-6">
+            I spent 20 years building digital networks. Now I build human connections.
+            <br />
+            I traded complexity for truth. My art is a return to the fundamental source code of
+            humanity. No politics, no borders, no social burden. Just the raw, unfiltered
+            transmission of empathy.
+            <br />
+            Love is necessary. Love is never enough.
+          </p>
+        </div>
+      </section>
+
+      {/* NAVIGATION - THE THREE PILLARS */}
+      <nav className="w-full max-w-2xl mx-auto flex flex-col gap-8 mb-16 px-4">
+        <ul className="flex flex-col gap-8">
+          <li>
+            <a href="/heartandangel" className="block text-center">
+              <span
+                className="text-2xl md:text-4xl font-serif font-bold tracking-wide leading-tight border-b-2 border-black pb-1 hover:opacity-80 transition"
+                style={{
+                  fontFamily: 'Playfair Display, Times New Roman, serif',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                [ ART ]
+              </span>
+              <div
+                className="mt-2 text-sm md:text-base font-mono text-gray-600 tracking-widest"
+                style={{
+                  fontFamily: 'Roboto Mono, Courier New, monospace',
+                  letterSpacing: '0.08em',
+                }}
+              >
+                Heart & Angel. The digital ritual.
+              </div>
+            </a>
+          </li>
+          <li>
+            <a href="/advising" className="block text-center">
+              <span
+                className="text-2xl md:text-4xl font-serif font-bold tracking-wide leading-tight border-b-2 border-black pb-1 hover:opacity-80 transition"
+                style={{
+                  fontFamily: 'Playfair Display, Times New Roman, serif',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                [ ADVISING ]
+              </span>
+              <div
+                className="mt-2 text-sm md:text-base font-mono text-gray-600 tracking-widest"
+                style={{
+                  fontFamily: 'Roboto Mono, Courier New, monospace',
+                  letterSpacing: '0.08em',
+                }}
+              >
+                Silence & Clarity. Private art acquisition.
+              </div>
+            </a>
+          </li>
+          <li>
+            <a href="/articles" className="block text-center">
+              <span
+                className="text-2xl md:text-4xl font-serif font-bold tracking-wide leading-tight border-b-2 border-black pb-1 hover:opacity-80 transition"
+                style={{
+                  fontFamily: 'Playfair Display, Times New Roman, serif',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                [ SELECTION ]
+              </span>
+              <div
+                className="mt-2 text-sm md:text-base font-mono text-gray-600 tracking-widest"
+                style={{
+                  fontFamily: 'Roboto Mono, Courier New, monospace',
+                  letterSpacing: '0.08em',
+                }}
+              >
+                Curated works. Buffet & Non-conformists.
+              </div>
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      {/* MINIMAL FOOTER */}
+      <footer
+        className="w-full text-center py-8 text-xs text-gray-500 font-mono tracking-widest border-t border-gray-200"
+        style={{ fontFamily: 'Roboto Mono, Courier New, monospace', letterSpacing: '0.08em' }}
+      >
+        © 2025 Anton Merkurov
+      </footer>
     </main>
   );
 }

@@ -211,7 +211,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {/* client-only sidebar should appear immediately under the header for logged-in users */}
           <UserSidebar />
           <main id="main-content">{children}</main>
-          <Footer subscriberCount={Number(subscriberCount) || 0} />
+          <Footer />
           {/* Newsletter subscription modal - shows once per 24h for non-subscribers */}
           <NewsletterModal />
         </AuthProvider>

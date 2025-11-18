@@ -15,9 +15,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       .eq('published', true)
       .single();
 
-    if (error || !letter) return { title: 'Письмо | Anton Merkurov' };
+    if (error || !letter) return { title: 'Letter | Anton Merkurov' };
 
-    const title = letter.title || 'Письмо';
+    const title = letter.title || 'Letter';
     const description = String(parseRichTextContent(letter.content || '')).slice(0, 160);
     const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love';
     const image = `${site}/default-og.png`;
@@ -26,26 +26,26 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     const breadcrumbSchema = {
       '@context': 'https://schema.org',
       '@type': 'BreadcrumbList',
-      'itemListElement': [
+      itemListElement: [
         {
           '@type': 'ListItem',
-          'position': 1,
-          'name': 'Главная',
-          'item': site
+          position: 1,
+          name: 'Home',
+          item: site,
         },
         {
           '@type': 'ListItem',
-          'position': 2,
-          'name': 'Письма',
-          'item': `${site}/letters`
+          position: 2,
+          name: 'Letters',
+          item: `${site}/letters`,
         },
         {
           '@type': 'ListItem',
-          'position': 3,
-          'name': title,
-          'item': `${site}/letters/${slug}`
-        }
-      ]
+          position: 3,
+          name: title,
+          item: `${site}/letters/${slug}`,
+        },
+      ],
     };
 
     return {
@@ -56,17 +56,17 @@ export async function generateMetadata({ params }: { params: { slug: string } })
         description,
         url: `${site}/letters/${slug}`,
         images: [image],
-        type: 'article'
+        type: 'article',
       },
       twitter: {
         card: 'summary_large_image',
         title,
         description,
-        images: [image]
+        images: [image],
       },
       other: {
-        'script:ld+json:breadcrumb': JSON.stringify(breadcrumbSchema)
-      }
+        'script:ld+json:breadcrumb': JSON.stringify(breadcrumbSchema),
+      },
     };
   } catch (e) {
     return { title: 'Письмо | Anton Merkurov' };
@@ -78,7 +78,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function LetterPage({ params }: { params: { slug: string } }) {
   const slug = params.slug;
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   // If user logged in, redirect to full
   if (user) {
@@ -88,7 +90,9 @@ export default async function LetterPage({ params }: { params: { slug: string } 
   const supabasePublic = createClient({ useServiceRole: true });
   const { data: letter, error } = await supabasePublic
     .from('letters')
-    .select('id, title, slug, content, published, publishedAt, createdAt, authorId, users(name, email)')
+    .select(
+      'id, title, slug, content, published, publishedAt, createdAt, authorId, users(name, email)'
+    )
     .eq('slug', slug)
     .eq('published', true)
     .single();
@@ -111,11 +115,20 @@ export default async function LetterPage({ params }: { params: { slug: string } 
             <div className="flex items-center gap-4 text-sm text-gray-500">
               <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Автор'}</span>
               <span>•</span>
-              <time dateTime={letter.publishedAt || letter.createdAt}>{new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' })}</time>
+              <time dateTime={letter.publishedAt || letter.createdAt}>
+                {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('ru-RU', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </time>
             </div>
           </header>
           <div className="prose prose-lg max-w-none">
-            <div className="text-gray-700 leading-relaxed">{previewContent}{hasMore && '...'}</div>
+            <div className="text-gray-700 leading-relaxed">
+              {previewContent}
+              {hasMore && '...'}
+            </div>
           </div>
           {hasMore && (
             <div className="mt-8 pt-8 border-t border-gray-200">
