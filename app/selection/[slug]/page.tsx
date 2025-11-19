@@ -171,8 +171,8 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
         <>
           <div className="w-full max-w-[600px] border-t border-gray-200 my-6"></div>
           <div className="w-full max-w-[600px] mb-12">
-            <div className="font-mono text-[0.9rem] text-gray-600 whitespace-pre-wrap">
-              {specs}
+            <div className="font-mono text-[0.9rem] text-gray-600 prose prose-sm">
+              <Markdown>{specs}</Markdown>
             </div>
           </div>
         </>

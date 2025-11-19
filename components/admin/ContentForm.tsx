@@ -266,15 +266,20 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       </div>
       <div>
         <label htmlFor="specs" className="block text-sm font-medium text-gray-700">Specs (Material, Dimensions, Context)</label>
-        <textarea
-          name="specs"
-          id="specs"
+        <RichTextArea
           value={specs}
-          onChange={e => setSpecs(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3 min-h-[80px] font-mono"
-          placeholder="Material: Oil on masonite&#10;Dimensions: 51 x 60 cm&#10;Context: Rossini, Paris&#10;Est. €40k"
+          onChange={setSpecs}
+          placeholder="Material: Oil on masonite
+Dimensions: 51 x 60 cm
+Context: Rossini, Paris
+Est. €40k"
+          className="font-mono text-sm"
+          minHeight="80px"
         />
-        <p className="mt-1 text-xs text-gray-500">Используйте переносы строк для форматирования</p>
+        <input type="hidden" name="specs" value={specs} />
+        <p className="mt-1 text-xs text-gray-500">
+          Поддерживается форматирование: bold, italic (копируйте с сохранением стилей)
+        </p>
       </div>
       <div>
         <label htmlFor="slug" className="block text-sm font-medium text-gray-700">
