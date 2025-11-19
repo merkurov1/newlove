@@ -48,7 +48,7 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="max-w-[680px] mx-auto px-4 sm:px-6 py-8 sm:py-16">
+      <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         <Link
           href="/journal"
           className="inline-flex items-center text-gray-600 hover:text-black mb-8 text-sm font-medium transition-colors"
@@ -56,14 +56,14 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
           ← Back to archive
         </Link>
         <article className="mb-12">
-          <header className="mb-10 border-b border-gray-200 pb-8">
-            <h1 className="text-3xl sm:text-4xl font-serif font-bold text-black leading-tight mb-4">
+          <header className="mb-12 border-b border-gray-200 pb-8">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-sans font-bold text-black leading-tight mb-6">
               {letter.title}
             </h1>
-            <div className="flex items-center gap-3 text-sm text-gray-500">
+            <div className="flex items-center gap-3 text-base text-gray-600">
               <span className="font-medium">{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Author'}</span>
               <span>•</span>
-              <time dateTime={letter.publishedAt || letter.createdAt} className="font-mono text-xs">
+              <time dateTime={letter.publishedAt || letter.createdAt} className="text-sm">
                 {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
@@ -72,7 +72,7 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
               </time>
             </div>
           </header>
-          <div className="prose prose-lg sm:prose-xl max-w-none prose-headings:font-serif prose-headings:font-bold prose-p:leading-relaxed prose-p:text-gray-800 prose-a:text-blue-700 prose-a:no-underline hover:prose-a:underline prose-strong:text-black prose-code:text-sm prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-900 prose-pre:text-gray-100">
+          <div className="prose prose-xl sm:prose-2xl max-w-none font-sans prose-headings:font-sans prose-headings:font-bold prose-p:leading-relaxed prose-p:text-gray-900 prose-a:text-blue-600 prose-a:underline hover:prose-a:text-blue-700 prose-strong:text-black prose-code:text-base prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-1 prose-code:rounded prose-pre:bg-gray-900 prose-pre:text-gray-100">
             {blocks && blocks.length > 0 ? (
               <BlockRenderer blocks={blocks} />
             ) : (

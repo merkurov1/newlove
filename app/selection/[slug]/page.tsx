@@ -130,7 +130,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
     <div className="min-h-screen bg-white flex flex-col items-center py-8 sm:py-16 px-4">
       {/* Component 1: The Visual - Max width 1200px */}
       {previewImage && (
-        <div className="w-full max-w-[1200px] mb-8 sm:mb-12">
+        <div className="w-full max-w-7xl mb-8 sm:mb-12 px-4">
           <Image
             src={previewImage}
             alt={title || artist}
@@ -143,7 +143,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       )}
       
       {/* Component 2: The Header - Centered, max-width 800px */}
-      <div className="w-full max-w-[800px] text-center mb-8 sm:mb-12 px-2">
+      <div className="w-full max-w-3xl text-center mb-8 sm:mb-12 px-4">
         {artist && (
           <h1 className="font-serif text-[1.75rem] sm:text-[2.5rem] text-black leading-tight mb-2">{artist}</h1>
         )}
@@ -153,7 +153,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       </div>
       
       {/* Component 3: The Essay - Left/Justified, max-width 600px */}
-      <div className="w-full max-w-[600px] mb-6 px-2">
+      <div className="w-full max-w-2xl mb-6 px-4">
         {curatorNote && (
           <div className="font-serif text-base sm:text-[1.1rem] leading-[1.7] text-black text-left mb-6 prose prose-base sm:prose-lg">
             <Markdown>{curatorNote}</Markdown>
@@ -169,8 +169,8 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       {/* Component 4: The Data - Monospace, small, max-width 600px */}
       {specs && (
         <>
-          <div className="w-full max-w-[600px] border-t border-gray-200 my-6 px-2"></div>
-          <div className="w-full max-w-[600px] mb-12 px-2">
+          <div className="w-full max-w-2xl border-t border-gray-200 my-6 px-4"></div>
+          <div className="w-full max-w-2xl mb-12 px-4">
             <div className="font-mono text-sm sm:text-[0.9rem] text-gray-600 prose prose-sm">
               <Markdown>{specs}</Markdown>
             </div>
@@ -179,7 +179,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       )}
       
       {/* Call to Action */}
-      <div className="w-full max-w-[600px] text-center px-2">
+      <div className="w-full max-w-2xl text-center px-4">
         <a
           href="mailto:merkurov@gmail.com?subject=Enquiry about artwork"
           className="inline-block text-sm font-semibold text-blue-700 hover:underline"

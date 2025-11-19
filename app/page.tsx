@@ -66,7 +66,7 @@ async function getArticlesByTag(supabase: any, tagSlug: string, limit = 50) {
 export default function Home() {
   return (
     <main className="min-h-screen bg-white text-[#333]">
-      <div className="max-w-[900px] mx-auto px-3 sm:px-5 flex flex-col items-center">
+      <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 flex flex-col items-center">
         {/* Add whitespace between header and main block */}
         <div className="h-8 sm:h-16 md:h-[100px]" />
 

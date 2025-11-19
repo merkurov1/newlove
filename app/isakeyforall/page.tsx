@@ -8,7 +8,7 @@ export const metadata = sanitizeMetadata({
 export default function IsAKeyForAllPage() {
   return (
     <main className="min-h-screen bg-white">
-      <div className="max-w-[720px] mx-auto px-4 sm:px-6 py-12 sm:py-20">
+      <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-20">
         {/* Hero Title */}
         <header className="text-center mb-16 sm:mb-20">
           <h1 

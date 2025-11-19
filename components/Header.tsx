@@ -61,7 +61,7 @@ export default function Header() {
       {/* Opt-in debug overlay when ?auth_debug=1 */}
       {/* Debug overlay removed for production */}
       <header className="sticky top-0 z-50 w-full bg-white border-b border-gray-100">
-        <div className="max-w-[1200px] mx-auto flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4">
+        <div className="w-full max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
           {/* Left: Site name only */}
           <Link
             href="/"
