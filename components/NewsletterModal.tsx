@@ -12,7 +12,7 @@ function SubmitButton() {
   return (
     <button 
       type="submit" 
-      className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3 text-base font-semibold text-white shadow-lg transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+      className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-5 sm:px-6 py-3 text-sm sm:text-base font-semibold text-white shadow-lg transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 min-h-[44px]"
     >
       Подписаться
     </button>

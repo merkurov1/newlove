@@ -66,13 +66,13 @@ async function getArticlesByTag(supabase: any, tagSlug: string, limit = 50) {
 export default function Home() {
   return (
     <main className="min-h-screen bg-white text-[#333]">
-      <div className="max-w-[900px] mx-auto px-4 sm:px-5 flex flex-col items-center">
+      <div className="max-w-[900px] mx-auto px-3 sm:px-5 flex flex-col items-center">
         {/* Add whitespace between header and main block */}
-        <div className="h-12 sm:h-20 md:h-[100px]" />
+        <div className="h-8 sm:h-16 md:h-[100px]" />
 
         {/* NAVIGATION - THE THREE PILLARS */}
-        <nav className="w-full flex flex-col gap-10 sm:gap-16 mb-16 sm:mb-32">
-          <ul className="flex flex-col gap-10 sm:gap-16">
+        <nav className="w-full flex flex-col gap-8 sm:gap-12 md:gap-16 mb-12 sm:mb-24 md:mb-32">
+          <ul className="flex flex-col gap-8 sm:gap-12 md:gap-16">
             {/* ART first */}
             <li>
               <a
@@ -81,7 +81,7 @@ export default function Home() {
                 style={{ textDecoration: 'none' }}
               >
                 <span
-                  className="block text-5xl sm:text-6xl md:text-7xl"
+                  className="block text-4xl sm:text-6xl md:text-7xl"
                   style={{
                     fontFamily: 'Cormorant Garamond, Playfair Display, serif',
                     color: '#000',
@@ -111,7 +111,7 @@ export default function Home() {
                 style={{ textDecoration: 'none' }}
               >
                 <span
-                  className="block text-4xl sm:text-5xl md:text-6xl"
+                  className="block text-3xl sm:text-5xl md:text-6xl"
                   style={{
                     fontFamily: 'Cormorant Garamond, Playfair Display, serif',
                     color: '#000',
@@ -141,7 +141,7 @@ export default function Home() {
                 style={{ textDecoration: 'none' }}
               >
                 <span
-                  className="block text-4xl sm:text-5xl md:text-6xl"
+                  className="block text-3xl sm:text-5xl md:text-6xl"
                   style={{
                     fontFamily: 'Cormorant Garamond, Playfair Display, serif',
                     color: '#000',
@@ -167,9 +167,9 @@ export default function Home() {
         </nav>
 
         {/* MANIFESTO */}
-        <section className="w-full mb-20 sm:mb-[120px]">
+        <section className="w-full mb-16 sm:mb-24 md:mb-[120px]">
           <div
-            className="mx-auto px-2"
+            className="mx-auto px-3"
             style={{
               maxWidth: 600,
               fontFamily: 'Space Mono, Courier Prime, monospace',

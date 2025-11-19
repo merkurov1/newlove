@@ -87,6 +87,12 @@ export const metadata = sanitizeMetadata({
       'max-snippet': -1,
     },
   },
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 5,
+    userScalable: true,
+  },
   icons: {
     icon: '/favicon.ico',
   },

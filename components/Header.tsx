@@ -61,11 +61,11 @@ export default function Header() {
       {/* Opt-in debug overlay when ?auth_debug=1 */}
       {/* Debug overlay removed for production */}
       <header className="sticky top-0 z-50 w-full bg-white border-b border-gray-100">
-        <div className="max-w-[1200px] mx-auto flex items-center justify-between px-4 sm:px-6 py-4">
+        <div className="max-w-[1200px] mx-auto flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4">
           {/* Left: Site name only */}
           <Link
             href="/"
-            className="font-bold text-black uppercase tracking-widest text-lg sm:text-xl"
+            className="font-bold text-black uppercase tracking-widest text-base sm:text-lg md:text-xl"
             style={{ fontFamily: 'Inter, Helvetica, Arial, sans-serif' }}
           >
             MERKUROV
@@ -105,12 +105,12 @@ export default function Header() {
           {/* Mobile menu button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden flex flex-col gap-1.5 w-7 h-6 justify-center"
+            className="md:hidden flex flex-col gap-1.5 w-8 h-8 justify-center items-center p-1"
             aria-label="Toggle menu"
           >
-            <span className={`block h-0.5 w-full bg-black transition-transform ${isMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
-            <span className={`block h-0.5 w-full bg-black transition-opacity ${isMenuOpen ? 'opacity-0' : ''}`}></span>
-            <span className={`block h-0.5 w-full bg-black transition-transform ${isMenuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
+            <span className={`block h-0.5 w-6 bg-black transition-transform ${isMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
+            <span className={`block h-0.5 w-6 bg-black transition-opacity ${isMenuOpen ? 'opacity-0' : ''}`}></span>
+            <span className={`block h-0.5 w-6 bg-black transition-transform ${isMenuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
           </button>
         </div>
       </header>
@@ -118,10 +118,10 @@ export default function Header() {
 
       {/* Mobile menu: same links, slide-in */}
       <div
-        className={`fixed inset-0 z-40 bg-white pt-24 transition-transform duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed inset-0 z-40 bg-white pt-20 transition-transform duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
-        <nav className="px-8">
-          <ul className="flex flex-col items-end gap-8 text-2xl font-semibold uppercase tracking-widest">
+        <nav className="px-6">
+          <ul className="flex flex-col items-end gap-6 text-xl font-semibold uppercase tracking-widest">
             <li>
               <Link
                 href="/heartandangel"
