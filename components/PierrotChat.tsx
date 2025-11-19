@@ -32,18 +32,28 @@ export default function PierrotChat() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: userMessage,
-          history: messages
+          query: userMessage,
+          sourceId: null,
+          conversationId: null,
+          settings: {}
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to send message');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error:', errorText);
+        throw new Error(`API returned ${response.status}`);
+      }
 
       const data = await response.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response || data.message || 'No response' }]);
+      const assistantMessage = data.response || data.reply || data.message || data.text || data.answer || 'No response';
+      setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
     } catch (error) {
       console.error('Chat error:', error);
-      setMessages(prev => [...prev, { role: 'assistant', content: '[Error: Unable to reach Pierrot]' }]);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: `[Error: ${error instanceof Error ? error.message : 'Unable to reach Pierrot'}]` 
+      }]);
     } finally {
       setIsLoading(false);
     }
