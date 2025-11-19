@@ -337,7 +337,7 @@ Est. €40k"
         📧 Отправка рассылки — отдельная операция (после публикации)
       </p>
       <div className="mt-4 space-y-3">
-        <button type="submit" className="w-full flex justify-center py-3 px-4 border rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 min-h-[44px]">
+        <button type="submit" className="w-full flex justify-center py-3 px-4 border rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 min-h-[44px]">
           {isEditing ? 'Сохранить изменения' : `Создать ${type}`}
         </button>
         
