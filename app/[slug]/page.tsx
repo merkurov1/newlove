@@ -462,14 +462,14 @@ function ProjectComponent({ project }: { project: any }) {
         <article>
           <header className="mb-8">
             <div className="flex justify-between items-start mb-4">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 flex-1">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 flex-1">
                 {project.title}
               </h1>
               <EditButton variant="inline" showLabel={true} className="ml-4 flex-shrink-0" />
             </div>
           </header>
 
-          <div className="prose prose-lg max-w-none">
+          <div className="prose prose-xl max-w-none">
             {blocks.length > 0 ? (
               <BlockRenderer blocks={blocks} />
             ) : (
