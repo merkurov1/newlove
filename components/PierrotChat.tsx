@@ -26,13 +26,10 @@ export default function PierrotChat() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://pierrot.merkurov.love/api/chat', {
+      const response = await fetch('/api/pierrot', {
         method: 'POST',
-        mode: 'cors',
-        credentials: 'omit',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
         },
         body: JSON.stringify({
           query: userMessage,
