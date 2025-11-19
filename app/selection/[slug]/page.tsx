@@ -127,10 +127,10 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
   const previewImage = extractFirstImage(content);
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center py-16 px-4">
+    <div className="min-h-screen bg-white flex flex-col items-center py-8 sm:py-16 px-4">
       {/* Component 1: The Visual - Max width 1200px */}
       {previewImage && (
-        <div className="w-full max-w-[1200px] mb-12">
+        <div className="w-full max-w-[1200px] mb-8 sm:mb-12">
           <Image
             src={previewImage}
             alt={title || artist}
@@ -143,24 +143,24 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       )}
       
       {/* Component 2: The Header - Centered, max-width 800px */}
-      <div className="w-full max-w-[800px] text-center mb-12">
+      <div className="w-full max-w-[800px] text-center mb-8 sm:mb-12 px-2">
         {artist && (
-          <h1 className="font-serif text-[2.5rem] text-black leading-tight mb-2">{artist}</h1>
+          <h1 className="font-serif text-[1.75rem] sm:text-[2.5rem] text-black leading-tight mb-2">{artist}</h1>
         )}
         {title && (
-          <h2 className="font-serif italic text-[1.5rem] text-gray-700">{title}</h2>
+          <h2 className="font-serif italic text-[1.25rem] sm:text-[1.5rem] text-gray-700">{title}</h2>
         )}
       </div>
       
       {/* Component 3: The Essay - Left/Justified, max-width 600px */}
-      <div className="w-full max-w-[600px] mb-6">
+      <div className="w-full max-w-[600px] mb-6 px-2">
         {curatorNote && (
-          <div className="font-serif text-[1.1rem] leading-[1.7] text-black text-left mb-6 prose prose-lg">
+          <div className="font-serif text-base sm:text-[1.1rem] leading-[1.7] text-black text-left mb-6 prose prose-base sm:prose-lg">
             <Markdown>{curatorNote}</Markdown>
           </div>
         )}
         {quote && (
-          <blockquote className="font-serif italic text-[1.1rem] leading-[1.7] text-gray-700 border-l-2 border-gray-300 pl-6 my-6">
+          <blockquote className="font-serif italic text-base sm:text-[1.1rem] leading-[1.7] text-gray-700 border-l-2 border-gray-300 pl-4 sm:pl-6 my-6">
             {quote}
           </blockquote>
         )}
@@ -169,9 +169,9 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       {/* Component 4: The Data - Monospace, small, max-width 600px */}
       {specs && (
         <>
-          <div className="w-full max-w-[600px] border-t border-gray-200 my-6"></div>
-          <div className="w-full max-w-[600px] mb-12">
-            <div className="font-mono text-[0.9rem] text-gray-600 prose prose-sm">
+          <div className="w-full max-w-[600px] border-t border-gray-200 my-6 px-2"></div>
+          <div className="w-full max-w-[600px] mb-12 px-2">
+            <div className="font-mono text-sm sm:text-[0.9rem] text-gray-600 prose prose-sm">
               <Markdown>{specs}</Markdown>
             </div>
           </div>
@@ -179,7 +179,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       )}
       
       {/* Call to Action */}
-      <div className="w-full max-w-[600px] text-center">
+      <div className="w-full max-w-[600px] text-center px-2">
         <a
           href="mailto:studio@merkurov.love?subject=Enquiry about artwork"
           className="inline-block text-sm font-semibold text-blue-700 hover:underline"

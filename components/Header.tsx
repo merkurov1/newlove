@@ -61,18 +61,19 @@ export default function Header() {
       {/* Opt-in debug overlay when ?auth_debug=1 */}
       {/* Debug overlay removed for production */}
       <header className="sticky top-0 z-50 w-full bg-white border-b border-gray-100">
-        <div className="max-w-[1200px] mx-auto flex items-center justify-between px-6 py-4">
+        <div className="max-w-[1200px] mx-auto flex items-center justify-between px-4 sm:px-6 py-4">
           {/* Left: Site name only */}
           <Link
             href="/"
-            className="font-bold text-black uppercase tracking-widest"
-            style={{ fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontSize: 20 }}
+            className="font-bold text-black uppercase tracking-widest text-lg sm:text-xl"
+            style={{ fontFamily: 'Inter, Helvetica, Arial, sans-serif' }}
           >
             MERKUROV
           </Link>
-          {/* Right: Navigation */}
-          <nav className="flex items-center">
-            <ul className="flex gap-10 text-base font-semibold uppercase tracking-widest">
+          
+          {/* Desktop Navigation - hidden on mobile */}
+          <nav className="hidden md:flex items-center">
+            <ul className="flex gap-6 lg:gap-10 text-sm lg:text-base font-semibold uppercase tracking-widest">
               <li>
                 <Link href="/heartandangel" className="hover:opacity-60 transition">
                   ART
@@ -89,7 +90,7 @@ export default function Header() {
                 </Link>
               </li>
               <li>
-                <Link href="/love-is-a-key-for-all" className="hover:opacity-60 transition">
+                <Link href="/isakeyforall" className="hover:opacity-60 transition">
                   ABOUT
                 </Link>
               </li>
@@ -100,6 +101,17 @@ export default function Header() {
               </li>
             </ul>
           </nav>
+          
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="md:hidden flex flex-col gap-1.5 w-7 h-6 justify-center"
+            aria-label="Toggle menu"
+          >
+            <span className={`block h-0.5 w-full bg-black transition-transform ${isMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
+            <span className={`block h-0.5 w-full bg-black transition-opacity ${isMenuOpen ? 'opacity-0' : ''}`}></span>
+            <span className={`block h-0.5 w-full bg-black transition-transform ${isMenuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
+          </button>
         </div>
       </header>
       {/* Animated gradient line убрана по финальному ТЗ */}
@@ -139,7 +151,7 @@ export default function Header() {
             </li>
             <li>
               <Link
-                href="/love-is-a-key-for-all"
+                href="/isakeyforall"
                 onClick={() => setIsMenuOpen(false)}
                 className="hover:opacity-60 transition"
               >

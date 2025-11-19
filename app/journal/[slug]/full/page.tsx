@@ -47,21 +47,23 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      <div className="max-w-3xl mx-auto px-4 py-12">
+    <div className="min-h-screen bg-white">
+      <div className="max-w-[680px] mx-auto px-4 sm:px-6 py-8 sm:py-16">
         <Link
           href="/journal"
-          className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-6 text-sm"
+          className="inline-flex items-center text-gray-600 hover:text-black mb-8 text-sm font-medium transition-colors"
         >
           ← Back to archive
         </Link>
-        <article className="bg-white rounded-2xl shadow-sm border border-blue-100 p-8 mb-8">
-          <header className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-3">{letter.title}</h1>
-            <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Author'}</span>
+        <article className="mb-12">
+          <header className="mb-10 border-b border-gray-200 pb-8">
+            <h1 className="text-3xl sm:text-4xl font-serif font-bold text-black leading-tight mb-4">
+              {letter.title}
+            </h1>
+            <div className="flex items-center gap-3 text-sm text-gray-500">
+              <span className="font-medium">{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Author'}</span>
               <span>•</span>
-              <time dateTime={letter.publishedAt || letter.createdAt}>
+              <time dateTime={letter.publishedAt || letter.createdAt} className="font-mono text-xs">
                 {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
@@ -70,7 +72,7 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
               </time>
             </div>
           </header>
-          <div className="prose prose-lg max-w-none">
+          <div className="prose prose-lg sm:prose-xl max-w-none prose-headings:font-serif prose-headings:font-bold prose-p:leading-relaxed prose-p:text-gray-800 prose-a:text-blue-700 prose-a:no-underline hover:prose-a:underline prose-strong:text-black prose-code:text-sm prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-900 prose-pre:text-gray-100">
             {blocks && blocks.length > 0 ? (
               <BlockRenderer blocks={blocks} />
             ) : (

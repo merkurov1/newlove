@@ -62,17 +62,17 @@ export default async function LettersPage({ searchParams }: Props) {
 
   return (
     <>
-      <main className="min-h-screen bg-white text-black flex flex-col items-center px-4 pt-16 pb-0">
+      <main className="min-h-screen bg-white text-black flex flex-col items-center px-4 pt-8 sm:pt-16 pb-0">
         {/* Header */}
-        <header className="w-full max-w-2xl mx-auto text-center mb-12">
+        <header className="w-full max-w-2xl mx-auto text-center mb-8 sm:mb-12">
           <h1
-            className="text-4xl md:text-5xl font-serif font-bold tracking-wide leading-tight mb-2"
+            className="text-3xl sm:text-4xl md:text-5xl font-serif font-bold tracking-wide leading-tight mb-2"
             style={{ fontFamily: 'Playfair Display, Times New Roman, serif' }}
           >
             JOURNAL
           </h1>
           <div
-            className="text-lg md:text-xl font-serif italic text-gray-500 mb-2"
+            className="text-base sm:text-lg md:text-xl font-serif italic text-gray-500 mb-2 px-2"
             style={{ fontFamily: 'Playfair Display, Times New Roman, serif' }}
           >
             Chronicles of the unframed. Notes on art, tech, and the void.
@@ -81,12 +81,12 @@ export default async function LettersPage({ searchParams }: Props) {
 
         {/* Table of Contents */}
         <section className="w-full max-w-2xl mx-auto flex-1">
-          <ul className="flex flex-col gap-10">
+          <ul className="flex flex-col gap-6 sm:gap-10">
             {initialLetters.map((letter) => (
               <li key={letter.id}>
                 <a href={`/journal/${letter.slug}`} className="block group">
                   <span
-                    className="block text-2xl md:text-3xl font-serif font-bold text-black group-hover:underline tracking-wide leading-snug"
+                    className="block text-xl sm:text-2xl md:text-3xl font-serif font-bold text-black group-hover:underline tracking-wide leading-snug"
                     style={{ fontFamily: 'Playfair Display, Times New Roman, serif' }}
                   >
                     {letter.title}

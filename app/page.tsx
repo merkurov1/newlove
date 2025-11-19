@@ -66,13 +66,13 @@ async function getArticlesByTag(supabase: any, tagSlug: string, limit = 50) {
 export default function Home() {
   return (
     <main className="min-h-screen bg-white text-[#333]">
-      <div className="max-w-[900px] mx-auto px-5 flex flex-col items-center">
+      <div className="max-w-[900px] mx-auto px-4 sm:px-5 flex flex-col items-center">
         {/* Add whitespace between header and main block */}
-        <div style={{ height: 100 }} />
+        <div className="h-12 sm:h-20 md:h-[100px]" />
 
         {/* NAVIGATION - THE THREE PILLARS */}
-        <nav className="w-full flex flex-col gap-16 mb-32">
-          <ul className="flex flex-col gap-16">
+        <nav className="w-full flex flex-col gap-10 sm:gap-16 mb-16 sm:mb-32">
+          <ul className="flex flex-col gap-10 sm:gap-16">
             {/* ART first */}
             <li>
               <a
@@ -81,10 +81,9 @@ export default function Home() {
                 style={{ textDecoration: 'none' }}
               >
                 <span
-                  className="block"
+                  className="block text-5xl sm:text-6xl md:text-7xl"
                   style={{
                     fontFamily: 'Cormorant Garamond, Playfair Display, serif',
-                    fontSize: '4rem',
                     color: '#000',
                     letterSpacing: '-0.02em',
                     lineHeight: 1.1,
@@ -93,11 +92,10 @@ export default function Home() {
                   [ ART ]
                 </span>
                 <div
-                  className="mt-2"
+                  className="mt-2 text-xs sm:text-sm"
                   style={{
                     fontFamily: 'Space Mono, Courier Prime, monospace',
                     color: '#000',
-                    fontSize: 14,
                     letterSpacing: 1,
                   }}
                 >
@@ -113,10 +111,9 @@ export default function Home() {
                 style={{ textDecoration: 'none' }}
               >
                 <span
-                  className="block"
+                  className="block text-4xl sm:text-5xl md:text-6xl"
                   style={{
                     fontFamily: 'Cormorant Garamond, Playfair Display, serif',
-                    fontSize: '4rem',
                     color: '#000',
                     letterSpacing: '-0.02em',
                     lineHeight: 1.1,
@@ -125,11 +122,10 @@ export default function Home() {
                   [ SELECTION ]
                 </span>
                 <div
-                  className="mt-2"
+                  className="mt-2 text-xs sm:text-sm"
                   style={{
                     fontFamily: 'Space Mono, Courier Prime, monospace',
                     color: '#000',
-                    fontSize: 14,
                     letterSpacing: 1,
                   }}
                 >
@@ -145,10 +141,9 @@ export default function Home() {
                 style={{ textDecoration: 'none' }}
               >
                 <span
-                  className="block"
+                  className="block text-4xl sm:text-5xl md:text-6xl"
                   style={{
                     fontFamily: 'Cormorant Garamond, Playfair Display, serif',
-                    fontSize: '4rem',
                     color: '#000',
                     letterSpacing: '-0.02em',
                     lineHeight: 1.1,
@@ -157,11 +152,10 @@ export default function Home() {
                   [ ADVISING ]
                 </span>
                 <div
-                  className="mt-2"
+                  className="mt-2 text-xs sm:text-sm"
                   style={{
                     fontFamily: 'Space Mono, Courier Prime, monospace',
                     color: '#000',
-                    fontSize: 14,
                     letterSpacing: 1,
                   }}
                 >
@@ -173,14 +167,14 @@ export default function Home() {
         </nav>
 
         {/* MANIFESTO */}
-        <section className="w-full" style={{ marginBottom: 120 }}>
+        <section className="w-full mb-20 sm:mb-[120px]">
           <div
-            className="mx-auto"
+            className="mx-auto px-2"
             style={{
               maxWidth: 600,
               fontFamily: 'Space Mono, Courier Prime, monospace',
               color: '#222',
-              fontSize: 14,
+              fontSize: 'clamp(13px, 3vw, 14px)',
               lineHeight: 1.8,
               textAlign: 'center',
             }}
