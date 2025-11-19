@@ -56,10 +56,10 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
         >
           ← Back to archive
         </Link>
-        <article className="bg-white rounded-2xl shadow-sm border border-blue-100 p-8 mb-8">
-          <header className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-3">{letter.title}</h1>
-            <div className="flex items-center gap-4 text-sm text-gray-500">
+        <article className="bg-white rounded-2xl shadow-sm border border-blue-100 p-8 sm:p-12 mb-8">
+          <header className="mb-10">
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">{letter.title}</h1>
+            <div className="flex items-center gap-4 text-base text-gray-500">
               <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Author'}</span>
               <span>•</span>
               <time dateTime={letter.publishedAt || letter.createdAt}>
@@ -71,7 +71,7 @@ export default async function LetterFullPage({ params }: { params: { slug: strin
               </time>
             </div>
           </header>
-          <div className="prose prose-lg max-w-none">
+          <div className="prose prose-xl max-w-none font-sans">
             {blocks && blocks.length > 0 ? (
               <BlockRenderer blocks={blocks} />
             ) : (
