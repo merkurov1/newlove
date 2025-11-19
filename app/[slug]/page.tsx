@@ -1,6 +1,7 @@
 import { safeData } from '@/lib/safeSerialize';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { notFound } from 'next/navigation';
+import Markdown from 'markdown-to-jsx';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
@@ -124,11 +125,16 @@ export async function generateMetadata({
     let breadcrumbSchema = null;
 
     if (type === 'article') {
+      // Build full title from artist and title
+      const artist = content.artist || '';
+      const articleTitle = content.title || '';
+      const fullTitle = [artist, articleTitle].filter(Boolean).join(' - ');
+      
       // Enhanced Article Schema
       jsonLd = {
         '@context': 'https://schema.org',
         '@type': 'Article',
-        headline: content.title,
+        headline: fullTitle || content.title,
         author: {
           '@type': 'Person',
           name: content.author?.name || 'Anton Merkurov',
@@ -283,11 +289,16 @@ export async function generateMetadata({
       normalizedPreview = previewImage;
     }
 
+    // Build full title for articles
+    const displayTitle = type === 'article' && content.artist
+      ? [content.artist, content.title].filter(Boolean).join(' - ')
+      : content.title;
+
     const meta = {
-      title: content.title,
+      title: displayTitle,
       description: description,
       openGraph: {
-        title: content.title,
+        title: displayTitle,
         description: description,
         url: `${baseUrl}/${content.slug}`,
         images: normalizedPreview ? [{ url: normalizedPreview }] : [],
@@ -295,7 +306,7 @@ export async function generateMetadata({
       },
       twitter: {
         card: 'summary_large_image',
-        title: content.title,
+        title: displayTitle,
         description: description,
         images: normalizedPreview ? [normalizedPreview] : [],
       },
@@ -386,14 +397,14 @@ function ArticleComponent({ article }: { article: any }) {
       </div>
       
       {/* Component 3: The Essay - Left/Justified, max-width 600px */}
-      <div className="w-full max-w-[600px] mb-12">
+      <div className="w-full max-w-[600px] mb-6">
         {curatorNote && (
-          <div className="font-serif text-[1.1rem] leading-[1.7] text-black text-left whitespace-pre-wrap mb-8">
-            {curatorNote}
+          <div className="font-serif text-[1.1rem] leading-[1.7] text-black text-left mb-6 prose prose-lg">
+            <Markdown>{curatorNote}</Markdown>
           </div>
         )}
         {quote && (
-          <blockquote className="font-serif italic text-[1.1rem] leading-[1.7] text-gray-700 border-l-2 border-gray-300 pl-6 my-8">
+          <blockquote className="font-serif italic text-[1.1rem] leading-[1.7] text-gray-700 border-l-2 border-gray-300 pl-6 my-6">
             {quote}
           </blockquote>
         )}
@@ -402,7 +413,7 @@ function ArticleComponent({ article }: { article: any }) {
       {/* Component 4: The Data - Monospace, small, max-width 600px */}
       {specs && (
         <>
-          <div className="w-full max-w-[600px] border-t border-gray-200 my-8"></div>
+          <div className="w-full max-w-[600px] border-t border-gray-200 my-6"></div>
           <div className="w-full max-w-[600px] mb-12">
             <div className="font-mono text-[0.9rem] text-gray-600 whitespace-pre-wrap">
               {specs}

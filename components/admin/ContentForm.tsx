@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 import TagInput from '@/components/admin/TagInput';
 import BlockEditorImproved from '@/components/admin/BlockEditorImproved';
+import RichTextArea from '@/components/admin/RichTextArea';
 import { createSeoSlug } from '@/lib/slugUtils';
 
 import { EditorJsBlock } from '@/types/blocks';
@@ -240,14 +241,17 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       </div>
       <div>
         <label htmlFor="curatorNote" className="block text-sm font-medium text-gray-700">Curator's Note</label>
-        <textarea
-          name="curatorNote"
-          id="curatorNote"
+        <RichTextArea
           value={curatorNote}
-          onChange={e => setCuratorNote(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3 min-h-[120px] font-serif"
+          onChange={setCuratorNote}
+          placeholder="Enter curator's note..."
+          className="font-serif"
+          minHeight="120px"
         />
-        <p className="mt-1 text-xs text-gray-500">Используйте переносы строк для форматирования</p>
+        <input type="hidden" name="curatorNote" value={curatorNote} />
+        <p className="mt-1 text-xs text-gray-500">
+          Поддерживается форматирование: bold, italic, links (копируйте с сохранением стилей)
+        </p>
       </div>
       <div>
         <label htmlFor="quote" className="block text-sm font-medium text-gray-700">Artist Quote</label>

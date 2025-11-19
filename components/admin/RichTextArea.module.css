@@ -1,0 +1,35 @@
+/* Style for contentEditable placeholder */
+[contentEditable][data-placeholder]:empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+  position: absolute;
+}
+
+[contentEditable] {
+  position: relative;
+}
+
+[contentEditable]:focus {
+  outline: none;
+}
+
+/* Preserve formatting in contentEditable */
+[contentEditable] strong {
+  font-weight: bold;
+}
+
+[contentEditable] em {
+  font-style: italic;
+}
+
+[contentEditable] a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+[contentEditable] br {
+  display: block;
+  content: "";
+  margin: 0.5em 0;
+}

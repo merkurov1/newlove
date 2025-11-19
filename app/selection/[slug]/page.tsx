@@ -1,14 +1,65 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import Markdown from 'markdown-to-jsx';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
-  // Optionally, fetch metadata for SEO
+  const article = await getArticle(params.slug);
+  if (!article) {
+    return sanitizeMetadata({
+      title: 'Not Found',
+      description: 'Article not found'
+    });
+  }
+
+  const artist = article.artist || '';
+  const title = article.title || '';
+  const fullTitle = [artist, title].filter(Boolean).join(' - ');
+  
+  // Extract first image for OpenGraph
+  function extractFirstImage(content: any): string | null {
+    if (!content) return null;
+    try {
+      const blocks = Array.isArray(content) ? content : JSON.parse(content);
+      for (const block of blocks) {
+        if (block?.type === 'image' && block?.data?.file?.url) {
+          return block.data.file.url;
+        }
+        if (block?.type === 'richText' && block?.data?.html) {
+          const imgMatch = block.data.html.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+          if (imgMatch) return imgMatch[1];
+        }
+      }
+    } catch {
+      const str = String(content);
+      const imgMatch = str.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+      if (imgMatch) return imgMatch[1];
+    }
+    return null;
+  }
+
+  const previewImage = extractFirstImage(article.content);
+  const description = article.curatorNote || article.quote || `${artist} - ${title}`;
+  const baseUrl = 'https://www.merkurov.love';
+
   return sanitizeMetadata({
-    title: 'Selection',
-    description: 'Curated selection of works and articles.'
+    title: fullTitle || 'Selection',
+    description: description.slice(0, 160),
+    openGraph: {
+      title: fullTitle,
+      description: description.slice(0, 160),
+      url: `${baseUrl}/${params.slug}`,
+      images: previewImage ? [{ url: previewImage }] : [],
+      type: 'article',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: fullTitle,
+      description: description.slice(0, 160),
+      images: previewImage ? [previewImage] : [],
+    },
   });
 }
 
@@ -102,14 +153,14 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       </div>
       
       {/* Component 3: The Essay - Left/Justified, max-width 600px */}
-      <div className="w-full max-w-[600px] mb-12">
+      <div className="w-full max-w-[600px] mb-6">
         {curatorNote && (
-          <div className="font-serif text-[1.1rem] leading-[1.7] text-black text-left whitespace-pre-wrap mb-8">
-            {curatorNote}
+          <div className="font-serif text-[1.1rem] leading-[1.7] text-black text-left mb-6 prose prose-lg">
+            <Markdown>{curatorNote}</Markdown>
           </div>
         )}
         {quote && (
-          <blockquote className="font-serif italic text-[1.1rem] leading-[1.7] text-gray-700 border-l-2 border-gray-300 pl-6 my-8">
+          <blockquote className="font-serif italic text-[1.1rem] leading-[1.7] text-gray-700 border-l-2 border-gray-300 pl-6 my-6">
             {quote}
           </blockquote>
         )}
@@ -118,7 +169,7 @@ export default async function SelectionArticlePage({ params }: { params: { slug:
       {/* Component 4: The Data - Monospace, small, max-width 600px */}
       {specs && (
         <>
-          <div className="w-full max-w-[600px] border-t border-gray-200 my-8"></div>
+          <div className="w-full max-w-[600px] border-t border-gray-200 my-6"></div>
           <div className="w-full max-w-[600px] mb-12">
             <div className="font-mono text-[0.9rem] text-gray-600 whitespace-pre-wrap">
               {specs}
