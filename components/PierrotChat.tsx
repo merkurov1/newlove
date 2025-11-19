@@ -26,10 +26,13 @@ export default function PierrotChat() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('https://pierrot.merkurov.love/chat', {
+      const response = await fetch('http://pierrot.merkurov.love/api/chat', {
         method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: JSON.stringify({
           query: userMessage,
@@ -41,18 +44,25 @@ export default function PierrotChat() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('API Error:', errorText);
-        throw new Error(`API returned ${response.status}`);
+        console.error('API Error:', response.status, errorText);
+        throw new Error(`API Error ${response.status}: ${errorText.substring(0, 100)}`);
       }
 
       const data = await response.json();
-      const assistantMessage = data.response || data.reply || data.message || data.text || data.answer || 'No response';
+      console.log('API Response:', data);
+      
+      // Try multiple possible response fields
+      const assistantMessage = data.response || data.reply || data.message || data.text || data.answer || data.result || JSON.stringify(data);
       setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
     } catch (error) {
       console.error('Chat error:', error);
+      const errorMsg = error instanceof TypeError && error.message.includes('Failed to fetch')
+        ? '[Error: CORS or Network issue. Check browser console for details.]'
+        : `[Error: ${error instanceof Error ? error.message : 'Unable to reach Pierrot'}]`;
+      
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `[Error: ${error instanceof Error ? error.message : 'Unable to reach Pierrot'}]` 
+        content: errorMsg
       }]);
     } finally {
       setIsLoading(false);
