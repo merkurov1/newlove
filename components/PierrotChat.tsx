@@ -1,9 +1,60 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export default function PierrotChat() {
   const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const sendMessage = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const userMessage = input.trim();
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('https://pierrot.merkurov.love/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          history: messages
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to send message');
+
+      const data = await response.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.response || data.message || 'No response' }]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      setMessages(prev => [...prev, { role: 'assistant', content: '[Error: Unable to reach Pierrot]' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
 
   return (
     <>
@@ -24,24 +75,68 @@ export default function PierrotChat() {
             background: 'rgba(255, 255, 255, 0.95)',
             backdropFilter: 'blur(10px)'
           }}
+          onClick={() => setIsOpen(false)}
         >
-          <div className="relative w-full max-w-4xl h-[80vh] bg-white border border-black shadow-2xl">
-            {/* Close Button */}
-            <button
-              onClick={() => setIsOpen(false)}
-              className="absolute top-4 right-4 text-xs font-mono text-black hover:text-gray-500 transition-colors z-10"
-              style={{ fontFamily: 'Space Mono, Courier, monospace' }}
-            >
-              [ CLOSE ]
-            </button>
+          <div 
+            className="relative w-full max-w-4xl h-[80vh] bg-black text-green-400 shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            style={{ fontFamily: 'Space Mono, Courier, monospace' }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-green-400/30">
+              <div className="text-xs">
+                <span className="text-green-400">PIERROT://TERMINAL</span>
+                <span className="ml-4 text-green-400/50">[CONNECTED]</span>
+              </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-xs text-green-400 hover:text-green-300 transition-colors"
+              >
+                [ CLOSE ]
+              </button>
+            </div>
 
-            {/* Iframe with Pierrot Chat */}
-            <iframe
-              src="https://pierrot.merkurov.love/chat"
-              className="w-full h-full border-0"
-              title="Pierrot Chat Interface"
-              allow="microphone"
-            />
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
+              {messages.length === 0 && (
+                <div className="text-green-400/50 text-xs">
+                  &gt; System ready. Type your message below...
+                </div>
+              )}
+              {messages.map((msg, idx) => (
+                <div key={idx} className="space-y-1">
+                  <div className="text-xs text-green-400/70">
+                    {msg.role === 'user' ? '> USER:' : '> PIERROT:'}
+                  </div>
+                  <div className="pl-4 whitespace-pre-wrap">{msg.content}</div>
+                </div>
+              ))}
+              {isLoading && (
+                <div className="text-green-400/50 text-xs animate-pulse">
+                  &gt; PIERROT is typing...
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Area */}
+            <div className="border-t border-green-400/30 p-4">
+              <div className="flex items-center gap-2">
+                <span className="text-green-400 text-sm">&gt;</span>
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type your message..."
+                  disabled={isLoading}
+                  className="flex-1 bg-transparent border-none outline-none text-green-400 text-sm placeholder-green-400/30"
+                  style={{ fontFamily: 'Space Mono, Courier, monospace' }}
+                  autoFocus
+                />
+                <span className="text-green-400 animate-pulse">_</span>
+              </div>
+            </div>
           </div>
         </div>
       )}

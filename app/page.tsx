@@ -193,13 +193,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* MINIMAL FOOTER */}
-        <footer
-          className="w-full text-center py-8 text-xs font-mono"
-          style={{ fontFamily: 'Inter, Space Mono, monospace', color: '#333' }}
-        >
-          © 2025 Anton Merkurov. London — Nowhere.
-        </footer>
+
       </div>
     </main>
   );
