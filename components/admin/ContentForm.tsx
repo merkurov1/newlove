@@ -216,71 +216,93 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   return (
   <form action={saveAction} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
   {isEditing && <input type="hidden" name="id" value={safeInitial.id} />}
-      <div>
-        <label htmlFor="artist" className="block text-sm font-medium text-gray-700">Artist Name</label>
-        <input
-          type="text"
-          name="artist"
-          id="artist"
-          value={artist}
-          onChange={e => setArtist(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
-        />
-      </div>
-      <div>
-        <label htmlFor="title" className="block text-sm font-medium text-gray-700">Artwork Title</label>
-        <input
-          type="text"
-          name="title"
-          id="title"
-          required
-          value={title}
-          onChange={handleTitleChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
-        />
-      </div>
-      <div>
-        <label htmlFor="curatorNote" className="block text-sm font-medium text-gray-700">Curator's Note</label>
-        <RichTextArea
-          value={curatorNote}
-          onChange={setCuratorNote}
-          placeholder="Enter curator's note..."
-          className="font-serif"
-          minHeight="120px"
-        />
-        <input type="hidden" name="curatorNote" value={curatorNote} />
-        <p className="mt-1 text-xs text-gray-500">
-          Поддерживается форматирование: bold, italic, links (копируйте с сохранением стилей)
-        </p>
-      </div>
-      <div>
-        <label htmlFor="quote" className="block text-sm font-medium text-gray-700">Artist Quote</label>
-        <textarea
-          name="quote"
-          id="quote"
-          value={quote}
-          onChange={e => setQuote(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3 min-h-[80px] italic"
-        />
-        <p className="mt-1 text-xs text-gray-500">Используйте переносы строк для форматирования</p>
-      </div>
-      <div>
-        <label htmlFor="specs" className="block text-sm font-medium text-gray-700">Specs (Material, Dimensions, Context)</label>
-        <RichTextArea
-          value={specs}
-          onChange={setSpecs}
-          placeholder="Material: Oil on masonite
+      
+      {/* Поля только для статей */}
+      {type !== 'выпуск' && (
+        <>
+          <div>
+            <label htmlFor="artist" className="block text-sm font-medium text-gray-700">Artist Name</label>
+            <input
+              type="text"
+              name="artist"
+              id="artist"
+              value={artist}
+              onChange={e => setArtist(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
+            />
+          </div>
+          <div>
+            <label htmlFor="title" className="block text-sm font-medium text-gray-700">Artwork Title</label>
+            <input
+              type="text"
+              name="title"
+              id="title"
+              required
+              value={title}
+              onChange={handleTitleChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
+            />
+          </div>
+          <div>
+            <label htmlFor="curatorNote" className="block text-sm font-medium text-gray-700">Curator's Note</label>
+            <RichTextArea
+              value={curatorNote}
+              onChange={setCuratorNote}
+              placeholder="Enter curator's note..."
+              className="font-serif"
+              minHeight="120px"
+            />
+            <input type="hidden" name="curatorNote" value={curatorNote} />
+            <p className="mt-1 text-xs text-gray-500">
+              Поддерживается форматирование: bold, italic, links (копируйте с сохранением стилей)
+            </p>
+          </div>
+          <div>
+            <label htmlFor="quote" className="block text-sm font-medium text-gray-700">Artist Quote</label>
+            <textarea
+              name="quote"
+              id="quote"
+              value={quote}
+              onChange={e => setQuote(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3 min-h-[80px] italic"
+            />
+            <p className="mt-1 text-xs text-gray-500">Используйте переносы строк для форматирования</p>
+          </div>
+          <div>
+            <label htmlFor="specs" className="block text-sm font-medium text-gray-700">Specs (Material, Dimensions, Context)</label>
+            <RichTextArea
+              value={specs}
+              onChange={setSpecs}
+              placeholder="Material: Oil on masonite
 Dimensions: 51 x 60 cm
 Context: Rossini, Paris
 Est. €40k"
-          className="font-mono text-sm"
-          minHeight="80px"
-        />
-        <input type="hidden" name="specs" value={specs} />
-        <p className="mt-1 text-xs text-gray-500">
-          Поддерживается форматирование: bold, italic (копируйте с сохранением стилей)
-        </p>
-      </div>
+              className="font-mono text-sm"
+              minHeight="80px"
+            />
+            <input type="hidden" name="specs" value={specs} />
+            <p className="mt-1 text-xs text-gray-500">
+              Поддерживается форматирование: bold, italic (копируйте с сохранением стилей)
+            </p>
+          </div>
+        </>
+      )}
+      
+      {/* Поле Title для писем */}
+      {type === 'выпуск' && (
+        <div>
+          <label htmlFor="title" className="block text-sm font-medium text-gray-700">Название письма</label>
+          <input
+            type="text"
+            name="title"
+            id="title"
+            required
+            value={title}
+            onChange={handleTitleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
+          />
+        </div>
+      )}
       <div>
         <label htmlFor="slug" className="block text-sm font-medium text-gray-700">
           URL (slug)
