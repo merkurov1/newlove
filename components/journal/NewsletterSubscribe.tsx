@@ -94,8 +94,6 @@ export default function NewsletterSubscribe() {
           </div>
         )}
       </form>
-      </div>
     </div>
   );
 }
-// ...existing code from components/letters/NewsletterSubscribe.tsx...
