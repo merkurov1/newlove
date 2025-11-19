@@ -426,7 +426,7 @@ function ArticleComponent({ article }: { article: any }) {
       {/* Call to Action */}
       <div className="w-full max-w-[600px] text-center px-2">
         <a
-          href="mailto:studio@merkurov.love?subject=Enquiry about artwork"
+          href="mailto:merkurov@gmail.com?subject=Enquiry about artwork"
           className="inline-block text-sm font-semibold text-blue-700 hover:underline"
         >
           Enquire about this work →

@@ -41,7 +41,7 @@ export default function AdvisingPage() {
         </p>
         <div style={{ marginTop: 40, textAlign: 'left' }}>
           <a
-            href="mailto:your-email"
+            href="mailto:merkurov@gmail.com"
             style={{
               fontFamily: 'Georgia, Times, serif',
               fontStyle: 'italic',

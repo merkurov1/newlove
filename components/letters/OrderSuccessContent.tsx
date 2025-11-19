@@ -143,11 +143,11 @@ export default function OrderSuccessContent() {
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <a 
-            href="mailto:anton@merkurov.love" 
+            href="mailto:merkurov@gmail.com" 
             className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             aria-label="Написать на email"
           >
-            📧 anton@merkurov.love
+            📧 merkurov@gmail.com
           </a>
           <a 
             href="https://t.me/merkurov" 
