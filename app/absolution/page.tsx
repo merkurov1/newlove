@@ -135,11 +135,14 @@ export default function AbsolutionPage() {
         setShake(true);
         setShowStamp(true);
         
-        // Stop shake after 300ms, hide devil after 600ms
+        // Stop shake after 300ms, change state after 2 seconds to keep devil visible
         setTimeout(() => {
           setShake(false);
-          setState('complete');
         }, 300);
+        
+        setTimeout(() => {
+          setState('complete');
+        }, 2000);
       }, STAMP_HIT_TIME);
     }, 4000);
   };
@@ -440,7 +443,7 @@ export default function AbsolutionPage() {
             font-size: 14px;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 40px;
+            margin-bottom: 30px;
           }
 
           .lang-toggle button {
@@ -471,7 +474,7 @@ export default function AbsolutionPage() {
             font-size: clamp(24px, 5vw, 42px);
             font-weight: 700;
             letter-spacing: 2px;
-            margin-bottom: 60px;
+            margin-bottom: 40px;
             line-height: 1.2;
           }
 
@@ -695,8 +698,8 @@ export default function AbsolutionPage() {
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%) rotate(-3deg);
-            width: 300px;
-            height: 300px;
+            width: 320px;
+            height: 320px;
             opacity: 0.85;
             mix-blend-mode: multiply;
             pointer-events: none;
@@ -843,6 +846,10 @@ export default function AbsolutionPage() {
 
           /* Mobile adjustments */
           @media (max-width: 768px) {
+            .absolution-container {
+              padding: 15px;
+            }
+
             .ritual-content {
               flex-direction: column;
             }
@@ -850,11 +857,10 @@ export default function AbsolutionPage() {
             .devil-container {
               width: 150px;
               height: 150px;
-              position: relative;
-              right: auto;
-              top: auto;
-              transform: none;
-              margin-top: 20px;
+              position: absolute;
+              left: 50%;
+              top: 50%;
+              transform: translate(-50%, -50%);
             }
 
             .receipt {
@@ -868,6 +874,43 @@ export default function AbsolutionPage() {
 
             .modal-amount {
               font-size: 36px;
+            }
+
+            .title {
+              margin-bottom: 30px;
+            }
+
+            .lang-toggle {
+              margin-bottom: 20px;
+            }
+
+            .name-input,
+            .custom-dropdown {
+              margin-bottom: 15px;
+            }
+
+            .action-buttons {
+              margin-top: 20px;
+            }
+          }
+
+          /* iPad specific */
+          @media (min-width: 768px) and (max-width: 1024px) {
+            .absolution-container {
+              padding: 15px;
+            }
+
+            .title {
+              margin-bottom: 35px;
+            }
+
+            .lang-toggle {
+              margin-bottom: 25px;
+            }
+
+            .devil-container {
+              width: 180px;
+              height: 180px;
             }
           }
         `}</style>
