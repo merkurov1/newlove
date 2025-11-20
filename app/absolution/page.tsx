@@ -107,6 +107,7 @@ export default function AbsolutionPage() {
   const [showStamp, setShowStamp] = useState(false);
   const [shake, setShake] = useState(false);
   const [html2canvasLoaded, setHtml2canvasLoaded] = useState(false);
+  const [showDonateModal, setShowDonateModal] = useState(false);
 
   const t = TRANSLATIONS[lang];
 
@@ -184,7 +185,30 @@ export default function AbsolutionPage() {
   };
 
   const handleDonate = () => {
-    window.open('mailto:merkurov@gmail.com?subject=Support%20Digital%20Absolution', '_blank');
+    setShowDonateModal(true);
+  };
+
+  const handleDonateStripe = async () => {
+    const amount = 1300; // £13.00 (Stripe in pence)
+    const currency = 'gbp';
+    const successUrl = window.location.origin + '/absolution?donate=success';
+    const cancelUrl = window.location.origin + '/absolution?donate=cancel';
+    
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, currency, successUrl, cancelUrl }),
+      });
+      const data = await res.json();
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        alert('Error creating payment session');
+      }
+    } catch (e) {
+      alert('Payment error. Please try again.');
+    }
   };
 
   return (
@@ -195,33 +219,33 @@ export default function AbsolutionPage() {
       />
       
       <div className="absolution-container">
-        {/* Language Toggle */}
-        <div className="lang-toggle">
-          <button 
-            className={lang === 'en' ? 'active' : ''} 
-            onClick={() => setLang('en')}
-          >
-            EN
-          </button>
-          <span>|</span>
-          <button 
-            className={lang === 'ru' ? 'active' : ''} 
-            onClick={() => setLang('ru')}
-          >
-            RU
-          </button>
-          <span>|</span>
-          <button 
-            className={lang === 'lat' ? 'active' : ''} 
-            onClick={() => setLang('lat')}
-          >
-            LAT
-          </button>
-        </div>
-
         {/* State 1: Confessional */}
         {state === 'confess' && (
           <div className="confessional">
+            {/* Language Toggle */}
+            <div className="lang-toggle">
+              <button 
+                className={lang === 'en' ? 'active' : ''} 
+                onClick={() => setLang('en')}
+              >
+                EN
+              </button>
+              <span>|</span>
+              <button 
+                className={lang === 'ru' ? 'active' : ''} 
+                onClick={() => setLang('ru')}
+              >
+                RU
+              </button>
+              <span>|</span>
+              <button 
+                className={lang === 'lat' ? 'active' : ''} 
+                onClick={() => setLang('lat')}
+              >
+                LAT
+              </button>
+            </div>
+
             <h1 className="title">{t.title}</h1>
             
             {/* Custom Dropdown */}
@@ -331,7 +355,7 @@ export default function AbsolutionPage() {
               </div>
 
               {/* Devil animation */}
-              <div className="devil-container">
+              <div className={`devil-container ${state === 'ritual' ? 'visible' : ''}`}>
                 <img 
                   src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0946.gif"
                   alt="Devil stamp"
@@ -351,11 +375,54 @@ export default function AbsolutionPage() {
           </div>
         )}
 
+        {/* Donation Modal */}
+        {showDonateModal && (
+          <div className="modal-overlay" onClick={() => setShowDonateModal(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <button 
+                className="modal-close"
+                onClick={() => setShowDonateModal(false)}
+              >
+                ×
+              </button>
+              
+              <h3 className="modal-title">
+                {lang === 'en' ? 'Support Digital Absolution' : 
+                 lang === 'ru' ? 'Поддержать проект' : 
+                 'Sustinere Opus'}
+              </h3>
+              
+              <p className="modal-text">
+                {lang === 'en' ? 'Your contribution helps keep this conceptual art project alive.' : 
+                 lang === 'ru' ? 'Ваша поддержка помогает сохранить этот арт-проект.' : 
+                 'Tua contributio adiuvat opus servare.'}
+              </p>
+              
+              <div className="modal-amount">£13</div>
+              
+              <button 
+                className="modal-donate-btn"
+                onClick={handleDonateStripe}
+              >
+                {lang === 'en' ? 'Donate via Stripe' : 
+                 lang === 'ru' ? 'Пожертвовать через Stripe' : 
+                 'Donare per Stripe'}
+              </button>
+              
+              <p className="modal-secure">
+                {lang === 'en' ? 'Secure payment via Stripe' : 
+                 lang === 'ru' ? 'Безопасная оплата через Stripe' : 
+                 'Solutio tuta per Stripe'}
+              </p>
+            </div>
+          </div>
+        )}
+
         <style jsx>{`
           .absolution-container {
             min-height: 100vh;
-            background-color: #000;
-            color: #fff;
+            background-color: #e8e8e8;
+            color: #000;
             font-family: 'Inter', sans-serif;
             display: flex;
             align-items: center;
@@ -365,32 +432,31 @@ export default function AbsolutionPage() {
           }
 
           .lang-toggle {
-            position: absolute;
-            top: 20px;
-            right: 20px;
             display: flex;
             gap: 10px;
             align-items: center;
+            justify-content: center;
             font-size: 14px;
             text-transform: uppercase;
             letter-spacing: 1px;
+            margin-bottom: 40px;
           }
 
           .lang-toggle button {
             background: none;
             border: none;
-            color: #666;
+            color: #999;
             cursor: pointer;
             transition: color 0.3s;
           }
 
           .lang-toggle button:hover,
           .lang-toggle button.active {
-            color: #fff;
+            color: #000;
           }
 
           .lang-toggle span {
-            color: #333;
+            color: #ccc;
           }
 
           /* State 1: Confessional */
@@ -414,8 +480,9 @@ export default function AbsolutionPage() {
           }
 
           .dropdown-selected {
-            background: #000;
-            border: 1px solid #fff;
+            background: #fff;
+            border: 1px solid #000;
+            color: #000;
             padding: 15px 20px;
             cursor: pointer;
             text-align: left;
@@ -424,7 +491,7 @@ export default function AbsolutionPage() {
           }
 
           .dropdown-selected:hover {
-            background: #111;
+            background: #f5f5f5;
           }
 
           .dropdown-options {
@@ -432,8 +499,8 @@ export default function AbsolutionPage() {
             top: 100%;
             left: 0;
             right: 0;
-            background: #000;
-            border: 1px solid #fff;
+            background: #fff;
+            border: 1px solid #000;
             border-top: none;
             max-height: 300px;
             overflow-y: auto;
@@ -443,19 +510,19 @@ export default function AbsolutionPage() {
           .dropdown-option {
             padding: 15px 20px;
             cursor: pointer;
-            border-bottom: 1px solid #222;
+            border-bottom: 1px solid #ddd;
             transition: background 0.2s;
           }
 
           .dropdown-option:hover {
-            background: #111;
+            background: #f5f5f5;
           }
 
           .name-input {
             width: 100%;
-            background: #000;
-            border: 1px solid #fff;
-            color: #fff;
+            background: #fff;
+            border: 1px solid #000;
+            color: #000;
             padding: 15px 20px;
             font-size: 16px;
             font-family: 'Inter', sans-serif;
@@ -463,13 +530,13 @@ export default function AbsolutionPage() {
           }
 
           .name-input::placeholder {
-            color: #666;
+            color: #999;
           }
 
           .submit-btn {
             width: 100%;
             background: #000;
-            border: 2px solid #fff;
+            border: 2px solid #000;
             color: #fff;
             padding: 18px 40px;
             font-size: 16px;
@@ -483,6 +550,7 @@ export default function AbsolutionPage() {
           .submit-btn:hover:not(:disabled) {
             background: #fff;
             color: #000;
+            border-color: #000;
           }
 
           .submit-btn:disabled {
@@ -521,11 +589,12 @@ export default function AbsolutionPage() {
 
           .ritual-content {
             display: flex;
-            gap: 40px;
+            gap: 0;
             align-items: center;
             justify-content: center;
             flex-wrap: wrap;
             margin-bottom: 40px;
+            position: relative;
           }
 
           .receipt {
@@ -637,6 +706,17 @@ export default function AbsolutionPage() {
             display: flex;
             align-items: center;
             justify-content: center;
+            position: absolute;
+            right: -50px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+          }
+
+          .devil-container.visible {
+            opacity: 1;
           }
 
           .devil-animation {
@@ -653,7 +733,7 @@ export default function AbsolutionPage() {
 
           .action-buttons button {
             background: #000;
-            border: 1px solid #fff;
+            border: 1px solid #000;
             color: #fff;
             padding: 12px 30px;
             font-size: 14px;
@@ -667,6 +747,95 @@ export default function AbsolutionPage() {
           .action-buttons button:hover {
             background: #fff;
             color: #000;
+            border-color: #000;
+          }
+
+          /* Donation Modal */
+          .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+          }
+
+          .modal-content {
+            background: #fff;
+            color: #000;
+            padding: 40px;
+            max-width: 400px;
+            width: 100%;
+            position: relative;
+            border: 2px solid #000;
+          }
+
+          .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 32px;
+            cursor: pointer;
+            color: #000;
+            line-height: 1;
+          }
+
+          .modal-close:hover {
+            color: #666;
+          }
+
+          .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-align: center;
+            letter-spacing: 1px;
+          }
+
+          .modal-text {
+            font-size: 14px;
+            margin-bottom: 30px;
+            text-align: center;
+            line-height: 1.6;
+            color: #666;
+          }
+
+          .modal-amount {
+            font-size: 48px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 30px;
+            letter-spacing: 2px;
+          }
+
+          .modal-donate-btn {
+            width: 100%;
+            background: #000;
+            border: 2px solid #000;
+            color: #fff;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+          }
+
+          .modal-donate-btn:hover {
+            background: #fff;
+            color: #000;
+          }
+
+          .modal-secure {
+            font-size: 12px;
+            text-align: center;
+            color: #999;
           }
 
           /* Mobile adjustments */
@@ -678,11 +847,24 @@ export default function AbsolutionPage() {
             .devil-container {
               width: 150px;
               height: 150px;
+              position: relative;
+              right: auto;
+              top: auto;
+              transform: none;
+              margin-top: 20px;
             }
 
             .receipt {
               width: 280px;
               padding: 25px 15px;
+            }
+
+            .modal-content {
+              padding: 30px 20px;
+            }
+
+            .modal-amount {
+              font-size: 36px;
             }
           }
         `}</style>
