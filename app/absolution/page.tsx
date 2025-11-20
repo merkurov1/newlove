@@ -136,7 +136,7 @@ export default function AbsolutionPage() {
         setShake(true);
         setShowStamp(true);
         
-        // Stop shake after 300ms
+        // Stop shake after 300ms, hide devil after 600ms
         setTimeout(() => {
           setShake(false);
           setState('complete');
@@ -154,7 +154,7 @@ export default function AbsolutionPage() {
     try {
       // @ts-ignore
       const canvas = await html2canvas(receipt, {
-        backgroundColor: '#f4f4f4',
+        backgroundColor: '#ffffff',
         scale: 2
       });
       
@@ -218,7 +218,7 @@ export default function AbsolutionPage() {
         onLoad={() => setHtml2canvasLoaded(true)}
       />
       
-      <div className="absolution-container">
+      <div className={`absolution-container ${(state === 'ritual' || state === 'complete') ? 'dark' : ''}`}>
         {/* State 1: Confessional */}
         {state === 'confess' && (
           <div className="confessional">
@@ -355,7 +355,7 @@ export default function AbsolutionPage() {
               </div>
 
               {/* Devil animation */}
-              <div className={`devil-container ${state === 'ritual' ? 'visible' : ''}`}>
+              <div className={`devil-container ${state === 'ritual' && !showStamp ? 'visible' : ''}`}>
                 <img 
                   src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0946.gif"
                   alt="Devil stamp"
@@ -429,6 +429,11 @@ export default function AbsolutionPage() {
             justify-content: center;
             padding: 20px;
             position: relative;
+            transition: background-color 0.5s ease;
+          }
+
+          .absolution-container.dark {
+            background-color: #2a2a2a;
           }
 
           .lang-toggle {
@@ -598,16 +603,17 @@ export default function AbsolutionPage() {
           }
 
           .receipt {
-            background-color: #f0f0f0;
+            background-color: #ffffff;
             color: #000;
             font-family: 'Space Mono', 'Courier New', monospace;
             width: 320px;
             padding: 30px 20px;
-            box-shadow: 0 0 20px rgba(255,255,255,0.1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
             position: relative;
             text-transform: uppercase;
             font-size: 13px;
             letter-spacing: 0.5px;
+            z-index: 1;
           }
 
           .receipt.shake {
@@ -698,6 +704,7 @@ export default function AbsolutionPage() {
             opacity: 0.85;
             mix-blend-mode: multiply;
             pointer-events: none;
+            z-index: 5;
           }
 
           .devil-container {
