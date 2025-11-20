@@ -59,6 +59,7 @@ export default function VigilPage() {
   const [nameInput, setNameInput] = useState('');
   const [sparkParticles, setSparkParticles] = useState<SparkParticle[]>([]);
   const [isLighting, setIsLighting] = useState(false);
+  const [debugMessage, setDebugMessage] = useState<string>('');
   
   const angelRef = useRef<HTMLDivElement>(null);
   const heartRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
@@ -195,20 +196,27 @@ export default function VigilPage() {
         // Remove spark
         setSparkParticles(prev => prev.filter(s => s.id !== sparkId));
         
-        // Upsert to DB (Create if doesn't exist, Update if does)
-        const { error } = await supabase
+        // Update the heart in DB
+        setDebugMessage(`Updating heart ${selectedHeart} with name: ${nameInput.trim()}`);
+        
+        const { data, error } = await supabase
           .from('vigil_hearts')
-          .upsert({
-            id: selectedHeart,
+          .update({
             owner_name: nameInput.trim(),
             last_lit_at: new Date().toISOString()
-          });
+          })
+          .eq('id', selectedHeart)
+          .select();
           
-        if (!error) {
-          setSelectedHeart(null); // Close modal
-          setNameInput('');
+        if (!error && data) {
+          setDebugMessage(`Success! Updated: ${JSON.stringify(data)}`);
+          setTimeout(() => {
+            setSelectedHeart(null); // Close modal
+            setNameInput('');
+            setDebugMessage('');
+          }, 2000);
         } else {
-          console.error('Error lighting heart:', error);
+          setDebugMessage(`ERROR: ${error?.message || 'Unknown error'} | Code: ${error?.code || 'N/A'}`);
         }
         setIsLighting(false);
       }, 1000); // 1 second flight time
@@ -219,6 +227,26 @@ export default function VigilPage() {
 
   return (
     <div className="vigil-container">
+      {/* Debug Message */}
+      {debugMessage && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(0,0,0,0.9)',
+          color: 'white',
+          padding: '15px 25px',
+          borderRadius: '8px',
+          zIndex: 10000,
+          maxWidth: '90%',
+          fontSize: '14px',
+          wordBreak: 'break-word'
+        }}>
+          {debugMessage}
+        </div>
+      )}
+      
       {/* Info Button */}
       <button 
         className="info-button"
