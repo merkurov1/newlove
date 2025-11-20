@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Script from 'next/script';
+import html2canvas from 'html2canvas';
 
 // Language translations
 const TRANSLATIONS = {
@@ -106,7 +106,6 @@ export default function AbsolutionPage() {
   const [dateStr, setDateStr] = useState('');
   const [showStamp, setShowStamp] = useState(false);
   const [shake, setShake] = useState(false);
-  const [html2canvasLoaded, setHtml2canvasLoaded] = useState(false);
   const [showDonateModal, setShowDonateModal] = useState(false);
 
   const t = TRANSLATIONS[lang];
@@ -146,24 +145,27 @@ export default function AbsolutionPage() {
   };
 
   const handleSave = async () => {
-    if (!html2canvasLoaded || typeof window === 'undefined') return;
-    
     const receipt = document.getElementById('receipt');
-    if (!receipt) return;
+    if (!receipt) {
+      alert('Receipt not found');
+      return;
+    }
 
     try {
-      // @ts-ignore
       const canvas = await html2canvas(receipt, {
         backgroundColor: '#ffffff',
-        scale: 2
+        scale: 2,
+        logging: false,
+        useCORS: true
       });
       
       const link = document.createElement('a');
       link.download = `absolution-${ticketId}.png`;
-      link.href = canvas.toDataURL();
+      link.href = canvas.toDataURL('image/png');
       link.click();
     } catch (e) {
       console.error('Save failed:', e);
+      alert('Failed to save image. Please try again.');
     }
   };
 
@@ -212,13 +214,7 @@ export default function AbsolutionPage() {
   };
 
   return (
-    <>
-      <Script
-        src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"
-        onLoad={() => setHtml2canvasLoaded(true)}
-      />
-      
-      <div className={`absolution-container ${(state === 'ritual' || state === 'complete') ? 'dark' : ''}`}>
+    <div className={`absolution-container ${(state === 'ritual' || state === 'complete') ? 'dark' : ''}`}>
         {/* State 1: Confessional */}
         {state === 'confess' && (
           <div className="confessional">
@@ -357,7 +353,7 @@ export default function AbsolutionPage() {
               {/* Devil animation */}
               <div className={`devil-container ${state === 'ritual' && !showStamp ? 'visible' : ''}`}>
                 <img 
-                  src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0946.gif"
+                  src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0948.gif"
                   alt="Devil stamp"
                   className="devil-animation"
                 />
@@ -699,8 +695,8 @@ export default function AbsolutionPage() {
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%) rotate(-3deg);
-            width: 150px;
-            height: 150px;
+            width: 300px;
+            height: 300px;
             opacity: 0.85;
             mix-blend-mode: multiply;
             pointer-events: none;
@@ -714,9 +710,9 @@ export default function AbsolutionPage() {
             align-items: center;
             justify-content: center;
             position: absolute;
-            right: -50px;
+            left: 50%;
             top: 50%;
-            transform: translateY(-50%);
+            transform: translate(-50%, -50%);
             z-index: 10;
             opacity: 0;
             transition: opacity 0.3s ease-in-out;
@@ -875,7 +871,6 @@ export default function AbsolutionPage() {
             }
           }
         `}</style>
-      </div>
-    </>
+    </div>
   );
 }
