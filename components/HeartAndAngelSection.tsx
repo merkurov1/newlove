@@ -49,7 +49,7 @@ export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel
       </div>
 
       {/* Buttons */}
-      <div className="mb-8 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4 w-full max-w-lg">
+      <div className="mb-8 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4 w-full max-w-2xl">
         <a
           href={ctaHref}
           className="inline-block bg-pink-600 hover:bg-pink-700 text-white font-semibold text-base sm:text-lg px-6 sm:px-7 py-2.5 sm:py-3 rounded-full shadow-lg transition-colors text-center"
@@ -61,6 +61,12 @@ export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel
           className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold text-base sm:text-lg px-6 sm:px-7 py-2.5 sm:py-3 rounded-full shadow-lg transition-colors text-center"
         >
           Let the Heart Go
+        </a>
+        <a
+          href="/absolution"
+          className="inline-block bg-gray-800 hover:bg-gray-900 text-white font-semibold text-base sm:text-lg px-6 sm:px-7 py-2.5 sm:py-3 rounded-full shadow-lg transition-colors text-center"
+        >
+          Digital Absolution
         </a>
       </div>
 

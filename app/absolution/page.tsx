@@ -142,7 +142,7 @@ export default function AbsolutionPage() {
         
         setTimeout(() => {
           setState('complete');
-        }, 2000);
+        }, 4000);
       }, STAMP_HIT_TIME);
     }, 4000);
   };
@@ -173,19 +173,57 @@ export default function AbsolutionPage() {
   };
 
   const handleShare = async () => {
-    const text = `I received absolution for: ${selectedSin}`;
-    const url = 'https://merkurov.love/absolution';
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'Digital Absolution', text, url });
-      } catch (e) {
-        console.log('Share cancelled');
+    const receipt = document.getElementById('receipt');
+    if (!receipt) {
+      alert('Receipt not found');
+      return;
+    }
+
+    try {
+      // Generate image
+      const canvas = await html2canvas(receipt, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        logging: false,
+        useCORS: true
+      });
+      
+      const imageData = canvas.toDataURL('image/png');
+
+      // Upload to server
+      const response = await fetch('/api/absolution/save-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData, ticketId }),
+      });
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error('Failed to upload image');
       }
-    } else {
-      // Fallback: copy to clipboard
-      navigator.clipboard.writeText(`${text}\n${url}`);
-      alert('Link copied to clipboard!');
+
+      const shareUrl = data.url;
+      const text = `I received digital absolution for: ${selectedSin}`;
+      
+      if (navigator.share) {
+        try {
+          await navigator.share({ 
+            title: 'Digital Absolution', 
+            text,
+            url: shareUrl
+          });
+        } catch (e) {
+          console.log('Share cancelled');
+        }
+      } else {
+        // Fallback: copy image URL to clipboard
+        navigator.clipboard.writeText(shareUrl);
+        alert('Image link copied to clipboard!');
+      }
+    } catch (e) {
+      console.error('Share failed:', e);
+      alert('Failed to share. Please try again.');
     }
   };
 
