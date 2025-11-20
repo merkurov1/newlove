@@ -58,6 +58,7 @@ export default function VigilPage() {
   const [selectedHeart, setSelectedHeart] = useState<number | null>(null);
   const [nameInput, setNameInput] = useState('');
   const [sparkParticles, setSparkParticles] = useState<SparkParticle[]>([]);
+  const [isLighting, setIsLighting] = useState(false);
   
   const angelRef = useRef<HTMLDivElement>(null);
   const heartRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
@@ -166,7 +167,9 @@ export default function VigilPage() {
   };
 
   const triggerRitual = async () => {
-    if (!selectedHeart || !nameInput.trim()) return;
+    if (!selectedHeart || !nameInput.trim() || isLighting) return;
+    
+    setIsLighting(true);
     
     // 1. Get Coordinates
     const angelRect = angelRef.current?.getBoundingClientRect();
@@ -203,8 +206,14 @@ export default function VigilPage() {
           
         if (!error) {
           setSelectedHeart(null); // Close modal
+          setNameInput('');
+        } else {
+          console.error('Error lighting heart:', error);
         }
+        setIsLighting(false);
       }, 1000); // 1 second flight time
+    } else {
+      setIsLighting(false);
     }
   };
 
@@ -295,9 +304,15 @@ export default function VigilPage() {
               placeholder="Enter your Name" 
               value={nameInput}
               onChange={e => setNameInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && triggerRitual()}
+              onKeyDown={e => e.key === 'Enter' && !isLighting && triggerRitual()}
+              disabled={isLighting}
             />
-            <button onClick={triggerRitual}>IGNITE</button>
+            <button 
+              onClick={triggerRitual}
+              disabled={isLighting || !nameInput.trim()}
+            >
+              {isLighting ? 'IGNITING...' : 'IGNITE'}
+            </button>
           </div>
         </div>
       )}
