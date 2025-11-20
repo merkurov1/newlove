@@ -107,6 +107,9 @@ export default function AbsolutionPage() {
   const [showStamp, setShowStamp] = useState(false);
   const [shake, setShake] = useState(false);
   const [showDonateModal, setShowDonateModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [cachedImage, setCachedImage] = useState<string | null>(null);
 
   const t = TRANSLATIONS[lang];
 
@@ -119,6 +122,33 @@ export default function AbsolutionPage() {
       day: '2-digit' 
     }));
   }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (dropdownOpen && !target.closest('.custom-dropdown')) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen]);
+
+  const resetToBeginning = () => {
+    setState('confess');
+    setName('');
+    setSelectedSin('');
+    setShowStamp(false);
+    setShake(false);
+    setCachedImage(null);
+    setTicketId(`#${Math.random().toString(36).substr(2, 9).toUpperCase()}`);
+    setDateStr(new Date().toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit' 
+    }));
+  };
 
   const handleSubmit = () => {
     if (!name.trim() || !selectedSin) return;
@@ -147,83 +177,109 @@ export default function AbsolutionPage() {
     }, 4000);
   };
 
-  const handleSave = async () => {
+  const generateImage = async () => {
+    if (cachedImage) return cachedImage;
+    
     const receipt = document.getElementById('receipt');
-    if (!receipt) {
-      alert('Receipt not found');
-      return;
-    }
+    if (!receipt) throw new Error('Receipt not found');
 
+    const canvas = await html2canvas(receipt, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      logging: false,
+      useCORS: true
+    });
+    
+    const imageData = canvas.toDataURL('image/png');
+    setCachedImage(imageData);
+    return imageData;
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
     try {
-      const canvas = await html2canvas(receipt, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        logging: false,
-        useCORS: true
-      });
-      
+      const imageData = await generateImage();
       const link = document.createElement('a');
       link.download = `absolution-${ticketId}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = imageData;
       link.click();
     } catch (e) {
       console.error('Save failed:', e);
       alert('Failed to save image. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleShare = async () => {
-    const receipt = document.getElementById('receipt');
-    if (!receipt) {
-      alert('Receipt not found');
-      return;
-    }
-
+    setIsSharing(true);
     try {
-      // Generate image
-      const canvas = await html2canvas(receipt, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        logging: false,
-        useCORS: true
-      });
-      
-      const imageData = canvas.toDataURL('image/png');
+      const imageData = await generateImage();
 
-      // Upload to server
-      const response = await fetch('/api/absolution/save-receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageData, ticketId }),
-      });
+      // Try to upload to server
+      try {
+        const response = await fetch('/api/absolution/save-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageData, ticketId }),
+        });
 
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error('Failed to upload image');
+        const data = await response.json();
+        
+        if (data.success) {
+          const shareUrl = data.url;
+          const text = `I received digital absolution for: ${selectedSin}`;
+          
+          if (navigator.share) {
+            try {
+              await navigator.share({ 
+                title: 'Digital Absolution', 
+                text,
+                url: shareUrl
+              });
+            } catch (e) {
+              // User cancelled share
+            }
+          } else {
+            navigator.clipboard.writeText(shareUrl);
+            alert('Image link copied to clipboard!');
+          }
+          return;
+        }
+      } catch (uploadError) {
+        console.warn('Upload failed, using fallback:', uploadError);
       }
 
-      const shareUrl = data.url;
+      // Fallback: download image and share page URL
       const text = `I received digital absolution for: ${selectedSin}`;
+      const fallbackUrl = 'https://merkurov.love/absolution';
       
       if (navigator.share) {
         try {
           await navigator.share({ 
             title: 'Digital Absolution', 
             text,
-            url: shareUrl
+            url: fallbackUrl
           });
         } catch (e) {
-          console.log('Share cancelled');
+          // User cancelled
         }
       } else {
-        // Fallback: copy image URL to clipboard
-        navigator.clipboard.writeText(shareUrl);
-        alert('Image link copied to clipboard!');
+        // Download image locally
+        const link = document.createElement('a');
+        link.download = `absolution-${ticketId}.png`;
+        link.href = imageData;
+        link.click();
+        
+        // Copy URL to clipboard
+        navigator.clipboard.writeText(fallbackUrl);
+        alert('Image downloaded! Link copied to clipboard.');
       }
     } catch (e) {
       console.error('Share failed:', e);
-      alert('Failed to share. Please try again.');
+      alert('Failed to share. Please try downloading the image instead.');
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -260,24 +316,30 @@ export default function AbsolutionPage() {
         {state === 'confess' && (
           <div className="confessional">
             {/* Language Toggle */}
-            <div className="lang-toggle">
+            <div className="lang-toggle" role="group" aria-label="Language selection">
               <button 
                 className={lang === 'en' ? 'active' : ''} 
                 onClick={() => setLang('en')}
+                aria-label="Switch to English"
+                aria-pressed={lang === 'en'}
               >
                 EN
               </button>
-              <span>|</span>
+              <span aria-hidden="true">|</span>
               <button 
                 className={lang === 'ru' ? 'active' : ''} 
                 onClick={() => setLang('ru')}
+                aria-label="Переключить на русский"
+                aria-pressed={lang === 'ru'}
               >
                 RU
               </button>
-              <span>|</span>
+              <span aria-hidden="true">|</span>
               <button 
                 className={lang === 'lat' ? 'active' : ''} 
                 onClick={() => setLang('lat')}
+                aria-label="Switch to Latin"
+                aria-pressed={lang === 'lat'}
               >
                 LAT
               </button>
@@ -290,11 +352,22 @@ export default function AbsolutionPage() {
               <div 
                 className="dropdown-selected"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
+                role="button"
+                aria-haspopup="listbox"
+                aria-expanded={dropdownOpen}
+                aria-label="Select your digital sin"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setDropdownOpen(!dropdownOpen);
+                  }
+                }}
               >
                 {selectedSin || 'Select your sin...'}
               </div>
               {dropdownOpen && (
-                <div className="dropdown-options">
+                <div className="dropdown-options" role="listbox">
                   {Object.entries(t.sins).map(([key, value]) => (
                     <div
                       key={key}
@@ -302,6 +375,16 @@ export default function AbsolutionPage() {
                       onClick={() => {
                         setSelectedSin(value);
                         setDropdownOpen(false);
+                      }}
+                      role="option"
+                      aria-selected={selectedSin === value}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedSin(value);
+                          setDropdownOpen(false);
+                        }
                       }}
                     >
                       {value}
@@ -403,11 +486,39 @@ export default function AbsolutionPage() {
 
             {/* Action buttons */}
             {state === 'complete' && (
-              <div className="action-buttons">
-                <button onClick={handleSave}>{t.actions.save}</button>
-                <button onClick={handleShare}>{t.actions.share}</button>
-                <button onClick={handleDonate}>{t.actions.donate}</button>
-              </div>
+              <>
+                <div className="action-buttons">
+                  <button 
+                    onClick={handleSave} 
+                    disabled={isSaving}
+                    aria-label="Save receipt as image"
+                  >
+                    {isSaving ? 'SAVING...' : t.actions.save}
+                  </button>
+                  <button 
+                    onClick={handleShare} 
+                    disabled={isSharing}
+                    aria-label="Share receipt"
+                  >
+                    {isSharing ? 'SHARING...' : t.actions.share}
+                  </button>
+                  <button 
+                    onClick={handleDonate}
+                    aria-label="Support this project"
+                  >
+                    {t.actions.donate}
+                  </button>
+                </div>
+                <div className="reset-container">
+                  <button 
+                    onClick={resetToBeginning}
+                    className="reset-button"
+                    aria-label="Start over with new confession"
+                  >
+                    {lang === 'en' ? 'Confess Again' : lang === 'ru' ? 'Исповедаться снова' : 'Iterum Confiteri'}
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -569,10 +680,18 @@ export default function AbsolutionPage() {
             font-size: 16px;
             font-family: 'Inter', sans-serif;
             margin-bottom: 30px;
+            -webkit-appearance: none;
+            border-radius: 0;
           }
 
           .name-input::placeholder {
             color: #999;
+          }
+
+          .name-input:focus {
+            outline: none;
+            border-color: #000;
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
           }
 
           .submit-btn {
@@ -788,10 +907,39 @@ export default function AbsolutionPage() {
             text-transform: uppercase;
           }
 
-          .action-buttons button:hover {
+          .action-buttons button:hover:not(:disabled) {
             background: #fff;
             color: #000;
             border-color: #000;
+          }
+
+          .action-buttons button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
+
+          .reset-container {
+            margin-top: 30px;
+            text-align: center;
+          }
+
+          .reset-button {
+            background: transparent;
+            border: 1px solid #666;
+            color: #666;
+            padding: 10px 24px;
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+          }
+
+          .reset-button:hover {
+            background: #666;
+            color: #fff;
+            border-color: #666;
           }
 
           /* Donation Modal */
