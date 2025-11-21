@@ -2,15 +2,13 @@ import { Bot, webhookCallback } from 'grammy';
 
 export const runtime = 'edge';
 
-// --- ИСПОЛЬЗУЕМ ПРАВИЛЬНУЮ ПЕРЕМЕННУЮ ---
+// Переменная для Личного бота
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) throw new Error('TELEGRAM_BOT_TOKEN is unset');
 
 const bot = new Bot(token);
-// Убедитесь, что MY_TELEGRAM_ID тоже прописан в Vercel
 const MY_ID = Number(process.env.MY_TELEGRAM_ID);
 
-// --- CONFIG ---
 const MODEL_NAME = 'gemini-1.5-flash'; 
 const SYSTEM_PROMPT = `
 Ты — Второй Мозг Антона Меркурова.
@@ -20,10 +18,10 @@ const SYSTEM_PROMPT = `
 `;
 
 bot.on('message:text', async (ctx) => {
-  // Проверка: отвечаем только Вам
+  // Защита: только вы
   if (ctx.from.id !== MY_ID) {
-    // Молчим или посылаем
-    return; 
+    // Можно молчать, можно отвечать
+    return ctx.reply("Access Denied.");
   }
 
   const userText = ctx.message.text;
