@@ -189,29 +189,29 @@ export default function ModernLoginModal({ onClose }: { onClose?: () => void } =
           boxSizing: 'border-box',
         }}
       >
-        <h2 className="text-3xl font-bold mb-4 text-center">Вход</h2>
+        <h2 className="text-2xl font-bold mb-4 text-center tracking-tight text-neutral-900">Sign In</h2>
         <button
           onClick={async () => { if (onClose) onClose(); setLoading(true); try { await auth.signInWithGoogle(); } catch (e:any) { setWeb3Error(e.message || String(e)); } setLoading(false); }}
-          className="w-full bg-red-600 text-white rounded-lg px-6 py-3 font-semibold text-lg hover:bg-red-700 transition mb-2 shadow"
+          className="w-full bg-black text-white rounded px-6 py-3 font-semibold text-base hover:bg-neutral-800 transition mb-2 border border-neutral-300 shadow-none"
           disabled={loading}
         >
-          {loading ? 'Входим через Google...' : 'Войти через Google'}
+          {loading ? 'Signing in with Google…' : 'Sign in with Google'}
         </button>
-          <button
-            onClick={async () => { try { if (typeof onClose === 'function') onClose(); await handleWeb3(); } catch (e){ /* ignore */ } }}
-            className="w-full bg-emerald-600 text-white rounded-lg px-6 py-3 font-semibold text-lg hover:bg-emerald-700 transition mb-2 shadow"
-            disabled={loading}
-          >
-            {loading ? 'Входим через Web3...' : 'Войти через Web3'}
-          </button>
+        <button
+          onClick={async () => { try { if (typeof onClose === 'function') onClose(); await handleWeb3(); } catch (e){ /* ignore */ } }}
+          className="w-full bg-white text-black rounded px-6 py-3 font-semibold text-base hover:bg-neutral-100 transition mb-2 border border-neutral-300 shadow-none"
+          disabled={loading}
+        >
+          {loading ? 'Signing in with Web3…' : 'Sign in with Web3'}
+        </button>
         {/* Web3 login intentionally removed — Google OAuth only */}
-  {error && <div className="text-red-600 text-sm text-center mt-2">{error}</div>}
-    {web3Error && <div className="text-red-600 text-sm text-center mt-2">{web3Error}</div>}
+        {error && <div className="text-red-600 text-sm text-center mt-2">{error}</div>}
+        {web3Error && <div className="text-red-600 text-sm text-center mt-2">{web3Error}</div>}
         <button
           onClick={onClose}
-          className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl font-bold bg-transparent border-none cursor-pointer"
+          className="absolute top-2 right-2 text-neutral-400 hover:text-neutral-700 text-2xl font-bold bg-transparent border-none cursor-pointer"
           style={{ background: 'none', border: 'none', padding: 0 }}
-          aria-label="Закрыть"
+          aria-label="Close"
         >×</button>
       </div>
     </div>
