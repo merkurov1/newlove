@@ -2,37 +2,17 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase-browser';
-import { useAuth } from '@/components/AuthContext';
+import { useAuth } from '@/components/AuthContext'; // Предполагаем, что этот контекст работает
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// --- ASSETS CONFIGURATION ---
+// --- ASSETS ---
 const HEARTS_DATA = [
-  {
-    id: 1,
-    static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0964.jpeg',
-    loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-7916633362072566540.mp4'
-  },
-  {
-    id: 2,
-    static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0962.jpeg',
-    loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-6228877831163806687.mp4'
-  },
-  {
-    id: 3,
-    static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0957.jpeg',
-    loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-8682541785678079730.mp4'
-  },
-  {
-    id: 4,
-    static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0960.jpeg',
-    loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1607792915860564384.mp4'
-  },
-  {
-    id: 5,
-    static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0955.jpeg',
-    loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-5300087847065473569.mp4'
-  }
+  { id: 1, static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0964.jpeg', loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-7916633362072566540.mp4' },
+  { id: 2, static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0962.jpeg', loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-6228877831163806687.mp4' },
+  { id: 3, static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0957.jpeg', loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-8682541785678079730.mp4' },
+  { id: 4, static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0960.jpeg', loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1607792915860564384.mp4' },
+  { id: 5, static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0955.jpeg', loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-5300087847065473569.mp4' }
 ];
 
 const ANGEL_IMAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
@@ -43,7 +23,6 @@ interface HeartData {
   owner_name: string | null;
   owner_id?: string | null;
   last_lit_at: string;
-  is_locked: boolean;
 }
 
 interface SparkParticle {
@@ -54,18 +33,22 @@ interface SparkParticle {
   endY: number;
 }
 
+// --- COMPONENT ---
 export default function VigilPage() {
-  // State to hold DB data. Initially empty.
   const [dbHearts, setDbHearts] = useState<HeartData[]>([]);
   const [showManifesto, setShowManifesto] = useState(false);
   const [selectedHeart, setSelectedHeart] = useState<number | null>(null);
   const [nameInput, setNameInput] = useState('');
   const [sparkParticles, setSparkParticles] = useState<SparkParticle[]>([]);
+  
+  // UX States
   const [isLighting, setIsLighting] = useState(false);
-  const [debugMessage, setDebugMessage] = useState<string>('');
+  const [flash, setFlash] = useState(false); // Global flash effect
+  const [angelActive, setAngelActive] = useState(false); // Angel reaction state
   const [showLogin, setShowLogin] = useState(false);
-  const auth = useAuth();
-  const user = auth?.user;
+  const [debugMessage, setDebugMessage] = useState<string>('');
+
+  const { user } = useAuth(); // Get user directly from context
   const ModernLoginModal = dynamic(() => import('@/components/ModernLoginModal'), { ssr: false });
   
   const angelRef = useRef<HTMLDivElement>(null);
@@ -75,162 +58,139 @@ export default function VigilPage() {
   // --- INITIALIZATION ---
   useEffect(() => {
     fetchHearts();
-    setupRealtimeSubscription();
     
-    // Show manifesto only on first visit
+    // Realtime subscription
+    const channel = supabase
+      .channel('vigil_hearts_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vigil_hearts' }, () => fetchHearts())
+      .subscribe();
+
+    // Check first visit
     if (!localStorage.getItem('vigil_visited')) {
       setShowManifesto(true);
       localStorage.setItem('vigil_visited', 'true');
     }
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // --- DATABASE FUNCTIONS ---
   const fetchHearts = async () => {
-    const { data, error } = await supabase
-      .from('vigil_hearts')
-      .select('*');
-    
-    if (data) {
-      setDbHearts(data);
-    }
+    const { data } = await supabase.from('vigil_hearts').select('*');
+    if (data) setDbHearts(data);
   };
 
-  const setupRealtimeSubscription = () => {
-    const channel = supabase
-      .channel('vigil_hearts_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'vigil_hearts' },
-        () => { fetchHearts(); } // Refresh data on any change
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  };
-
-  // --- LOGIC: Calculate Visual State ---
+  // --- CALCULATE VISUAL STATE (Entropy) ---
   const getHeartState = (heartId: number) => {
-    // Find the DB record for this heart ID
     const dbRecord = dbHearts.find(h => h.id === heartId);
-
-    // Default state (if not in DB or never lit)
     if (!dbRecord || !dbRecord.last_lit_at) {
-      return {
-        isAlive: false,
-        owner: null,
-        filter: 'grayscale(100%) brightness(0.3)',
-        glow: 'none',
-        scale: 0.95
-      };
+      return { isAlive: false, owner: null, isMine: false, filter: 'grayscale(100%) brightness(0.3)', glow: 'none', scale: 0.95 };
     }
 
     const now = new Date();
     const litTime = new Date(dbRecord.last_lit_at);
     const hoursPassed = (now.getTime() - litTime.getTime()) / (1000 * 60 * 60);
     const isAlive = hoursPassed < 24;
+    const isMine = user ? dbRecord.owner_id === user.id : false;
 
-    let filter = '';
-    let glow = '';
-    let scale = 1;
+    let filter = '', glow = '', scale = 1;
 
     if (isAlive) {
       if (hoursPassed < 6) {
-        // Phase 1: Burning Bright
-        filter = 'brightness(1.2) saturate(1.2)';
-        glow = '0 0 30px rgba(255, 50, 50, 0.6)';
+        filter = 'brightness(1.2) saturate(1.3)';
+        glow = '0 0 40px rgba(255, 50, 50, 0.7)';
         scale = 1.05;
       } else if (hoursPassed < 12) {
-        // Phase 2: Normal
         filter = 'brightness(1) saturate(1)';
-        glow = '0 0 15px rgba(255, 50, 50, 0.3)';
+        glow = '0 0 20px rgba(255, 50, 50, 0.4)';
         scale = 1;
       } else {
-        // Phase 3: Fading
-        filter = 'grayscale(0.6) brightness(0.6)';
+        filter = 'grayscale(0.7) brightness(0.6)';
         glow = '0 0 5px rgba(255, 50, 50, 0.1)';
-        scale = 0.98;
+        scale = 0.97;
       }
     } else {
-      // Phase 4: Dead (Stone)
       filter = 'grayscale(100%) brightness(0.3)';
       glow = 'none';
       scale = 0.95;
     }
 
-    return {
-      isAlive,
-      owner: isAlive ? dbRecord.owner_name : null,
-      filter,
-      glow,
-      scale
-    };
+    return { isAlive, owner: isAlive ? dbRecord.owner_name : null, isMine, filter, glow, scale };
   };
 
-  // --- INTERACTION HANDLERS ---
+  // --- INTERACTION ---
   const handleHeartClick = (heartId: number) => {
-    // Find heart in db
-    const dbHeart = dbHearts.find(h => h.id === heartId);
-    // Only allow if heart is dead or owned by this user
+    // 1. Check Auth IMMEDIATELY
     if (!user) {
       setShowLogin(true);
       return;
     }
-    if (dbHeart && dbHeart.last_lit_at) {
-      const now = new Date();
-      const litTime = new Date(dbHeart.last_lit_at);
-      const hoursPassed = (now.getTime() - litTime.getTime()) / (1000 * 60 * 60);
-      const isAlive = hoursPassed < 24;
-      if (isAlive && dbHeart.owner_id && dbHeart.owner_id !== user.id) {
-        setDebugMessage('This heart belongs to another user until it fades.');
-        setTimeout(() => setDebugMessage(''), 3000);
-        return;
-      }
+
+    const state = getHeartState(heartId);
+
+    // 2. Check Ownership Logic
+    if (state.isAlive && !state.isMine) {
+      setDebugMessage(`Occupied by ${state.owner}. Wait for the light to fade.`);
+      setTimeout(() => setDebugMessage(''), 3000);
+      return;
     }
+
+    // 3. Prepare Ritual
     setSelectedHeart(heartId);
-    setNameInput(user?.email?.split('@')[0] || '');
+    // If re-igniting, pre-fill name
+    setNameInput(state.isMine && state.owner ? state.owner : (user.email?.split('@')[0] || ''));
   };
 
   const triggerRitual = async () => {
     if (!selectedHeart || !nameInput.trim() || isLighting || !user) return;
+    
     setIsLighting(true);
-    // 1. Get Coordinates
+    setSelectedHeart(null); // Close modal immediately for cinema effect
+
     const angelRect = angelRef.current?.getBoundingClientRect();
     const targetRect = heartRefs.current[selectedHeart]?.getBoundingClientRect();
+
     if (angelRect && targetRect) {
-      // 2. Calculate Spark Origin (Calibrated to the Candle Tip)
+      // CALIBRATION: Candle Tip Position
       const startX = angelRect.left + (angelRect.width * 0.85);
       const startY = angelRect.top + (angelRect.height * 0.55);
+      
       const endX = targetRect.left + (targetRect.width / 2);
       const endY = targetRect.top + (targetRect.height / 2);
+
       const sparkId = `spark-${Date.now()}`;
-      setSparkParticles(prev => [...prev, { id: sparkId, startX, startY, endX, endY }]);
-      // 4. Database Update (Delayed to match animation impact)
+      
+      // 1. Angel Reacts (Gathers energy)
+      setAngelActive(true);
+
+      // 2. Launch Spark (Wait a tiny bit for angel reaction)
+      setTimeout(() => {
+        setSparkParticles(prev => [...prev, { id: sparkId, startX, startY, endX, endY }]);
+      }, 200);
+
+      // 3. Impact & DB Update (After flight duration)
       setTimeout(async () => {
+        // Visual Impact
+        setFlash(true); 
+        setAngelActive(false);
+        setTimeout(() => setFlash(false), 300); // Flash duration
+
+        // Clean up spark
         setSparkParticles(prev => prev.filter(s => s.id !== sparkId));
-        setDebugMessage(`Updating heart ${selectedHeart} with name: ${nameInput.trim()}`);
-        const { data, error } = await supabase
+
+        // DB Write
+        const { error } = await supabase
           .from('vigil_hearts')
-          .update({
+          .upsert({
+            id: selectedHeart,
             owner_name: nameInput.trim(),
             owner_id: user.id,
             last_lit_at: new Date().toISOString()
-          })
-          .eq('id', selectedHeart)
-          .select();
-        if (!error && data) {
-          setDebugMessage(`Success! Updated: ${JSON.stringify(data)}`);
-          setTimeout(() => {
-            setSelectedHeart(null);
-            setNameInput('');
-            setDebugMessage('');
-          }, 2000);
-        } else {
-          setDebugMessage(`ERROR: ${error?.message || 'Unknown error'} | Code: ${error?.code || 'N/A'}`);
-        }
+          });
+
         setIsLighting(false);
-      }, 1000);
+        
+        if (error) setDebugMessage('Error saving light.');
+      }, 2500); // Total duration (matches animation)
     } else {
       setIsLighting(false);
     }
@@ -238,80 +198,76 @@ export default function VigilPage() {
 
   return (
     <div className="vigil-container">
-      {/* Debug Message */}
-      {debugMessage && (
-        <div style={{
-          position: 'fixed',
-          top: '20px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'rgba(0,0,0,0.9)',
-          color: 'white',
-          padding: '15px 25px',
-          borderRadius: '8px',
-          zIndex: 10000,
-          maxWidth: '90%',
-          fontSize: '14px',
-          wordBreak: 'break-word'
-        }}>
-          {debugMessage}
-        </div>
-      )}
-      
-      {/* Info Button */}
-      <button 
-        className="info-button"
-        onClick={() => setShowManifesto(true)}
-      >
-        ?
-      </button>
+      {/* GLOBAL FLASH EFFECT */}
+      <div 
+        style={{
+          position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 99999,
+          opacity: flash ? 0.2 : 0, transition: 'opacity 0.1s ease-out', background: 'white'
+        }} 
+      />
+
+      {/* DEBUG TOAST */}
+      <AnimatePresence>
+        {debugMessage && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', top: 20, left: '50%', x: '-50%',
+              background: 'rgba(20,0,0,0.9)', border: '1px solid #500', color: '#f88',
+              padding: '10px 20px', borderRadius: 4, fontFamily: 'monospace', zIndex: 10000
+            }}
+          >
+            {debugMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <button className="info-button" onClick={() => setShowManifesto(true)}>?</button>
 
       <div className="room">
-        {/* Angel Layer */}
-        <div className="angel-layer" ref={angelRef}>
+        {/* ANGEL */}
+        <div 
+          className="angel-layer" 
+          ref={angelRef}
+          style={{ 
+            filter: angelActive ? 'brightness(1.3) drop-shadow(0 0 20px gold)' : 'brightness(1)',
+            transition: 'filter 0.5s ease'
+          }}
+        >
           <img src={ANGEL_IMAGE} className="angel-img" alt="Watcher" />
         </div>
 
-        {/* Grid Layer */}
+        {/* HEARTS GRID */}
         <div className="shelves-grid">
           {HEARTS_DATA.map((asset) => {
             const state = getHeartState(asset.id);
-            
             return (
               <div 
                 key={asset.id}
-                ref={el => {
-                  heartRefs.current[asset.id] = el;
-                }}
+                ref={el => { heartRefs.current[asset.id] = el }}
                 className="heart-slot"
                 onClick={() => handleHeartClick(asset.id)}
-                style={{ transform: `scale(${state.scale})` }}
+                style={{ 
+                  transform: `scale(${state.scale})`,
+                  cursor: (state.isAlive && !state.isMine) ? 'not-allowed' : 'pointer'
+                }}
               >
                 <div 
                   className="heart-inner"
                   style={{ 
                     filter: state.filter, 
-                    boxShadow: state.glow 
+                    boxShadow: state.glow,
+                    border: state.isMine ? '1px solid rgba(255,255,255,0.2)' : 'none'
                   }}
                 >
                   {state.isAlive ? (
-                    <video 
-                      src={asset.loop} 
-                      autoPlay loop muted playsInline 
-                      className="heart-content" 
-                    />
+                    <video src={asset.loop} autoPlay loop muted playsInline className="heart-content" />
                   ) : (
-                    <img 
-                      src={asset.static} 
-                      className="heart-content" 
-                      alt="Empty Vessel" 
-                    />
+                    <img src={asset.static} className="heart-content" alt="Empty" />
                   )}
                 </div>
-                
-                {/* Tooltip / Label */}
                 <div className="heart-label">
-                  {state.owner ? state.owner : "VACANT"}
+                  {state.isAlive ? state.owner : "VACANT"}
                 </div>
               </div>
             );
@@ -319,217 +275,181 @@ export default function VigilPage() {
         </div>
       </div>
 
-      {/* Spark Layer */}
-      {/* Spark Layer - fixed full screen container */}
+      {/* SPARK ANIMATION LAYER */}
       <div style={{position:'fixed',top:0,left:0,width:'100vw',height:'100vh',pointerEvents:'none',zIndex:9999}}>
         <AnimatePresence>
           {sparkParticles.map(spark => (
             <motion.div
               key={spark.id}
               className="spark"
-              style={{position:'absolute'}}
-              initial={{ x: spark.startX, y: spark.startY, opacity: 1, scale: 1 }}
-              animate={{ x: spark.endX, y: spark.endY, opacity: 0, scale: 0.5 }}
-              transition={{ duration: 1, ease: "easeInOut" }}
+              initial={{ x: spark.startX, y: spark.startY, opacity: 0, scale: 0.5 }}
+              animate={{ 
+                x: spark.endX, 
+                y: spark.endY, 
+                opacity: [0, 1, 1, 0], 
+                scale: [0.5, 1.5, 0.5] 
+              }}
+              transition={{ 
+                duration: 2.2, // SLOW FLIGHT
+                ease: "easeInOut",
+                times: [0, 0.1, 0.9, 1]
+              }}
             />
           ))}
         </AnimatePresence>
       </div>
 
-      {/* Modal: Input Name */}
+      {/* MODALS */}
       {selectedHeart !== null && (
         <div className="modal-backdrop" onClick={() => setSelectedHeart(null)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3>LIGHT THIS SOUL</h3>
+            <h3 className="font-serif text-2xl mb-4">
+              {hearts_are_mine(selectedHeart) ? "REIGNITE SOUL" : "CLAIM VESSEL"}
+            </h3>
             <input 
               autoFocus
               type="text" 
-              placeholder="Enter your Name" 
+              placeholder="Your Name" 
               value={nameInput}
               onChange={e => setNameInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !isLighting && triggerRitual()}
               disabled={isLighting}
+              className="w-full bg-black border border-gray-800 p-3 mb-6 text-center font-mono text-white focus:border-white outline-none"
             />
             <button 
               onClick={triggerRitual}
               disabled={isLighting || !nameInput.trim()}
+              className="w-full bg-white text-black py-3 font-mono font-bold hover:opacity-90 disabled:opacity-50"
             >
-              {isLighting ? 'IGNITING...' : 'IGNITE'}
+              {isLighting ? 'IGNITING...' : 'TRANSFER SPARK'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Modal: Manifesto */}
+      {/* LOGIN MODAL TRIGGER */}
+      {showLogin && (
+        <ModernLoginModal onClose={() => setShowLogin(false)} />
+      )}
+
+      {/* MANIFESTO */}
       {showManifesto && (
         <div className="modal-backdrop" onClick={() => setShowManifesto(false)}>
           <div className="modal-box manifesto" onClick={e => e.stopPropagation()}>
-            <h2>THE VIGIL</h2>
-            <p>The Internet is a cold void.<br/>Matter is dead until you touch it.</p>
-            <p>These hearts are vessels.<br/>Click to transfer a spark of attention.<br/>Keep them warm, or they will turn to stone in 24 hours.</p>
-            <p><i>We keep each other warm in the dark.</i></p>
-            <button onClick={() => setShowManifesto(false)}>ENTER</button>
+            <h2 className="font-serif text-3xl mb-6 tracking-widest">THE VIGIL</h2>
+            <div className="text-gray-400 font-mono text-sm leading-relaxed space-y-4 mb-8">
+              <p>The Internet is a cold void.<br/>Matter is dead until you touch it.</p>
+              <p>These hearts are vessels.<br/>Click to transfer a spark of attention.<br/>Keep them warm, or they will turn to stone in 24 hours.</p>
+              <p className="italic text-white mt-4">We keep each other warm in the dark.</p>
+            </div>
+            <button onClick={() => setShowManifesto(false)} className="px-8 py-2 border border-white/30 hover:bg-white hover:text-black transition-colors font-mono text-sm">ENTER</button>
           </div>
         </div>
       )}
 
       <style jsx global>{`
-        .spark {
-          box-shadow: 0 0 15px 5px rgba(255,215,0,0.8), 0 0 40px 20px rgba(255,140,0,0.3);
-          background: radial-gradient(circle, #fff 60%, #ffd700 100%);
-          border: 2px solid #ffd700;
-        }
-              {/* Login Modal */}
-              {showLogin && (
-                <ModernLoginModal onClose={() => setShowLogin(false)} />
-              )}
-
-              {/* User indicator */}
-              {user && (
-                <div style={{position:'fixed',bottom:8,right:16,fontSize:12,color:'#aaa',zIndex:10001,opacity:0.7}}>
-                  Logged in as {user.email}
-                </div>
-              )}
-        body { margin: 0; background: #000; color: white; overflow: hidden; }
+        body { margin: 0; background: #050505; color: white; overflow: hidden; }
         
         .vigil-container {
           position: relative;
-          width: 100vw;
-          height: 100vh;
-          background: radial-gradient(circle at 50% 80%, #1a1a1a 0%, #000000 100%);
-          perspective: 1000px;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-
-        .info-button {
-          position: absolute;
-          top: 20px; right: 20px;
-          background: none; border: 1px solid #333; color: #555;
-          width: 30px; height: 30px; border-radius: 50%;
-          cursor: pointer; z-index: 100;
-        }
-
-        .room {
-          position: relative;
-          width: 100%;
-          max-width: 1200px;
-          height: 80vh;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .angel-layer {
-          position: relative;
-          z-index: 10;
-          margin-bottom: 40px;
-          /* Floating animation */
-          animation: float 6s ease-in-out infinite;
-        }
-        
-        .angel-img {
-          width: 180px; /* Adjust based on your GIF size */
-          opacity: 0.9;
-        }
-
-        @keyframes float {
-          0% { transform: translateY(0px); }
-          50% { transform: translateY(-15px); }
-          100% { transform: translateY(0px); }
-        }
-
-        .shelves-grid {
-          display: grid;
-          grid-template-columns: repeat(5, 1fr); /* 5 hearts in a row */
-          gap: 30px;
-          width: 100%;
-          padding: 20px;
-          z-index: 5;
-        }
-
-        /* Mobile: Stack them */
-        @media (max-width: 768px) {
-          .shelves-grid {
-            grid-template-columns: repeat(2, 1fr);
-            overflow-y: auto;
-            max-height: 50vh;
-          }
-        }
-
-        .heart-slot {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 10px;
-          transition: transform 0.3s;
-          cursor: pointer;
-        }
-        .heart-slot:hover { transform: scale(1.05); }
-
-        .heart-inner {
-          width: 120px;
-          height: 120px;
-          border-radius: 50%;
-          overflow: hidden;
-          background: #000;
-          transition: all 1s ease; /* Smooth lighting transition */
-        }
-
-        .heart-content {
-          width: 100%; height: 100%; object-fit: cover;
-        }
-
-        .heart-label {
-          font-family: 'Courier New', monospace;
-          font-size: 10px;
-          color: #666;
-          text-transform: uppercase;
-          letter-spacing: 1px;
+          width: 100vw; height: 100vh;
+          background: radial-gradient(circle at 50% 90%, #1a1a1a 0%, #000000 80%);
+          perspective: 1200px;
+          display: flex; justify-content: center; align-items: center;
         }
 
         .spark {
-          position: fixed;
-          width: 8px; height: 8px;
+          position: absolute;
+          width: 12px; height: 12px;
           background: #fff;
-          box-shadow: 0 0 20px 5px gold;
           border-radius: 50%;
-          z-index: 9999;
-          pointer-events: none;
+          box-shadow: 
+            0 0 10px 2px rgba(255, 255, 255, 0.8),
+            0 0 20px 10px rgba(255, 200, 50, 0.4),
+            0 0 40px 20px rgba(255, 100, 0, 0.2);
         }
 
-        /* Modals */
+        .info-button {
+          position: absolute; top: 30px; right: 30px;
+          width: 36px; height: 36px; border-radius: 50%;
+          border: 1px solid #333; color: #666; background: transparent;
+          font-family: 'Times New Roman', serif; font-style: italic;
+          cursor: pointer; transition: all 0.3s; z-index: 100;
+        }
+        .info-button:hover { border-color: #fff; color: #fff; transform: scale(1.1); }
+
+        .room {
+          width: 100%; max-width: 1400px; height: 85vh;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          transform-style: preserve-3d;
+        }
+
+        .angel-layer {
+          position: relative; z-index: 20; margin-bottom: 60px;
+          animation: float 8s ease-in-out infinite;
+        }
+        .angel-img { width: 220px; opacity: 0.9; display: block; }
+
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-20px); }
+        }
+
+        .shelves-grid {
+          display: grid; grid-template-columns: repeat(5, 1fr); gap: 40px;
+          width: 100%; padding: 0 40px; z-index: 10;
+        }
+
+        @media (max-width: 768px) {
+          .shelves-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            overflow-y: auto;
+            max-height: 55vh;
+            padding-bottom: 100px; /* Space for scrolling */
+          }
+          .angel-img { width: 160px; margin-bottom: 20px; }
+        }
+
+        .heart-slot {
+          display: flex; flex-direction: column; align-items: center; gap: 15px;
+          transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .heart-slot:hover { transform: translateY(-10px) scale(1.05); }
+
+        .heart-inner {
+          width: 140px; height: 140px;
+          border-radius: 50%; overflow: hidden; background: #000;
+          transition: all 1.5s ease;
+          position: relative;
+        }
+        
+        .heart-content { width: 100%; height: 100%; object-fit: cover; }
+
+        .heart-label {
+          font-family: 'Space Mono', monospace; font-size: 11px;
+          color: #444; text-transform: uppercase; letter-spacing: 2px;
+          height: 20px;
+        }
+
         .modal-backdrop {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.8);
+          position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+          backdrop-filter: blur(8px); z-index: 500;
           display: flex; justify-content: center; align-items: center;
-          z-index: 200;
-          backdrop-filter: blur(5px);
         }
         .modal-box {
-          background: #111;
-          border: 1px solid #333;
-          padding: 40px;
-          text-align: center;
-          max-width: 400px;
+          background: #0a0a0a; border: 1px solid #333;
+          padding: 50px; text-align: center; max-width: 450px; width: 90%;
+          box-shadow: 0 20px 50px rgba(0,0,0,0.8);
         }
-        .modal-box h3, h2 { font-family: serif; margin-bottom: 20px; }
-        .modal-box p { font-family: monospace; font-size: 12px; color: #aaa; line-height: 1.5; margin-bottom: 20px; }
-        
-        input {
-          background: #000; border: 1px solid #444; color: white;
-          padding: 10px; width: 100%; margin-bottom: 20px;
-          font-family: monospace; text-align: center;
-        }
-        button {
-          background: white; color: black; border: none;
-          padding: 10px 30px; font-family: monospace; cursor: pointer;
-          font-weight: bold;
-        }
-        button:hover { opacity: 0.8; }
       `}</style>
     </div>
   );
+
+  // Helper to check ownership safely inside render
+  function hearts_are_mine(heartId: number) {
+    if (!user) return false;
+    const h = dbHearts.find(x => x.id === heartId);
+    return h && h.owner_id === user.id;
+  }
 }
