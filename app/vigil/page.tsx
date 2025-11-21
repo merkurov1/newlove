@@ -1,6 +1,8 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import * as React from "react";
+import { useState, useEffect, useRef } from "react";
+const useMemo = React.useMemo;
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext'; 
 import dynamic from 'next/dynamic';
@@ -57,7 +59,7 @@ export default function VigilPage() {
   const { user } = useAuth();
   const ModernLoginModal = dynamic(() => import('@/components/ModernLoginModal'), { ssr: false });
   
-  const angelRef = useRef<HTMLDivElement>(null);
+  const angelRef = useRef<HTMLDivElement | null>(null);
   const heartRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const supabase = createClient();
 
@@ -299,7 +301,7 @@ export default function VigilPage() {
             return (
               <div 
                 key={asset.id}
-                ref={el => { heartRefs.current[asset.id] = el }}
+                ref={(el: HTMLDivElement | null) => { heartRefs.current[asset.id] = el }}
                 className="heart-slot"
                 onClick={() => handleHeartClick(asset.id)}
                 style={{ 
@@ -355,7 +357,7 @@ export default function VigilPage() {
       {/* MODALS */}
       {selectedHeart !== null && (
         <div className="modal-backdrop" onClick={() => setSelectedHeart(null)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
+          <div className="modal-box" onClick={(e) => (e as React.MouseEvent<HTMLDivElement>).stopPropagation()}>
             
             {/* ADMIN VIEW */}
             {user?.id === ADMIN_ID && getHeartState(selectedHeart).isAlive && !getHeartState(selectedHeart).isMine ? (
@@ -373,7 +375,7 @@ export default function VigilPage() {
                         <label>YOUR NAME</label>
                         <input 
                             autoFocus type="text" placeholder="Name" 
-                            value={nameInput} onChange={e => setNameInput(e.target.value)}
+                            value={nameInput} onChange={(e) => setNameInput((e.target as HTMLInputElement).value)}
                         />
                     </div>
                     
@@ -381,8 +383,8 @@ export default function VigilPage() {
                         <label>YOUR INTENTION (OPTIONAL)</label>
                         <input 
                             type="text" placeholder="e.g. Silence, Bitcoin, Love" 
-                            value={intentionInput} onChange={e => setIntentionInput(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && !isLighting && triggerRitual()}
+                            value={intentionInput} onChange={(e) => setIntentionInput((e.target as HTMLInputElement).value)}
+                            onKeyDown={(e) => (e as React.KeyboardEvent<HTMLInputElement>).key === 'Enter' && !isLighting && triggerRitual()}
                         />
                     </div>
 
@@ -405,7 +407,7 @@ export default function VigilPage() {
       {/* MANIFESTO */}
       {showManifesto && (
         <div className="modal-backdrop" onClick={() => setShowManifesto(false)}>
-          <div className="modal-box manifesto" onClick={e => e.stopPropagation()}>
+          <div className="modal-box manifesto" onClick={(e) => (e as React.MouseEvent<HTMLDivElement>).stopPropagation()}>
             <h2>THE VIGIL</h2>
             <p>The Internet is a cold void.<br/>Matter is dead until you touch it.</p>
             <p>These hearts are vessels.<br/>Click to transfer a spark of attention.<br/><b>State your Intention.</b></p>
