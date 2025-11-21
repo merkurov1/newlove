@@ -200,6 +200,7 @@ export async function updateArticle(formData: any) {
       curatorNote,
       quote,
       specs,
+      updatedAt: new Date().toISOString(),
     })
     .eq('id', id);
 
