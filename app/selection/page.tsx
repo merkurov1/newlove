@@ -38,7 +38,7 @@ export default async function SelectionPage() {
       );
     }
   }
-  const { data: articles = [], error } = await supabase.from('articles').select('id,title,slug,publishedAt,preview_image,content,artist,curatorNote,quote,specs').eq('published', true).order('publishedAt', { ascending: false });
+  const { data: articles = [], error } = await supabase.from('articles').select('id,title,slug,publishedAd,preview_image,content,artist,curatorNote,quote,specs').eq('published', true).order('publishedAd', { ascending: false });
   if (error) {
     console.error('Supabase fetch articles error', error);
   }
