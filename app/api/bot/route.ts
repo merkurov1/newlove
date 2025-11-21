@@ -1,55 +1,65 @@
 import { Bot, webhookCallback } from 'grammy';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
-export const runtime = 'edge'; // Важно для Vercel!
+export const runtime = 'edge';
 
-// --- CONFIG ---
+// --- ИСПОЛЬЗУЕМ ПРАВИЛЬНУЮ ПЕРЕМЕННУЮ ---
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) throw new Error('TELEGRAM_BOT_TOKEN is unset');
 
 const bot = new Bot(token);
+// Убедитесь, что MY_TELEGRAM_ID тоже прописан в Vercel
 const MY_ID = Number(process.env.MY_TELEGRAM_ID);
 
-// --- SYSTEM PROMPT (Внутренний голос) ---
+// --- CONFIG ---
+const MODEL_NAME = 'gemini-1.5-flash'; 
 const SYSTEM_PROMPT = `
 Ты — Второй Мозг Антона Меркурова.
-Ты знаешь его контекст: арт-адвайзер, "unframed", живет в "nowhere", пишет книгу, циник, сноб, технократ.
-
-Твоя задача:
-1. Если я присылаю черновик мысли — структурируй его, преврати в пост или главу книги.
-2. Если я ною — дай жесткий стоический совет.
-3. Если я спрашиваю идею — дай неочевидное решение.
-Тон: Близкий друг, но интеллектуально превосходящий. Без цензуры.
+Критичный, стоический, аналитический.
+Твоя задача: помогать структурировать мысли, книгу и стратегию.
+Без цензуры. Без лести.
 `;
 
-// --- LOGIC ---
-bot.on('message:text', async (ctx: any) => {
-  // 1. Security Check
+bot.on('message:text', async (ctx) => {
+  // Проверка: отвечаем только Вам
   if (ctx.from.id !== MY_ID) {
-    return ctx.reply("Access Denied. You are not Anton.");
+    // Молчим или посылаем
+    return; 
   }
 
   const userText = ctx.message.text;
+  await ctx.api.sendChatAction(ctx.chat.id, "typing");
 
-  // 2. Google Gemini Call
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-    const model = genAI.getGenerativeModel({ 
-        model: 'gemini-1.5-flash',
-        systemInstruction: SYSTEM_PROMPT
+    const apiKey = process.env.GOOGLE_API_KEY;
+    
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+    
+    const payload = {
+      contents: [{ role: "user", parts: [{ text: userText }] }],
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      generationConfig: { temperature: 0.7, maxOutputTokens: 1000 }
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
 
-    const result = await model.generateContent(userText);
-    const response = result.response.text();
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Google Error: ${response.status} - ${errText}`);
+    }
 
-    // 3. Reply
-    await ctx.reply(response, { parse_mode: 'Markdown' });
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Empty response.";
 
-  } catch (error) {
+    await ctx.reply(text, { parse_mode: 'Markdown' });
+
+  } catch (error: any) {
     console.error(error);
-    await ctx.reply("Ошибка связи с Нейросетями.");
+    await ctx.reply(`Error: ${error.message}`);
   }
 });
 
-// --- WEBHOOK HANDLER ---
 export const POST = webhookCallback(bot, 'std/http');

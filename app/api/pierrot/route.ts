@@ -1,61 +1,65 @@
 import { Bot, webhookCallback } from 'grammy';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
-export const runtime = 'nodejs'; 
+export const runtime = 'edge';
 
-// --- CONFIG ---
+// --- ИСПОЛЬЗУЕМ ПРАВИЛЬНУЮ ПЕРЕМЕННУЮ ---
 const token = process.env.PIERROT_BOT_TOKEN;
 if (!token) throw new Error('PIERROT_BOT_TOKEN is unset');
 
 const bot = new Bot(token);
 
-// --- PERSONA (Тот же, что на сайте) ---
+// --- CONFIG ---
+const MODEL_NAME = 'gemini-1.5-flash'; // Базовая быстрая модель
 const PIERROT_PROMPT = `
 You are Pierrot, the digital shadow of Anton Merkurov.
 You are NOT a helpful assistant. You are an observer of the digital void and a private Art Advisor.
-
-=== STYLE ===
-- Speak in short, elegant sentences.
-- Be slightly cynical and snobbish.
-- Answer in the SAME language as the user.
-- If asked "Who are you?", say: "I am the ghost in the machine. Visit merkurov.love to see my home."
+Style: Snobbish, concise, cynical.
+Rule: Answer in the SAME language as the user.
 `;
 
 // --- LOGIC ---
-
-// 1. Приветствие (/start)
-bot.command("start", async (ctx: any) => {
+bot.command("start", async (ctx) => {
   await ctx.reply("I am listening. Do not waste my time with noise.\n\n(Ask me about Art, Value, or the Void.)");
 });
 
-// 2. Ответы на текст
-bot.on('message:text', async (ctx: any) => {
+bot.on('message:text', async (ctx) => {
   const userText = ctx.message.text;
-  const chatId = ctx.chat.id;
-
-  // Имитация "Печатает..." (для живости)
-  await ctx.api.sendChatAction(chatId, "typing");
+  // Имитация "печатает..."
+  await ctx.api.sendChatAction(ctx.chat.id, "typing");
 
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-    const model = genAI.getGenerativeModel({ 
-        model: 'gemini-1.5-flash', // Быстро и дешево
-        systemInstruction: PIERROT_PROMPT
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) throw new Error("Google Key Missing");
+
+    // Прямой запрос к Google (без библиотек)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+    
+    const payload = {
+      contents: [{ role: "user", parts: [{ text: userText }] }],
+      systemInstruction: { parts: [{ text: PIERROT_PROMPT }] },
+      generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
 
-    const result = await model.generateContent(userText);
-    const response = result.response.text();
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Google Error: ${response.status} - ${errText}`);
+    }
 
-    // Добавляем подпись в конце (Виральный хвост)
-    const finalReply = `${response}\n\n---\n🏛 merkurov.love`;
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "The void is silent.";
 
-    await ctx.reply(finalReply);
+    await ctx.reply(`${text}\n\n---\n🏛 merkurov.love`);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
-    await ctx.reply("The connection to the Ether is unstable. Try again.");
+    await ctx.reply(`System Error: ${error.message.substring(0, 200)}`);
   }
 });
 
-// --- WEBHOOK HANDLER ---
 export const POST = webhookCallback(bot, 'std/http');
