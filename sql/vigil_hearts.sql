@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS vigil_hearts (
   id INTEGER PRIMARY KEY CHECK (id >= 1 AND id <= 5),
   owner_name TEXT,
+  owner_id UUID,
   last_lit_at TIMESTAMPTZ DEFAULT NOW(),
   is_locked BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -9,13 +10,13 @@ CREATE TABLE IF NOT EXISTS vigil_hearts (
 );
 
 -- Insert initial 5 hearts (all dead/vacant)
-INSERT INTO vigil_hearts (id, owner_name, last_lit_at, is_locked)
+INSERT INTO vigil_hearts (id, owner_name, owner_id, last_lit_at, is_locked)
 VALUES 
-  (1, NULL, NOW() - INTERVAL '25 hours', FALSE),
-  (2, NULL, NOW() - INTERVAL '25 hours', FALSE),
-  (3, NULL, NOW() - INTERVAL '25 hours', FALSE),
-  (4, NULL, NOW() - INTERVAL '25 hours', FALSE),
-  (5, NULL, NOW() - INTERVAL '25 hours', FALSE)
+  (1, NULL, NULL, NOW() - INTERVAL '25 hours', FALSE),
+  (2, NULL, NULL, NOW() - INTERVAL '25 hours', FALSE),
+  (3, NULL, NULL, NOW() - INTERVAL '25 hours', FALSE),
+  (4, NULL, NULL, NOW() - INTERVAL '25 hours', FALSE),
+  (5, NULL, NULL, NOW() - INTERVAL '25 hours', FALSE)
 ON CONFLICT (id) DO NOTHING;
 
 -- Enable Row Level Security

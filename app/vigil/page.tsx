@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase-browser';
+import { useAuth } from '@/components/AuthContext';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- ASSETS CONFIGURATION ---
@@ -39,6 +41,7 @@ const ANGEL_IMAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/
 interface HeartData {
   id: number;
   owner_name: string | null;
+  owner_id?: string | null;
   last_lit_at: string;
   is_locked: boolean;
 }
@@ -60,6 +63,10 @@ export default function VigilPage() {
   const [sparkParticles, setSparkParticles] = useState<SparkParticle[]>([]);
   const [isLighting, setIsLighting] = useState(false);
   const [debugMessage, setDebugMessage] = useState<string>('');
+  const [showLogin, setShowLogin] = useState(false);
+  const auth = useAuth();
+  const user = auth?.user;
+  const ModernLoginModal = dynamic(() => import('@/components/ModernLoginModal'), { ssr: false });
   
   const angelRef = useRef<HTMLDivElement>(null);
   const heartRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
@@ -163,55 +170,59 @@ export default function VigilPage() {
 
   // --- INTERACTION HANDLERS ---
   const handleHeartClick = (heartId: number) => {
+    // Find heart in db
+    const dbHeart = dbHearts.find(h => h.id === heartId);
+    // Only allow if heart is dead or owned by this user
+    if (!user) {
+      setShowLogin(true);
+      return;
+    }
+    if (dbHeart && dbHeart.last_lit_at) {
+      const now = new Date();
+      const litTime = new Date(dbHeart.last_lit_at);
+      const hoursPassed = (now.getTime() - litTime.getTime()) / (1000 * 60 * 60);
+      const isAlive = hoursPassed < 24;
+      if (isAlive && dbHeart.owner_id && dbHeart.owner_id !== user.id) {
+        setDebugMessage('This heart belongs to another user until it fades.');
+        setTimeout(() => setDebugMessage(''), 3000);
+        return;
+      }
+    }
     setSelectedHeart(heartId);
-    setNameInput('');
+    setNameInput(user?.email?.split('@')[0] || '');
   };
 
   const triggerRitual = async () => {
-    if (!selectedHeart || !nameInput.trim() || isLighting) return;
-    
+    if (!selectedHeart || !nameInput.trim() || isLighting || !user) return;
     setIsLighting(true);
-    
     // 1. Get Coordinates
     const angelRect = angelRef.current?.getBoundingClientRect();
     const targetRect = heartRefs.current[selectedHeart]?.getBoundingClientRect();
-    
     if (angelRect && targetRect) {
       // 2. Calculate Spark Origin (Calibrated to the Candle Tip)
-      // Assuming candle is roughly at 85% width (right hand) and 50% height
-      const startX = angelRect.left + (angelRect.width * 0.85); 
+      const startX = angelRect.left + (angelRect.width * 0.85);
       const startY = angelRect.top + (angelRect.height * 0.55);
-
-      // Target center
       const endX = targetRect.left + (targetRect.width / 2);
       const endY = targetRect.top + (targetRect.height / 2);
-
       const sparkId = `spark-${Date.now()}`;
-      
-      // 3. Launch Spark
       setSparkParticles(prev => [...prev, { id: sparkId, startX, startY, endX, endY }]);
-      
       // 4. Database Update (Delayed to match animation impact)
       setTimeout(async () => {
-        // Remove spark
         setSparkParticles(prev => prev.filter(s => s.id !== sparkId));
-        
-        // Update the heart in DB
         setDebugMessage(`Updating heart ${selectedHeart} with name: ${nameInput.trim()}`);
-        
         const { data, error } = await supabase
           .from('vigil_hearts')
           .update({
             owner_name: nameInput.trim(),
+            owner_id: user.id,
             last_lit_at: new Date().toISOString()
           })
           .eq('id', selectedHeart)
           .select();
-          
         if (!error && data) {
           setDebugMessage(`Success! Updated: ${JSON.stringify(data)}`);
           setTimeout(() => {
-            setSelectedHeart(null); // Close modal
+            setSelectedHeart(null);
             setNameInput('');
             setDebugMessage('');
           }, 2000);
@@ -219,7 +230,7 @@ export default function VigilPage() {
           setDebugMessage(`ERROR: ${error?.message || 'Unknown error'} | Code: ${error?.code || 'N/A'}`);
         }
         setIsLighting(false);
-      }, 1000); // 1 second flight time
+      }, 1000);
     } else {
       setIsLighting(false);
     }
@@ -309,17 +320,21 @@ export default function VigilPage() {
       </div>
 
       {/* Spark Layer */}
-      <AnimatePresence>
-        {sparkParticles.map(spark => (
-          <motion.div
-            key={spark.id}
-            className="spark"
-            initial={{ x: spark.startX, y: spark.startY, opacity: 1, scale: 1 }}
-            animate={{ x: spark.endX, y: spark.endY, opacity: 0, scale: 0.5 }}
-            transition={{ duration: 1, ease: "easeInOut" }}
-          />
-        ))}
-      </AnimatePresence>
+      {/* Spark Layer - fixed full screen container */}
+      <div style={{position:'fixed',top:0,left:0,width:'100vw',height:'100vh',pointerEvents:'none',zIndex:9999}}>
+        <AnimatePresence>
+          {sparkParticles.map(spark => (
+            <motion.div
+              key={spark.id}
+              className="spark"
+              style={{position:'absolute'}}
+              initial={{ x: spark.startX, y: spark.startY, opacity: 1, scale: 1 }}
+              animate={{ x: spark.endX, y: spark.endY, opacity: 0, scale: 0.5 }}
+              transition={{ duration: 1, ease: "easeInOut" }}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
 
       {/* Modal: Input Name */}
       {selectedHeart !== null && (
@@ -359,6 +374,22 @@ export default function VigilPage() {
       )}
 
       <style jsx global>{`
+        .spark {
+          box-shadow: 0 0 15px 5px rgba(255,215,0,0.8), 0 0 40px 20px rgba(255,140,0,0.3);
+          background: radial-gradient(circle, #fff 60%, #ffd700 100%);
+          border: 2px solid #ffd700;
+        }
+              {/* Login Modal */}
+              {showLogin && (
+                <ModernLoginModal onClose={() => setShowLogin(false)} />
+              )}
+
+              {/* User indicator */}
+              {user && (
+                <div style={{position:'fixed',bottom:8,right:16,fontSize:12,color:'#aaa',zIndex:10001,opacity:0.7}}>
+                  Logged in as {user.email}
+                </div>
+              )}
         body { margin: 0; background: #000; color: white; overflow: hidden; }
         
         .vigil-container {
