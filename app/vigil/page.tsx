@@ -7,8 +7,8 @@ import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- CONFIGURATION ---
-// Вставь сюда свой ID из таблицы auth.users, чтобы иметь право тушить свечи
-const ADMIN_ID = 'INSERT_YOUR_SUPABASE_USER_UUID_HERE'; 
+// Ваш ID для прав Администратора (тушить свечи)
+const ADMIN_ID = 'fffa55a9-1ed7-49ff-953d-dfffa9f00844'; 
 
 // Asset configuration
 const HEARTS_DATA = [
@@ -26,7 +26,7 @@ interface HeartData {
   id: number;
   owner_name: string | null;
   owner_id?: string | null;
-  intention?: string | null; // Новое поле: Намерение
+  intention?: string | null; // Поле Намерения
   last_lit_at: string;
 }
 
@@ -53,10 +53,6 @@ export default function VigilPage() {
   const [flash, setFlash] = useState(false); 
   const [showLogin, setShowLogin] = useState(false);
   const [debugMessage, setDebugMessage] = useState<string>('');
-  
-  // Audio (Optional - find a good drone sound)
-  // const [audioPlaying, setAudioPlaying] = useState(false);
-  // const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const { user } = useAuth();
   const ModernLoginModal = dynamic(() => import('@/components/ModernLoginModal'), { ssr: false });
@@ -89,7 +85,7 @@ export default function VigilPage() {
 
   // --- CALCULATE STATE (Entropy & Light) ---
   
-  // 1. Global Light Level (Based on active hearts)
+  // 1. Global Light Level
   const activeHeartsCount = useMemo(() => {
     if (!dbHearts.length) return 0;
     const now = new Date().getTime();
@@ -152,10 +148,12 @@ export default function VigilPage() {
 
     const state = getHeartState(heartId);
 
-    // 2. One Heart Per Person Rule (Optional: Disable if you want multiple)
+    // 2. One Heart Per Person Rule (Optional - commented out for testing)
     /* 
     const myAliveHeart = dbHearts.find(h => {
-       // ... logic to check if user already has a live heart
+        if (!h.owner_id || h.owner_id !== user.id) return false;
+        // check if alive logic...
+        return true; 
     });
     */
 
@@ -173,7 +171,7 @@ export default function VigilPage() {
 
     // 4. Open Modal
     setSelectedHeart(heartId);
-    // Pre-fill if re-igniting
+    // Pre-fill
     if (state.isMine) {
         setNameInput(state.owner || '');
         setIntentionInput(state.intention || '');
@@ -194,9 +192,9 @@ export default function VigilPage() {
     const targetRect = heartRefs.current[heartIdToUpdate]?.getBoundingClientRect();
 
     if (angelRect && targetRect) {
-      // Spark Coordinates
-      const startX = angelRect.left + (angelRect.width * 0.85); // Right hand
-      const startY = angelRect.top + (angelRect.height * 0.55); // Candle height
+      // Spark Coordinates (Calibrated to Right Hand Candle)
+      const startX = angelRect.left + (angelRect.width * 0.85); 
+      const startY = angelRect.top + (angelRect.height * 0.55); 
       const endX = targetRect.left + (targetRect.width / 2);
       const endY = targetRect.top + (targetRect.height / 2);
 
@@ -205,11 +203,11 @@ export default function VigilPage() {
       // Launch Spark
       setSparkParticles(prev => [...prev, { id: sparkId, startX, startY, endX, endY }]);
 
-      // Wait for flight (2.5s)
+      // Wait for flight (2.5s - Majestic Slow)
       setTimeout(async () => {
         // 1. Visual Impact
         setFlash(true);
-        if (navigator.vibrate) navigator.vibrate(50); // Haptic
+        if (navigator.vibrate) navigator.vibrate([50, 50]); // Haptic
         setTimeout(() => setFlash(false), 200);
 
         // 2. Remove Spark
@@ -233,13 +231,14 @@ export default function VigilPage() {
 
   const triggerExtinguish = async () => {
       if (!selectedHeart || !user || user.id !== ADMIN_ID) return;
+      
       // Admin Action: Kill the heart
       await supabase.from('vigil_hearts').upsert({
           id: selectedHeart,
           owner_name: null,
           owner_id: null,
           intention: null,
-          last_lit_at: null // Or set to very old date
+          last_lit_at: null // Set to null or old date
       });
       setSelectedHeart(null);
   };
@@ -247,18 +246,18 @@ export default function VigilPage() {
   return (
     <div className="vigil-container">
       
-      {/* Preload Videos for smoothness */}
+      {/* Preload Videos */}
       <div style={{display:'none'}}>
         {HEARTS_DATA.map(h => <video key={h.id} src={h.loop} preload="auto" />)}
       </div>
 
-      {/* FLASH */}
+      {/* FLASH EFFECT */}
       <div style={{
           position: 'fixed', inset: 0, background: 'white', pointerEvents: 'none', zIndex: 9999,
           opacity: flash ? 0.15 : 0, transition: 'opacity 0.2s ease-out'
       }} />
 
-      {/* DEBUG MSG */}
+      {/* DEBUG TOAST */}
       <AnimatePresence>
         {debugMessage && (
           <motion.div 
@@ -273,8 +272,8 @@ export default function VigilPage() {
       <button className="info-button" onClick={() => setShowManifesto(true)}>?</button>
 
       <div className="room" style={{
-          // Dynamic Lighting based on active hearts
-          filter: `brightness(${0.4 + (activeHeartsCount * 0.15)})` 
+          // Dynamic Room Lighting
+          filter: `brightness(${0.4 + (activeHeartsCount * 0.12)})` 
       }}>
         
         {/* ANGEL */}
@@ -284,10 +283,10 @@ export default function VigilPage() {
             className="angel-img" 
             alt="Watcher"
             style={{
-                // Angel glows gold if > 3 hearts active
+                // Angel glows gold if > 2 hearts active
                 filter: activeHeartsCount >= 3 
-                    ? 'drop-shadow(0 0 30px rgba(255, 215, 0, 0.6)) brightness(1.2)' 
-                    : 'drop-shadow(0 0 10px rgba(255, 255, 255, 0.1)) brightness(0.9)',
+                    ? 'drop-shadow(0 0 40px rgba(255, 215, 0, 0.7)) brightness(1.2)' 
+                    : 'drop-shadow(0 0 15px rgba(255, 255, 255, 0.2)) brightness(0.9)',
                 transition: 'filter 2s ease'
             }} 
           />
@@ -316,7 +315,7 @@ export default function VigilPage() {
                   )}
                 </div>
                 
-                {/* Label / Intention */}
+                {/* Meta Info */}
                 <div className="heart-meta">
                   <div className="heart-owner">{state.isAlive ? state.owner : "VACANT"}</div>
                   {state.isAlive && state.intention && (
@@ -329,7 +328,7 @@ export default function VigilPage() {
         </div>
       </div>
 
-      {/* SPARK LAYER */}
+      {/* SPARK ANIMATION */}
       <div className="spark-layer">
         <AnimatePresence>
           {sparkParticles.map(spark => (
@@ -344,7 +343,7 @@ export default function VigilPage() {
                 scale: [0.2, 1.5, 0.5] 
               }}
               transition={{ 
-                duration: 2.5, // VERY SLOW MAJESTIC FLIGHT
+                duration: 2.5, // 2.5 Seconds Flight
                 ease: "easeInOut",
                 times: [0, 0.2, 0.9, 1]
               }}
@@ -358,17 +357,18 @@ export default function VigilPage() {
         <div className="modal-backdrop" onClick={() => setSelectedHeart(null)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             
-            {/* GOD MODE VIEW */}
+            {/* ADMIN VIEW */}
             {user?.id === ADMIN_ID && getHeartState(selectedHeart).isAlive && !getHeartState(selectedHeart).isMine ? (
                 <>
                     <h3>ADMIN CONTROL</h3>
-                    <p>Extinguish this soul?</p>
-                    <button onClick={triggerExtinguish} className="btn-danger">EXTINGUISH</button>
+                    <p className="text-sm text-gray-400 mb-4">Owned by: {getHeartState(selectedHeart).owner}</p>
+                    <button onClick={triggerExtinguish} className="btn-danger">EXTINGUISH FLAME</button>
                 </>
             ) : (
-                // NORMAL USER VIEW
+                // USER VIEW
                 <>
                     <h3>{getHeartState(selectedHeart).isMine ? "REIGNITE" : "CLAIM VESSEL"}</h3>
+                    
                     <div className="input-group">
                         <label>YOUR NAME</label>
                         <input 
@@ -376,16 +376,22 @@ export default function VigilPage() {
                             value={nameInput} onChange={e => setNameInput(e.target.value)}
                         />
                     </div>
+                    
                     <div className="input-group">
-                        <label>INTENTION (Optional)</label>
+                        <label>YOUR INTENTION (OPTIONAL)</label>
                         <input 
-                            type="text" placeholder="e.g. Silence, Love, Bitcoin" 
+                            type="text" placeholder="e.g. Silence, Bitcoin, Love" 
                             value={intentionInput} onChange={e => setIntentionInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && !isLighting && triggerRitual()}
                         />
                     </div>
-                    <button onClick={triggerRitual} disabled={isLighting || !nameInput.trim()}>
-                        {isLighting ? 'TRANSFERRING...' : 'TRANSFER SPARK'}
+
+                    <button 
+                        onClick={triggerRitual} 
+                        disabled={isLighting || !nameInput.trim()}
+                        className="btn-primary"
+                    >
+                        {isLighting ? 'TRANSFERRING SPARK...' : 'TRANSFER SPARK'}
                     </button>
                 </>
             )}
@@ -468,9 +474,9 @@ export default function VigilPage() {
         }
         .heart-content { width: 100%; height: 100%; object-fit: cover; }
 
-        .heart-meta { text-align: center; min-height: 30px; }
+        .heart-meta { text-align: center; min-height: 40px; display: flex; flex-direction: column; align-items: center; }
         .heart-owner { font-family: 'Space Mono', monospace; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
-        .heart-intention { font-family: serif; font-style: italic; font-size: 13px; color: #aaa; margin-top: 2px; }
+        .heart-intention { font-family: serif; font-style: italic; font-size: 13px; color: #aaa; margin-top: 4px; opacity: 0.8; }
 
         .modal-backdrop {
           position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(10px); z-index: 500;
@@ -496,6 +502,7 @@ export default function VigilPage() {
           cursor: pointer; font-weight: bold; letter-spacing: 1px; margin-top: 10px; width: 100%;
         }
         button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-danger { background: #500; color: #faa; }
         
         .debug-toast {
