@@ -1,6 +1,6 @@
 import { Bot, webhookCallback } from 'grammy';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) throw new Error('TELEGRAM_BOT_TOKEN is unset');
