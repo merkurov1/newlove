@@ -200,7 +200,6 @@ export async function updateArticle(formData: any) {
       curatorNote,
       quote,
       specs,
-      updatedAt: new Date().toISOString(),
     })
     .eq('id', id);
 
@@ -974,7 +973,6 @@ export async function updateLetter(formData: any) {
       slug,
       content: JSON.stringify(validBlocks),
       published,
-      updatedAt: new Date().toISOString(),
     })
     .eq('id', id);
 
@@ -1331,7 +1329,6 @@ export async function updatePostcard(formData: any) {
       price,
       available: formData.get('available') === 'on',
       featured: formData.get('featured') === 'on',
-      updatedAt: new Date().toISOString(),
     })
     .eq('id', id);
 
