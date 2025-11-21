@@ -68,6 +68,12 @@ export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel
         >
           Digital Absolution
         </a>
+        <a
+          href="/vigil"
+          className="inline-block bg-yellow-600 hover:bg-yellow-700 text-white font-semibold text-base sm:text-lg px-6 sm:px-7 py-2.5 sm:py-3 rounded-full shadow-lg transition-colors text-center"
+        >
+          The Vigil
+        </a>
       </div>
 
       {/* Concept Section */}
