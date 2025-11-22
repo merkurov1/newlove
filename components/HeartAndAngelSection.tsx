@@ -77,28 +77,26 @@ export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel
           Heart & Angel is a transmedia art project about choice, archetypes, and digital identity. Each image is a digital artifact, presented as in a museum archive. No stretching, no filters—just pure presence.
         </p>
       </div>
-    </section>
+    {/* Medium Section */}
+    <div className="max-w-2xl w-full mb-6 px-4 text-left font-serif text-[0.95rem] sm:text-[1.05rem] md:text-[1.15rem] leading-[1.6] sm:leading-[1.7] text-neutral-900">
+      <h3 className="text-lg sm:text-xl font-bold mb-2 text-black">The Medium</h3>
+      <ul className="list-disc pl-6 mb-4">
+        <li><span className="font-bold">Ink & Paper:</span> To ground the spirit in the physical moment.</li>
+        <li><span className="font-bold">Digital & AR:</span> To let the symbol live in the ether.</li>
+        <li><span className="font-bold">Code:</span> To turn empathy into a ritual.</li>
+      </ul>
+    </div>
 
-      {/* Medium Section */}
-      <div className="max-w-2xl w-full mb-6 px-4 text-left font-serif text-[0.95rem] sm:text-[1.05rem] md:text-[1.15rem] leading-[1.6] sm:leading-[1.7] text-neutral-900">
-        <h3 className="text-lg sm:text-xl font-bold mb-2 text-black">The Medium</h3>
-        <ul className="list-disc pl-6 mb-4">
-          <li><span className="font-bold">Ink & Paper:</span> To ground the spirit in the physical moment.</li>
-          <li><span className="font-bold">Digital & AR:</span> To let the symbol live in the ether.</li>
-          <li><span className="font-bold">Code:</span> To turn empathy into a ritual.</li>
-        </ul>
-      </div>
-
-      {/* Mission Section */}
-      <div className="max-w-2xl w-full mb-6 px-4 text-left font-serif text-[0.95rem] sm:text-[1.05rem] md:text-[1.15rem] leading-[1.6] sm:leading-[1.7] text-neutral-900">
-        <h3 className="text-lg sm:text-xl font-bold mb-2 text-black">The Mission</h3>
-        <p className="mb-4">
-          Can a simple symbol heal a complex trauma?<br/>
-          This project explores love not as a romantic category, but as the only viable strategy for survival. It is an investigation into the physics of empathy.<br/>
-          I do not aim to teach. I aim to remind.
-        </p>
-        <p className="italic text-neutral-700">Love is necessary. Love is never enough.</p>
-      </div>
-    </section>
+    {/* Mission Section */}
+    <div className="max-w-2xl w-full mb-6 px-4 text-left font-serif text-[0.95rem] sm:text-[1.05rem] md:text-[1.15rem] leading-[1.6] sm:leading-[1.7] text-neutral-900">
+      <h3 className="text-lg sm:text-xl font-bold mb-2 text-black">The Mission</h3>
+      <p className="mb-4">
+        Can a simple symbol heal a complex trauma?<br/>
+        This project explores love not as a romantic category, but as the only viable strategy for survival. It is an investigation into the physics of empathy.<br/>
+        I do not aim to teach. I aim to remind.
+      </p>
+      <p className="italic text-neutral-700">Love is necessary. Love is never enough.</p>
+    </div>
+  </section>
   );
 }
