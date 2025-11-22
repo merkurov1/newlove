@@ -59,8 +59,8 @@ export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel
             key={c.action}
             className="border border-neutral-800 py-4 text-xs font-bold uppercase tracking-[0.2em] hover:bg-neutral-900 hover:text-white transition-all duration-300 text-center bg-transparent"
             onClick={() => {
-              if (c.action === 'prev') setIndex((idx) => (idx === 0 ? images.length - 1 : idx - 1));
-              if (c.action === 'next') setIndex((idx) => (idx === images.length - 1 ? 0 : idx + 1));
+              if (c.action === 'prev') setIndex((idx: number) => (idx === 0 ? images.length - 1 : idx - 1));
+              if (c.action === 'next') setIndex((idx: number) => (idx === images.length - 1 ? 0 : idx + 1));
               if (c.action === 'download') window.open(current, '_blank');
               // Info: could show modal or tooltip
             }}

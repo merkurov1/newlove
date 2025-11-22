@@ -8,6 +8,8 @@ on:
 
 jobs:
   deploy:
+    # Workflow temporarily disabled: project frozen (Nov 2025)
+    if: false
     name: Deploy to Polygon
     runs-on: ubuntu-latest
     steps:
