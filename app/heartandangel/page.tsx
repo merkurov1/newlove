@@ -1,12 +1,11 @@
 export const dynamic = 'force-dynamic';
 
 import React from 'react';
-import Image from 'next/image';
 import HeartAndAngelSection from '@/components/HeartAndAngelSection';
 
 export const metadata = {
-  title: 'Heart & Angel',
-  description: 'Heart & Angel — a transmedia art project about choice, archetypes, and digital identity.'
+  title: 'Heart & Angel | Merkurov.love',
+  description: 'A universal mythology for a fragmented world.'
 };
 
 const images = [
@@ -18,10 +17,21 @@ const images = [
 
 export default function HeartAndAngelPage() {
   return (
-    <div className="min-h-screen bg-white">
-      <main className="container mx-auto px-3 sm:px-4 py-12 sm:py-16 md:py-20">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold mb-6 sm:mb-8 break-words leading-tight text-center">Heart & Angel</h1>
+    <div className="min-h-screen bg-white text-black selection:bg-black selection:text-white">
+      <main className="container mx-auto px-4 py-12 md:py-20">
+        <div className="flex flex-col items-center w-full">
+          
+          {/* Header Section */}
+          <div className="text-center mb-12 max-w-2xl">
+            <h1 className="font-serif text-4xl md:text-6xl mb-4 text-black tracking-tight">
+              Heart & Angel
+            </h1>
+            <p className="font-mono text-xs md:text-sm text-neutral-500 uppercase tracking-widest">
+              A universal mythology for a fragmented world
+            </p>
+          </div>
+
+          {/* Gallery Component */}
           <HeartAndAngelSection images={images} />
 
         </div>

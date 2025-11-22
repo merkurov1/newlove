@@ -1,102 +1,132 @@
 'use client';
 
-
 import React from 'react';
 import Image from 'next/image';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination, Autoplay } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/navigation';
-import 'swiper/css/pagination';
+import Link from 'next/link';
 
 interface Props {
   images: string[];
-  ctaHref?: string;
 }
 
-export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel/NFT' }: Props) {
+export default function HeartAndAngelSection({ images }: Props) {
   const [index, setIndex] = React.useState(0);
   const current = images[index];
-  const controls = [
-    { label: 'Prev', action: 'prev' },
-    { label: 'Next', action: 'next' },
-    { label: 'Info', action: 'info' },
-    { label: 'Download', action: 'download' },
-  ];
+
+  // Функция переключения слайдов
+  const handlePrev = () => setIndex((prev: number) => (prev === 0 ? images.length - 1 : prev - 1));
+  const handleNext = () => setIndex((prev: number) => (prev === images.length - 1 ? 0 : prev + 1));
 
   return (
     <section className="w-full flex flex-col items-center">
-      {/* Museum Frame */}
-      <div className="relative w-full max-w-4xl aspect-[4/3] bg-white shadow-inner flex items-center justify-center p-12 border border-neutral-200">
-        {/* Blurred background */}
-        <div className="absolute inset-0 z-0">
-          <Image
-            src={current}
-            alt="art-bg"
-            fill
-            className="object-cover blur-lg brightness-75 opacity-40"
-            draggable={false}
-            style={{ zIndex: 0 }}
-          />
+      
+      {/* MUSEUM FRAME (THE ARCHIVE VIEWER) */}
+      {/* Контейнер фиксированной пропорции или высоты, создающий "Паспарту" */}
+      <div className="relative w-full max-w-3xl bg-neutral-50 border border-neutral-200 shadow-sm p-8 md:p-16 flex items-center justify-center aspect-[4/3] md:aspect-square lg:aspect-[4/3]">
+        
+        {/* Номер слайда (как инвентарный номер) */}
+        <div className="absolute top-4 right-4 font-mono text-[10px] text-neutral-400 tracking-widest">
+          REF: {String(index + 1).padStart(2, '0')} / {String(images.length).padStart(2, '0')}
         </div>
-        {/* Main image */}
-        <div className="relative z-10 flex items-center justify-center w-full h-full">
-          <Image
-            src={current}
-            alt={`Heart & Angel #${index + 1}`}
-            width={480}
-            height={480}
-            className="object-contain max-h-full shadow-2xl bg-white"
-            draggable={false}
-            style={{ maxWidth: '320px', maxHeight: '420px', margin: 'auto' }}
-          />
-        </div>
-      </div>
-      {/* Control Deck */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl mt-8">
-        {controls.map((c, i) => (
-          <button
-            key={c.action}
-            className="border border-neutral-800 py-4 text-xs font-bold uppercase tracking-[0.2em] hover:bg-neutral-900 hover:text-white transition-all duration-300 text-center bg-transparent"
-            onClick={() => {
-              if (c.action === 'prev') setIndex((idx: number) => (idx === 0 ? images.length - 1 : idx - 1));
-              if (c.action === 'next') setIndex((idx: number) => (idx === images.length - 1 ? 0 : idx + 1));
-              if (c.action === 'download') window.open(current, '_blank');
-              // Info: could show modal or tooltip
-            }}
-            style={{ letterSpacing: '0.2em', fontFamily: 'Space Mono, Courier, monospace' }}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
-      {/* Museum Placard */}
-      <div className="max-w-md mx-auto mt-10 text-center text-base font-serif text-neutral-700 border-t border-neutral-200 pt-6">
-        <h2 className="text-lg font-bold mb-2 tracking-tight">The Concept</h2>
-        <p className="text-sm leading-relaxed text-neutral-600">
-          Heart & Angel is a transmedia art project about choice, archetypes, and digital identity. Each image is a digital artifact, presented as in a museum archive. No stretching, no filters—just pure presence.
-        </p>
-      </div>
-    {/* Medium Section */}
-    <div className="max-w-2xl w-full mb-6 px-4 text-left font-serif text-[0.95rem] sm:text-[1.05rem] md:text-[1.15rem] leading-[1.6] sm:leading-[1.7] text-neutral-900">
-      <h3 className="text-lg sm:text-xl font-bold mb-2 text-black">The Medium</h3>
-      <ul className="list-disc pl-6 mb-4">
-        <li><span className="font-bold">Ink & Paper:</span> To ground the spirit in the physical moment.</li>
-        <li><span className="font-bold">Digital & AR:</span> To let the symbol live in the ether.</li>
-        <li><span className="font-bold">Code:</span> To turn empathy into a ritual.</li>
-      </ul>
-    </div>
 
-    {/* Mission Section */}
-    <div className="max-w-2xl w-full mb-6 px-4 text-left font-serif text-[0.95rem] sm:text-[1.05rem] md:text-[1.15rem] leading-[1.6] sm:leading-[1.7] text-neutral-900">
-      <h3 className="text-lg sm:text-xl font-bold mb-2 text-black">The Mission</h3>
-      <p className="mb-4">
-        Can a simple symbol heal a complex trauma?<br/>
-        This project explores love not as a romantic category, but as the only viable strategy for survival. It is an investigation into the physics of empathy.<br/>
-        I do not aim to teach. I aim to remind.
-      </p>
-      <p className="italic text-neutral-700">Love is necessary. Love is never enough.</p>
-    </div>
-  </section>
+        {/* Изображение */}
+        <div className="relative w-full h-full flex items-center justify-center">
+          <Image
+            src={current}
+            alt={`Heart & Angel Artifact #${index + 1}`}
+            width={800}
+            height={800}
+            className="object-contain max-h-full w-auto shadow-xl transition-opacity duration-500"
+            draggable={false}
+            priority
+          />
+        </div>
+      </div>
+
+      {/* CONTROL DECK (BRUTALIST NAVIGATION) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-0 w-full max-w-3xl mt-8 border-t border-l border-black">
+        
+        {/* 1. PREV BUTTON */}
+        <button
+          onClick={handlePrev}
+          className="h-14 border-r border-b border-black flex items-center justify-center hover:bg-black hover:text-white transition-colors duration-200 group"
+        >
+          <span className="font-mono text-xs font-bold uppercase tracking-[0.15em] group-hover:tracking-[0.25em] transition-all">
+            &lt; Prev
+          </span>
+        </button>
+
+        {/* 2. LINK TO VIGIL */}
+        <Link 
+          href="/vigil"
+          className="h-14 border-r border-b border-black flex items-center justify-center hover:bg-black hover:text-white transition-colors duration-200"
+        >
+          <span className="font-mono text-xs font-bold uppercase tracking-[0.15em]">
+            The Vigil
+          </span>
+        </Link>
+
+        {/* 3. LINK TO ABSOLUTION */}
+        <Link 
+          href="/absolution"
+          className="h-14 border-r border-b border-black flex items-center justify-center hover:bg-black hover:text-white transition-colors duration-200"
+        >
+          <span className="font-mono text-xs font-bold uppercase tracking-[0.15em]">
+            Absolution
+          </span>
+        </Link>
+
+        {/* 4. NEXT BUTTON */}
+        <button
+          onClick={handleNext}
+          className="h-14 border-r border-b border-black flex items-center justify-center hover:bg-black hover:text-white transition-colors duration-200 group"
+        >
+          <span className="font-mono text-xs font-bold uppercase tracking-[0.15em] group-hover:tracking-[0.25em] transition-all">
+            Next &gt;
+          </span>
+        </button>
+      </div>
+
+      {/* TEXT: MUSEUM PLACARD STYLE */}
+      <div className="max-w-xl mx-auto mt-12 space-y-8 text-center md:text-left">
+        
+        {/* The Concept */}
+        <div className="space-y-3">
+          <h2 className="font-serif text-xl text-black tracking-tight border-b border-neutral-200 pb-2 inline-block">
+            The Concept
+          </h2>
+          <p className="font-serif text-neutral-600 leading-relaxed text-base">
+            Heart & Angel is a transmedia art project about choice, archetypes, and digital identity. 
+            Each image is a digital artifact, presented here as in a museum archive. 
+            No stretching, no filters—just pure presence.
+          </p>
+        </div>
+
+        {/* The Medium & Mission Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 text-sm leading-relaxed text-neutral-800 font-serif">
+          
+          {/* Medium */}
+          <div>
+            <h3 className="font-bold mb-2 uppercase text-xs tracking-widest font-mono text-neutral-400">Medium</h3>
+            <ul className="space-y-2">
+              <li><span className="font-semibold">Ink & Paper:</span> Grounding the spirit.</li>
+              <li><span className="font-semibold">Digital & AR:</span> Living in the ether.</li>
+              <li><span className="font-semibold">Code:</span> Empathy as a ritual.</li>
+            </ul>
+          </div>
+
+          {/* Mission */}
+          <div>
+            <h3 className="font-bold mb-2 uppercase text-xs tracking-widest font-mono text-neutral-400">Statement</h3>
+            <p>
+              This project explores love not as a romantic category, but as the only viable strategy for survival.
+            </p>
+            <p className="mt-4 italic text-neutral-500 border-l-2 border-black pl-3">
+              "Love is necessary. Love is never enough."
+            </p>
+          </div>
+
+        </div>
+      </div>
+    </section>
   );
 }
