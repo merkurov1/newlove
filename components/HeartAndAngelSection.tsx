@@ -9,122 +9,122 @@ interface Props {
 }
 
 export default function HeartAndAngelSection({ images }: Props) {
-  const [index, setIndex] = React.useState(0);
-  const current = images[index];
-
-  // Функция переключения слайдов
-  const handlePrev = () => setIndex((prev: number) => (prev === 0 ? images.length - 1 : prev - 1));
-  const handleNext = () => setIndex((prev: number) => (prev === images.length - 1 ? 0 : prev + 1));
-
   return (
     <section className="w-full flex flex-col items-center">
       
-      {/* MUSEUM FRAME (THE ARCHIVE VIEWER) */}
-      {/* Контейнер фиксированной пропорции или высоты, создающий "Паспарту" */}
-      <div className="relative w-full max-w-3xl bg-neutral-50 border border-neutral-200 shadow-sm p-8 md:p-16 flex items-center justify-center aspect-[4/3] md:aspect-square lg:aspect-[4/3]">
-        
-        {/* Номер слайда (как инвентарный номер) */}
-        <div className="absolute top-4 right-4 font-mono text-[10px] text-neutral-400 tracking-widest">
-          REF: {String(index + 1).padStart(2, '0')} / {String(images.length).padStart(2, '0')}
-        </div>
-
-        {/* Изображение */}
-        <div className="relative w-full h-full flex items-center justify-center">
-          <Image
-            src={current}
-            alt={`Heart & Angel Artifact #${index + 1}`}
-            width={800}
-            height={800}
-            className="object-contain max-h-full w-auto shadow-xl transition-opacity duration-500"
-            draggable={false}
-            priority
-          />
-        </div>
+      {/* 1. THE GRID (WALL OF ARTIFACTS) */}
+      {/* Показываем все картинки сразу. Сетка заполняет пустоту. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-5xl mb-16">
+        {images.map((src, idx) => (
+          <div 
+            key={idx} 
+            className="relative w-full aspect-square bg-neutral-50 border border-neutral-200 p-8 flex items-center justify-center group transition-all duration-500 hover:border-neutral-400"
+          >
+            {/* Декоративный номер артефакта */}
+            <div className="absolute top-4 right-4 font-mono text-[10px] text-neutral-300 group-hover:text-neutral-500 transition-colors">
+              REF_{String(idx + 1).padStart(2, '0')}
+            </div>
+            
+            <div className="relative w-full h-full">
+              <Image
+                src={src}
+                alt={`Artifact ${idx + 1}`}
+                fill
+                className="object-contain drop-shadow-xl transition-transform duration-500 group-hover:scale-105"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* CONTROL DECK (BRUTALIST NAVIGATION) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-0 w-full max-w-3xl mt-8 border-t border-l border-black">
-        
-        {/* 1. PREV BUTTON */}
-        <button
-          onClick={handlePrev}
-          className="h-14 border-r border-b border-black flex items-center justify-center hover:bg-black hover:text-white transition-colors duration-200 group"
-        >
-          <span className="font-mono text-xs font-bold uppercase tracking-[0.15em] group-hover:tracking-[0.25em] transition-all">
-            &lt; Prev
-          </span>
-        </button>
-
-        {/* 2. LINK TO VIGIL */}
-        <Link 
-          href="/vigil"
-          className="h-14 border-r border-b border-black flex items-center justify-center hover:bg-black hover:text-white transition-colors duration-200"
-        >
-          <span className="font-mono text-xs font-bold uppercase tracking-[0.15em]">
-            The Vigil
-          </span>
-        </Link>
-
-        {/* 3. LINK TO ABSOLUTION */}
-        <Link 
-          href="/absolution"
-          className="h-14 border-r border-b border-black flex items-center justify-center hover:bg-black hover:text-white transition-colors duration-200"
-        >
-          <span className="font-mono text-xs font-bold uppercase tracking-[0.15em]">
-            Absolution
-          </span>
-        </Link>
-
-        {/* 4. NEXT BUTTON */}
-        <button
-          onClick={handleNext}
-          className="h-14 border-r border-b border-black flex items-center justify-center hover:bg-black hover:text-white transition-colors duration-200 group"
-        >
-          <span className="font-mono text-xs font-bold uppercase tracking-[0.15em] group-hover:tracking-[0.25em] transition-all">
-            Next &gt;
-          </span>
-        </button>
-      </div>
-
-      {/* TEXT: MUSEUM PLACARD STYLE */}
-      <div className="max-w-xl mx-auto mt-12 space-y-8 text-center md:text-left">
-        
-        {/* The Concept */}
-        <div className="space-y-3">
-          <h2 className="font-serif text-xl text-black tracking-tight border-b border-neutral-200 pb-2 inline-block">
-            The Concept
-          </h2>
-          <p className="font-serif text-neutral-600 leading-relaxed text-base">
-            Heart & Angel is a transmedia art project about choice, archetypes, and digital identity. 
-            Each image is a digital artifact, presented here as in a museum archive. 
-            No stretching, no filters—just pure presence.
-          </p>
-        </div>
-
-        {/* The Medium & Mission Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 text-sm leading-relaxed text-neutral-800 font-serif">
+      {/* 2. PROJECT NAVIGATION (THE TRINITY) */}
+      {/* Жесткая панель ссылок на проекты */}
+      <div className="w-full max-w-5xl border border-black">
+        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-black">
           
-          {/* Medium */}
-          <div>
-            <h3 className="font-bold mb-2 uppercase text-xs tracking-widest font-mono text-neutral-400">Medium</h3>
-            <ul className="space-y-2">
-              <li><span className="font-semibold">Ink & Paper:</span> Grounding the spirit.</li>
-              <li><span className="font-semibold">Digital & AR:</span> Living in the ether.</li>
-              <li><span className="font-semibold">Code:</span> Empathy as a ritual.</li>
-            </ul>
+          {/* LINK: THE VIGIL */}
+          <Link 
+            href="/vigil"
+            className="h-16 flex items-center justify-center hover:bg-black hover:text-white transition-colors duration-200"
+          >
+            <span className="font-mono text-xs font-bold uppercase tracking-[0.2em]">
+              The Vigil
+            </span>
+          </Link>
+
+          {/* LINK: LET IT GO (ВОССТАНОВЛЕНО) */}
+          <Link 
+            href="/heartandangel/letitgo"
+            className="h-16 flex items-center justify-center hover:bg-red-600 hover:text-white transition-colors duration-200"
+          >
+            <span className="font-mono text-xs font-bold uppercase tracking-[0.2em]">
+              Let It Go
+            </span>
+          </Link>
+
+          {/* LINK: ABSOLUTION */}
+          <Link 
+            href="/absolution"
+            className="h-16 flex items-center justify-center hover:bg-black hover:text-white transition-colors duration-200"
+          >
+            <span className="font-mono text-xs font-bold uppercase tracking-[0.2em]">
+              Absolution
+            </span>
+          </Link>
+        </div>
+      </div>
+
+      {/* 3. MANIFESTO (STRUCTURED TEXT) */}
+      <div className="w-full max-w-5xl mt-16 border-t border-neutral-200 pt-10">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
+          
+          {/* Left Column: Concept */}
+          <div className="md:col-span-7 space-y-6">
+            <h2 className="font-serif text-2xl text-black tracking-tight">
+              The Concept
+            </h2>
+            <p className="font-serif text-lg text-neutral-800 leading-relaxed">
+              Heart & Angel is a transmedia art project about choice, archetypes, and digital identity. 
+              Each image is a digital artifact. We do not stretch them to fit screens; 
+              we build the space around them to honor their scale.
+            </p>
+            <p className="font-serif text-base text-neutral-600 leading-relaxed">
+              This project explores love not as a romantic category, but as the only viable strategy for survival. 
+              It is an investigation into the physics of empathy in a broken world.
+            </p>
           </div>
 
-          {/* Mission */}
-          <div>
-            <h3 className="font-bold mb-2 uppercase text-xs tracking-widest font-mono text-neutral-400">Statement</h3>
-            <p>
-              This project explores love not as a romantic category, but as the only viable strategy for survival.
-            </p>
-            <p className="mt-4 italic text-neutral-500 border-l-2 border-black pl-3">
-              "Love is necessary. Love is never enough."
-            </p>
-          </div>
+          {/* Right Column: Details */}
+          <div className="md:col-span-5 space-y-8 pt-2 md:pt-0">
+            
+            <div>
+              <h3 className="font-mono text-xs font-bold uppercase tracking-widest text-neutral-400 mb-3">
+                The Medium
+              </h3>
+              <ul className="space-y-3 text-sm font-serif text-neutral-900">
+                <li className="flex items-start">
+                  <span className="w-24 font-bold shrink-0">Ink & Paper</span>
+                  <span>Grounding the spirit in the physical.</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="w-24 font-bold shrink-0">Digital / AR</span>
+                  <span>Living in the ether.</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="w-24 font-bold shrink-0">Code</span>
+                  <span>Empathy as a ritual.</span>
+                </li>
+              </ul>
+            </div>
 
+            <div className="border-l-2 border-black pl-4">
+              <p className="italic font-serif text-neutral-500">
+                "Love is necessary. Love is never enough."
+              </p>
+            </div>
+
+          </div>
         </div>
       </div>
     </section>
