@@ -884,6 +884,12 @@ export default function NFTLabPageClient() {
 
     return (
         <main className="mx-auto max-w-4xl py-12 px-6">
+            <section className="text-center mb-10">
+                <h1 className="font-serif text-3xl md:text-5xl mb-4 text-black tracking-tight">THE IRREVERSIBLE CHOICE</h1>
+                <p className="font-mono text-base text-neutral-600 mb-2">Neutral Heart — a transmedia NFT experiment on Polygon.</p>
+                <p className="font-mono text-xs text-neutral-500 mb-6">Transform Neutral Heart into an Angel or a Demon.</p>
+                <img src="https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafybeihnx7kaue4ehbigi4koydoei43ojjykp2mhhh7xwx4qg3tntm5e5e" alt="Neutral Heart NFT" className="mx-auto rounded-lg shadow-lg w-64 h-64 object-cover mb-6" />
+            </section>
             {/* ...existing code... */}
         </main>
     );

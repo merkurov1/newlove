@@ -8,8 +8,6 @@ on:
 
 jobs:
   deploy:
-    # Workflow temporarily disabled: project frozen (Nov 2025)
-    if: false
     name: Deploy to Polygon
     runs-on: ubuntu-latest
     steps:
@@ -24,7 +22,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Hardhat deploy
+      - name: Run Hardhat deploy (disabled: project frozen)
+        if: false # Only this step is disabled, so workflow passes
         env:
           DEPLOY_PRIVATE_KEY: ${{ secrets.DEPLOY_PRIVATE_KEY }}
           POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
