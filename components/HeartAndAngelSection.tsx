@@ -78,16 +78,6 @@ export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel
         </p>
       </div>
     </section>
-        <h3 className="text-lg sm:text-xl font-bold mb-2 text-black">The Concept</h3>
-        <p className="mb-4">
-          We live in an era of broken connections. We are divided by borders, algorithms, and definitions.<br/>
-          <span className="font-bold">"Heart & Angel"</span> is an attempt to bypass the mind and speak directly to the spirit. It creates a space where the duality of the world — good and evil, digital and physical — dissolves into a third element: <span className="font-bold">The Heart</span>.
-        </p>
-        <p className="mb-4">
-          This is not a critique of the old world. It is a proposal for a new emotional literacy.<br/>
-          The figures of the Angel and the Heart are stripped of religious dogma and gender markers not to make a political statement, but to reach the Universal Human.
-        </p>
-      </div>
 
       {/* Medium Section */}
       <div className="max-w-2xl w-full mb-6 px-4 text-left font-serif text-[0.95rem] sm:text-[1.05rem] md:text-[1.15rem] leading-[1.6] sm:leading-[1.7] text-neutral-900">
