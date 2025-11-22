@@ -15,49 +15,69 @@ interface Props {
 }
 
 export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel/NFT' }: Props) {
+  const [index, setIndex] = React.useState(0);
+  const current = images[index];
+  const controls = [
+    { label: 'Prev', action: 'prev' },
+    { label: 'Next', action: 'next' },
+    { label: 'Info', action: 'info' },
+    { label: 'Download', action: 'download' },
+  ];
+
   return (
     <section className="w-full flex flex-col items-center">
-      <div className="text-center mb-6 px-3">
-        <div className="text-base sm:text-lg md:text-xl text-neutral-700 font-serif italic">A universal mythology for a fragmented world.</div>
+      {/* Museum Frame */}
+      <div className="relative w-full max-w-4xl aspect-[4/3] bg-white shadow-inner flex items-center justify-center p-12 border border-neutral-200">
+        {/* Blurred background */}
+        <div className="absolute inset-0 z-0">
+          <Image
+            src={current}
+            alt="art-bg"
+            fill
+            className="object-cover blur-lg brightness-75 opacity-40"
+            draggable={false}
+            style={{ zIndex: 0 }}
+          />
+        </div>
+        {/* Main image */}
+        <div className="relative z-10 flex items-center justify-center w-full h-full">
+          <Image
+            src={current}
+            alt={`Heart & Angel #${index + 1}`}
+            width={480}
+            height={480}
+            className="object-contain max-h-full shadow-2xl bg-white"
+            draggable={false}
+            style={{ maxWidth: '320px', maxHeight: '420px', margin: 'auto' }}
+          />
+        </div>
       </div>
-
-      {/* Gallery */}
-      <div className="w-full max-w-3xl mb-6 px-2 sm:px-0">
-        <Swiper
-          modules={[Navigation, Pagination, Autoplay]}
-          slidesPerView={1}
-          navigation={{ enabled: true }}
-          pagination={{ clickable: true, dynamicBullets: true }}
-          autoplay={{ delay: 4500, disableOnInteraction: false }}
-          loop
-          spaceBetween={0}
-          className="rounded-lg sm:rounded-xl overflow-hidden shadow-xl border border-neutral-200"
-        >
-          {images.map((src, i) => (
-            <SwiperSlide key={i}>
-              <div className="relative w-full h-[44vh] sm:h-[56vh] md:h-[44vh] lg:h-[32rem] flex items-center justify-center bg-white">
-                <Image
-                  src={src}
-                  alt={`Heart and Angel ${i}`}
-                  fill
-                  className="object-contain object-center"
-                />
-              </div>
-            </SwiperSlide>
-          ))}
-        </Swiper>
+      {/* Control Deck */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl mt-8">
+        {controls.map((c, i) => (
+          <button
+            key={c.action}
+            className="border border-neutral-800 py-4 text-xs font-bold uppercase tracking-[0.2em] hover:bg-neutral-900 hover:text-white transition-all duration-300 text-center bg-transparent"
+            onClick={() => {
+              if (c.action === 'prev') setIndex((idx) => (idx === 0 ? images.length - 1 : idx - 1));
+              if (c.action === 'next') setIndex((idx) => (idx === images.length - 1 ? 0 : idx + 1));
+              if (c.action === 'download') window.open(current, '_blank');
+              // Info: could show modal or tooltip
+            }}
+            style={{ letterSpacing: '0.2em', fontFamily: 'Space Mono, Courier, monospace' }}
+          >
+            {c.label}
+          </button>
+        ))}
       </div>
-
-      {/* Buttons */}
-      <div className="mb-8 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4 w-full max-w-2xl">
-        <a
-          href={ctaHref}
-          className="inline-block bg-pink-600 hover:bg-pink-700 text-white font-semibold text-base sm:text-lg px-6 sm:px-7 py-2.5 sm:py-3 rounded-full shadow-lg transition-colors text-center"
-        >
-          Irreversible Choice
-        </a>
-        <a
-          href="/heartandangel/letitgo"
+      {/* Museum Placard */}
+      <div className="max-w-md mx-auto mt-10 text-center text-base font-serif text-neutral-700 border-t border-neutral-200 pt-6">
+        <h2 className="text-lg font-bold mb-2 tracking-tight">The Concept</h2>
+        <p className="text-sm leading-relaxed text-neutral-600">
+          Heart & Angel is a transmedia art project about choice, archetypes, and digital identity. Each image is a digital artifact, presented as in a museum archive. No stretching, no filters—just pure presence.
+        </p>
+      </div>
+    </section>
           className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold text-base sm:text-lg px-6 sm:px-7 py-2.5 sm:py-3 rounded-full shadow-lg transition-colors text-center"
         >
           Let the Heart Go
