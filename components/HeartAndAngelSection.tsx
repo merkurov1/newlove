@@ -78,26 +78,6 @@ export default function HeartAndAngelSection({ images, ctaHref = '/heartandangel
         </p>
       </div>
     </section>
-          className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold text-base sm:text-lg px-6 sm:px-7 py-2.5 sm:py-3 rounded-full shadow-lg transition-colors text-center"
-        >
-          Let the Heart Go
-        </a>
-        <a
-          href="/absolution"
-          className="inline-block bg-gray-800 hover:bg-gray-900 text-white font-semibold text-base sm:text-lg px-6 sm:px-7 py-2.5 sm:py-3 rounded-full shadow-lg transition-colors text-center"
-        >
-          Digital Absolution
-        </a>
-        <a
-          href="/vigil"
-          className="inline-block bg-yellow-600 hover:bg-yellow-700 text-white font-semibold text-base sm:text-lg px-6 sm:px-7 py-2.5 sm:py-3 rounded-full shadow-lg transition-colors text-center"
-        >
-          The Vigil
-        </a>
-      </div>
-
-      {/* Concept Section */}
-      <div className="max-w-2xl w-full mb-6 px-4 text-left font-serif text-[0.95rem] sm:text-[1.05rem] md:text-[1.15rem] leading-[1.6] sm:leading-[1.7] text-neutral-900">
         <h3 className="text-lg sm:text-xl font-bold mb-2 text-black">The Concept</h3>
         <p className="mb-4">
           We live in an era of broken connections. We are divided by borders, algorithms, and definitions.<br/>
