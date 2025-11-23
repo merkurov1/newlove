@@ -1,7 +1,6 @@
-'use client';
+"use client";
 
 import React, { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase-browser';
 
 export interface TempleLog {
   id: string;
@@ -17,50 +16,32 @@ export default function TempleLogsClient({ initialLogs = [], serverError = null 
   const [error, setError] = useState<string | null>(serverError ?? null);
 
   useEffect(() => {
-    const supabase = createClient();
+    let mounted = true;
 
-    if (initialLogs.length === 0) {
-      (async () => {
-        try {
-          setLoading(true);
-          const { data, error: e } = await supabase
-            .from('temple_log')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(20);
-          if (e) {
-            console.warn('client fetch temple_log error', e);
-            setError(String(e.message || e.code));
-          } else {
-            setLogs(data ?? []);
-          }
-        } catch (ex: any) {
-          setError(String(ex));
-        } finally {
-          setLoading(false);
-        }
-      })();
-    }
-
-    // Realtime subscription
-    const channel = supabase
-      .channel('public:temple_log')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'temple_log' },
-        (payload: any) => {
-          const row = payload?.new;
-          if (!row) return;
-          setLogs((prev) => [row, ...prev].slice(0, 20));
-        }
-      )
-      .subscribe();
-
-    return () => {
+    const fetchLogs = async () => {
       try {
-        supabase.removeChannel(channel);
-      } catch (e) {}
+        setLoading(true);
+        const res = await fetch('/api/temple/logs');
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(txt || `HTTP ${res.status}`);
+        }
+        const json = await res.json();
+        if (!mounted) return;
+        setLogs(json.data ?? []);
+      } catch (ex: any) {
+        if (!mounted) return;
+        console.warn('client fetch temple_log error', ex);
+        setError(String(ex.message || ex));
+      } finally {
+        if (mounted) setLoading(false);
+      }
     };
+
+    fetchLogs();
+
+    const iv = setInterval(fetchLogs, 5000);
+    return () => { mounted = false; clearInterval(iv); };
   }, [initialLogs.length]);
 
   if (error) return <div className="p-4 text-red-400">Ошибка: {error}</div>;

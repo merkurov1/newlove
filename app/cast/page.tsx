@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import TempleWrapper from '@/components/TempleWrapper'
+import { templeTrack } from '@/components/templeTrack'
 
 const QUESTIONS_EN = [
   "What is the one physical object in your home you hate but cannot throw away?",
@@ -71,19 +72,22 @@ export default function CastPage() {
 
   // Typewriter Effect
   useEffect(() => {
-    if (currentStep === 11 && fullText) {
-      let index = 0
-      const interval = setInterval(() => {
-        setDisplayedText((prev) => prev + fullText.charAt(index))
-        index++
-        if (index >= fullText.length) {
-          clearInterval(interval)
-          setTimeout(() => setShowStamp(true), 500) // Show stamp after text finishes
-        }
-      }, 15) // Speed of typing
-      return () => clearInterval(interval)
-    }
-  }, [currentStep, fullText])
+      templeTrack('enter', 'User opened Cast page')
+   }, [])
+   useEffect(() => {
+      if (currentStep === 11 && fullText) {
+         let index = 0
+         const interval = setInterval(() => {
+            setDisplayedText((prev) => prev + fullText.charAt(index))
+            index++
+            if (index >= fullText.length) {
+               clearInterval(interval)
+               setTimeout(() => setShowStamp(true), 500) // Show stamp after text finishes
+            }
+         }, 15) // Speed of typing
+         return () => clearInterval(interval)
+      }
+   }, [currentStep, fullText])
 
   const handleLanguageSelect = (lang: 'en' | 'ru') => {
     setLanguage(lang)

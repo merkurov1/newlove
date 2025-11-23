@@ -1,7 +1,8 @@
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import LetItGoAngel from '@/components/LetItGoAngel';
 import TempleWrapper from '@/components/TempleWrapper'; // Используем новый Wrapper
 import './letitgo.css';
+import { templeTrack } from '@/components/templeTrack';
 
 export const metadata = {
   title: 'Let the Heart Go | Merkurov',
@@ -23,6 +24,9 @@ export const metadata = {
 };
 
 export default function LetItGoPage() {
+  useEffect(() => {
+    templeTrack('enter', 'User opened LetItGo page')
+  }, [])
   return (
     <div className="letitgo-container">
       {/* 

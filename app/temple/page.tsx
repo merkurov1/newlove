@@ -1,12 +1,8 @@
- 'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
 import TempleLogsClient from './TempleLogs.client';
-
-// Инициализация клиента для записи/трекинга — use shared helper (no args)
-const supabase = createClient();
 
 export default function TemplePage() {
   const [isTelegram, setIsTelegram] = useState(false);
@@ -51,17 +47,16 @@ export default function TemplePage() {
     };
   }, []);
 
-  // Клик по кнопке пишет в лог (запись делает клиентский supabase)
+  // Клик по кнопке пишет в лог (через серверный API, использующий service-role key)
   const trackClick = async (service: string) => {
-    if (supabase) {
-        try {
-          await supabase.from('temple_log').insert({ 
-              event_type: 'nav', 
-              message: `Кто-то вошел в ${service}` 
-          });
-        } catch (e) {
-          console.warn('trackClick failed', e);
-        }
+    try {
+      await fetch('/api/temple/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_type: 'nav', message: `Кто-то вошел в ${service}` })
+      });
+    } catch (e) {
+      console.warn('trackClick failed', e);
     }
   };
 

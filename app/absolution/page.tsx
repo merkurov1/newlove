@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
+import { templeTrack } from '@/components/templeTrack';
 import html2canvas from 'html2canvas';
 import TempleWrapper from '@/components/TempleWrapper';
 
@@ -123,6 +124,7 @@ export default function AbsolutionPage() {
       month: '2-digit', 
       day: '2-digit' 
     }));
+    templeTrack('enter', 'User opened Absolution page');
   }, []);
 
   // Close dropdown on outside click

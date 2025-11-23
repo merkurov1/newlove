@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthContext';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import TempleWrapper from '@/components/TempleWrapper'; // Импортируем Wrapper
+import { templeTrack } from '@/components/templeTrack';
 
 // --- CONFIGURATION ---
 const ADMIN_ID = 'fffa55a9-1ed7-49ff-953d-dfffa9f00844'; 
@@ -73,6 +74,10 @@ export default function VigilPage() {
 
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  useEffect(() => {
+    templeTrack('enter', 'User opened Vigil page')
+  }, [])
 
   const fetchHearts = async () => {
     const { data } = await supabase.from('vigil_hearts').select('*');
