@@ -11,7 +11,7 @@ export async function GET(req: Request) {
       .from('temple_log')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(20)
+      .limit(5)
 
     if (error) {
       console.error('API GET /api/temple_logs error', error)

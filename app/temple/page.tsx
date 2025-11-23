@@ -9,6 +9,21 @@ export default function TemplePage() {
 
   useEffect(() => {
     // 1. Ручная загрузка скрипта (так надежнее всего)
+    // Before loading Telegram script, check for an existing server-side session
+    // so site users are recognised even without Telegram WebApp.
+    (async function checkSession() {
+      try {
+        const res = await fetch('/api/temple/me');
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.displayName) {
+            try { localStorage.setItem('temple_user', json.displayName); } catch (e) {}
+            setIsTelegram(true); // treat as an identified user for UI
+          }
+        }
+      } catch (e) {}
+    })();
+
     const script = document.createElement('script');
     script.src = "https://telegram.org/js/telegram-web-app.js";
     script.async = true;
@@ -28,11 +43,20 @@ export default function TemplePage() {
           // Тихая авторизация через наш API
           const user = tg.initDataUnsafe?.user;
           if (user) {
+            // Send auth to server; server sets an HTTP-only cookie.
             fetch('/api/temple/auth', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(user)
-            }).catch(err => console.error("Auth sync failed", err));
+            })
+              .then(res => res.json())
+              .then(json => {
+                if (json?.displayName) {
+                  try { localStorage.setItem('temple_user', json.displayName); } catch (e) {}
+                  setIsTelegram(true);
+                }
+              })
+              .catch(err => console.error("Auth sync failed", err));
           }
         }
       }, 100);
@@ -50,10 +74,11 @@ export default function TemplePage() {
   // Клик по кнопке пишет в лог (через серверный API, использующий service-role key)
   const trackClick = async (service: string) => {
     try {
+      const displayName = typeof window !== 'undefined' ? (localStorage.getItem('temple_user') || 'Кто-то') : 'Кто-то';
       await fetch('/api/temple_logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_type: 'nav', message: `Кто-то вошел в ${service}` })
+        body: JSON.stringify({ event_type: 'nav', message: `${displayName} entered ${service}` })
       });
     } catch (e) {
       console.warn('trackClick failed', e);

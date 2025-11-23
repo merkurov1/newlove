@@ -49,13 +49,25 @@ export async function POST(req: Request) {
 
     console.log("API: Success writing user:", id);
     
-    // Логируем в temple_log от имени системы
+    // Prepare a display name (prefer username, then first_name)
+    const displayName = username || first_name || `user_${String(id).slice(-6)}`;
+
+    // Логируем в temple_log только имя пользователя (без telegram id)
     await supabaseAdmin.from('temple_log').insert({
       event_type: 'enter',
-      message: `User ${id} (${username}) entered`
+      message: `${displayName} entered`
     });
 
-    return NextResponse.json({ success: true, userId: id });
+    // Set an HTTP-only cookie so the website can recognise the user
+    const maxAge = 60 * 60 * 24 * 30; // 30 days
+    const cookieValue = encodeURIComponent(displayName);
+    const isProd = process.env.NODE_ENV === 'production';
+    const cookie = `temple_user=${cookieValue}; Path=/; Max-Age=${maxAge}; SameSite=Lax; HttpOnly${isProd ? '; Secure' : ''}`;
+
+    return NextResponse.json({ success: true, userId: id, displayName }, {
+      status: 200,
+      headers: { 'Set-Cookie': cookie }
+    });
 
   } catch (e: any) {
     console.error("API: Critical Error:", e);
