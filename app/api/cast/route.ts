@@ -11,87 +11,110 @@ const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY! // Важно: Service Role
 const genAI = new GoogleGenerativeAI(apiKey)
 const supabase = createClient(sbUrl, sbKey)
 
+function buildSystemPrompt(language: 'en' | 'ru') {
+  const langNote = language === 'ru' ? 'OUTPUT MUST BE IN RUSSIAN.' : 'OUTPUT MUST BE IN ENGLISH.'
+
+  return `You are THE MERKUROV ANALYZER. Tone: cold, clinical, brutally honest.
+Task: Deterministically analyze the user from 10 short answers and assign ONE archetype.
+
+CRITERIA (apply these strictly):
+- VOID: short answers, apathy, mention of sleep, nothing, normal, emptiness, "I don't know", lack of detail.
+- STONE: trauma, heavy past, specific painful events, nostalgia used as shelter, mentions of scars, rigidity.
+- NOISE: chaotic, grandiose claims, performative social behavior, frequent use of and obsession with social metrics, rambling anxiety.
+- UNFRAMED: intellectual, meta, uses distinct metaphors, willingly accepts ambiguity, reflective and unusual perspective.
+
+PROCESS:
+1) Read all answers carefully.
+2) For each archetype, count how many answers match the listed indicators.
+3) Choose the archetype with the highest strict-match count. In case of exact tie, prefer: STONE > VOID > NOISE > UNFRAMED.
+4) Produce a JSON object ONLY (no surrounding text). Example schema:
+{
+  "archetype": "VOID|STONE|NOISE|UNFRAMED",
+  "scores": { "VOID": 0, "STONE": 0, "NOISE": 0, "UNFRAMED": 0 },
+  "executive_summary": "Two-sentence summary.",
+  "structural_weaknesses": "Short paragraph.",
+  "core_assets": "Short paragraph.",
+  "strategic_directive": "One imperative sentence."
+}
+
+${langNote}
+Respond ONLY with valid JSON according to the schema above.
+`
+}
+
+function extractJSON(text: string) {
+  // Try to find first JSON object in text
+  const jsonMatch = text.match(/\{[\s\S]*\}/m)
+  if (jsonMatch) {
+    try {
+      return JSON.parse(jsonMatch[0])
+    } catch (e) {
+      return null
+    }
+  }
+  return null
+}
+
 export async function POST(req: Request) {
   try {
     const { answers, language } = await req.json()
+    const lang: 'en' | 'ru' = language === 'ru' ? 'ru' : 'en'
 
-    // 1. GEMINI ANALYTICS
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-    
-    const langInstruction = language === 'ru' 
-      ? 'ANSWER STRICTLY IN RUSSIAN.' 
-      : 'ANSWER STRICTLY IN ENGLISH.'
+    const systemPrompt = buildSystemPrompt(lang)
 
-    const prompt = `
-      ROLE: You are THE MERKUROV ANALYZER.
-      TASK: Analyze the user based on 10 answers.
-      
-      STEP 1: CLASSIFY. Based on answers, choose ONE archetype:
-      - [ARCHETYPE: VOID] (Empty, depressed, burnt out)
-      - [ARCHETYPE: NOISE] (Chaotic, vain, addicted to social media)
-      - [ARCHETYPE: STONE] (Traumatized, heavy, stuck in past)
-      - [ARCHETYPE: UNFRAMED] (Rare. Creative, strong, independent)
-      
-      STEP 2: ANALYZE. Write the report.
-      
-      USER ANSWERS:
-      ${answers.map((a: string, i: number) => `${i + 1}. ${a}`).join('\n')}
+    // Call Generative Language REST API directly to control generationConfig
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
 
-      INSTRUCTION: ${langInstruction}
-      
-      OUTPUT FORMAT:
-      [ARCHETYPE: ...] 
-      
-      # SUBJECT ANALYSIS
-      
-      ## I. EXECUTIVE SUMMARY
-      [2 sentences psychoanalysis]
-      
-      ## II. STRUCTURAL INTEGRITY
-      [Trauma analysis]
-      
-      ## III. DIGITAL FOOTPRINT
-      [Vanity analysis]
-      
-      ## IV. STRATEGIC DIRECTIVE
-      [One imperative command]
-    `
-
-    const result = await model.generateContent(prompt)
-    const fullText = await result.response.text()
-
-    // 2. PARSING (Вытаскиваем штамп и чистый текст)
-    let archetype = 'VOID'
-    let cleanText = fullText
-
-    const match = fullText.match(/\[ARCHETYPE:\s*(.*?)\]/)
-    if (match) {
-        archetype = match[1].trim()
-        cleanText = fullText.replace(match[0], '').trim()
+    const payload = {
+      "systemInstruction": { "parts": [{ "text": systemPrompt }] },
+      "content": [
+        { "type": "text", "text": `USER ANSWERS:\n${answers.map((a: string, i: number) => `${i + 1}. ${a}`).join('\n')}` }
+      ],
+      "temperature": 0.0,
+      "maxOutputTokens": 800
     }
 
-    // 3. DATABASE SAVE (Сохраняем "Сырой" лид)
-    const { data: record, error } = await supabase
-        .from('casts')
-        .insert({
-            answers,
-            language,
-            analysis: cleanText,
-            archetype: archetype
-        })
-        .select()
-        .single()
-
-    if (error) console.error('Supabase Error:', error)
-
-    return NextResponse.json({ 
-        analysis: cleanText, 
-        archetype: archetype,
-        recordId: record?.id // Возвращаем ID, чтобы потом обновить Email
+    const gaResp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     })
 
-  } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json({ error: 'Core Failure' }, { status: 500 })
+    if (!gaResp.ok) {
+      const errText = await gaResp.text()
+      console.error('Google API error:', gaResp.status, errText)
+      return NextResponse.json({ error: 'AI service error' }, { status: 502 })
+    }
+
+    const gaJson = await gaResp.json()
+    const rawText = gaJson?.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(gaJson)
+
+    // Try to parse JSON-only output
+    let parsed = extractJSON(rawText)
+    let archetype = 'VOID'
+    let analysisText = rawText
+
+    if (parsed && parsed.archetype) {
+      archetype = String(parsed.archetype).toUpperCase()
+      analysisText = JSON.stringify(parsed, null, 2)
+    } else {
+      // Fallback: look for bracket marker
+      const match = rawText.match(/\"?ARCHETYPE\"?:?\s*\"?([A-Z]+)\"?/i) || rawText.match(/\[ARCHETYPE:\s*(.*?)\]/i)
+      if (match) archetype = String(match[1] || 'VOID').toUpperCase()
+    }
+
+    // Persist to DB using service role key
+    const { data: record, error } = await supabase
+      .from('casts')
+      .insert({ answers, language: lang, analysis: analysisText, archetype })
+      .select()
+      .single()
+
+    if (error) console.error('Supabase insert error:', error)
+
+    return NextResponse.json({ analysis: analysisText, archetype, recordId: record?.id })
+  } catch (err) {
+    console.error('Cast route error:', err)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
