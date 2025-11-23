@@ -58,6 +58,10 @@ export default function TemplePage() {
               .then(json => {
                 if (json?.displayName) {
                   try { localStorage.setItem('temple_user', json.displayName); } catch (e) {}
+                  // If server returned token (dev fallback), persist for later requests
+                  if (json?.token) {
+                    try { localStorage.setItem('temple_session_token', json.token); } catch (e) {}
+                  }
                   setIsTelegram(true);
                 }
               })
@@ -95,6 +99,9 @@ export default function TemplePage() {
       if (!res.ok) return false;
       const json = await res.json().catch(() => ({}));
       if (json?.displayName) {
+        if (json?.token) {
+          try { localStorage.setItem('temple_session_token', json.token); } catch (e) {}
+        }
         try { localStorage.setItem('temple_user', json.displayName); } catch (e) {}
         return true;
       }
@@ -154,11 +161,6 @@ export default function TemplePage() {
         </div>
       </div>
 
-      {/* ЖИВАЯ ЛЕТОПИСЬ */}
-      <div className="w-full max-w-md mb-8 min-h-[100px] flex flex-col justify-end items-center gap-2 pointer-events-none z-0 opacity-70">
-        <TempleLogsClient initialLogs={[]} />
-      </div>
-
       {/* МЕНЮ */}
       <div className="grid grid-cols-2 gap-4 w-full max-w-sm z-10 mx-auto pb-10">
         <button onClick={async () => { await handleNav('/vigil?mode=temple'); trackClick('Vigil'); }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform no-underline text-white">
@@ -180,6 +182,11 @@ export default function TemplePage() {
           <div className="text-2xl">💀</div>
           <div className="text-xs font-bold tracking-widest">CAST</div>
         </button>
+      </div>
+
+      {/* ЖИВАЯ ЛЕТОПИСЬ (перенесено под кнопки) */}
+      <div className="w-full max-w-md mt-8 mb-8 min-h-[100px] flex flex-col justify-end items-center gap-2 pointer-events-none z-0 opacity-70">
+        <TempleLogsClient initialLogs={[]} />
       </div>
     </div>
   );

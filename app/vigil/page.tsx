@@ -199,10 +199,15 @@ export default function VigilPage() {
             });
           } else {
             // Not signed in via Supabase: attempt server-side claim via temple_session
+            // If cookie wasn't accepted (common in dev/WebView), include token fallback
+            const token = typeof window !== 'undefined' ? localStorage.getItem('temple_session_token') : null;
+            const body: any = { id: heartIdToUpdate, name: nameInput.trim(), intention: intentionInput.trim() };
+            if (token) body.token = token;
+
             const res = await fetch('/api/vigil/claim', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: heartIdToUpdate, name: nameInput.trim(), intention: intentionInput.trim() })
+              body: JSON.stringify(body)
             });
             const j = await res.json();
             if (!res.ok) {

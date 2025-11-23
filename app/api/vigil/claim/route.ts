@@ -16,11 +16,22 @@ export async function POST(req: Request) {
     const { id, name, intention } = body || {}
     if (!id || !name) return NextResponse.json({ error: 'missing params' }, { status: 400 })
 
-    // Verify temple session cookie
+    // Verify temple session cookie or fallback token (for WebView/dev cases)
+    let token: string | null = null
     const cookie = req.headers.get('cookie') || ''
     const m = cookie.match(/(?:^|; )temple_session=([^;]+)/)
-    if (!m) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
-    const token = decodeURIComponent(m[1])
+    if (m) {
+      token = decodeURIComponent(m[1])
+    } else if (body && body.token) {
+      token = String(body.token)
+    } else {
+      // Also accept Authorization: Bearer <token>
+      const auth = req.headers.get('authorization') || ''
+      const b = auth.match(/Bearer (.+)/)
+      if (b) token = b[1]
+    }
+
+    if (!token) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
     const session = verifySession(token as string)
     if (!session || !session.userId) return NextResponse.json({ error: 'invalid session' }, { status: 401 })
 

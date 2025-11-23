@@ -103,7 +103,15 @@ export async function POST(req: Request) {
     const sameSite = body?.initData ? 'None' : 'Lax'
     const cookie = `temple_session=${token}; Path=/; Max-Age=${maxAge}; SameSite=${sameSite}; HttpOnly${isProd ? '; Secure' : ''}`
 
-    return NextResponse.json({ success: true, userId: id, displayName }, { status: 200, headers: { 'Set-Cookie': cookie } })
+    // If we're in development (or not in a secure context), some WebViews/browsers
+    // will ignore Set-Cookie when SameSite=None but Secure is not set. To make
+    // local debugging possible, return the JWT token in the JSON body when not
+    // running in production. The client will store it and send it to server-side
+    // endpoints as a fallback.
+    const resBody: any = { success: true, userId: id, displayName }
+    if (!isProd) resBody.token = token
+
+    return NextResponse.json(resBody, { status: 200, headers: { 'Set-Cookie': cookie } })
   } catch (e: any) {
     console.error('API: Critical Error:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })
