@@ -49,45 +49,66 @@ export default function CastPage() {
   }
 
   const handleNext = async () => {
+    // 1. Сохраняем ответ локально
     const newAnswers = [...answers, currentAnswer]
     setAnswers(newAnswers)
-    setCurrentAnswer('')
+    setCurrentAnswer('') // Очищаем поле
+
     if (currentStep < 10) {
+      // Если это не последний вопрос, просто идем дальше
       setCurrentStep(currentStep + 1)
     } else {
+      // 2. ЭТО ПОСЛЕДНИЙ ШАГ. Сразу переключаем интерфейс!
+      setCurrentStep(11) 
       setLoading(true)
+      
       try {
         const res = await fetch('/api/cast', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ answers: newAnswers, language })
         })
+
+        if (!res.ok) throw new Error('Network response was not ok')
+
         const data = await res.json()
-        setAnalysis(data.analysis)
-        setCurrentStep(11)
+        
+        // Проверяем, есть ли поле analysis, если нет - выводим сырой ответ для дебага
+        setAnalysis(data.analysis || JSON.stringify(data, null, 2))
+
       } catch (error) {
         console.error('Error fetching analysis:', error)
-        setAnalysis('Error occurred. Please try again.')
-        setCurrentStep(11)
+        setAnalysis(language === 'ru' 
+          ? 'Ошибка соединения с ядром. Попробуйте еще раз.' 
+          : 'Connection error. Core unreachable.')
       } finally {
         setLoading(false)
       }
     }
   }
 
+  // Обработчик нажатия Enter (для удобства на десктопе)
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey && currentAnswer.trim()) {
+      e.preventDefault()
+      handleNext()
+    }
+  }
+
   const renderContent = () => {
+    // ШАГ 0: Выбор языка
     if (currentStep === 0) {
       return (
-        <div className="text-center">
+        <div className="flex flex-col items-center gap-8 animate-in fade-in duration-700">
           <button
             onClick={() => handleLanguageSelect('en')}
-            className="text-white hover:text-gray-500 transition-colors duration-300 text-2xl mb-4 block"
+            className="text-gray-400 hover:text-white transition-colors duration-300 text-xl tracking-widest font-mono"
           >
             [ ENGLISH ]
           </button>
           <button
             onClick={() => handleLanguageSelect('ru')}
-            className="text-white hover:text-gray-500 transition-colors duration-300 text-2xl block"
+            className="text-gray-400 hover:text-white transition-colors duration-300 text-xl tracking-widest font-mono"
           >
             [ РУССКИЙ ]
           </button>
@@ -95,35 +116,71 @@ export default function CastPage() {
       )
     }
 
+    // ШАГИ 1-10: Вопросы
     if (currentStep <= 10) {
       const question = questions[currentStep - 1]
       return (
-        <div className="text-white text-center max-w-2xl">
-          <p className="text-xl mb-8">{question}</p>
+        <div className="flex flex-col items-center w-full max-w-2xl px-6">
+          <p className="text-gray-300 text-center text-lg md:text-xl font-mono mb-12 min-h-[80px]">
+            {currentStep < 10 ? `0${currentStep}` : currentStep} / 10 <br/><br/>
+            {question}
+          </p>
+          
           <textarea
+            autoFocus
             value={currentAnswer}
             onChange={(e) => setCurrentAnswer(e.target.value)}
-            className="w-full h-32 bg-gray-800 text-white p-4 mb-4 resize-none"
-            placeholder="Your answer..."
+            onKeyDown={handleKeyDown}
+            className="w-full bg-transparent text-white text-xl md:text-2xl font-mono border-b border-gray-800 focus:border-white outline-none py-4 text-center resize-none placeholder-gray-800 transition-colors duration-300 mb-12"
+            placeholder={language === 'ru' ? "..." : "..."}
+            rows={1}
           />
+          
           <button
             onClick={handleNext}
-            className="bg-white text-black px-6 py-2 hover:bg-gray-200 transition-colors duration-300"
             disabled={!currentAnswer.trim()}
+            className={`px-8 py-3 font-mono text-sm tracking-widest border transition-all duration-300 ${
+              !currentAnswer.trim() 
+                ? 'border-gray-900 text-gray-900 cursor-not-allowed' 
+                : 'border-white text-white hover:bg-white hover:text-black'
+            }`}
           >
-            {currentStep === 10 ? 'Analyze' : 'Next'}
+            {currentStep === 10 
+              ? (language === 'ru' ? 'ПОЛУЧИТЬ ДИАГНОЗ' : 'INITIALIZE ANALYSIS') 
+              : (language === 'ru' ? 'ДАЛЕЕ' : 'NEXT')}
           </button>
         </div>
       )
     }
 
+    // ШАГ 11: Результат / Загрузка
     if (currentStep === 11) {
       return (
-        <div className="text-white text-center max-w-4xl">
+        <div className="w-full max-w-3xl px-6 py-12 animate-in fade-in zoom-in duration-500">
           {loading ? (
-            <p>Loading analysis...</p>
+            <div className="text-center">
+              <div className="inline-block w-3 h-3 bg-white mb-4 animate-ping"></div>
+              <p className="text-gray-500 font-mono text-sm tracking-widest animate-pulse">
+                {language === 'ru' ? 'СИНХРОНИЗАЦИЯ С ЯДРОМ...' : 'UPLOADING TO CORE...'}
+              </p>
+            </div>
           ) : (
-            <pre className="whitespace-pre-wrap text-left">{analysis}</pre>
+            <div className="border border-white/20 p-8 md:p-12 bg-black shadow-2xl shadow-white/5">
+              <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4">
+                <span className="text-xs text-gray-500 font-mono">MERKUROV.LOVE // CAST</span>
+                <span className="text-xs text-gray-500 font-mono">{new Date().toLocaleDateString()}</span>
+              </div>
+              
+              <pre className="whitespace-pre-wrap text-gray-200 font-mono text-sm md:text-base leading-relaxed">
+                {analysis}
+              </pre>
+
+              <div className="mt-12 pt-8 border-t border-gray-800 text-center">
+                <a href="/" className="text-xs text-gray-600 hover:text-white transition-colors font-mono uppercase">
+                   {language === 'ru' ? '[ ВЕРНУТЬСЯ В ТЕНЬ ]' : '[ RETURN TO SHADOW ]'}
+                </a>
+              </div>
+            </div>
           )}
         </div>
       )
