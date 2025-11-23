@@ -10,6 +10,7 @@ export async function POST(req: Request) {
   try {
     const { rawText, artist, title, link } = await req.json()
 
+    // Используем Flash модель (она быстрее и дешевле)
     const model = genAI.getGenerativeModel({ 
         model: 'gemini-2.5-flash',
         generationConfig: { responseMimeType: "application/json" } 
@@ -27,37 +28,54 @@ export async function POST(req: Request) {
       Link: ${link}
       Raw Info: ${rawText}
 
-      OUTPUT REQUIREMENTS (JSON):
+      OUTPUT REQUIREMENTS (Return valid JSON):
       
-      1. "website":
-         - "curator_note": A 3-paragraph essay. 
-           Para 1: Analysis of the visual/atmosphere.
-           Para 2: Historical context.
-           Para 3: "Why it matters" (Market context, arbitrage, value).
-         - "specs": Format details list (Medium, Size, Date, Provenance).
+      1. "website_formatted":
+         - MUST follow this EXACT structure:
+           
+           The Heading
+           [Artist Name (Dates)]
+           [Title]
+
+           The Curator’s Note
+           [Bold Headline, e.g. "The Canvas of Dissent" or "The Red Rhythm"]
+           [Paragraph 1: Visual analysis. Atmosphere. Use words like "Silence", "Structure", "Rhythm".]
+           [Paragraph 2: Historical context without boring details.]
+           
+           Why it matters: [One strong paragraph. Mention "Arbitrage", "Unique Work", "Undervalued" or "Granite vs Noise".]
+
+           The Specs (Footer)
+           Details:
+           [Medium]
+           [Dimensions]
+           [Signed/Date]
+           [Provenance summary]
+
+           Market Context:
+           Auction: [Auction House]
+           Date: [Date]
+           Estimate: [Price Range]
 
       2. "telegram":
-         - Strict Markdown V1 formatting (use single * for bold).
-         - NO estimates in the text.
+         - Strict Markdown V1 formatting (use single * for bold, _ for italic).
          - Structure:
-           *SELECTION: [TITLE IN CAPS]*
-           (Empty Line)
-           Intro hook about the market blindness.
-           (Empty Line)
-           *Artist Name*
-           _Title_
-           (Empty Line)
-           Description (Atmosphere, why it's granite/silence).
-           (Empty Line)
-           Why buy: (Investment thesis).
-           (Empty Line)
+           *SELECTION: [SHORT TITLE CAPS]*
+           
+           [Short intro hook about market blindness/hype]
+           
+           *[Artist Name]*
+           _[Title]_
+           
+           [Description of the work. 2-3 sentences. Focus on visual weight.]
+           
+           [Investment Thesis: Why is this a "Hidden Gem" or "Granite"?]
+           
            *Подробный разбор лота:*
            [Читать на сайте](${link})
 
       3. "socials":
-         - Short, punchy text (max 200 chars) for Twitter.
-         - English.
-         - Include Link.
+         - Short tweet (English). Max 280 chars.
+         - Hook + Link.
 
       RETURN JSON ONLY.
     `
