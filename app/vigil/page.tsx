@@ -65,17 +65,66 @@ export default function VigilPage() {
   const heartRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const supabase = createClient();
 
+  // --- 1. TELEGRAM AUTH INIT LOGIC (COPIED FROM TEMPLE) ---
   useEffect(() => {
-    fetchHearts();
-    
-    // Check for Temple Session (Telegram)
+    // A. Пробуем восстановить из localStorage
     if (typeof window !== 'undefined') {
-        const token = localStorage.getItem('temple_session_token');
-        const tName = localStorage.getItem('temple_user');
-        if (token) setTempleToken(token);
-        if (tName) setTempleUserName(tName);
+      const storedToken = localStorage.getItem('temple_session_token');
+      const storedUser = localStorage.getItem('temple_user');
+      if (storedToken) setTempleToken(storedToken);
+      if (storedUser) setTempleUserName(storedUser);
     }
 
+    // B. Загружаем скрипт Телеграма, если его нет (для прямых заходов)
+    const script = document.createElement('script');
+    script.src = "https://telegram.org/js/telegram-web-app.js";
+    script.async = true;
+    script.onload = () => {
+        // Ждем инициализации
+        setTimeout(() => {
+            const tg = (window as any).Telegram?.WebApp;
+            if (tg) {
+                tg.ready();
+                try { tg.expand(); } catch(e){}
+                
+                const initData = tg.initData;
+                const tgUser = tg.initDataUnsafe?.user;
+                
+                // Если есть юзер Телеграма, но нет токена - логинимся молча
+                if (tgUser && !localStorage.getItem('temple_session_token')) {
+                    fetch('/api/temple/auth', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...tgUser, initData })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.token) {
+                            localStorage.setItem('temple_session_token', data.token);
+                            setTempleToken(data.token);
+                        }
+                        if (data.displayName) {
+                            localStorage.setItem('temple_user', data.displayName);
+                            setTempleUserName(data.displayName);
+                        }
+                    })
+                    .catch(console.error);
+                }
+            }
+        }, 200);
+    };
+    document.head.appendChild(script);
+
+    // C. Проверяем серверную сессию (Cookie) как фоллбэк
+    fetch('/api/temple/me')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.displayName) setTempleUserName(data.displayName);
+      })
+      .catch(() => {});
+
+    // D. Supabase Subscription
+    fetchHearts();
     const channel = supabase
       .channel('vigil_hearts_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vigil_hearts' }, () => fetchHearts())
@@ -86,12 +135,13 @@ export default function VigilPage() {
       localStorage.setItem('vigil_visited', 'true');
     }
 
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+    templeTrack('enter', 'User opened Vigil page');
 
-  useEffect(() => {
-    templeTrack('enter', 'User opened Vigil page')
-  }, [])
+    return () => { 
+        if(document.head.contains(script)) document.head.removeChild(script);
+        supabase.removeChannel(channel); 
+    };
+  }, []);
 
   const fetchHearts = async () => {
     const { data } = await supabase.from('vigil_hearts').select('*');
@@ -123,7 +173,6 @@ export default function VigilPage() {
     if (user && dbRecord.owner_id === user.id) {
         isMine = true;
     } else if (templeUserName && dbRecord.owner_name === templeUserName) {
-        // Fallback for Telegram users since we don't have their ID client-side easily
         isMine = true;
     }
 
@@ -153,8 +202,8 @@ export default function VigilPage() {
   };
 
   const handleHeartClick = (heartId: number) => {
-    // CRITICAL FIX: Allow access if Supabase User OR Temple Token exists
-    if (!user && !templeToken) {
+    // CRITICAL FIX: Allow access if Supabase User OR Temple Token exists OR We have a temple username (Cookie auth)
+    if (!user && !templeToken && !templeUserName) {
       setShowLogin(true);
       return;
     }
@@ -235,8 +284,12 @@ export default function VigilPage() {
             const j = await res.json();
             if (!res.ok) {
               console.warn('vigil claim failed', j);
-              setDebugMessage(j?.error || 'claim failed');
-              setTimeout(() => setDebugMessage(''), 3000);
+              // Если ошибка токена - попробуем еще раз пнуть auth (редкий кейс) или просто покажем ошибку
+              if (res.status === 401) setShowLogin(true);
+              else {
+                  setDebugMessage(j?.error || 'claim failed');
+                  setTimeout(() => setDebugMessage(''), 3000);
+              }
             }
           }
         } catch (e) {

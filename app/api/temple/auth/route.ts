@@ -99,19 +99,27 @@ export async function POST(req: Request) {
     const token = signSession({ userId: id, displayName })
     const maxAge = 60 * 60 * 24 * 30 // 30 days
     const isProd = process.env.NODE_ENV === 'production'
+    
     // If initData provided (Telegram flow), set SameSite=None to allow WebView cookies.
+    // Important for cross-site cookie availability within the Telegram iframe.
     const sameSite = body?.initData ? 'None' : 'Lax'
     const cookie = `temple_session=${token}; Path=/; Max-Age=${maxAge}; SameSite=${sameSite}; HttpOnly${isProd ? '; Secure' : ''}`
 
-    // If we're in development (or not in a secure context), some WebViews/browsers
-    // will ignore Set-Cookie when SameSite=None but Secure is not set. To make
-    // local debugging possible, return the JWT token in the JSON body when not
-    // running in production. The client will store it and send it to server-side
-    // endpoints as a fallback.
-    const resBody: any = { success: true, userId: id, displayName }
-    if (!isProd) resBody.token = token
+    // Construct response body
+    // CRITICAL FIX: Always return the token.
+    // The client (Telegram Mini App) needs this token to store in localStorage
+    // because cookies often fail in iFrames/WebViews due to strict privacy settings.
+    const resBody: any = { 
+      success: true, 
+      userId: id, 
+      displayName, 
+      token: token // <--- Always included now
+    }
 
-    return NextResponse.json(resBody, { status: 200, headers: { 'Set-Cookie': cookie } })
+    return NextResponse.json(resBody, { 
+      status: 200, 
+      headers: { 'Set-Cookie': cookie } 
+    })
   } catch (e: any) {
     console.error('API: Critical Error:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })
