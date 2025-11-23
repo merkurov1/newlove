@@ -21,7 +21,7 @@ export default function TempleLogsClient({ initialLogs = [], serverError = null 
     const fetchLogs = async () => {
       try {
         setLoading(true);
-        const res = await fetch('/api/temple/logs');
+        const res = await fetch('/api/temple_logs');
         if (!res.ok) {
           const txt = await res.text();
           throw new Error(txt || `HTTP ${res.status}`);

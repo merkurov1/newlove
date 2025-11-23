@@ -1,6 +1,6 @@
 export async function templeTrack(eventType: string, message: string) {
   try {
-    await fetch('/api/temple/logs', {
+    await fetch('/api/temple_logs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ event_type: eventType, message })

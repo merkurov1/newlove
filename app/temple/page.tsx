@@ -50,7 +50,7 @@ export default function TemplePage() {
   // Клик по кнопке пишет в лог (через серверный API, использующий service-role key)
   const trackClick = async (service: string) => {
     try {
-      await fetch('/api/temple/logs', {
+      await fetch('/api/temple_logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event_type: 'nav', message: `Кто-то вошел в ${service}` })
