@@ -9,7 +9,7 @@ export async function templeTrack(eventType: string, message: string) {
           const j = await res.json();
           if (j?.displayName) {
             displayName = j.displayName;
-            try { localStorage.setItem('temple_user', displayName); } catch (e) {}
+            try { if (displayName) localStorage.setItem('temple_user', displayName); } catch (e) {}
           }
         }
       } catch (e) {
