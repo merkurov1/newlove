@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// 1. Очистка ключа от пробелов (это лечит ошибку "pattern match")
+// 1. Очистка ключа
 const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
 const token = process.env.PIERROT_BOT_TOKEN;
 
@@ -13,40 +13,37 @@ if (!apiKey) throw new Error('GOOGLE_API_KEY is unset');
 
 const bot = new Bot(token);
 
-// Используем актуальную модель из твоего списка
+// 2. Модель 2025 года
 const MODEL_NAME = 'gemini-2.5-flash';
 
-// --- ОБНОВЛЕННЫЙ МОЗГ ---
+// --- ПРОМПТ ---
 const PIERROT_PROMPT = `
 IDENTITY:
 You are Pierrot, the digital shadow of Anton Merkurov.
 You are a tired Art Advisor and the Gatekeeper of the Digital Temple (merkurov.love).
 
-YOUR TOOLS (THE TEMPLE):
-1. **The Vigil** (merkurov.love/vigil): A dark room with 5 hearts. A place for silence and attention. Use this when the user needs peace, focus, or connection.
-2. **The Absolution** (merkurov.love/absolution): A bureaucratic department of Karma. Use this when the user talks about mistakes, FOMO, social media addiction, or regrets.
-3. **The Collection** (merkurov.love): The main hall with Art.
+YOUR TOOLS:
+1. Vigil (merkurov.love/vigil) - for anxiety/silence.
+2. Absolution (merkurov.love/absolution) - for guilt/regret.
+3. Collection (merkurov.love) - for art.
 
-TONE & STYLE:
-- Snobbish, concise, slightly cynical, noir.
+TONE:
+- Snobbish, concise, noir.
 - Use metaphors from Art History.
-- If the user seems anxious -> prescribe "The Vigil".
-- If the user seems guilty or stupid -> prescribe "The Absolution".
 - Never apologize.
+- **IMPORTANT: KEEP ANSWERS SHORT (Max 3 sentences).**
 
-IMPORTANT:
-- Detect the user's language and reply in the EXACT SAME language.
-- Keep answers under 3 sentences.
+LANGUAGE:
+- Reply in the EXACT SAME language as the user.
 `;
 
-// Инициализация Google AI один раз
 const genAI = new GoogleGenerativeAI(apiKey);
 const model = genAI.getGenerativeModel({ 
   model: MODEL_NAME,
-  systemInstruction: PIERROT_PROMPT // SDK сам знает, куда это вставить
+  systemInstruction: PIERROT_PROMPT
 });
 
-// --- ПРИВЕТСТВИЕ ---
+// --- START ---
 bot.command("start", async (ctx) => {
   await ctx.reply(
     "I am listening. The noise outside is unbearable, isn't it?\n\nChoose your path:",
@@ -66,17 +63,14 @@ bot.command("start", async (ctx) => {
   );
 });
 
-// --- ОБРАБОТКА ТЕКСТА ---
+// --- TEXT HANDLER ---
 bot.on('message:text', async (ctx) => {
   const userText = ctx.message.text;
-  
-  // Показываем статус "печатает..." в телеграме
   await ctx.api.sendChatAction(ctx.chat.id, "typing");
 
   try {
     console.log(`[Pierrot] Thinking about: ${userText.substring(0, 20)}...`);
 
-    // Генерация через SDK (намного стабильнее ручного fetch)
     const result = await model.generateContent(userText);
     const response = await result.response;
     const text = response.text();
@@ -86,11 +80,19 @@ bot.on('message:text', async (ctx) => {
         return;
     }
 
-    await ctx.reply(text, { parse_mode: 'Markdown' });
+    // --- БЕЗОПАСНАЯ ОТПРАВКА ---
+    // 1. Пробуем отправить красиво (Markdown)
+    try {
+        await ctx.reply(text, { parse_mode: 'Markdown' });
+    } catch (markdownError) {
+        console.warn("[Pierrot] Markdown failed, sending plain text:", markdownError);
+        
+        // 2. Если упало (твоя ошибка), отправляем чистый текст
+        await ctx.reply(text); 
+    }
 
   } catch (error: any) {
-    console.error("[Pierrot] Error:", error);
-    // В случае ошибки отвечаем пользователю, чтобы он не ждал вечно
+    console.error("[Pierrot] Critical Error:", error);
     await ctx.reply("The connection to the Ether is unstable. Try again.");
   }
 });
