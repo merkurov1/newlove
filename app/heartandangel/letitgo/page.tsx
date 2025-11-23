@@ -1,6 +1,6 @@
-import { Suspense } from 'react'; // Импортируем Suspense
+import { Suspense } from 'react';
 import LetItGoAngel from '@/components/LetItGoAngel';
-import TempleNav from '@/components/TempleNav'; // Импортируем наш новый компонент
+import TempleWrapper from '@/components/TempleWrapper'; // Используем новый Wrapper
 import './letitgo.css';
 
 export const metadata = {
@@ -26,13 +26,12 @@ export default function LetItGoPage() {
   return (
     <div className="letitgo-container">
       {/* 
-        Вставляем навигатор Храма. 
-        Он сам проверит, зашли мы из Храма или просто так.
-        Если просто так — он ничего не сделает.
-        Если из Храма — скроет хедеры и добавит навигацию.
+        Обертка для режима Храма.
+        Скрывает хедер сайта и добавляет навигацию "Назад", 
+        если в URL есть ?mode=temple
       */}
       <Suspense fallback={null}>
-        <TempleNav />
+        <TempleWrapper />
       </Suspense>
 
       {/* Твой основной контент */}

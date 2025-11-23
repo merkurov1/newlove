@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import TempleWrapper from '@/components/TempleWrapper'
 
 const QUESTIONS_EN = [
   "What is the one physical object in your home you hate but cannot throw away?",
@@ -110,7 +111,7 @@ export default function CastPage() {
         
         setFullText(data.analysis)
         setArchetype(data.archetype)
-        setRecordId(data.recordId) // Сохраняем ID для апселла
+        setRecordId(data.recordId) 
 
       } catch (error) {
         setFullText('Error connecting to the Core.')
@@ -138,10 +139,12 @@ export default function CastPage() {
     }
   }
 
-  // --- RENDER ---
+  // --- RENDER: INTRO ---
   if (currentStep === 0) {
      return (
-        <div className="min-h-screen bg-black flex items-center justify-center font-mono">
+        <div className="min-h-screen bg-black flex items-center justify-center font-mono relative">
+            <Suspense fallback={null}><TempleWrapper /></Suspense>
+            
             <div className="max-w-4xl px-6 grid md:grid-cols-2 gap-12">
                 <div className="space-y-6">
                     <p className="text-gray-400 text-sm leading-relaxed">
@@ -168,9 +171,12 @@ export default function CastPage() {
      )
   }
 
+  // --- RENDER: QUESTIONS ---
   if (currentStep <= 10) {
      return (
-        <div className="min-h-screen bg-black flex flex-col items-center justify-center px-6 font-mono animate-in fade-in">
+        <div className="min-h-screen bg-black flex flex-col items-center justify-center px-6 font-mono animate-in fade-in relative">
+           <Suspense fallback={null}><TempleWrapper /></Suspense>
+
            <div className="w-full max-w-2xl">
               <div className="flex justify-between text-xs text-gray-600 mb-12 uppercase tracking-widest">
                  <span>Query {currentStep < 10 ? `0${currentStep}` : currentStep}</span>
@@ -198,9 +204,11 @@ export default function CastPage() {
      )
   }
 
-  // RESULT SCREEN
+  // --- RENDER: RESULT ---
   return (
-    <div className="min-h-screen bg-black text-white font-mono p-6 md:p-12 overflow-y-auto">
+    <div className="min-h-screen bg-black text-white font-mono p-6 md:p-12 overflow-y-auto relative">
+       <Suspense fallback={null}><TempleWrapper /></Suspense>
+
        <div className="max-w-3xl mx-auto mt-12 relative">
           
           {loading ? (

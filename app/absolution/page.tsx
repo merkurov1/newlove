@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import html2canvas from 'html2canvas';
+import TempleWrapper from '@/components/TempleWrapper';
 
 // Language translations
 const TRANSLATIONS = {
+  // ... твои переводы (они остаются без изменений) ...
   en: {
     title: "CONFESS YOUR DIGITAL SINS",
     namePlaceholder: "Enter your Name",
@@ -312,6 +314,11 @@ export default function AbsolutionPage() {
 
   return (
     <div className={`absolution-container ${(state === 'ritual' || state === 'complete') ? 'dark' : ''}`}>
+        {/* === ВСТАВЛЯЕМ WRAPPER ЗДЕСЬ === */}
+        <Suspense fallback={null}>
+            <TempleWrapper />
+        </Suspense>
+
         {/* State 1: Confessional */}
         {state === 'confess' && (
           <div className="confessional">

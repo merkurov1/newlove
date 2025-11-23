@@ -1,18 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useRef } from "react";
-const useMemo = React.useMemo;
+import { useState, useEffect, useRef, useMemo, Suspense } from "react"; // Добавил Suspense
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext'; 
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
+import TempleWrapper from '@/components/TempleWrapper'; // Импортируем Wrapper
 
 // --- CONFIGURATION ---
-// Ваш ID для прав Администратора (тушить свечи)
 const ADMIN_ID = 'fffa55a9-1ed7-49ff-953d-dfffa9f00844'; 
 
-// Asset configuration
 const HEARTS_DATA = [
   { id: 1, static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0964.jpeg', loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-7916633362072566540.mp4' },
   { id: 2, static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0962.jpeg', loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-6228877831163806687.mp4' },
@@ -23,12 +21,11 @@ const HEARTS_DATA = [
 
 const ANGEL_IMAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
 
-// --- TYPES ---
 interface HeartData {
   id: number;
   owner_name: string | null;
   owner_id?: string | null;
-  intention?: string | null; // Поле Намерения
+  intention?: string | null;
   last_lit_at: string;
 }
 
@@ -45,11 +42,9 @@ export default function VigilPage() {
   const [showManifesto, setShowManifesto] = useState(false);
   const [selectedHeart, setSelectedHeart] = useState<number | null>(null);
   
-  // Inputs
   const [nameInput, setNameInput] = useState('');
   const [intentionInput, setIntentionInput] = useState('');
 
-  // UX States
   const [sparkParticles, setSparkParticles] = useState<SparkParticle[]>([]);
   const [isLighting, setIsLighting] = useState(false);
   const [flash, setFlash] = useState(false); 
@@ -63,7 +58,6 @@ export default function VigilPage() {
   const heartRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const supabase = createClient();
 
-  // --- INITIALIZATION ---
   useEffect(() => {
     fetchHearts();
     
@@ -85,9 +79,6 @@ export default function VigilPage() {
     if (data) setDbHearts(data);
   };
 
-  // --- CALCULATE STATE (Entropy & Light) ---
-  
-  // 1. Global Light Level
   const activeHeartsCount = useMemo(() => {
     if (!dbHearts.length) return 0;
     const now = new Date().getTime();
@@ -97,7 +88,6 @@ export default function VigilPage() {
     }).length;
   }, [dbHearts]);
 
-  // 2. Individual Heart State
   const getHeartState = (heartId: number) => {
     const dbRecord = dbHearts.find(h => h.id === heartId);
     if (!dbRecord || !dbRecord.last_lit_at) {
@@ -114,23 +104,19 @@ export default function VigilPage() {
 
     if (isAlive) {
       if (hoursPassed < 6) {
-        // Phase 1: Blazing (0-6h)
         filter = 'brightness(1.3) saturate(1.4) contrast(1.1)';
         glow = '0 0 50px rgba(255, 60, 60, 0.8)';
         scale = 1.05;
       } else if (hoursPassed < 12) {
-        // Phase 2: Burning (6-12h)
         filter = 'brightness(1) saturate(1)';
         glow = '0 0 25px rgba(255, 60, 60, 0.4)';
         scale = 1;
       } else {
-        // Phase 3: Fading (12-24h)
         filter = 'grayscale(0.6) brightness(0.7)';
         glow = '0 0 10px rgba(255, 60, 60, 0.15)';
         scale = 0.98;
       }
     } else {
-      // Dead
       filter = 'grayscale(100%) brightness(0.2)';
       glow = 'none';
       scale = 0.95;
@@ -139,10 +125,7 @@ export default function VigilPage() {
     return { isAlive, owner: isAlive ? dbRecord.owner_name : null, intention: isAlive ? dbRecord.intention : null, isMine, filter, glow, scale };
   };
 
-  // --- INTERACTIONS ---
-
   const handleHeartClick = (heartId: number) => {
-    // 1. Auth Check
     if (!user) {
       setShowLogin(true);
       return;
@@ -150,20 +133,9 @@ export default function VigilPage() {
 
     const state = getHeartState(heartId);
 
-    // 2. One Heart Per Person Rule (Optional - commented out for testing)
-    /* 
-    const myAliveHeart = dbHearts.find(h => {
-        if (!h.owner_id || h.owner_id !== user.id) return false;
-        // check if alive logic...
-        return true; 
-    });
-    */
-
-    // 3. Access Control
     if (state.isAlive && !state.isMine) {
-        // GOD MODE: Allow admin to extinguish
         if (user.id === ADMIN_ID) {
-            setSelectedHeart(heartId); // Open modal to extinguish
+            setSelectedHeart(heartId); 
             return;
         }
         setDebugMessage(`Occupied by ${state.owner}. Wait for the light to fade.`);
@@ -171,9 +143,7 @@ export default function VigilPage() {
         return;
     }
 
-    // 4. Open Modal
     setSelectedHeart(heartId);
-    // Pre-fill
     if (state.isMine) {
         setNameInput(state.owner || '');
         setIntentionInput(state.intention || '');
@@ -188,13 +158,12 @@ export default function VigilPage() {
     
     setIsLighting(true);
     const heartIdToUpdate = selectedHeart;
-    setSelectedHeart(null); // Close modal instantly
+    setSelectedHeart(null); 
 
     const angelRect = angelRef.current?.getBoundingClientRect();
     const targetRect = heartRefs.current[heartIdToUpdate]?.getBoundingClientRect();
 
     if (angelRect && targetRect) {
-      // Spark Coordinates (Calibrated to Right Hand Candle)
       const startX = angelRect.left + (angelRect.width * 0.85); 
       const startY = angelRect.top + (angelRect.height * 0.55); 
       const endX = targetRect.left + (targetRect.width / 2);
@@ -202,20 +171,15 @@ export default function VigilPage() {
 
       const sparkId = `spark-${Date.now()}`;
       
-      // Launch Spark
       setSparkParticles(prev => [...prev, { id: sparkId, startX, startY, endX, endY }]);
 
-      // Wait for flight (2.5s - Majestic Slow)
       setTimeout(async () => {
-        // 1. Visual Impact
         setFlash(true);
-        if (navigator.vibrate) navigator.vibrate([50, 50]); // Haptic
+        if (navigator.vibrate) navigator.vibrate([50, 50]); 
         setTimeout(() => setFlash(false), 200);
 
-        // 2. Remove Spark
         setSparkParticles(prev => prev.filter(s => s.id !== sparkId));
 
-        // 3. Database Write
         await supabase.from('vigil_hearts').upsert({
             id: heartIdToUpdate,
             owner_name: nameInput.trim(),
@@ -225,7 +189,7 @@ export default function VigilPage() {
         });
 
         setIsLighting(false);
-      }, 2500); // Matches animation duration
+      }, 2500); 
     } else {
       setIsLighting(false);
     }
@@ -234,32 +198,32 @@ export default function VigilPage() {
   const triggerExtinguish = async () => {
       if (!selectedHeart || !user || user.id !== ADMIN_ID) return;
       
-      // Admin Action: Kill the heart
       await supabase.from('vigil_hearts').upsert({
           id: selectedHeart,
           owner_name: null,
           owner_id: null,
           intention: null,
-          last_lit_at: null // Set to null or old date
+          last_lit_at: null 
       });
       setSelectedHeart(null);
   };
 
   return (
     <div className="vigil-container">
-      
-      {/* Preload Videos */}
+      {/* --- ВСТАВЛЯЕМ WRAPPER СЮДА --- */}
+      <Suspense fallback={null}>
+        <TempleWrapper />
+      </Suspense>
+
       <div style={{display:'none'}}>
         {HEARTS_DATA.map(h => <video key={h.id} src={h.loop} preload="auto" />)}
       </div>
 
-      {/* FLASH EFFECT */}
       <div style={{
           position: 'fixed', inset: 0, background: 'white', pointerEvents: 'none', zIndex: 9999,
           opacity: flash ? 0.15 : 0, transition: 'opacity 0.2s ease-out'
       }} />
 
-      {/* DEBUG TOAST */}
       <AnimatePresence>
         {debugMessage && (
           <motion.div 
@@ -274,18 +238,15 @@ export default function VigilPage() {
       <button className="info-button" onClick={() => setShowManifesto(true)}>?</button>
 
       <div className="room" style={{
-          // Dynamic Room Lighting
           filter: `brightness(${0.4 + (activeHeartsCount * 0.12)})` 
       }}>
         
-        {/* ANGEL */}
         <div className="angel-layer" ref={angelRef}>
           <img 
             src={ANGEL_IMAGE} 
             className="angel-img" 
             alt="Watcher"
             style={{
-                // Angel glows gold if > 2 hearts active
                 filter: activeHeartsCount >= 3 
                     ? 'drop-shadow(0 0 40px rgba(255, 215, 0, 0.7)) brightness(1.2)' 
                     : 'drop-shadow(0 0 15px rgba(255, 255, 255, 0.2)) brightness(0.9)',
@@ -294,7 +255,6 @@ export default function VigilPage() {
           />
         </div>
 
-        {/* HEARTS */}
         <div className="shelves-grid">
           {HEARTS_DATA.map((asset) => {
             const state = getHeartState(asset.id);
@@ -317,7 +277,6 @@ export default function VigilPage() {
                   )}
                 </div>
                 
-                {/* Meta Info */}
                 <div className="heart-meta">
                   <div className="heart-owner">{state.isAlive ? state.owner : "VACANT"}</div>
                   {state.isAlive && state.intention && (
@@ -330,7 +289,6 @@ export default function VigilPage() {
         </div>
       </div>
 
-      {/* SPARK ANIMATION */}
       <div className="spark-layer">
         <AnimatePresence>
           {sparkParticles.map(spark => (
@@ -345,7 +303,7 @@ export default function VigilPage() {
                 scale: [0.2, 1.5, 0.5] 
               }}
               transition={{ 
-                duration: 2.5, // 2.5 Seconds Flight
+                duration: 2.5, 
                 ease: "easeInOut",
                 times: [0, 0.2, 0.9, 1]
               }}
@@ -354,12 +312,10 @@ export default function VigilPage() {
         </AnimatePresence>
       </div>
 
-      {/* MODALS */}
       {selectedHeart !== null && (
         <div className="modal-backdrop" onClick={() => setSelectedHeart(null)}>
           <div className="modal-box" onClick={(e) => (e as React.MouseEvent<HTMLDivElement>).stopPropagation()}>
             
-            {/* ADMIN VIEW */}
             {user?.id === ADMIN_ID && getHeartState(selectedHeart).isAlive && !getHeartState(selectedHeart).isMine ? (
                 <>
                     <h3>ADMIN CONTROL</h3>
@@ -367,7 +323,6 @@ export default function VigilPage() {
                     <button onClick={triggerExtinguish} className="btn-danger">EXTINGUISH FLAME</button>
                 </>
             ) : (
-                // USER VIEW
                 <>
                     <h3>{getHeartState(selectedHeart).isMine ? "REIGNITE" : "CLAIM VESSEL"}</h3>
                     
@@ -401,10 +356,8 @@ export default function VigilPage() {
         </div>
       )}
 
-      {/* LOGIN */}
       {showLogin && <ModernLoginModal onClose={() => setShowLogin(false)} />}
 
-      {/* MANIFESTO */}
       {showManifesto && (
         <div className="modal-backdrop" onClick={() => setShowManifesto(false)}>
           <div className="modal-box manifesto" onClick={(e) => (e as React.MouseEvent<HTMLDivElement>).stopPropagation()}>
@@ -426,6 +379,7 @@ export default function VigilPage() {
           background: radial-gradient(circle at 50% 90%, #151515 0%, #000000 85%);
           perspective: 1200px;
           display: flex; justify-content: center; align-items: center;
+          position: relative; /* Важно для позиционирования враппера */
         }
 
         .spark-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
