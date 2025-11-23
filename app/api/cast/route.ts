@@ -62,32 +62,13 @@ export async function POST(req: Request) {
 
     const systemPrompt = buildSystemPrompt(lang)
 
-    // Call Generative Language REST API directly to control generationConfig
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
+    // Use the official client to call the generative model (avoids hand-rolled REST payload mismatches)
+    const MODEL_NAME = 'gemini-2.5-flash'
+    const model = genAI.getGenerativeModel({ model: MODEL_NAME, systemInstruction: systemPrompt })
 
-    const payload = {
-      "systemInstruction": { "parts": [{ "text": systemPrompt }] },
-      "content": [
-        { "type": "text", "text": `USER ANSWERS:\n${answers.map((a: string, i: number) => `${i + 1}. ${a}`).join('\n')}` }
-      ],
-      "temperature": 0.0,
-      "maxOutputTokens": 800
-    }
-
-    const gaResp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-
-    if (!gaResp.ok) {
-      const errText = await gaResp.text()
-      console.error('Google API error:', gaResp.status, errText)
-      return NextResponse.json({ error: 'AI service error' }, { status: 502 })
-    }
-
-    const gaJson = await gaResp.json()
-    const rawText = gaJson?.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(gaJson)
+    const userText = `USER ANSWERS:\n${answers.map((a: string, i: number) => `${i + 1}. ${a}`).join('\n')}`
+    const result = await model.generateContent(userText)
+    const rawText = (result?.response?.text && String(result.response.text())) || JSON.stringify(result)
 
     // Try to parse JSON-only output
     let parsed = extractJSON(rawText)

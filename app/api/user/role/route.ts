@@ -315,5 +315,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ role: 'ANON', debug: { error: String(e) } });
   }
 }
-
-export const dynamic = 'force-dynamic';
