@@ -49,7 +49,6 @@ const QUESTIONS_RU = [
   "10/10. Вы готовы узнать свой диагноз? (Да/Нет)"
 ];
 
-// --- ADVISOR PROMPT (DEFAULT MODE) ---
 const ADVISOR_PROMPT = `
 IDENTITY:
 You are Pierrot, the digital shadow of Anton Merkurov.
@@ -78,7 +77,6 @@ async function getSession(chatId: number) {
 }
 
 async function createSession(chatId: number) {
-  // Сбрасываем сессию в 0
   await supabase.from('bot_sessions').upsert({ chat_id: chatId, step: 0, answers: [] });
 }
 
@@ -90,12 +88,10 @@ async function updateSession(chatId: number, data: any) {
   await supabase.from('bot_sessions').update(data).eq('chat_id', chatId);
 }
 
-// --- HELPER: SAFE REPLY ---
 async function safeReply(ctx: any, text: string) {
     try {
         await ctx.reply(text, { parse_mode: 'Markdown' });
     } catch (e) {
-        // Если маркдаун сломался, шлем чистый текст
         await ctx.reply(text);
     }
 }
@@ -108,17 +104,9 @@ bot.command("start", async (ctx) => {
     {
       reply_markup: {
         inline_keyboard: [
-          [
-             // Кнопка запуска CAST
-            { text: "💀 Deconstruct Me (/cast)", callback_data: "start_cast" }
-          ],
-          [
-            { text: "🕯 The Vigil", url: "https://www.merkurov.love/vigil" },
-            { text: "🧾 Absolution", url: "https://www.merkurov.love/absolution" }
-          ],
-          [
-            { text: "🏛 Main Hall", url: "https://www.merkurov.love" }
-          ]
+          [{ text: "💀 Deconstruct Me (/cast)", callback_data: "start_cast" }],
+          [{ text: "🕯 The Vigil", url: "https://www.merkurov.love/vigil" }, { text: "🧾 Absolution", url: "https://www.merkurov.love/absolution" }],
+          [{ text: "🏛 Main Hall", url: "https://www.merkurov.love" }]
         ]
       }
     }
@@ -136,7 +124,6 @@ bot.command("cancel", async (ctx) => {
   await ctx.reply("Protocol aborted. I am your Advisor again.");
 });
 
-// Callback для кнопки старта
 bot.callbackQuery("start_cast", async (ctx) => {
   await createSession(ctx.chat?.id!);
   const keyboard = new InlineKeyboard().text("English", "lang_en").text("Русский", "lang_ru");
@@ -144,11 +131,9 @@ bot.callbackQuery("start_cast", async (ctx) => {
   await ctx.answerCallbackQuery();
 });
 
-// Callback для выбора языка
 bot.callbackQuery(/lang_(.+)/, async (ctx) => {
-  const lang = ctx.match[1]; // 'en' or 'ru'
+  const lang = ctx.match[1];
   await updateSession(ctx.chat?.id!, { language: lang, step: 1 });
-  
   const q = lang === 'ru' ? QUESTIONS_RU[0] : QUESTIONS_EN[0];
   await ctx.reply(q);
   await ctx.answerCallbackQuery();
@@ -159,34 +144,16 @@ bot.callbackQuery(/lang_(.+)/, async (ctx) => {
 bot.on('message:text', async (ctx) => {
   const chatId = ctx.chat.id;
   const text = ctx.message.text;
-  
-  // 1. Проверяем сессию (находится ли юзер в процессе CAST?)
   const session = await getSession(chatId);
 
-  // ====================================================
-  // РЕЖИМ 1: ART ADVISOR (Если нет активной сессии)
-  // ====================================================
+  // === REJIM 1: ADVISOR ===
   if (!session) {
     await ctx.api.sendChatAction(chatId, "typing");
     try {
       console.log(`[Pierrot Advisor] Query: ${text.substring(0, 20)}...`);
-      
-      const model = genAI.getGenerativeModel({ 
-        model: MODEL_NAME,
-        systemInstruction: ADVISOR_PROMPT
-      });
-      
+      const model = genAI.getGenerativeModel({ model: MODEL_NAME, systemInstruction: ADVISOR_PROMPT });
       const result = await model.generateContent(text);
-      const response = await result.response;
-      const replyText = response.text();
-
-      if (!replyText) {
-          await ctx.reply("The void is silent.");
-          return;
-      }
-
-      await safeReply(ctx, replyText);
-
+      await safeReply(ctx, result.response.text());
     } catch (error) {
       console.error("[Pierrot Advisor] Error:", error);
       await ctx.reply("The connection to the Ether is unstable.");
@@ -194,37 +161,28 @@ bot.on('message:text', async (ctx) => {
     return;
   }
 
-  // ====================================================
-  // РЕЖИМ 2: CAST PROTOCOL (Если есть сессия)
-  // ====================================================
+  // === REJIM 2: CAST PROTOCOL ===
   const step = session.step;
   const lang = session.language || 'en';
   const questions = lang === 'ru' ? QUESTIONS_RU : QUESTIONS_EN;
 
-  // Если юзер на шаге 0 (выбор языка), но пишет текст -> игнорируем или просим нажать кнопку
   if (step === 0) {
-      await ctx.reply("Please select a language using the buttons above. / Выберите язык кнопками выше.");
+      await ctx.reply("Please select a language using the buttons above.");
       return;
   }
 
-  // ШАГИ 1-10: Сбор ответов
+  // STEPS 1-10
   if (step > 0 && step <= 10) {
-    // Сохраняем текущий ответ
     const newAnswers = [...(session.answers || []), text];
-    
-    // Переходим к следующему шагу
     const nextStep = step + 1;
     await updateSession(chatId, { answers: newAnswers, step: nextStep });
 
-    // Если это был последний ответ (шаг 10), запускаем анализ
     if (step === 10) {
       await ctx.reply(lang === 'ru' ? "⏳ Анализирую структуру..." : "⏳ Analyzing structure...");
       await ctx.api.sendChatAction(chatId, "typing");
 
       try {
-        // --- ГЕНЕРАЦИЯ ДИАГНОЗА ---
         const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-        
         const langPrompt = lang === 'ru' ? 'RUSSIAN' : 'ENGLISH';
         const analysisPrompt = `
           ROLE: THE MERKUROV ANALYZER.
@@ -232,76 +190,69 @@ bot.on('message:text', async (ctx) => {
           TONE: Cold, Clinical.
           USER ANSWERS:
           ${newAnswers.map((a: string, i: number) => `${i+1}. ${a}`).join('\n')}
-          
           INSTRUCTION: Answer strictly in ${langPrompt}.
-          
           OUTPUT FORMAT:
           [ARCHETYPE: VOID/NOISE/STONE/UNFRAMED]
-          
           # SUBJECT ANALYSIS
           [2 sentences psychoanalysis]
-          
           ## STRUCTURAL INTEGRITY
           [Trauma analysis]
-          
           ## DIGITAL FOOTPRINT
           [Vanity analysis]
-          
           ## DIRECTIVE
           [One imperative command]
         `;
 
         const result = await model.generateContent(analysisPrompt);
         const analysisText = result.response.text();
-
-        // Отправляем диагноз
         await safeReply(ctx, analysisText);
 
-        // Парсим Архетип
         const match = analysisText.match(/\[ARCHETYPE:\s*(.*?)\]/);
         const archetype = match ? match[1] : 'VOID';
 
-        // Сохраняем в таблицу CASTS (для истории)
         const { data: record } = await supabase.from('casts').insert({
           answers: newAnswers,
           language: lang,
           analysis: analysisText,
           archetype: archetype,
-          status: 'telegram_pending', // Ждем email
-          email: `tg_${chatId}`       // Временный ID
+          status: 'telegram_pending',
+          email: `tg_${chatId}`
         }).select().single();
 
-        // Сохраняем ID записи в сессии, чтобы потом обновить Email
-        await updateSession(chatId, { step: 11, record_id: record?.id });
+        await updateSession(chatId, { step: 11, record_id: record?.id, answers: newAnswers }); // Важно: обновили answers
 
-        // UPSELL
         await ctx.reply(
           lang === 'ru' 
             ? "Чтобы сохранить слепок в Архиве и получить доступ к Level II, введите ваш Email."
             : "To archive this cast and access Level II, enter your Email."
         );
-
       } catch (e) {
         console.error("Analysis Error:", e);
-        await ctx.reply("Critical Failure during analysis.");
+        await ctx.reply("Critical Failure.");
         await deleteSession(chatId);
       }
       return;
     }
 
-    // Если не последний шаг -> задаем следующий вопрос
-    await ctx.reply(questions[step]); // step уже равен индексу следующего вопроса (т.к. мы сделали +1)
+    await ctx.reply(questions[step]);
   }
 
-  // ШАГ 11: EMAIL CAPTURE
+  // STEP 11: EMAIL CAPTURE
   else if (step === 11) {
+    // --- FIX: ЗАЩИТА ОТ ДУБЛЕЙ TELEGRAM ---
+    // Если текст сообщения совпадает с ПОСЛЕДНИМ ответом (на 10-й вопрос),
+    // значит это ретрай вебхука. Игнорируем его.
+    const lastAnswer = session.answers?.[session.answers.length - 1];
+    if (text === lastAnswer) {
+        console.log("Ignoring webhook retry (duplicate message)");
+        return; 
+    }
+    // ---------------------------------------
+
     if (text.includes('@')) {
-       // Обновляем email в таблице casts
-       // Мы не знаем ID записи здесь напрямую, если не сохранили его в session.
-       // Но для MVP просто поблагодарим.
-       
+       // Тут можно реально обновить Email в БД, если нужно
        await ctx.reply(lang === 'ru' ? "[ ЗАПРОС ПРИНЯТ. ВЫ В СИСТЕМЕ. ]" : "[ REQUEST ACCEPTED. YOU ARE IN. ]");
-       await deleteSession(chatId); // Возвращаем режим Эдвайзера
+       await deleteSession(chatId);
     } else {
        await ctx.reply(lang === 'ru' ? "Это не похоже на Email. Попробуйте еще раз или /cancel" : "Invalid Email. Try again or /cancel");
     }
