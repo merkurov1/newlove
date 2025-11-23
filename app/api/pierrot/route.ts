@@ -6,14 +6,19 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // --- CONFIG & VALIDATION ---
-const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
+// 1. Исправленная и безопасная инициализация ключей
 const token = process.env.PIERROT_BOT_TOKEN;
 const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const rawApiKey = process.env.GOOGLE_API_KEY;
 
+// Проверяем ключи ДО запуска бота, чтобы видеть ошибку в логах Vercel
 if (!token) throw new Error('PIERROT_BOT_TOKEN is unset');
-if (!apiKey) throw new Error('GOOGLE_API_KEY is unset');
 if (!sbUrl || !sbKey) throw new Error('SUPABASE credentials missing');
+if (!rawApiKey) throw new Error('GOOGLE_API_KEY is unset');
+
+// Чистим API ключ от случайных пробелов
+const apiKey = rawApiKey.trim();
 
 // --- INIT ---
 const bot = new Bot(token);
@@ -70,10 +75,23 @@ LANGUAGE:
 - Reply in the EXACT SAME language as the user.
 `;
 
+// --- GLOBAL ERROR HANDLER (Чтобы бот не падал молча) ---
+bot.catch((err) => {
+  console.error("Global Bot Error:", err);
+});
+
 // --- SESSION HELPERS ---
 async function getSession(chatId: number) {
-  const { data } = await supabase.from('bot_sessions').select('*').eq('chat_id', chatId).single();
-  return data;
+  try {
+    const { data, error } = await supabase.from('bot_sessions').select('*').eq('chat_id', chatId).single();
+    if (error && error.code !== 'PGRST116') { // PGRST116 = not found, это ок
+        console.error("Supabase Error:", error);
+    }
+    return data;
+  } catch (e) {
+    console.error("Session Get Error:", e);
+    return null;
+  }
 }
 
 async function createSession(chatId: number) {
@@ -92,7 +110,7 @@ async function safeReply(ctx: any, text: string) {
     try {
         await ctx.reply(text, { parse_mode: 'Markdown' });
     } catch (e) {
-        await ctx.reply(text);
+        await ctx.reply(text); // Фолбек на обычный текст
     }
 }
 
@@ -139,125 +157,118 @@ bot.callbackQuery(/lang_(.+)/, async (ctx) => {
   await ctx.answerCallbackQuery();
 });
 
-
 // --- MAIN MESSAGE LOGIC ---
 bot.on('message:text', async (ctx) => {
   const chatId = ctx.chat.id;
   const text = ctx.message.text;
-  const session = await getSession(chatId);
+  
+  // Добавил try/catch на весь хендлер, чтобы ловить любые сбои
+  try {
+      const session = await getSession(chatId);
 
-  // === REJIM 1: ADVISOR ===
-  if (!session) {
-    await ctx.api.sendChatAction(chatId, "typing");
-    try {
-      console.log(`[Pierrot Advisor] Query: ${text.substring(0, 20)}...`);
-      const model = genAI.getGenerativeModel({ model: MODEL_NAME, systemInstruction: ADVISOR_PROMPT });
-      const result = await model.generateContent(text);
-      await safeReply(ctx, result.response.text());
-    } catch (error) {
-      console.error("[Pierrot Advisor] Error:", error);
-      await ctx.reply("The connection to the Ether is unstable.");
-    }
-    return;
-  }
-
-  // === REJIM 2: CAST PROTOCOL ===
-  const step = session.step;
-  const lang = session.language || 'en';
-  const questions = lang === 'ru' ? QUESTIONS_RU : QUESTIONS_EN;
-
-  if (step === 0) {
-      await ctx.reply("Please select a language using the buttons above.");
-      return;
-  }
-
-  // STEPS 1-10
-  if (step > 0 && step <= 10) {
-    const newAnswers = [...(session.answers || []), text];
-    const nextStep = step + 1;
-    await updateSession(chatId, { answers: newAnswers, step: nextStep });
-
-    if (step === 10) {
-      await ctx.reply(lang === 'ru' ? "⏳ Анализирую структуру..." : "⏳ Analyzing structure...");
-      await ctx.api.sendChatAction(chatId, "typing");
-
-      try {
-        const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-        const langPrompt = lang === 'ru' ? 'RUSSIAN' : 'ENGLISH';
-        const analysisPrompt = `
-          ROLE: THE MERKUROV ANALYZER.
-          TASK: Analyze user based on 10 answers.
-          TONE: Cold, Clinical.
-          USER ANSWERS:
-          ${newAnswers.map((a: string, i: number) => `${i+1}. ${a}`).join('\n')}
-          INSTRUCTION: Answer strictly in ${langPrompt}.
-          OUTPUT FORMAT:
-          [ARCHETYPE: VOID/NOISE/STONE/UNFRAMED]
-          # SUBJECT ANALYSIS
-          [2 sentences psychoanalysis]
-          ## STRUCTURAL INTEGRITY
-          [Trauma analysis]
-          ## DIGITAL FOOTPRINT
-          [Vanity analysis]
-          ## DIRECTIVE
-          [One imperative command]
-        `;
-
-        const result = await model.generateContent(analysisPrompt);
-        const analysisText = result.response.text();
-        await safeReply(ctx, analysisText);
-
-        const match = analysisText.match(/\[ARCHETYPE:\s*(.*?)\]/);
-        const archetype = match ? match[1] : 'VOID';
-
-        const { data: record } = await supabase.from('casts').insert({
-          answers: newAnswers,
-          language: lang,
-          analysis: analysisText,
-          archetype: archetype,
-          status: 'telegram_pending',
-          email: `tg_${chatId}`
-        }).select().single();
-
-        await updateSession(chatId, { step: 11, record_id: record?.id, answers: newAnswers }); // Важно: обновили answers
-
-        await ctx.reply(
-          lang === 'ru' 
-            ? "Чтобы сохранить слепок в Архиве и получить доступ к Level II, введите ваш Email."
-            : "To archive this cast and access Level II, enter your Email."
-        );
-      } catch (e) {
-        console.error("Analysis Error:", e);
-        await ctx.reply("Critical Failure.");
-        await deleteSession(chatId);
+      // === REJIM 1: ADVISOR ===
+      if (!session) {
+        await ctx.api.sendChatAction(chatId, "typing");
+        console.log(`[Pierrot Advisor] Query: ${text.substring(0, 20)}...`);
+        const model = genAI.getGenerativeModel({ model: MODEL_NAME, systemInstruction: ADVISOR_PROMPT });
+        const result = await model.generateContent(text);
+        await safeReply(ctx, result.response.text());
+        return;
       }
-      return;
-    }
 
-    await ctx.reply(questions[step]);
+      // === REJIM 2: CAST PROTOCOL ===
+      const step = session.step;
+      const lang = session.language || 'en';
+      const questions = lang === 'ru' ? QUESTIONS_RU : QUESTIONS_EN;
+
+      if (step === 0) {
+          await ctx.reply("Please select a language using the buttons above.");
+          return;
+      }
+
+      // STEPS 1-10
+      if (step > 0 && step <= 10) {
+        const newAnswers = [...(session.answers || []), text];
+        const nextStep = step + 1;
+        await updateSession(chatId, { answers: newAnswers, step: nextStep });
+
+        if (step === 10) {
+          await ctx.reply(lang === 'ru' ? "⏳ Анализирую структуру..." : "⏳ Analyzing structure...");
+          await ctx.api.sendChatAction(chatId, "typing");
+
+          const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+          const langPrompt = lang === 'ru' ? 'RUSSIAN' : 'ENGLISH';
+          const analysisPrompt = `
+            ROLE: THE MERKUROV ANALYZER.
+            TASK: Analyze user based on 10 answers.
+            TONE: Cold, Clinical.
+            USER ANSWERS:
+            ${newAnswers.map((a: string, i: number) => `${i+1}. ${a}`).join('\n')}
+            INSTRUCTION: Answer strictly in ${langPrompt}.
+            OUTPUT FORMAT:
+            [ARCHETYPE: VOID/NOISE/STONE/UNFRAMED]
+            # SUBJECT ANALYSIS
+            [2 sentences psychoanalysis]
+            ## STRUCTURAL INTEGRITY
+            [Trauma analysis]
+            ## DIGITAL FOOTPRINT
+            [Vanity analysis]
+            ## DIRECTIVE
+            [One imperative command]
+          `;
+
+          const result = await model.generateContent(analysisPrompt);
+          const analysisText = result.response.text();
+          await safeReply(ctx, analysisText);
+
+          // Сохраняем в БД и ловим ошибки если база недоступна
+          try {
+              const match = analysisText.match(/\[ARCHETYPE:\s*(.*?)\]/);
+              const archetype = match ? match[1] : 'VOID';
+
+              const { data: record } = await supabase.from('casts').insert({
+                answers: newAnswers,
+                language: lang,
+                analysis: analysisText,
+                archetype: archetype,
+                status: 'telegram_pending',
+                email: `tg_${chatId}`
+              }).select().single();
+
+              await updateSession(chatId, { step: 11, record_id: record?.id, answers: newAnswers });
+          } catch (dbError) {
+              console.error("DB Save Error:", dbError);
+              // Не прерываем флоу, даже если база упала
+          }
+
+          await ctx.reply(
+            lang === 'ru' 
+              ? "Чтобы сохранить слепок в Архиве и получить доступ к Level II, введите ваш Email."
+              : "To archive this cast and access Level II, enter your Email."
+          );
+          return;
+        }
+
+        await ctx.reply(questions[step]);
+      }
+
+      // STEP 11: EMAIL CAPTURE
+      else if (step === 11) {
+        const lastAnswer = session.answers?.[session.answers.length - 1];
+        if (text === lastAnswer) return; 
+
+        if (text.includes('@')) {
+           await ctx.reply(lang === 'ru' ? "[ ЗАПРОС ПРИНЯТ. ВЫ В СИСТЕМЕ. ]" : "[ REQUEST ACCEPTED. YOU ARE IN. ]");
+           await deleteSession(chatId);
+        } else {
+           await ctx.reply(lang === 'ru' ? "Это не похоже на Email. Попробуйте еще раз или /cancel" : "Invalid Email. Try again or /cancel");
+        }
+      }
+
+  } catch (criticalError) {
+      console.error("CRITICAL BOT ERROR:", criticalError);
+      await ctx.reply("System Failure. Try /start again.");
   }
-
-  // STEP 11: EMAIL CAPTURE
-  else if (step === 11) {
-    // --- FIX: ЗАЩИТА ОТ ДУБЛЕЙ TELEGRAM ---
-    // Если текст сообщения совпадает с ПОСЛЕДНИМ ответом (на 10-й вопрос),
-    // значит это ретрай вебхука. Игнорируем его.
-    const lastAnswer = session.answers?.[session.answers.length - 1];
-    if (text === lastAnswer) {
-        console.log("Ignoring webhook retry (duplicate message)");
-        return; 
-    }
-    // ---------------------------------------
-
-    if (text.includes('@')) {
-       // Тут можно реально обновить Email в БД, если нужно
-       await ctx.reply(lang === 'ru' ? "[ ЗАПРОС ПРИНЯТ. ВЫ В СИСТЕМЕ. ]" : "[ REQUEST ACCEPTED. YOU ARE IN. ]");
-       await deleteSession(chatId);
-    } else {
-       await ctx.reply(lang === 'ru' ? "Это не похоже на Email. Попробуйте еще раз или /cancel" : "Invalid Email. Try again or /cancel");
-    }
-  }
-
 });
 
 export const POST = webhookCallback(bot, 'std/http');
