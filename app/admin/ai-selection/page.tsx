@@ -41,7 +41,7 @@ export default function CuratorTool() {
   const generate = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/generate-lot', {
+      const res = await fetch('/api/admin/generate_lot', {
         method: 'POST',
         body: JSON.stringify({
             artist: input.artist,
