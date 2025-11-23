@@ -66,7 +66,7 @@ export default function TributePage() {
     setTimeout(() => setLastDonor(null), 4000);
   };
 
-  // --- 2. PAYMENT LOGIC ---
+ // --- 2. PAYMENT LOGIC ---
   const handleTribute = async () => {
     setLoading(true);
     try {
@@ -76,14 +76,24 @@ export default function TributePage() {
         body: JSON.stringify({ 
             amount, 
             currency: 'usd',
-            // Можно добавить поле для ввода имени/сообщения в UI, пока хардкод для теста
-            donor_name: 'Pilgrim', 
+            donor_name: 'Pilgrim', // В будущем можно брать из инпута
             message: 'For the Golden Heart' 
         }),
       });
       const data = await res.json();
+      
       if (data.url) {
-        window.location.href = data.url;
+        // FIX: Проверяем, мы в Телеграме или в вебе?
+        const tg = (window as any).Telegram?.WebApp;
+        
+        if (tg && tg.openLink) {
+            // ВАРИАНТ А: Мы в Телеграме. Открываем во внешнем браузере.
+            // Храм остается висеть в фоне и ждет вебхук.
+            tg.openLink(data.url);
+        } else {
+            // ВАРИАНТ Б: Мы в обычном браузере. Делаем редирект.
+            window.location.href = data.url;
+        }
       } else {
         alert('Payment gateway error');
       }
