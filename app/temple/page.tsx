@@ -12,44 +12,49 @@ const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supaba
 
 export default function TemplePage() {
   const [isTelegram, setIsTelegram] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // <--- Добавили состояние загрузки
   const [logs, setLogs] = useState<any[]>([]);
 
   useEffect(() => {
-    // 1. Логика Телеграма (запускается с задержкой, чтобы скрипт успел прогрузиться)
-    const checkTelegram = () => {
+    let attempts = 0;
+    const maxAttempts = 30; // Пробуем 3 секунды (30 * 100мс)
+
+    const checkTelegram = setInterval(() => {
+      attempts++;
+      
+      // Проверяем, появился ли объект Telegram в глобальной области
       if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
         const tg = (window as any).Telegram.WebApp;
         
-        // Проверяем, что мы реально внутри ТГ
-        if (tg.platform !== 'unknown') {
-          setIsTelegram(true);
-          tg.ready();
-          tg.expand();
-          
-          // Пытаемся убрать кнопку назад и покрасить хедер
-          try { tg.BackButton.hide(); } catch (e) {}
-          try { tg.setHeaderColor('#000000'); } catch (e) {}
-          try { tg.setBackgroundColor('#000000'); } catch (e) {}
+        // Ура, мы нашли Телеграм!
+        setIsTelegram(true);
+        setIsLoading(false);
+        clearInterval(checkTelegram); // Останавливаем поиск
 
-          // === АВТОРИЗАЦИЯ ЧЕРЕЗ API ===
-          const user = tg.initDataUnsafe?.user;
-          if (user) {
-            // Шлем данные на наш серверный API, который имеет права админа
-            fetch('/api/temple/auth', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(user)
-            }).catch(err => console.error('Auth sync failed', err));
-          }
+        // Настройка UI
+        tg.ready();
+        tg.expand();
+        try { tg.BackButton.hide(); } catch (e) {}
+        try { tg.setHeaderColor('#000000'); } catch (e) {}
+        try { tg.setBackgroundColor('#000000'); } catch (e) {}
+
+        // Авторизация через API
+        const user = tg.initDataUnsafe?.user;
+        if (user) {
+          fetch('/api/temple/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(user)
+          }).catch(console.error);
         }
+      } else if (attempts >= maxAttempts) {
+        // Время вышло, Телеграм не найден
+        setIsLoading(false);
+        clearInterval(checkTelegram);
       }
-    };
+    }, 100); // Проверяем каждые 100мс
 
-    // Проверяем сразу и через 500мс (на всякий случай)
-    checkTelegram();
-    const timer = setTimeout(checkTelegram, 500);
-
-    // 2. Подписка на логи (Realtime)
+    // --- Подписка на логи (не зависит от Телеграма) ---
     if (supabase) {
       const channel = supabase
         .channel('temple-live')
@@ -58,14 +63,16 @@ export default function TemplePage() {
         })
         .subscribe();
         
-      // Загрузить последние логи
       supabase.from('temple_log').select('*').order('created_at', { ascending: false }).limit(4)
         .then(({ data }) => { if (data) setLogs(data); });
 
-      return () => { supabase.removeChannel(channel); };
+      return () => { 
+        supabase.removeChannel(channel);
+        clearInterval(checkTelegram);
+      };
     }
 
-    return () => clearTimeout(timer);
+    return () => clearInterval(checkTelegram);
   }, []);
 
   // Функция клика по меню
@@ -80,9 +87,9 @@ export default function TemplePage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center p-4 font-sans relative overflow-hidden">
+      {/* Важно: strategy="beforeInteractive" грузит скрипт как можно раньше */}
       <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
       
-      {/* Глобальные стили для перекрытия основного сайта */}
       <style jsx global>{`
         header, footer, nav { display: none !important; }
         body, html { background-color: #000000 !important; overflow-x: hidden; }
@@ -93,7 +100,7 @@ export default function TemplePage() {
         <div className="text-[10px] text-gray-500 tracking-widest">DIGITAL SANCTUARY</div>
       </div>
 
-      {/* ЛОГИ (Тишина...) */}
+      {/* ЛОГИ */}
       <div className="w-full max-w-xs mb-8 min-h-[80px] flex flex-col justify-end items-center gap-2 pointer-events-none z-0 opacity-60">
         {logs.length === 0 && <div className="text-xs text-gray-600 animate-pulse">...тишина...</div>}
         {logs.map((log) => (
@@ -126,10 +133,18 @@ export default function TemplePage() {
         </Link>
       </div>
 
-      {!isTelegram && (
+      {/* Показываем сообщение ТОЛЬКО если загрузка закончилась И телеграм не найден */}
+      {!isLoading && !isTelegram && (
          <div className="mt-12 text-xs text-gray-600">
              Откройте через Telegram Bot для входа
          </div>
+      )}
+      
+      {/* Можно добавить индикатор загрузки для отладки, если нужно */}
+      {isLoading && (
+        <div className="mt-12 text-xs text-gray-800 animate-pulse">
+           Connecting...
+        </div>
       )}
     </div>
   );
