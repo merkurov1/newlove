@@ -53,6 +53,7 @@ export default function VigilPage() {
   const [flash, setFlash] = useState(false); 
   const [showLogin, setShowLogin] = useState(false);
   const [debugMessage, setDebugMessage] = useState<string>('');
+  const [shakingHeartId, setShakingHeartId] = useState<number | null>(null);
   
   // Telegram / Temple Auth State
   const [templeToken, setTempleToken] = useState<string | null>(null);
@@ -65,9 +66,20 @@ export default function VigilPage() {
   const heartRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const supabase = createClient();
 
-  // --- 1. TELEGRAM AUTH INIT LOGIC (COPIED FROM TEMPLE) ---
+  // --- HELPER: Haptics ---
+  const triggerHaptic = (style: 'light' | 'medium' | 'heavy' | 'error') => {
+    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.HapticFeedback) {
+        const haptic = (window as any).Telegram.WebApp.HapticFeedback;
+        if (style === 'error') haptic.notificationOccurred('error');
+        else haptic.impactOccurred(style);
+    } else if (navigator.vibrate) {
+        // Fallback
+        if (style === 'error') navigator.vibrate([50, 50, 50]);
+        else navigator.vibrate(style === 'heavy' ? 100 : 50);
+    }
+  };
+
   useEffect(() => {
-    // A. Пробуем восстановить из localStorage
     if (typeof window !== 'undefined') {
       const storedToken = localStorage.getItem('temple_session_token');
       const storedUser = localStorage.getItem('temple_user');
@@ -75,12 +87,10 @@ export default function VigilPage() {
       if (storedUser) setTempleUserName(storedUser);
     }
 
-    // B. Загружаем скрипт Телеграма, если его нет (для прямых заходов)
     const script = document.createElement('script');
     script.src = "https://telegram.org/js/telegram-web-app.js";
     script.async = true;
     script.onload = () => {
-        // Ждем инициализации
         setTimeout(() => {
             const tg = (window as any).Telegram?.WebApp;
             if (tg) {
@@ -89,8 +99,6 @@ export default function VigilPage() {
                 
                 const initData = tg.initData;
                 const tgUser = tg.initDataUnsafe?.user;
-                
-                // Если есть юзер Телеграма, но нет токена - логинимся молча
                 if (tgUser && !localStorage.getItem('temple_session_token')) {
                     fetch('/api/temple/auth', {
                         method: 'POST',
@@ -115,15 +123,6 @@ export default function VigilPage() {
     };
     document.head.appendChild(script);
 
-    // C. Проверяем серверную сессию (Cookie) как фоллбэк
-    fetch('/api/temple/me')
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data?.displayName) setTempleUserName(data.displayName);
-      })
-      .catch(() => {});
-
-    // D. Supabase Subscription
     fetchHearts();
     const channel = supabase
       .channel('vigil_hearts_changes')
@@ -157,6 +156,43 @@ export default function VigilPage() {
     }).length;
   }, [dbHearts]);
 
+  // --- ATMOSPHERE ENGINE ---
+  const getRoomStyle = (count: number) => {
+    // 0-1: Void (Darkness)
+    // 2-3: Dusk (Glow starts)
+    // 4: Dawn (Bright)
+    // 5: Glory (Golden/Red)
+    
+    if (count <= 1) return {
+        bg: 'radial-gradient(circle at 50% 90%, #151515 0%, #000000 85%)',
+        angelOpacity: 0.5,
+        angelFilter: 'grayscale(100%) brightness(0.6)',
+        roomFilter: 'brightness(0.6)'
+    };
+    if (count <= 3) return {
+        bg: 'radial-gradient(circle at 50% 80%, #2a1a1a 0%, #050505 100%)',
+        angelOpacity: 0.8,
+        angelFilter: 'grayscale(60%) brightness(0.9)',
+        roomFilter: 'brightness(1.0)'
+    };
+    if (count === 4) return {
+        bg: 'radial-gradient(circle at 50% 70%, #4a1a1a 0%, #0a0a0a 100%)',
+        angelOpacity: 0.95,
+        angelFilter: 'grayscale(20%) brightness(1.1) drop-shadow(0 0 10px rgba(255,100,100,0.2))',
+        roomFilter: 'brightness(1.1) contrast(1.1)'
+    };
+    // FULL VIGIL (5)
+    return {
+        bg: 'radial-gradient(circle at 50% 60%, #550000 0%, #1a0000 60%, #000000 100%)',
+        angelOpacity: 1,
+        angelFilter: 'grayscale(0%) brightness(1.3) sepia(20%) drop-shadow(0 0 30px rgba(255,50,0,0.5))',
+        roomFilter: 'brightness(1.2) contrast(1.2)',
+        overlay: true // Golden overlay
+    };
+  };
+
+  const roomStyle = getRoomStyle(activeHeartsCount);
+
   const getHeartState = (heartId: number) => {
     const dbRecord = dbHearts.find(h => h.id === heartId);
     if (!dbRecord || !dbRecord.last_lit_at) {
@@ -168,13 +204,9 @@ export default function VigilPage() {
     const hoursPassed = (now.getTime() - litTime.getTime()) / (1000 * 60 * 60);
     const isAlive = hoursPassed < 24;
     
-    // Ownership logic: Supabase ID OR Name match (for Telegram users)
     let isMine = false;
-    if (user && dbRecord.owner_id === user.id) {
-        isMine = true;
-    } else if (templeUserName && dbRecord.owner_name === templeUserName) {
-        isMine = true;
-    }
+    if (user && dbRecord.owner_id === user.id) isMine = true;
+    else if (templeUserName && dbRecord.owner_name === templeUserName) isMine = true;
 
     let filter = '', glow = '', scale = 1;
 
@@ -202,11 +234,11 @@ export default function VigilPage() {
   };
 
   const handleHeartClick = (heartId: number) => {
-    // CRITICAL FIX: Allow access if Supabase User OR Temple Token exists OR We have a temple username (Cookie auth)
     if (!user && !templeToken && !templeUserName) {
       setShowLogin(true);
       return;
     }
+    triggerHaptic('light');
 
     const state = getHeartState(heartId);
 
@@ -215,7 +247,12 @@ export default function VigilPage() {
             setSelectedHeart(heartId); 
             return;
         }
-        setDebugMessage(`Occupied by ${state.owner}. Wait for the light to fade.`);
+        // Shake visual effect
+        setShakingHeartId(heartId);
+        setTimeout(() => setShakingHeartId(null), 500);
+        triggerHaptic('error');
+
+        setDebugMessage(`OCCUPIED BY ${state.owner ? state.owner.toUpperCase() : 'ANOTHER'}`);
         setTimeout(() => setDebugMessage(''), 3000);
         return;
     }
@@ -225,7 +262,6 @@ export default function VigilPage() {
         setNameInput(state.owner || '');
         setIntentionInput(state.intention || '');
     } else {
-        // Pre-fill name: Supabase email OR Telegram display name
         const prefill = user?.email?.split('@')[0] || templeUserName || '';
         setNameInput(prefill);
         setIntentionInput('');
@@ -236,6 +272,8 @@ export default function VigilPage() {
     if (!selectedHeart || !nameInput.trim() || isLighting) return;
     
     setIsLighting(true);
+    triggerHaptic('medium');
+    
     const heartIdToUpdate = selectedHeart;
     setSelectedHeart(null); 
 
@@ -249,19 +287,22 @@ export default function VigilPage() {
       const endY = targetRect.top + (targetRect.height / 2);
 
       const sparkId = `spark-${Date.now()}`;
-      
       setSparkParticles(prev => [...prev, { id: sparkId, startX, startY, endX, endY }]);
 
         setTimeout(async () => {
         setFlash(true);
-        if (navigator.vibrate) navigator.vibrate([50, 50]); 
+        triggerHaptic('heavy');
         setTimeout(() => setFlash(false), 200);
 
         setSparkParticles(prev => prev.filter(s => s.id !== sparkId));
 
         try {
           if (user && user.id) {
-            // Signed-in via Supabase: update directly from client
+            // Supabase Logic
+            // 1. Clear old hearts (Single Tenancy) - client side optimistic update not needed, DB handles logical check but we can do it here too if needed. 
+            // Better to rely on server policy, but since we are admin client basically:
+            await supabase.from('vigil_hearts').update({owner_id: null, owner_name: null, last_lit_at: null}).eq('owner_id', user.id).neq('id', heartIdToUpdate);
+            
             await supabase.from('vigil_hearts').upsert({
               id: heartIdToUpdate,
               owner_name: nameInput.trim(),
@@ -270,9 +311,8 @@ export default function VigilPage() {
               last_lit_at: new Date().toISOString()
             });
           } else {
-            // Not signed in via Supabase: attempt server-side claim via temple_session (Telegram/Dev)
+            // Server API Logic (handles cleaning old hearts)
             const token = templeToken || (typeof window !== 'undefined' ? localStorage.getItem('temple_session_token') : null);
-            
             const body: any = { id: heartIdToUpdate, name: nameInput.trim(), intention: intentionInput.trim() };
             if (token) body.token = token;
 
@@ -283,11 +323,9 @@ export default function VigilPage() {
             });
             const j = await res.json();
             if (!res.ok) {
-              console.warn('vigil claim failed', j);
-              // Если ошибка токена - попробуем еще раз пнуть auth (редкий кейс) или просто покажем ошибку
               if (res.status === 401) setShowLogin(true);
               else {
-                  setDebugMessage(j?.error || 'claim failed');
+                  setDebugMessage(j?.error || 'CLAIM FAILED');
                   setTimeout(() => setDebugMessage(''), 3000);
               }
             }
@@ -305,7 +343,6 @@ export default function VigilPage() {
 
   const triggerExtinguish = async () => {
       if (!selectedHeart || !user || user.id !== ADMIN_ID) return;
-      
       await supabase.from('vigil_hearts').upsert({
           id: selectedHeart,
           owner_name: null,
@@ -317,11 +354,8 @@ export default function VigilPage() {
   };
 
   return (
-    <div className="vigil-container">
-      {/* --- ВСТАВЛЯЕМ WRAPPER СЮДА --- */}
-      <Suspense fallback={null}>
-        <TempleWrapper />
-      </Suspense>
+    <div className="vigil-container" style={{ background: roomStyle.bg }}>
+      <Suspense fallback={null}><TempleWrapper /></Suspense>
 
       <div style={{display:'none'}}>
         {HEARTS_DATA.map(h => <video key={h.id} src={h.loop} preload="auto" />)}
@@ -329,8 +363,17 @@ export default function VigilPage() {
 
       <div style={{
           position: 'fixed', inset: 0, background: 'white', pointerEvents: 'none', zIndex: 9999,
-          opacity: flash ? 0.15 : 0, transition: 'opacity 0.2s ease-out'
+          opacity: flash ? 0.2 : 0, transition: 'opacity 0.2s ease-out'
       }} />
+
+      {/* Glory Overlay */}
+      {roomStyle.overlay && (
+          <div style={{
+              position: 'fixed', inset: 0, 
+              background: 'linear-gradient(180deg, rgba(255,200,0,0.05) 0%, rgba(0,0,0,0) 100%)',
+              mixBlendMode: 'overlay', pointerEvents: 'none', zIndex: 5
+          }} />
+      )}
 
       <AnimatePresence>
         {debugMessage && (
@@ -345,9 +388,7 @@ export default function VigilPage() {
 
       <button className="info-button" onClick={() => setShowManifesto(true)}>?</button>
 
-      <div className="room" style={{
-          filter: `brightness(${0.4 + (activeHeartsCount * 0.12)})` 
-      }}>
+      <div className="room" style={{ filter: roomStyle.roomFilter }}>
         
         <div className="angel-layer" ref={angelRef}>
           <img 
@@ -355,10 +396,9 @@ export default function VigilPage() {
             className="angel-img" 
             alt="Watcher"
             style={{
-                filter: activeHeartsCount >= 3 
-                    ? 'drop-shadow(0 0 40px rgba(255, 215, 0, 0.7)) brightness(1.2)' 
-                    : 'drop-shadow(0 0 15px rgba(255, 255, 255, 0.2)) brightness(0.9)',
-                transition: 'filter 2s ease'
+                opacity: roomStyle.angelOpacity,
+                filter: roomStyle.angelFilter,
+                transition: 'all 2s ease'
             }} 
           />
         </div>
@@ -366,18 +406,23 @@ export default function VigilPage() {
         <div className="shelves-grid">
           {HEARTS_DATA.map((asset) => {
             const state = getHeartState(asset.id);
+            const isShaking = shakingHeartId === asset.id;
             return (
               <div 
                 key={asset.id}
                 ref={(el: HTMLDivElement | null) => { heartRefs.current[asset.id] = el }}
-                className="heart-slot"
+                className={`heart-slot ${isShaking ? 'shake-anim' : ''}`}
                 onClick={() => handleHeartClick(asset.id)}
                 style={{ 
                   transform: `scale(${state.scale})`,
-                  cursor: (state.isAlive && !state.isMine && user?.id !== ADMIN_ID) ? 'not-allowed' : 'pointer'
+                  cursor: (state.isAlive && !state.isMine && user?.id !== ADMIN_ID) ? 'default' : 'pointer'
                 }}
               >
-                <div className="heart-inner" style={{ filter: state.filter, boxShadow: state.glow, border: state.isMine ? '1px solid rgba(255,255,255,0.3)' : 'none' }}>
+                <div className="heart-inner" style={{ 
+                    filter: state.filter, 
+                    boxShadow: state.glow, 
+                    border: state.isMine ? '1px solid rgba(255,255,255,0.4)' : '1px solid transparent' 
+                }}>
                   {state.isAlive ? (
                     <video src={asset.loop} autoPlay loop muted playsInline className="heart-content" />
                   ) : (
@@ -386,9 +431,11 @@ export default function VigilPage() {
                 </div>
                 
                 <div className="heart-meta">
-                  <div className="heart-owner">{state.isAlive ? state.owner : "VACANT"}</div>
+                  <div className="heart-owner" style={{ color: state.isAlive ? '#fff' : '#444' }}>
+                    {state.isAlive ? state.owner : "VACANT"}
+                  </div>
                   {state.isAlive && state.intention && (
-                    <div className="heart-intention">for {state.intention}</div>
+                    <div className="heart-intention">{state.intention}</div>
                   )}
                 </div>
               </div>
@@ -405,16 +452,9 @@ export default function VigilPage() {
               className="spark"
               initial={{ x: spark.startX, y: spark.startY, opacity: 0, scale: 0.2 }}
               animate={{ 
-                x: spark.endX, 
-                y: spark.endY, 
-                opacity: [0, 1, 1, 0.8], 
-                scale: [0.2, 1.5, 0.5] 
+                x: spark.endX, y: spark.endY, opacity: [0, 1, 1, 0.8], scale: [0.2, 1.5, 0.5] 
               }}
-              transition={{ 
-                duration: 2.5, 
-                ease: "easeInOut",
-                times: [0, 0.2, 0.9, 1]
-              }}
+              transition={{ duration: 2.5, ease: "easeInOut", times: [0, 0.2, 0.9, 1] }}
             />
           ))}
         </AnimatePresence>
@@ -428,35 +468,39 @@ export default function VigilPage() {
                 <>
                     <h3>ADMIN CONTROL</h3>
                     <p className="text-sm text-gray-400 mb-4">Owned by: {getHeartState(selectedHeart).owner}</p>
-                    <button onClick={triggerExtinguish} className="btn-danger">EXTINGUISH FLAME</button>
+                    <button onClick={triggerExtinguish} className="btn-danger">EXTINGUISH</button>
                 </>
             ) : (
                 <>
-                    <h3>{getHeartState(selectedHeart).isMine ? "REIGNITE" : "CLAIM VESSEL"}</h3>
+                    <h3>{getHeartState(selectedHeart).isMine ? "REIGNITE FLAME" : "CLAIM VESSEL"}</h3>
                     
                     <div className="input-group">
                         <label>YOUR NAME</label>
                         <input 
-                            autoFocus type="text" placeholder="Name" 
-                            value={nameInput} onChange={(e) => setNameInput((e.target as HTMLInputElement).value)}
+                            autoFocus type="text" placeholder="NAME" maxLength={15}
+                            value={nameInput} onChange={(e) => setNameInput((e.target as HTMLInputElement).value.toUpperCase())}
                         />
                     </div>
                     
                     <div className="input-group">
-                        <label>YOUR INTENTION (OPTIONAL)</label>
+                        <label>INTENTION (OPTIONAL)</label>
                         <input 
-                            type="text" placeholder="e.g. Silence, Bitcoin, Love" 
+                            type="text" placeholder="SILENCE / LOVE / BITCOIN" maxLength={30}
                             value={intentionInput} onChange={(e) => setIntentionInput((e.target as HTMLInputElement).value)}
                             onKeyDown={(e) => (e as React.KeyboardEvent<HTMLInputElement>).key === 'Enter' && !isLighting && triggerRitual()}
                         />
                     </div>
+
+                    <p className="text-xs text-gray-500 mb-4 font-mono">
+                        By lighting this heart, you extinguish your previous flame. <br/>One soul, one vessel.
+                    </p>
 
                     <button 
                         onClick={triggerRitual} 
                         disabled={isLighting || !nameInput.trim()}
                         className="btn-primary"
                     >
-                        {isLighting ? 'TRANSFERRING SPARK...' : 'TRANSFER SPARK'}
+                        {isLighting ? 'IGNITING...' : 'IGNITE'}
                     </button>
                 </>
             )}
@@ -469,110 +513,144 @@ export default function VigilPage() {
       {showManifesto && (
         <div className="modal-backdrop" onClick={() => setShowManifesto(false)}>
           <div className="modal-box manifesto" onClick={(e) => (e as React.MouseEvent<HTMLDivElement>).stopPropagation()}>
-            <h2>THE VIGIL</h2>
-            <p>The Internet is a cold void.<br/>Matter is dead until you touch it.</p>
-            <p>These hearts are vessels.<br/>Click to transfer a spark of attention.<br/><b>State your Intention.</b></p>
-            <p>Keep them warm, or they will turn to stone in 24 hours.</p>
-            <p><i>We keep each other warm in the dark.</i></p>
-            <button onClick={() => setShowManifesto(false)}>ENTER</button>
+            <h2 className="glitch-text">THE VIGIL</h2>
+            <div className="manifesto-content">
+                <p>The Internet is a cold void.</p>
+                <p>These 5 hearts are digital vessels. They are dead matter until you touch them.</p>
+                <p>Click to transfer a <b>Spark</b>.</p>
+                <p>Rules:<br/>1. You can hold only <b>ONE</b> heart.<br/>2. Fire dies in 24 hours.<br/>3. Keep the Temple warm.</p>
+                <p className="italic">"We keep each other warm in the dark."</p>
+            </div>
+            <button className="btn-enter" onClick={() => setShowManifesto(false)}>ENTER THE VOID</button>
           </div>
         </div>
       )}
 
       <style jsx global>{`
-        body { margin: 0; background: #020202; color: #eee; overflow: hidden; font-family: 'Inter', sans-serif; }
+        body { margin: 0; background: #000; color: #eee; overflow: hidden; font-family: 'Inter', sans-serif; }
         
         .vigil-container {
           width: 100vw; height: 100vh;
-          background: radial-gradient(circle at 50% 90%, #151515 0%, #000000 85%);
+          transition: background 2s ease; /* Smooth transition for atmosphere */
           perspective: 1200px;
           display: flex; justify-content: center; align-items: center;
-          position: relative; /* Важно для позиционирования враппера */
+          position: relative;
         }
 
         .spark-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
-        
         .spark {
-          position: absolute; width: 8px; height: 8px; background: #fff; border-radius: 50%;
-          box-shadow: 0 0 15px 4px rgba(255, 200, 50, 0.9), 0 0 40px 10px rgba(255, 100, 0, 0.4);
+          position: absolute; width: 6px; height: 6px; background: #fff; border-radius: 50%;
+          box-shadow: 0 0 20px 5px rgba(255, 200, 50, 0.9);
         }
 
         .info-button {
-          position: absolute; top: 30px; right: 30px; width: 40px; height: 40px; border-radius: 50%;
-          border: 1px solid #333; color: #666; background: transparent;
-          font-family: serif; font-style: italic; font-size: 20px; cursor: pointer; z-index: 100;
+          position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%;
+          border: 1px solid #333; color: #666; background: rgba(0,0,0,0.5);
+          font-family: 'Space Mono', monospace; font-size: 20px; cursor: pointer; z-index: 100;
+          transition: all 0.2s;
         }
-        .info-button:hover { border-color: #fff; color: #fff; }
+        .info-button:hover { border-color: #fff; color: #fff; transform: scale(1.1); }
 
         .room {
           width: 100%; max-width: 1400px; height: 85vh;
           display: flex; flex-direction: column; align-items: center; justify-content: center;
-          transform-style: preserve-3d; transition: filter 1s ease;
+          transform-style: preserve-3d; transition: filter 2s ease;
         }
 
         .angel-layer {
-          position: relative; z-index: 20; margin-bottom: 50px;
+          position: relative; z-index: 20; margin-bottom: 5vh;
           animation: float 8s ease-in-out infinite;
         }
-        .angel-img { width: 200px; opacity: 0.95; display: block; }
-        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
+        .angel-img { width: 220px; display: block; }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-15px); } }
 
         .shelves-grid {
-          display: grid; grid-template-columns: repeat(5, 1fr); gap: 30px;
+          display: grid; grid-template-columns: repeat(5, 1fr); gap: 2vw;
           width: 100%; padding: 0 20px; z-index: 10;
-        }
-        @media (max-width: 768px) {
-          .shelves-grid { grid-template-columns: repeat(2, 1fr); gap: 15px; overflow-y: auto; max-height: 55vh; padding-bottom: 100px; }
-          .angel-img { width: 140px; margin-bottom: 20px; }
+          max-width: 1000px;
         }
 
         .heart-slot {
-          display: flex; flex-direction: column; align-items: center; gap: 12px;
-          transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+          display: flex; flex-direction: column; align-items: center; gap: 15px;
+          transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
-        .heart-slot:hover { transform: translateY(-5px) scale(1.03); }
+        .heart-slot:active { transform: scale(0.95) !important; }
+        
+        .shake-anim { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+          10%, 90% { transform: translate3d(-1px, 0, 0); }
+          20%, 80% { transform: translate3d(2px, 0, 0); }
+          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+          40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
 
         .heart-inner {
-          width: 130px; height: 130px; border-radius: 50%; overflow: hidden; background: #000;
+          width: 12vw; height: 12vw; max-width: 140px; max-height: 140px; min-width: 80px; min-height: 80px;
+          border-radius: 50%; overflow: hidden; background: #000;
           transition: all 1.5s ease; position: relative;
         }
         .heart-content { width: 100%; height: 100%; object-fit: cover; }
 
-        .heart-meta { text-align: center; min-height: 40px; display: flex; flex-direction: column; align-items: center; }
-        .heart-owner { font-family: 'Space Mono', monospace; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
-        .heart-intention { font-family: serif; font-style: italic; font-size: 13px; color: #aaa; margin-top: 4px; opacity: 0.8; }
+        .heart-meta { text-align: center; min-height: 50px; display: flex; flex-direction: column; align-items: center; }
+        .heart-owner { font-family: 'Space Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
+        .heart-intention { font-family: 'Times New Roman', serif; font-style: italic; font-size: 13px; color: #888; opacity: 0.8; }
 
+        /* MODALS */
         .modal-backdrop {
-          position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(10px); z-index: 500;
+          position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(12px); z-index: 500;
           display: flex; justify-content: center; align-items: center;
+          animation: fadeIn 0.3s ease;
         }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
         .modal-box {
           background: #0a0a0a; border: 1px solid #333; padding: 40px; text-align: center; width: 90%; max-width: 400px;
-          box-shadow: 0 20px 50px rgba(0,0,0,0.9);
+          box-shadow: 0 0 50px rgba(0,0,0,1);
         }
-        .modal-box h2, h3 { font-family: serif; font-weight: normal; letter-spacing: 2px; margin-bottom: 30px; }
+        .modal-box h3 { 
+            font-family: 'Space Mono', monospace; font-size: 16px; letter-spacing: 4px; margin-bottom: 30px; color: #fff; 
+            border-bottom: 1px solid #333; padding-bottom: 20px;
+        }
+
+        .manifesto { max-width: 500px; text-align: left; border: 1px solid #fff; background: #000; }
+        .manifesto h2 { font-family: 'Space Mono', monospace; font-size: 32px; letter-spacing: -2px; margin-bottom: 30px; text-align: center; }
+        .manifesto-content p { font-family: 'Space Mono', monospace; font-size: 14px; line-height: 1.6; color: #ccc; margin-bottom: 15px; }
+        .manifesto-content b { color: #fff; }
+        .btn-enter { background: #fff; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; margin-top: 20px; cursor: pointer; letter-spacing: 2px; }
+        .btn-enter:hover { background: #ccc; }
         
-        .input-group { margin-bottom: 20px; text-align: left; }
-        .input-group label { display: block; font-size: 10px; color: #555; margin-bottom: 8px; font-family: monospace; text-transform: uppercase; }
+        .input-group { margin-bottom: 25px; text-align: left; }
+        .input-group label { display: block; font-size: 10px; color: #666; margin-bottom: 8px; font-family: 'Space Mono', monospace; letter-spacing: 1px; }
         
         input {
-          background: #111; border: 1px solid #333; color: white; padding: 12px; width: 100%;
-          font-family: monospace; text-align: center; font-size: 16px; outline: none;
+          background: #000; border: 1px solid #333; color: white; padding: 15px; width: 100%;
+          font-family: 'Space Mono', monospace; text-align: center; font-size: 16px; outline: none;
+          text-transform: uppercase;
         }
-        input:focus { border-color: #666; }
+        input:focus { border-color: #fff; }
 
-        button {
-          background: white; color: black; border: none; padding: 12px 30px; font-family: monospace;
-          cursor: pointer; font-weight: bold; letter-spacing: 1px; margin-top: 10px; width: 100%;
+        .btn-primary {
+          background: #fff; color: #000; border: none; padding: 15px; width: 100%; 
+          font-family: 'Space Mono', monospace; font-weight: bold; letter-spacing: 2px; cursor: pointer;
+          transition: all 0.2s;
         }
-        button:hover { opacity: 0.9; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-danger { background: #500; color: #faa; }
+        .btn-primary:hover:not(:disabled) { transform: scale(1.02); box-shadow: 0 0 15px rgba(255,255,255,0.3); }
+        .btn-primary:disabled { background: #333; color: #666; cursor: not-allowed; }
+        
+        .btn-danger { background: #300; color: #f55; border: 1px solid #500; width: 100%; padding: 15px; cursor: pointer; font-family: monospace; }
         
         .debug-toast {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(50,0,0,0.9); border: 1px solid red; color: #ffaaaa;
-            padding: 10px 20px; border-radius: 4px; z-index: 10000; font-family: monospace;
+            position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
+            background: #000; border: 1px solid #f00; color: #f00;
+            padding: 10px 20px; z-index: 10000; font-family: 'Space Mono', monospace; font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        @media (max-width: 768px) {
+          .shelves-grid { grid-template-columns: repeat(2, 1fr); gap: 20px; max-height: 60vh; overflow-y: scroll; padding-bottom: 100px; }
+          .angel-img { width: 150px; margin-bottom: 20px; }
+          .heart-inner { width: 35vw; height: 35vw; max-width: 140px; max-height: 140px; }
+          .manifesto h2 { font-size: 24px; }
         }
       `}</style>
     </div>
