@@ -1,4 +1,6 @@
+import { Suspense } from 'react'; // Импортируем Suspense
 import LetItGoAngel from '@/components/LetItGoAngel';
+import TempleNav from '@/components/TempleNav'; // Импортируем наш новый компонент
 import './letitgo.css';
 
 export const metadata = {
@@ -24,9 +26,16 @@ export default function LetItGoPage() {
   return (
     <div className="letitgo-container">
       {/* 
-         Контейнер, внутри которого рендерится Ангел и вылетающие сердца.
-         Класс .letitgo-container в CSS управляет всем происходящим.
+        Вставляем навигатор Храма. 
+        Он сам проверит, зашли мы из Храма или просто так.
+        Если просто так — он ничего не сделает.
+        Если из Храма — скроет хедеры и добавит навигацию.
       */}
+      <Suspense fallback={null}>
+        <TempleNav />
+      </Suspense>
+
+      {/* Твой основной контент */}
       <LetItGoAngel />
     </div>
   );
