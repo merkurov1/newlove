@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import TempleLogsClient from './TempleLogs.client';
 
 export default function TemplePage() {
   const [isTelegram, setIsTelegram] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     // 1. Ручная загрузка скрипта (так надежнее всего)
@@ -74,6 +76,46 @@ export default function TemplePage() {
     };
   }, []);
 
+  // Ensure Telegram auth: try localStorage first, otherwise post initData to server
+  async function ensureTelegramAuth() {
+    try {
+      const existing = typeof window !== 'undefined' ? localStorage.getItem('temple_user') : null;
+      if (existing) return true;
+      const tg = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : null;
+      if (!tg) return false;
+      const initData = tg.initData || (window as any).Telegram?.WebApp?.initData || null;
+      const user = tg.initDataUnsafe?.user || null;
+      if (!user) return false;
+      const res = await fetch('/api/temple/auth', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...user, initData })
+      });
+      if (!res.ok) return false;
+      const json = await res.json().catch(() => ({}));
+      if (json?.displayName) {
+        try { localStorage.setItem('temple_user', json.displayName); } catch (e) {}
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Navigation helper: ensure Telegram auth before navigating when in WebApp
+  const handleNav = async (href: string) => {
+    const tg = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : null;
+    if (tg) {
+      // Try to authenticate first
+      await ensureTelegramAuth();
+      // small delay to allow cookie to be set
+      await new Promise(r => setTimeout(r, 150));
+    }
+    router.push(href);
+  }
+
   // Клик по кнопке пишет в лог (через серверный API, использующий service-role key)
   const trackClick = async (service: string) => {
     try {
@@ -119,25 +161,25 @@ export default function TemplePage() {
 
       {/* МЕНЮ */}
       <div className="grid grid-cols-2 gap-4 w-full max-w-sm z-10 mx-auto pb-10">
-        <Link href="/vigil?mode=temple" onClick={() => trackClick('Vigil')} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform no-underline text-white">
-           <div className="text-2xl">🕯</div>
-           <div className="text-xs font-bold tracking-widest">VIGIL</div>
-        </Link>
+        <button onClick={async () => { await handleNav('/vigil?mode=temple'); trackClick('Vigil'); }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform no-underline text-white">
+          <div className="text-2xl">🕯</div>
+          <div className="text-xs font-bold tracking-widest">VIGIL</div>
+        </button>
 
-        <Link href="/heartandangel/letitgo?mode=temple" onClick={() => trackClick('Let It Go')} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform no-underline text-white">
-           <div className="text-2xl">❤️</div>
-           <div className="text-xs font-bold tracking-widest">LET IT GO</div>
-        </Link>
+        <button onClick={async () => { await handleNav('/heartandangel/letitgo?mode=temple'); trackClick('Let It Go'); }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform no-underline text-white">
+          <div className="text-2xl">❤️</div>
+          <div className="text-xs font-bold tracking-widest">LET IT GO</div>
+        </button>
 
-        <Link href="/absolution?mode=temple" onClick={() => trackClick('Absolution')} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform no-underline text-white">
-           <div className="text-2xl">🧾</div>
-           <div className="text-xs font-bold tracking-widest">ABSOLVE</div>
-        </Link>
+        <button onClick={async () => { await handleNav('/absolution?mode=temple'); trackClick('Absolution'); }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform no-underline text-white">
+          <div className="text-2xl">🧾</div>
+          <div className="text-xs font-bold tracking-widest">ABSOLVE</div>
+        </button>
 
-        <Link href="/cast?mode=temple" onClick={() => trackClick('Cast')} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform no-underline text-white">
-           <div className="text-2xl">💀</div>
-           <div className="text-xs font-bold tracking-widest">CAST</div>
-        </Link>
+        <button onClick={async () => { await handleNav('/cast?mode=temple'); trackClick('Cast'); }} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform no-underline text-white">
+          <div className="text-2xl">💀</div>
+          <div className="text-xs font-bold tracking-widest">CAST</div>
+        </button>
       </div>
     </div>
   );
