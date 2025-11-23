@@ -40,7 +40,12 @@ export default function TempleLogsClient({ initialLogs = [], serverError = null 
 
     fetchLogs();
 
-    const iv = setInterval(fetchLogs, 5000);
+    // Use a longer polling interval when running inside the Telegram MiniApp
+    // to avoid excessive log refreshes there. Default to 5s for web.
+    const isTelegramWebApp = typeof window !== 'undefined' && (window as any).Telegram && (window as any).Telegram.WebApp
+    // Mini-app: 30s; Web: 5 minutes to reduce frequent refreshes
+    const intervalMs = isTelegramWebApp ? 30000 : 5 * 60 * 1000
+    const iv = setInterval(fetchLogs, intervalMs);
     return () => { mounted = false; clearInterval(iv); };
   }, [initialLogs.length]);
 
