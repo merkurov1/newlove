@@ -1,12 +1,14 @@
+/* ===== FILE: app/vigil/page.tsx ===== */
+
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useRef, useMemo, Suspense } from "react"; // Добавил Suspense
+import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext'; 
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import TempleWrapper from '@/components/TempleWrapper'; // Импортируем Wrapper
+import TempleWrapper from '@/components/TempleWrapper';
 import { templeTrack } from '@/components/templeTrack';
 
 // --- CONFIGURATION ---
@@ -51,6 +53,10 @@ export default function VigilPage() {
   const [flash, setFlash] = useState(false); 
   const [showLogin, setShowLogin] = useState(false);
   const [debugMessage, setDebugMessage] = useState<string>('');
+  
+  // Telegram / Temple Auth State
+  const [templeToken, setTempleToken] = useState<string | null>(null);
+  const [templeUserName, setTempleUserName] = useState<string | null>(null);
 
   const { user } = useAuth();
   const ModernLoginModal = dynamic(() => import('@/components/ModernLoginModal'), { ssr: false });
@@ -62,6 +68,14 @@ export default function VigilPage() {
   useEffect(() => {
     fetchHearts();
     
+    // Check for Temple Session (Telegram)
+    if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('temple_session_token');
+        const tName = localStorage.getItem('temple_user');
+        if (token) setTempleToken(token);
+        if (tName) setTempleUserName(tName);
+    }
+
     const channel = supabase
       .channel('vigil_hearts_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vigil_hearts' }, () => fetchHearts())
@@ -103,7 +117,15 @@ export default function VigilPage() {
     const litTime = new Date(dbRecord.last_lit_at);
     const hoursPassed = (now.getTime() - litTime.getTime()) / (1000 * 60 * 60);
     const isAlive = hoursPassed < 24;
-    const isMine = user ? dbRecord.owner_id === user.id : false;
+    
+    // Ownership logic: Supabase ID OR Name match (for Telegram users)
+    let isMine = false;
+    if (user && dbRecord.owner_id === user.id) {
+        isMine = true;
+    } else if (templeUserName && dbRecord.owner_name === templeUserName) {
+        // Fallback for Telegram users since we don't have their ID client-side easily
+        isMine = true;
+    }
 
     let filter = '', glow = '', scale = 1;
 
@@ -131,7 +153,8 @@ export default function VigilPage() {
   };
 
   const handleHeartClick = (heartId: number) => {
-    if (!user) {
+    // CRITICAL FIX: Allow access if Supabase User OR Temple Token exists
+    if (!user && !templeToken) {
       setShowLogin(true);
       return;
     }
@@ -139,7 +162,7 @@ export default function VigilPage() {
     const state = getHeartState(heartId);
 
     if (state.isAlive && !state.isMine) {
-        if (user.id === ADMIN_ID) {
+        if (user?.id === ADMIN_ID) {
             setSelectedHeart(heartId); 
             return;
         }
@@ -153,14 +176,14 @@ export default function VigilPage() {
         setNameInput(state.owner || '');
         setIntentionInput(state.intention || '');
     } else {
-        setNameInput(user.email?.split('@')[0] || '');
+        // Pre-fill name: Supabase email OR Telegram display name
+        const prefill = user?.email?.split('@')[0] || templeUserName || '';
+        setNameInput(prefill);
         setIntentionInput('');
     }
   };
 
   const triggerRitual = async () => {
-    // If there's no supabase user but we might have a temple session (Telegram miniapp),
-    // we'll POST to server-side endpoint which will verify temple_session and upsert via service role.
     if (!selectedHeart || !nameInput.trim() || isLighting) return;
     
     setIsLighting(true);
@@ -198,9 +221,9 @@ export default function VigilPage() {
               last_lit_at: new Date().toISOString()
             });
           } else {
-            // Not signed in via Supabase: attempt server-side claim via temple_session
-            // If cookie wasn't accepted (common in dev/WebView), include token fallback
-            const token = typeof window !== 'undefined' ? localStorage.getItem('temple_session_token') : null;
+            // Not signed in via Supabase: attempt server-side claim via temple_session (Telegram/Dev)
+            const token = templeToken || (typeof window !== 'undefined' ? localStorage.getItem('temple_session_token') : null);
+            
             const body: any = { id: heartIdToUpdate, name: nameInput.trim(), intention: intentionInput.trim() };
             if (token) body.token = token;
 
