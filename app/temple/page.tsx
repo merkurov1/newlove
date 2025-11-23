@@ -1,357 +1,136 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import Script from 'next/script';
-import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client'; 
-
-const supabase = createClient();
-
-export default function LoveTemple() {
-  const [isTelegram, setIsTelegram] = useState(false);
-  const [logs, setLogs] = useState<any[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  const initTelegram = useCallback(() => {
-    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
-      const tg = (window as any).Telegram.WebApp;
-      
-      if (tg.initData || tg.platform !== 'unknown') {
-        setIsTelegram(true);
-        tg.ready();
-        tg.expand();
-        
-        try { tg.BackButton?.hide(); } catch (e) {}
-        try {
-            tg.setHeaderColor?.('#000000');
-            tg.setBackgroundColor?.('#000000');
-        } catch (e) {}
-
-        // === ВОТ ГЛАВНОЕ ИЗМЕНЕНИЕ ===
-        // Мы не пишем в базу напрямую. Мы зовем наш API.
-        const user = tg.initDataUnsafe?.user;
-        if (user) {
-            fetch('/api/temple/auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(user)
-            }).then(() => console.log('User synced via API'));
-        }
-      }
-    }
-    setIsLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => { if (!isTelegram) initTelegram(); }, 500);
-    return () => clearTimeout(timer);
-  }, [initTelegram, isTelegram]);
-
-  // Логи через публичную подписку (это безопасно)
-  useEffect(() => {
-    if (supabase) {
-      fetchRecentLogs();
-      const channel = supabase
-        .channel('temple-live')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, (payload: any) => {
-            setLogs((prev) => [payload.new, ...prev].slice(0, 5));
-        })
-        .subscribe();
-      return () => { supabase.removeChannel(channel); };
-    }
-  }, []);
-
-  const fetchRecentLogs = async () => {
-    if (!supabase) return;
-    const { data } = await supabase.from('temple_log').select('*').order('created_at', { ascending: false }).limit(3);
-    if (data) setLogs(data);
-  };
-
-  // Сигнал тоже можно перевести на API, если будут ошибки, но пока оставим так
-  const sendSignal = async (type: string, message: string) => {
-    if (!supabase) return;
-    await supabase.from('temple_log').insert({ event_type: type, message: message });
-  };
-
-  return (
-    <>
-      <Script 
-        src="https://telegram.org/js/telegram-web-app.js" 
-        strategy="afterInteractive" 
-        onLoad={initTelegram}
-      />
-
-      <main className="temple-overlay">
-        <header className="temple-header">
-          <h1>LOVE TEMPLE</h1>
-          <div className="subtitle">DIGITAL SANCTUARY</div>
-        </header>
-
-        <div className="chronicle-container">
-            {logs.map((log) => (
-                <div key={log.id} className="log-item fade-in">
-                    <span className="log-icon">
-                        {log.event_type === 'vigil' && '🕯️'}
-                        {log.event_type === 'letitgo' && '❤️‍🔥'}
-                        {log.event_type === 'absolution' && '🕊️'}
-                        {log.event_type === 'cast' && '📡'}
-                    </span>
-                    {log.message}
-                </div>
-            ))}
-            {logs.length === 0 && <div className="log-item" style={{opacity: 0.3}}>...тишина...</div>}
-        </div>
-
-        <div className="grid">
-          <Link href="/vigil?mode=temple" className="card" onClick={() => sendSignal('vigil', 'Бдение')}>
-            <div className="status-dot active"></div>
-            <div><h2>VIGIL</h2><p>Бдение</p></div>
-          </Link>
-
-          <Link href="/heartandangel/letitgo?mode=temple" className="card" onClick={() => sendSignal('letitgo', 'Отпускание')}>
-            <div className="status-dot"></div>
-            <div><h2>LET IT GO</h2><p>Отпусти</p></div>
-          </Link>
-
-          <Link href="/absolution?mode=temple" className="card" onClick={() => sendSignal('absolution', 'Искупление')}>
-            <div className="status-dot"></div>
-            <div><h2>ABSOLUTION</h2><p>Искупление</p></div>
-          </Link>
-
-          <Link href="/cast?mode=temple" className="card" onClick={() => sendSignal('cast', 'Голос')}>
-            <div className="status-dot active"></div>
-            <div><h2>CAST</h2><p>Голос</p></div>
-          </Link>
-        </div>
-
-        {isLoaded && !isTelegram && (
-          <div className="web-footer">
-            <a href="https://t.me/MerkurovLoveBot" className="tg-button">Telegram Login</a>
-          </div>
-        )}
-      </main>
-
-      <style jsx>{`
-        .temple-overlay {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background-color: #000; color: #fff; z-index: 99999;
-            overflow-y: auto; display: flex; flex-direction: column; align-items: center;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding-bottom: 20px;
-        }
-        .temple-header { margin-top: 40px; margin-bottom: 20px; text-align: center; }
-        h1 { font-weight: 300; letter-spacing: 4px; font-size: 24px; margin: 0; text-transform: uppercase; color: white; }
-        .subtitle { font-size: 12px; color: #666; margin-top: 5px; letter-spacing: 1px; }
-        .chronicle-container {
-            width: 90%; max-width: 400px; height: 80px; margin-bottom: 20px;
-            display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
-            overflow: hidden; mask-image: linear-gradient(to top, black 50%, transparent 100%);
-        }
-        .log-item { font-size: 12px; color: #888; margin-bottom: 4px; display: flex; gap: 6px; animation: slideIn 0.5s ease-out; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 90%; max-width: 400px; }
-        :global(.card) {
-            background: #111111; border: 1px solid #333333; border-radius: 16px;
-            padding: 20px; text-decoration: none; color: white;
-            display: flex; flex-direction: column; justify-content: space-between;
-            height: 120px; position: relative; transition: transform 0.1s;
-        }
-        :global(.card:active) { transform: scale(0.98); border-color: #555; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #333; position: absolute; top: 15px; right: 15px; }
-        .status-dot.active { background-color: #ff3b30; box-shadow: 0 0 8px #ff3b30; animation: pulse 2s infinite; }
-        .web-footer { m'use client';
-
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 
-// Инициализация клиента (публичная часть)
+// Инициализация Supabase (только если ключи есть)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = (supabaseUrl && supabaseAnonKey) 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
-  : null;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
-export default function LoveTemple() {
+export default function TemplePage() {
   const [isTelegram, setIsTelegram] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
-  
-  // == DEBUG STATE ==
-  const [debugInfo, setDebugInfo] = useState<string>('Initializing...');
-  const [userId, setUserId] = useState<string | number>('none');
-  const [apiStatus, setApiStatus] = useState<string>('idle');
 
   useEffect(() => {
-    // Логируем каждый шаг
-    const addLog = (msg: string) => setDebugInfo(prev => prev + '\n> ' + msg);
-
-    // 1. Жесткая проверка наличия Telegram SDK через интервал
-    // (onLoad иногда срабатывает слишком рано или поздно в Next.js)
-    const interval = setInterval(() => {
+    // 1. Логика Телеграма (запускается с задержкой, чтобы скрипт успел прогрузиться)
+    const checkTelegram = () => {
       if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
         const tg = (window as any).Telegram.WebApp;
         
-        addLog('Telegram object found');
-        
-        if (tg.initDataUnsafe?.user) {
-            const user = tg.initDataUnsafe.user;
-            setIsTelegram(true);
-            setUserId(user.id);
-            addLog(`User found: ${user.id} (${user.username})`);
-            
-            // Настраиваем UI
-            tg.ready();
-            tg.expand();
-            try { tg.BackButton.hide(); } catch (e) {}
-            try {
-                tg.setHeaderColor('#000000');
-                tg.setBackgroundColor('#000000');
-            } catch (e) {}
+        // Проверяем, что мы реально внутри ТГ
+        if (tg.platform !== 'unknown') {
+          setIsTelegram(true);
+          tg.ready();
+          tg.expand();
+          
+          // Пытаемся убрать кнопку назад и покрасить хедер
+          try { tg.BackButton.hide(); } catch (e) {}
+          try { tg.setHeaderColor('#000000'); } catch (e) {}
+          try { tg.setBackgroundColor('#000000'); } catch (e) {}
 
-            // Пробуем отправить на API
-            setApiStatus('sending...');
+          // === АВТОРИЗАЦИЯ ЧЕРЕЗ API ===
+          const user = tg.initDataUnsafe?.user;
+          if (user) {
+            // Шлем данные на наш серверный API, который имеет права админа
             fetch('/api/temple/auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(user)
-            })
-            .then(async (res) => {
-                const text = await res.text(); // Читаем как текст, чтобы видеть HTML ошибки если есть
-                addLog(`API Response (${res.status}): ${text.slice(0, 50)}...`);
-                if (res.ok) setApiStatus('success');
-                else setApiStatus(`error: ${res.status}`);
-            })
-            .catch(err => {
-                addLog(`Fetch error: ${err.message}`);
-                setApiStatus('fetch_failed');
-            });
-
-            clearInterval(interval); // Останавливаем проверку, раз нашли
-        } else {
-            addLog('Telegram found, but NO USER data (opened externally?)');
-            // Если открыто не в телеграме, но скрипт есть - останавливаем
-            clearInterval(interval); 
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(user)
+            }).catch(err => console.error('Auth sync failed', err));
+          }
         }
-      } else {
-          // addLog('Waiting for Telegram SDK...');
       }
-    }, 500);
+    };
 
-    // Стоп через 5 секунд, если не нашли
-    setTimeout(() => clearInterval(interval), 5000);
+    // Проверяем сразу и через 500мс (на всякий случай)
+    checkTelegram();
+    const timer = setTimeout(checkTelegram, 500);
 
-    // Realtime логи (не зависят от телеграма)
+    // 2. Подписка на логи (Realtime)
     if (supabase) {
       const channel = supabase
         .channel('temple-live')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, (payload: any) => {
-            setLogs((prev) => [payload.new, ...prev].slice(0, 5));
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, (payload) => {
+          setLogs((prev) => [payload.new, ...prev].slice(0, 4));
         })
         .subscribe();
-      
-      supabase.from('temple_log').select('*').order('created_at', { ascending: false }).limit(3)
-        .then(({ data }) => { if (data) setLogs(data); });
         
+      // Загрузить последние логи
+      supabase.from('temple_log').select('*').order('created_at', { ascending: false }).limit(4)
+        .then(({ data }) => { if (data) setLogs(data); });
+
       return () => { supabase.removeChannel(channel); };
-    } else {
-        addLog('Supabase client missing keys');
     }
+
+    return () => clearTimeout(timer);
   }, []);
 
-  const sendSignal = async (type: string, message: string) => {
-    if (!supabase) return;
-    await supabase.from('temple_log').insert({ event_type: type, message: message });
+  // Функция клика по меню
+  const handleNavClick = async (label: string) => {
+    if (supabase) {
+      await supabase.from('temple_log').insert({ 
+        event_type: 'nav', 
+        message: `Кто-то вошел в ${label}` 
+      });
+    }
   };
 
   return (
-    <>
+    <div className="min-h-screen bg-black text-white flex flex-col items-center p-4 font-sans relative overflow-hidden">
       <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
-
-      <main className="temple-overlay">
-        <header className="temple-header">
-          <h1>LOVE TEMPLE</h1>
-          <div className="subtitle">DIGITAL SANCTUARY</div>
-        </header>
-
-        {/* LIVEDATA */}
-        <div className="chronicle-container">
-            {logs.map((log) => (
-                <div key={log.id} className="log-item fade-in">
-                    {log.message}
-                </div>
-            ))}
-        </div>
-
-        {/* MENU */}
-        <div className="grid">
-          <Link href="/vigil?mode=temple" className="card" onClick={() => sendSignal('vigil', 'Бдение')}>
-            <div className="status-dot active"></div>
-            <div><h2>VIGIL</h2><p>Бдение</p></div>
-          </Link>
-          <Link href="/heartandangel/letitgo?mode=temple" className="card" onClick={() => sendSignal('letitgo', 'Отпускание')}>
-            <div className="status-dot"></div>
-            <div><h2>LET IT GO</h2><p>Отпусти</p></div>
-          </Link>
-          <Link href="/absolution?mode=temple" className="card" onClick={() => sendSignal('absolution', 'Искупление')}>
-            <div className="status-dot"></div>
-            <div><h2>ABSOLUTION</h2><p>Искупление</p></div>
-          </Link>
-          <Link href="/cast?mode=temple" className="card" onClick={() => sendSignal('cast', 'Голос')}>
-            <div className="status-dot active"></div>
-            <div><h2>CAST</h2><p>Голос</p></div>
-          </Link>
-        </div>
-
-        {/* === DEBUG PANEL (ВРЕМЕННО) === */}
-        <div className="mt-8 w-[90%] p-4 bg-gray-900 border border-gray-700 rounded font-mono text-[10px] text-green-400 overflow-hidden break-all">
-            <p>STATUS: {isTelegram ? 'TG APP DETECTED' : 'WEB BROWSER'}</p>
-            <p>USER ID: {userId}</p>
-            <p>API STATUS: {apiStatus}</p>
-            <hr className="border-gray-700 my-2"/>
-            <pre className="whitespace-pre-wrap">{debugInfo}</pre>
-        </div>
-
-      </main>
-
+      
+      {/* Глобальные стили для перекрытия основного сайта */}
       <style jsx global>{`
         header, footer, nav { display: none !important; }
-        body { background: #000 !important; }
+        body, html { background-color: #000000 !important; overflow-x: hidden; }
       `}</style>
 
-      <style jsx>{`
-        .temple-overlay {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background-color: #000; color: #fff; z-index: 99999;
-            overflow-y: auto; display: flex; flex-direction: column; align-items: center;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding-bottom: 20px;
-        }
-        .temple-header { margin-top: 40px; margin-bottom: 20px; text-align: center; }
-        h1 { font-weight: 300; letter-spacing: 4px; font-size: 24px; margin: 0; text-transform: uppercase; color: white; }
-        .subtitle { font-size: 12px; color: #666; margin-top: 5px; letter-spacing: 1px; }
-        .chronicle-container {
-            width: 90%; max-width: 400px; height: 80px; margin-bottom: 20px;
-            display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
-            overflow: hidden; mask-image: linear-gradient(to top, black 50%, transparent 100%);
-        }
-        .log-item { font-size: 12px; color: #888; margin-bottom: 4px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 90%; max-width: 400px; }
-        :global(.card) {
-            background: #111111; border: 1px solid #333333; border-radius: 16px;
-            padding: 20px; text-decoration: none; color: white;
-            display: flex; flex-direction: column; justify-content: space-between;
-            height: 120px; position: relative;
-        }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #333; position: absolute; top: 15px; right: 15px; }
-        .status-dot.active { background-color: #ff3b30; box-shadow: 0 0 8px #ff3b30; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-      `}</style>
-    </>
-  );
-}argin-top: auto; padding-bottom: 40px; animation: fadeIn 1s ease; }
-        .tg-button { background: #fff; color: #000; padding: 10px 20px; border-radius: 20px; text-decoration: none; font-size: 12px; font-weight: bold;}
-        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-      `}</style>
-    </>
+      <div className="mt-10 mb-6 text-center z-10">
+        <h1 className="text-2xl font-light tracking-[0.3em] uppercase mb-2">Temple</h1>
+        <div className="text-[10px] text-gray-500 tracking-widest">DIGITAL SANCTUARY</div>
+      </div>
+
+      {/* ЛОГИ (Тишина...) */}
+      <div className="w-full max-w-xs mb-8 min-h-[80px] flex flex-col justify-end items-center gap-2 pointer-events-none z-0 opacity-60">
+        {logs.length === 0 && <div className="text-xs text-gray-600 animate-pulse">...тишина...</div>}
+        {logs.map((log) => (
+           <div key={log.id} className="text-[11px] text-gray-400 text-center">
+              {log.message}
+           </div>
+        ))}
+      </div>
+
+      {/* МЕНЮ */}
+      <div className="grid grid-cols-2 gap-4 w-full max-w-sm z-10">
+        <Link href="/vigil?mode=temple" onClick={() => handleNavClick('Vigil')} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform">
+           <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_red] animate-pulse"></div>
+           <div className="text-xs font-bold tracking-widest">VIGIL</div>
+        </Link>
+
+        <Link href="/heartandangel/letitgo?mode=temple" onClick={() => handleNavClick('Let It Go')} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform">
+           <div className="w-2 h-2 rounded-full bg-gray-600"></div>
+           <div className="text-xs font-bold tracking-widest">LET IT GO</div>
+        </Link>
+
+        <Link href="/absolution?mode=temple" onClick={() => handleNavClick('Absolution')} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform">
+           <div className="w-2 h-2 rounded-full bg-gray-600"></div>
+           <div className="text-xs font-bold tracking-widest">ABSOLVE</div>
+        </Link>
+
+        <Link href="/cast?mode=temple" onClick={() => handleNavClick('Cast')} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform">
+           <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_red] animate-pulse"></div>
+           <div className="text-xs font-bold tracking-widest">CAST</div>
+        </Link>
+      </div>
+
+      {!isTelegram && (
+         <div className="mt-12 text-xs text-gray-600">
+             Откройте через Telegram Bot для входа
+         </div>
+      )}
+    </div>
   );
 }
