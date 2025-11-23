@@ -22,44 +22,40 @@ export default function PierrotChat() {
 
     const userMessage = input.trim();
     setInput('');
+    // Добавляем сообщение пользователя в чат
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/pierrot', {
+      // ИСПРАВЛЕНО: Стучимся в отдельный веб-роут
+      const response = await fetch('/api/pierrot-web', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        // ИСПРАВЛЕНО: Простая структура, которую ждет наш API
         body: JSON.stringify({
-          query: userMessage,
-          sourceId: null,
-          conversationId: null,
-          settings: {}
+          message: userMessage
         }),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error('API Error:', response.status, errorText);
-        throw new Error(`API Error ${response.status}: ${errorText.substring(0, 100)}`);
+        throw new Error(`Connection Error: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('API Response:', data);
       
-      // Try multiple possible response fields
-      const assistantMessage = data.response || data.reply || data.message || data.text || data.answer || data.result || JSON.stringify(data);
+      // ИСПРАВЛЕНО: Берем поле 'reply' из нашего API
+      const assistantMessage = data.reply || "Silence.";
+      
       setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
     } catch (error) {
       console.error('Chat error:', error);
-      const errorMsg = error instanceof TypeError && error.message.includes('Failed to fetch')
-        ? '[Error: CORS or Network issue. Check browser console for details.]'
-        : `[Error: ${error instanceof Error ? error.message : 'Unable to reach Pierrot'}]`;
-      
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: errorMsg
+        content: "[ CONNECTION LOST. THE ETHER IS UNSTABLE. ]"
       }]);
     } finally {
       setIsLoading(false);
@@ -78,8 +74,8 @@ export default function PierrotChat() {
       {/* Trigger Link */}
       <button
         onClick={() => setIsOpen(true)}
-        className="text-xs font-mono text-gray-500 hover:text-black transition-colors"
-        style={{ fontFamily: 'Space Mono, Courier, monospace' }}
+        className="text-xs font-mono text-gray-500 hover:text-black transition-colors uppercase tracking-widest"
+        style={{ fontFamily: 'monospace' }}
       >
         &gt; TALK TO PIERROT <span className="animate-pulse">_</span>
       </button>
@@ -89,69 +85,71 @@ export default function PierrotChat() {
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ 
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(10px)'
+            background: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(5px)'
           }}
           onClick={() => setIsOpen(false)}
         >
           <div 
-            className="relative w-full max-w-4xl h-[80vh] bg-black text-green-400 shadow-2xl flex flex-col"
+            className="relative w-full max-w-2xl h-[70vh] bg-black border border-white/20 text-gray-300 shadow-2xl flex flex-col font-mono"
             onClick={(e) => e.stopPropagation()}
-            style={{ fontFamily: 'Space Mono, Courier, monospace' }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-green-400/30">
-              <div className="text-xs">
-                <span className="text-green-400">PIERROT://TERMINAL</span>
-                <span className="ml-4 text-green-400/50">[CONNECTED]</span>
+            <div className="flex items-center justify-between p-4 border-b border-white/10 bg-zinc-900/50">
+              <div className="text-xs tracking-widest text-white">
+                PIERROT // ADVISOR <span className="text-green-500 animate-pulse">●</span>
               </div>
               <button
                 onClick={() => setIsOpen(false)}
-                className="text-xs text-green-400 hover:text-green-300 transition-colors"
+                className="text-xs text-gray-500 hover:text-white transition-colors"
               >
                 [ CLOSE ]
               </button>
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 text-sm">
               {messages.length === 0 && (
-                <div className="text-green-400/50 text-xs">
-                  &gt; System ready. Type your message below...
+                <div className="text-gray-600 text-xs text-center mt-20">
+                  The advisor is listening.<br/>Ask about Art, Silence, or your Digital Sins.
                 </div>
               )}
               {messages.map((msg, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="text-xs text-green-400/70">
-                    {msg.role === 'user' ? '> USER:' : '> PIERROT:'}
+                <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div className="text-[10px] text-gray-600 mb-1 uppercase tracking-wider">
+                    {msg.role === 'user' ? 'YOU' : 'PIERROT'}
                   </div>
-                  <div className="pl-4 whitespace-pre-wrap">{msg.content}</div>
+                  <div className={`max-w-[85%] leading-relaxed ${
+                    msg.role === 'user' 
+                      ? 'text-white bg-zinc-900 p-3 border border-white/10' 
+                      : 'text-gray-300 pl-0'
+                  }`}>
+                    {msg.content}
+                  </div>
                 </div>
               ))}
               {isLoading && (
-                <div className="text-green-400/50 text-xs animate-pulse">
-                  &gt; PIERROT is typing...
+                <div className="text-gray-600 text-xs animate-pulse pl-0">
+                  Thinking...
                 </div>
               )}
               <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area */}
-            <div className="border-t border-green-400/30 p-4">
-              <div className="flex items-center gap-2">
-                <span className="text-green-400 text-sm">&gt;</span>
+            <div className="border-t border-white/10 p-4 bg-zinc-900/30">
+              <div className="flex items-center gap-3">
+                <span className="text-gray-500 text-lg">›</span>
                 <input
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Type your message..."
+                  placeholder="Type here..."
                   disabled={isLoading}
-                  className="flex-1 bg-transparent border-none outline-none text-green-400 text-sm placeholder-green-400/30"
-                  style={{ fontFamily: 'Space Mono, Courier, monospace' }}
+                  className="flex-1 bg-transparent border-none outline-none text-white text-sm placeholder-gray-700"
                   autoFocus
                 />
-                <span className="text-green-400 animate-pulse">_</span>
               </div>
             </div>
           </div>

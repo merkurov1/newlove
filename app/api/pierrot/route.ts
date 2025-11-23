@@ -1,12 +1,19 @@
 import { Bot, webhookCallback } from 'grammy';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// 1. Очистка ключа от пробелов (это лечит ошибку "pattern match")
+const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
 const token = process.env.PIERROT_BOT_TOKEN;
+
 if (!token) throw new Error('PIERROT_BOT_TOKEN is unset');
+if (!apiKey) throw new Error('GOOGLE_API_KEY is unset');
 
 const bot = new Bot(token);
+
+// Используем актуальную модель из твоего списка
 const MODEL_NAME = 'gemini-2.5-flash';
 
 // --- ОБНОВЛЕННЫЙ МОЗГ ---
@@ -32,7 +39,14 @@ IMPORTANT:
 - Keep answers under 3 sentences.
 `;
 
-// --- ПРИВЕТСТВИЕ С КНОПКАМИ ---
+// Инициализация Google AI один раз
+const genAI = new GoogleGenerativeAI(apiKey);
+const model = genAI.getGenerativeModel({ 
+  model: MODEL_NAME,
+  systemInstruction: PIERROT_PROMPT // SDK сам знает, куда это вставить
+});
+
+// --- ПРИВЕТСТВИЕ ---
 bot.command("start", async (ctx) => {
   await ctx.reply(
     "I am listening. The noise outside is unbearable, isn't it?\n\nChoose your path:",
@@ -55,50 +69,29 @@ bot.command("start", async (ctx) => {
 // --- ОБРАБОТКА ТЕКСТА ---
 bot.on('message:text', async (ctx) => {
   const userText = ctx.message.text;
+  
+  // Показываем статус "печатает..." в телеграме
   await ctx.api.sendChatAction(ctx.chat.id, "typing");
 
   try {
-    const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) throw new Error("GOOGLE_API_KEY is missing");
-    
-    console.log(`[Pierrot] Asking Gemini: ${userText.substring(0, 20)}...`);
+    console.log(`[Pierrot] Thinking about: ${userText.substring(0, 20)}...`);
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
-    
-    const payload = {
-      contents: [{ role: "user", parts: [{ text: userText }] }],
-      systemInstruction: { parts: [{ text: PIERROT_PROMPT }] },
-      generationConfig: { 
-        temperature: 0.9, // Чуть выше для креативных советов
-        maxOutputTokens: 500 
-      }
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Google Error: ${response.status} - ${errText}`);
-    }
-
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    // Генерация через SDK (намного стабильнее ручного fetch)
+    const result = await model.generateContent(userText);
+    const response = await result.response;
+    const text = response.text();
 
     if (!text) {
         await ctx.reply("The void is silent.");
         return;
     }
 
-    // Отправляем ответ. Кнопки добавляем, если текст короткий, чтобы не перегружать.
     await ctx.reply(text, { parse_mode: 'Markdown' });
 
   } catch (error: any) {
     console.error("[Pierrot] Error:", error);
-    await ctx.reply("Connection disrupted.");
+    // В случае ошибки отвечаем пользователю, чтобы он не ждал вечно
+    await ctx.reply("The connection to the Ether is unstable. Try again.");
   }
 });
 
