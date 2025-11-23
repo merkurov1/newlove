@@ -27,7 +27,7 @@ export default function LoveTemple() {
     if (typeof window !== 'undefined') {
       // Небольшая задержка для инициализации API Телеграма
       setTimeout(() => {
-        const tg = window.Telegram?.WebApp;
+        const tg = (window as any).Telegram?.WebApp;
         
         if (tg && (tg.initData || tg.platform !== 'unknown')) {
           initTelegramMode(tg);
@@ -36,7 +36,7 @@ export default function LoveTemple() {
     }
   }, []);
 
-  const initTelegramMode = async (tg) => {
+  const initTelegramMode = async (tg: any) => {
     setIsTelegram(true);
     tg.ready();
     tg.expand();
