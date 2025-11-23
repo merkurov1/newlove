@@ -7,7 +7,7 @@ const token = process.env.PIERROT_BOT_TOKEN;
 if (!token) throw new Error('PIERROT_BOT_TOKEN is unset');
 
 const bot = new Bot(token);
-const MODEL_NAME = 'gemini-2.0-flash';
+const MODEL_NAME = 'gemini-2.5-flash';
 
 // --- ОБНОВЛЕННЫЙ МОЗГ ---
 const PIERROT_PROMPT = `
