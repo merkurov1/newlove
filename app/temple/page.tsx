@@ -1,14 +1,14 @@
-'use client';
+ 'use client';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import TempleLogsClient from './TempleLogs.client';
 
-// Инициализация клиента для чтения логов — use shared helper (no args)
+// Инициализация клиента для записи/трекинга — use shared helper (no args)
 const supabase = createClient();
 
 export default function TemplePage() {
-  const [logs, setLogs] = useState<any[]>([]);
   const [isTelegram, setIsTelegram] = useState(false);
 
   useEffect(() => {
@@ -46,33 +46,22 @@ export default function TemplePage() {
     
     document.head.appendChild(script);
 
-    // 2. Подписка на живые события
-    if (supabase) {
-      const channel = supabase
-        .channel('temple-live')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, (payload) => {
-            setLogs((prev) => [payload.new, ...prev].slice(0, 5));
-        })
-        .subscribe();
-      
-      // Грузим историю
-      supabase.from('temple_log').select('*').order('created_at', { ascending: false }).limit(5)
-        .then(({ data }) => { if (data) setLogs(data); });
-
-      return () => { 
-        supabase.removeChannel(channel);
-        if (document.head.contains(script)) document.head.removeChild(script);
-      };
-    }
+    return () => { 
+      if (document.head.contains(script)) document.head.removeChild(script);
+    };
   }, []);
 
-  // Клик по кнопке пишет в лог
+  // Клик по кнопке пишет в лог (запись делает клиентский supabase)
   const trackClick = async (service: string) => {
     if (supabase) {
-        await supabase.from('temple_log').insert({ 
-            event_type: 'nav', 
-            message: `Кто-то вошел в ${service}` 
-        });
+        try {
+          await supabase.from('temple_log').insert({ 
+              event_type: 'nav', 
+              message: `Кто-то вошел в ${service}` 
+          });
+        } catch (e) {
+          console.warn('trackClick failed', e);
+        }
     }
   };
 
@@ -102,12 +91,7 @@ export default function TemplePage() {
 
       {/* ЖИВАЯ ЛЕТОПИСЬ */}
       <div className="w-full max-w-md mb-8 min-h-[100px] flex flex-col justify-end items-center gap-2 pointer-events-none z-0 opacity-70">
-        {logs.length === 0 && <div className="text-xs text-zinc-700 animate-pulse">...тишина...</div>}
-        {logs.map((log) => (
-           <div key={log.id} className="text-[11px] text-zinc-400 text-center animate-fade-in">
-              {log.message}
-           </div>
-        ))}
+        <TempleLogsClient initialLogs={[]} />
       </div>
 
       {/* МЕНЮ */}
