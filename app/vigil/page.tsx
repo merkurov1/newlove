@@ -159,7 +159,9 @@ export default function VigilPage() {
   };
 
   const triggerRitual = async () => {
-    if (!selectedHeart || !nameInput.trim() || isLighting || !user) return;
+    // If there's no supabase user but we might have a temple session (Telegram miniapp),
+    // we'll POST to server-side endpoint which will verify temple_session and upsert via service role.
+    if (!selectedHeart || !nameInput.trim() || isLighting) return;
     
     setIsLighting(true);
     const heartIdToUpdate = selectedHeart;
@@ -178,20 +180,40 @@ export default function VigilPage() {
       
       setSparkParticles(prev => [...prev, { id: sparkId, startX, startY, endX, endY }]);
 
-      setTimeout(async () => {
+        setTimeout(async () => {
         setFlash(true);
         if (navigator.vibrate) navigator.vibrate([50, 50]); 
         setTimeout(() => setFlash(false), 200);
 
         setSparkParticles(prev => prev.filter(s => s.id !== sparkId));
 
-        await supabase.from('vigil_hearts').upsert({
-            id: heartIdToUpdate,
-            owner_name: nameInput.trim(),
-            owner_id: user.id,
-            intention: intentionInput.trim(),
-            last_lit_at: new Date().toISOString()
-        });
+        try {
+          if (user && user.id) {
+            // Signed-in via Supabase: update directly from client
+            await supabase.from('vigil_hearts').upsert({
+              id: heartIdToUpdate,
+              owner_name: nameInput.trim(),
+              owner_id: user.id,
+              intention: intentionInput.trim(),
+              last_lit_at: new Date().toISOString()
+            });
+          } else {
+            // Not signed in via Supabase: attempt server-side claim via temple_session
+            const res = await fetch('/api/vigil/claim', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: heartIdToUpdate, name: nameInput.trim(), intention: intentionInput.trim() })
+            });
+            const j = await res.json();
+            if (!res.ok) {
+              console.warn('vigil claim failed', j);
+              setDebugMessage(j?.error || 'claim failed');
+              setTimeout(() => setDebugMessage(''), 3000);
+            }
+          }
+        } catch (e) {
+          console.error('triggerRitual error', e);
+        }
 
         setIsLighting(false);
       }, 2500); 

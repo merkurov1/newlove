@@ -112,9 +112,23 @@ export default function CastPage() {
           body: JSON.stringify({ answers: newAnswers, language })
         })
         const data = await res.json()
-        
-        setFullText(data.analysis)
-        setArchetype(data.archetype)
+            // Try to parse structured JSON analysis returned from the server
+            let formatted = String(data.analysis || '')
+            try {
+               const parsed = typeof data.analysis === 'string' ? JSON.parse(data.analysis) : data.analysis
+               if (parsed && typeof parsed === 'object' && parsed.executive_summary) {
+                  // Build a readable formatted text instead of showing raw JSON
+                  const scores = parsed.scores || {}
+                  const scoresText = Object.keys(scores).map(k => `${k}: ${scores[k]}`).join('\n')
+                  formatted = `Archetype: ${parsed.archetype || data.archetype}\n\nScores:\n${scoresText}\n\nExecutive Summary:\n${parsed.executive_summary}\n\nStructural Weaknesses:\n${parsed.structural_weaknesses}\n\nCore Assets:\n${parsed.core_assets}\n\nStrategic Directive:\n${parsed.strategic_directive}`
+               }
+            } catch (e) {
+               // If parsing fails, fall back to raw text
+               formatted = String(data.analysis || '')
+            }
+
+            setFullText(formatted)
+            setArchetype(data.archetype)
         setRecordId(data.recordId) 
 
       } catch (error) {
