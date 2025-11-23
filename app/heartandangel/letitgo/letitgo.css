@@ -1,11 +1,27 @@
+/* --- CONTAINER --- */
 .letitgo-container {
   position: relative;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: #87ceeb; /* Light Blue */
+  background-color: #87ceeb; /* Sky Blue */
+  /* Градиент для глубины (опционально, но красиво) */
+  background: linear-gradient(to bottom, #87ceeb 0%, #b0e0e6 100%);
 }
 
+/* Трава */
+.letitgo-container::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100px;
+  background-color: #90ee90;
+  z-index: 0;
+}
+
+/* --- ANGEL --- */
 .angel-container {
   position: absolute;
   bottom: 20px;
@@ -14,134 +30,147 @@
   height: 600px;
   cursor: pointer;
   z-index: 10;
+  transition: transform 0.1s ease; /* Эффект нажатия */
+}
+
+.angel-container:active {
+  transform: scale(0.98);
 }
 
 .angel-image {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  pointer-events: none; /* Чтобы клик проходил в контейнер */
 }
 
-.heart {
+/* --- HEART (THE CORE FIX) --- */
+/* Используем вложенность, чтобы перебить глобальные стили */
+.letitgo-container .heart {
   position: absolute;
-  width: 150px !important;
-  height: 150px !important;
-  min-width: 150px !important;
-  min-height: 150px !important;
-  max-width: 150px !important;
-  max-height: 150px !important;
+  
+  /* РАЗМЕР: Увеличили в 2 раза */
+  width: 300px;
+  height: 300px;
+  
+  /* ФОН */
   background-image: url('https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0920.png');
   background-size: contain;
+  background-position: center;
   background-repeat: no-repeat;
+  
   z-index: 5;
-  animation: float-away 5s forwards;
+  pointer-events: none; /* Чтобы не мешало кликать */
+  
+  /* АНИМАЦИЯ */
+  animation: float-away 4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+/* --- ANIMATIONS --- */
+
+/* Desktop Animation */
 @keyframes float-away {
   0% {
-    bottom: 360px;
-    left: 300px;
+    bottom: 350px;     /* Стартуем от рук ангела */
+    left: 350px;
+    opacity: 0;        /* Появляемся плавно */
+    transform: scale(0.2) rotate(0deg);
+  }
+  10% {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) rotate(10deg);
   }
   100% {
-    bottom: 120vh;
-    left: 110vw;
+    bottom: 120vh;     /* Улетаем за экран */
+    left: 100vw;       /* Вправо-вверх */
     opacity: 0;
-    transform: scale(0.5) rotate(45deg);
+    transform: scale(0.8) rotate(45deg);
   }
 }
 
+/* --- UI ELEMENTS --- */
 .click-counter {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: 30px;
+  right: 30px;
+  font-family: monospace;
   font-size: 24px;
   font-weight: bold;
-  color: #333;
-  background-color: rgba(255, 255, 255, 0.7);
-  padding: 10px 20px;
-  border-radius: 10px;
+  color: #000;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 12px 24px;
+  border: 1px solid #000;
+  box-shadow: 4px 4px 0px #000; /* Брутализм стиль */
   z-index: 20;
 }
 
-.letitgo-container::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 100px;
-  background-color: #90ee90; /* Light Green */
-  z-index: 0;
+/* --- RESPONSIVE --- */
+
+@media (max-width: 1024px) {
+  /* Tablet & Mobile shared styles */
+  .angel-container {
+    left: 50%;
+    transform: translateX(-50%); /* Центрируем ангела */
+  }
+  
+  /* При нажатии на мобилке scale с учетом translate */
+  .angel-container:active {
+    transform: translateX(-50%) scale(0.95);
+  }
+
+  /* Меняем точку старта сердца для центра */
+  @keyframes float-away {
+    0% {
+      bottom: 50%; /* Относительно ангела */
+      left: 50%;
+      opacity: 0;
+      transform: translate(-50%, 0) scale(0.2);
+    }
+    10% {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
+    100% {
+      bottom: 110vh;
+      left: 120%; /* Улетает вправо */
+      opacity: 0;
+      transform: translate(0, 0) scale(0.5) rotate(45deg);
+    }
+  }
 }
 
 @media (max-width: 768px) {
+  /* Mobile specific */
   .angel-container {
-    width: 300px;
-    height: 300px;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 10px;
+    width: 320px;
+    height: 320px;
+    bottom: 40px;
   }
 
+  /* Сердце на мобилке поменьше, но все равно крупное */
   .letitgo-container .heart {
-    width: 75px !important;
-    height: 75px !important;
-    min-width: 75px !important;
-    min-height: 75px !important;
-    max-width: 75px !important;
-    max-height: 75px !important;
+    width: 150px;
+    height: 150px;
+    /* Корректируем анимацию для мобилки */
     animation-name: float-away-mobile;
   }
-}
 
-@keyframes float-away-mobile {
-  0% {
-    bottom: 180px;
-    left: 50%;
-    transform: translateX(-50%) scale(1);
-    opacity: 1;
-  }
-  100% {
-    bottom: 120vh;
-    left: 110vw;
-    opacity: 0;
-    transform: scale(0.5) rotate(45deg);
-  }
-}
-
-@media (min-width: 769px) and (max-width: 1024px) {
-  .angel-container {
-    width: 450px;
-    height: 450px;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 15px;
-  }
-
-  .letitgo-container .heart {
-    width: 110px !important;
-    height: 110px !important;
-    min-width: 110px !important;
-    min-height: 110px !important;
-    max-width: 110px !important;
-    max-height: 110px !important;
-    animation-name: float-away-tablet;
-  }
-}
-
-@keyframes float-away-tablet {
-  0% {
-    bottom: 270px;
-    left: 50%;
-    transform: translateX(-50%) scale(1);
-    opacity: 1;
-  }
-  100% {
-    bottom: 120vh;
-    left: 110vw;
-    opacity: 0;
-    transform: scale(0.5) rotate(45deg);
+  @keyframes float-away-mobile {
+    0% {
+      bottom: 220px; /* Чуть выше рук на мобилке */
+      left: 50%;
+      opacity: 0;
+      transform: translateX(-50%) scale(0.2);
+    }
+    15% {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+    100% {
+      bottom: 100vh;
+      left: 100vw;
+      opacity: 0;
+      transform: translateX(0) scale(0.6) rotate(45deg);
+    }
   }
 }
