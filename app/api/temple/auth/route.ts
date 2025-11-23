@@ -99,7 +99,9 @@ export async function POST(req: Request) {
     const token = signSession({ userId: id, displayName })
     const maxAge = 60 * 60 * 24 * 30 // 30 days
     const isProd = process.env.NODE_ENV === 'production'
-    const cookie = `temple_session=${token}; Path=/; Max-Age=${maxAge}; SameSite=Lax; HttpOnly${isProd ? '; Secure' : ''}`
+    // If initData provided (Telegram flow), set SameSite=None to allow WebView cookies.
+    const sameSite = body?.initData ? 'None' : 'Lax'
+    const cookie = `temple_session=${token}; Path=/; Max-Age=${maxAge}; SameSite=${sameSite}; HttpOnly${isProd ? '; Secure' : ''}`
 
     return NextResponse.json({ success: true, userId: id, displayName }, { status: 200, headers: { 'Set-Cookie': cookie } })
   } catch (e: any) {

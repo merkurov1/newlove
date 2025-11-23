@@ -13,7 +13,7 @@ export default function TemplePage() {
     // so site users are recognised even without Telegram WebApp.
     (async function checkSession() {
       try {
-        const res = await fetch('/api/temple/me');
+        const res = await fetch('/api/temple/me', { credentials: 'include' });
         if (res.ok) {
           const json = await res.json();
           if (json?.displayName) {
@@ -41,13 +41,16 @@ export default function TemplePage() {
           try { tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); } catch (e) {}
 
           // Тихая авторизация через наш API
+          // Send full initData to server (safer: allows server to verify HMAC)
+          const initData = (window as any).Telegram?.WebApp?.initData || null;
           const user = tg.initDataUnsafe?.user;
           if (user) {
             // Send auth to server; server sets an HTTP-only cookie.
             fetch('/api/temple/auth', {
               method: 'POST',
+              credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(user)
+              body: JSON.stringify({ ...user, initData })
             })
               .then(res => res.json())
               .then(json => {

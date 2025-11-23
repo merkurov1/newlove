@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getUserAndSupabaseForRequest } from '@/lib/getUserAndSupabaseForRequest';
 
+// This endpoint inspects cookies from the incoming request; mark as dynamic.
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
     try {
         // Build cookie-aware Request for server helper

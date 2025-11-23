@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+// This route reads request headers (cookies) and must be dynamic.
+export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 export async function GET(req: Request) {

@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+
+// This route reads request headers (authorization/cookie) and may be called during SSR,
+// mark it dynamic to avoid static render-time errors.
+export const dynamic = 'force-dynamic';
 import getUserAndSupabaseForRequest from '@/lib/getUserAndSupabaseForRequest';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import tokenUtils from '@/lib/auth/tokenUtils';
