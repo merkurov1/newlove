@@ -1,125 +1,179 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Script from 'next/script';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 
 export default function TemplePage() {
-  const [debugLog, setDebugLog] = useState<string[]>([]);
-  const [status, setStatus] = useState("Waiting for Telegram...");
+  const [logs, setLogs] = useState<string[]>([]);
+  const [status, setStatus] = useState("Waiting...");
   const [isTelegram, setIsTelegram] = useState(false);
+  const [userId, setUserId] = useState<string | number>('?');
 
-  const log = (msg: string) => {
-    console.log(msg);
-    setDebugLog(prev => [msg, ...prev].slice(0, 8));
+  // Функция для записи логов на экран
+  const addLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString().split(' ')[0];
+    setLogs(prev => [`[${time}] ${msg}`, ...prev].slice(0, 15));
+    console.log(`[Temple] ${msg}`);
   };
 
-  // Проверка Телеграма
-  const checkTelegram = () => {
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg) {
-      setIsTelegram(true);
-      setStatus("TG Connected ✅");
+  useEffect(() => {
+    addLog("Starting manual initialization...");
+
+    // 1. Создаем тег скрипта вручную
+    const script = document.createElement('script');
+    script.src = "https://telegram.org/js/telegram-web-app.js";
+    script.async = true;
+
+    // 2. Обработчик успешной загрузки
+    script.onload = () => {
+      addLog("Script loaded event fired.");
       
-      tg.ready();
-      tg.expand();
-      try { tg.BackButton.hide(); } catch (e) {}
-      // Красим системные бары телеграма в черный
-      try { tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); } catch (e) {}
-      
-      const user = tg.initDataUnsafe?.user;
-      if (user) {
-         log(`User: ${user.first_name} (${user.id})`);
-         // Пытаемся записать юзера через API
-         fetch('/api/temple/auth', {
-            method: 'POST',
-            body: JSON.stringify(user)
-         }).then(r => log(`Auth API: ${r.status}`)).catch(e => log(`Auth API Error: ${e}`));
-      } else {
-         log("Anon user (Browser?)");
+      // Начинаем искать объект Telegram (иногда он появляется с задержкой)
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        const tg = (window as any).Telegram?.WebApp;
+        
+        if (tg) {
+          clearInterval(interval);
+          addLog("Telegram WebApp object found!");
+          setIsTelegram(true);
+          setStatus("CONNECTED");
+          
+          // Инициализация
+          try {
+              tg.ready();
+              tg.expand();
+              addLog(`Platform: ${tg.platform}, ColorScheme: ${tg.colorScheme}`);
+              
+              // Прячем кнопку назад
+              if (tg.BackButton) tg.BackButton.hide();
+              
+              // Красим хедер
+              if (tg.setHeaderColor) tg.setHeaderColor('#000000');
+              if (tg.setBackgroundColor) tg.setBackgroundColor('#000000');
+          } catch (e: any) {
+              addLog(`UI Setup Error: ${e.message}`);
+          }
+
+          // Данные юзера
+          const user = tg.initDataUnsafe?.user;
+          if (user) {
+            setUserId(user.id);
+            addLog(`User: ${user.username || user.first_name} (${user.id})`);
+            
+            // Отправка на сервер
+            addLog("Sending auth request...");
+            fetch('/api/temple/auth', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(user)
+            })
+            .then(async res => {
+                const text = await res.text();
+                addLog(`API [${res.status}]: ${text.slice(0, 30)}`);
+            })
+            .catch(err => addLog(`API Error: ${err.message}`));
+          } else {
+            addLog("No user data in initDataUnsafe (Browser?)");
+          }
+          
+        } else if (attempts > 20) { // 2 секунды
+          clearInterval(interval);
+          addLog("Timeout: window.Telegram not found after script load");
+        }
+      }, 100);
+    };
+
+    // 3. Обработчик ошибки загрузки (CSP или Сеть)
+    script.onerror = () => {
+      addLog("CRITICAL: Failed to load Telegram script. Checked CSP?");
+      setStatus("SCRIPT BLOCKED");
+    };
+
+    // Добавляем в head
+    document.head.appendChild(script);
+
+    return () => {
+      // Чистим за собой
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
       }
-    }
-  };
+    };
+  }, []);
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono flex flex-col p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-black text-white font-mono flex flex-col p-4 relative">
       
-      <Script 
-        src="https://telegram.org/js/telegram-web-app.js" 
-        strategy="beforeInteractive"
-        onLoad={() => {
-            log("Script Loaded");
-            checkTelegram();
-        }}
-        onError={(e) => log("Script Blocked by CSP!")}
-      />
-
-      {/* === ЯДЕРНЫЙ CSS ДЛЯ СКРЫТИЯ ХЕДЕРА === */}
+      {/* ЯДЕРНЫЙ CSS: Скрываем все лишнее и делаем оверлей */}
       <style jsx global>{`
-        /* Скрываем любой тег header, footer, nav */
-        header, footer, nav {
+        /* Скрываем хедеры и футеры по тегам и популярным классам */
+        header, footer, nav, .header, .footer, #header, #footer {
             display: none !important;
-            opacity: 0 !important;
             visibility: hidden !important;
+            opacity: 0 !important;
             height: 0 !important;
-            overflow: hidden !important;
-        }
-        /* На всякий случай по классам, если они используются */
-        .site-header, .site-footer, [class*="Header"], [class*="Footer"] {
-            display: none !important;
+            pointer-events: none !important;
         }
         /* Принудительный черный фон */
-        html, body { 
-            background-color: #000000 !important; 
+        html, body {
+            background-color: #000000 !important;
             overflow-x: hidden;
-            min-height: 100vh;
         }
       `}</style>
-      
-      {/* ЛОГОТИП ХРАМА */}
-      <div className="mt-8 mb-8 text-center z-10">
+
+      {/* Оверлей на случай, если CSS выше не сработал, этот div перекроет всё */}
+      <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'black',
+          zIndex: -1 
+      }}></div>
+
+      {/* HEADER */}
+      <div className="mt-6 mb-6 text-center z-10">
         <h1 className="text-3xl font-bold tracking-[0.2em] mb-1 text-white">TEMPLE</h1>
-        <div className="text-[10px] text-green-500 tracking-widest uppercase mb-4">
-           {status}
+        <div className="text-[10px] font-bold tracking-widest uppercase mb-4" style={{ color: status === 'CONNECTED' ? '#0f0' : '#f00' }}>
+           STATUS: {status}
         </div>
       </div>
 
-      {/* МЕНЮ */}
-      <div className="grid grid-cols-2 gap-4 w-full max-w-sm z-10 mx-auto">
-        <Link href="/vigil?mode=temple" className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 text-white no-underline">
-           <div className="text-xl">🕯</div>
-           <div className="text-xs font-bold tracking-widest">VIGIL</div>
-        </Link>
-
-        <Link href="/heartandangel/letitgo?mode=temple" className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 text-white no-underline">
-           <div className="text-xl">❤️</div>
-           <div className="text-xs font-bold tracking-widest">LET IT GO</div>
-        </Link>
-
-        <Link href="/absolution?mode=temple" className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 text-white no-underline">
-           <div className="text-xl">🧾</div>
-           <div className="text-xs font-bold tracking-widest">ABSOLVE</div>
-        </Link>
-
-        <Link href="/cast?mode=temple" className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 text-white no-underline">
-           <div className="text-xl">💀</div>
-           <div className="text-xs font-bold tracking-widest">CAST</div>
-        </Link>
+      {/* DEBUG CONSOLE (Самое важное сейчас) */}
+      <div className="w-full max-w-md mx-auto mb-6 p-3 border border-zinc-800 bg-zinc-900/50 rounded text-[10px] font-mono text-green-400 overflow-hidden break-all">
+        <div className="border-b border-zinc-700 pb-1 mb-2 flex justify-between">
+            <span>DEBUG LOG</span>
+            <span>UID: {userId}</span>
+        </div>
+        <div className="flex flex-col gap-1">
+            {logs.length === 0 && <span className="text-gray-500">Waiting for logs...</span>}
+            {logs.map((line, i) => (
+                <div key={i}>{line}</div>
+            ))}
+        </div>
       </div>
 
-      {/* DEBUG LOG */}
-      <div className="mt-8 p-4 border border-red-900 bg-red-900/10 rounded text-[10px] text-red-300 w-full max-w-md mx-auto break-all">
-        <p className="font-bold mb-2 border-b border-red-800 pb-1">DEBUG:</p>
-        {debugLog.map((line, i) => (
-          <div key={i} className="mb-1 font-mono">{`> ${line}`}</div>
-        ))}
-      </div>
+      {/* MENU */}
+      <div className="grid grid-cols-2 gap-4 w-full max-w-sm z-10 mx-auto pb-10">
+        <Link href="/vigil?mode=temple" className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 text-white no-underline active:opacity-50">
+           <span className="text-xl">🕯</span>
+           <span className="text-xs font-bold tracking-widest">VIGIL</span>
+        </Link>
 
-      {!isTelegram && (
-         <div className="mt-4 text-center text-xs text-gray-600">
-             Not in Telegram? <a href="https://t.me/MerkurovLoveBot" className="underline">Open Bot</a>
-         </div>
-      )}
+        <Link href="/heartandangel/letitgo?mode=temple" className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 text-white no-underline active:opacity-50">
+           <span className="text-xl">❤️</span>
+           <span className="text-xs font-bold tracking-widest">LET IT GO</span>
+        </Link>
+
+        <Link href="/absolution?mode=temple" className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 text-white no-underline active:opacity-50">
+           <span className="text-xl">🧾</span>
+           <span className="text-xs font-bold tracking-widest">ABSOLVE</span>
+        </Link>
+
+        <Link href="/cast?mode=temple" className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 text-white no-underline active:opacity-50">
+           <span className="text-xl">💀</span>
+           <span className="text-xs font-bold tracking-widest">CAST</span>
+        </Link>
+      </div>
     </div>
   );
 }
