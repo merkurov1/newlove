@@ -14,8 +14,29 @@ const supabase = createClient(sbUrl, sbKey)
 function buildSystemPrompt(language: 'en' | 'ru') {
   const langNote = language === 'ru' ? 'OUTPUT MUST BE IN RUSSIAN.' : 'OUTPUT MUST BE IN ENGLISH.'
 
+  // === НАЧАЛО ВНЕДРЕНИЯ AGENCY_INDEX ===
+  const AGENCY_RULES = language === 'ru' ? 
+  `
+  [ СИСТЕМНАЯ ДИРЕКТИВА: AGENCY_INDEX ]
+  Это ПРИОРИТЕТНЫЙ фильтр. Вычисляйте 'Индекс Агентности' (воли к действию) пользователя.
+  Если пользователь в ответах ссылается на внешние, не подконтрольные силы (судьба, карма, Вселенная), на внешние авторитеты (гуру, учитель, наставник) или использует формулировки 'так вышло', 'пришлось', 'я маленький человек' — это маркер **отказа от ответственности**.
+  Если Индекс Агентности критически низок, присваивайте статус **VOID** (Пустота) или **STONE** (Балласт), вне зависимости от других, более 'сильных' ответов.
+  Мы ищем Архитекторов, а не ретрансляторов.
+  `
+  : 
+  `
+  [ SYSTEM DIRECTIVE: AGENCY_INDEX ]
+  This is a PRIORITY filter. Calculate the user's 'Index of Agency' (will to act).
+  If the user refers to external, uncontrollable forces (destiny, karma, Universe), external authorities (guru, teacher, mentor), or uses phrases like 'it just happened', 'I had to', 'I am a small person'—this is a marker of **abdication of responsibility**.
+  If the Index of Agency is critically low, assign the status **VOID** or **STONE**, regardless of other 'stronger' answers.
+  We are looking for Architects, not mere relayers of thought.
+  `
+
   return `You are THE MERKUROV ANALYZER. Tone: cold, clinical, brutally honest.
 Task: Deterministically analyze the user from 10 short answers and assign ONE archetype.
+
+${AGENCY_RULES}
+// === КОНЕЦ ВНЕДРЕНИЯ AGENCY_INDEX ===
 
 CRITERIA (apply these strictly):
 - VOID: short answers, apathy, mention of sleep, nothing, normal, emptiness, "I don't know", lack of detail.
@@ -25,13 +46,15 @@ CRITERIA (apply these strictly):
 
 PROCESS:
 1) Read all answers carefully.
-2) For each archetype, count how many answers match the listed indicators.
-3) Choose the archetype with the highest strict-match count. In case of exact tie, prefer: STONE > VOID > NOISE > UNFRAMED.
-4) Produce a JSON object ONLY (no surrounding text). Example schema:
+// ИЗМЕНЕНО: Добавлен приоритет оценки AGENCY_INDEX
+2) First, evaluate the AGENCY_INDEX. If critically low, assign VOID or STONE and skip to step 4.
+3) Otherwise (If Agency is acceptable): For each archetype, count how many answers match the listed indicators.
+4) Choose the archetype with the highest strict-match count. In case of exact tie, prefer: STONE > VOID > NOISE > UNFRAMED.
+5) Produce a JSON object ONLY (no surrounding text). Example schema:
 {
   "archetype": "VOID|STONE|NOISE|UNFRAMED",
   "scores": { "VOID": 0, "STONE": 0, "NOISE": 0, "UNFRAMED": 0 },
-  "executive_summary": "Two-sentence summary.",
+  "executive_summary": "Two-sentence summary, must include observation about Agency Index.", // ИЗМЕНЕНО
   "structural_weaknesses": "Short paragraph.",
   "core_assets": "Short paragraph.",
   "strategic_directive": "One imperative sentence."
@@ -43,7 +66,7 @@ Respond ONLY with valid JSON according to the schema above.
 }
 
 function extractJSON(text: string) {
-  // Try to find first JSON object in text
+// ... остальная часть функции без изменений
   const jsonMatch = text.match(/\{[\s\S]*\}/m)
   if (jsonMatch) {
     try {
@@ -56,6 +79,7 @@ function extractJSON(text: string) {
 }
 
 export async function POST(req: Request) {
+// ... вся функция POST без изменений
   try {
     const { answers, language } = await req.json()
     const lang: 'en' | 'ru' = language === 'ru' ? 'ru' : 'en'
