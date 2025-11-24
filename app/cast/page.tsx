@@ -4,7 +4,15 @@ import { useState, useEffect, Suspense, useMemo } from 'react'
 import TempleWrapper from '@/components/TempleWrapper'
 import { templeTrack } from '@/components/templeTrack'
 
+// Utility function to convert **markdown** to <b>HTML</b>
+const formatQuestionText = (text: string): string => {
+    if (!text) return '';
+    // Replaces **bold** with <b>bold</b>
+    return text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+}
+
 // NEW QUESTIONS V2.0 - Designed to force specificity and conflict
+// (Массивы вопросов остаются прежними, но теперь они будут рендериться корректно)
 const QUESTIONS_EN = [
   "Which object in your home do you keep because it reminds you of **failed ambition** or a **bad compromise**?",
   "At what age or event did you first realize the **person closest to you** could not protect you?",
@@ -31,7 +39,7 @@ const QUESTIONS_RU = [
   "Вы готовы узнать свой диагноз?"
 ]
 
-// Компонент Штампа
+// Компонент Штампа (без изменений)
 const Stamp = ({ type }: { type: string }) => {
   const colors: Record<string, string> = {
     'VOID': 'text-gray-500 border-gray-500',
@@ -51,7 +59,7 @@ const Stamp = ({ type }: { type: string }) => {
   )
 }
 
-// Custom hook for the step-by-step loading process
+// Custom hook for the step-by-step loading process (без изменений)
 const useProcessing = (isLoading: boolean) => {
     const [step, setStep] = useState(0);
     const [text, setText] = useState('');
@@ -104,17 +112,17 @@ export default function CastPage() {
   
   // UI State
   const [loading, setLoading] = useState(false)
-  const { processingText } = useProcessing(loading); // Use the custom hook
+  const { processingText } = useProcessing(loading); 
   const [showStamp, setShowStamp] = useState(false)
   const [email, setEmail] = useState('')
   const [emailSent, setEmailSent] = useState(false)
 
   const questions = language === 'en' ? QUESTIONS_EN : QUESTIONS_RU
   
-  // Utility to check if answer is meaningful
+  // Utility to check if answer is meaningful (без изменений)
   const isAnswerValid = currentAnswer.trim().length > 3 && currentAnswer.trim() !== '/' && currentAnswer.trim() !== '-'
 
-  // Typewriter Effect
+  // Typewriter Effect (без изменений)
   useEffect(() => {
       templeTrack('enter', 'User opened Cast page')
    }, [])
@@ -126,9 +134,9 @@ export default function CastPage() {
             index++
             if (index >= fullText.length) {
                clearInterval(interval)
-               setTimeout(() => setShowStamp(true), 500) // Show stamp after text finishes
+               setTimeout(() => setShowStamp(true), 500) 
             }
-         }, 15) // Speed of typing
+         }, 15) 
          return () => clearInterval(interval)
       }
    }, [currentStep, fullText])
@@ -138,7 +146,7 @@ export default function CastPage() {
     setCurrentStep(1)
   }
   
-  // NEW: Refactored formatting logic using Merkurov OS headings
+  // Refactored formatting logic using Merkurov OS headings (без изменений)
   const formatAnalysisText = (analysis: any, archetype: string): string => {
     try {
         const parsed = typeof analysis === 'string' ? JSON.parse(analysis) : analysis;
@@ -146,7 +154,7 @@ export default function CastPage() {
 
         const scores = parsed.scores || {};
         const scoresText = Object.keys(scores)
-            .sort((a, b) => scores[b] - scores[a]) // Sort by score descending
+            .sort((a, b) => scores[b] - scores[a]) 
             .map(k => `${k}: ${scores[k]}`).join(' / ');
 
         const ruHeadings = {
@@ -182,8 +190,7 @@ export default function CastPage() {
 
   const handleNext = async () => {
     if (!isAnswerValid && currentStep < 10) {
-        // Only allow skipping the final question
-        return // Prevents submitting empty/short answers
+        return 
     }
 
     const newAnswers = [...answers, currentAnswer]
@@ -236,7 +243,7 @@ export default function CastPage() {
     }
   }
 
-  // --- RENDER: INTRO ---
+  // --- RENDER: INTRO --- (без изменений)
   if (currentStep === 0) {
      return (
         <div className="min-h-screen bg-black flex items-center justify-center font-mono relative">
@@ -268,7 +275,7 @@ export default function CastPage() {
      )
   }
 
-  // --- RENDER: QUESTIONS ---
+  // --- RENDER: QUESTIONS --- (ИСПРАВЛЕНАЯ СЕКЦИЯ)
   if (currentStep <= 10) {
      return (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center px-6 font-mono animate-in fade-in relative">
@@ -279,9 +286,11 @@ export default function CastPage() {
                  <span>Query {currentStep < 10 ? `0${currentStep}` : currentStep}</span>
                  <span>Protocol v.2.0</span>
               </div>
-              <p className="text-white text-xl md:text-2xl leading-relaxed mb-16 min-h-[100px] text-center">
-                 {questions[currentStep - 1]}
-              </p>
+              <p 
+                 className="text-white text-xl md:text-2xl leading-relaxed mb-16 min-h-[100px] text-center"
+                 // ИСПРАВЛЕНИЕ: Используем dangerouslySetInnerHTML для рендеринга жирного шрифта
+                 dangerouslySetInnerHTML={{ __html: formatQuestionText(questions[currentStep - 1]) }}
+              />
               <textarea 
                  autoFocus
                  value={currentAnswer}
@@ -294,7 +303,7 @@ export default function CastPage() {
               <div className="text-center">
                  <button 
                     onClick={handleNext} 
-                    disabled={!isAnswerValid && currentStep < 10} // New validation logic
+                    disabled={!isAnswerValid && currentStep < 10} 
                     className="text-xs text-white border border-white px-8 py-3 hover:bg-white hover:text-black transition-all tracking-[0.2em] disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-white"
                  >
                     {currentStep === 10 ? (language === 'ru' ? 'АНАЛИЗ' : 'ANALYZE') : (language === 'ru' ? 'ДАЛЕЕ' : 'NEXT')}
@@ -310,7 +319,7 @@ export default function CastPage() {
      )
   }
 
-  // --- RENDER: RESULT ---
+  // --- RENDER: RESULT --- (без изменений, кроме использования useProcessing)
   return (
     <div className="min-h-screen bg-black text-white font-mono p-6 md:p-12 overflow-y-auto relative">
        <Suspense fallback={null}><TempleWrapper /></Suspense>
@@ -402,6 +411,9 @@ export default function CastPage() {
          }
          .animate-stamp {
            animation: stamp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+         }
+         .text-center b {
+             font-weight: 700; /* Ensure bolding works on b tag */
          }
        `}</style>
     </div>
