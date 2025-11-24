@@ -1,31 +1,32 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useMemo } from 'react'
 import TempleWrapper from '@/components/TempleWrapper'
 import { templeTrack } from '@/components/templeTrack'
 
+// NEW QUESTIONS V2.0 - Designed to force specificity and conflict
 const QUESTIONS_EN = [
-  "What is the one physical object in your home you hate but cannot throw away?",
-  "At what specific moment in your childhood did you realize adults were lying?",
-  "What is the biggest lie you tell the world about yourself every day?",
+  "Which object in your home do you keep because it reminds you of **failed ambition** or a **bad compromise**?",
+  "At what age or event did you first realize the **person closest to you** could not protect you?",
+  "Which public virtue of yours (competence, calmness) is actually your **biggest defensive mechanism**?",
   "If I deleted your digital presence right now, what % of your personality would remain?",
   "Open your last 5 photos. Do they show a life you enjoy or a life you perform?",
-  "What is your primary digital sin: Envy (watching others), Wrath (arguing), or Sloth (scrolling)?",
-  "What did you spend the most money on that brought you zero happiness?",
-  "If locked in a silent room for 24 hours, would you worry about the future or regret the past?",
+  "What is the **most shameful** digital behavior you continue to engage in (scrolling, voyeurism, seeking validation)?",
+  "What is the **largest material asset** you acquired purely for **status confirmation**, not happiness?",
+  "In complete silence: do you attempt to **structure** future steps or **deconstruct** past mistakes?",
   "Finish the sentence: 'I am a person who...'",
   "Are you ready to see your true diagnosis?"
 ]
 
 const QUESTIONS_RU = [
-  "Назовите одну вещь в вашем доме, которую вы ненавидите, но не можете выбросить.",
-  "В какой момент детства вы поняли, что взрослые врут, а мир небезопасен?",
-  "Какую ложь о себе вы продаете миру каждый день?",
+  "Какой один предмет в вашем доме вы храните, потому что он напоминает о **нереализованном потенциале** или **неудачном компромиссе**?",
+  "В каком возрасте или событии вы впервые поняли, что **самый близкий вам человек** не может вас защитить?",
+  "Какое ваше публичное достоинство (компетентность, спокойствие) на самом деле **ваш самый большой защитный механизм**?",
   "Если удалить все ваши соцсети прямо сейчас, какой процент личности останется?",
   "Ваши последние 5 фото в телефоне: это жизнь, которой вы наслаждаетесь, или спектакль для других?",
-  "Ваш главный цифровой грех: Зависть (наблюдение), Гнев (спopы) или Уныние (скроллинг)?",
-  "На что вы потратили кучу денег, и это не принесло счастья?",
-  "Час в полной тишине: вы будете тревожиться о будущем или жалеть о прошлом?",
+  "Что в вашем цифровом поведении — **самое стыдное**, но вы продолжаете это делать (скроллинг, подглядывание, поиск валидации)?",
+  "Какой **самый крупный материальный актив** вы приобрели исключительно для **утверждения своего статуса**, а не для счастья?",
+  "В полной тишине: вы пытаетесь **структурировать** будущие шаги или **деконструировать** прошлые ошибки?",
   "Закончите фразу: «Я человек, который...»",
   "Вы готовы узнать свой диагноз?"
 ]
@@ -50,6 +51,45 @@ const Stamp = ({ type }: { type: string }) => {
   )
 }
 
+// Custom hook for the step-by-step loading process
+const useProcessing = (isLoading: boolean) => {
+    const [step, setStep] = useState(0);
+    const [text, setText] = useState('');
+    
+    const messages = useMemo(() => [
+        'CORE ACCESS GRANTED...',
+        'ANALYZING INERTIA AND DIGITAL NOISE...',
+        'CALCULATING ARCHETYPE SCORE...',
+        'GENERATING PSYCHOLOGICAL CAST...'
+    ], []);
+
+    useEffect(() => {
+        if (!isLoading) {
+            setStep(0);
+            setText('');
+            return;
+        }
+
+        let currentStep = 0;
+        setText(messages[currentStep]);
+
+        const interval = setInterval(() => {
+            currentStep++;
+            if (currentStep < messages.length) {
+                setText(messages[currentStep]);
+            } else {
+                // Loop the last message or stop
+                setText(messages[messages.length - 1]);
+            }
+        }, 1000); // Display each step for 1 second
+
+        return () => clearInterval(interval);
+    }, [isLoading, messages]);
+
+    return { processingText: text };
+};
+
+
 export default function CastPage() {
   const [language, setLanguage] = useState<'en' | 'ru' | null>(null)
   const [currentStep, setCurrentStep] = useState(0)
@@ -64,11 +104,15 @@ export default function CastPage() {
   
   // UI State
   const [loading, setLoading] = useState(false)
+  const { processingText } = useProcessing(loading); // Use the custom hook
   const [showStamp, setShowStamp] = useState(false)
   const [email, setEmail] = useState('')
   const [emailSent, setEmailSent] = useState(false)
 
   const questions = language === 'en' ? QUESTIONS_EN : QUESTIONS_RU
+  
+  // Utility to check if answer is meaningful
+  const isAnswerValid = currentAnswer.trim().length > 3 && currentAnswer.trim() !== '/' && currentAnswer.trim() !== '-'
 
   // Typewriter Effect
   useEffect(() => {
@@ -93,8 +137,55 @@ export default function CastPage() {
     setLanguage(lang)
     setCurrentStep(1)
   }
+  
+  // NEW: Refactored formatting logic using Merkurov OS headings
+  const formatAnalysisText = (analysis: any, archetype: string): string => {
+    try {
+        const parsed = typeof analysis === 'string' ? JSON.parse(analysis) : analysis;
+        if (!parsed || typeof parsed !== 'object' || !parsed.executive_summary) return String(analysis || 'Analysis structure incomplete.');
+
+        const scores = parsed.scores || {};
+        const scoresText = Object.keys(scores)
+            .sort((a, b) => scores[b] - scores[a]) // Sort by score descending
+            .map(k => `${k}: ${scores[k]}`).join(' / ');
+
+        const ruHeadings = {
+            scores: "СЧЕТ",
+            executive_summary: "РЕЗЮМЕ",
+            structural_weaknesses: "СТРУКТУРНЫЕ СЛАБОСТИ",
+            core_assets: "КЛЮЧЕВЫЕ АКТИВЫ",
+            strategic_directive: "СТРАТЕГИЧЕСКАЯ ДИРЕКТИВА"
+        };
+        const enHeadings = {
+            scores: "SCOREBOARD",
+            executive_summary: "EXECUTIVE SUMMARY",
+            structural_weaknesses: "STRUCTURAL WEAKNESSES",
+            core_assets: "CORE ASSETS",
+            strategic_directive: "STRATEGIC DIRECTIVE"
+        };
+        const headings = language === 'ru' ? ruHeadings : enHeadings;
+        
+        // Build the formatted string with the high-level headings
+        let formatted = `\n[ ${language === 'ru' ? 'АРХЕТИП' : 'ARCHETYPE'} ]\n${archetype}\n\n`;
+        
+        formatted += `\n[ ${headings.scores} ]\n${scoresText}\n\n`;
+        formatted += `\n[ ${headings.executive_summary} ]\n${parsed.executive_summary}\n\n`;
+        formatted += `\n[ ${headings.structural_weaknesses} ]\n${parsed.structural_weaknesses}\n\n`;
+        formatted += `\n[ ${headings.core_assets} ]\n${parsed.core_assets}\n\n`;
+        formatted += `\n[ ${headings.strategic_directive} ]\n${parsed.strategic_directive}\n\n`;
+
+        return formatted;
+    } catch (e) {
+        return String(analysis || 'Error formatting analysis.');
+    }
+}
 
   const handleNext = async () => {
+    if (!isAnswerValid && currentStep < 10) {
+        // Only allow skipping the final question
+        return // Prevents submitting empty/short answers
+    }
+
     const newAnswers = [...answers, currentAnswer]
     setAnswers(newAnswers)
     setCurrentAnswer('')
@@ -112,23 +203,11 @@ export default function CastPage() {
           body: JSON.stringify({ answers: newAnswers, language })
         })
         const data = await res.json()
-            // Try to parse structured JSON analysis returned from the server
-            let formatted = String(data.analysis || '')
-            try {
-               const parsed = typeof data.analysis === 'string' ? JSON.parse(data.analysis) : data.analysis
-               if (parsed && typeof parsed === 'object' && parsed.executive_summary) {
-                  // Build a readable formatted text instead of showing raw JSON
-                  const scores = parsed.scores || {}
-                  const scoresText = Object.keys(scores).map(k => `${k}: ${scores[k]}`).join('\n')
-                  formatted = `Archetype: ${parsed.archetype || data.archetype}\n\nScores:\n${scoresText}\n\nExecutive Summary:\n${parsed.executive_summary}\n\nStructural Weaknesses:\n${parsed.structural_weaknesses}\n\nCore Assets:\n${parsed.core_assets}\n\nStrategic Directive:\n${parsed.strategic_directive}`
-               }
-            } catch (e) {
-               // If parsing fails, fall back to raw text
-               formatted = String(data.analysis || '')
-            }
+            
+        const formatted = formatAnalysisText(data.analysis, data.archetype);
 
-            setFullText(formatted)
-            setArchetype(data.archetype)
+        setFullText(formatted)
+        setArchetype(data.archetype)
         setRecordId(data.recordId) 
 
       } catch (error) {
@@ -151,7 +230,7 @@ export default function CastPage() {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey && currentAnswer.trim()) {
+    if (e.key === 'Enter' && !e.shiftKey && isAnswerValid) {
       e.preventDefault()
       handleNext()
     }
@@ -198,7 +277,7 @@ export default function CastPage() {
            <div className="w-full max-w-2xl">
               <div className="flex justify-between text-xs text-gray-600 mb-12 uppercase tracking-widest">
                  <span>Query {currentStep < 10 ? `0${currentStep}` : currentStep}</span>
-                 <span>Protocol v.1</span>
+                 <span>Protocol v.2.0</span>
               </div>
               <p className="text-white text-xl md:text-2xl leading-relaxed mb-16 min-h-[100px] text-center">
                  {questions[currentStep - 1]}
@@ -213,10 +292,19 @@ export default function CastPage() {
                  rows={1}
               />
               <div className="text-center">
-                 <button onClick={handleNext} disabled={!currentAnswer.trim()} className="text-xs text-white border border-white px-8 py-3 hover:bg-white hover:text-black transition-all tracking-[0.2em] disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-white">
-                    {currentStep === 10 ? (language === 'ru' ? 'ANALYZE' : 'ANALYZE') : (language === 'ru' ? 'NEXT' : 'NEXT')}
+                 <button 
+                    onClick={handleNext} 
+                    disabled={!isAnswerValid && currentStep < 10} // New validation logic
+                    className="text-xs text-white border border-white px-8 py-3 hover:bg-white hover:text-black transition-all tracking-[0.2em] disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-white"
+                 >
+                    {currentStep === 10 ? (language === 'ru' ? 'АНАЛИЗ' : 'ANALYZE') : (language === 'ru' ? 'ДАЛЕЕ' : 'NEXT')}
                  </button>
               </div>
+              {currentStep < 10 && !isAnswerValid && currentAnswer.trim() && (
+                 <p className="text-red-500 text-center text-xs mt-4">
+                    {language === 'ru' ? 'Ответ слишком короткий или неинформативный. Требуется больше деталей.' : 'Answer too short or uninformative. More detail is required.'}
+                 </p>
+              )}
            </div>
         </div>
      )
@@ -231,7 +319,9 @@ export default function CastPage() {
           
           {loading ? (
              <div className="text-center mt-32">
-                <div className="animate-pulse text-xs tracking-[0.3em]">PROCESSING DATA...</div>
+                <div className="animate-pulse text-xs tracking-[0.3em]">
+                   {processingText || 'INITIATING CORE...'}
+                </div>
              </div>
           ) : (
              <>
