@@ -1,4 +1,32 @@
 import React from 'react';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Lucio Fontana: The White Absolute (1968) // Merkurov Analysis',
+  description: 'Investment Memorandum: Asset Class "Post-War Italian". Why \'Bianco\' is the Gold Standard of liquidity. Market Arbitrage & Forensic Analysis. Internal release.',
+  openGraph: {
+    title: 'Lucio Fontana: The White Absolute (1968) // Private Analysis',
+    description: 'Why this 1968 white slashed canvas is the \'Zero Point\' of value. Deep dive into liquidity, purity, and Milan-NY arbitrage.',
+    url: 'https://merkurov.love/case-study/fontana',
+    siteName: 'Merkurov Curator Engine',
+    images: [
+      {
+        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1022.jpeg',
+        width: 1200,
+        height: 630,
+        alt: 'Lucio Fontana White Slash',
+      },
+    ],
+    locale: 'en_US',
+    type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Asset Alert: Lucio Fontana (White/Bianco)',
+    description: 'Investment Memo: The Milan Arbitrage Opportunity.',
+    images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1022.jpeg'],
+  },
+};
 
 export default function FontanaCaseStudy() {
   return (
