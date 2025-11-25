@@ -21,14 +21,14 @@ export async function POST(req: Request) {
     console.log(`[Parser] Target: ${url}`);
 
     // 1. THE HARVESTER (Jina AI)
-    const jinaUrl = `https://r.jina.ai/${encodeURI(url)}`;
+    // Use encodeURIComponent for the path segment and request Markdown explicitly
+    const jinaUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
     const jinaResponse = await fetch(jinaUrl, {
       method: 'GET',
       headers: {
         'X-Return-Format': 'markdown',
         // Маскируемся под обычный браузер
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json' 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
       cache: 'no-store',
     });
@@ -107,12 +107,25 @@ export async function POST(req: Request) {
     const rawText = result?.response ? await result.response.text() : '';
 
     let jsonResponse;
+    const cleaned = cleanJSON(rawText);
     try {
-        jsonResponse = JSON.parse(cleanJSON(rawText));
-        jsonResponse.source_url = url; 
+      jsonResponse = JSON.parse(cleaned);
+      jsonResponse.source_url = url; 
     } catch (e) {
-        console.error('[Parser] JSON Parse Failed:', rawText);
+      // Try a resilient extraction: find the first {...} block in the output and parse that
+      const maybe = String(rawText).match(/({[\s\S]*})/);
+      if (maybe && maybe[1]) {
+        try {
+          jsonResponse = JSON.parse(maybe[1]);
+          jsonResponse.source_url = url;
+        } catch (e2) {
+          console.error('[Parser] Fallback JSON Parse Failed:', e2, '\nSnippet:', (maybe[1] || '').substring(0, 1000));
+          return NextResponse.json({ error: 'AI produced invalid JSON' }, { status: 500 });
+        }
+      } else {
+        console.error('[Parser] JSON Parse Failed (no object found):', cleaned.substring(0, 1000));
         return NextResponse.json({ error: 'AI produced invalid JSON' }, { status: 500 });
+      }
     }
 
     return NextResponse.json(jsonResponse);

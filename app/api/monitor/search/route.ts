@@ -20,13 +20,15 @@ export async function POST(req: Request) {
     const query = `site:invaluable.com "${artist}" "lot details"`;
     // Используем глобальный Bing (без локализации)
     const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&setlang=en-us`;
-    
-    const jinaUrl = `https://r.jina.ai/${bingUrl}`;
-    
+
+    // Encode the full URL when calling r.jina.ai
+    const jinaUrl = `https://r.jina.ai/${encodeURI(bingUrl)}`;
+
     const jinaResponse = await fetch(jinaUrl, {
       headers: { 
           'X-Return-Format': 'markdown',
-          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+          // Use an ordinary browser UA to reduce bot blocking
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
       cache: 'no-store'
     });
@@ -44,8 +46,8 @@ export async function POST(req: Request) {
     }
 
     // 3. Gemini фильтрует
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', generationConfig: { responseMimeType: "application/json", temperature: 0.0 } });
+
     const prompt = `
       ROLE: Data Scout.
       TASK: Extract URLs from Bing search results.
@@ -61,16 +63,34 @@ export async function POST(req: Request) {
     `;
 
     const result = await model.generateContent(prompt);
-    const text = result.response.text().replace(/^```json\s*/, '').replace(/```\s*$/, '');
-    
+    const raw = result?.response ? await result.response.text() : '';
+    const cleaned = String(raw).replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+
     let data;
     try {
-        data = JSON.parse(text);
+      data = JSON.parse(cleaned);
     } catch (e) {
-        return NextResponse.json({ found: 0, links: [] });
+      // Fallback: try to extract a JSON object substring from the noisy output
+      const maybe = String(raw).match(/({[\s\S]*})/);
+      if (maybe && maybe[1]) {
+        try {
+          data = JSON.parse(maybe[1]);
+        } catch (e2) {
+          console.warn('[Monitor] Fallback JSON parse failed', e2, (maybe[1] || '').substring(0, 1000));
+          return NextResponse.json({ found: 0, links: [], warning: 'AI returned invalid JSON' });
+        }
+      } else {
+        console.warn('[Monitor] AI did not return valid JSON', cleaned.substring(0, 1000));
+        return NextResponse.json({ found: 0, links: [], warning: 'AI returned invalid JSON' });
+      }
     }
-    
-    const uniqueLinks = Array.from(new Set(data.links));
+
+    // Ensure we have an array of links
+    const links = Array.isArray(data?.links) ? data.links : [];
+    // Filter only Invaluable lot URLs and normalize
+    const re = /^https?:\/\/(?:www\.)?invaluable\.com\/auction-lot\//i;
+    const filtered = links.map((l: string) => String(l).trim()).filter((l: string) => re.test(l));
+    const uniqueLinks = Array.from(new Set(filtered));
 
     console.log(`[Monitor] Targets acquired: ${uniqueLinks.length}`);
 
