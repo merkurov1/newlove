@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 // Ссылка на твое превью в Supabase
 const OG_IMAGE_URL = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/cast_og.jpeg'
@@ -47,6 +49,8 @@ export default function CastLayout({
         src="https://cloud.umami.is/script.js"
         data-website-id="87795d47-f53d-4ef8-8e82-3ee195ea997b"
       ></script>
+      <Analytics />
+      <SpeedInsights />
       {children}
     </>
   );

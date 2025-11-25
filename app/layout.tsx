@@ -6,6 +6,9 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
+
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -227,6 +230,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <main id="main-content">{children}</main>
           <Footer />
         </AuthProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

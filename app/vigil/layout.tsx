@@ -1,4 +1,6 @@
 import { Metadata } from 'next';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 export const metadata: Metadata = {
   title: 'The Vigil | Cabinet of Souls',
@@ -51,6 +53,8 @@ export default function VigilLayout({
         src="https://cloud.umami.is/script.js"
         data-website-id="87795d47-f53d-4ef8-8e82-3ee195ea997b"
       ></script>
+      <Analytics />
+      <SpeedInsights />
       {children}
     </>
   );
