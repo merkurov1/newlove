@@ -58,20 +58,54 @@ export async function POST(req: Request) {
     // Берем больше кандидатов (30)
     const imageCandidates = Array.from(new Set([...(ogImage ? [ogImage] : []), ...imgMatches].filter(Boolean))).slice(0, 30)
 
-    // --- Heuristics (оставляем базовые, остальное доверим Gemini) ---
+    // --- Heuristics: deterministic extraction before AI ---
     function extractHeuristics(markdownText: string, htmlText: string) {
       const heur: any = {}
-      // ... (Твой код эвристик для валют и размеров оставляем без изменений, он хороший)
-      const estimateRe = /Estimate[s]?:?\s*([£$€]?\s?[\d,]+(?:\.\d+)?)(?:\s*(?:-|to)\s*([£$€]?\s?[\d,]+(?:\.\d+)?))?/i
-      const estM = markdownText.match(estimateRe) || htmlText.match(estimateRe)
+      const combined = markdownText + '\n' + htmlText
+      
+      // Estimate
+      const estimateRe = /Estimate[s]?:?\s*([£$€USD]?\s?[\d,]+(?:\.\d+)?)(?:\s*(?:-|to|–)\s*([£$€USD]?\s?[\d,]+(?:\.\d+)?))?/i
+      const estM = combined.match(estimateRe)
       if (estM) {
-        const parseNum = (s: string) => Number(String(s || '').replace(/[^0-9\.]/g, '').replace(/,/g, '')) || null
+        const parseNum = (s: string) => Number(String(s || '').replace(/[^0-9.]/g, '').replace(/,/g, '')) || null
         heur.estimate_low = parseNum(estM[1])
         heur.estimate_high = parseNum(estM[2])
-        const currencyMatch = (estM[1] || '').match(/([£$€])/)
-        heur.currency = currencyMatch ? currencyMatch[1] : heur.currency || null
+        const currencyMatch = (estM[1] || estM[0] || '').match(/([£$€]|USD|GBP|EUR)/i)
+        if (currencyMatch) {
+          const sym = currencyMatch[1].toUpperCase()
+          heur.currency = sym === 'USD' ? '$' : sym === 'GBP' ? '£' : sym === 'EUR' ? '€' : currencyMatch[1]
+        }
       }
-      // ... (остальные эвристики можно оставить)
+
+      // Dimensions (e.g., "50 x 40 cm", "20 × 16 in")
+      const dimRe = /(\d+(?:[.,]\d+)?\s*[x×X]\s*\d+(?:[.,]\d+)?(?:\s*[x×X]\s*\d+(?:[.,]\d+)?)?\s*(?:cm|in|mm|inches|centimeters)?)/i
+      const dimM = combined.match(dimRe)
+      if (dimM) heur.dimensions = dimM[1].trim()
+
+      // Medium
+      const mediumRe = /(?:Medium|Technique|Materials?)\s*[:\-]?\s*([A-Za-z][A-Za-z0-9 ,\/\-&]+?)(?:\.|\n|Dimensions|Size|Signed)/i
+      const medM = combined.match(mediumRe)
+      if (medM && medM[1].length < 150) heur.medium = medM[1].trim()
+
+      // Year
+      const yearRe = /(?:executed|painted|created|dated|circa|c\.)\s*(\d{4})/i
+      const yM = combined.match(yearRe) || combined.match(/(19\d{2}|20[0-2]\d)/)
+      if (yM) heur.year = yM[1]
+
+      // Provenance snippet
+      const provRe = /Provenance[:\s]*([\s\S]{10,600}?)(?=Literature|Exhibited|Condition|$)/i
+      const pM = combined.match(provRe)
+      if (pM) heur.provenance_summary = pM[1].replace(/\n+/g, ' ').trim()
+
+      // Artist & Title from page title pattern "Artist - Title | Auction House"
+      if (pageTitle) {
+        const titleParts = pageTitle.split(/[|–-]/).map(s => s.trim())
+        if (titleParts.length >= 2) {
+          heur.artist = titleParts[0] || null
+          heur.title = titleParts[1] || null
+        }
+      }
+
       return heur
     }
 
@@ -88,9 +122,43 @@ export async function POST(req: Request) {
         } catch(e) { return null }
     }
     async function chooseBestImage(candidates: string[]) {
-        // Assume your existing logic
-        if(!candidates.length) return null;
-        return candidates[0]; 
+        if (!candidates.length) return null;
+        
+        // Filter out obvious non-artwork images
+        const dominated = candidates.filter(c => {
+          const lower = c.toLowerCase()
+          // Skip icons, logos, tracking pixels, social media
+          if (/(\/icon|\/logo|tracking|pixel|sprite|button|share|social|favicon|badge)/i.test(lower)) return false
+          // Skip tiny images
+          if (/[?&](w|width|h|height)=(\d{1,2})(?:&|$)/i.test(c)) return false
+          return true
+        })
+
+        // Prefer og:image if it passed the filter
+        if (ogImage) {
+          const normOg = await normalizeImageUrl(ogImage)
+          if (normOg && dominated.includes(normOg)) {
+            const probe = await probeImage(normOg)
+            if (probe && probe.size > 5000) return normOg
+          }
+        }
+
+        // Probe candidates and pick largest
+        const probes: {url: string, size: number}[] = []
+        for (const c of dominated.slice(0, 10)) {
+          const norm = await normalizeImageUrl(c)
+          if (!norm) continue
+          const p = await probeImage(norm)
+          if (p && p.size > 3000) probes.push({ url: norm, size: p.size })
+        }
+        if (probes.length) {
+          probes.sort((a, b) => b.size - a.size)
+          return probes[0].url
+        }
+
+        // Fallback to first filtered candidate
+        const first = dominated[0] ? await normalizeImageUrl(dominated[0]) : null
+        return first || candidates[0]
     }
 
     // === SAFETY CHECK ===
@@ -106,17 +174,15 @@ export async function POST(req: Request) {
     // We intentionally list generation-capable models (exclude embedding-only names).
     const MODEL_CANDIDATES = [
       (process.env.GOOGLE_GEMINI_MODEL || '').trim(),
-      // Latest/preview generation models (try newer first)
-      'gemini-3-pro-preview',
-      'gemini-2.5-pro',
+      // Stable production models (verified working)
       'gemini-2.5-flash',
-      'gemini-flash-latest',
-      'gemini-pro-latest',
-      // Fallbacks to older families if newer ones are unavailable
+      'gemini-2.5-pro',
       'gemini-2.0-flash',
-      'gemini-2.0-pro',
+      'gemini-1.5-flash',
       'gemini-1.5-pro',
-      'gemini-1.5-flash'
+      // Aliases
+      'gemini-flash-latest',
+      'gemini-pro-latest'
     ].filter(Boolean);
 
     // РАСШИРЕННЫЙ ПРОМПТ
@@ -209,9 +275,21 @@ export async function POST(req: Request) {
       jsonResponse = JSON.parse(cleanJSON(rawText));
       jsonResponse.source_url = url;
     } catch (e) {
-       // ... (Твой фоллбек парсинг оставляем)
-       console.error('[Parser] JSON Parse Error');
-       return NextResponse.json({ error: 'Invalid AI JSON' }, { status: 500 });
+       // Fallback: extract JSON object from noisy output
+       const maybeJson = String(rawText).match(/\{[\s\S]*\}/);
+       if (maybeJson) {
+         try {
+           jsonResponse = JSON.parse(maybeJson[0]);
+           jsonResponse.source_url = url;
+           console.log('[Parser] Recovered JSON via regex fallback');
+         } catch (e2) {
+           console.error('[Parser] JSON Parse Error, fallback also failed:', rawText.substring(0, 500));
+           return NextResponse.json({ error: 'Invalid AI JSON', snippet: rawText.substring(0, 300) }, { status: 500 });
+         }
+       } else {
+         console.error('[Parser] No JSON object found in AI response');
+         return NextResponse.json({ error: 'Invalid AI JSON' }, { status: 500 });
+       }
     }
 
     // Merge

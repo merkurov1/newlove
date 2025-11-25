@@ -52,23 +52,31 @@ export async function POST(req: Request) {
          return NextResponse.json({ found: 0, links: [], warning: "Search blocked or empty" });
     }
 
-    // 3. Gemini фильтрует — try model candidates (env override via GOOGLE_GEMINI_MODEL)
+    // 3. Gemini filters URLs — try model candidates (env override via GOOGLE_GEMINI_MODEL)
     const MODEL_CANDIDATES = [
       (process.env.GOOGLE_GEMINI_MODEL || '').trim(),
       'gemini-2.5-flash',
+      'gemini-2.0-flash',
       'gemini-1.5-flash',
-      'gemini-1.0',
+      'gemini-flash-latest'
     ].filter(Boolean);
 
+    const targetSites = source === 'all' 
+      ? 'invaluable.com, sothebys.com, christies.com, bonhams.com, phillips.com' 
+      : 'invaluable.com';
+
     const prompt = `
-      ROLE: Data Scout.
-      TASK: Extract URLs from Bing search results.
-      CONTEXT: We are looking for auction lots for "${artist}".
+      ROLE: Auction Lot URL Extractor.
+      TASK: Extract auction lot URLs from search results for artist "${artist}".
+      
+      TARGET DOMAINS: ${targetSites}
       
       RULES:
-      1. Return JSON: { "links": [] }.
-      2. TARGET: Links starting with "https://www.invaluable.com/auction-lot/" 
-      3. IGNORE: Search related links, ads, microsoft links.
+      1. Return JSON: { "links": ["url1", "url2", ...] }
+      2. Only include URLs that lead to specific auction LOTS (not category pages).
+      3. Look for patterns like: /auction-lot/, /lot/, /lots/, /en/auctions/
+      4. IGNORE: homepage links, search pages, microsoft/bing links, social media.
+      5. Return empty array [] if no valid lot URLs found.
       
       INPUT TEXT:
       ${markdown.substring(0, 50000)}
@@ -121,9 +129,17 @@ export async function POST(req: Request) {
 
     // Ensure we have an array of links
     const links = Array.isArray(data?.links) ? data.links : [];
-    // Filter only Invaluable lot URLs and normalize
-    const re = /^https?:\/\/(?:www\.)?invaluable\.com\/auction-lot\//i;
-    const filtered = links.map((l: string) => String(l).trim()).filter((l: string) => re.test(l));
+    
+    // Build regex based on source selection
+    let urlPattern: RegExp;
+    if (source === 'all') {
+      // Accept lot URLs from multiple auction houses
+      urlPattern = /^https?:\/\/(?:www\.)?(invaluable\.com\/auction-lot|sothebys\.com\/en\/auctions|christies\.com\/lot|bonhams\.com\/auction|phillips\.com\/detail)/i;
+    } else {
+      urlPattern = /^https?:\/\/(?:www\.)?invaluable\.com\/auction-lot\//i;
+    }
+    
+    const filtered = links.map((l: string) => String(l).trim()).filter((l: string) => urlPattern.test(l));
     const uniqueLinks = Array.from(new Set(filtered));
 
     console.log(`[Monitor] Targets acquired via Gemini: ${uniqueLinks.length}`);
@@ -144,9 +160,14 @@ export async function POST(req: Request) {
 
       if (bingHtmlRes.ok) {
         const html = await bingHtmlRes.text();
-        // Find direct invaluable auction-lot links in href attributes
-        const hrefRe = /href=["'](https?:\/\/(?:www\.)?invaluable\.com\/auction-lot[^"']+)["']/gi;
-        const matches = Array.from(html.matchAll(hrefRe)).map(m => m[1]);
+        // Find auction lot links based on source
+        let hrefPattern: RegExp;
+        if (source === 'all') {
+          hrefPattern = /href=["'](https?:\/\/(?:www\.)?(invaluable\.com\/auction-lot|sothebys\.com\/en\/auctions|christies\.com\/lot|bonhams\.com\/auction|phillips\.com\/detail)[^"']+)["']/gi;
+        } else {
+          hrefPattern = /href=["'](https?:\/\/(?:www\.)?invaluable\.com\/auction-lot[^"']+)["']/gi;
+        }
+        const matches = Array.from(html.matchAll(hrefPattern)).map(m => m[1]);
         const dedup = Array.from(new Set(matches.map((s: string) => s.split('?')[0])));
         if (dedup.length > 0) {
           console.log(`[Monitor] Found ${dedup.length} links via Bing HTML parse.`);
@@ -157,6 +178,38 @@ export async function POST(req: Request) {
       }
     } catch (e) {
       console.warn('[Monitor] Bing HTML fallback failed:', e);
+    }
+
+    // Fallback 2: Try DuckDuckGo HTML (often less blocked than Bing)
+    try {
+      console.log('[Monitor] Trying DuckDuckGo fallback...');
+      const ddgQuery = `${siteFilter} "${artist}" auction lot`;
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(ddgQuery)}`;
+      const ddgRes = await fetch(ddgUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        cache: 'no-store'
+      });
+      if (ddgRes.ok) {
+        const ddgHtml = await ddgRes.text();
+        // Extract URLs from DuckDuckGo results (they use uddg= redirect param)
+        const uddgMatches = Array.from(ddgHtml.matchAll(/uddg=([^&"']+)/gi)).map(m => {
+          try { return decodeURIComponent(m[1]); } catch { return ''; }
+        });
+        let lotPattern: RegExp;
+        if (source === 'all') {
+          lotPattern = /^https?:\/\/(?:www\.)?(invaluable\.com\/auction-lot|sothebys\.com\/en\/auctions|christies\.com\/lot)/i;
+        } else {
+          lotPattern = /^https?:\/\/(?:www\.)?invaluable\.com\/auction-lot/i;
+        }
+        const filtered = uddgMatches.filter(u => lotPattern.test(u));
+        const dedup = Array.from(new Set(filtered.map((s: string) => s.split('?')[0])));
+        if (dedup.length > 0) {
+          console.log(`[Monitor] Found ${dedup.length} links via DuckDuckGo.`);
+          return NextResponse.json({ found: dedup.length, links: dedup, method: 'duckduckgo' });
+        }
+      }
+    } catch (e) {
+      console.warn('[Monitor] DuckDuckGo fallback failed:', e);
     }
 
     console.log('[Monitor] No lots found via Jina/Gemini.');
