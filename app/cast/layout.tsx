@@ -40,5 +40,14 @@ export default function CastLayout({
 }: {
   children: React.ReactNode
 }) {
-  return <>{children}</>
+  return (
+    <>
+      <script
+        defer
+        src="https://cloud.umami.is/script.js"
+        data-website-id="87795d47-f53d-4ef8-8e82-3ee195ea997b"
+      ></script>
+      {children}
+    </>
+  );
 }
