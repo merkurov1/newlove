@@ -46,6 +46,7 @@ export async function POST(req: Request) {
 
       OUTPUT FORMAT (JSON):
       {
+        "image_url": "URL of the main artwork image (look for ![image](url) pattern)", 
         "artist": "Name (Year-Year)",
         "title": "Title of work",
         "medium": "Oil on canvas, etc",
