@@ -19,30 +19,42 @@ export async function POST(req: Request) {
 
     // 1. THE HEIST: Если есть ссылка на картинку, крадем её
     if (image_url) {
-        console.log(`[Saver] Stealing image: ${image_url}`)
-        
-        const imageRes = await fetch(image_url)
-        if (imageRes.ok) {
-            const imageBuffer = await imageRes.arrayBuffer()
-            const fileExt = image_url.split('.').pop()?.split('?')[0] || 'jpg'
-            // Генерируем уникальное имя: artist_title_timestamp
-            const safeName = `${artist}-${title}`.replace(/[^a-z0-9]/gi, '_').toLowerCase()
-            const fileName = `${safeName}_${Date.now()}.${fileExt}`
+      console.log(`[Saver] Stealing image: ${image_url}`)
 
-            // Загружаем в Supabase Storage
-            const { data: uploadData, error: uploadError } = await supabase
-                .storage
-                .from('artifacts')
-                .upload(fileName, imageBuffer, {
-                    contentType: imageRes.headers.get('content-type') || 'image/jpeg'
-                })
+      const imageRes = await fetch(image_url)
+      if (imageRes.ok) {
+        const arrayBuffer = await imageRes.arrayBuffer()
+        // Convert ArrayBuffer -> Node Buffer for supabase-js upload
+        const buffer = Buffer.from(arrayBuffer)
+        const fileExt = image_url.split('.').pop()?.split('?')[0] || 'jpg'
+        // Генерируем уникальное имя: artist_title_timestamp
+        const safeName = `${artist || 'unknown'}-${title || 'untitled'}`.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+        const fileName = `${safeName}_${Date.now()}.${fileExt}`
 
-            if (uploadError) {
-                console.error('Upload failed:', uploadError)
-            } else {
-                storedImagePath = uploadData.path
-            }
+        const contentType = imageRes.headers.get('content-type') || 'image/jpeg'
+        console.log('[Saver] Uploading to bucket `artifacts` as', fileName, 'content-type:', contentType)
+
+        // Загружаем в Supabase Storage (use Buffer)
+        const { data: uploadData, error: uploadError } = await supabase
+          .storage
+          .from('artifacts')
+          .upload(fileName, buffer, {
+            contentType,
+            // do not overwrite by default
+            upsert: false
+          })
+
+        if (uploadError) {
+          console.error('[Saver] Upload failed:', uploadError)
+        } else if (uploadData && uploadData.path) {
+          storedImagePath = uploadData.path
+          console.log('[Saver] Image stored at:', storedImagePath)
+        } else {
+          console.warn('[Saver] Upload succeeded but no path returned', uploadData)
         }
+      } else {
+        console.warn('[Saver] Failed to fetch image URL, status:', imageRes.status)
+      }
     }
 
     // 2. THE VAULT: Сохраняем данные в таблицу

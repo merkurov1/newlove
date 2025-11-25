@@ -15,10 +15,10 @@ export async function POST(req: Request) {
 
     console.log(`[Monitor] Scouting via BING for: ${artist}`);
 
-    // ТАКТИКА: BING SEARCH (Менее агрессивная защита)
-    // Ищем лоты на Invaluable через Bing
-    const query = `site:invaluable.com "${artist}" "lot details"`;
-    // Используем глобальный Bing (без локализации)
+    // ТАКТИКА: BING SEARCH (broadened query to increase recall)
+    // Search Invaluable for the artist, allow 'lot' / 'auction' variants to match more results
+    const query = `site:invaluable.com "${artist}" ("auction-lot" OR "auction" OR "lot" OR "lot details")`;
+    // Use global Bing (no localization)
     const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&setlang=en-us`;
 
     // Encode the full URL when calling r.jina.ai
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       3. IGNORE: Search related links, ads, microsoft links.
       
       INPUT TEXT:
-      ${markdown.substring(0, 20000)}
+      ${markdown.substring(0, 50000)}
     `;
 
     // Attempt generation using candidate models until one succeeds
@@ -119,12 +119,41 @@ export async function POST(req: Request) {
     const filtered = links.map((l: string) => String(l).trim()).filter((l: string) => re.test(l));
     const uniqueLinks = Array.from(new Set(filtered));
 
-    console.log(`[Monitor] Targets acquired: ${uniqueLinks.length}`);
+    console.log(`[Monitor] Targets acquired via Gemini: ${uniqueLinks.length}`);
 
-    return NextResponse.json({ 
-        found: uniqueLinks.length, 
-        links: uniqueLinks 
-    });
+    if (uniqueLinks.length > 0) {
+      return NextResponse.json({ found: uniqueLinks.length, links: uniqueLinks, method: 'gemini' });
+    }
+
+    // Fallback: if Gemini found nothing, fetch the Bing HTML directly and extract hrefs
+    try {
+      console.log('[Monitor] No lots found via Jina/Gemini. Falling back to direct Bing HTML parsing.');
+      const bingHtmlRes = await fetch(bingUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        cache: 'no-store'
+      });
+
+      if (bingHtmlRes.ok) {
+        const html = await bingHtmlRes.text();
+        // Find direct invaluable auction-lot links in href attributes
+        const hrefRe = /href=["'](https?:\/\/(?:www\.)?invaluable\.com\/auction-lot[^"']+)["']/gi;
+        const matches = Array.from(html.matchAll(hrefRe)).map(m => m[1]);
+        const dedup = Array.from(new Set(matches.map((s: string) => s.split('?')[0])));
+        if (dedup.length > 0) {
+          console.log(`[Monitor] Found ${dedup.length} links via Bing HTML parse.`);
+          return NextResponse.json({ found: dedup.length, links: dedup, method: 'bing-html' });
+        }
+      } else {
+        console.warn('[Monitor] Direct Bing HTML fetch failed:', bingHtmlRes.status);
+      }
+    } catch (e) {
+      console.warn('[Monitor] Bing HTML fallback failed:', e);
+    }
+
+    console.log('[Monitor] No lots found via Jina/Gemini.');
+    return NextResponse.json({ found: 0, links: [], warning: 'No lots found via Jina/Gemini.' });
 
   } catch (error) {
     console.error('[Monitor Error]:', error);
