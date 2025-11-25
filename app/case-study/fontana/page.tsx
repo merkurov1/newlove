@@ -1,4 +1,32 @@
 import React from 'react';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Lucio Fontana: The Red Silence (1968) // Merkurov Analysis',
+  description: 'Investment Memorandum: Asset Class "Post-War Italian". Market Arbitrage, Liquidity Profile & Forensic Analysis. Internal release.',
+  openGraph: {
+    title: 'Lucio Fontana: The Red Silence (1968) // Private Analysis',
+    description: 'Why this 1968 slashed canvas outperforms the S&P 500. A deep dive into liquidity and valuation.',
+    url: 'https://merkurov.love/case-study/fontana',
+    siteName: 'Merkurov Curator Engine',
+    images: [
+      {
+        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1022.jpeg',
+        width: 1200,
+        height: 630,
+        alt: 'Fontana Red Slash',
+      },
+    ],
+    locale: 'en_US',
+    type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Asset Alert: Lucio Fontana (1968)',
+    description: 'Investment Memo: The Milan Arbitrage Opportunity.',
+    images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1022.jpeg'],
+  },
+};
 
 export default function FontanaCaseStudy() {
   return (
