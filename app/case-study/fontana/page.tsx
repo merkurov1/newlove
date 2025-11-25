@@ -34,7 +34,7 @@ export default function FontanaCaseStudy() {
       
       {/* 1. NAVIGATION */}
       <nav className="fixed top-0 left-0 w-full bg-white/95 backdrop-blur-md z-50 border-b border-gray-100 py-4 px-6 md:px-12 flex justify-between items-center transition-all duration-300">
-        <div className="text-[10px] font-bold tracking-[0.25em] uppercase text-black">Merkurov.Love</div>
+        <a href="/" className="text-[10px] font-bold tracking-[0.25em] uppercase text-black hover:text-gray-600 transition-colors">Merkurov.Love</a>
         <div className="flex items-center space-x-6">
             <div className="hidden md:flex items-center space-x-2">
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
