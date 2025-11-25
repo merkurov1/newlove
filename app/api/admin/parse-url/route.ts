@@ -21,7 +21,12 @@ export async function POST(req: Request) {
     console.log(`[Parser] Target: ${url}`);
 
     // 1. THE HARVESTER (Jina)
-    const jinaResponse = await fetch(`https://r.jina.ai/${url}`, {
+    // Encode the URL segment to avoid invalid paths when the incoming URL
+    // contains characters that would break the harvester endpoint.
+    // Use encodeURI to preserve URL path separators (slashes, colons)
+    // while encoding unsafe characters.
+    const jinaUrl = `https://r.jina.ai/${encodeURI(url)}`;
+    const jinaResponse = await fetch(jinaUrl, {
       headers: {
         'X-Return-Format': 'markdown',
         'X-With-Images-Summary': 'true',
@@ -43,6 +48,11 @@ export async function POST(req: Request) {
     }
 
     // 2. THE BRAIN (Gemini)
+    if (!apiKey) {
+      console.error('[Parser] Missing GOOGLE_API_KEY')
+      return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+    }
+
     const model = genAI.getGenerativeModel({ 
         model: 'gemini-1.5-flash', // Или gemini-2.0-flash-exp если есть доступ
         generationConfig: { responseMimeType: "application/json" } 
@@ -82,9 +92,11 @@ export async function POST(req: Request) {
     `;
 
     const result = await model.generateContent(prompt);
-    const rawText = result.response.text();
-    
-    console.log('[Parser] Raw Gemini Output (First 100 chars):', rawText.substring(0, 100));
+    // The SDK returns a response-like object; await it first, then call .text()
+    const response = await result.response;
+    const rawText = String(response?.text ? response.text() : JSON.stringify(result));
+
+    console.log('[Parser] Raw Gemini Output (First 100 chars):', String(rawText).substring(0, 100));
 
     // Очищаем и парсим
     let jsonResponse;

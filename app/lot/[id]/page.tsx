@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
+import Markdown from 'markdown-to-jsx'
 
 // Отключаем кеширование, чтобы всегда видеть свежие правки (особенно если ты меняешь статус)
 export const revalidate = 0
@@ -111,9 +112,9 @@ export default async function LotPage({ params }: { params: { id: string } }) {
 
         {/* 3. THE NARRATIVE (TEXT) */}
         <article className="prose prose-invert prose-lg md:prose-xl mx-auto font-serif leading-relaxed text-gray-300 max-w-2xl mb-24">
-            <div className="whitespace-pre-wrap opacity-90 hover:opacity-100 transition-opacity">
-                {mainText}
-            </div>
+          <div className="whitespace-pre-wrap opacity-90 hover:opacity-100 transition-opacity">
+            <Markdown>{String(mainText)}</Markdown>
+          </div>
         </article>
 
         {/* 4. THE MARKET (FOOTER) */}
