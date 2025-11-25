@@ -2,8 +2,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
-// Увеличиваем таймаут, так как парсинг может занять время
-export const maxDuration = 30; 
+// Ставим таймаут побольше, Jina иногда задумывается
+export const maxDuration = 60; 
 
 const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
 const genAI = new GoogleGenerativeAI(apiKey);
@@ -14,13 +14,13 @@ export async function POST(req: Request) {
 
     if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 });
 
-    // 1. THE HARVESTER (Используем Jina Reader как прокси)
-    // Это превращает сложный сайт Christie's в простой Markdown
+    // 1. THE HARVESTER (Jina Reader)
+    // Скачиваем страницу в чистом Markdown
     console.log(`[Parser] Harvesting: ${url}`);
+    
     const jinaResponse = await fetch(`https://r.jina.ai/${url}`, {
       headers: {
         'X-Return-Format': 'markdown',
-        // Иногда полезно притвориться браузером, хотя Jina это делает сама
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 
       }
     });
@@ -31,9 +31,10 @@ export async function POST(req: Request) {
 
     const markdown = await jinaResponse.text();
 
-    // 2. THE BRAIN (Gemini структурирует кашу)
+    // 2. THE BRAIN (Gemini Analysis)
+    // Используем Flash 2.0 (или 1.5), она идеальна для экстракции данных
     const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash', // Или 'gemini-2.0-flash', если доступна
         generationConfig: { responseMimeType: "application/json" } 
     });
 
@@ -41,14 +42,17 @@ export async function POST(req: Request) {
       TASK: You are an Art Data Specialist.
       Extract structured data from the scraped auction page content below.
 
+      CRITICAL: Find the MAIN artwork image URL. Jina returns images in markdown format like ![alt](url). 
+      Look for the largest/main image associated with the lot. Ignore icons, logos, or tiny thumbnails.
+
       SOURCE CONTENT (Markdown):
-      ${markdown.substring(0, 20000)} // Ограничиваем длину, чтобы не пробить лимиты
+      ${markdown.substring(0, 25000)} 
 
       OUTPUT FORMAT (JSON):
       {
-        "image_url": "URL of the main artwork image (look for ![image](url) pattern)", 
         "artist": "Name (Year-Year)",
         "title": "Title of work",
+        "image_url": "HTTPS URL of the main image (or empty string if not found)",
         "medium": "Oil on canvas, etc",
         "dimensions": "Height x Width cm/in",
         "date": "Year of execution",
@@ -58,11 +62,14 @@ export async function POST(req: Request) {
       }
 
       If a field is missing, leave it as empty string "".
-      Clean up the text (remove "Lot details", "Bid now" etc).
+      Clean up the text (remove "Lot details", "Bid now", cookie warnings etc).
     `;
 
     const result = await model.generateContent(prompt);
-    const jsonResponse = JSON.parse(result.response.text());
+    const responseText = result.response.text();
+    
+    // Парсим ответ модели
+    const jsonResponse = JSON.parse(responseText);
 
     return NextResponse.json(jsonResponse);
 
