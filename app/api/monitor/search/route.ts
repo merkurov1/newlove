@@ -9,16 +9,23 @@ const genAI = new GoogleGenerativeAI(apiKey);
 
 export async function POST(req: Request) {
   try {
-    const { artist } = await req.json();
-    
+    const { artist, source } = await req.json();
+
     if (!artist) return NextResponse.json({ error: 'Artist name required' }, { status: 400 });
 
-    console.log(`[Monitor] Scouting via BING for: ${artist}`);
+    console.log(`[Monitor] Scouting via BING for: ${artist} (source=${source || 'invaluable'})`);
 
-    // ТАКТИКА: BING SEARCH (broadened query to increase recall)
-    // Search Invaluable for the artist, allow 'lot' / 'auction' variants to match more results
-    const query = `site:invaluable.com "${artist}" ("auction-lot" OR "auction" OR "lot" OR "lot details")`;
-    // Use global Bing (no localization)
+    // Build site restriction based on requested source (default: Invaluable-first)
+    let siteFilter = 'site:invaluable.com';
+    if (source === 'all') {
+      siteFilter = '(site:invaluable.com OR site:sothebys.com OR site:christies.com OR site:bonhams.com)';
+    } else if (typeof source === 'string' && source && source !== 'invaluable') {
+      // allow direct site hints like 'sothebys' -> sothebys.com
+      siteFilter = `site:${source}`;
+    }
+
+    // TACTIC: BING SEARCH (broadened query to increase recall)
+    const query = `${siteFilter} "${artist}" ("auction-lot" OR "auction" OR "lot" OR "lot details")`;
     const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&setlang=en-us`;
 
     // Encode the full URL when calling r.jina.ai

@@ -1,0 +1,25 @@
+name: Crawl Invaluable
+
+on:
+  # Disabled automatic schedule for now — manual dispatch only.
+  workflow_dispatch: {}
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install deps
+        run: |
+          npm ci
+      - name: Run crawl
+        env:
+          INVALUABLE_LISTINGS: ${{ secrets.INVALUABLE_LISTINGS }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node ./scripts/crawl-invaluable.js

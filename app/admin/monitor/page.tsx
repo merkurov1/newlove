@@ -11,6 +11,7 @@ const supabase = createClient(
 
 export default function MonitorPage() {
   const [artist, setArtist] = useState('Sergey Merkurov');
+  const [source, setSource] = useState('invaluable');
   const [logs, setLogs] = useState<string[]>([]);
   const [links, setLinks] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -26,7 +27,8 @@ export default function MonitorPage() {
     try {
       const res = await fetch('/api/monitor/search', {
         method: 'POST',
-        body: JSON.stringify({ artist }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ artist, source }),
       });
       const data = await res.json();
 
@@ -52,8 +54,9 @@ export default function MonitorPage() {
       
       try {
         // А. Парсим данные через твой AI Parser
-        const parseRes = await fetch('/api/parse', {
+        const parseRes = await fetch('/api/admin/parse-url', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: link }),
         });
         
@@ -116,6 +119,14 @@ export default function MonitorPage() {
           onChange={(e) => setArtist(e.target.value)}
           className="bg-gray-900 border border-gray-700 p-2 w-64 text-white focus:outline-none focus:border-red-500"
         />
+        <select
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+          className="bg-gray-900 border border-gray-700 p-2 text-white"
+        >
+          <option value="invaluable">Invaluable</option>
+          <option value="all">All auction sites</option>
+        </select>
         <button 
           onClick={scanMarket} 
           disabled={loading}
