@@ -64,14 +64,14 @@ export async function POST(req: Request) {
 
     console.log(`[Parser] Content retrieved (${markdown.length} chars). Sending to Gemini.`);
 
-    // 2. THE BRAIN (Gemini)
-    const model = genAI.getGenerativeModel({ 
-        model: 'gemini-1.5-flash', 
-        generationConfig: { 
-            responseMimeType: "application/json",
-            temperature: 0.0 
-        } 
-    });
+    // 2. THE BRAIN (Gemini) - try a few candidate models (env override via GOOGLE_GEMINI_MODEL)
+    const MODEL_CANDIDATES = [
+      (process.env.GOOGLE_GEMINI_MODEL || '').trim(),
+      'gemini-2.5-flash',
+      'gemini-1.5-flash',
+      'gemini-1.0',
+      'gemini-2.1'
+    ].filter(Boolean);
 
     const prompt = `
       ROLE: Art Market Data Extractor.
@@ -102,7 +102,30 @@ export async function POST(req: Request) {
       }
     `;
 
-    const result = await model.generateContent(prompt);
+    // Attempt generation using candidate models until one succeeds
+    let result: any = null;
+    let lastErr: any = null;
+    MODEL_LOOP: for (const candidate of MODEL_CANDIDATES) {
+      // Try both the plain candidate and the full resource name (models/...) since API lists use full names
+      const variants = candidate.startsWith('models/') ? [candidate] : [candidate, `models/${candidate}`];
+      for (const name of variants) {
+        try {
+          console.log(`[Parser] Trying model: ${name}`);
+          const model = genAI.getGenerativeModel({ model: name, generationConfig: { responseMimeType: "application/json", temperature: 0.0 } });
+          result = await model.generateContent(prompt);
+          break MODEL_LOOP;
+        } catch (err: any) {
+          lastErr = err;
+          console.warn(`[Parser] Model ${name} failed:`, err?.message || err);
+        }
+      }
+    }
+
+    if (!result) {
+      console.error('[Parser] All model candidates failed:', lastErr);
+      return NextResponse.json({ error: 'No available AI models', detail: String(lastErr?.message || lastErr) }, { status: 502 });
+    }
+
     // result.response.text() may be async; await it to get the full string
     const rawText = result?.response ? await result.response.text() : '';
 

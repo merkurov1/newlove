@@ -45,8 +45,13 @@ export async function POST(req: Request) {
          return NextResponse.json({ found: 0, links: [], warning: "Search blocked or empty" });
     }
 
-    // 3. Gemini фильтрует
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', generationConfig: { responseMimeType: "application/json", temperature: 0.0 } });
+    // 3. Gemini фильтрует — try model candidates (env override via GOOGLE_GEMINI_MODEL)
+    const MODEL_CANDIDATES = [
+      (process.env.GOOGLE_GEMINI_MODEL || '').trim(),
+      'gemini-2.5-flash',
+      'gemini-1.5-flash',
+      'gemini-1.0',
+    ].filter(Boolean);
 
     const prompt = `
       ROLE: Data Scout.
@@ -62,7 +67,29 @@ export async function POST(req: Request) {
       ${markdown.substring(0, 20000)}
     `;
 
-    const result = await model.generateContent(prompt);
+    // Attempt generation using candidate models until one succeeds
+    let result: any = null;
+    let lastErr: any = null;
+    MODEL_LOOP: for (const candidate of MODEL_CANDIDATES) {
+      const variants = candidate.startsWith('models/') ? [candidate] : [candidate, `models/${candidate}`];
+      for (const name of variants) {
+        try {
+          console.log(`[Monitor] Trying model: ${name}`);
+          const model = genAI.getGenerativeModel({ model: name, generationConfig: { responseMimeType: "application/json", temperature: 0.0 } });
+          result = await model.generateContent(prompt);
+          break MODEL_LOOP;
+        } catch (err: any) {
+          lastErr = err;
+          console.warn(`[Monitor] Model ${name} failed:`, err?.message || err);
+        }
+      }
+    }
+
+    if (!result) {
+      console.error('[Monitor] All model candidates failed:', lastErr);
+      return NextResponse.json({ found: 0, links: [], warning: 'No available AI models', detail: String(lastErr?.message || lastErr) });
+    }
+
     const raw = result?.response ? await result.response.text() : '';
     const cleaned = String(raw).replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
 
