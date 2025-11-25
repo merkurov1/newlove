@@ -103,6 +103,7 @@ npm run dev
 - Контент сохраняется в формате JSON (Editor.js OutputData) в поле `content` модели Project.
 - Для загрузки изображений используется API `/api/upload` (загружает в `/public/uploads`).
 - Публичная страница `/projects/[slug]` рендерит блоки через компоненты `BlockRenderer` и отдельные блоки.
+dd
 
 ### Как добавить проект
 1. Создайте проект через API или напрямую в базе (укажите title, slug, authorId).
