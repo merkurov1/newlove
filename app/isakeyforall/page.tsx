@@ -7,30 +7,31 @@ export const metadata = sanitizeMetadata({
 
 export default function IsAKeyForAllPage() {
   return (
-    <main className="min-h-screen bg-white">
-      <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-20">
-        {/* Hero Title */}
-        <header className="text-center mb-16 sm:mb-20">
+    <main className="min-h-screen bg-white text-black selection:bg-black selection:text-white">
+      <div className="w-full max-w-2xl mx-auto px-6 py-24 sm:py-32">
+        
+        {/* Header: The Monument */}
+        <header className="mb-20 text-center">
           <h1 
-            className="text-4xl sm:text-5xl md:text-6xl font-serif font-bold text-black leading-tight mb-6"
+            className="text-5xl sm:text-7xl font-serif font-medium tracking-tight leading-[1.1] mb-8"
             style={{ fontFamily: 'Playfair Display, Cormorant Garamond, serif' }}
           >
             Love is a key for all
           </h1>
-          <div className="space-y-1">
-            <p className="text-xl sm:text-2xl font-serif font-semibold text-gray-900">
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-sm font-bold tracking-[0.2em] uppercase text-black">
               Anton Merkurov
             </p>
-            <p className="text-base sm:text-lg text-gray-600 font-light">
+            <p className="text-lg font-serif italic text-gray-500">
               Artist. Digital Architect. Humanist.
             </p>
           </div>
         </header>
 
-        {/* Biography Content */}
-        <article className="prose prose-lg sm:prose-xl max-w-none">
-          <div className="space-y-6 text-gray-800 leading-relaxed">
-            <p className="text-lg sm:text-xl">
+        {/* Content: The Narrative */}
+        <article className="prose prose-lg prose-neutral prose-p:font-light prose-p:leading-relaxed prose-headings:font-serif max-w-none">
+          <div className="space-y-8 text-lg sm:text-xl text-gray-900 font-light">
+            <p className="first-letter:text-5xl first-letter:font-serif first-letter:font-bold first-letter:float-left first-letter:mr-3 first-letter:mt-[-8px]">
               Anton Merkurov is an artist operating at the intersection of legacy and future. 
               A descendant of the monumental sculptor Sergey Merkurov, Anton spent two decades 
               mastering the digital realm—from the early days of the runet to the complexities 
@@ -51,8 +52,10 @@ export default function IsAKeyForAllPage() {
               radical simplicity.
             </p>
 
-            <blockquote className="border-l-4 border-black pl-6 py-2 my-8 italic text-xl sm:text-2xl font-serif text-gray-900">
-              "Why do you need technology if you don't have love?"
+            <blockquote className="border-l-2 border-black pl-8 my-12 py-2">
+              <p className="text-2xl sm:text-3xl font-serif italic text-black leading-tight">
+                "Why do you need technology if you don't have love?"
+              </p>
             </blockquote>
 
             <p>
@@ -66,8 +69,14 @@ export default function IsAKeyForAllPage() {
               distribute emotional capital in a bankrupt world. Whether through canvas or code, 
               his message is singular and absolute:
             </p>
+          </div>
 
-            <p className="text-center text-xl sm:text-2xl font-serif font-bold text-black mt-8 pt-8 border-t border-gray-200">
+          {/* Footer: The Seal */}
+          <div className="mt-16 pt-12 border-t border-gray-100 text-center">
+            <p 
+              className="text-3xl sm:text-4xl font-serif font-bold text-black"
+              style={{ fontFamily: 'Playfair Display, Cormorant Garamond, serif' }}
+            >
               Love is a key for all.
             </p>
           </div>
