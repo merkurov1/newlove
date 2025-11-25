@@ -2,7 +2,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
-// Ставим таймаут побольше, Jina иногда задумывается
 export const maxDuration = 60; 
 
 const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
@@ -11,73 +10,65 @@ const genAI = new GoogleGenerativeAI(apiKey);
 export async function POST(req: Request) {
   try {
     const { url } = await req.json();
-
     if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 });
 
-    // 1. THE HARVESTER (Jina Reader)
-    // Скачиваем страницу в чистом Markdown
-    console.log(`[Parser] Harvesting: ${url}`);
-    
+    // 1. THE HARVESTER
+    // Добавляем параметр withImagesSummary, чтобы Jina лучше отдавала картинки
     const jinaResponse = await fetch(`https://r.jina.ai/${url}`, {
       headers: {
         'X-Return-Format': 'markdown',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 
+        'X-With-Images-Summary': 'true', // Просим Jina собрать список картинок в конце
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
       }
     });
 
-    if (!jinaResponse.ok) {
-      throw new Error(`Harvester failed: ${jinaResponse.statusText}`);
-    }
-
+    if (!jinaResponse.ok) throw new Error(`Harvester failed: ${jinaResponse.statusText}`);
     const markdown = await jinaResponse.text();
 
-    // 2. THE BRAIN (Gemini Analysis)
-    // Используем Flash 2.0 (или 1.5), она идеальна для экстракции данных
+    // 2. THE BRAIN
     const model = genAI.getGenerativeModel({ 
-        model: 'gemini-1.5-flash', // Или 'gemini-2.0-flash', если доступна
+        model: 'gemini-1.5-flash',
         generationConfig: { responseMimeType: "application/json" } 
     });
 
     const prompt = `
-      TASK: You are an Art Data Specialist.
-      Extract structured data from the scraped auction page content below.
+      ROLE: You are an elite Data Extraction Specialist specialized in Art Auctions.
+      
+      TASK: Extract structured metadata from the raw auction page text below.
+      
+      SPECIFIC PLATFORM HINTS:
+      - If "Invaluable.com": The DATE is often near "Starts:", "Live Auction", or "Upcoming". It might be in a header. Look closely for a Day/Month/Year pattern.
+      - If "Artcurial": The IMAGE is often a long URL ending in .jpg or .jpeg. Ignore "logo.png" or "picto". Look for the Markdown image syntax ![...](url) that corresponds to the main artwork.
 
-      CRITICAL: Find the MAIN artwork image URL. Jina returns images in markdown format like ![alt](url). 
-      Look for the largest/main image associated with the lot. Ignore icons, logos, or tiny thumbnails.
+      SOURCE TEXT (Markdown):
+      ${markdown.substring(0, 30000)}
 
-      SOURCE CONTENT (Markdown):
-      ${markdown.substring(0, 25000)} 
-
-      OUTPUT FORMAT (JSON):
+      OUTPUT JSON STRUCTURE:
       {
-        "artist": "Name (Year-Year)",
-        "title": "Title of work",
-        "image_url": "HTTPS URL of the main image (or empty string if not found)",
-        "medium": "Oil on canvas, etc",
-        "dimensions": "Height x Width cm/in",
-        "date": "Year of execution",
-        "estimate": "GBP X - GBP Y",
-        "provenance": "List of previous owners (summary)",
-        "raw_description": "The main essay/description text about the lot"
+        "artist": "Artist Name (Year-Year)",
+        "title": "Title of the work",
+        "image_url": "The DIRECT url of the main artwork image. Must start with http. Prefer high-res.",
+        "medium": "Material/Technique",
+        "dimensions": "Size",
+        "date": "Year of creation (of the artwork)",
+        "auction_date": "Date of the auction (e.g. '25 Nov 2025' or 'Starts in 2 days'). If not found, leave empty.",
+        "estimate": "Price estimate range",
+        "provenance": "History of ownership",
+        "raw_description": "Full description text"
       }
-
-      If a field is missing, leave it as empty string "".
-      Clean up the text (remove "Lot details", "Bid now", cookie warnings etc).
+      
+      RULES:
+      1. If you find multiple images, pick the one that looks like a Painting/Sculpture, NOT the auction house logo.
+      2. If a field is missing, return empty string "". Do not invent data.
     `;
 
     const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    
-    // Парсим ответ модели
-    const jsonResponse = JSON.parse(responseText);
+    const jsonResponse = JSON.parse(result.response.text());
 
     return NextResponse.json(jsonResponse);
 
   } catch (error) {
     console.error('[Parser Error]:', error);
-    return NextResponse.json(
-      { error: 'Parsing failed. The site might be protected.', details: String(error) }, 
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Parsing failed', details: String(error) }, { status: 500 });
   }
 }
