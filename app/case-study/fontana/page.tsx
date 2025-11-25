@@ -1,38 +1,10 @@
 import React from 'react';
-import type { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: 'Lucio Fontana: The Red Silence (1968) // Merkurov Analysis',
-  description: 'Investment Memorandum: Asset Class "Post-War Italian". Market Arbitrage, Liquidity Profile & Forensic Analysis. Internal release.',
-  openGraph: {
-    title: 'Lucio Fontana: The Red Silence (1968) // Private Analysis',
-    description: 'Why this 1968 slashed canvas outperforms the S&P 500. A deep dive into liquidity and valuation.',
-    url: 'https://merkurov.love/case-study/fontana',
-    siteName: 'Merkurov Curator Engine',
-    images: [
-      {
-        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1022.jpeg',
-        width: 1200,
-        height: 630,
-        alt: 'Fontana Red Slash',
-      },
-    ],
-    locale: 'en_US',
-    type: 'article',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Asset Alert: Lucio Fontana (1968)',
-    description: 'Investment Memo: The Milan Arbitrage Opportunity.',
-    images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1022.jpeg'],
-  },
-};
 
 export default function FontanaCaseStudy() {
   return (
-    <div className="min-h-screen bg-white text-black selection:bg-red-600 selection:text-white font-sans antialiased">
+    <div className="min-h-screen bg-white text-black selection:bg-black selection:text-white font-sans antialiased">
       
-      {/* 1. NAVIGATION (Glassmorphism + CTA) */}
+      {/* 1. NAVIGATION */}
       <nav className="fixed top-0 left-0 w-full bg-white/95 backdrop-blur-md z-50 border-b border-gray-100 py-4 px-6 md:px-12 flex justify-between items-center transition-all duration-300">
         <div className="text-[10px] font-bold tracking-[0.25em] uppercase text-black">Merkurov.Love</div>
         <div className="flex items-center space-x-6">
@@ -41,8 +13,8 @@ export default function FontanaCaseStudy() {
                 <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Live Asset / Lot 059</span>
             </div>
             <a 
-              href="mailto:merkurov@gmail.com?subject=Inquiry: Fontana Lot 059"
-              className="px-4 py-2 bg-black text-white text-[10px] font-mono uppercase tracking-widest hover:bg-red-600 transition-colors duration-300"
+              href="mailto:merkurov@gmail.com?subject=Inquiry: Fontana Lot 059 (White)"
+              className="px-4 py-2 bg-black text-white text-[10px] font-mono uppercase tracking-widest hover:bg-gray-800 transition-colors duration-300"
             >
               Inquire
             </a>
@@ -58,10 +30,9 @@ export default function FontanaCaseStudy() {
             <div className="aspect-[3/4] bg-gray-50 relative shadow-2xl transition-transform duration-700 ease-out group-hover:scale-[1.01]">
               <img 
                 src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1022.jpeg" 
-                alt="Lucio Fontana, Concetto Spaziale (Red)" 
+                alt="Lucio Fontana, Concetto Spaziale (White)" 
                 className="w-full h-full object-cover" 
               />
-              {/* Overlay on hover */}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-500"></div>
             </div>
             <p className="mt-6 text-[9px] text-gray-400 font-mono uppercase text-right tracking-[0.2em]">
@@ -74,11 +45,11 @@ export default function FontanaCaseStudy() {
             <div>
               <div className="flex items-center space-x-2 mb-6 opacity-0 animate-fadeIn" style={{animationDelay: '0.2s', animationFillMode: 'forwards'}}>
                   <span className="px-2 py-1 bg-gray-100 text-[10px] font-mono uppercase tracking-widest text-gray-600">Blue Chip</span>
-                  <span className="px-2 py-1 bg-red-50 text-[10px] font-mono uppercase tracking-widest text-red-600">Post-War Italian</span>
+                  <span className="px-2 py-1 bg-gray-100 text-[10px] font-mono uppercase tracking-widest text-black border border-gray-200">The 'Bianco' Standard</span>
               </div>
               
               <h1 className="text-6xl md:text-8xl font-serif font-light leading-[0.9] mb-12 tracking-tight opacity-0 animate-fadeIn" style={{animationDelay: '0.4s', animationFillMode: 'forwards'}}>
-                The Red<br/>Silence.
+                The White<br/>Absolute.
               </h1>
               
               <div className="grid grid-cols-2 gap-x-12 gap-y-8 text-sm border-t border-black pt-8 opacity-0 animate-fadeIn" style={{animationDelay: '0.6s', animationFillMode: 'forwards'}}>
@@ -95,41 +66,41 @@ export default function FontanaCaseStudy() {
                   <p>1968 (Final Period)</p>
                 </div>
                 <div>
-                  <p className="font-mono text-[10px] text-gray-400 mb-2 uppercase tracking-wider">Provenance</p>
-                  <p>Private Collection, Bologna (50y)</p>
+                  <p className="font-mono text-[10px] text-gray-400 mb-2 uppercase tracking-wider">Color</p>
+                  <p>Bianco (White)</p>
                 </div>
               </div>
             </div>
 
             {/* QUOTE */}
-            <div className="mt-20 lg:mt-32 border-l-2 border-red-600 pl-6 opacity-0 animate-fadeIn" style={{animationDelay: '0.8s', animationFillMode: 'forwards'}}>
+            <div className="mt-20 lg:mt-32 border-l-2 border-black pl-6 opacity-0 animate-fadeIn" style={{animationDelay: '0.8s', animationFillMode: 'forwards'}}>
                 <blockquote className="text-xl md:text-2xl font-serif italic leading-relaxed text-gray-800">
-                “Everyone thought I wanted to destroy: but it’s not true, I have built, not destroyed, that’s the point.”
+                “Infinite... I have not destroyed the canvas, I have created a dimension.”
                 </blockquote>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 3. PERFORMANCE CHART (Financial Module) */}
+      {/* 3. PERFORMANCE CHART */}
       <section className="py-20 bg-gray-50 border-y border-gray-200">
         <div className="max-w-screen-xl mx-auto px-6 md:px-12 grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
             
             <div className="md:col-span-4">
-                <h3 className="font-mono text-[10px] font-bold uppercase mb-4 tracking-widest text-red-600">Market Performance</h3>
-                <h2 className="text-3xl font-serif mb-4">Defying Gravity</h2>
+                <h3 className="font-mono text-[10px] font-bold uppercase mb-4 tracking-widest text-black">Market Stability</h3>
+                <h2 className="text-3xl font-serif mb-4">The Purity Index</h2>
                 <p className="text-sm text-gray-600 leading-7 mb-6 text-justify">
-                    While traditional equities face volatility, Tier-1 Post-War Italian art demonstrates low correlation to the stock market. 
-                    Since 2020, Red <em>Attese</em> works have outperformed the S&P 500 by an average of 12% annually.
+                    White (Bianco) represents the core of Fontana's philosophy. Unlike colored canvases which fluctuate with trends, White remains the "Gold Standard" of Spatialism. 
+                    It exhibits the highest volume liquidity and lowest volatility among all Post-War Italian assets.
                 </p>
                 <div className="flex gap-8 border-t border-gray-200 pt-6">
                     <div>
                         <p className="text-[10px] font-mono text-gray-400 uppercase">CAGR (5Y)</p>
-                        <p className="text-2xl font-serif">+14.2%</p>
+                        <p className="text-2xl font-serif">+11.8%</p>
                     </div>
                     <div>
                         <p className="text-[10px] font-mono text-gray-400 uppercase">Sharpe Ratio</p>
-                        <p className="text-2xl font-serif">1.8</p>
+                        <p className="text-2xl font-serif">2.1</p>
                     </div>
                 </div>
             </div>
@@ -156,17 +127,17 @@ export default function FontanaCaseStudy() {
                     <text x="610" y="80" className="text-[10px] fill-gray-400 font-mono">S&P 500</text>
                 </svg>
 
-                {/* Fontana Line (Red) */}
+                {/* Fontana Line (Black/White Contrast) */}
                 <svg className="absolute inset-0 w-full h-full p-8 overflow-visible" preserveAspectRatio="none">
                     <polyline 
                         fill="none" 
-                        stroke="#DC2626" 
+                        stroke="#000000" 
                         strokeWidth="3" 
                         vectorEffect="non-scaling-stroke"
-                        points="0,200 80,190 160,170 240,150 320,120 400,90 480,60 600,20" 
+                        points="0,180 80,175 160,160 240,140 320,130 400,100 480,80 600,40" 
                     />
-                    <circle cx="600" cy="20" r="4" fill="#DC2626" className="animate-pulse origin-center" />
-                    <text x="615" y="25" className="text-xs fill-red-600 font-bold font-mono">FONTANA (RED)</text>
+                    <circle cx="600" cy="40" r="4" fill="#000000" className="animate-pulse origin-center" />
+                    <text x="615" y="45" className="text-xs fill-black font-bold font-mono">BIANCO (WHITE)</text>
                 </svg>
 
                 {/* X-Axis */}
@@ -182,35 +153,22 @@ export default function FontanaCaseStudy() {
         </div>
       </section>
 
-      {/* 4. MACRO INSPECTION (Condition Module) */}
-      <section className="py-24 bg-[#0A0A0A] text-white relative overflow-hidden">
-        {/* Subtle texture overlay */}
-        <div className="absolute inset-0 opacity-[0.03]" style={{backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23FFFFFF\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")'}}></div>
-
+      {/* 4. MACRO INSPECTION */}
+      <section className="py-24 bg-[#F0F0F0] text-black relative overflow-hidden">
+        
         <div className="max-w-screen-xl mx-auto px-6 md:px-12 relative z-10 grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
             
             {/* ZOOM VISUAL */}
             <div>
-                <div className="relative border border-gray-800 aspect-video bg-gray-900 overflow-hidden group shadow-2xl">
-                    {/* Simulated Macro View (Scaled Image) */}
+                <div className="relative border border-gray-300 aspect-video bg-white overflow-hidden group shadow-2xl">
                     <img 
                         src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1022.jpeg" 
                         className="w-[300%] h-[300%] object-cover object-center transition-transform duration-[5s] ease-linear group-hover:scale-[3.2]" 
                         alt="Macro Texture"
                     />
-                    
-                    {/* HUD Overlay */}
-                    <div className="absolute top-4 left-4 flex space-x-2">
-                         <span className="w-1 h-1 bg-red-500 rounded-full animate-ping"></span>
-                         <span className="text-[9px] font-mono text-red-500">LIVE FEED</span>
-                    </div>
-                    <div className="absolute inset-0 border-[20px] border-black/30 pointer-events-none"></div>
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 border border-white/30 rounded-full"></div>
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 bg-white rounded-full"></div>
-                    
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-md px-4 py-2 flex justify-between items-center border-t border-gray-800">
-                        <span className="text-[10px] font-mono text-gray-400">ZOOM: 400%</span>
-                        <span className="text-[10px] font-mono text-green-500">TENSION: STABLE</span>
+                    <div className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md px-4 py-2 flex justify-between items-center border-t border-gray-200">
+                        <span className="text-[10px] font-mono text-gray-500">ZOOM: 400%</span>
+                        <span className="text-[10px] font-mono text-green-600">CONDITION: PRISTINE</span>
                     </div>
                 </div>
             </div>
@@ -218,64 +176,59 @@ export default function FontanaCaseStudy() {
             {/* TEXT ANALYSIS */}
             <div>
                 <h3 className="font-mono text-[10px] font-bold uppercase mb-6 tracking-widest text-gray-500">Forensic Analysis</h3>
-                <h2 className="text-3xl font-serif mb-6 text-white">The Anatomy of the Cut</h2>
-                <p className="text-sm text-gray-400 leading-7 mb-8 text-justify">
-                    The value of a Fontana lies in the tension. Inspecting the incision edges reveals zero restoration. 
-                    The canvas retains its original "drum-like" tautness—a critical factor for long-term preservation.
-                    Unlike 80% of market supply, this lot shows no craquelure.
+                <h2 className="text-3xl font-serif mb-6">The Anatomy of White</h2>
+                <p className="text-sm text-gray-600 leading-7 mb-8 text-justify">
+                    White reveals everything. On a <em>Bianco</em> canvas, any imperfection—dust, craquelure, or yellowing—is instantly visible. 
+                    This lot is technically flawless. The "Virgin White" state indicates it has been kept in a climate-controlled dark environment for decades.
                 </p>
                 
                 <div className="space-y-4 font-mono text-xs">
-                    <div className="flex items-center justify-between border-b border-gray-800 pb-2">
-                        <span className="text-gray-500">CANVAS TENSION</span>
-                        <span className="text-green-500">OPTIMAL</span>
+                    <div className="flex items-center justify-between border-b border-gray-300 pb-2">
+                        <span className="text-gray-500">SURFACE PURITY</span>
+                        <span className="text-green-600 font-bold">98% (MINT)</span>
                     </div>
-                    <div className="flex items-center justify-between border-b border-gray-800 pb-2">
-                        <span className="text-gray-500">RESTORATION</span>
-                        <span className="text-green-500">NONE DETECTED</span>
+                    <div className="flex items-center justify-between border-b border-gray-300 pb-2">
+                        <span className="text-gray-500">INCISION EDGES</span>
+                        <span className="text-green-600 font-bold">SHARP</span>
                     </div>
-                    <div className="flex items-center justify-between border-b border-gray-800 pb-2">
-                        <span className="text-gray-500">UV FLUORESCENCE</span>
-                        <span className="text-green-500">NEGATIVE</span>
+                    <div className="flex items-center justify-between border-b border-gray-300 pb-2">
+                        <span className="text-gray-500">YELLOWING RISK</span>
+                        <span className="text-green-600 font-bold">MINIMAL</span>
                     </div>
                 </div>
             </div>
         </div>
       </section>
 
-      {/* 5. MARKET ARBITRAGE (Data Context) */}
+      {/* 5. MARKET ARBITRAGE */}
       <section className="py-24 px-6 md:px-12 max-w-screen-xl mx-auto">
         <h2 className="text-4xl font-serif font-light mb-16 border-b border-black pb-6">Valuation & Arbitrage</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-16">
-          
-          {/* Column 1 */}
           <div className="group">
-            <h3 className="font-mono text-[10px] font-bold uppercase mb-6 tracking-widest text-red-600 group-hover:text-black transition-colors">01. The 1968 Premium</h3>
+            <h3 className="font-mono text-[10px] font-bold uppercase mb-6 tracking-widest text-black">01. The 1968 Premium</h3>
             <p className="text-sm text-gray-600 leading-7 mb-4">
-              Executed in the final year of the artist's life, this work represents the <em>summa</em> of Fontana's practice. Unlike the hesitant cuts of the early 60s, the 1968 incisions are surgical.
+              Executed in the final year of the artist's life. White canvases from 1968 are considered the "Zero Point" of modern art history.
             </p>
           </div>
 
-          {/* Column 2 */}
           <div className="group">
-            <h3 className="font-mono text-[10px] font-bold uppercase mb-6 tracking-widest text-red-600 group-hover:text-black transition-colors">02. Liquidity Profile</h3>
+            <h3 className="font-mono text-[10px] font-bold uppercase mb-6 tracking-widest text-black">02. The 'Bianco' Standard</h3>
             <p className="text-sm text-gray-600 leading-7 mb-6">
-              Red <em>Attese</em> canvases command a distinct liquidity premium (~18% over white). They act as a "Global Nomad Asset" — instantly recognizable currency in NY, London, and Hong Kong.
+              White is the most traded color. While Red has peaks, White has volume. It is the USD of the Art Market—universally accepted.
             </p>
           </div>
 
-          {/* Column 3: The Arbitrage */}
           <div className="group">
-            <h3 className="font-mono text-[10px] font-bold uppercase mb-6 tracking-widest text-red-600 group-hover:text-black transition-colors">03. The Opportunity</h3>
+            <h3 className="font-mono text-[10px] font-bold uppercase mb-6 tracking-widest text-black">03. The Opportunity</h3>
             <p className="text-sm text-gray-600 leading-7 mb-6">
-              A pricing inefficiency exists between the local Milanese market and global valuations. 
+              Milan vs Global Pricing Arbitrage. 
             </p>
             <div className="bg-gray-50 p-4 rounded border border-gray-100">
                 <ul className="text-xs font-mono space-y-3">
                     <li className="flex justify-between items-center">
                         <span className="text-gray-500">NY/London Comp</span>
-                        <span className="font-bold text-sm">$1.4M - $1.8M</span>
+                        <span className="font-bold text-sm">$1.2M - $1.5M</span>
                     </li>
                     <li className="flex justify-between items-center">
                         <span className="text-gray-500">Milan Estimate</span>
@@ -283,23 +236,20 @@ export default function FontanaCaseStudy() {
                     </li>
                     <li className="flex justify-between items-center pt-3 mt-1 border-t border-gray-200">
                         <span className="font-bold text-black">IMPLIED UPSIDE</span>
-                        <span className="text-white font-bold bg-green-600 px-2 py-0.5 rounded text-[10px]">~35%</span>
+                        <span className="text-white font-bold bg-green-600 px-2 py-0.5 rounded text-[10px]">~25-30%</span>
                     </li>
                 </ul>
             </div>
           </div>
-
         </div>
       </section>
 
-      {/* 6. PROVENANCE (Timeline) */}
-      <section className="py-20 bg-gray-100 px-6 md:px-12 border-t border-gray-200">
+      {/* 6. PROVENANCE */}
+      <section className="py-20 bg-gray-50 px-6 md:px-12 border-t border-gray-200">
         <div className="max-w-screen-xl mx-auto">
             <h3 className="font-mono text-[10px] tracking-widest text-gray-500 mb-12 uppercase text-center">Provenance Chain</h3>
             
             <div className="relative border-l border-gray-300 ml-4 md:ml-1/2 space-y-12">
-                
-                {/* Node 1 */}
                 <div className="relative pl-8 md:pl-0">
                     <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 bg-gray-400 rounded-full border-2 border-gray-100"></span>
                     <div className="md:w-1/2 md:pr-12 md:text-right">
@@ -307,55 +257,37 @@ export default function FontanaCaseStudy() {
                         <p className="font-mono text-xs text-gray-500 mt-1">Rome, Primary Market</p>
                     </div>
                 </div>
-
-                {/* Node 2 */}
                 <div className="relative pl-8 md:pl-0">
-                    <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 bg-gray-400 rounded-full border-2 border-gray-100"></span>
-                    <div className="md:flex md:justify-end md:w-1/2 md:pr-12">
-                         {/* Spacer for right alignment on desktop if needed, or stick to left for variety */}
-                    </div>
-                    <div className="md:absolute md:left-0 md:w-full md:pl-1/2 md:ml-8">
-                         <p className="font-bold text-sm">Galleria La Nuova Loggia</p>
-                         <p className="font-mono text-xs text-gray-500 mt-1">Bologna, Italy</p>
-                    </div>
-                </div>
-
-                {/* Node 3 */}
-                <div className="relative pl-8 md:pl-0">
-                     <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse ring-4 ring-red-100"></span>
+                     <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 bg-black rounded-full animate-pulse ring-4 ring-gray-200"></span>
                      <div className="md:w-1/2 md:pr-12 md:text-right">
                         <p className="font-bold text-sm">Private Collection</p>
                         <p className="font-mono text-xs text-gray-500 mt-1">Bologna (Acquired 1970s)</p>
                         <span className="inline-block mt-2 px-2 py-1 bg-black text-white text-[9px] font-mono uppercase rounded">Current Owner</span>
                     </div>
                 </div>
-
             </div>
         </div>
       </section>
 
-      {/* 7. FINAL CTA */}
-      <section className="py-24 bg-white text-center">
-        <h2 className="text-3xl font-serif font-light mb-8">Secure This Asset</h2>
+      {/* 7. FINAL CTA & DISCLAIMER */}
+      <footer className="py-12 px-6 text-center bg-white border-t border-gray-200">
+        <h2 className="text-2xl font-serif font-light mb-8">Secure This Asset</h2>
         <a 
             href="mailto:merkurov@gmail.com?subject=Acquisition Request: Fontana Lot 059"
-            className="inline-block px-12 py-4 bg-black text-white font-mono uppercase tracking-[0.2em] hover:bg-red-600 transition-all duration-300"
+            className="inline-block px-12 py-4 bg-black text-white font-mono uppercase tracking-[0.2em] hover:bg-gray-800 transition-all duration-300 mb-12"
         >
             Request Private Access
         </a>
-      </section>
-      
-      {/* 8. FOOTER & DISCLAIMER */}
-      <footer className="py-12 px-6 text-center bg-gray-50 border-t border-gray-200">
+        
         <p className="font-mono text-[10px] text-gray-400 tracking-[0.3em] uppercase mb-8">
             Curated by Anton Merkurov / All Rights Reserved 2025
         </p>
-        <div className="max-w-2xl mx-auto text-[9px] text-gray-400 leading-relaxed font-sans border-t border-gray-200 pt-8">
+        <div className="max-w-2xl mx-auto text-[9px] text-gray-400 leading-relaxed font-sans border-t border-gray-100 pt-8">
             <p>
                 DISCLAIMER: This document is an independent market analysis produced by the Curator Engine. 
                 It does not constitute a solicitation to buy securities. Art market values are historical estimates. 
-                Past performance of 'Red Fontanas' does not guarantee future liquidity. 
-                You are buying a wound in the canvas, not a bond.
+                Past performance of 'White Fontanas' does not guarantee future liquidity. 
+                You are buying a void in the canvas, not a bond.
             </p>
         </div>
       </footer>
