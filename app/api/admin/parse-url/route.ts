@@ -2,8 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; 
-export const dynamic = 'force-dynamic'; 
+export const dynamic = 'force-dynamic';
 
 const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
 const genAI = new GoogleGenerativeAI(apiKey);
@@ -27,7 +26,8 @@ export async function POST(req: Request) {
       method: 'GET',
       headers: {
         'X-Return-Format': 'markdown',
-        'X-With-Images-Summary': 'true',
+        // Маскируемся под обычный браузер
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json' 
       },
       cache: 'no-store',
@@ -39,60 +39,75 @@ export async function POST(req: Request) {
 
     const markdown = await jinaResponse.text();
 
-    // Проверки на мусор
-    if (!markdown || markdown.length < 200 || markdown.includes("Cloudflare")) {
-         return NextResponse.json({ error: 'Content blocked by firewall' }, { status: 422 });
+    // === SAFETY CHECK: ПРОВЕРКА НА БЛОКИРОВКУ ===
+    // Если сайт отдал заглушку вместо контента, нет смысла тратить токены Gemini.
+    const lowerMd = markdown.toLowerCase();
+    if (
+        lowerMd.includes("cloudflare") || 
+        lowerMd.includes("verify you are human") || 
+        lowerMd.includes("access denied") ||
+        lowerMd.includes("enable javascript") ||
+        markdown.length < 300
+    ) {
+        console.warn('[Parser] BLOCKED by Anti-Bot Defense.');
+        console.warn(`[Parser] Debug Snippet: ${markdown.substring(0, 200)}...`);
+        return NextResponse.json({ 
+            error: 'Content blocked by firewall',
+            // Возвращаем пустую структуру, чтобы фронтенд не упал с undefined
+            artist: "Unknown (Blocked)",
+            title: "Access Denied",
+            medium: null,
+            estimate_low: 0,
+            currency: 'USD'
+        }, { status: 422 });
     }
+
+    console.log(`[Parser] Content retrieved (${markdown.length} chars). Sending to Gemini.`);
 
     // 2. THE BRAIN (Gemini)
     const model = genAI.getGenerativeModel({ 
         model: 'gemini-1.5-flash', 
         generationConfig: { 
             responseMimeType: "application/json",
-            temperature: 0.0 // Ноль креативности. Только факты.
+            temperature: 0.0 
         } 
     });
 
     const prompt = `
       ROLE: Art Market Data Extractor.
-      TASK: Extract structured data from the auction lot description.
+      TASK: Extract structured data from the auction lot text.
       
       STRICT RULES:
       1. Output MUST be valid JSON.
-      2. EXTRACT NUMBERS for estimates. If "5,000 - 7,000 USD", low=5000, high=7000, currency='USD'.
-      3. DATE: Convert auction date to ISO 8601 format (YYYY-MM-DD) if possible.
-      4. "auction_house": Infer from the text or URL (e.g., Sotheby's, Bonhams).
+      2. If a field is missing, use null (do NOT use undefined).
+      3. EXTRACT NUMBERS for estimates.
       
       INPUT TEXT:
-      ${markdown.substring(0, 30000)}
+      ${markdown.substring(0, 25000)}
 
       REQUIRED JSON SCHEMA:
       {
-        "artist": "string (Name ONLY)",
-        "title": "string",
+        "artist": "string | null",
+        "title": "string | null",
         "image_url": "string | null",
         "medium": "string | null",
         "dimensions": "string | null",
         "year": "string | null",
         "auction_house": "string | null",
-        "auction_date": "string (ISO 8601) | null",
+        "auction_date": "string | null",
         "estimate_low": "number | null",
         "estimate_high": "number | null",
-        "currency": "string (USD/EUR/GBP) | null",
-        "price_realized": "number | null (Sold price ONLY, ignore estimates here)",
-        "provenance_summary": "string | null",
-        "status": "string (upcoming/sold/unsold)"
+        "currency": "string | null",
+        "provenance_summary": "string | null"
       }
     `;
 
     const result = await model.generateContent(prompt);
-    const response = result.response;
-    const rawText = response.text();
+    const rawText = result.response.text();
 
     let jsonResponse;
     try {
         jsonResponse = JSON.parse(cleanJSON(rawText));
-        // Добавляем исходный URL в ответ, чтобы фронтенд мог его сохранить
         jsonResponse.source_url = url; 
     } catch (e) {
         console.error('[Parser] JSON Parse Failed:', rawText);

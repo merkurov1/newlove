@@ -13,55 +13,48 @@ export async function POST(req: Request) {
     
     if (!artist) return NextResponse.json({ error: 'Artist name required' }, { status: 400 });
 
-    console.log(`[Monitor] Scouting via Search Engine for: ${artist}`);
+    console.log(`[Monitor] Scouting via BING for: ${artist}`);
 
-    // ТАКТИКА: БОКОВОЙ ВХОД
-    // Мы ищем не на сайте аукциона, а в индексе DuckDuckGo (HTML версия).
-    // Запрос: site:invaluable.com "Artist Name" "auction lot"
-    // Это обходит JS-защиту агрегатора.
-    const query = `site:invaluable.com "${artist}" auction lot`;
-    const searchEngineUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    // ТАКТИКА: BING SEARCH (Менее агрессивная защита)
+    // Ищем лоты на Invaluable через Bing
+    const query = `site:invaluable.com "${artist}" "lot details"`;
+    // Используем глобальный Bing (без локализации)
+    const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&setlang=en-us`;
     
-    // Скармливаем выдачу поисковика в Jina
-    const jinaUrl = `https://r.jina.ai/${searchEngineUrl}`;
+    const jinaUrl = `https://r.jina.ai/${bingUrl}`;
     
     const jinaResponse = await fetch(jinaUrl, {
       headers: { 
           'X-Return-Format': 'markdown',
-          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' // Притворяемся ботом Гугла, иногда помогает
+          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
       },
       cache: 'no-store'
     });
 
     if (!jinaResponse.ok) {
-        console.error(`[Monitor] Jina Error: ${jinaResponse.status}`);
         return NextResponse.json({ error: 'Scout failed to connect' }, { status: 500 });
     }
 
     const markdown = await jinaResponse.text();
-    console.log(`[Monitor] Jina received ${markdown.length} chars from Search Engine.`);
-
-    // Если Jina вернула мало данных, значит нас заблочили или поиск пуст
-    if (markdown.length < 500) {
-        return NextResponse.json({ found: 0, links: [], warning: "Search engine returned empty result" });
+    
+    // Проверка, вернул ли Bing хоть что-то
+    if (markdown.length < 500 || markdown.includes("There are no results")) {
+         console.warn("[Monitor] Bing returned empty or blocked result.");
+         return NextResponse.json({ found: 0, links: [], warning: "Search blocked or empty" });
     }
 
-    // 3. Gemini фильтрует ссылки из выдачи поисковика
+    // 3. Gemini фильтрует
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     
     const prompt = `
       ROLE: Data Scout.
-      TASK: Extract target URLs from the search engine results below.
-      
-      CONTEXT: We are looking for auction lots for artist: "${artist}".
+      TASK: Extract URLs from Bing search results.
+      CONTEXT: We are looking for auction lots for "${artist}".
       
       RULES:
-      1. Return ONLY a JSON object with a key "links" (array of strings).
-      2. TARGET: Look for links starting with: 
-         - "https://www.invaluable.com/auction-lot/"
-         - "https://www.invaluable.com/buy-now/"
-      3. IGNORE: generic links, search queries, privacy policies, ads.
-      4. Clean the URLs (remove tracking params if obvious).
+      1. Return JSON: { "links": [] }.
+      2. TARGET: Links starting with "https://www.invaluable.com/auction-lot/" 
+      3. IGNORE: Search related links, ads, microsoft links.
       
       INPUT TEXT:
       ${markdown.substring(0, 20000)}
@@ -74,11 +67,9 @@ export async function POST(req: Request) {
     try {
         data = JSON.parse(text);
     } catch (e) {
-        console.error("JSON Parse Error", text);
         return NextResponse.json({ found: 0, links: [] });
     }
     
-    // Фильтруем дубли
     const uniqueLinks = Array.from(new Set(data.links));
 
     console.log(`[Monitor] Targets acquired: ${uniqueLinks.length}`);
