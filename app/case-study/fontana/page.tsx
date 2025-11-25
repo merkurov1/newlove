@@ -4,12 +4,20 @@ export default function FontanaCaseStudy() {
   return (
     <div className="min-h-screen bg-white text-black selection:bg-red-600 selection:text-white font-sans antialiased">
       
-      {/* 1. NAVIGATION (Glassmorphism) */}
-      <nav className="fixed top-0 left-0 w-full bg-white/90 backdrop-blur-md z-50 border-b border-gray-100 py-4 px-6 md:px-12 flex justify-between items-center transition-all duration-300">
+      {/* 1. NAVIGATION (Glassmorphism + CTA) */}
+      <nav className="fixed top-0 left-0 w-full bg-white/95 backdrop-blur-md z-50 border-b border-gray-100 py-4 px-6 md:px-12 flex justify-between items-center transition-all duration-300">
         <div className="text-[10px] font-bold tracking-[0.25em] uppercase text-black">Merkurov.Love</div>
-        <div className="flex items-center space-x-4">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-            <div className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Live Asset / Lot 059</div>
+        <div className="flex items-center space-x-6">
+            <div className="hidden md:flex items-center space-x-2">
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Live Asset / Lot 059</span>
+            </div>
+            <a 
+              href="mailto:merkurov@gmail.com?subject=Inquiry: Fontana Lot 059"
+              className="px-4 py-2 bg-black text-white text-[10px] font-mono uppercase tracking-widest hover:bg-red-600 transition-colors duration-300"
+            >
+              Inquire
+            </a>
         </div>
       </nav>
 
@@ -297,12 +305,31 @@ export default function FontanaCaseStudy() {
             </div>
         </div>
       </section>
+
+      {/* 7. FINAL CTA */}
+      <section className="py-24 bg-white text-center">
+        <h2 className="text-3xl font-serif font-light mb-8">Secure This Asset</h2>
+        <a 
+            href="mailto:merkurov@gmail.com?subject=Acquisition Request: Fontana Lot 059"
+            className="inline-block px-12 py-4 bg-black text-white font-mono uppercase tracking-[0.2em] hover:bg-red-600 transition-all duration-300"
+        >
+            Request Private Access
+        </a>
+      </section>
       
-      {/* 7. FOOTER */}
-      <footer className="py-12 px-6 text-center bg-white border-t border-gray-200">
-        <p className="font-mono text-[10px] text-gray-300 tracking-[0.3em] uppercase">
+      {/* 8. FOOTER & DISCLAIMER */}
+      <footer className="py-12 px-6 text-center bg-gray-50 border-t border-gray-200">
+        <p className="font-mono text-[10px] text-gray-400 tracking-[0.3em] uppercase mb-8">
             Curated by Anton Merkurov / All Rights Reserved 2025
         </p>
+        <div className="max-w-2xl mx-auto text-[9px] text-gray-400 leading-relaxed font-sans border-t border-gray-200 pt-8">
+            <p>
+                DISCLAIMER: This document is an independent market analysis produced by the Curator Engine. 
+                It does not constitute a solicitation to buy securities. Art market values are historical estimates. 
+                Past performance of 'Red Fontanas' does not guarantee future liquidity. 
+                You are buying a wound in the canvas, not a bond.
+            </p>
+        </div>
       </footer>
 
     </div>
