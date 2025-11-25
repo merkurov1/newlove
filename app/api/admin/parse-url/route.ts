@@ -39,6 +39,23 @@ export async function POST(req: Request) {
 
     const markdown = await jinaResponse.text();
 
+    // ALSO: fetch original HTML page to extract meta tags and additional images
+    let html = ''
+    try {
+      const htmlRes = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }, cache: 'no-store' })
+      if (htmlRes.ok) html = await htmlRes.text()
+    } catch (e) {
+      console.warn('[Parser] HTML fetch failed, continuing with Jina markdown only', e)
+    }
+
+    // Extract og:image, page title, and <img> srcs as image candidates
+    const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]*content=["']([^"']+)["']/i) || html.match(/<meta[^>]+name=["']og:image["'][^>]*content=["']([^"']+)["']/i)
+    const ogImage = ogMatch ? ogMatch[1] : null
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+    const pageTitle = titleMatch ? titleMatch[1].trim() : null
+    const imgMatches = Array.from(html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)).map(m => m[1])
+    const imageCandidates = Array.from(new Set([...(ogImage ? [ogImage] : []), ...imgMatches].filter(Boolean))).slice(0, 20)
+
     // === SAFETY CHECK: ПРОВЕРКА НА БЛОКИРОВКУ ===
     // Если сайт отдал заглушку вместо контента, нет смысла тратить токены Gemini.
     const lowerMd = markdown.toLowerCase();
@@ -82,8 +99,16 @@ export async function POST(req: Request) {
       2. If a field is missing, use null (do NOT use undefined).
       3. EXTRACT NUMBERS for estimates.
       
-      INPUT TEXT:
-      ${markdown.substring(0, 25000)}
+      INPUT TEXT (JINA MARKDOWN):
+      ${markdown.substring(0, 100000)}
+
+      INPUT TEXT (PAGE HTML):
+      ${html.substring(0, 200000)}
+
+      EXTRA PAGE DATA:
+      page_title: ${pageTitle || ''}
+      og_image: ${ogImage || ''}
+      image_candidates: ${JSON.stringify(imageCandidates)}
 
       REQUIRED JSON SCHEMA:
       {
