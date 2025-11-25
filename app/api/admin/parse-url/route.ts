@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     console.log(`[Parser] Target: ${url}`);
 
     // 1. THE HARVESTER (Jina AI)
-    const jinaUrl = `https://r.jina.ai/${url}`;
+    const jinaUrl = `https://r.jina.ai/${encodeURI(url)}`;
     const jinaResponse = await fetch(jinaUrl, {
       method: 'GET',
       headers: {
@@ -103,7 +103,8 @@ export async function POST(req: Request) {
     `;
 
     const result = await model.generateContent(prompt);
-    const rawText = result.response.text();
+    // result.response.text() may be async; await it to get the full string
+    const rawText = result?.response ? await result.response.text() : '';
 
     let jsonResponse;
     try {
