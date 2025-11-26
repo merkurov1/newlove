@@ -7,30 +7,42 @@ export const metadata = sanitizeMetadata({
 
 export default function IsAKeyForAllPage() {
   return (
-    <main className="min-h-screen bg-white text-black selection:bg-black selection:text-white">
-      <div className="w-full max-w-2xl mx-auto px-6 py-24 sm:py-32">
+    <main className="min-h-screen bg-[#FDFBF7] text-[#111] font-sans selection:bg-black selection:text-white">
+      
+      {/* DECORATIVE BORDER TOP */}
+      <div className="h-1 w-full bg-black fixed top-0 z-50"></div>
+
+      <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
         
         {/* Header: The Monument */}
-        <header className="mb-20 text-center">
+        <header className="mb-16 border-b border-gray-200 pb-8">
+           <div className="flex justify-between items-center mb-6">
+            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400">
+              Identity Protocol
+            </span>
+            <span className="font-mono text-[10px] tracking-widest uppercase text-gray-400">
+               Est. 19XX
+            </span>
+          </div>
           <h1 
-            className="text-5xl sm:text-7xl font-serif font-medium tracking-tight leading-[1.1] mb-8"
+            className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-8"
             style={{ fontFamily: 'Playfair Display, Cormorant Garamond, serif' }}
           >
-            Love is a key for all
+            Love is a<br/>key for all.
           </h1>
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-sm font-bold tracking-[0.2em] uppercase text-black">
+          <div className="flex flex-col gap-2">
+            <p className="font-mono text-xs font-bold tracking-[0.2em] uppercase text-black">
               Anton Merkurov
             </p>
-            <p className="text-lg font-serif italic text-gray-500">
+            <p className="text-xl font-serif italic text-gray-600">
               Artist. Digital Architect. Humanist.
             </p>
           </div>
         </header>
 
         {/* Content: The Narrative */}
-        <article className="prose prose-lg prose-neutral prose-p:font-light prose-p:leading-relaxed prose-headings:font-serif max-w-none">
-          <div className="space-y-8 text-lg sm:text-xl text-gray-900 font-light">
+        <article className="prose prose-lg prose-stone prose-p:font-light prose-p:leading-relaxed prose-headings:font-serif max-w-none">
+          <div className="space-y-8 text-lg leading-relaxed text-[#111]">
             <p className="first-letter:text-5xl first-letter:font-serif first-letter:font-bold first-letter:float-left first-letter:mr-3 first-letter:mt-[-8px]">
               Anton Merkurov is an artist operating at the intersection of legacy and future. 
               A descendant of the monumental sculptor Sergey Merkurov, Anton spent two decades 
@@ -52,7 +64,7 @@ export default function IsAKeyForAllPage() {
               radical simplicity.
             </p>
 
-            <blockquote className="border-l-2 border-black pl-8 my-12 py-2">
+            <blockquote className="border-l-2 border-black pl-8 my-12 py-2 bg-white/50 p-6">
               <p className="text-2xl sm:text-3xl font-serif italic text-black leading-tight">
                 "Why do you need technology if you don't have love?"
               </p>
@@ -72,7 +84,7 @@ export default function IsAKeyForAllPage() {
           </div>
 
           {/* Footer: The Seal */}
-          <div className="mt-16 pt-12 border-t border-gray-100 text-center">
+          <div className="mt-16 pt-12 border-t border-gray-200 text-center">
             <p 
               className="text-3xl sm:text-4xl font-serif font-bold text-black"
               style={{ fontFamily: 'Playfair Display, Cormorant Garamond, serif' }}
