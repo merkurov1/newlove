@@ -1,5 +1,3 @@
-/* ===== FILE: app/vigil/page.tsx ===== */
-
 "use client";
 
 import * as React from "react";
@@ -68,18 +66,15 @@ export default function VigilPage() {
 
   // --- HELPER: Haptics ---
   const triggerHaptic = (style: 'light' | 'medium' | 'heavy' | 'error') => {
-    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.HapticFeedback) {
-        const haptic = (window as any).Telegram.WebApp.HapticFeedback;
-        if (style === 'error') haptic.notificationOccurred('error');
-        else haptic.impactOccurred(style);
-    } else if (navigator.vibrate) {
-        // Fallback
-        if (style === 'error') navigator.vibrate([50, 50, 50]);
-        else navigator.vibrate(style === 'heavy' ? 100 : 50);
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.HapticFeedback) {
+        if (style === 'error') tg.HapticFeedback.notificationOccurred('error');
+        else tg.HapticFeedback.impactOccurred(style);
     }
   };
 
   useEffect(() => {
+    // 1. Session Sync
     if (typeof window !== 'undefined') {
       const storedToken = localStorage.getItem('temple_session_token');
       const storedUser = localStorage.getItem('temple_user');
@@ -87,48 +82,58 @@ export default function VigilPage() {
       if (storedUser) setTempleUserName(storedUser);
     }
 
-    const script = document.createElement('script');
-    script.src = "https://telegram.org/js/telegram-web-app.js";
-    script.async = true;
-    script.onload = () => {
-        setTimeout(() => {
-            const tg = (window as any).Telegram?.WebApp;
-            if (tg) {
-                tg.ready();
-                try { tg.expand(); } catch(e){}
-                
-                const initData = tg.initData;
-                const tgUser = tg.initDataUnsafe?.user;
-                if (tgUser && !localStorage.getItem('temple_session_token')) {
-                    fetch('/api/temple/auth', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ...tgUser, initData })
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.token) {
-                            localStorage.setItem('temple_session_token', data.token);
-                            setTempleToken(data.token);
-                        }
-                        if (data.displayName) {
-                            localStorage.setItem('temple_user', data.displayName);
-                            setTempleUserName(data.displayName);
-                        }
-                    })
-                    .catch(console.error);
-                }
+    // 2. Telegram Init
+    const initTelegram = () => {
+        const tg = (window as any).Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+            tg.setHeaderColor('#000000');
+            tg.setBackgroundColor('#000000');
+            
+            const initData = tg.initData;
+            const tgUser = tg.initDataUnsafe?.user;
+            
+            // Silent Auth Update
+            if (tgUser && !localStorage.getItem('temple_session_token')) {
+                fetch('/api/temple/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...tgUser, initData })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.token) {
+                        localStorage.setItem('temple_session_token', data.token);
+                        setTempleToken(data.token);
+                    }
+                    if (data.displayName) {
+                        localStorage.setItem('temple_user', data.displayName);
+                        setTempleUserName(data.displayName);
+                    }
+                })
+                .catch(console.error);
             }
-        }, 200);
+        }
     };
-    document.head.appendChild(script);
 
+    if ((window as any).Telegram?.WebApp) {
+        initTelegram();
+    } else {
+        const script = document.createElement('script');
+        script.src = "https://telegram.org/js/telegram-web-app.js";
+        script.onload = initTelegram;
+        document.head.appendChild(script);
+    }
+
+    // 3. Data Sync
     fetchHearts();
     const channel = supabase
       .channel('vigil_hearts_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vigil_hearts' }, () => fetchHearts())
       .subscribe();
 
+    // 4. First Visit Check
     if (!localStorage.getItem('vigil_visited')) {
       setShowManifesto(true);
       localStorage.setItem('vigil_visited', 'true');
@@ -136,10 +141,7 @@ export default function VigilPage() {
 
     templeTrack('enter', 'User opened Vigil page');
 
-    return () => { 
-        if(document.head.contains(script)) document.head.removeChild(script);
-        supabase.removeChannel(channel); 
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const fetchHearts = async () => {
@@ -234,6 +236,7 @@ export default function VigilPage() {
   };
 
   const handleHeartClick = (heartId: number) => {
+    // If not logged in and not in Telegram -> Show Login
     if (!user && !templeToken && !templeUserName) {
       setShowLogin(true);
       return;
@@ -298,9 +301,7 @@ export default function VigilPage() {
 
         try {
           if (user && user.id) {
-            // Supabase Logic
-            // 1. Clear old hearts (Single Tenancy) - client side optimistic update not needed, DB handles logical check but we can do it here too if needed. 
-            // Better to rely on server policy, but since we are admin client basically:
+            // ADMIN / WEB USER LOGIC
             await supabase.from('vigil_hearts').update({owner_id: null, owner_name: null, last_lit_at: null}).eq('owner_id', user.id).neq('id', heartIdToUpdate);
             
             await supabase.from('vigil_hearts').upsert({
@@ -311,7 +312,7 @@ export default function VigilPage() {
               last_lit_at: new Date().toISOString()
             });
           } else {
-            // Server API Logic (handles cleaning old hearts)
+            // TELEGRAM / TEMPLE USER LOGIC
             const token = templeToken || (typeof window !== 'undefined' ? localStorage.getItem('temple_session_token') : null);
             const body: any = { id: heartIdToUpdate, name: nameInput.trim(), intention: intentionInput.trim() };
             if (token) body.token = token;
@@ -361,12 +362,13 @@ export default function VigilPage() {
         {HEARTS_DATA.map(h => <video key={h.id} src={h.loop} preload="auto" />)}
       </div>
 
+      {/* FLASH */}
       <div style={{
           position: 'fixed', inset: 0, background: 'white', pointerEvents: 'none', zIndex: 9999,
           opacity: flash ? 0.2 : 0, transition: 'opacity 0.2s ease-out'
       }} />
 
-      {/* Glory Overlay */}
+      {/* GLORY OVERLAY */}
       {roomStyle.overlay && (
           <div style={{
               position: 'fixed', inset: 0, 
@@ -444,6 +446,7 @@ export default function VigilPage() {
         </div>
       </div>
 
+      {/* SPARKS */}
       <div className="spark-layer">
         <AnimatePresence>
           {sparkParticles.map(spark => (
@@ -460,6 +463,7 @@ export default function VigilPage() {
         </AnimatePresence>
       </div>
 
+      {/* RITUAL MODAL */}
       {selectedHeart !== null && (
         <div className="modal-backdrop" onClick={() => setSelectedHeart(null)}>
           <div className="modal-box" onClick={(e) => (e as React.MouseEvent<HTMLDivElement>).stopPropagation()}>
@@ -510,10 +514,11 @@ export default function VigilPage() {
 
       {showLogin && <ModernLoginModal onClose={() => setShowLogin(false)} />}
 
+      {/* MANIFESTO MODAL */}
       {showManifesto && (
         <div className="modal-backdrop" onClick={() => setShowManifesto(false)}>
           <div className="modal-box manifesto" onClick={(e) => (e as React.MouseEvent<HTMLDivElement>).stopPropagation()}>
-            <h2 className="glitch-text">THE VIGIL</h2>
+            <h2 className="glitch-text" data-text="THE VIGIL">THE VIGIL</h2>
             <div className="manifesto-content">
                 <p>The Internet is a cold void.</p>
                 <p>These 5 hearts are digital vessels. They are dead matter until you touch them.</p>
@@ -531,10 +536,43 @@ export default function VigilPage() {
         
         .vigil-container {
           width: 100vw; height: 100vh;
-          transition: background 2s ease; /* Smooth transition for atmosphere */
+          transition: background 2s ease;
           perspective: 1200px;
           display: flex; justify-content: center; align-items: center;
           position: relative;
+        }
+
+        /* GLITCH EFFECT */
+        .glitch-text {
+            position: relative; color: white;
+            font-family: 'Space Mono', monospace; font-size: 32px; letter-spacing: -2px; margin-bottom: 30px; text-align: center;
+        }
+        .glitch-text::before, .glitch-text::after {
+            content: attr(data-text); position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        }
+        .glitch-text::before {
+            left: 2px; text-shadow: -1px 0 #ff00c1; clip: rect(44px, 450px, 56px, 0);
+            animation: glitch-anim 5s infinite linear alternate-reverse;
+        }
+        .glitch-text::after {
+            left: -2px; text-shadow: -1px 0 #00fff9; clip: rect(44px, 450px, 56px, 0);
+            animation: glitch-anim2 5s infinite linear alternate-reverse;
+        }
+        @keyframes glitch-anim {
+            0% { clip: rect(12px, 9999px, 81px, 0); }
+            20% { clip: rect(83px, 9999px, 40px, 0); }
+            40% { clip: rect(22px, 9999px, 6px, 0); }
+            60% { clip: rect(64px, 9999px, 19px, 0); }
+            80% { clip: rect(3px, 9999px, 58px, 0); }
+            100% { clip: rect(93px, 9999px, 30px, 0); }
+        }
+        @keyframes glitch-anim2 {
+            0% { clip: rect(65px, 9999px, 100px, 0); }
+            20% { clip: rect(32px, 9999px, 4px, 0); }
+            40% { clip: rect(10px, 9999px, 63px, 0); }
+            60% { clip: rect(80px, 9999px, 20px, 0); }
+            80% { clip: rect(1px, 9999px, 50px, 0); }
+            100% { clip: rect(30px, 9999px, 80px, 0); }
         }
 
         .spark-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
@@ -613,7 +651,6 @@ export default function VigilPage() {
         }
 
         .manifesto { max-width: 500px; text-align: left; border: 1px solid #fff; background: #000; }
-        .manifesto h2 { font-family: 'Space Mono', monospace; font-size: 32px; letter-spacing: -2px; margin-bottom: 30px; text-align: center; }
         .manifesto-content p { font-family: 'Space Mono', monospace; font-size: 14px; line-height: 1.6; color: #ccc; margin-bottom: 15px; }
         .manifesto-content b { color: #fff; }
         .btn-enter { background: #fff; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; margin-top: 20px; cursor: pointer; letter-spacing: 2px; }
@@ -646,11 +683,21 @@ export default function VigilPage() {
             text-transform: uppercase;
         }
 
+        /* MOBILE FIX */
         @media (max-width: 768px) {
-          .shelves-grid { grid-template-columns: repeat(2, 1fr); gap: 20px; max-height: 60vh; overflow-y: scroll; padding-bottom: 100px; }
+          .shelves-grid { 
+             grid-template-columns: repeat(2, 1fr); 
+             gap: 20px; 
+             max-height: 60vh; 
+             overflow-y: scroll; 
+             padding-bottom: 100px; 
+          }
+          /* Center the 5th item (odd one out) */
+          .heart-slot:last-child {
+             grid-column: span 2;
+          }
           .angel-img { width: 150px; margin-bottom: 20px; }
           .heart-inner { width: 35vw; height: 35vw; max-width: 140px; max-height: 140px; }
-          .manifesto h2 { font-size: 24px; }
         }
       `}</style>
     </div>

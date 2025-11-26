@@ -1,38 +1,38 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 import TempleWrapper from '@/components/TempleWrapper';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- CONFIG ---
-// Используем то же видео сердца, но покрасим его в золото через CSS
 const HEART_VIDEO = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-5300087847065473569.mp4'; 
-
-const PRESETS = [5, 20, 100];
+const PRESETS = [5, 20, 100]; // USD Amounts
 
 export default function TributePage() {
   const [amount, setAmount] = useState<number>(20);
   const [isCustom, setIsCustom] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // Realtime State
   const [total24h, setTotal24h] = useState(0);
   const [pulse, setPulse] = useState(false);
   const [lastDonor, setLastDonor] = useState<string | null>(null);
 
   const supabase = createClient();
 
-  // --- 1. DATA & REALTIME ---
+  // --- 1. INIT & REALTIME ---
   useEffect(() => {
     fetchTotal();
 
-    // Слушаем новые донаты в реальном времени
+    // Listen for GLOBAL donations (someone else pays -> heart beats)
     const channel = supabase
       .channel('tribute-live')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tributes' }, (payload) => {
         const newDonation = payload.new;
         if (newDonation.status === 'succeeded') {
             triggerPulse(newDonation.donor_name);
-            fetchTotal(); // Обновляем общую энергию
+            fetchTotal(); // Refresh energy level
         }
       })
       .subscribe();
@@ -41,7 +41,7 @@ export default function TributePage() {
   }, []);
 
   const fetchTotal = async () => {
-    // Считаем сумму за последние 24 часа
+    // Calculate energy (sum of last 24h)
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data } = await supabase
       .from('tributes')
@@ -55,114 +55,135 @@ export default function TributePage() {
     }
   };
 
+  const triggerHaptic = (style: 'light' | 'medium' | 'heavy') => {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred(style);
+  };
+
   const triggerPulse = (donorName: string) => {
     setPulse(true);
     setLastDonor(donorName || "ANONYMOUS");
-    
-    // Звук монеты/удара (опционально)
-    // const audio = new Audio('/sounds/coin_drop.mp3'); audio.play().catch(() => {});
-
+    triggerHaptic('heavy');
     setTimeout(() => setPulse(false), 800);
     setTimeout(() => setLastDonor(null), 4000);
   };
 
- // --- 2. PAYMENT LOGIC ---
+  // --- 2. PAYMENT LOGIC (TELEGRAM OPTIMIZED) ---
   const handleTribute = async () => {
+    triggerHaptic('medium');
     setLoading(true);
+
     try {
+      // 1. Get Payment Link from Server
       const res = await fetch('/api/tribute/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             amount, 
             currency: 'usd',
-            donor_name: 'Pilgrim', // В будущем можно брать из инпута
-            message: 'For the Golden Heart' 
+            donor_name: typeof window !== 'undefined' ? (localStorage.getItem('temple_user') || 'Pilgrim') : 'Pilgrim', 
+            message: 'Fuel for the Temple' 
         }),
       });
       const data = await res.json();
       
       if (data.url) {
-        // FIX: Проверяем, мы в Телеграме или в вебе?
         const tg = (window as any).Telegram?.WebApp;
         
         if (tg && tg.openLink) {
-            // ВАРИАНТ А: Мы в Телеграме. Открываем во внешнем браузере.
-            // Храм остается висеть в фоне и ждет вебхук.
+            // TELEGRAM MODE: Open in external browser, keep App alive
             tg.openLink(data.url);
         } else {
-            // ВАРИАНТ Б: Мы в обычном браузере. Делаем редирект.
+            // WEB MODE: Redirect
             window.location.href = data.url;
         }
       } else {
-        alert('Payment gateway error');
+        alert('Payment gateway busy. Try again.');
       }
     } catch (e) {
       console.error(e);
-      alert('Connection failed');
+      alert('Connection failed.');
     } finally {
       setLoading(false);
     }
   };
 
-  // --- 3. VISUAL STATE CALCULATOR ---
+  // --- 3. DYNAMIC STYLES ---
+  // Heart changes based on Total Energy Level
   const getHeartStyle = () => {
-    // DORMANT (< $50) -> AWAKE ($50-$500) -> RADIANT (> $500)
-    let filter = 'grayscale(100%) sepia(100%) hue-rotate(5deg) saturate(200%) brightness(0.6) contrast(1.2)';
-    let dropShadow = 'none';
+    // Levels: 0-50 (Dormant), 50-200 (Awake), 200+ (Radiant)
+    let filter = 'grayscale(100%) sepia(80%) brightness(0.6) contrast(1.2)'; // Dormant
     let scale = 1;
+    let opacity = 0.8;
 
-    if (total24h > 50) {
-        // Awake
-        filter = 'grayscale(100%) sepia(100%) hue-rotate(5deg) saturate(300%) brightness(1.0) contrast(1.1)';
-        dropShadow = '0 0 30px rgba(255, 215, 0, 0.3)';
+    if (total24h > 50) { // Awake
+        filter = 'grayscale(20%) sepia(40%) brightness(1.0) contrast(1.1) saturate(1.2)';
+        opacity = 1;
     }
-    if (total24h > 200) {
-        // Radiant
-        filter = 'grayscale(100%) sepia(100%) hue-rotate(5deg) saturate(400%) brightness(1.3) contrast(1.3)';
-        dropShadow = '0 0 60px rgba(255, 215, 0, 0.6)';
-    }
-
-    if (pulse) {
-        scale = 1.3;
-        filter = 'grayscale(100%) sepia(100%) hue-rotate(5deg) saturate(500%) brightness(2.0)';
-        dropShadow = '0 0 100px rgba(255, 215, 0, 1)';
+    if (total24h > 200) { // Radiant
+        filter = 'grayscale(0%) sepia(0%) brightness(1.1) contrast(1.0) saturate(1.5)';
+        scale = 1.05;
     }
 
-    return { filter, dropShadow, scale };
+    if (pulse) { // Beating state
+        scale = 1.25;
+        filter = 'brightness(1.5) saturate(2.0)';
+        opacity = 1;
+    }
+
+    return { filter, scale, opacity };
   };
 
   const style = getHeartStyle();
 
   return (
-    <div className="tribute-container">
+    <div className="min-h-screen bg-black text-[#e5b863] font-mono flex flex-col items-center relative overflow-hidden">
       <Suspense fallback={null}><TempleWrapper /></Suspense>
       
-      {/* Background Ambience */}
-      <div className="bg-glow" style={{ opacity: Math.min(total24h / 500, 0.8) }} />
+      {/* AMBIENT GLOW (Reacts to energy) */}
+      <div 
+        className="absolute inset-0 pointer-events-none transition-opacity duration-1000"
+        style={{ 
+            background: 'radial-gradient(circle at center, rgba(255, 215, 0, 0.15) 0%, black 70%)',
+            opacity: Math.min(total24h / 300, 0.8) 
+        }} 
+      />
 
-      <div className="content">
-        <h1 className="title">TRIBUTE</h1>
-        <div className="subtitle">ENERGY LEVEL: ${total24h.toFixed(0)} / 24H</div>
+      <div className="z-10 w-full max-w-md px-6 flex flex-col items-center h-screen justify-center py-10">
+        
+        {/* HEADER */}
+        <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold tracking-[0.3em] text-white drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]">
+                TRIBUTE
+            </h1>
+            <div className="text-[10px] text-[#886e36] tracking-[0.2em] uppercase mt-2">
+                ENERGY LEVEL: ${total24h.toFixed(0)} / 24H
+            </div>
+        </div>
 
-        {/* THE GOLDEN HEART */}
-        <div className="heart-wrapper">
+        {/* THE HEART ARTIFACT */}
+        <div className="relative w-64 h-64 mb-12 flex items-center justify-center">
             <video 
                 src={HEART_VIDEO} 
                 autoPlay loop muted playsInline 
-                className="golden-heart"
+                className="w-full h-full object-cover rounded-full"
                 style={{
                     filter: style.filter,
-                    boxShadow: style.dropShadow, // Note: boxShadow works on div, drop-shadow filter on video content
-                    transform: `scale(${style.scale})`
+                    transform: `scale(${style.scale})`,
+                    opacity: style.opacity,
+                    transition: 'all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                    boxShadow: total24h > 100 ? '0 0 50px rgba(255,215,0,0.2)' : 'none'
                 }}
             />
-            {/* Last Donor Toast */}
+            
+            {/* DONOR TOAST */}
             <AnimatePresence>
                 {lastDonor && (
                     <motion.div 
-                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                        className="donor-toast"
+                        initial={{ opacity: 0, y: 30 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        exit={{ opacity: 0, y: -20 }}
+                        className="absolute -bottom-12 text-white font-bold text-sm tracking-widest uppercase drop-shadow-[0_0_5px_gold]"
                     >
                         ⚡ {lastDonor}
                     </motion.div>
@@ -171,113 +192,61 @@ export default function TributePage() {
         </div>
 
         {/* CONTROLS */}
-        <div className="controls">
-            <div className="presets">
+        <div className="w-full space-y-6">
+            {/* PRESETS */}
+            <div className="flex gap-4 justify-center">
                 {PRESETS.map(val => (
                     <button 
                         key={val} 
-                        className={`preset-btn ${amount === val && !isCustom ? 'active' : ''}`}
-                        onClick={() => { setAmount(val); setIsCustom(false); }}
+                        className={`flex-1 py-3 border border-[#443311] text-[#886e36] hover:text-[#e5b863] hover:border-[#e5b863] transition-all uppercase tracking-widest text-xs font-bold ${amount === val && !isCustom ? 'bg-[#e5b863] !text-black border-[#e5b863]' : ''}`}
+                        onClick={() => { setAmount(val); setIsCustom(false); triggerHaptic('light'); }}
                     >
                         ${val}
                     </button>
                 ))}
                 <button 
-                    className={`preset-btn ${isCustom ? 'active' : ''}`}
-                    onClick={() => { setIsCustom(true); setAmount(0); }}
+                    className={`px-4 border border-[#443311] text-[#886e36] hover:text-[#e5b863] ${isCustom ? 'bg-[#e5b863] !text-black' : ''}`}
+                    onClick={() => { setIsCustom(true); setAmount(0); triggerHaptic('light'); }}
                 >
                     ...
                 </button>
             </div>
 
-            {isCustom && (
-                <input 
-                    type="number" 
-                    className="custom-input"
-                    placeholder="ENTER AMOUNT"
-                    value={amount || ''}
-                    onChange={(e) => setAmount(Number(e.target.value))}
-                    autoFocus
-                />
-            )}
+            {/* CUSTOM INPUT */}
+            <AnimatePresence>
+                {isCustom && (
+                    <motion.input 
+                        initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                        type="number" 
+                        className="w-full bg-[#110c05] border border-[#e5b863] text-[#e5b863] p-4 text-center font-mono text-xl outline-none placeholder-[#443311]"
+                        placeholder="ENTER AMOUNT"
+                        value={amount || ''}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(Number(e.target.value))}
+                        autoFocus
+                    />
+                )}
+            </AnimatePresence>
 
+            {/* PAY BUTTON */}
             <button 
-                className="pay-btn"
+                className="w-full bg-gradient-to-r from-[#e5b863] to-[#ffeec7] text-black py-4 text-sm font-bold tracking-[0.2em] uppercase hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale shadow-[0_0_20px_rgba(229,184,99,0.3)]"
                 onClick={handleTribute}
                 disabled={loading || amount <= 0}
             >
                 {loading ? 'INITIATING...' : `OFFER $${amount}`}
             </button>
             
-            <p className="disclaimer">
-                Funds fuel the Temple's servers and future artifacts.<br/>
-                Energy transforms into Light.
+            <p className="text-[9px] text-[#443311] text-center uppercase tracking-wider leading-relaxed">
+                Funds maintain the Temple servers.<br/>
+                Energy is never lost, only transformed.
             </p>
         </div>
       </div>
 
       <style jsx global>{`
-        body { background: #050505; color: #e5b863; font-family: 'Space Mono', monospace; overflow: hidden; }
-        
-        .tribute-container {
-            width: 100vw; height: 100vh;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            position: relative;
-            background: radial-gradient(circle at center, #1a1005 0%, #000 100%);
-        }
-
-        .bg-glow {
-            position: absolute; inset: 0;
-            background: radial-gradient(circle at center, rgba(255, 215, 0, 0.15) 0%, transparent 70%);
-            pointer-events: none; transition: opacity 1s ease;
-        }
-
-        .content { z-index: 10; display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 400px; }
-
-        .title { font-size: 32px; letter-spacing: 8px; margin-bottom: 5px; color: #fff; text-shadow: 0 0 20px rgba(255,215,0,0.5); }
-        .subtitle { font-size: 12px; color: #886e36; margin-bottom: 40px; letter-spacing: 2px; }
-
-        .heart-wrapper { position: relative; width: 200px; height: 200px; margin-bottom: 50px; display: flex; justify-content: center; align-items: center; }
-        
-        .golden-heart {
-            width: 100%; height: 100%; border-radius: 50%; object-fit: cover;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            /* The real magic happens in inline styles */
-        }
-
-        .donor-toast {
-            position: absolute; bottom: -40px; 
-            color: #fff; font-weight: bold; text-shadow: 0 0 10px gold;
-            white-space: nowrap;
-        }
-
-        .controls { width: 100%; padding: 0 20px; }
-
-        .presets { display: flex; gap: 10px; margin-bottom: 20px; justify-content: center; }
-        .preset-btn {
-            background: transparent; border: 1px solid #443311; color: #886e36;
-            padding: 10px 0; flex: 1; cursor: pointer; font-family: 'Space Mono', monospace;
-            transition: all 0.2s;
-        }
-        .preset-btn:hover { border-color: #e5b863; color: #e5b863; }
-        .preset-btn.active { background: #e5b863; color: #000; border-color: #e5b863; font-weight: bold; box-shadow: 0 0 15px rgba(229, 184, 99, 0.4); }
-
-        .custom-input {
-            width: 100%; background: #110c05; border: 1px solid #e5b863; color: #e5b863;
-            padding: 15px; text-align: center; font-family: 'Space Mono', monospace; font-size: 18px;
-            outline: none; margin-bottom: 20px;
-        }
-
-        .pay-btn {
-            width: 100%; background: linear-gradient(45deg, #e5b863, #ffeec7); 
-            color: #000; border: none; padding: 18px;
-            font-size: 16px; font-weight: bold; letter-spacing: 2px; cursor: pointer;
-            text-transform: uppercase; transition: transform 0.2s;
-        }
-        .pay-btn:hover:not(:disabled) { transform: scale(1.02); box-shadow: 0 0 30px rgba(229, 184, 99, 0.5); }
-        .pay-btn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
-
-        .disclaimer { margin-top: 20px; font-size: 10px; color: #443311; text-align: center; line-height: 1.5; }
+        body { background: #000; }
+        /* Remove input arrows */
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
       `}</style>
     </div>
   );

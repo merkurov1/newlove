@@ -4,15 +4,14 @@ import { useState, useEffect, Suspense, useMemo } from 'react'
 import TempleWrapper from '@/components/TempleWrapper'
 import { templeTrack } from '@/components/templeTrack'
 
-// Utility function to convert **markdown** to <b>HTML</b>
+// --- CONSTANTS & DATA ---
+
+// Utility: Convert **markdown** to <b>HTML</b> for emphasis
 const formatQuestionText = (text: string): string => {
     if (!text) return '';
-    // Replaces **bold** with <b>bold</b>
-    return text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    return text.replace(/\*\*(.*?)\*\*/g, '<b class="font-bold text-white">$1</b>');
 }
 
-// NEW QUESTIONS V2.0 - Designed to force specificity and conflict
-// (Массивы вопросов остаются прежними, но теперь они будут рендериться корректно)
 const QUESTIONS_EN = [
   "Which object in your home do you keep because it reminds you of **failed ambition** or a **bad compromise**?",
   "At what age or event did you first realize the **person closest to you** could not protect you?",
@@ -39,7 +38,8 @@ const QUESTIONS_RU = [
   "Вы готовы узнать свой диагноз?"
 ]
 
-// Компонент Штампа (без изменений)
+// --- COMPONENTS ---
+
 const Stamp = ({ type }: { type: string }) => {
   const colors: Record<string, string> = {
     'VOID': 'text-gray-500 border-gray-500',
@@ -50,16 +50,19 @@ const Stamp = ({ type }: { type: string }) => {
   const style = colors[type] || colors['VOID']
 
   return (
-    <div className={`absolute top-10 right-10 md:top-20 md:right-20 transform rotate-12 opacity-0 animate-stamp z-10 pointer-events-none`}>
-       <div className={`border-4 ${style} px-4 py-2 font-black text-4xl md:text-6xl uppercase tracking-widest`} 
-            style={{ maskImage: 'url("https://s3-us-west-2.amazonaws.com/s.cdpn.io/8399/grunge.png")', WebkitMaskImage: 'url("https://s3-us-west-2.amazonaws.com/s.cdpn.io/8399/grunge.png")', maskSize: 'contain' }}>
+    <div className={`absolute top-10 right-4 md:top-20 md:right-20 transform rotate-12 opacity-0 animate-stamp z-20 pointer-events-none`}>
+       <div className={`border-4 ${style} px-4 py-2 font-black text-4xl md:text-6xl uppercase tracking-widest mix-blend-difference`} 
+            style={{ 
+              maskImage: 'url("https://s3-us-west-2.amazonaws.com/s.cdpn.io/8399/grunge.png")', 
+              WebkitMaskImage: 'url("https://s3-us-west-2.amazonaws.com/s.cdpn.io/8399/grunge.png")', 
+              maskSize: 'contain' 
+            }}>
          [{type}]
        </div>
     </div>
   )
 }
 
-// Custom hook for the step-by-step loading process (без изменений)
 const useProcessing = (isLoading: boolean) => {
     const [step, setStep] = useState(0);
     const [text, setText] = useState('');
@@ -67,36 +70,27 @@ const useProcessing = (isLoading: boolean) => {
     const messages = useMemo(() => [
         'CORE ACCESS GRANTED...',
         'ANALYZING INERTIA AND DIGITAL NOISE...',
-        'CALCULATING ARCHETYPE SCORE...',
+        'CALCULATING AGENCY INDEX...',
         'GENERATING PSYCHOLOGICAL CAST...'
     ], []);
 
     useEffect(() => {
         if (!isLoading) {
-            setStep(0);
-            setText('');
-            return;
+            setStep(0); setText(''); return;
         }
-
         let currentStep = 0;
         setText(messages[currentStep]);
-
         const interval = setInterval(() => {
             currentStep++;
-            if (currentStep < messages.length) {
-                setText(messages[currentStep]);
-            } else {
-                // Loop the last message or stop
-                setText(messages[messages.length - 1]);
-            }
-        }, 1000); // Display each step for 1 second
-
+            if (currentStep < messages.length) setText(messages[currentStep]);
+        }, 1200); 
         return () => clearInterval(interval);
     }, [isLoading, messages]);
 
     return { processingText: text };
 };
 
+// --- MAIN PAGE COMPONENT ---
 
 export default function CastPage() {
   const [language, setLanguage] = useState<'en' | 'ru' | null>(null)
@@ -118,14 +112,13 @@ export default function CastPage() {
   const [emailSent, setEmailSent] = useState(false)
 
   const questions = language === 'en' ? QUESTIONS_EN : QUESTIONS_RU
-  
-  // Utility to check if answer is meaningful (без изменений)
-  const isAnswerValid = currentAnswer.trim().length > 3 && currentAnswer.trim() !== '/' && currentAnswer.trim() !== '-'
+  const isAnswerValid = currentAnswer.trim().length > 2 
 
-  // Typewriter Effect (без изменений)
   useEffect(() => {
       templeTrack('enter', 'User opened Cast page')
    }, [])
+
+  // Typewriter Effect for Result
    useEffect(() => {
       if (currentStep === 11 && fullText) {
          let index = 0
@@ -136,7 +129,7 @@ export default function CastPage() {
                clearInterval(interval)
                setTimeout(() => setShowStamp(true), 500) 
             }
-         }, 15) 
+         }, 10) // Speed of typing
          return () => clearInterval(interval)
       }
    }, [currentStep, fullText])
@@ -146,11 +139,12 @@ export default function CastPage() {
     setCurrentStep(1)
   }
   
-  // Refactored formatting logic using Merkurov OS headings (без изменений)
   const formatAnalysisText = (analysis: any, archetype: string): string => {
     try {
         const parsed = typeof analysis === 'string' ? JSON.parse(analysis) : analysis;
-        if (!parsed || typeof parsed !== 'object' || !parsed.executive_summary) return String(analysis || 'Analysis structure incomplete.');
+        
+        // Fallback for raw text response
+        if (!parsed || typeof parsed !== 'object') return String(analysis || 'Analysis structure incomplete.');
 
         const scores = parsed.scores || {};
         const scoresText = Object.keys(scores)
@@ -159,28 +153,26 @@ export default function CastPage() {
 
         const ruHeadings = {
             scores: "СЧЕТ",
-            executive_summary: "РЕЗЮМЕ",
+            executive_summary: "РЕЗЮМЕ (AGENCY INDEX)",
             structural_weaknesses: "СТРУКТУРНЫЕ СЛАБОСТИ",
             core_assets: "КЛЮЧЕВЫЕ АКТИВЫ",
             strategic_directive: "СТРАТЕГИЧЕСКАЯ ДИРЕКТИВА"
         };
         const enHeadings = {
             scores: "SCOREBOARD",
-            executive_summary: "EXECUTIVE SUMMARY",
+            executive_summary: "EXECUTIVE SUMMARY (AGENCY INDEX)",
             structural_weaknesses: "STRUCTURAL WEAKNESSES",
             core_assets: "CORE ASSETS",
             strategic_directive: "STRATEGIC DIRECTIVE"
         };
         const headings = language === 'ru' ? ruHeadings : enHeadings;
         
-        // Build the formatted string with the high-level headings
         let formatted = `\n[ ${language === 'ru' ? 'АРХЕТИП' : 'ARCHETYPE'} ]\n${archetype}\n\n`;
-        
         formatted += `\n[ ${headings.scores} ]\n${scoresText}\n\n`;
-        formatted += `\n[ ${headings.executive_summary} ]\n${parsed.executive_summary}\n\n`;
-        formatted += `\n[ ${headings.structural_weaknesses} ]\n${parsed.structural_weaknesses}\n\n`;
-        formatted += `\n[ ${headings.core_assets} ]\n${parsed.core_assets}\n\n`;
-        formatted += `\n[ ${headings.strategic_directive} ]\n${parsed.strategic_directive}\n\n`;
+        formatted += `\n[ ${headings.executive_summary} ]\n${parsed.executive_summary || ''}\n\n`;
+        formatted += `\n[ ${headings.structural_weaknesses} ]\n${parsed.structural_weaknesses || ''}\n\n`;
+        formatted += `\n[ ${headings.core_assets} ]\n${parsed.core_assets || ''}\n\n`;
+        formatted += `\n[ ${headings.strategic_directive} ]\n${parsed.strategic_directive || ''}\n\n`;
 
         return formatted;
     } catch (e) {
@@ -189,9 +181,7 @@ export default function CastPage() {
 }
 
   const handleNext = async () => {
-    if (!isAnswerValid && currentStep < 10) {
-        return 
-    }
+    if (!isAnswerValid && currentStep < 10) return 
 
     const newAnswers = [...answers, currentAnswer]
     setAnswers(newAnswers)
@@ -200,6 +190,7 @@ export default function CastPage() {
     if (currentStep < 10) {
       setCurrentStep(currentStep + 1)
     } else {
+      // FINISH
       setCurrentStep(11)
       setLoading(true)
       
@@ -218,7 +209,8 @@ export default function CastPage() {
         setRecordId(data.recordId) 
 
       } catch (error) {
-        setFullText('Error connecting to the Core.')
+        setFullText('Error connecting to the Core. Connection severed.')
+        setLoading(false)
       } finally {
         setLoading(false)
       }
@@ -243,31 +235,37 @@ export default function CastPage() {
     }
   }
 
-  // --- RENDER: INTRO --- (без изменений)
+  // --- VIEW 1: INTRO ---
   if (currentStep === 0) {
      return (
-        <div className="min-h-screen bg-black flex items-center justify-center font-mono relative">
+        <div className="min-h-screen bg-black flex items-center justify-center font-mono relative p-6">
             <Suspense fallback={null}><TempleWrapper /></Suspense>
             
-            <div className="max-w-4xl px-6 grid md:grid-cols-2 gap-12">
-                <div className="space-y-6">
-                    <p className="text-gray-400 text-sm leading-relaxed">
+            <div className="max-w-4xl w-full grid md:grid-cols-2 gap-12 animate-in fade-in duration-700">
+                <div className="space-y-8 flex flex-col justify-center">
+                    <p className="text-gray-400 text-sm md:text-base leading-relaxed tracking-wide">
                         I spent 20 years building a personal myth and 2 years deconstructing it with AI. 
-                        I discovered that 90% of our personality is just digital noise. 
+                        I discovered that 90% of our personality is just <span className="text-white">digital noise</span>. 
                         This Protocol finds the remaining 10% — the Truth.
                     </p>
-                    <button onClick={() => handleLanguageSelect('en')} className="text-white text-lg tracking-widest hover:text-gray-400 transition-colors">
-                        [ START IN ENGLISH ] →
+                    <button 
+                        onClick={() => handleLanguageSelect('en')} 
+                        className="group flex items-center gap-4 text-white text-lg tracking-[0.2em] transition-all hover:opacity-70"
+                    >
+                        [ START IN ENGLISH ] <span className="group-hover:translate-x-2 transition-transform">→</span>
                     </button>
                 </div>
-                <div className="space-y-6 md:border-l md:border-gray-800 md:pl-12">
-                    <p className="text-gray-400 text-sm leading-relaxed">
+                <div className="space-y-8 md:border-l md:border-zinc-800 md:pl-12 flex flex-col justify-center">
+                    <p className="text-gray-400 text-sm md:text-base leading-relaxed tracking-wide">
                         Я потратил 20 лет на создание личного мифа и 2 года на его деконструкцию.
-                        90% нашей личности — это цифровой шум.
+                        90% нашей личности — это <span className="text-white">цифровой шум</span>.
                         Этот Протокол находит оставшиеся 10% — Истину.
                     </p>
-                    <button onClick={() => handleLanguageSelect('ru')} className="text-white text-lg tracking-widest hover:text-gray-400 transition-colors">
-                        [ НАЧАТЬ НА РУССКОМ ] →
+                    <button 
+                        onClick={() => handleLanguageSelect('ru')} 
+                        className="group flex items-center gap-4 text-white text-lg tracking-[0.2em] transition-all hover:opacity-70"
+                    >
+                        [ НАЧАТЬ НА РУССКОМ ] <span className="group-hover:translate-x-2 transition-transform">→</span>
                     </button>
                 </div>
             </div>
@@ -275,118 +273,126 @@ export default function CastPage() {
      )
   }
 
-  // --- RENDER: QUESTIONS --- (ИСПРАВЛЕНАЯ СЕКЦИЯ)
+  // --- VIEW 2: QUESTIONS ---
   if (currentStep <= 10) {
      return (
-        <div className="min-h-screen bg-black flex flex-col items-center justify-center px-6 font-mono animate-in fade-in relative">
+        <div className="min-h-screen bg-black flex flex-col items-center justify-center px-6 font-mono animate-in fade-in duration-500 relative">
            <Suspense fallback={null}><TempleWrapper /></Suspense>
 
-           <div className="w-full max-w-2xl">
-              <div className="flex justify-between text-xs text-gray-600 mb-12 uppercase tracking-widest">
-                 <span>Query {currentStep < 10 ? `0${currentStep}` : currentStep}</span>
-                 <span>Protocol v.2.0</span>
+           <div className="w-full max-w-2xl flex flex-col min-h-[60vh] justify-center">
+              
+              <div className="flex justify-between text-[10px] text-zinc-600 mb-8 uppercase tracking-[0.3em]">
+                 <span>Query {currentStep < 10 ? `0${currentStep}` : currentStep} / 10</span>
+                 <span>Protocol v.2.5</span>
               </div>
-              <p 
-                 className="text-white text-xl md:text-2xl leading-relaxed mb-16 min-h-[100px] text-center"
-                 // ИСПРАВЛЕНИЕ: Используем dangerouslySetInnerHTML для рендеринга жирного шрифта
+              
+              <div 
+                 className="text-white text-xl md:text-2xl leading-relaxed mb-12 min-h-[80px]"
                  dangerouslySetInnerHTML={{ __html: formatQuestionText(questions[currentStep - 1]) }}
               />
+              
               <textarea 
                  autoFocus
                  value={currentAnswer}
                  onChange={(e) => setCurrentAnswer(e.target.value)}
                  onKeyDown={handleKeyDown}
-                 className="w-full bg-transparent text-gray-300 text-center text-xl border-b border-gray-800 focus:border-white outline-none py-4 resize-none mb-12 placeholder-gray-900 transition-colors"
-                 placeholder="..."
-                 rows={1}
+                 className="w-full bg-zinc-950/50 text-gray-300 text-lg border border-zinc-800 focus:border-white focus:bg-black outline-none p-6 resize-none mb-8 placeholder-zinc-800 transition-all rounded-sm min-h-[120px]"
+                 placeholder={language === 'ru' ? "Пишите честно..." : "Answer honestly..."}
               />
-              <div className="text-center">
+              
+              <div className="flex flex-col items-center gap-4">
                  <button 
                     onClick={handleNext} 
-                    disabled={!isAnswerValid && currentStep < 10} 
-                    className="text-xs text-white border border-white px-8 py-3 hover:bg-white hover:text-black transition-all tracking-[0.2em] disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-white"
+                    disabled={!isAnswerValid} 
+                    className="text-xs text-black bg-white border border-white px-12 py-4 hover:bg-gray-200 transition-all tracking-[0.2em] disabled:opacity-20 disabled:cursor-not-allowed uppercase font-bold"
                  >
                     {currentStep === 10 ? (language === 'ru' ? 'АНАЛИЗ' : 'ANALYZE') : (language === 'ru' ? 'ДАЛЕЕ' : 'NEXT')}
                  </button>
+                 
+                 {/* Hint for Enter key */}
+                 <span className="text-[10px] text-zinc-700 uppercase tracking-widest">
+                    {language === 'ru' ? '[ ENTER ДЛЯ ВВОДА ]' : '[ PRESS ENTER ]'}
+                 </span>
               </div>
-              {currentStep < 10 && !isAnswerValid && currentAnswer.trim() && (
-                 <p className="text-red-500 text-center text-xs mt-4">
-                    {language === 'ru' ? 'Ответ слишком короткий или неинформативный. Требуется больше деталей.' : 'Answer too short or uninformative. More detail is required.'}
-                 </p>
-              )}
            </div>
         </div>
      )
   }
 
-  // --- RENDER: RESULT --- (без изменений, кроме использования useProcessing)
+  // --- VIEW 3: RESULT ---
   return (
-    <div className="min-h-screen bg-black text-white font-mono p-6 md:p-12 overflow-y-auto relative">
+    <div className="min-h-screen bg-black text-white font-mono p-4 md:p-12 overflow-y-auto relative">
        <Suspense fallback={null}><TempleWrapper /></Suspense>
 
-       <div className="max-w-3xl mx-auto mt-12 relative">
+       <div className="max-w-3xl mx-auto mt-12 relative pb-20">
           
           {loading ? (
-             <div className="text-center mt-32">
-                <div className="animate-pulse text-xs tracking-[0.3em]">
+             <div className="flex flex-col items-center justify-center h-[50vh]">
+                <div className="animate-pulse text-xs md:text-sm tracking-[0.3em] text-zinc-400">
                    {processingText || 'INITIATING CORE...'}
+                </div>
+                <div className="w-64 h-1 bg-zinc-900 mt-8 overflow-hidden">
+                    <div className="h-full bg-white animate-progress-indeterminate"></div>
                 </div>
              </div>
           ) : (
              <>
-                {/* STAMP OVERLAY */}
+                {/* STAMP */}
                 {showStamp && <Stamp type={archetype} />}
 
-                {/* MAIN DOCUMENT */}
-                <div className="border border-gray-800 p-8 md:p-16 bg-black relative shadow-[0_0_50px_rgba(255,255,255,0.05)]">
-                   <div className="flex justify-between border-b border-gray-800 pb-6 mb-8 text-xs text-gray-500 tracking-widest uppercase">
+                {/* TERMINAL OUTPUT */}
+                <div className="border border-zinc-800 p-6 md:p-12 bg-black relative shadow-[0_0_100px_rgba(255,255,255,0.03)] min-h-[60vh]">
+                   <div className="flex justify-between border-b border-zinc-900 pb-6 mb-8 text-[10px] text-zinc-500 tracking-[0.2em] uppercase">
                       <span>Subject: Anonymous</span>
                       <span>Date: {new Date().toLocaleDateString()}</span>
                    </div>
                    
-                   <pre className="whitespace-pre-wrap text-sm md:text-base leading-loose text-gray-300 font-light min-h-[50vh]">
+                   <pre className="whitespace-pre-wrap text-sm md:text-base leading-loose text-zinc-300 font-light font-mono">
                       {displayedText}
-                      <span className="animate-pulse">_</span>
+                      <span className="animate-pulse bg-white text-black px-1 ml-1"> </span>
                    </pre>
                 </div>
 
-                {/* UPSELL / LEVEL II BLOCK */}
-                <div className={`mt-12 border-t border-gray-800 pt-12 transition-opacity duration-1000 ${showStamp ? 'opacity-100' : 'opacity-0'}`}>
-                   <div className="grid md:grid-cols-2 gap-8 items-start">
+                {/* LEVEL II (LEAD GEN) */}
+                <div className={`mt-12 transition-all duration-1000 ${showStamp ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+                   <div className="border border-zinc-800 bg-zinc-950 p-8 grid md:grid-cols-2 gap-8 items-center">
                       <div>
-                         <h3 className="text-red-600 text-xs tracking-[0.2em] mb-4 uppercase">
-                            {language === 'ru' ? 'Внимание: Низкое Разрешение' : 'Warning: Low Resolution'}
+                         <h3 className="text-red-500 text-xs tracking-[0.2em] mb-4 uppercase font-bold">
+                            {language === 'ru' ? 'НИЗКОЕ РАЗРЕШЕНИЕ' : 'LOW RESOLUTION WARNING'}
                          </h3>
-                         <p className="text-gray-500 text-xs leading-relaxed">
+                         <p className="text-zinc-500 text-xs leading-relaxed">
                             {language === 'ru' 
-                              ? 'Этот слепок создан на основе 10 точек данных. Это набросок. Чтобы получить Истину, мне потребовалось 100 часов диалогов с Ядром. Я открываю доступ к Level II для тех, кто готов загрузить полные архивы.'
-                              : 'This cast uses 10 data points. It is a sketch. Real deconstruction requires 100+ hours of processing. I am opening Level II for those ready to upload their full archives.'}
+                              ? 'Этот слепок создан на основе 10 точек данных. Это набросок. Чтобы получить Истину и полную стратегию, требуется доступ к Level II.'
+                              : 'This cast uses 10 data points. It is a sketch. Real deconstruction requires Level II access and deeper architectural analysis.'}
                          </p>
                       </div>
 
-                      <div className="bg-zinc-900/50 p-6 border border-zinc-800">
+                      <div>
                          {!emailSent ? (
-                            <div className="flex flex-col gap-4">
-                               <p className="text-xs text-gray-400 uppercase tracking-widest">
-                                  {language === 'ru' ? 'Запросить доступ к Level II:' : 'Request Access to Level II:'}
+                            <div className="flex flex-col gap-3">
+                               <p className="text-[10px] text-zinc-400 uppercase tracking-widest">
+                                  {language === 'ru' ? 'ПОЛУЧИТЬ ДОСТУП:' : 'REQUEST ACCESS:'}
                                </p>
-                               <div className="flex gap-2">
+                               <div className="flex gap-0">
                                   <input 
                                     type="email" 
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     placeholder="email@address.com"
-                                    className="bg-black border border-gray-700 text-white text-xs p-3 w-full outline-none focus:border-white transition-colors"
+                                    className="bg-black border border-zinc-700 border-r-0 text-white text-xs p-4 w-full outline-none focus:border-white transition-colors placeholder-zinc-800"
                                   />
-                                  <button onClick={handleEmailSubmit} className="bg-white text-black text-xs px-4 uppercase hover:bg-gray-200">
+                                  <button 
+                                    onClick={handleEmailSubmit} 
+                                    className="bg-white border border-white text-black text-xs px-6 uppercase hover:bg-zinc-200 transition-colors font-bold tracking-wider"
+                                  >
                                      Submit
                                   </button>
                                </div>
                             </div>
                          ) : (
-                            <div className="text-center py-4">
-                               <span className="text-green-500 text-xs tracking-widest uppercase">
-                                  {language === 'ru' ? '[ ЗАПРОС ПРИНЯТ ]' : '[ REQUEST ACCEPTED ]'}
+                            <div className="text-center py-4 border border-zinc-800 bg-black">
+                               <span className="text-zinc-500 text-xs tracking-widest uppercase">
+                                  {language === 'ru' ? '[ ЗАПРОС ОТПРАВЛЕН ]' : '[ REQUEST SENT ]'}
                                </span>
                             </div>
                          )}
@@ -394,8 +400,8 @@ export default function CastPage() {
                    </div>
                 </div>
 
-                <div className="text-center mt-24 pb-12">
-                   <a href="/" className="text-xs text-gray-700 hover:text-white transition-colors tracking-[0.2em] uppercase">
+                <div className="text-center mt-24">
+                   <a href="/" className="text-[10px] text-zinc-700 hover:text-white transition-colors tracking-[0.3em] uppercase">
                       [ Exit Protocol ]
                    </a>
                 </div>
@@ -405,15 +411,20 @@ export default function CastPage() {
        
        <style jsx global>{`
          @keyframes stamp {
-           0% { opacity: 0; transform: scale(2) rotate(12deg); }
-           10% { opacity: 1; transform: scale(1) rotate(12deg); }
-           100% { opacity: 0.8; transform: scale(1) rotate(12deg); }
+           0% { opacity: 0; transform: scale(3) rotate(0deg); }
+           50% { opacity: 1; transform: scale(0.9) rotate(12deg); }
+           70% { transform: scale(1.1) rotate(12deg); }
+           100% { opacity: 1; transform: scale(1) rotate(12deg); }
          }
          .animate-stamp {
-           animation: stamp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+           animation: stamp 0.4s cubic-bezier(0.5, 0, 0.75, 0) forwards;
          }
-         .text-center b {
-             font-weight: 700; /* Ensure bolding works on b tag */
+         @keyframes progress-indeterminate {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+         }
+         .animate-progress-indeterminate {
+            animation: progress-indeterminate 1.5s infinite linear;
          }
        `}</style>
     </div>
