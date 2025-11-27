@@ -324,6 +324,7 @@ export async function POST(req: Request) {
     }`;
 
     let aiData: any = {};
+    let aiRawText: string | null = null;
     // Skip AI if API key missing
     if (!apiKey) {
       debugLog.push('Skipping AI: GOOGLE_API_KEY not set');
@@ -336,9 +337,11 @@ export async function POST(req: Request) {
           // support both sync and async text() shapes
           const maybe = result.response?.text();
           text = typeof maybe === 'string' ? maybe : await maybe;
+          aiRawText = text;
         } catch (e) {
           // Fallback: if SDK shape differs, try toString
           text = String(result?.response ?? result);
+          aiRawText = text;
         }
 
         debugLog.push(`AI raw length: ${String(text?.length || 0)}`);
@@ -408,10 +411,17 @@ export async function POST(req: Request) {
 
     console.log(`[Parser] Success | Lot: ${final.lot_number} | AI: ${aiUsed}`);
     
-    return NextResponse.json({
-      ...final,
-      _debug: debugLog // Return debug info to client for troubleshooting
-    });
+    const responseBody: any = { ...final, _debug: debugLog };
+    // If caller requested debug, include short raw snippets to help debugging
+    if (body?.debug) {
+      responseBody._raw = {
+        html_snippet: (html || '').slice(0, 8000),
+        markdown_snippet: (markdown || '').slice(0, 8000),
+        ai_raw: aiRawText ? aiRawText.slice(0, 8000) : null
+      };
+    }
+
+    return NextResponse.json(responseBody);
 
   } catch (error: any) {
     console.error('[Parser Critical Error]:', error);
