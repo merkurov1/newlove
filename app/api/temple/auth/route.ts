@@ -9,7 +9,18 @@ function parseQuery(str: string) {
   return str.split('&').reduce<Record<string,string>>((acc, pair) => {
     const [k, v] = pair.split('=')
     if (!k) return acc
+    // Keep decoded form for most uses
     acc[decodeURIComponent(k)] = decodeURIComponent(v || '')
+    return acc
+  }, {})
+}
+
+// Parse without decoding values (preserve original percent-encoding)
+function parseQueryRaw(str: string) {
+  return str.split('&').reduce<Record<string,string>>((acc, pair) => {
+    const [k, v] = pair.split('=')
+    if (!k) return acc
+    acc[decodeURIComponent(k)] = (v || '')
     return acc
   }, {})
 }
@@ -20,14 +31,36 @@ function buildDataCheckString(obj: Record<string,string>) {
 
 function verifyTelegramInitData(initData: string, botToken: string) {
   try {
-    const params = parseQuery(initData)
-    const providedHash = params['hash']
+    // Try decoded values first (most clients send decoded initData)
+    const paramsDecoded = parseQuery(initData)
+    const providedHash = paramsDecoded['hash']
     if (!providedHash) return false
-    delete params['hash']
-    const dataCheckString = buildDataCheckString(params)
+
+    // Remove hash for building the data string
+    delete paramsDecoded['hash']
+    const dataCheckStringDecoded = buildDataCheckString(paramsDecoded)
+
+    // Also try using raw (non-decoded) values in case the client provided percent-encoding
+    const paramsRaw = parseQueryRaw(initData)
+    delete paramsRaw['hash']
+    const dataCheckStringRaw = buildDataCheckString(paramsRaw)
+
     const secret = crypto.createHash('sha256').update(botToken).digest()
-    const hmac = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex')
-    return hmac === providedHash
+
+    const hmacDecoded = crypto.createHmac('sha256', secret).update(dataCheckStringDecoded).digest()
+    const hmacRaw = crypto.createHmac('sha256', secret).update(dataCheckStringRaw).digest()
+
+    const providedBuf = Buffer.from(providedHash, 'hex')
+    // timingSafeEqual requires buffers of same length
+    if (providedBuf.length !== hmacDecoded.length && providedBuf.length !== hmacRaw.length) return false
+
+    // Compare safely
+    if (providedBuf.length === hmacDecoded.length && crypto.timingSafeEqual(providedBuf, hmacDecoded)) return true
+    if (providedBuf.length === hmacRaw.length && crypto.timingSafeEqual(providedBuf, hmacRaw)) return true
+
+    // If we reach here, verification failed. Log safe debug info (no secrets).
+    try { console.warn('Telegram initData verification mismatch', { providedHash, dataCheckStringDecoded: dataCheckStringDecoded.slice(0,200), dataCheckStringRaw: dataCheckStringRaw.slice(0,200) }) } catch (e) {}
+    return false
   } catch (e) {
     return false
   }

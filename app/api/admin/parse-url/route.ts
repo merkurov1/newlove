@@ -324,14 +324,48 @@ export async function POST(req: Request) {
     }`;
 
     let aiData: any = {};
-    try {
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      aiData = JSON.parse(cleanJSON(text));
-      aiUsed = true;
-    } catch (e: any) {
-      console.error("[Parser] AI Failure", e);
-      debugLog.push(`AI Error: ${e.message}`);
+    // Skip AI if API key missing
+    if (!apiKey) {
+      debugLog.push('Skipping AI: GOOGLE_API_KEY not set');
+    } else {
+      try {
+        const result = await model.generateContent(prompt);
+        // result.response.text() may include code fences or extra text
+        let text: string;
+        try {
+          // support both sync and async text() shapes
+          const maybe = result.response?.text();
+          text = typeof maybe === 'string' ? maybe : await maybe;
+        } catch (e) {
+          // Fallback: if SDK shape differs, try toString
+          text = String(result?.response ?? result);
+        }
+
+        debugLog.push(`AI raw length: ${String(text?.length || 0)}`);
+
+        // Try clean parse first
+        try {
+          aiData = JSON.parse(cleanJSON(text));
+          aiUsed = true;
+        } catch (parseErr) {
+          // Attempt to extract first JSON object substring
+          const jsonMatch = text.match(/\{[\s\S]*\}/m);
+          if (jsonMatch) {
+            try {
+              aiData = JSON.parse(cleanJSON(jsonMatch[0]));
+              aiUsed = true;
+            } catch (e2) {
+              debugLog.push('AI JSON extraction failed');
+              console.error('[Parser] AI JSON extraction failed', e2);
+            }
+          } else {
+            debugLog.push('AI returned non-JSON text');
+          }
+        }
+      } catch (e: any) {
+        console.error('[Parser] AI Failure', e);
+        debugLog.push(`AI Error: ${e?.message || String(e)}`);
+      }
     }
 
     // === STAGE 4: MERGE ===
