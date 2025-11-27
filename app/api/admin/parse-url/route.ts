@@ -328,6 +328,13 @@ export async function POST(req: Request) {
     }
 
     // === STAGE 4: MERGE ===
+    // Heuristics for Lot Number if AI/JSON-LD failed
+    let lotNumber = aiData.lot_number || jsonLd?.sku || null;
+    if (!lotNumber) {
+      const urlMatch = url.match(/\/(\d{5,})(\?|$)/); // Match 5+ digits at end of URL (ignoring query params)
+      if (urlMatch) lotNumber = urlMatch[1];
+    }
+
     const final: ParsedLot = {
       auction_house: "Christie's",
       source_url: url,
@@ -341,7 +348,7 @@ export async function POST(req: Request) {
       year: aiData.year || null,
       signature: aiData.signature || null,
       
-      lot_number: aiData.lot_number || jsonLd?.sku || null,
+      lot_number: lotNumber,
       sale_id: aiData.sale_id || null,
       location: aiData.location || null,
       auction_date: aiData.auction_date || null,
