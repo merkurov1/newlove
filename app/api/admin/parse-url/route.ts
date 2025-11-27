@@ -62,7 +62,70 @@ function normalizeCurrency(curr: string): string {
   return map[curr.toLowerCase()] || curr.toUpperCase();
 }
 
-// --- EXTRACTORS ---
+// --- EXTRACTORS (REGEX FALLBACK) ---
+
+function extractJsonLdRegex(html: string): any | null {
+  try {
+    const regex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+      try {
+        const data = JSON.parse(match[1]);
+        if (data['@type'] === 'Product' || data['@type'] === 'VisualArtwork') return data;
+        if (Array.isArray(data['@graph'])) {
+          const product = data['@graph'].find((item: any) => 
+            item['@type'] === 'Product' || item['@type'] === 'VisualArtwork'
+          );
+          if (product) return product;
+        }
+        if (Array.isArray(data)) {
+           const product = data.find((item: any) => 
+            item['@type'] === 'Product' || item['@type'] === 'VisualArtwork'
+          );
+          if (product) return product;
+        }
+      } catch { continue; }
+    }
+  } catch { }
+  return null;
+}
+
+function extractImagesRegex(html: string, markdown: string): string[] {
+  const images: Set<string> = new Set();
+  
+  // Regex for HTML
+  const htmlPatterns = [
+    /data-zoom-image=["']([^"']+)["']/gi,
+    /data-fullscreen-src=["']([^"']+)["']/gi,
+    /class="[^"]*lot-image[^"]*"[^>]*src=["']([^"']+)["']/gi,
+    /"contentUrl":\s*"([^"]+)"/gi,
+    /<meta[^>]+property=["']og:image["'][^>]*content=["']([^"']+)["']/i
+  ];
+
+  for (const pattern of htmlPatterns) {
+    let match;
+    while ((match = pattern.exec(html)) !== null) {
+      let url = match[1];
+      if (url.startsWith('//')) url = 'https:' + url;
+      if (!url.includes('icon') && !url.includes('logo') && !url.includes('thumb')) {
+        images.add(url);
+      }
+    }
+  }
+
+  // Regex for Markdown
+  const mdRegex = /!\[.*?\]\((https?:\/\/[^)]+)\)/g;
+  let mdMatch;
+  while ((mdMatch = mdRegex.exec(markdown)) !== null) {
+    if (!mdMatch[1].includes('icon') && !mdMatch[1].includes('logo')) {
+      images.add(mdMatch[1]);
+    }
+  }
+
+  return Array.from(images).slice(0, 10);
+}
+
+// --- EXTRACTORS (JSDOM) ---
 
 function extractJsonLd(dom: JSDOM): any | null {
   try {
@@ -183,10 +246,28 @@ export async function POST(req: Request) {
     }
 
     // === STAGE 2: PARSING ===
-    const dom = new JSDOM(html || `<html><body>${markdown}</body></html>`);
-    const jsonLd = extractJsonLd(dom);
-    const images = extractImages(dom, markdown);
-    const cleanText = extractTextContent(dom);
+    let dom: JSDOM | null = null;
+    let jsonLd: any = null;
+    let images: string[] = [];
+    let cleanText = "";
+
+    // Try JSDOM first
+    try {
+      debugLog.push("Attempting JSDOM parsing...");
+      dom = new JSDOM(html || `<html><body>${markdown}</body></html>`);
+      jsonLd = extractJsonLd(dom);
+      images = extractImages(dom, markdown);
+      cleanText = extractTextContent(dom);
+      debugLog.push("JSDOM parsing successful.");
+    } catch (e: any) {
+      console.error("JSDOM Failed:", e);
+      debugLog.push(`JSDOM Failed: ${e.message}. Falling back to Regex.`);
+      
+      // Fallback to Regex
+      jsonLd = extractJsonLdRegex(html);
+      images = extractImagesRegex(html, markdown);
+      cleanText = (markdown + "\n" + html).replace(/<[^>]*>/g, ' ').slice(0, 50000);
+    }
     
     debugLog.push(`JSON-LD Found: ${!!jsonLd}`);
     debugLog.push(`Images Found: ${images.length}`);
