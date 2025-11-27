@@ -221,28 +221,31 @@ export async function POST(req: Request) {
 
     debugLog.push(`Fetching URL: ${url}`);
 
-    // === STAGE 1: FETCHING ===
+    // === STAGE 1: ROBUST FETCHING ===
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
     };
 
+    // Clean URL for Jina (remove query params that might confuse it)
+    const cleanUrl = url.split('?')[0];
+
+    // Parallel fetch with error suppression (Promise.allSettled)
     const [jinaResult, rawResult] = await Promise.allSettled([
-      fetch(`https://r.jina.ai/${encodeURIComponent(url)}`, {
+      fetch(`https://r.jina.ai/${encodeURIComponent(cleanUrl)}`, {
         headers: { 'X-Return-Format': 'markdown', 'X-With-Images-Summary': 'true', ...headers }
       }),
       fetch(url, { headers })
-    ]);
-
-    const markdown = jinaResult.status === 'fulfilled' && jinaResult.value.ok ? await jinaResult.value.text() : '';
+    ]);    const markdown = jinaResult.status === 'fulfilled' && jinaResult.value.ok ? await jinaResult.value.text() : '';
     const html = rawResult.status === 'fulfilled' && rawResult.value.ok ? await rawResult.value.text() : '';
 
     debugLog.push(`Jina Status: ${jinaResult.status}, Length: ${markdown.length}`);
     debugLog.push(`Direct Fetch Status: ${rawResult.status}, Length: ${html.length}`);
 
-    if (!html && !markdown) {
-      throw new Error("Blocked: Failed to retrieve content.");
+    if (!markdown && !html) {
+      console.error("Blocked: Failed to retrieve content from both sources.");
+      // Don't throw immediately, try to return what we can or a specific error
+      throw new Error("Content Retrieval Failed: Both Jina and Direct fetch returned empty results. The site might be blocking requests.");
     }
 
     // === STAGE 2: PARSING ===
@@ -282,6 +285,10 @@ export async function POST(req: Request) {
       generationConfig: { responseMimeType: "application/json", temperature: 0.0 }
     });
 
+    // Truncate content to avoid token limits (Gemini Flash has large context but let's be safe)
+    const safeCleanText = cleanText.slice(0, 30000);
+    const safeMarkdown = markdown.slice(0, 30000);
+
     const prompt = `You are an expert art auction data extractor. Extract ALL information from this Christie's lot page.
     
     URL: ${url}
@@ -289,10 +296,10 @@ export async function POST(req: Request) {
     ${jsonLd ? `STRUCTURED DATA (JSON-LD): ${JSON.stringify(jsonLd)}` : ''}
     
     PAGE TEXT CONTENT:
-    ${cleanText.slice(0, 30000)}
+    ${safeCleanText}
     
     MARKDOWN CONTENT (Jina):
-    ${markdown.slice(0, 30000)}
+    ${safeMarkdown}
     
     Extract this JSON structure (use null for missing fields):
     {
