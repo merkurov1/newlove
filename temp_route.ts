@@ -34,17 +34,6 @@ interface ParsedLot {
   source_url: string;
 }
 
-interface JsonLdProduct {
-  '@type'?: string;
-  name?: string;
-  description?: string;
-  image?: string | string[];
-  brand?: { name?: string };
-  creator?: { name?: string };
-  sku?: string;
-  offers?: { priceCurrency?: string; lowPrice?: number; highPrice?: number };
-}
-
 // --- UTILS ---
 
 function cleanJSON(text: string): string {
