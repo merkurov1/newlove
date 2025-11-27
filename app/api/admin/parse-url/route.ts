@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
+export const runtime = 'nodejs'; // Node runtime required for heavier processing
 export const dynamic = 'force-dynamic';
 
 const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
@@ -9,6 +9,38 @@ const genAI = new GoogleGenerativeAI(apiKey);
 
 function cleanJSON(text: string) {
   return text.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
+}
+
+/**
+ * BUREAUCRATIC MAGIC: Extract structured data intended for Search Engines.
+ * Christie's Online Only pages always have this for SEO.
+ */
+function extractJSONLD(html: string) {
+  try {
+    const matches = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi);
+    if (!matches) return null;
+    
+    // Often there are multiple blocks (Breadcrumb, Product, Organization). We want 'Product' or 'CreativeWork'.
+    for (const match of matches) {
+      const content = match.replace(/<script type="application\/ld\+json">|<\/script>/gi, '').trim();
+      try {
+        const data = JSON.parse(content);
+        const type = Array.isArray(data) ? data[0]?.['@type'] : data['@type'];
+        
+        // Target specific schemas
+        if (['Product', 'CreativeWork', 'VisualArtwork'].includes(type)) {
+            return {
+                title: data.name || data.headline,
+                image: data.image,
+                description: data.description,
+                sku: data.sku, // Often the Lot Number
+                offers: data.offers // Contains price/currency
+            };
+        }
+      } catch (e) { continue; }
+    }
+  } catch (e) { return null; }
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -21,194 +53,110 @@ export async function POST(req: Request) {
     console.log(`[Parser] Target: ${url}`);
 
     // 1. THE HARVESTER (Jina AI)
-    // Добавляем заголовки, чтобы Jina пыталась собрать всё
+    // Using 'r.jina.ai' is good, but we need to ensure we get the content.
+    // Christie's blocks generic bots. We mimic a standard browser.
     const jinaUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
-    const jinaResponse = await fetch(jinaUrl, {
-      method: 'GET',
-      headers: {
-        'X-Return-Format': 'markdown',
-        // Просим Jina вернуть ссылки, иногда полезно для провенанса
-        'X-With-Links-Summary': 'true', 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      cache: 'no-store',
-    });
+    
+    // PARALLEL EXECUTION: Fetch Jina (Markdown) AND Raw HTML (for JSON-LD)
+    const [jinaRes, htmlRes] = await Promise.all([
+        fetch(jinaUrl, {
+            method: 'GET',
+            headers: {
+                'X-Return-Format': 'markdown',
+                'X-With-Links-Summary': 'true', 
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            cache: 'no-store',
+        }),
+        fetch(url, {
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+            }, 
+            cache: 'no-store' 
+        })
+    ]);
 
-    if (!jinaResponse.ok) {
-        return NextResponse.json({ error: `Scraper failed: ${jinaResponse.status}` }, { status: 500 });
-    }
+    const markdown = jinaRes.ok ? await jinaRes.text() : '';
+    const html = htmlRes.ok ? await htmlRes.text() : '';
 
-    const markdown = await jinaResponse.text();
+    // 2. EXTRACT METADATA LAYERS
+    const jsonLd = extractJSONLD(html);
+    
+    // Fallback: Check for Title/OG Image in HTML if Jina failed or JSON-LD missing
+    const ogImageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+    const ogImage = ogImageMatch ? ogImageMatch[1] : (jsonLd?.image || null);
+    
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const pageTitle = titleMatch ? titleMatch[1].trim() : null;
 
-    // Fetch HTML for metadata (fallback and images)
-    let html = ''
-    try {
-      const htmlRes = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }, cache: 'no-store' })
-      if (htmlRes.ok) html = await htmlRes.text()
-    } catch (e) {
-      console.warn('[Parser] HTML fetch failed, continuing with Jina markdown only', e)
-    }
+    // Image Candidates for AI to choose from if main one is missing
+    const imgMatches = Array.from(html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)).map(m => m[1]);
+    const imageCandidates = Array.from(new Set([...(ogImage ? [ogImage] : []), ...imgMatches].filter(Boolean))).slice(0, 20);
 
-    // --- Image Candidate Extraction ---
-    const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]*content=["']([^"']+)["']/i) || html.match(/<meta[^>]+name=["']og:image["'][^>]*content=["']([^"']+)["']/i)
-    const ogImage = ogMatch ? ogMatch[1] : null
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
-    const pageTitle = titleMatch ? titleMatch[1].trim() : null
-    const imgMatches = Array.from(html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)).map(m => m[1])
-    // Берем больше кандидатов (30)
-    const imageCandidates = Array.from(new Set([...(ogImage ? [ogImage] : []), ...imgMatches].filter(Boolean))).slice(0, 30)
-
-    // --- Heuristics: deterministic extraction before AI ---
-    function extractHeuristics(markdownText: string, htmlText: string) {
+    // --- Heuristics (Regex) ---
+    // (Kept your existing logic, it's solid for non-SPA pages)
+    function extractHeuristics(text: string) {
       const heur: any = {}
-      const combined = markdownText + '\n' + htmlText
       
-      // Estimate
-      const estimateRe = /Estimate[s]?:?\s*([£$€USD]?\s?[\d,]+(?:\.\d+)?)(?:\s*(?:-|to|–)\s*([£$€USD]?\s?[\d,]+(?:\.\d+)?))?/i
-      const estM = combined.match(estimateRe)
+      // Estimate (Improved regex for "GBP 1,000 - GBP 2,000")
+      const estimateRe = /(?:Estimate|Est\.?|Guide Price)[\s\S]{0,20}?([£$€USDGBP]{1,3})\s?([\d,]+)(?:\s*[-–to]\s*([£$€USDGBP]{1,3})?\s?([\d,]+))?/i
+      const estM = text.match(estimateRe)
+      
       if (estM) {
-        const parseNum = (s: string) => Number(String(s || '').replace(/[^0-9.]/g, '').replace(/,/g, '')) || null
-        heur.estimate_low = parseNum(estM[1])
-        heur.estimate_high = parseNum(estM[2])
-        const currencyMatch = (estM[1] || estM[0] || '').match(/([£$€]|USD|GBP|EUR)/i)
-        if (currencyMatch) {
-          const sym = currencyMatch[1].toUpperCase()
-          heur.currency = sym === 'USD' ? '$' : sym === 'GBP' ? '£' : sym === 'EUR' ? '€' : currencyMatch[1]
-        }
+        const cleanNum = (s: string) => Number(s.replace(/[^0-9.]/g, '')) || null
+        heur.estimate_low = cleanNum(estM[2])
+        heur.estimate_high = cleanNum(estM[4])
+        heur.currency = estM[1] // Basic currency detection
       }
-
-      // Dimensions (e.g., "50 x 40 cm", "20 × 16 in")
-      const dimRe = /(\d+(?:[.,]\d+)?\s*[x×X]\s*\d+(?:[.,]\d+)?(?:\s*[x×X]\s*\d+(?:[.,]\d+)?)?\s*(?:cm|in|mm|inches|centimeters)?)/i
-      const dimM = combined.match(dimRe)
-      if (dimM) heur.dimensions = dimM[1].trim()
-
-      // Medium
-      const mediumRe = /(?:Medium|Technique|Materials?)\s*[:\-]?\s*([A-Za-z][A-Za-z0-9 ,\/\-&]+?)(?:\.|\n|Dimensions|Size|Signed)/i
-      const medM = combined.match(mediumRe)
-      if (medM && medM[1].length < 150) heur.medium = medM[1].trim()
 
       // Year
       const yearRe = /(?:executed|painted|created|dated|circa|c\.)\s*(\d{4})/i
-      const yM = combined.match(yearRe) || combined.match(/(19\d{2}|20[0-2]\d)/)
+      const yM = text.match(yearRe)
       if (yM) heur.year = yM[1]
-
-      // Provenance snippet
-      const provRe = /Provenance[:\s]*([\s\S]{10,600}?)(?=Literature|Exhibited|Condition|$)/i
-      const pM = combined.match(provRe)
-      if (pM) heur.provenance_summary = pM[1].replace(/\n+/g, ' ').trim()
-
-      // Artist & Title from page title pattern "Artist - Title | Auction House"
-      if (pageTitle) {
-        const titleParts = pageTitle.split(/[|–-]/).map(s => s.trim())
-        if (titleParts.length >= 2) {
-          heur.artist = titleParts[0] || null
-          heur.title = titleParts[1] || null
-        }
-      }
-
-      return heur
+      
+      return heur;
     }
 
-    // ... (Функции normalizeImageUrl, probeImage, chooseBestImage оставляем как есть)
-    async function normalizeImageUrl(candidate: string) {
-        try { return new URL(candidate, url).href } catch (e) { return null }
-    }
-    async function probeImage(urlToProbe: string) {
-        // Simplified for brevity in this view, assume your existing logic works
-        try {
-            const res = await fetch(urlToProbe, { method: 'HEAD', headers: { 'User-Agent': 'Mozilla/5.0' } });
-            if(res.ok && res.headers.get('content-type')?.startsWith('image/')) return { url: urlToProbe, size: Number(res.headers.get('content-length')) || 0, contentType: res.headers.get('content-type') };
-            return null;
-        } catch(e) { return null }
-    }
-    async function chooseBestImage(candidates: string[]) {
-        if (!candidates.length) return null;
-        
-        // Filter out obvious non-artwork images
-        const dominated = candidates.filter(c => {
-          const lower = c.toLowerCase()
-          // Skip icons, logos, tracking pixels, social media
-          if (/(\/icon|\/logo|tracking|pixel|sprite|button|share|social|favicon|badge)/i.test(lower)) return false
-          // Skip tiny images
-          if (/[?&](w|width|h|height)=(\d{1,2})(?:&|$)/i.test(c)) return false
-          return true
-        })
-
-        // Prefer og:image if it passed the filter
-        if (ogImage) {
-          const normOg = await normalizeImageUrl(ogImage)
-          if (normOg && dominated.includes(normOg)) {
-            const probe = await probeImage(normOg)
-            if (probe && probe.size > 5000) return normOg
-          }
-        }
-
-        // Probe candidates and pick largest
-        const probes: {url: string, size: number}[] = []
-        for (const c of dominated.slice(0, 10)) {
-          const norm = await normalizeImageUrl(c)
-          if (!norm) continue
-          const p = await probeImage(norm)
-          if (p && p.size > 3000) probes.push({ url: norm, size: p.size })
-        }
-        if (probes.length) {
-          probes.sort((a, b) => b.size - a.size)
-          return probes[0].url
-        }
-
-        // Fallback to first filtered candidate
-        const first = dominated[0] ? await normalizeImageUrl(dominated[0]) : null
-        return first || candidates[0]
-    }
+    const heuristicData = extractHeuristics(markdown + " " + (pageTitle || ""));
 
     // === SAFETY CHECK ===
-    const lowerMd = markdown.toLowerCase();
-    if (lowerMd.includes("cloudflare") || lowerMd.includes("verify you are human") || markdown.length < 300) {
-        return NextResponse.json({ error: 'Content blocked', artist: "Unknown (Blocked)", title: "Access Denied" }, { status: 422 });
+    if (!markdown && !jsonLd) {
+        return NextResponse.json({ error: 'Content blocked or empty', url }, { status: 422 });
     }
 
-    console.log(`[Parser] Content retrieved. Jina: ${markdown.length} chars. Sending to Gemini.`);
+    console.log(`[Parser] Data Check: Markdown (${markdown.length} chars), JSON-LD (${!!jsonLd})`);
 
-    // 2. THE BRAIN (Gemini)
-    // Prefer newer Gemini generation models; keep env override first so deploys can control exact model.
-    // We intentionally list generation-capable models (exclude embedding-only names).
-    const MODEL_CANDIDATES = [
-      (process.env.GOOGLE_GEMINI_MODEL || '').trim(),
-      // Stable production models (verified working)
-      'gemini-2.5-flash',
-      'gemini-2.5-pro',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-1.5-pro',
-      // Aliases
-      'gemini-flash-latest',
-      'gemini-pro-latest'
-    ].filter(Boolean);
+    // 3. THE BRAIN (Gemini)
+    const modelName = process.env.GOOGLE_GEMINI_MODEL || 'gemini-1.5-flash';
+    const generationConfig = { 
+        responseMimeType: "application/json", 
+        temperature: 0.1
+    };
 
-    // РАСШИРЕННЫЙ ПРОМПТ
+    // MERGE CONTEXT FOR AI
+    // We give AI the JSON-LD as a "Cheat Sheet" so it doesn't hallucinate.
     const prompt = `
       ROLE: Expert Art Market Analyst & Data Extractor.
-      TASK: Extract EXHAUSTIVE structured data from the auction lot text. 
+      TASK: Extract structured data from the auction lot.
       
+      CRITICAL INPUTS (TRUST THESE):
+      - JSON-LD Data (Official): ${JSON.stringify(jsonLd)}
+      - Page Title: ${pageTitle}
+      - Detected Images: ${JSON.stringify(imageCandidates)}
+
+      RAW CONTENT (Markdwon):
+      ${markdown.substring(0, 50000)}
+
       INSTRUCTIONS:
-      1. Output MUST be valid JSON.
-      2. Look for detailed lists for Exhibitions, Literature, and Provenance. 
-      3. Do NOT summarize the "Description" or "Condition Report" - extract the full text if available.
-      4. If a field is missing, use null.
-      5. "estimate_low" and "high" must be numbers.
+      1. Prefer JSON-LD data for Title, Artist, and Description if available.
+      2. Extract "provenance_list" (history of ownership) as an array of strings.
+      3. Extract "literature" and "exhibitions" if present in the text.
+      4. For "medium" (Materials), look for terms like "Oil on canvas", "Gouache", "Bronze".
+      5. "estimate_low" and "high" must be numbers. 
+      6. If "lot_number" is missing in text, try to find it in the URL or Title (e.g. "216").
       
-      INPUT TEXT (JINA MARKDOWN):
-      ${markdown.substring(0, 500000)} 
-
-      INPUT TEXT (PAGE HTML - Partial):
-      ${html.substring(0, 200000)}
-
-      EXTRA PAGE DATA:
-      page_title: ${pageTitle || ''}
-      og_image: ${ogImage || ''}
-      image_candidates: ${JSON.stringify(imageCandidates)}
-
-      REQUIRED JSON SCHEMA:
+      REQUIRED JSON OUTPUT:
       {
         "artist": "string | null",
         "title": "string | null",
@@ -217,98 +165,57 @@ export async function POST(req: Request) {
         "dimensions": "string | null",
         "year": "string | null",
         
-        "auction_house": "string | null",
-        "auction_date": "string | null", // ISO format preference or string
-        "sale_id": "string | null",      // e.g. "Sale 1234"
-        "lot_number": "string | null",   // e.g. "Lot 45"
-        "location": "string | null",     // e.g. "London", "New York"
+        "auction_house": "Christie's", 
+        "auction_date": "string | null",
+        "sale_id": "string | null",
+        "lot_number": "string | null",
+        "location": "string | null",
 
         "estimate_low": "number | null",
         "estimate_high": "number | null",
         "currency": "string | null",
         
-        "description": "string | null",       // Full catalog note/description
-        "condition_report": "string | null",  // Condition details
-        
-        "provenance_summary": "string | null", // Full text block
-        "provenance_list": "string[]",         // Array if detected as list
-        
-        "exhibitions": "string[]", // Array of strings
-        "literature": "string[]",  // Array of strings
-        "catalog_note": "string | null"
+        "description": "string | null",
+        "condition_report": "string | null",
+        "provenance_list": "string[]",
+        "exhibitions": "string[]",
+        "literature": "string[]"
       }
     `;
 
-    let result: any = null;
-    let lastErr: any = null;
-    
-    // Increased token limit for output to handle long descriptions
-    const generationConfig = { 
-        responseMimeType: "application/json", 
-        temperature: 0.1, // Немного выше 0, чтобы лучше цеплял списки
-        maxOutputTokens: 8192 // Даем место для длинных списков выставок
-    };
-
-    MODEL_LOOP: for (const candidate of MODEL_CANDIDATES) {
-      const variants = candidate.startsWith('models/') ? [candidate] : [candidate, `models/${candidate}`];
-      for (const name of variants) {
-        try {
-          console.log(`[Parser] Trying model: ${name}`);
-          const model = genAI.getGenerativeModel({ model: name, generationConfig });
-          result = await model.generateContent(prompt);
-          break MODEL_LOOP;
-        } catch (err: any) {
-          lastErr = err;
-          console.warn(`[Parser] Model ${name} failed:`, err?.message);
-        }
-      }
-    }
-
-    if (!result) {
-      return NextResponse.json({ error: 'AI Processing failed', detail: String(lastErr?.message) }, { status: 502 });
-    }
-
-    const rawText = result?.response ? await result.response.text() : '';
-    let jsonResponse;
+    let finalJSON: any = {};
     
     try {
-      jsonResponse = JSON.parse(cleanJSON(rawText));
-      jsonResponse.source_url = url;
+        const model = genAI.getGenerativeModel({ model: modelName, generationConfig });
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
+        finalJSON = JSON.parse(cleanJSON(text));
     } catch (e) {
-       // Fallback: extract JSON object from noisy output
-       const maybeJson = String(rawText).match(/\{[\s\S]*\}/);
-       if (maybeJson) {
-         try {
-           jsonResponse = JSON.parse(maybeJson[0]);
-           jsonResponse.source_url = url;
-           console.log('[Parser] Recovered JSON via regex fallback');
-         } catch (e2) {
-           console.error('[Parser] JSON Parse Error, fallback also failed:', rawText.substring(0, 500));
-           return NextResponse.json({ error: 'Invalid AI JSON', snippet: rawText.substring(0, 300) }, { status: 500 });
-         }
-       } else {
-         console.error('[Parser] No JSON object found in AI response');
-         return NextResponse.json({ error: 'Invalid AI JSON' }, { status: 500 });
-       }
+        console.error("[Parser] AI Failed, falling back to heuristics");
+        finalJSON = {};
     }
 
-    // Merge
-    const heur = extractHeuristics(markdown, html)
-    const merged: any = { ...(heur || {}), ...(jsonResponse || {}) }
-    merged.source_url = url
+    // 4. MERGE & POLISH
+    // Order of precedence: AI > JSON-LD > Heuristics
+    const merged = {
+        ...heuristicData,
+        ...jsonLd, // JSON-LD usually has cleaner Title/Artist
+        ...finalJSON,
+        source_url: url
+    };
 
-    // Image fallback logic
-    if (!merged.image_url) {
-        try {
-            const chosen = await chooseBestImage(imageCandidates);
-            if (chosen) merged.image_url = chosen;
-        } catch(e) {}
+    // Force Image Selection logic if AI failed to pick one
+    if (!merged.image_url && jsonLd?.image) {
+        merged.image_url = Array.isArray(jsonLd.image) ? jsonLd.image[0] : jsonLd.image;
+    }
+    if (!merged.image_url && ogImage) {
+        merged.image_url = ogImage;
     }
 
     return NextResponse.json(merged);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[Parser Error]:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
