@@ -18,6 +18,7 @@ export async function middleware(request: NextRequest) {
       const res = await fetch(apiUrl, {
         headers: {
           cookie: request.headers.get('cookie') || '',
+          authorization: request.headers.get('authorization') || request.headers.get('Authorization') || '',
         },
         // don't cache this call
         next: { revalidate: 0 },

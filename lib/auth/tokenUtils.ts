@@ -25,11 +25,13 @@ export function reconstructTokenFromCookies(cookies: Record<string, string>): Re
   let token = cookies['sb-access-token'] || cookies['supabase-access-token'] || null;
   let matchedCookieBase: string | undefined;
   let matchedCookieParts: Array<{ idx: number; len: number }> | undefined;
-
   if (!token) {
+    // Broaden matching to capture more cookie-name patterns seen in deployments
+    // Examples: '__Host-sb-access-token', 'sb:token', 'sb.token.0', 'supabase-access-token'
     const candidates: Record<string, string[]> = {};
+    const nameRegex = /(sb[:._-]?.*(?:auth-token|access-token|token)|supabase[:._-]?access[:._-]?token)/i;
     for (const name of cookieNames) {
-      if (/sb-.*(?:auth-token|access-token|token)/i.test(name) || /supabase-?access-?token/i.test(name)) {
+      if (nameRegex.test(name)) {
         const m = name.match(/^(.*?)(?:\.(\d+))?$/);
         const base = m ? m[1] : name;
         const partIndex = m && m[2] ? parseInt(m[2], 10) : -1;

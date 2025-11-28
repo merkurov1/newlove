@@ -22,14 +22,18 @@ export async function GET(req: Request) {
         }
       } else {
         // Try to detect Supabase-style access token in cookies for clearer diagnostics
-  let cookieTokenPreview: string | null = null;
+      let cookieTokenPreview: string | null = null;
+        let cookieNamesPreview: string[] = [];
+        let matchedBasePreview: string | null = null;
         try {
           const res = tokenUtils.extractTokenFromCookieHeader(cookieHeader || '');
           if (res && res.token) cookieTokenPreview = String(res.token).slice(0, 12) + '…';
+          cookieNamesPreview = res.cookieNames || [];
+          matchedBasePreview = res.matchedCookieBase || null;
         } catch (ee) {
           // ignore
         }
-        console.debug('[api/user/role] No Authorization header; cookie present=', Boolean(cookieHeader), 'cookie token preview=', cookieTokenPreview);
+        console.debug('[api/user/role] No Authorization header; cookie present=', Boolean(cookieHeader), 'cookieNames=', cookieNamesPreview, 'matchedBase=', matchedBasePreview, 'cookie token preview=', cookieTokenPreview);
       }
     } catch (e) {
       console.debug('[api/user/role] cannot read authorization header or cookies', e);
