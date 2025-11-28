@@ -68,7 +68,22 @@ export async function POST(req: Request) {
         if (markdown.length > 0) debug.push(`Jina snippet: ${jinaSnippet.substring(0, 500).replace(/\n/g, ' ')}...`);
         if (markdown.length > 400) {
           const hrefRegex = /https?:\/\/(?:www\.)?[a-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/gi;
-          const matches = Array.from(new Set((markdown.match(hrefRegex) || []).map(s => s.split('?')[0])));
+          const rawMatches = Array.from(new Set((markdown.match(hrefRegex) || [])));
+          const cleanUrl = (s: string) => {
+            try {
+              let t = s.trim();
+              t = t.replace(/^\(+/, '').replace(/\)+$/, '');
+              t = t.replace(/[\]\)"'`<>]+$/g, '');
+              t = t.replace(/^\[+/, '').replace(/\]+$/, '');
+              t = t.replace(/&amp;/g, '&');
+              // ensure URL constructor can parse it
+              new URL(t);
+              return t.split('?')[0];
+            } catch (e) {
+              return null;
+            }
+          };
+          const matches = rawMatches.map(cleanUrl).filter(Boolean) as string[];
           // push matches into debug for inspection
           debug.push(`Jina extracted raw links (${matches.length}): ${JSON.stringify(matches.slice(0, 30))}`);
           const pattern = defaultUrlPattern(source);
@@ -93,8 +108,25 @@ export async function POST(req: Request) {
         const bingSnippet = html.substring(0, 2000).replace(/\n/g, ' ');
         debug.push(`Bing HTML snippet: ${bingSnippet.substring(0, 500)}...`);
         const hrefPattern = /href=["'](https?:\/\/(?:www\.)?(?:invaluable\.com\/auction-lot|sothebys\.com\/en\/auctions|christies\.com\/lot|bonhams\.com\/auction|phillips\.com\/detail)[^"']+)["']/gi;
-        const matches = Array.from(html.matchAll(hrefPattern)).map(m => m[1]);
-        const uniq = Array.from(new Set(matches.map(s => s.split('?')[0])));
+        let matches = Array.from(html.matchAll(hrefPattern)).map(m => m[1]);
+        // Fallback: more permissive capture of any URL containing target domains
+        if (matches.length === 0) {
+          const anyUrlPattern = /https?:\/\/(?:www\.)?[^"'>\s]*?(?:invaluable\.com|sothebys\.com|christies\.com|bonhams\.com|phillips\.com)[^"'>\s]*/gi;
+          matches = Array.from(html.matchAll(anyUrlPattern)).map(m => m[0]);
+        }
+        const cleanUrl = (s: string) => {
+          try {
+            let t = s.trim();
+            t = t.replace(/^\(+/, '').replace(/\)+$/, '');
+            t = t.replace(/[\]\)"'`<>]+$/g, '');
+            t = t.replace(/&amp;/g, '&');
+            new URL(t);
+            return t.split('?')[0];
+          } catch (e) {
+            return null;
+          }
+        };
+        const uniq = Array.from(new Set(matches.map(cleanUrl).filter(Boolean) as string[]));
         debug.push(`Bing HTML extracted ${uniq.length} links: ${JSON.stringify(uniq.slice(0, 30))}`);
         if (uniq.length > 0) return NextResponse.json({ found: uniq.length, links: uniq, method: 'bing-html', _debug: debug });
       } else {
