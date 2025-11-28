@@ -27,11 +27,12 @@ async function tryRequire(name: string) {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const timestamp = new Date().toISOString();
-  // Parse query to optionally include logs
-  const url = new URL((globalThis as any).REQUEST_URL || 'http://localhost');
-  const includeLogs = url.searchParams.get('includeLogs') === '1';
+  // Parse query to optionally include logs and optionally trigger monitor
+  const url = new URL(req.url);
+  const includeLogs = url.searchParams.get('includeLogs') === '1' || url.searchParams.get('includeLogs') === 'true';
+  const includeMonitor = url.searchParams.get('includeMonitor') === '1' || url.searchParams.get('includeMonitor') === 'true';
 
   // Basic runtime info
   const runtime: Record<string, any> = {
@@ -97,16 +98,21 @@ export async function GET() {
     internalChecks['/api/user/role'] = { error: String(e?.message || e) };
   }
 
-  try {
-    const monitorRes = await fetch(new URL('/api/monitor/search', process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost').toString(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ artist: 'Pablo Picasso', source: 'invaluable' }),
-      cache: 'no-store',
-    });
-    internalChecks['/api/monitor/search'] = { status: monitorRes.status, ok: monitorRes.ok, body: await monitorRes.text().catch(() => '') };
-  } catch (e: any) {
-    internalChecks['/api/monitor/search'] = { error: String(e?.message || e) };
+  // Only call the monitor endpoint when explicitly requested via query param.
+  if (includeMonitor) {
+    try {
+      const monitorRes = await fetch(new URL('/api/monitor/search', process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost').toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ artist: 'Pablo Picasso', source: 'invaluable' }),
+        cache: 'no-store',
+      });
+      internalChecks['/api/monitor/search'] = { status: monitorRes.status, ok: monitorRes.ok, body: await monitorRes.text().catch(() => '') };
+    } catch (e: any) {
+      internalChecks['/api/monitor/search'] = { error: String(e?.message || e) };
+    }
+  } else {
+    internalChecks['/api/monitor/search'] = { note: 'skipped (includeMonitor not set)' };
   }
 
   // Build safe report

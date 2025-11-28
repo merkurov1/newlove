@@ -26,6 +26,30 @@ export async function POST(req: Request) {
     const { artist, source } = await req.json();
     if (!artist) return NextResponse.json({ error: 'Artist name required' }, { status: 400 });
 
+    // Fast-path: if caller specifically asked for Invaluable only, query Invaluable directly.
+    if (source === 'invaluable') {
+      try {
+        const invUrl = `https://www.invaluable.com/search?query=${encodeURIComponent(artist)}&keyword=${encodeURIComponent(artist)}`;
+        debug.push(`Fetching Invaluable search: ${invUrl}`);
+        const invRes = await fetch(invUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, cache: 'no-store' });
+        if (invRes.ok) {
+          const html = await invRes.text();
+          debug.push(`Invaluable HTML length: ${html.length}`);
+          // Find likely lot URLs (common path segments: auction-lot, /lot/ etc.)
+          const invPattern = /href=["'](https?:\/\/(?:www\.)?invaluable\.com\/[^"]*?(?:auction-lot|lot)[^"']*)["']/gi;
+          const matches = Array.from(html.matchAll(invPattern)).map(m => m[1]);
+          const unique = Array.from(new Set(matches.map(s => s.split('?')[0])));
+          debug.push(`Invaluable extracted ${unique.length} links: ${JSON.stringify(unique.slice(0, 30))}`);
+          if (unique.length > 0) return NextResponse.json({ found: unique.length, links: unique, method: 'invaluable', _debug: debug });
+        } else {
+          debug.push(`Invaluable search responded: ${invRes.status}`);
+        }
+      } catch (e: any) {
+        debug.push(`Invaluable fetch failed: ${String(e?.message || e)}`);
+      }
+      // If invaluable fast-path found nothing, continue to general pipeline as fallback
+    }
+
     debug.push(`Scouting for: ${artist} (source=${source || 'invaluable'})`);
     const siteFilter = buildSiteFilter(source);
     const query = `${siteFilter} "${artist}" ("auction-lot" OR "auction" OR "lot" OR "lot details")`;
