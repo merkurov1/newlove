@@ -4,219 +4,129 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
-const genAI = new GoogleGenerativeAI(apiKey);
+const apiKey = (process.env.GOOGLE_API_KEY || '').trim();
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+
+function buildSiteFilter(source: string | undefined) {
+  if (!source || source === 'invaluable') return 'site:invaluable.com';
+  if (source === 'all') return '(site:invaluable.com OR site:sothebys.com OR site:christies.com OR site:bonhams.com OR site:phillips.com)';
+  return source.includes('.') ? `site:${source}` : `site:${source}.com`;
+}
+
+function defaultUrlPattern(source: string | undefined) {
+  if (source === 'all') {
+    return /^https?:\/\/(?:www\.)?(?:invaluable\.com\/auction-lot|sothebys\.com\/en\/auctions|christies\.com\/lot|bonhams\.com\/auction|phillips\.com\/detail)/i;
+  }
+  return /^https?:\/\/(?:www\.)?invaluable\.com\/auction-lot\//i;
+}
 
 export async function POST(req: Request) {
+  const debug: string[] = [];
   try {
     const { artist, source } = await req.json();
-
     if (!artist) return NextResponse.json({ error: 'Artist name required' }, { status: 400 });
 
-    console.log(`[Monitor] Scouting via BING for: ${artist} (source=${source || 'invaluable'})`);
-
-    // Build site restriction based on requested source (default: Invaluable-first)
-    let siteFilter = 'site:invaluable.com';
-    if (source === 'all') {
-      siteFilter = '(site:invaluable.com OR site:sothebys.com OR site:christies.com OR site:bonhams.com)';
-    } else if (typeof source === 'string' && source && source !== 'invaluable') {
-      // allow direct site hints like 'sothebys' -> sothebys.com
-      siteFilter = `site:${source}`;
-    }
-
-    // TACTIC: BING SEARCH (broadened query to increase recall)
+    debug.push(`Scouting for: ${artist} (source=${source || 'invaluable'})`);
+    const siteFilter = buildSiteFilter(source);
     const query = `${siteFilter} "${artist}" ("auction-lot" OR "auction" OR "lot" OR "lot details")`;
     const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&setlang=en-us`;
 
-    // Encode the full URL when calling r.jina.ai
-    const jinaUrl = `https://r.jina.ai/${encodeURI(bingUrl)}`;
-
-    const jinaResponse = await fetch(jinaUrl, {
-      headers: { 
-          'X-Return-Format': 'markdown',
-          // Use an ordinary browser UA to reduce bot blocking
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      cache: 'no-store'
-    });
-
-    if (!jinaResponse.ok) {
-        return NextResponse.json({ error: 'Scout failed to connect' }, { status: 500 });
-    }
-
-    const markdown = await jinaResponse.text();
-    
-    // Проверка, вернул ли Bing хоть что-то
-    if (markdown.length < 500 || markdown.includes("There are no results")) {
-         console.warn("[Monitor] Bing returned empty or blocked result.");
-         return NextResponse.json({ found: 0, links: [], warning: "Search blocked or empty" });
-    }
-
-    // 3. Gemini filters URLs — try model candidates (env override via GOOGLE_GEMINI_MODEL)
-    const MODEL_CANDIDATES = [
-      (process.env.GOOGLE_GEMINI_MODEL || '').trim(),
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-flash-latest'
-    ].filter(Boolean);
-
-    const targetSites = source === 'all' 
-      ? 'invaluable.com, sothebys.com, christies.com, bonhams.com, phillips.com' 
-      : 'invaluable.com';
-
-    const prompt = `
-      ROLE: Auction Lot URL Extractor.
-      TASK: Extract auction lot URLs from search results for artist "${artist}".
-      
-      TARGET DOMAINS: ${targetSites}
-      
-      RULES:
-      1. Return JSON: { "links": ["url1", "url2", ...] }
-      2. Only include URLs that lead to specific auction LOTS (not category pages).
-      3. Look for patterns like: /auction-lot/, /lot/, /lots/, /en/auctions/
-      4. IGNORE: homepage links, search pages, microsoft/bing links, social media.
-      5. Return empty array [] if no valid lot URLs found.
-      
-      INPUT TEXT:
-      ${markdown.substring(0, 50000)}
-    `;
-
-    // Attempt generation using candidate models until one succeeds
-    let result: any = null;
-    let lastErr: any = null;
-    MODEL_LOOP: for (const candidate of MODEL_CANDIDATES) {
-      const variants = candidate.startsWith('models/') ? [candidate] : [candidate, `models/${candidate}`];
-      for (const name of variants) {
-        try {
-          console.log(`[Monitor] Trying model: ${name}`);
-          const model = genAI.getGenerativeModel({ model: name, generationConfig: { responseMimeType: "application/json", temperature: 0.0 } });
-          result = await model.generateContent(prompt);
-          break MODEL_LOOP;
-        } catch (err: any) {
-          lastErr = err;
-          console.warn(`[Monitor] Model ${name} failed:`, err?.message || err);
-        }
-      }
-    }
-
-    if (!result) {
-      console.error('[Monitor] All model candidates failed:', lastErr);
-      return NextResponse.json({ found: 0, links: [], warning: 'No available AI models', detail: String(lastErr?.message || lastErr) });
-    }
-
-    const raw = result?.response ? await result.response.text() : '';
-    const cleaned = String(raw).replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
-
-    let data;
+    // Try Jina.ai markdown harvest first (best-effort)
     try {
-      data = JSON.parse(cleaned);
-    } catch (e) {
-      // Fallback: try to extract a JSON object substring from the noisy output
-      const maybe = String(raw).match(/({[\s\S]*})/);
-      if (maybe && maybe[1]) {
-        try {
-          data = JSON.parse(maybe[1]);
-        } catch (e2) {
-          console.warn('[Monitor] Fallback JSON parse failed', e2, (maybe[1] || '').substring(0, 1000));
-          return NextResponse.json({ found: 0, links: [], warning: 'AI returned invalid JSON' });
+      const jinaUrl = `https://r.jina.ai/${encodeURI(bingUrl)}`;
+      debug.push(`Fetching Jina: ${jinaUrl}`);
+      const jinaRes = await fetch(jinaUrl, { headers: { 'X-Return-Format': 'markdown', 'User-Agent': 'Mozilla/5.0' }, cache: 'no-store' });
+      if (jinaRes.ok) {
+        const markdown = await jinaRes.text();
+        debug.push(`Jina length: ${markdown.length}`);
+        if (markdown.length > 400) {
+          const hrefRegex = /https?:\/\/(?:www\.)?[a-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/gi;
+          const matches = Array.from(new Set((markdown.match(hrefRegex) || []).map(s => s.split('?')[0])));
+          debug.push(`Jina extracted ${matches.length} raw links`);
+          const pattern = defaultUrlPattern(source);
+          const filtered = matches.filter(m => pattern.test(m));
+          if (filtered.length > 0) return NextResponse.json({ found: filtered.length, links: filtered, method: 'jina', _debug: debug });
         }
       } else {
-        console.warn('[Monitor] AI did not return valid JSON', cleaned.substring(0, 1000));
-        return NextResponse.json({ found: 0, links: [], warning: 'AI returned invalid JSON' });
+        debug.push(`Jina responded: ${jinaRes.status}`);
       }
+    } catch (e: any) {
+      debug.push(`Jina failed: ${String(e?.message || e)}`);
     }
 
-    // Ensure we have an array of links
-    const links = Array.isArray(data?.links) ? data.links : [];
-    
-    // Build regex based on source selection
-    let urlPattern: RegExp;
-    if (source === 'all') {
-      // Accept lot URLs from multiple auction houses
-      urlPattern = /^https?:\/\/(?:www\.)?(invaluable\.com\/auction-lot|sothebys\.com\/en\/auctions|christies\.com\/lot|bonhams\.com\/auction|phillips\.com\/detail)/i;
-    } else {
-      urlPattern = /^https?:\/\/(?:www\.)?invaluable\.com\/auction-lot\//i;
-    }
-    
-    const filtered = links.map((l: string) => String(l).trim()).filter((l: string) => urlPattern.test(l));
-    const uniqueLinks = Array.from(new Set(filtered));
-
-    console.log(`[Monitor] Targets acquired via Gemini: ${uniqueLinks.length}`);
-
-    if (uniqueLinks.length > 0) {
-      return NextResponse.json({ found: uniqueLinks.length, links: uniqueLinks, method: 'gemini' });
-    }
-
-    // Fallback: if Gemini found nothing, fetch the Bing HTML directly and extract hrefs
+    // Prefer direct HTML parsing fallback (Bing -> links)
     try {
-      console.log('[Monitor] No lots found via Jina/Gemini. Falling back to direct Bing HTML parsing.');
-      const bingHtmlRes = await fetch(bingUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        },
-        cache: 'no-store'
-      });
-
+      debug.push(`Fetching Bing HTML: ${bingUrl}`);
+      const bingHtmlRes = await fetch(bingUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, cache: 'no-store' });
       if (bingHtmlRes.ok) {
         const html = await bingHtmlRes.text();
-        // Find auction lot links based on source
-        let hrefPattern: RegExp;
-        if (source === 'all') {
-          hrefPattern = /href=["'](https?:\/\/(?:www\.)?(invaluable\.com\/auction-lot|sothebys\.com\/en\/auctions|christies\.com\/lot|bonhams\.com\/auction|phillips\.com\/detail)[^"']+)["']/gi;
-        } else {
-          hrefPattern = /href=["'](https?:\/\/(?:www\.)?invaluable\.com\/auction-lot[^"']+)["']/gi;
-        }
+        const hrefPattern = /href=["'](https?:\/\/(?:www\.)?(?:invaluable\.com\/auction-lot|sothebys\.com\/en\/auctions|christies\.com\/lot|bonhams\.com\/auction|phillips\.com\/detail)[^"']+)["']/gi;
         const matches = Array.from(html.matchAll(hrefPattern)).map(m => m[1]);
-        const dedup = Array.from(new Set(matches.map((s: string) => s.split('?')[0])));
-        if (dedup.length > 0) {
-          console.log(`[Monitor] Found ${dedup.length} links via Bing HTML parse.`);
-          return NextResponse.json({ found: dedup.length, links: dedup, method: 'bing-html' });
-        }
+        const uniq = Array.from(new Set(matches.map(s => s.split('?')[0])));
+        debug.push(`Bing HTML extracted ${uniq.length} links`);
+        if (uniq.length > 0) return NextResponse.json({ found: uniq.length, links: uniq, method: 'bing-html', _debug: debug });
       } else {
-        console.warn('[Monitor] Direct Bing HTML fetch failed:', bingHtmlRes.status);
+        debug.push(`Bing HTML response: ${bingHtmlRes.status}`);
       }
-    } catch (e) {
-      console.warn('[Monitor] Bing HTML fallback failed:', e);
+    } catch (e: any) {
+      debug.push(`Bing HTML failed: ${String(e?.message || e)}`);
     }
 
-    // Fallback 2: Try DuckDuckGo HTML (often less blocked than Bing)
+    // If we have an AI key, try Gemini as a last resort (more expensive/fragile)
+    if (genAI) {
+      try {
+        const modelName = (process.env.GOOGLE_GEMINI_MODEL || 'gemini-2.5-flash').trim();
+        debug.push(`Attempting Gemini model: ${modelName}`);
+        const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: 'application/json', temperature: 0.0 } });
+        const prompt = `ROLE: Auction Lot URL Extractor. TASK: Extract auction lot URLs from the text below. TARGET: ${siteFilter}. INPUT:\n\n`;
+        const result = await model.generateContent(prompt + "\n\n" + 'Please output JSON like {"links": [...]}');
+        const raw = result?.response ? await result.response.text() : String(result);
+        debug.push(`Gemini raw length: ${String(raw?.length || 0)}`);
+        const cleaned = String(raw).replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+        let data: any = null;
+        try { data = JSON.parse(cleaned); } catch (e) {
+          const maybe = String(raw).match(/(\{[\s\S]*\})/);
+          if (maybe && maybe[1]) data = JSON.parse(maybe[1]);
+        }
+        const links = Array.isArray(data?.links) ? data.links.map((s: string) => String(s).split('?')[0]) : [];
+        const pattern = defaultUrlPattern(source);
+        const filtered = links.filter((l: string) => pattern.test(l));
+        const unique = Array.from(new Set(filtered));
+        debug.push(`Gemini found ${unique.length} links`);
+        if (unique.length > 0) return NextResponse.json({ found: unique.length, links: unique, method: 'gemini', _debug: debug });
+      } catch (e: any) {
+        debug.push(`Gemini failed: ${String(e?.message || e)}`);
+      }
+    } else {
+      debug.push('Skipping Gemini: GOOGLE_API_KEY not set');
+    }
+
+    // DuckDuckGo fallback
     try {
-      console.log('[Monitor] Trying DuckDuckGo fallback...');
       const ddgQuery = `${siteFilter} "${artist}" auction lot`;
       const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(ddgQuery)}`;
-      const ddgRes = await fetch(ddgUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-        cache: 'no-store'
-      });
+      debug.push(`Fetching DuckDuckGo HTML: ${ddgUrl}`);
+      const ddgRes = await fetch(ddgUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, cache: 'no-store' });
       if (ddgRes.ok) {
         const ddgHtml = await ddgRes.text();
-        // Extract URLs from DuckDuckGo results (they use uddg= redirect param)
-        const uddgMatches = Array.from(ddgHtml.matchAll(/uddg=([^&"']+)/gi)).map(m => {
-          try { return decodeURIComponent(m[1]); } catch { return ''; }
-        });
-        let lotPattern: RegExp;
-        if (source === 'all') {
-          lotPattern = /^https?:\/\/(?:www\.)?(invaluable\.com\/auction-lot|sothebys\.com\/en\/auctions|christies\.com\/lot)/i;
-        } else {
-          lotPattern = /^https?:\/\/(?:www\.)?invaluable\.com\/auction-lot/i;
-        }
-        const filtered = uddgMatches.filter(u => lotPattern.test(u));
-        const dedup = Array.from(new Set(filtered.map((s: string) => s.split('?')[0])));
-        if (dedup.length > 0) {
-          console.log(`[Monitor] Found ${dedup.length} links via DuckDuckGo.`);
-          return NextResponse.json({ found: dedup.length, links: dedup, method: 'duckduckgo' });
-        }
+        const uddgMatches = Array.from(ddgHtml.matchAll(/uddg=([^&"']+)/gi)).map(m => { try { return decodeURIComponent(m[1]); } catch { return ''; } });
+        const patt = defaultUrlPattern(source);
+        const filtered = uddgMatches.filter(u => patt.test(u)).map((s: string) => s.split('?')[0]);
+        const unique = Array.from(new Set(filtered));
+        debug.push(`DuckDuckGo found ${unique.length} links`);
+        if (unique.length > 0) return NextResponse.json({ found: unique.length, links: unique, method: 'duckduckgo', _debug: debug });
+      } else {
+        debug.push(`DuckDuckGo response: ${ddgRes.status}`);
       }
-    } catch (e) {
-      console.warn('[Monitor] DuckDuckGo fallback failed:', e);
+    } catch (e: any) {
+      debug.push(`DuckDuckGo failed: ${String(e?.message || e)}`);
     }
 
-    console.log('[Monitor] No lots found via Jina/Gemini.');
-    return NextResponse.json({ found: 0, links: [], warning: 'No lots found via Jina/Gemini.' });
+    debug.push('No lots found via any method');
+    return NextResponse.json({ found: 0, links: [], warning: 'No lots found', _debug: debug });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[Monitor Error]:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error', detail: String(error?.message || error) }, { status: 500 });
   }
 }
