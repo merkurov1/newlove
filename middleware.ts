@@ -14,15 +14,28 @@ export async function middleware(request: NextRequest) {
     try {
       const apiUrl = new URL('/api/user/role', request.url).toString();
 
+      // Prepare cookie preview for safe diagnostics (names only)
+      const cookieHeader = request.headers.get('cookie') || '';
+      const cookieNames = cookieHeader
+        ? cookieHeader
+            .split(';')
+            .map((s) => (s || '').split('=')[0])
+            .map((n) => (n ? n.trim() : ''))
+            .filter(Boolean)
+        : [];
+      console.debug('[middleware] /admin request cookieNames=', cookieNames);
+
       // Forward cookies so the API can read the session
       const res = await fetch(apiUrl, {
         headers: {
-          cookie: request.headers.get('cookie') || '',
+          cookie: cookieHeader,
           authorization: request.headers.get('authorization') || request.headers.get('Authorization') || '',
         },
         // don't cache this call
         next: { revalidate: 0 },
       });
+
+      console.debug('[middleware] /admin -> /api/user/role status=', res.status);
 
       if (res.ok) {
         const body = await res.json().catch(() => ({}));

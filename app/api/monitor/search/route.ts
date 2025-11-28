@@ -39,10 +39,14 @@ export async function POST(req: Request) {
       if (jinaRes.ok) {
         const markdown = await jinaRes.text();
         debug.push(`Jina length: ${markdown.length}`);
+        // include a small snippet of the markdown for debugging
+        const jinaSnippet = markdown.substring(0, 2000);
+        if (markdown.length > 0) debug.push(`Jina snippet: ${jinaSnippet.substring(0, 500).replace(/\n/g, ' ')}...`);
         if (markdown.length > 400) {
           const hrefRegex = /https?:\/\/(?:www\.)?[a-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/gi;
           const matches = Array.from(new Set((markdown.match(hrefRegex) || []).map(s => s.split('?')[0])));
-          debug.push(`Jina extracted ${matches.length} raw links`);
+          // push matches into debug for inspection
+          debug.push(`Jina extracted raw links (${matches.length}): ${JSON.stringify(matches.slice(0, 30))}`);
           const pattern = defaultUrlPattern(source);
           const filtered = matches.filter(m => pattern.test(m));
           if (filtered.length > 0) return NextResponse.json({ found: filtered.length, links: filtered, method: 'jina', _debug: debug });
@@ -60,10 +64,14 @@ export async function POST(req: Request) {
       const bingHtmlRes = await fetch(bingUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, cache: 'no-store' });
       if (bingHtmlRes.ok) {
         const html = await bingHtmlRes.text();
+        // include a small snippet of bing html
+        debug.push(`Bing HTML length: ${html.length}`);
+        const bingSnippet = html.substring(0, 2000).replace(/\n/g, ' ');
+        debug.push(`Bing HTML snippet: ${bingSnippet.substring(0, 500)}...`);
         const hrefPattern = /href=["'](https?:\/\/(?:www\.)?(?:invaluable\.com\/auction-lot|sothebys\.com\/en\/auctions|christies\.com\/lot|bonhams\.com\/auction|phillips\.com\/detail)[^"']+)["']/gi;
         const matches = Array.from(html.matchAll(hrefPattern)).map(m => m[1]);
         const uniq = Array.from(new Set(matches.map(s => s.split('?')[0])));
-        debug.push(`Bing HTML extracted ${uniq.length} links`);
+        debug.push(`Bing HTML extracted ${uniq.length} links: ${JSON.stringify(uniq.slice(0, 30))}`);
         if (uniq.length > 0) return NextResponse.json({ found: uniq.length, links: uniq, method: 'bing-html', _debug: debug });
       } else {
         debug.push(`Bing HTML response: ${bingHtmlRes.status}`);
