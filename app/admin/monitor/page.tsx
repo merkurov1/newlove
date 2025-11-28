@@ -30,16 +30,34 @@ export default function MonitorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ artist, source }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        addLog(`Monitor returned non-JSON response (status ${res.status})`);
+        addLog(text.substring(0, 1000));
+      }
 
-      if (data.links && data.links.length > 0) {
+      addLog(`Monitor HTTP ${res.status}`);
+
+      // If the endpoint provided debug lines, surface them in the system log
+      if (data && Array.isArray(data._debug)) {
+        data._debug.forEach((line: string) => addLog(line));
+      }
+
+      if (data && data.links && data.links.length > 0) {
         setLinks(data.links);
         addLog(`Found ${data.links.length} potential lots.`);
+      } else if (data && data.warning) {
+        addLog(`Warning: ${data.warning}`);
+      } else if (!data) {
+        addLog('No JSON data returned from monitor.');
       } else {
-        addLog('No lots found via Jina/Gemini.');
+        addLog('No lots found.');
       }
     } catch (e) {
-      addLog('Error during scan.');
+      addLog(`Error during scan: ${String(e)}`);
     }
     setLoading(false);
   };
