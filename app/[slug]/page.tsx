@@ -345,6 +345,27 @@ function ArticleComponent({ article }: { article: any }) {
   } = article;
   const curatorNote = article.curatorNote ?? article.curatornote ?? '';
 
+  // Sanitize hrefs coming from potentially messy editor text.
+  // Fixes cases where smart quotes or malformed slashes are included around URLs
+  // (e.g. “https:/www.example.com” -> https://www.example.com).
+  // This sanitizer is applied only to the web Markdown renderer so it doesn't
+  // affect email rendering logic.
+  function sanitizeHref(href?: string | null) {
+    if (!href) return href || '';
+    let s = String(href).trim();
+    // Remove smart quotes and common directional quotes
+    s = s.replace(/^[\u2018\u2019\u201C\u201D\u00AB\u00BB]+/, '').replace(/[\u2018\u2019\u201C\u201D\u00AB\u00BB]+$/, '');
+    // Remove surrounding ASCII quotes
+    s = s.replace(/^['"`]+/, '').replace(/['"`]+$/, '');
+    // Fix common single-slash typo "https:/example.com" -> "https://example.com"
+    s = s.replace(/^https?:\/([^\/])/, (m, p1) => m.replace(/:\//, '://'));
+    // Ensure protocol present for obvious http(s) urls
+    if (/^https?:\/\//i.test(s)) return s;
+    // If it looks like a site (starts with www.) add protocol
+    if (/^www\./i.test(s)) return 'https://' + s;
+    return s;
+  }
+
   // Extract first image from content (EditorJS blocks or string)
   function extractFirstImage(content: any): string | null {
     if (!content) return null;
@@ -401,7 +422,10 @@ function ArticleComponent({ article }: { article: any }) {
       <div className="w-full max-w-2xl mb-6 px-4">
         {curatorNote && (
           <div className="font-serif text-base sm:text-[1.1rem] leading-[1.7] text-black text-left mb-6 prose prose-base sm:prose-lg">
-            <Markdown>{curatorNote}</Markdown>
+            <Markdown options={{ overrides: { a: { component: ({ href, children, ...rest }: any) => {
+                const safe = sanitizeHref(href);
+                return <a href={safe} {...rest}>{children}</a>;
+              } } } }}>{curatorNote}</Markdown>
           </div>
         )}
         {quote && (
@@ -417,7 +441,10 @@ function ArticleComponent({ article }: { article: any }) {
           <div className="w-full max-w-2xl border-t border-gray-200 my-6 px-4"></div>
           <div className="w-full max-w-2xl mb-12 px-4">
             <div className="font-mono text-sm sm:text-[0.9rem] text-gray-600 prose prose-sm">
-              <Markdown>{specs}</Markdown>
+              <Markdown options={{ overrides: { a: { component: ({ href, children, ...rest }: any) => {
+                    const safe = sanitizeHref(href);
+                    return <a href={safe} {...rest}>{children}</a>;
+                  } } } }}>{specs}</Markdown>
             </div>
           </div>
         </>
