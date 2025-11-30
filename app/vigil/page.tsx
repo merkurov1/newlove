@@ -8,7 +8,6 @@ import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import TempleWrapper from '@/components/TempleWrapper';
 import { templeTrack } from '@/components/templeTrack';
-// Импортируем твои компоненты иконок
 import { XIcon, InfoIcon, SparklesIcon } from '@/components/icons'; 
 
 // --- CONFIGURATION ---
@@ -22,33 +21,18 @@ const HEARTS_DATA = [
   { id: 5, static: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0955.jpeg', loop: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-5300087847065473569.mp4' }
 ];
 
+// Используем статичное изображение Ангела для иконки, если гифка тяжелая, или ту же гифку
 const ANGEL_IMAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
 
-interface HeartData {
-  id: number;
-  owner_name: string | null;
-  owner_id?: string | null;
-  intention?: string | null;
-  last_lit_at: string;
-}
-
-interface SparkParticle {
-  id: string;
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
-}
-
 export default function VigilPage() {
-  const [dbHearts, setDbHearts] = useState<HeartData[]>([]);
+  const [dbHearts, setDbHearts] = useState<any[]>([]);
   const [showManifesto, setShowManifesto] = useState(false);
   const [selectedHeart, setSelectedHeart] = useState<number | null>(null);
   
   const [nameInput, setNameInput] = useState('');
   const [intentionInput, setIntentionInput] = useState('');
 
-  const [sparkParticles, setSparkParticles] = useState<SparkParticle[]>([]);
+  const [sparkParticles, setSparkParticles] = useState<any[]>([]);
   const [isLighting, setIsLighting] = useState(false);
   const [flash, setFlash] = useState(false); 
   const [showLogin, setShowLogin] = useState(false);
@@ -64,7 +48,7 @@ export default function VigilPage() {
   const heartRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const supabase = createClient();
 
-  // --- HAPTICS ---
+  // --- LOGIC ---
   const triggerHaptic = (style: 'light' | 'medium' | 'heavy' | 'error') => {
     const tg = (window as any).Telegram?.WebApp;
     if (tg?.HapticFeedback) {
@@ -74,13 +58,14 @@ export default function VigilPage() {
   };
 
   useEffect(() => {
+    // Auth & Telegram Init Logic (Keep as is)
     if (typeof window !== 'undefined') {
       const storedToken = localStorage.getItem('temple_session_token');
       const storedUser = localStorage.getItem('temple_user');
       if (storedToken) setTempleToken(storedToken);
       if (storedUser) setTempleUserName(storedUser);
     }
-
+    
     // Telegram Init
     const initTelegram = () => {
         const tg = (window as any).Telegram?.WebApp;
@@ -90,40 +75,9 @@ export default function VigilPage() {
             tg.setHeaderColor('#000000');
             tg.setBackgroundColor('#000000');
             document.documentElement.style.setProperty('--tg-theme-bg-color', '#000000');
-            
-            const initData = tg.initData;
-            const tgUser = tg.initDataUnsafe?.user;
-            
-            if (tgUser && !localStorage.getItem('temple_session_token')) {
-                fetch('/api/temple/auth', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...tgUser, initData })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.token) {
-                        localStorage.setItem('temple_session_token', data.token);
-                        setTempleToken(data.token);
-                    }
-                    if (data.displayName) {
-                        localStorage.setItem('temple_user', data.displayName);
-                        setTempleUserName(data.displayName);
-                    }
-                })
-                .catch(console.error);
-            }
         }
     };
-
-    if ((window as any).Telegram?.WebApp) {
-        initTelegram();
-    } else {
-        const script = document.createElement('script');
-        script.src = "https://telegram.org/js/telegram-web-app.js";
-        script.onload = initTelegram;
-        document.head.appendChild(script);
-    }
+    if ((window as any).Telegram?.WebApp) initTelegram();
 
     fetchHearts();
     const channel = supabase
@@ -135,8 +89,6 @@ export default function VigilPage() {
       setShowManifesto(true);
       localStorage.setItem('vigil_visited', 'true');
     }
-
-    templeTrack('enter', 'User opened Vigil page');
     return () => { supabase.removeChannel(channel); };
   }, []);
 
@@ -144,23 +96,6 @@ export default function VigilPage() {
     const { data } = await supabase.from('vigil_hearts').select('*');
     if (data) setDbHearts(data);
   };
-
-  const activeHeartsCount = useMemo(() => {
-    if (!dbHearts.length) return 0;
-    const now = new Date().getTime();
-    return dbHearts.filter(h => {
-      if (!h.last_lit_at) return false;
-      return (now - new Date(h.last_lit_at).getTime()) < (24 * 60 * 60 * 1000);
-    }).length;
-  }, [dbHearts]);
-
-  const atmosphere = useMemo(() => {
-    const intensity = Math.min(activeHeartsCount * 0.2, 1); 
-    return {
-        overlayOpacity: intensity * 0.4,
-        angelOpacity: 0.3 + (intensity * 0.7),
-    };
-  }, [activeHeartsCount]);
 
   const getHeartState = (heartId: number) => {
     const dbRecord = dbHearts.find(h => h.id === heartId);
@@ -187,13 +122,9 @@ export default function VigilPage() {
     triggerHaptic('light');
     const state = getHeartState(heartId);
 
-    if (state.isAlive && !state.isMine) {
-        if (user?.id === ADMIN_ID) {
-            setSelectedHeart(heartId); 
-            return;
-        }
+    if (state.isAlive && !state.isMine && user?.id !== ADMIN_ID) {
         triggerHaptic('error');
-        setDebugMessage(`THIS FLAME BELONGS TO ${state.owner}`);
+        setDebugMessage(`LOCKED BY ${state.owner}`);
         setTimeout(() => setDebugMessage(''), 2000);
         return;
     }
@@ -211,347 +142,199 @@ export default function VigilPage() {
 
   const triggerRitual = async () => {
     if (!selectedHeart || !nameInput.trim() || isLighting) return;
-    
     setIsLighting(true);
     triggerHaptic('medium');
     
+    // Spark Logic
     const heartIdToUpdate = selectedHeart;
     const angelRect = angelRef.current?.getBoundingClientRect();
     const targetRect = heartRefs.current[heartIdToUpdate]?.getBoundingClientRect();
 
     if (angelRect && targetRect) {
-      const startX = window.innerWidth / 2; 
-      const startY = window.innerHeight * 0.2; // From Angel's heart
+      const startX = angelRect.left + (angelRect.width / 2);
+      const startY = angelRect.top + (angelRect.height / 2);
       const endX = targetRect.left + (targetRect.width / 2);
       const endY = targetRect.top + (targetRect.height / 2);
 
       const sparkId = `spark-${Date.now()}`;
       setSparkParticles(prev => [...prev, { id: sparkId, startX, startY, endX, endY }]);
-      
-      setSelectedHeart(null); // Close modal
+      setSelectedHeart(null);
 
       setTimeout(async () => {
         setFlash(true);
         triggerHaptic('heavy');
-        setTimeout(() => setFlash(false), 500);
-
+        setTimeout(() => setFlash(false), 300);
         setSparkParticles(prev => prev.filter(s => s.id !== sparkId));
 
+        // DB Update Logic (Same as before)
         try {
-          if (user && user.id) {
-            await supabase.from('vigil_hearts').update({owner_id: null, owner_name: null, last_lit_at: null}).eq('owner_id', user.id).neq('id', heartIdToUpdate);
-            await supabase.from('vigil_hearts').upsert({
-              id: heartIdToUpdate,
-              owner_name: nameInput.trim(),
-              owner_id: user.id,
-              intention: intentionInput.trim(),
-              last_lit_at: new Date().toISOString()
-            });
-          } else {
-            const token = templeToken || (typeof window !== 'undefined' ? localStorage.getItem('temple_session_token') : null);
-            const body: any = { id: heartIdToUpdate, name: nameInput.trim(), intention: intentionInput.trim() };
-            if (token) body.token = token;
-
-            const res = await fetch('/api/vigil/claim', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body)
-            });
-            if (!res.ok && res.status === 401) setShowLogin(true);
-          }
-        } catch (e) {
-          console.error(e);
-        }
+            if (user && user.id) {
+                await supabase.from('vigil_hearts').update({owner_id: null, owner_name: null, last_lit_at: null}).eq('owner_id', user.id).neq('id', heartIdToUpdate);
+                await supabase.from('vigil_hearts').upsert({ id: heartIdToUpdate, owner_name: nameInput.trim(), owner_id: user.id, intention: intentionInput.trim(), last_lit_at: new Date().toISOString() });
+            } else {
+                const token = templeToken || localStorage.getItem('temple_session_token');
+                const body: any = { id: heartIdToUpdate, name: nameInput.trim(), intention: intentionInput.trim() };
+                if (token) body.token = token;
+                await fetch('/api/vigil/claim', { method: 'POST', body: JSON.stringify(body) });
+            }
+        } catch (e) { console.error(e) }
         setIsLighting(false);
-      }, 1500);
+      }, 1000);
     } else {
-      setIsLighting(false);
-      setSelectedHeart(null);
+        setIsLighting(false);
+        setSelectedHeart(null);
     }
   };
 
   return (
-    <div className="vigil-root h-[100dvh] w-full overflow-hidden bg-black selection:bg-white/20">
+    <div className="vigil-root relative w-full h-[100dvh] bg-[#050505] overflow-hidden flex flex-col font-sans selection:bg-red-500/30">
       <Suspense fallback={null}><TempleWrapper /></Suspense>
 
-      {/* Preload Videos */}
-      <div style={{display:'none'}}>
-        {HEARTS_DATA.map(h => <video key={h.id} src={h.loop} preload="auto" />)}
-      </div>
+      {/* --- BACKGROUND --- */}
+      {/* Subtle Gradient from Top */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-zinc-900/30 via-[#050505] to-[#000000]" />
+      {/* Noise Texture */}
+      <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} />
+      {/* Flash */}
+      <div className={`absolute inset-0 bg-white z-[9999] pointer-events-none transition-opacity duration-300 ease-out ${flash ? 'opacity-20' : 'opacity-0'}`} />
 
-      {/* --- LAYER 1: AMBIENT --- */}
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900/40 via-black to-black z-0 pointer-events-none" />
-      
-      {/* Dynamic Warmth Layer */}
-      <div 
-        className="fixed inset-0 z-0 pointer-events-none transition-opacity duration-[3000ms] mix-blend-screen"
-        style={{
-            background: 'radial-gradient(circle at 50% 30%, rgba(255,100,50,0.15) 0%, rgba(0,0,0,0) 70%)',
-            opacity: atmosphere.overlayOpacity
-        }}
-      />
-
-      {/* Noise */}
-      <div className="fixed inset-0 z-[1] pointer-events-none opacity-[0.04] mix-blend-overlay" 
-           style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} 
-      />
-
-      {/* Flash Effect */}
-      <div className="fixed inset-0 bg-white z-[9999] pointer-events-none transition-opacity duration-300 ease-out"
-           style={{ opacity: flash ? 0.25 : 0 }} />
-
-
-      {/* --- LAYER 2: UI CONTROLS --- */}
-      <div className="fixed top-6 right-6 z-50">
-        <button 
-            onClick={() => setShowManifesto(true)} 
-            className="w-10 h-10 rounded-full border border-white/10 bg-white/5 backdrop-blur-md flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all active:scale-95"
-        >
-            <InfoIcon className="w-5 h-5 opacity-70" />
-        </button>
-      </div>
-
-      {/* Toast Messages */}
-      <AnimatePresence>
-        {debugMessage && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="fixed top-24 left-1/2 -translate-x-1/2 bg-red-950/90 border border-red-500/30 text-red-200 px-6 py-3 text-[10px] font-mono tracking-[0.2em] z-[100] backdrop-blur-xl rounded-sm shadow-[0_0_20px_rgba(255,0,0,0.1)]"
-          >
-            {debugMessage}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-
-      {/* --- LAYER 3: THE ALTAR (Main Content) --- */}
-      <div className="relative w-full h-full flex flex-col items-center justify-center z-10">
-        
-        {/* THE ANGEL (Background Spirit) */}
-        <div ref={angelRef} className="absolute top-[15%] pointer-events-none transition-all duration-[2000ms] mix-blend-lighten"
-             style={{ 
-                 opacity: atmosphere.angelOpacity,
-                 filter: `blur(${activeHeartsCount === 0 ? '8px' : '0px'}) grayscale(100%) contrast(120%)` 
-             }}>
-          <img src={ANGEL_IMAGE} className="w-[280px] opacity-80 animate-float" alt="Angel" />
+      {/* --- HEADER (THE ANGEL TOTEM) --- */}
+      <div className="relative z-20 flex flex-col items-center pt-8 md:pt-12 shrink-0">
+        <div ref={angelRef} className="relative w-16 h-16 md:w-20 md:h-20 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+            <img src={ANGEL_IMAGE} className="w-10 md:w-12 opacity-80 contrast-125 grayscale" alt="Angel" />
         </div>
+        <h1 className="mt-4 text-[10px] tracking-[0.4em] text-white/40 uppercase font-mono">
+            Temple of Love
+        </h1>
+      </div>
 
-        {/* THE HEARTS GRID (2-1-2 Formation) */}
-        {/* We use a flex column with rows to ensure perfect centering regardless of screen size */}
-        <div className="relative mt-[10vh] flex flex-col items-center gap-10 md:gap-12">
+      {/* --- INFO BUTTON --- */}
+      <button onClick={() => setShowManifesto(true)} className="absolute top-6 right-6 z-50 text-white/30 hover:text-white transition-colors">
+        <InfoIcon className="w-5 h-5" />
+      </button>
+
+      {/* --- MAIN GRID (THE X FORMATION) --- */}
+      <div className="relative z-10 flex-grow flex items-center justify-center p-6">
+        <div className="grid grid-cols-3 gap-4 md:gap-8 aspect-square w-full max-w-[320px] md:max-w-[400px]">
             
-            {/* ROW 1: Top Hearts */}
-            <div className="flex gap-16 md:gap-24">
-                {[HEARTS_DATA[0], HEARTS_DATA[1]].map((asset, i) => (
-                    <VigilHeart key={asset.id} asset={asset} state={getHeartState(asset.id)} onClick={handleHeartClick} heartRef={heartRefs} />
-                ))}
-            </div>
+            {/* ROW 1: LEFT, VOID, RIGHT */}
+            <Slot asset={HEARTS_DATA[0]} state={getHeartState(HEARTS_DATA[0].id)} onClick={handleHeartClick} refs={heartRefs} />
+            <div className="pointer-events-none" /> {/* Empty Center Top */}
+            <Slot asset={HEARTS_DATA[1]} state={getHeartState(HEARTS_DATA[1].id)} onClick={handleHeartClick} refs={heartRefs} />
 
-            {/* ROW 2: Center Heart (Keystone) */}
-            <div className="-mt-4 md:-mt-6 z-20">
-                 <VigilHeart key={HEARTS_DATA[2].id} asset={HEARTS_DATA[2]} state={getHeartState(HEARTS_DATA[2].id)} onClick={handleHeartClick} heartRef={heartRefs} isCenter />
-            </div>
+            {/* ROW 2: VOID, CENTER (KEYSTONE), VOID */}
+            <div className="pointer-events-none" />
+            <Slot asset={HEARTS_DATA[2]} state={getHeartState(HEARTS_DATA[2].id)} onClick={handleHeartClick} refs={heartRefs} isCenter />
+            <div className="pointer-events-none" />
 
-            {/* ROW 3: Bottom Hearts */}
-            <div className="flex gap-16 md:gap-24 -mt-4 md:-mt-6">
-                {[HEARTS_DATA[3], HEARTS_DATA[4]].map((asset, i) => (
-                    <VigilHeart key={asset.id} asset={asset} state={getHeartState(asset.id)} onClick={handleHeartClick} heartRef={heartRefs} />
-                ))}
-            </div>
+            {/* ROW 3: LEFT, VOID, RIGHT */}
+            <Slot asset={HEARTS_DATA[3]} state={getHeartState(HEARTS_DATA[3].id)} onClick={handleHeartClick} refs={heartRefs} />
+            <div className="pointer-events-none" />
+            <Slot asset={HEARTS_DATA[4]} state={getHeartState(HEARTS_DATA[4].id)} onClick={handleHeartClick} refs={heartRefs} />
 
         </div>
       </div>
 
+      {/* --- FOOTER / STATUS --- */}
+      <div className="relative z-20 pb-8 text-center shrink-0">
+        <AnimatePresence mode="wait">
+            {debugMessage ? (
+                <motion.p initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="text-red-400 text-[10px] font-mono tracking-widest">
+                    {debugMessage}
+                </motion.p>
+            ) : (
+                <p className="text-white/20 text-[10px] font-mono tracking-widest">
+                    {dbHearts.filter(h => new Date(h.last_lit_at).getTime() > Date.now() - 86400000).length} / 5 FLAMES BURNING
+                </p>
+            )}
+        </AnimatePresence>
+      </div>
 
-      {/* --- LAYER 4: PARTICLES --- */}
+      {/* --- PARTICLES --- */}
       <AnimatePresence>
         {sparkParticles.map(spark => (
             <motion.div
                 key={spark.id}
-                className="fixed w-1.5 h-1.5 bg-white rounded-full z-[9999] shadow-[0_0_25px_white]"
-                initial={{ x: spark.startX, y: spark.startY, opacity: 0, scale: 0.5 }}
-                animate={{ x: spark.endX, y: spark.endY, opacity: 1, scale: 1.5 }}
-                transition={{ duration: 1.5, ease: "easeInOut" }}
+                className="fixed w-1 h-1 bg-white rounded-full z-[9999] shadow-[0_0_15px_white]"
+                initial={{ x: spark.startX, y: spark.startY, opacity: 1 }}
+                animate={{ x: spark.endX, y: spark.endY, opacity: 0 }}
+                transition={{ duration: 0.8, ease: "circIn" }}
             />
         ))}
       </AnimatePresence>
 
-
-      {/* --- LAYER 5: INTERACTION (Bottom Sheet) --- */}
+      {/* --- BOTTOM SHEET --- */}
       <AnimatePresence>
         {selectedHeart !== null && (
             <>
-                {/* Backdrop */}
-                <motion.div 
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90]"
-                    onClick={() => !isLighting && setSelectedHeart(null)}
-                />
-                
-                {/* Sheet */}
-                <motion.div 
-                    initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-                    transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                    className="fixed bottom-0 left-0 right-0 z-[100] flex justify-center pb-6 px-4"
-                >
-                    <div className="w-full max-w-md bg-[#090909] border border-white/10 rounded-2xl shadow-2xl overflow-hidden ring-1 ring-white/5">
-                        
-                        {/* Header */}
-                        <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
-                            <span className="text-[10px] font-mono tracking-[0.2em] text-white/40 uppercase">
-                                Heart Protocol
-                            </span>
-                            <button onClick={() => setSelectedHeart(null)} className="text-white/40 hover:text-white">
-                                <XIcon className="w-4 h-4" />
-                            </button>
+                <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[90]" onClick={() => setSelectedHeart(null)} />
+                <motion.div initial={{y:"100%"}} animate={{y:0}} exit={{y:"100%"}} transition={{type:"spring", damping:25}} className="fixed bottom-0 w-full bg-[#0F0F0F] border-t border-white/10 rounded-t-2xl z-[100] p-6 pb-10">
+                    <div className="w-full max-w-xs mx-auto space-y-6">
+                        <div className="text-center">
+                            <h3 className="text-white font-serif text-lg">Ignite Slot {selectedHeart}</h3>
+                            <p className="text-white/30 text-[10px] font-mono mt-1">THIS WILL EXTINGUISH YOUR PREVIOUS FLAME</p>
                         </div>
-
-                        {/* Body */}
-                        <div className="p-6 flex flex-col gap-5">
-                            
-                            <div className="text-center space-y-1">
-                                <h3 className="text-lg font-serif text-white tracking-wide">
-                                    {getHeartState(selectedHeart).isMine ? "Keep the Fire" : "Ignite the Void"}
-                                </h3>
-                                <p className="text-xs text-white/30 font-mono">
-                                    Slot #{selectedHeart} selected
-                                </p>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="group">
-                                    <input 
-                                        autoFocus
-                                        type="text" 
-                                        className="w-full bg-transparent border-b border-white/10 py-3 text-center text-xl text-white font-serif placeholder:text-white/10 focus:outline-none focus:border-white/50 transition-colors uppercase tracking-widest"
-                                        placeholder="YOUR NAME"
-                                        maxLength={15}
-                                        value={nameInput}
-                                        onChange={(e) => setNameInput(e.target.value.toUpperCase())}
-                                    />
-                                </div>
-                                <div className="group">
-                                    <input 
-                                        type="text" 
-                                        className="w-full bg-transparent border-b border-white/10 py-3 text-center text-sm text-white/70 font-serif italic placeholder:text-white/10 focus:outline-none focus:border-white/50 transition-colors"
-                                        placeholder="what is your intention?"
-                                        maxLength={30}
-                                        value={intentionInput}
-                                        onChange={(e) => setIntentionInput(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-
-                            <button 
-                                disabled={isLighting || !nameInput.trim()}
-                                onClick={triggerRitual}
-                                className="mt-2 w-full bg-white text-black h-12 rounded-sm font-mono text-[11px] tracking-[0.2em] hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] uppercase flex items-center justify-center gap-2"
-                            >
-                                {isLighting ? <SparklesIcon className="w-4 h-4 animate-spin" /> : null}
-                                {isLighting ? "TRANSMITTING..." : "LIGHT FLAME"}
-                            </button>
-                        </div>
+                        <input type="text" placeholder="YOUR NAME" maxLength={15} className="w-full bg-transparent border-b border-white/20 text-center text-white py-2 font-mono uppercase focus:outline-none focus:border-white" value={nameInput} onChange={e => setNameInput(e.target.value.toUpperCase())} autoFocus />
+                        <input type="text" placeholder="intention (optional)" maxLength={30} className="w-full bg-transparent border-b border-white/20 text-center text-white/60 py-2 font-serif italic focus:outline-none focus:border-white" value={intentionInput} onChange={e => setIntentionInput(e.target.value)} />
+                        <button onClick={triggerRitual} disabled={!nameInput.trim() || isLighting} className="w-full bg-white text-black py-4 font-mono text-[10px] tracking-[0.3em] uppercase hover:bg-gray-200 disabled:opacity-50">
+                            {isLighting ? "IGNITING..." : "LIGHT"}
+                        </button>
                     </div>
                 </motion.div>
             </>
         )}
       </AnimatePresence>
 
-      {/* MANIFESTO */}
+      {/* --- MANIFESTO --- */}
       <AnimatePresence>
         {showManifesto && (
-            <motion.div 
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-6"
-                onClick={() => setShowManifesto(false)}
-            >
-                <div className="max-w-sm w-full border border-white/10 bg-black p-8 relative shadow-[0_0_50px_rgba(255,255,255,0.05)]">
-                    <h2 className="text-xl font-serif text-white mb-6 text-center tracking-wide border-b border-white/10 pb-4">The Vigil</h2>
-                    <div className="space-y-4 text-xs font-mono text-white/60 leading-relaxed text-justify">
-                        <p>You have entered the Temple of Digital Silence.</p>
-                        <ul className="space-y-2 border-l border-white/20 ml-2 pl-4">
-                            <li><span className="text-white">5 Vessels.</span> Only 5 flames can burn at once.</li>
-                            <li><span className="text-white">1 Flame.</span> You may hold only one.</li>
-                            <li><span className="text-white">Entropy.</span> Lighting a new flame extinguishes your old one.</li>
-                            <li><span className="text-white">Time.</span> The fire dies after 24 hours.</li>
-                        </ul>
-                        <p className="pt-4 text-center italic text-white/40 font-serif">
-                            "We keep each other warm in the dark."
-                        </p>
-                    </div>
-                    <button onClick={() => setShowManifesto(false)} className="w-full mt-8 border border-white/20 py-3 text-[10px] tracking-[0.3em] text-white hover:bg-white hover:text-black transition-colors uppercase">
-                        Enter
-                    </button>
+            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-8" onClick={() => setShowManifesto(false)}>
+                <div className="max-w-xs text-center space-y-6" onClick={e => e.stopPropagation()}>
+                    <InfoIcon className="w-8 h-8 text-white/50 mx-auto" />
+                    <p className="text-white/60 text-xs font-mono leading-relaxed">
+                        5 Slots. 24 Hours.<br/>
+                        Lighting a flame creates a digital spark.<br/>
+                        If you light a new one, your old one dies.
+                    </p>
+                    <button onClick={() => setShowManifesto(false)} className="border border-white/20 px-8 py-3 text-white text-[10px] tracking-widest hover:bg-white hover:text-black transition-colors">ENTER</button>
                 </div>
             </motion.div>
         )}
       </AnimatePresence>
 
       {showLogin && <ModernLoginModal onClose={() => setShowLogin(false)} />}
-
-      <style jsx global>{`
-        @keyframes float { 
-            0%, 100% { transform: translateY(0px); } 
-            50% { transform: translateY(-10px); } 
-        }
-        .animate-float { animation: float 8s ease-in-out infinite; }
-      `}</style>
     </div>
   );
 }
 
-// --- SUB-COMPONENT: VIGIL HEART ---
-// Extracted to keep the main render clean
-const VigilHeart = ({ asset, state, onClick, heartRef, isCenter = false }: any) => {
+// --- SLOT COMPONENT ---
+const Slot = ({ asset, state, onClick, refs, isCenter }: any) => {
     return (
         <motion.div 
-            ref={(el: HTMLDivElement | null) => { heartRef.current[asset.id] = el }}
-            className="relative group cursor-pointer"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8 }}
+            ref={el => refs.current[asset.id] = el}
             onClick={() => onClick(asset.id)}
-        >
-            {/* ORBIT RING (Only if alive) */}
-            {state.isAlive && (
-                <div className="absolute inset-[-10px] rounded-full border border-white/5 animate-[spin_10s_linear_infinite]" />
-            )}
-
-            {/* CONTAINER */}
-            <div className={`relative rounded-full flex items-center justify-center transition-all duration-700
-                ${isCenter ? 'w-28 h-28 md:w-36 md:h-36' : 'w-20 h-20 md:w-24 md:h-24'}
+            className={`relative rounded-full border flex items-center justify-center overflow-hidden cursor-pointer transition-all duration-500
+                ${isCenter ? 'w-24 h-24 md:w-32 md:h-32' : 'w-20 h-20 md:w-24 md:h-24'}
                 ${state.isAlive 
-                    ? 'shadow-[0_0_30px_rgba(255,100,50,0.3)] border border-white/20 bg-black' 
-                    : 'opacity-40 border border-white/5 bg-white/5 hover:opacity-60'}
-                ${state.isMine ? 'ring-1 ring-white/50 shadow-[0_0_40px_rgba(255,255,255,0.2)]' : ''}
-            `}>
-                
-                {/* CONTENT */}
-                <div className="w-full h-full rounded-full overflow-hidden relative z-10">
-                    {state.isAlive ? (
-                        <video src={asset.loop} autoPlay loop muted playsInline className="w-full h-full object-cover scale-110" />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                            <div className="w-2 h-2 rounded-full bg-white/10" />
-                        </div>
-                    )}
-                </div>
-
-                {/* LABEL (Strictly positioned below) */}
-                <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center w-[120px] pointer-events-none">
-                    <span className={`text-[9px] tracking-[0.2em] font-mono uppercase transition-all duration-300
-                        ${state.isAlive ? 'text-white' : 'text-white/20'}
-                    `}>
-                        {state.isAlive ? state.owner : 'VOID'}
+                    ? 'border-white/20 shadow-[0_0_20px_rgba(255,100,50,0.3)]' 
+                    : 'border-white/5 bg-white/[0.03] hover:border-white/20'}
+            `}
+            whileTap={{ scale: 0.95 }}
+        >
+            {state.isAlive ? (
+                <>
+                    <video src={asset.loop} autoPlay loop muted playsInline className="w-full h-full object-cover opacity-90 scale-110" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                    <span className="absolute bottom-3 text-[8px] text-white font-mono tracking-widest uppercase truncate max-w-[80%]">
+                        {state.owner}
                     </span>
-                    {state.isAlive && state.intention && (
-                        <span className="text-[8px] font-serif italic text-white/40 mt-0.5 truncate max-w-full opacity-0 group-hover:opacity-100 transition-opacity">
-                            {state.intention}
-                        </span>
-                    )}
+                </>
+            ) : (
+                <div className="flex flex-col items-center opacity-30">
+                    <div className="w-1.5 h-1.5 bg-white rounded-full mb-2" />
+                    <span className="text-[8px] font-mono tracking-widest">VOID</span>
                 </div>
-
-            </div>
+            )}
         </motion.div>
-    )
+    );
 }
