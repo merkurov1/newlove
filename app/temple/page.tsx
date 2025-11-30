@@ -17,7 +17,7 @@ export default function TemplePage() {
   const [isTelegram, setIsTelegram] = useState(false);
   const [userName, setUserName] = useState('Pilgrim');
 
-  // --- 1. SURGICAL AUTH (No setInterval junk) ---
+  // --- 1. SURGICAL AUTH (Fixed) ---
   useEffect(() => {
     // Check Web Session
     const localUser = typeof window !== 'undefined' ? localStorage.getItem('temple_user') : null;
@@ -29,30 +29,29 @@ export default function TemplePage() {
       if (tg) {
         setIsTelegram(true);
         tg.ready();
-        tg.expand();
+        tg.expand(); // Opens full height
         
-        // Style Injection for seamless feel
+        // Style Injection
         try { 
             tg.setHeaderColor('#000000'); 
             tg.setBackgroundColor('#000000'); 
-            tg.enableClosingConfirmation(); // Prevent accidental swipe-to-close
+            // REMOVED: tg.enableClosingConfirmation();  <-- THIS WAS THE ANNOYING POPUP
         } catch (e) {}
 
         // Auth Data Sync
         const user = tg.initDataUnsafe?.user;
         if (user) {
            setUserName(user.first_name || 'Pilgrim');
-           // Silent Auth Sync (Fire and Forget)
+           // Silent Auth Sync
            fetch('/api/temple/auth', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ...user, initData: tg.initData })
-           }).catch(() => {}); // Don't block UI on error
+           }).catch(() => {});
         }
       }
     };
 
-    // Script injection strategy
     if ((window as any).Telegram?.WebApp) {
         initTelegram();
     } else {
@@ -67,12 +66,12 @@ export default function TemplePage() {
   const handleNav = async (href: string, serviceName: string) => {
     const tg = (window as any).Telegram?.WebApp;
     
-    // Haptic Feedback (Physicality of Digital Assets)
+    // Haptic Feedback
     if (tg?.HapticFeedback) {
-        tg.HapticFeedback.impactOccurred('medium');
+        tg.HapticFeedback.impactOccurred('light'); // Changed to 'light' for faster feel
     }
 
-    // Analytics (Non-blocking)
+    // Analytics
     try {
         fetch('/api/temple_logs', {
             method: 'POST',
@@ -80,8 +79,8 @@ export default function TemplePage() {
         });
     } catch (e) {}
 
-    // Delay for animation feel
-    setTimeout(() => router.push(href), 100);
+    // Immediate navigation feels snappier
+    router.push(href);
   }
 
   return (
@@ -99,17 +98,17 @@ export default function TemplePage() {
             position: relative; overflow: hidden;
             transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
-        .temple-btn:active { transform: scale(0.96); border-color: #666; }
+        .temple-btn:active { transform: scale(0.98); border-color: #444; }
       `}</style>
       
       <div className="noise-overlay" />
 
       {/* HEADER */}
       <div className="mt-16 mb-12 text-center z-10 animate-in fade-in duration-700">
-        <h1 className="text-4xl font-bold tracking-[0.3em] mb-3 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+        <h1 className="text-4xl font-serif font-bold tracking-[0.2em] mb-3 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
           TEMPLE
         </h1>
-        <div className="text-[9px] text-zinc-600 tracking-[0.5em] uppercase">
+        <div className="text-[10px] text-zinc-600 tracking-[0.4em] uppercase font-mono">
            PROTOCOL v.3.0
         </div>
       </div>
@@ -118,17 +117,17 @@ export default function TemplePage() {
       <div className="w-full max-w-sm px-6 z-10 flex-1 flex flex-col justify-start gap-4">
         
         {/* SERVICES GRID */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           {SERVICES.map((s) => (
             <button 
                 key={s.id}
                 onClick={() => handleNav(s.path, s.name)}
-                className="temple-btn group bg-zinc-950/80 border border-zinc-800 p-6 rounded-sm flex flex-col items-center justify-center gap-4 hover:border-zinc-500 hover:bg-zinc-900 transition-all aspect-square"
+                className="temple-btn group bg-[#0A0A0A] border border-white/5 p-6 rounded-sm flex flex-col items-center justify-center gap-4 hover:border-white/20 hover:bg-[#111] transition-all aspect-square shadow-[0_0_20px_rgba(0,0,0,0.5)]"
             >
-                <div className="text-4xl filter grayscale group-hover:grayscale-0 transition-all duration-300 drop-shadow-md">
+                <div className="text-3xl filter grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-300 drop-shadow-md">
                     {s.icon}
                 </div>
-                <div className={`text-[10px] font-bold tracking-widest ${s.color} opacity-70 group-hover:opacity-100`}>
+                <div className={`text-[9px] font-bold tracking-widest ${s.color} opacity-60 group-hover:opacity-100 font-mono`}>
                     {s.name}
                 </div>
             </button>
@@ -138,20 +137,20 @@ export default function TemplePage() {
         {/* TRIBUTE (Special Asset) */}
         <button 
           onClick={() => handleNav('/tribute?mode=temple', 'Tribute')}
-          className="temple-btn w-full bg-gradient-to-b from-[#1a1208] to-[#0d0904] border border-yellow-900/30 p-6 rounded-sm flex flex-row items-center justify-between gap-4 mt-2 hover:border-yellow-700/50 hover:shadow-[0_0_20px_rgba(255,215,0,0.1)] group"
+          className="temple-btn w-full bg-gradient-to-r from-[#1a1208] via-[#0d0904] to-[#1a1208] border border-yellow-900/20 p-5 rounded-sm flex flex-row items-center justify-between gap-4 mt-2 hover:border-yellow-700/40 hover:shadow-[0_0_15px_rgba(255,215,0,0.05)] group"
         >
-           <div className="flex flex-col items-start">
-               <span className="text-xs font-bold tracking-[0.2em] text-yellow-600/90 group-hover:text-yellow-500 transition-colors">TRIBUTE</span>
-               <span className="text-[9px] text-yellow-800/60 uppercase tracking-widest mt-1">Fuel the Light</span>
+           <div className="flex flex-col items-start pl-2">
+               <span className="text-[10px] font-bold tracking-[0.25em] text-yellow-600/80 group-hover:text-yellow-500 transition-colors font-mono">TRIBUTE</span>
+               <span className="text-[8px] text-yellow-800/50 uppercase tracking-widest mt-1 font-mono">Fuel the Light</span>
            </div>
-           <div className="text-xl opacity-80 group-hover:scale-110 transition-transform">⚡</div>
+           <div className="text-sm opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-transform pr-2">⚡</div>
         </button>
 
       </div>
 
       {/* LOGS (Atmosphere) */}
       <div className="w-full max-w-md px-6 mb-8 mt-auto z-10">
-        <div className="border-t border-zinc-900/50 pt-4 opacity-50 hover:opacity-100 transition-opacity duration-500">
+        <div className="border-t border-white/5 pt-4 opacity-40 hover:opacity-100 transition-opacity duration-500">
            <TempleLogsClient initialLogs={[]} />
         </div>
       </div>

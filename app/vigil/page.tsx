@@ -309,9 +309,9 @@ export default function VigilPage() {
 
 // --- SLOT COMPONENT ---
 const Slot = ({ asset, state, onClick, refs, isCenter }: any) => {
-    return (
-        <motion.div 
-            ref={el => refs.current[asset.id] = el}
+  return (
+    <motion.div 
+      ref={(el: HTMLDivElement | null) => { refs.current[asset.id] = el }}
             onClick={() => onClick(asset.id)}
             className={`relative rounded-full border flex items-center justify-center overflow-hidden cursor-pointer transition-all duration-500
                 ${isCenter ? 'w-24 h-24 md:w-32 md:h-32' : 'w-20 h-20 md:w-24 md:h-24'}
