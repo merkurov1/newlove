@@ -1,9 +1,8 @@
 "use client";
 
 import React from 'react';
-import Image from 'next/image';
+// using native <img> to avoid requiring additional Next image domain config
 import { motion } from 'framer-motion';
-import { Calendar } from 'lucide-react';
 
 export default function Page() {
   const fade = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.45, ease: 'easeOut' } };
@@ -23,7 +22,10 @@ export default function Page() {
             <div className="flex flex-col items-end gap-3">
               <span className="inline-flex items-center gap-2 font-mono text-sm border border-red-500 text-red-500 px-3 py-1 rounded-sm">SOLD / REALIZED</span>
               <div className="flex items-center gap-2 text-sm opacity-60 font-mono">
-                <Calendar className="w-4 h-4" />
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block">
+                  <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M16 3v4M8 3v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
                 <span>SEPT 2021 — Sotheby's</span>
               </div>
             </div>
@@ -36,12 +38,11 @@ export default function Page() {
             <div className="col-span-12 md:col-span-7">
               <div className="bg-[#050505] border border-gray-800 p-6">
                 <div className="relative w-full" style={{ paddingBottom: '75%' }}>
-                  <Image
+                  <img
                     src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1039.jpeg"
                     alt="Viktor Pivovarov — Untitled (1985)"
-                    fill
-                    sizes="(min-width: 1024px) 800px, 600px"
-                    className="object-contain"
+                    className="object-contain w-full h-full absolute inset-0"
+                    style={{ objectFit: 'contain' }}
                   />
                 </div>
               </div>
