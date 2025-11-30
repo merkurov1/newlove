@@ -1,10 +1,42 @@
 "use client";
 
 import React from 'react';
+import type { Metadata } from 'next';
 // using native <img> to avoid requiring additional Next image domain config
 import { motion } from 'framer-motion';
 
-export default function Page() {
+export const metadata: Metadata = {
+  title: 'Viktor Pivovarov: The Metaphysical Room (1985) // Merkurov Analysis',
+  description:
+    "Case Study 003 — Viktor Pivovarov, Untitled (1985). Investment memorandum and curator analysis: provenance, deconstruction, and financial logic.",
+  openGraph: {
+    title: 'Viktor Pivovarov: The Metaphysical Room (1985)',
+    description:
+      "Case Study 003 — Viktor Pivovarov, Untitled (1985). Investment memorandum and curator analysis: provenance, deconstruction, and financial logic.",
+    url: 'https://merkurov.love/case-study/pivovarov',
+    siteName: 'Merkurov Curator Engine',
+    images: [
+      {
+        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1039.jpeg',
+        width: 1200,
+        height: 630,
+        alt: 'Viktor Pivovarov — Untitled (1985)'
+      }
+    ],
+    locale: 'en_US',
+    type: 'article'
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Case Study: Viktor Pivovarov — The Metaphysical Room',
+    description:
+      "Investment memo: Viktor Pivovarov (1985) — financial logic, provenance, and curator analysis.",
+    images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1039.jpeg']
+  },
+  keywords: ['Viktor Pivovarov', 'Case Study', 'Merkurov', 'Conceptualism', 'Art Investment', 'Sotheby\'s']
+};
+
+export default function PivovarovCaseStudy() {
   const fade = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.45, ease: 'easeOut' } };
 
   return (
