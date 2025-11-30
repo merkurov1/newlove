@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import TempleWrapper from '@/components/TempleWrapper';
 import { templeTrack } from '@/components/templeTrack';
-import { X, Info, Sparkles } from 'lucide-react'; // Убедись, что lucide-react установлен
+import { XIcon as X, InfoIcon as Info, SparklesIcon as Sparkles } from '@/components/icons'
 
 // --- CONFIGURATION ---
 const ADMIN_ID = 'fffa55a9-1ed7-49ff-953d-dfffa9f00844'; 
