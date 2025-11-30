@@ -203,7 +203,7 @@ export default function PivovarovCaseStudy() {
         </section>
 
         {/* Footer */}
-        <footer className="mt-20 border-t border-gray-900 pt-8 text-sm opacity-70 opacity-0 animate-fadeIn" style={{ animationDelay: '0.42s', animationFillMode: 'forwards' }}>
+        <footer className="mt-20 border-t border-gray-900 pt-8 text-sm opacity-0 animate-fadeIn" style={{ animationDelay: '0.42s', animationFillMode: 'forwards' }}>
           <div className="flex items-center justify-between">
             <div className="font-mono">The Curator Engine</div>
             <div className="font-mono">Merkurov OS</div>
