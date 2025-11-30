@@ -1,9 +1,6 @@
-"use client";
-
 import React from 'react';
 import type { Metadata } from 'next';
 // using native <img> to avoid requiring additional Next image domain config
-import { motion } from 'framer-motion';
 
 export const metadata: Metadata = {
   title: 'Viktor Pivovarov: The Metaphysical Room (1985) // Merkurov Analysis',
@@ -37,13 +34,11 @@ export const metadata: Metadata = {
 };
 
 export default function PivovarovCaseStudy() {
-  const fade = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.45, ease: 'easeOut' } };
-
   return (
     <main className="min-h-screen bg-black text-white font-sans">
       <div className="max-w-6xl mx-auto px-8 py-20">
         {/* Header */}
-        <motion.header {...fade} className="mb-16">
+        <header className="mb-16 opacity-0 animate-fadeIn" style={{ animationDelay: '0.05s', animationFillMode: 'forwards' }}>
           <div className="flex items-center justify-between gap-6">
             <div>
               <div className="text-[12px] uppercase opacity-50 tracking-widest font-mono">CASE STUDY 003</div>
@@ -62,10 +57,10 @@ export default function PivovarovCaseStudy() {
               </div>
             </div>
           </div>
-        </motion.header>
+        </header>
 
         {/* Asset */}
-        <motion.section {...fade} className="mb-16">
+        <section className="mb-16 opacity-0 animate-fadeIn" style={{ animationDelay: '0.12s', animationFillMode: 'forwards' }}>
           <div className="grid grid-cols-12 gap-8 items-start">
             <div className="col-span-12 md:col-span-7">
               <div className="bg-[#050505] border border-gray-800 p-6">
@@ -127,13 +122,13 @@ export default function PivovarovCaseStudy() {
               </div>
             </aside>
           </div>
-        </motion.section>
+        </section>
 
         {/* Analytical Text Sections — two column layout per section */}
         <section>
           <div className="space-y-12">
             {/* Section 01 */}
-            <motion.div {...fade} className="grid grid-cols-12 gap-8 items-start">
+            <div className="grid grid-cols-12 gap-8 items-start opacity-0 animate-fadeIn" style={{ animationDelay: '0.18s', animationFillMode: 'forwards' }}>
               <div className="col-span-12 md:col-span-3">
                 <div className="font-mono opacity-50 text-sm">SECTION 01</div>
                 <h3 className="mt-4 font-serif text-xl">EXECUTIVE SUMMARY</h3>
@@ -149,10 +144,10 @@ export default function PivovarovCaseStudy() {
                   <strong>The Metric:</strong> Sold at Sotheby's 'Escape Artists' auction. This sale confirms that high-intellect Conceptualism remains a 'Blue Chip' asset, immune to the volatility of decorative art.
                 </p>
               </div>
-            </motion.div>
+            </div>
 
             {/* Section 02 */}
-            <motion.div {...fade} className="grid grid-cols-12 gap-8 items-start">
+            <div className="grid grid-cols-12 gap-8 items-start opacity-0 animate-fadeIn" style={{ animationDelay: '0.24s', animationFillMode: 'forwards' }}>
               <div className="col-span-12 md:col-span-3">
                 <div className="font-mono opacity-50 text-sm">SECTION 02</div>
                 <h3 className="mt-4 font-serif text-xl">THE ASSET (DECONSTRUCTION)</h3>
@@ -168,10 +163,10 @@ export default function PivovarovCaseStudy() {
                   <strong>The Philosophy:</strong> 'Interiority vs. Exteriority.' The painting acts as a window not into the world, but into the mind of a person who has ceased to believe in the material reality of the USSR.
                 </p>
               </div>
-            </motion.div>
+            </div>
 
             {/* Section 03 */}
-            <motion.div {...fade} className="grid grid-cols-12 gap-8 items-start">
+            <div className="grid grid-cols-12 gap-8 items-start opacity-0 animate-fadeIn" style={{ animationDelay: '0.30s', animationFillMode: 'forwards' }}>
               <div className="col-span-12 md:col-span-3">
                 <div className="font-mono opacity-50 text-sm">SECTION 03</div>
                 <h3 className="mt-4 font-serif text-xl">FINANCIAL LOGIC (THE KABAKOV GAP)</h3>
@@ -187,10 +182,10 @@ export default function PivovarovCaseStudy() {
                   <strong>The Strategy:</strong> Strong Buy & Hold. As the supply of 1980s Conceptualism dries up, the price gap between Kabakov and Pivovarov will inevitably close.
                 </p>
               </div>
-            </motion.div>
+            </div>
 
             {/* Section 04 */}
-            <motion.div {...fade} className="grid grid-cols-12 gap-8 items-start">
+            <div className="grid grid-cols-12 gap-8 items-start opacity-0 animate-fadeIn" style={{ animationDelay: '0.36s', animationFillMode: 'forwards' }}>
               <div className="col-span-12 md:col-span-3">
                 <div className="font-mono opacity-50 text-sm">SECTION 04</div>
                 <h3 className="mt-4 font-serif text-xl">THE VERDICT</h3>
@@ -203,17 +198,17 @@ export default function PivovarovCaseStudy() {
                   <strong>Action:</strong> Asset Archived. Benchmark Recorded. We are not looking at a painting; we are looking at the blueprints of the Soviet subconscious.
                 </p>
               </div>
-            </motion.div>
+            </div>
           </div>
         </section>
 
         {/* Footer */}
-        <motion.footer {...fade} className="mt-20 border-t border-gray-900 pt-8 text-sm opacity-70">
+        <footer className="mt-20 border-t border-gray-900 pt-8 text-sm opacity-70 opacity-0 animate-fadeIn" style={{ animationDelay: '0.42s', animationFillMode: 'forwards' }}>
           <div className="flex items-center justify-between">
             <div className="font-mono">The Curator Engine</div>
             <div className="font-mono">Merkurov OS</div>
           </div>
-        </motion.footer>
+        </footer>
       </div>
     </main>
   );
