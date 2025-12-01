@@ -149,15 +149,15 @@ export default function TemplePage() {
             PROTOCOL v.3.0
           </div>
 
-          {/* realtime burning count (absolutely positioned to avoid shifting layout) */}
-          <div className="absolute left-1/2 -bottom-6 transform -translate-x-1/2 text-center">
-            <div className="text-3xl font-serif font-bold tracking-wide leading-tight">{burningCount}/5</div>
+          {/* realtime burning count (in-flow to avoid overlapping content) */}
+          <div className="mt-6 text-center">
+            <div className="text-2xl md:text-3xl font-serif font-bold tracking-wide leading-tight">{burningCount}/5</div>
             <div className="text-[11px] text-white/40 tracking-widest font-mono mt-1 max-w-[80vw] truncate">{burningNames}</div>
           </div>
       </div>
 
-      {/* spacer to accommodate absolute burning counter */}
-      <div className="h-10 md:h-12" />
+      {/* small spacer so header and grid don't collide */}
+      <div className="h-6 md:h-8" />
 
       {/* GRID CONTAINER */}
       <div className="w-full max-w-sm px-6 z-10 flex-1 flex flex-col justify-start gap-4">
