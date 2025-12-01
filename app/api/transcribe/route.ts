@@ -29,15 +29,26 @@ export async function POST(req: Request) {
     const OPENAI_KEY = process.env.OPENAI_API_KEY;
     let text = null;
 
+    // Prepare debug info to return to the client for easier troubleshooting
+    const debug: Record<string, any> = { audioFetch: null, openai: null };
+
     if (OPENAI_KEY) {
       // call OpenAI Whisper API (example)
       try {
         const form = new FormData();
-        const audioResp = await fetch(url);
-        if (!audioResp.ok) throw new Error(`failed to fetch audio from url: ${audioResp.status}`);
+        const audioResp = await fetch(url as string);
+        debug.audioFetch = { ok: audioResp.ok, status: audioResp.status, headers: {} as any };
+        audioResp.headers.forEach((v, k) => { (debug.audioFetch.headers as any)[k] = v; });
+        if (!audioResp.ok) {
+          const bodyText = await audioResp.text().catch(() => 'no body');
+          debug.audioFetch.body = bodyText;
+          return NextResponse.json({ ok: false, error: `failed to fetch audio from url: ${audioResp.status}`, debug }, { status: 502 });
+        }
         const audioBuf = await audioResp.arrayBuffer();
-        const contentType = audioResp.headers.get('content-type') || 'audio/webm';
-        const fileBlob = new Blob([audioBuf], { type: contentType });
+        debug.audioFetch.size = audioBuf.byteLength;
+
+        const contentTypeFromAudio = audioResp.headers.get('content-type') || 'audio/webm';
+        const fileBlob = new Blob([audioBuf], { type: contentTypeFromAudio });
         // include a filename to be safe for multipart handling on the OpenAI side
         // @ts-ignore
         form.append('file', fileBlob, 'whisper.webm');
@@ -49,20 +60,23 @@ export async function POST(req: Request) {
           body: form as any
         });
 
+        debug.openai = { ok: r.ok, status: r.status };
+        const openaiBodyText = await r.text().catch(() => '');
+        debug.openai.body = openaiBodyText;
         if (!r.ok) {
-          const bodyText = await r.text().catch(() => 'no body');
-          console.error('openai transcribe failed', r.status, bodyText);
-          throw new Error(`openai transcribe failed: ${r.status} ${bodyText}`);
+          return NextResponse.json({ ok: false, error: `openai transcribe failed: ${r.status}`, debug }, { status: 502 });
         }
-
-        const parsed = await r.json();
+        let parsed: any = {};
+        try { parsed = JSON.parse(openaiBodyText); } catch (e) { parsed = {}; }
         text = parsed.text || parsed.transcript || null;
       } catch (e) {
+        debug.error = String(e);
         console.error('transcription error', e);
-        throw e;
+        return NextResponse.json({ ok: false, error: String(e), debug }, { status: 500 });
       }
     } else {
       // No OpenAI key — return instruction for admin to transcribe manually.
+      debug.note = 'OPENAI_API_KEY not configured';
       text = null;
     }
 
