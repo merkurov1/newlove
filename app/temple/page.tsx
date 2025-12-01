@@ -143,10 +143,7 @@ export default function TemplePage() {
 
       {/* HEADER */}
       <div className="mt-16 mb-12 text-center z-10 animate-in fade-in duration-700 relative">
-        {/* Microphone button top-right */}
-        <div className="absolute right-6 top-6 z-30">
-          <MicrophoneButton />
-        </div>
+        {/* top-right microphone removed (moved to Tribute area) */}
         <h1 className="text-4xl font-serif font-bold tracking-[0.2em] mb-3 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
           TEMPLE
         </h1>
@@ -198,7 +195,9 @@ export default function TemplePage() {
              <div className="text-sm opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-transform pr-2">⚡</div>
           </button>
 
-          {/* legacy microphone removed (moved inline) */}
+          <div className="shrink-0">
+            <MicrophoneButton />
+          </div>
         </div>
 
       </div>

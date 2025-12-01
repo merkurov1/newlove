@@ -25,8 +25,9 @@ export async function POST(req: Request) {
     const { data: whisper } = await supabase.from('whispers').select('*').eq('id', whisperId).single();
     if (!whisper) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 });
 
-    const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-    if (!BOT_TOKEN) return NextResponse.json({ ok: false, error: 'bot token missing' }, { status: 500 });
+    // Prefer PIERROT_BOT_TOKEN (new bot); fall back to legacy TELEGRAM_BOT_TOKEN
+    const BOT_TOKEN = process.env.PIERROT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+    if (!BOT_TOKEN) return NextResponse.json({ ok: false, error: 'bot token missing (set PIERROT_BOT_TOKEN or TELEGRAM_BOT_TOKEN)' }, { status: 500 });
 
     // try to send message to user via bot
     const sendUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;

@@ -37,7 +37,6 @@ export async function POST(req: Request) {
       // call OpenAI Whisper API (example)
       try {
         const form = new FormData();
-        const audioResp = await fetch(url as string);
         // fetch audio
         const audioResp = await fetch(url as string);
         if (!audioResp.ok) {
