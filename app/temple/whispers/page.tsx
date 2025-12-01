@@ -3,7 +3,7 @@ import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAu
 import MicrophoneButton from '@/components/MicrophoneButton';
 import WhisperTestClient from '../WhisperTest.client';
 import dynamic from 'next/dynamic';
-const WhisperActions = dynamic(() => import('./WhisperActions.client'), { ssr: false });
+const WhisperActions = dynamic(() => import('../WhisperActions.client'), { ssr: false });
 
 export default async function WhispersPage() {
   // require admin
