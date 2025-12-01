@@ -185,17 +185,23 @@ export default function TemplePage() {
           ))}
         </div>
 
-        {/* TRIBUTE (Special Asset) */}
-        <button 
-          onClick={() => handleNav('/tribute?mode=temple', 'Tribute')}
-          className="temple-btn w-full bg-gradient-to-r from-[#1a1208] via-[#0d0904] to-[#1a1208] border border-yellow-900/20 p-5 rounded-sm flex flex-row items-center justify-between gap-4 mt-2 hover:border-yellow-700/40 hover:shadow-[0_0_15px_rgba(255,215,0,0.05)] group"
-        >
-           <div className="flex flex-col items-start pl-2">
-               <span className="text-[10px] font-bold tracking-[0.25em] text-yellow-600/80 group-hover:text-yellow-500 transition-colors font-mono">TRIBUTE</span>
-               <span className="text-[8px] text-yellow-800/50 uppercase tracking-widest mt-1 font-mono">Fuel the Light</span>
-           </div>
-           <div className="text-sm opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-transform pr-2">⚡</div>
-        </button>
+        {/* TRIBUTE (Special Asset) with prominent Microphone next to it */}
+        <div className="mt-2 flex items-center gap-3 w-full">
+          <button 
+            onClick={() => handleNav('/tribute?mode=temple', 'Tribute')}
+            className="temple-btn flex-1 bg-gradient-to-r from-[#1a1208] via-[#0d0904] to-[#1a1208] border border-yellow-900/20 p-5 rounded-sm flex flex-row items-center justify-between gap-4 hover:border-yellow-700/40 hover:shadow-[0_0_15px_rgba(255,215,0,0.05)] group"
+          >
+             <div className="flex flex-col items-start pl-2">
+                 <span className="text-[10px] font-bold tracking-[0.25em] text-yellow-600/80 group-hover:text-yellow-500 transition-colors font-mono">TRIBUTE</span>
+                 <span className="text-[8px] text-yellow-800/50 uppercase tracking-widest mt-1 font-mono">Fuel the Light</span>
+             </div>
+             <div className="text-sm opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-transform pr-2">⚡</div>
+          </button>
+
+          <div className="shrink-0">
+            <MicrophoneButton />
+          </div>
+        </div>
 
       </div>
 
