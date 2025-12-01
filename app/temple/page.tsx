@@ -151,7 +151,7 @@ export default function TemplePage() {
           TEMPLE
         </h1>
           <div className="text-[10px] text-zinc-600 tracking-[0.4em] uppercase font-mono">
-            PROTOCOL v.3.0
+            PROTOCOL v.3.5
           </div>
 
           {/* realtime burning count (in-flow to avoid overlapping content) */}
