@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase-browser';
 import TempleLogsClient from './TempleLogs.client';
 
 // --- CONFIG ---
@@ -16,6 +17,18 @@ export default function TemplePage() {
   const router = useRouter();
   const [isTelegram, setIsTelegram] = useState(false);
   const [userName, setUserName] = useState('Pilgrim');
+  const [dbHearts, setDbHearts] = useState<any[]>([]);
+
+  const supabase = createClient();
+
+  // derived realtime data
+  const burningCount = dbHearts.filter(h => h?.last_lit_at && (Date.now() - new Date(h.last_lit_at).getTime()) < 24 * 60 * 60 * 1000).length;
+  const burningNames = dbHearts
+    .filter(h => h?.last_lit_at && (Date.now() - new Date(h.last_lit_at).getTime()) < 24 * 60 * 60 * 1000)
+    .map(h => h.owner_name || 'someone')
+    .join(' · ') || 'the temple waits';
+
+  const glowColor = `rgba(255,140,60,${Math.min(burningCount / 5, 1) * 0.12})`;
 
   // --- 1. SURGICAL AUTH (Fixed) ---
   useEffect(() => {
@@ -60,6 +73,25 @@ export default function TemplePage() {
         script.onload = initTelegram;
         document.head.appendChild(script);
     }
+
+    // fetch initial hearts and subscribe to realtime changes
+    const fetchHearts = async () => {
+      try {
+        const { data } = await supabase.from('vigil_hearts').select('*');
+        if (data) setDbHearts(data as any[]);
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    fetchHearts();
+
+    const channel = supabase
+      .channel('temple_vigil_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vigil_hearts' }, () => fetchHearts())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   // --- 2. TACTILE NAVIGATION ---
@@ -84,7 +116,12 @@ export default function TemplePage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono flex flex-col items-center relative overflow-hidden selection:bg-white selection:text-black">
+    <div
+      className="min-h-screen bg-black text-white font-mono flex flex-col items-center relative overflow-hidden selection:bg-white selection:text-black"
+      style={{
+        background: `radial-gradient(circle at 50% 30%, ${glowColor} 0%, rgba(0,0,0,0) 60%), #000`,
+      }}
+    >
       
       {/* NOISE & GLOBAL OVERRIDES */}
       <style jsx global>{`
@@ -108,9 +145,15 @@ export default function TemplePage() {
         <h1 className="text-4xl font-serif font-bold tracking-[0.2em] mb-3 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
           TEMPLE
         </h1>
-        <div className="text-[10px] text-zinc-600 tracking-[0.4em] uppercase font-mono">
-           PROTOCOL v.3.0
-        </div>
+          <div className="text-[10px] text-zinc-600 tracking-[0.4em] uppercase font-mono">
+            PROTOCOL v.3.0
+          </div>
+
+          {/* realtime burning count */}
+          <div className="mt-4">
+           <div className="text-3xl font-serif font-bold tracking-wide">{burningCount}/5</div>
+           <div className="text-[11px] text-white/40 tracking-widest font-mono mt-1">{burningNames}</div>
+          </div>
       </div>
 
       {/* GRID CONTAINER */}

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useRef, useMemo, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext'; 
 import dynamic from 'next/dynamic';
@@ -47,6 +47,16 @@ export default function VigilPage() {
   const angelRef = useRef<HTMLDivElement | null>(null);
   const heartRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const supabase = createClient();
+
+  // derived realtime data for display
+  const burningCount = dbHearts.filter(h => h?.last_lit_at && (Date.now() - new Date(h.last_lit_at).getTime()) < 24 * 60 * 60 * 1000).length;
+  const burningNames = dbHearts
+    .filter(h => h?.last_lit_at && (Date.now() - new Date(h.last_lit_at).getTime()) < 24 * 60 * 60 * 1000)
+    .map(h => h.owner_name || 'someone')
+    .join(' · ') || 'the temple waits';
+
+  const glowIntensity = Math.min(burningCount / 5, 1);
+  const glowColor = `rgba(255,140,60,${glowIntensity * 0.14})`;
 
   // --- LOGIC ---
   const triggerHaptic = (style: 'light' | 'medium' | 'heavy' | 'error') => {
@@ -187,8 +197,8 @@ export default function VigilPage() {
   };
 
   return (
-    <div className="vigil-root relative w-full h-[100dvh] bg-[#050505] overflow-hidden flex flex-col font-sans selection:bg-red-500/30">
-      <Suspense fallback={null}><TempleWrapper /></Suspense>
+    <div className="vigil-root relative w-full h-[100dvh] overflow-hidden flex flex-col font-sans selection:bg-red-500/30" style={{ background: `radial-gradient(circle at 50% 30%, ${glowColor} 0%, rgba(0,0,0,0) 60%), #050505` }}>
+      <React.Suspense fallback={null}><TempleWrapper /></React.Suspense>
 
       {/* --- BACKGROUND --- */}
       {/* Subtle Gradient from Top */}
@@ -203,9 +213,10 @@ export default function VigilPage() {
         <div ref={angelRef} className="relative w-16 h-16 md:w-20 md:h-20 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.05)]">
             <img src={ANGEL_IMAGE} className="w-10 md:w-12 opacity-80 contrast-125 grayscale" alt="Angel" />
         </div>
-        <h1 className="mt-4 text-[10px] tracking-[0.4em] text-white/40 uppercase font-mono">
-            Temple of Love
-        </h1>
+        <h1 className="mt-4 text-[10px] tracking-[0.4em] text-white/40 uppercase font-mono">Temple of Love</h1>
+        <div className="mt-2 text-center">
+          <div className="text-sm font-mono text-white/40 tracking-widest">{burningCount}/5 FLAMES BURNING</div>
+        </div>
       </div>
 
       {/* --- INFO BUTTON --- */}
@@ -233,6 +244,8 @@ export default function VigilPage() {
             <Slot asset={HEARTS_DATA[4]} state={getHeartState(HEARTS_DATA[4].id)} onClick={handleHeartClick} refs={heartRefs} />
 
         </div>
+        {/* names under grid */}
+        <div className="w-full max-w-[400px] text-center mt-4 text-[11px] text-white/50 font-mono tracking-widest">{burningNames}</div>
       </div>
 
       {/* --- FOOTER / STATUS --- */}
