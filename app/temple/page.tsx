@@ -1,6 +1,7 @@
-'use client';
+"use client";
 
 import { useEffect, useState } from 'react';
+import MicrophoneButton from '@/components/MicrophoneButton';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase-browser';
 import TempleLogsClient from './TempleLogs.client';
@@ -142,6 +143,10 @@ export default function TemplePage() {
 
       {/* HEADER */}
       <div className="mt-16 mb-12 text-center z-10 animate-in fade-in duration-700 relative">
+        {/* Microphone button top-right */}
+        <div className="absolute right-6 top-6 z-30">
+          <MicrophoneButton />
+        </div>
         <h1 className="text-4xl font-serif font-bold tracking-[0.2em] mb-3 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
           TEMPLE
         </h1>
