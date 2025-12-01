@@ -7,59 +7,80 @@ export default function MicrophoneInline() {
   const [recording, setRecording] = useState(false);
   const [supported, setSupported] = useState(true);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [timer, setTimer] = useState(0);
-  const mediaRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<number | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [timer, setTimer] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const mediaRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<any>(null); // Use any to avoid NodeJS.Timeout vs number conflict
+  
   const supabase = createClient();
 
+  // Cleanup on unmount
   useEffect(() => {
     if (!navigator.mediaDevices || !window.MediaRecorder) setSupported(false);
     return () => {
-      if (timerRef.current) { clearInterval(timerRef.current); }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
-        streamRef.current = null;
-      }
-      if (audioUrl) { URL.revokeObjectURL(audioUrl); setAudioUrl(null); }
+      cleanupResources();
     };
   }, []);
 
+  const cleanupResources = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    
+    // Stop all tracks to release hardware microphone
+    if (mediaRef.current && mediaRef.current.stream) {
+      mediaRef.current.stream.getTracks().forEach(t => t.stop());
+    }
+  };
+
   const start = async () => {
     try {
+      setUploadError(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      let mr: MediaRecorder;
-      try {
-        mr = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      } catch (e) {
-        mr = new MediaRecorder(stream as MediaStream);
-      }
+      
+      // FIX: iOS Safari logic
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
+        ? 'audio/webm' 
+        : MediaRecorder.isTypeSupported('audio/mp4') 
+          ? 'audio/mp4' 
+          : undefined;
+
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRef.current = mr;
       chunksRef.current = [];
-      mr.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
+
+      mr.ondataavailable = (e) => { 
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data); 
+      };
+
       mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const type = mr.mimeType || 'audio/webm';
+        const blob = new Blob(chunksRef.current, { type });
         setRecordedBlob(blob);
+        
+        // Generate preview URL
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(t => t.stop());
-          streamRef.current = null;
-        }
+
+        // Stop hardware
+        stream.getTracks().forEach(t => t.stop());
         setRecording(false);
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        if (timerRef.current) clearInterval(timerRef.current);
       };
+
       mr.start();
       setRecording(true);
+      
+      // Reset Timer
       setTimer(0);
-      timerRef.current = window.setInterval(() => setTimer(t => t + 1), 1000) as unknown as number;
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => setTimer(t => t + 1), 1000);
+
     } catch (e) {
-      console.error('mic start error', e);
+      console.error('Mic start error:', e);
       setSupported(false);
     }
   };
@@ -67,29 +88,40 @@ export default function MicrophoneInline() {
   const stop = () => {
     const mr = mediaRef.current;
     if (mr && mr.state !== 'inactive') {
-      try { mr.stop(); } catch (e) { console.warn('mr.stop() failed', e); }
-    }
-    if (streamRef.current) {
-      try { streamRef.current.getTracks().forEach(t => t.stop()); } catch (e) {}
-      streamRef.current = null;
+      mr.stop(); // This triggers onstop above
     }
   };
 
   async function uploadAndCreate(blob: Blob) {
-    const fn = `whispers/${Date.now()}-voice.webm`;
+    // Detect extension
+    const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+    const filename = `whispers/${Date.now()}-voice.${ext}`;
+    
     try {
       setUploading(true);
       setUploadError(null);
-      // @ts-ignore
-      const up = await supabase.storage.from('whispers').upload(fn, blob, { cacheControl: '3600', upsert: false });
-      if (up.error) throw up.error;
-      const { data: pub } = supabase.storage.from('whispers').getPublicUrl(fn);
-      const publicUrl = (pub as any)?.publicUrl || null;
 
+      // 1. Upload
+      const { error: upError } = await supabase.storage
+        .from('whispers')
+        .upload(filename, blob, { 
+            cacheControl: '3600', 
+            upsert: false,
+            contentType: blob.type 
+        });
+      
+      if (upError) throw upError;
+
+      // 2. Get URL
+      const { data } = supabase.storage.from('whispers').getPublicUrl(filename);
+      const publicUrl = data.publicUrl;
+
+      // 3. Telegram Metadata
       // @ts-ignore
       const tg = (window as any).Telegram?.WebApp;
       const tgUser = tg?.initDataUnsafe?.user;
 
+      // 4. API Call
       const resp = await fetch('/api/whispers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,68 +130,109 @@ export default function MicrophoneInline() {
           telegram_first_name: tgUser?.first_name || null,
           telegram_file_id: publicUrl,
           telegram_file_unique_id: null,
-          storage_path: fn
+          storage_path: filename
         })
       });
 
-      if (!resp.ok) {
-        const text = await resp.text().catch(() => 'unknown');
-        throw new Error(`server returned ${resp.status}: ${text}`);
-      }
+      if (!resp.ok) throw new Error(`API Error: ${resp.status}`);
+
+      // Success cleanup
       setUploading(false);
-      setRecordedBlob(null);
-      if (audioUrl) { URL.revokeObjectURL(audioUrl); setAudioUrl(null); }
+      discardRecorded(); // Reset UI for next recording
+
     } catch (e: any) {
-      console.error('upload failed', e);
+      console.error('Upload failed:', e);
       setUploading(false);
-      setUploadError(e?.message || String(e));
+      setUploadError(e.message || 'Unknown error');
     }
   }
 
   const sendRecorded = async () => {
     if (!recordedBlob) return;
     await uploadAndCreate(recordedBlob);
-    setRecordedBlob(null);
-    setTimer(0);
   };
 
   const discardRecorded = () => {
     setRecordedBlob(null);
-    if (audioUrl) { URL.revokeObjectURL(audioUrl); setAudioUrl(null); }
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      setAudioUrl(null);
+    }
     setTimer(0);
     setUploadError(null);
   };
 
-  if (!supported) return null;
+  if (!supported) return (
+    <div className="p-4 bg-red-900/20 border border-red-500/50 text-red-200 text-xs rounded">
+      Microphone not supported in this browser.
+    </div>
+  );
 
   return (
-    <div className="w-full bg-[#0A0A0A] border border-white/6 p-4 rounded-sm flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-mono text-white/80">Шёпот</div>
-        <div className="text-xs text-white/40">{timer}s</div>
+    <div className="w-full bg-[#0A0A0A] border border-white/10 p-4 rounded-md flex flex-col gap-4 shadow-sm">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-white/5 pb-2">
+        <div className="text-sm font-medium text-white/80 uppercase tracking-wider">Voice Note</div>
+        <div className={`text-xs font-mono ${recording ? 'text-red-500 animate-pulse' : 'text-white/40'}`}>
+          00:{timer.toString().padStart(2, '0')}
+        </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        {!recording ? (
-          <button onClick={start} className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 rounded">Record</button>
+      {/* Controls Area */}
+      <div className="flex flex-col gap-3">
+        {!recordedBlob ? (
+          // RECORDING STATE
+          !recording ? (
+            <button 
+              onClick={start} 
+              className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded transition-all flex items-center justify-center gap-2 group"
+            >
+              <div className="w-2 h-2 rounded-full bg-red-500 group-hover:scale-125 transition-transform" />
+              <span className="text-sm">Start Recording</span>
+            </button>
+          ) : (
+            <button 
+              onClick={stop} 
+              className="w-full bg-red-600 hover:bg-red-500 text-white py-3 rounded transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-900/20"
+            >
+              <div className="w-3 h-3 bg-white rounded-sm animate-pulse" />
+              <span className="text-sm font-bold">Stop Recording</span>
+            </button>
+          )
         ) : (
-          <button onClick={stop} className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-black py-2 rounded">Stop</button>
-        )}
-        {audioUrl ? (
-          <audio controls src={audioUrl} className="w-40" />
-        ) : (
-          <div className="w-40 text-[12px] text-white/40">No recording</div>
+          // REVIEW STATE
+          <div className="flex flex-col gap-3 animate-in fade-in duration-300">
+             {audioUrl && (
+              <audio controls src={audioUrl} className="w-full h-10 block" />
+            )}
+            
+            <div className="flex gap-2 mt-1">
+              <button 
+                disabled={uploading} 
+                onClick={sendRecorded} 
+                className="flex-1 bg-white text-black text-sm font-medium py-2 rounded hover:bg-gray-200 disabled:opacity-50 transition-colors"
+              >
+                {uploading ? 'Sending...' : 'Send Whisper'}
+              </button>
+              
+              <button 
+                disabled={uploading}
+                onClick={discardRecorded} 
+                className="px-4 py-2 bg-white/5 border border-white/10 text-white/60 text-sm rounded hover:bg-white/10 hover:text-white transition-colors"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
-      <div className="flex gap-2">
-        <button disabled={!recordedBlob || uploading} onClick={sendRecorded} className="flex-1 bg-white text-black py-2 rounded disabled:opacity-50">{uploading ? 'Sending…' : 'Send'}</button>
-        <button onClick={discardRecorded} className="px-3 py-2 bg-white/6 rounded">Discard</button>
-      </div>
-
-      {uploadError ? (
-        <div className="text-xs text-red-400 mt-2">Upload error: {uploadError}</div>
-      ) : null}
+      {/* Error Message */}
+      {uploadError && (
+        <div className="text-xs text-red-400 bg-red-900/10 p-2 rounded border border-red-500/20">
+          Error: {uploadError}
+        </div>
+      )}
     </div>
   );
 }
