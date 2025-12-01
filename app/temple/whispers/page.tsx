@@ -1,6 +1,7 @@
 import React from 'react';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 import MicrophoneButton from '@/components/MicrophoneButton';
+import WhisperTestClient from '../WhisperTest.client';
 
 export default async function WhispersPage() {
   // require admin
@@ -18,7 +19,7 @@ export default async function WhispersPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-serif">Шёпоты в Храм</h1>
           <div className="flex items-center gap-3">
-            <MicrophoneButton />
+            <WhisperTestClient />
           </div>
         </div>
 
