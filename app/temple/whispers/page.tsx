@@ -2,7 +2,8 @@ import React from 'react';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 import MicrophoneButton from '@/components/MicrophoneButton';
 import WhisperTestClient from '../WhisperTest.client';
-import WhisperActions from './WhisperActions.client';
+import dynamic from 'next/dynamic';
+const WhisperActions = dynamic(() => import('./WhisperActions.client'), { ssr: false });
 
 export default async function WhispersPage() {
   // require admin
