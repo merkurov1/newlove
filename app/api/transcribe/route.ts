@@ -6,8 +6,20 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { whisperId, url } = body;
+    // Accept either JSON or form-encoded requests (admin HTML form uses form-encoded)
+    let whisperId: string | null = null;
+    let url: string | null = null;
+    const contentType = req.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const body = await req.json();
+      whisperId = body.whisperId || body.whisper_id || null;
+      url = body.url || null;
+    } else {
+      const text = await req.text();
+      const params = new URLSearchParams(text);
+      whisperId = params.get('whisperId') || params.get('whisper_id');
+      url = params.get('url');
+    }
     if (!whisperId || !url) return NextResponse.json({ ok: false, error: 'missing' }, { status: 400 });
 
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');

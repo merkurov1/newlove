@@ -3,8 +3,20 @@ import { NextResponse } from 'next/server';
 // Accept { whisperId, message } and send message to the original user via bot
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { whisperId, message } = body;
+    // Support both JSON and form-encoded submissions (HTML forms send x-www-form-urlencoded)
+    let whisperId: string | null = null;
+    let message: string | null = null;
+    const contentType = req.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const body = await req.json();
+      whisperId = body.whisperId || body.whisper_id || null;
+      message = body.message || null;
+    } else {
+      const text = await req.text();
+      const params = new URLSearchParams(text);
+      whisperId = params.get('whisperId') || params.get('whisper_id');
+      message = params.get('message');
+    }
     if (!whisperId || !message) return NextResponse.json({ ok: false, error: 'missing' }, { status: 400 });
 
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');

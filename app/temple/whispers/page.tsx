@@ -2,6 +2,7 @@ import React from 'react';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 import MicrophoneButton from '@/components/MicrophoneButton';
 import WhisperTestClient from '../WhisperTest.client';
+import WhisperActions from './WhisperActions.client';
 
 export default async function WhispersPage() {
   // require admin
@@ -33,20 +34,8 @@ export default async function WhispersPage() {
                 <div className="flex-1">
                   <div className="text-sm text-white/60">{new Date(w.created_at).toLocaleString()}</div>
                   <div className="mt-2 text-white/90">{w.transcribed_text || <span className="text-white/40">(не транскрибировано)</span>}</div>
-                  <div className="mt-3 flex gap-2">
-                    <form action="/api/transcribe" method="post">
-                      <input type="hidden" name="whisperId" value={w.id} />
-                      <input type="hidden" name="url" value={w.telegram_file_id} />
-                      <button className="px-3 py-1 bg-white/6 rounded">Транскрибировать</button>
-                    </form>
-                    <details className="ml-auto bg-white/6 rounded p-2">
-                      <summary className="cursor-pointer">Ответить</summary>
-                      <form action="/api/whispers/reply" method="post" className="mt-2 flex gap-2">
-                        <input type="hidden" name="whisperId" value={w.id} />
-                        <input name="message" placeholder="Ваш ответ" className="flex-1 p-2 bg-black/20 rounded" />
-                        <button className="px-3 py-1 bg-white/6 rounded">Отправить</button>
-                      </form>
-                    </details>
+                  <div className="mt-3">
+                    <WhisperActions id={String(w.id)} url={w.telegram_file_id || null} />
                   </div>
                 </div>
               </div>
