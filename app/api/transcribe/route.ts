@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       whisperId = params.get('whisperId') || params.get('whisper_id');
       url = params.get('url');
     }
-    if (!whisperId || !url) return NextResponse.json({ ok: false, error: 'missing' }, { status: 400 });
+    if (!whisperId || !url) return NextResponse.json({ ok: false, error: 'missing', debug: { note: 'missing whisperId or url', provided: { whisperId, url } } }, { status: 400 });
 
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
       await supabase.from('whispers').update({ transcribed_text: text, status: 'transcribed' }).eq('id', whisperId);
     }
 
-    return NextResponse.json({ ok: true, transcribed: !!text, text });
+    return NextResponse.json({ ok: true, transcribed: !!text, text, debug });
   } catch (e) {
     console.error('transcribe error', e);
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
