@@ -219,7 +219,7 @@ export default function VigilPage() {
   return (
     <div className="vigil-root relative w-full h-[100dvh] bg-[#000000] overflow-hidden flex flex-col font-sans selection:bg-red-500/30">
 
-      <Suspense fallback={null}><TempleWrapper /></Suspense>
+      <React.Suspense fallback={null}><TempleWrapper /></React.Suspense>
 
       {/* ==================== СВЕТ ХРАМА ==================== */}
       <div className="absolute inset-0 pointer-events-none"
@@ -291,7 +291,7 @@ export default function VigilPage() {
             key={spark.id}
             className="fixed w-1 h-1 bg-white rounded-full z-[9999] shadow-[0_0_15px_white]"
             initial={{ x: spark.startX, y: spark.startY, opacity: 1 }}
-            animate={{ x: spark.endX, y: endY, opacity: 0 }}
+            animate={{ x: spark.endX, y: spark.endY, opacity: 0 }}
             transition={{ duration: 0.8, ease: "circIn" }}
           />
         ))}
