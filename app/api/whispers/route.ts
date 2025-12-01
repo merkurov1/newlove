@@ -8,6 +8,16 @@ export async function POST(req: Request) {
 
     // server helpers from repo
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+
+    // Ensure the service role key is present — inserting rows must be done
+    // with a service-role client so RLS policies do not block the insert.
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const msg = 'SUPABASE_SERVICE_ROLE_KEY is not configured on the server. \n' +
+        'Server must use the service role key to insert into `whispers` (RLS blocks anonymous inserts).';
+      console.error(msg);
+      return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+    }
+
     const supabase = getServerSupabaseClient({ useServiceRole: true });
 
     const insert = await supabase.from('whispers').insert({
@@ -18,7 +28,16 @@ export async function POST(req: Request) {
       status: 'new'
     }).select('*').single();
 
-    if (insert.error) throw insert.error;
+    if (insert.error) {
+      // Surface RLS-specific guidance when the insert is blocked by policy
+      const errMsg = String(insert.error.message || insert.error);
+      if (errMsg.toLowerCase().includes('row-level') || errMsg.toLowerCase().includes('policy')) {
+        const guidance = 'Insert failed due to row-level security. Ensure this route runs with SUPABASE_SERVICE_ROLE_KEY or adjust RLS policies.';
+        console.error('whispers insert rls', insert.error);
+        return NextResponse.json({ ok: false, error: guidance, detail: errMsg }, { status: 403 });
+      }
+      throw insert.error;
+    }
     const whisper = insert.data;
 
     // Notify admin via bot (env vars BOT_TOKEN and ADMIN_CHAT_ID must be set)

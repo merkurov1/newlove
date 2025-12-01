@@ -8,8 +8,7 @@ ALTER TABLE public.whispers ENABLE ROW LEVEL SECURITY;
 -- This allows users authenticated via Supabase to insert their own whisper (if you later enable client-side inserts).
 CREATE POLICY whispers_insert_authenticated ON public.whispers
   FOR INSERT
-  USING ( auth.role() = 'authenticated' )
-  WITH CHECK ( (auth.role() = 'authenticated' AND (new.user_id IS NULL OR new.user_id::text = auth.uid())) );
+  WITH CHECK ( auth.role() = 'authenticated' AND (user_id IS NULL OR user_id::text = auth.uid()) );
 
 -- POLICY: allow SELECT only to the owner (authenticated users can select their own rows)
 -- Note: server/service-role bypasses RLS and can read everything.
