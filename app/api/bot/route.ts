@@ -59,7 +59,8 @@ bot.on('message', async (ctx) => {
 
   // Otherwise treat as AI command (existing behavior)
   const userText = ctx.message.text || '';
-  await ctx.api.sendChatAction(ctx.chat.id, 'typing');
+  const aiChatId = ctx.chat?.id ?? ctx.from?.id;
+  if (aiChatId) await ctx.api.sendChatAction(aiChatId, 'typing');
   try {
     if (!GOOGLE_KEY) throw new Error('GOOGLE_API_KEY is missing');
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GOOGLE_KEY}`;
@@ -138,7 +139,12 @@ bot.callbackQuery(/^reply:(.+)/, async (ctx) => {
   const id = ctx.callbackQuery.data.split(':')[1];
   await ctx.answerCallbackQuery({ text: 'Напишите ответ в этом чате, ответив на сообщение.' });
   // send a message with whisper-id marker and force reply
-  await ctx.api.sendMessage(ctx.chat.id, `Ответ для whisper-id:${id}\nReply to this message with your text.`, { reply_markup: { force_reply: true } as any });
+  const replyChatId = ctx.chat?.id ?? ctx.callbackQuery?.message?.chat?.id ?? ctx.from?.id;
+  if (!replyChatId) {
+    await ctx.answerCallbackQuery({ text: 'Не удалось определить чат для ответа.' });
+    return;
+  }
+  await ctx.api.sendMessage(replyChatId, `Ответ для whisper-id:${id}\nReply to this message with your text.`, { reply_markup: { force_reply: true } as any });
 });
 
 // Надежный обработчик вебхука
