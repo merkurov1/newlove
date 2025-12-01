@@ -31,19 +31,36 @@ export async function POST(req: Request) {
 
     if (OPENAI_KEY) {
       // call OpenAI Whisper API (example)
-      const form = new FormData();
-      const audioResp = await fetch(url);
-      const audioBuf = await audioResp.arrayBuffer();
-      form.append('file', new Blob([audioBuf]));
-      form.append('model', 'whisper-1');
+      try {
+        const form = new FormData();
+        const audioResp = await fetch(url);
+        if (!audioResp.ok) throw new Error(`failed to fetch audio from url: ${audioResp.status}`);
+        const audioBuf = await audioResp.arrayBuffer();
+        const contentType = audioResp.headers.get('content-type') || 'audio/webm';
+        const fileBlob = new Blob([audioBuf], { type: contentType });
+        // include a filename to be safe for multipart handling on the OpenAI side
+        // @ts-ignore
+        form.append('file', fileBlob, 'whisper.webm');
+        form.append('model', 'whisper-1');
 
-      const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${OPENAI_KEY}` },
-        body: form as any
-      });
-      const parsed = await r.json();
-      text = parsed.text || parsed.transcript || null;
+        const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${OPENAI_KEY}` },
+          body: form as any
+        });
+
+        if (!r.ok) {
+          const bodyText = await r.text().catch(() => 'no body');
+          console.error('openai transcribe failed', r.status, bodyText);
+          throw new Error(`openai transcribe failed: ${r.status} ${bodyText}`);
+        }
+
+        const parsed = await r.json();
+        text = parsed.text || parsed.transcript || null;
+      } catch (e) {
+        console.error('transcription error', e);
+        throw e;
+      }
     } else {
       // No OpenAI key — return instruction for admin to transcribe manually.
       text = null;
