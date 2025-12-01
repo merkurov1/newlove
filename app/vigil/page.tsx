@@ -210,13 +210,15 @@ export default function VigilPage() {
 
       {/* --- HEADER (THE ANGEL TOTEM) --- */}
       <div className="relative z-20 flex flex-col items-center pt-8 md:pt-12 shrink-0">
-        <div ref={angelRef} className="relative w-16 h-16 md:w-20 md:h-20 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.05)]">
-            <img src={ANGEL_IMAGE} className="w-10 md:w-12 opacity-80 contrast-125 grayscale" alt="Angel" />
+        <div className="relative">
+          <div ref={angelRef} className="relative w-16 h-16 md:w-20 md:h-20 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+              <img src={ANGEL_IMAGE} className="w-10 md:w-12 opacity-80 contrast-125 grayscale" alt="Angel" />
+          </div>
+          <div className="absolute left-1/2 transform -translate-x-1/2 mt-2 -bottom-6 text-center">
+            <div className="text-sm font-mono text-white/40 tracking-widest">{burningCount}/5 FLAMES BURNING</div>
+          </div>
         </div>
-        <h1 className="mt-4 text-[10px] tracking-[0.4em] text-white/40 uppercase font-mono">Temple of Love</h1>
-        <div className="mt-2 text-center">
-          <div className="text-sm font-mono text-white/40 tracking-widest">{burningCount}/5 FLAMES BURNING</div>
-        </div>
+        <h1 className="mt-10 text-[10px] tracking-[0.4em] text-white/40 uppercase font-mono">Temple of Love</h1>
       </div>
 
       {/* --- INFO BUTTON --- */}

@@ -141,7 +141,7 @@ export default function TemplePage() {
       <div className="noise-overlay" />
 
       {/* HEADER */}
-      <div className="mt-16 mb-12 text-center z-10 animate-in fade-in duration-700">
+      <div className="mt-16 mb-12 text-center z-10 animate-in fade-in duration-700 relative">
         <h1 className="text-4xl font-serif font-bold tracking-[0.2em] mb-3 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
           TEMPLE
         </h1>
@@ -149,10 +149,10 @@ export default function TemplePage() {
             PROTOCOL v.3.0
           </div>
 
-          {/* realtime burning count */}
-          <div className="mt-4">
-           <div className="text-3xl font-serif font-bold tracking-wide">{burningCount}/5</div>
-           <div className="text-[11px] text-white/40 tracking-widest font-mono mt-1">{burningNames}</div>
+          {/* realtime burning count (absolutely positioned to avoid shifting layout) */}
+          <div className="absolute left-1/2 -bottom-6 transform -translate-x-1/2 text-center">
+            <div className="text-3xl font-serif font-bold tracking-wide leading-tight">{burningCount}/5</div>
+            <div className="text-[11px] text-white/40 tracking-widest font-mono mt-1 max-w-[80vw] truncate">{burningNames}</div>
           </div>
       </div>
 
