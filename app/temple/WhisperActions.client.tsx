@@ -6,7 +6,7 @@ export default function WhisperActions({ id, url }: { id: string; url: string | 
   const [transcribing, setTranscribing] = useState(false);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
   const [transcribedText, setTranscribedText] = useState<string | null>(null);
-  const [transcribeDebug, setTranscribeDebug] = useState<any | null>(null);
+  // debug removed for production
 
   const [replying, setReplying] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
@@ -28,7 +28,6 @@ export default function WhisperActions({ id, url }: { id: string; url: string | 
         body: JSON.stringify({ whisperId: id, url })
       });
       const data = await res.json();
-      setTranscribeDebug(data.debug || null);
       if (!res.ok || !data.ok) {
         throw new Error(data.error || `status ${res.status}`);
       }
@@ -79,9 +78,7 @@ export default function WhisperActions({ id, url }: { id: string; url: string | 
         <div className="text-sm bg-white/3 p-2 rounded font-mono text-white/90">{transcribedText}</div>
       ) : null}
 
-      {transcribeDebug ? (
-        <pre className="text-xs bg-black/20 p-2 rounded overflow-auto mt-2 text-white/60">{JSON.stringify(transcribeDebug, null, 2)}</pre>
-      ) : null}
+      {/* debug removed */}
 
       <form onSubmit={handleReply} className="flex items-center gap-2">
         <input

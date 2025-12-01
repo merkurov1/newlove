@@ -30,22 +30,21 @@ export async function POST(req: Request) {
     let text = null;
 
     // Prepare debug info to return to the client for easier troubleshooting
-    const debug: Record<string, any> = { audioFetch: null, openai: null };
+    // (debug removed in production; keep local only)
+    let debug: Record<string, any> | null = null;
 
     if (OPENAI_KEY) {
       // call OpenAI Whisper API (example)
       try {
         const form = new FormData();
         const audioResp = await fetch(url as string);
-        debug.audioFetch = { ok: audioResp.ok, status: audioResp.status, headers: {} as any };
-        audioResp.headers.forEach((v, k) => { (debug.audioFetch.headers as any)[k] = v; });
+        // fetch audio
+        const audioResp = await fetch(url as string);
         if (!audioResp.ok) {
           const bodyText = await audioResp.text().catch(() => 'no body');
-          debug.audioFetch.body = bodyText;
-          return NextResponse.json({ ok: false, error: `failed to fetch audio from url: ${audioResp.status}`, debug }, { status: 502 });
+          return NextResponse.json({ ok: false, error: `failed to fetch audio from url: ${audioResp.status}: ${bodyText}` }, { status: 502 });
         }
         const audioBuf = await audioResp.arrayBuffer();
-        debug.audioFetch.size = audioBuf.byteLength;
 
         const contentTypeFromAudio = audioResp.headers.get('content-type') || 'audio/webm';
         const fileBlob = new Blob([audioBuf], { type: contentTypeFromAudio });
@@ -60,23 +59,19 @@ export async function POST(req: Request) {
           body: form as any
         });
 
-        debug.openai = { ok: r.ok, status: r.status };
-        const openaiBodyText = await r.text().catch(() => '');
-        debug.openai.body = openaiBodyText;
+        const openaiRes = await r.text().catch(() => '');
         if (!r.ok) {
-          return NextResponse.json({ ok: false, error: `openai transcribe failed: ${r.status}`, debug }, { status: 502 });
+          return NextResponse.json({ ok: false, error: `openai transcribe failed: ${r.status}: ${openaiRes}` }, { status: 502 });
         }
         let parsed: any = {};
-        try { parsed = JSON.parse(openaiBodyText); } catch (e) { parsed = {}; }
+        try { parsed = JSON.parse(openaiRes); } catch (e) { parsed = {}; }
         text = parsed.text || parsed.transcript || null;
       } catch (e) {
-        debug.error = String(e);
         console.error('transcription error', e);
-        return NextResponse.json({ ok: false, error: String(e), debug }, { status: 500 });
+        return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
       }
     } else {
       // No OpenAI key — return instruction for admin to transcribe manually.
-      debug.note = 'OPENAI_API_KEY not configured';
       text = null;
     }
 
@@ -84,7 +79,7 @@ export async function POST(req: Request) {
       await supabase.from('whispers').update({ transcribed_text: text, status: 'transcribed' }).eq('id', whisperId);
     }
 
-    return NextResponse.json({ ok: true, transcribed: !!text, text, debug });
+    return NextResponse.json({ ok: true, transcribed: !!text, text });
   } catch (e) {
     console.error('transcribe error', e);
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
