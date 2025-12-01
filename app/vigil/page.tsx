@@ -219,6 +219,9 @@ export default function VigilPage() {
           </div>
         </div>
         <h1 className="mt-10 text-[10px] tracking-[0.4em] text-white/40 uppercase font-mono">Temple of Love</h1>
+
+        {/* spacer to keep grid from being overlapped by absolute flame counter */}
+        <div className="h-10 md:h-12" />
       </div>
 
       {/* --- INFO BUTTON --- */}

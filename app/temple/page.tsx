@@ -156,6 +156,9 @@ export default function TemplePage() {
           </div>
       </div>
 
+      {/* spacer to accommodate absolute burning counter */}
+      <div className="h-10 md:h-12" />
+
       {/* GRID CONTAINER */}
       <div className="w-full max-w-sm px-6 z-10 flex-1 flex flex-col justify-start gap-4">
         
