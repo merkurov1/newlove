@@ -198,9 +198,7 @@ export default function TemplePage() {
              <div className="text-sm opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-transform pr-2">⚡</div>
           </button>
 
-          <div className="shrink-0">
-            <MicrophoneButton />
-          </div>
+          {/* legacy microphone removed (moved inline) */}
         </div>
 
       </div>
