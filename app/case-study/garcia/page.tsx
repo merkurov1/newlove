@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import Image from 'next/image';
-import { Play, Volume2, X } from 'lucide-react'; // Добавил X для выхода
+import { Play, X } from 'lucide-react';
 
 // --- ASSETS ---
 const ASSETS = {
@@ -32,7 +32,7 @@ export default function GarciaCaseStudy() {
   const initializeSession = () => {
     setPhase('session');
     setTimeout(() => {
-      audioRef.current?.play().catch(e => console.log("Autoplay blocked, user interaction needed"));
+      audioRef.current?.play().catch(() => console.log("Autoplay blocked"));
     }, 500);
   };
 
@@ -49,16 +49,18 @@ export default function GarciaCaseStudy() {
   const activeEvent = SCRIPT_EVENTS.find(e => currentTime >= e.start && currentTime <= e.end);
 
   return (
-    // z-[9999] перекроет любой Navbar или глобальный стиль сайта
-    <main className="fixed inset-0 z-[9999] w-full h-screen bg-black text-white overflow-hidden font-sans">
+    <main className="fixed inset-0 z-[9999] w-full h-screen bg-black text-white overflow-hidden font-sans selection:bg-red-900 selection:text-white">
       
-      {/* --- BACKGROUND LAYER --- */}
-      <div className={`absolute inset-0 z-0 transition-transform duration-[100s] ease-linear will-change-transform ${phase === 'session' ? 'scale-125' : 'scale-100'}`}>
+      {/* ==========================================
+          LAYER 0: THE ARTWORK (With Pulse)
+         ========================================== */}
+      <div className={`absolute inset-0 z-0 will-change-transform 
+          ${phase === 'session' ? 'animate-[subtleZoom_60s_linear_infinite]' : 'scale-100'}
+      `}>
         <Image 
           src={ASSETS.image} 
           alt="Aimee Garcia - Untitled" 
           fill 
-          // FIX: В session убрал blur и поднял opacity
           className={`object-cover transition-all duration-[2000ms] 
             ${phase === 'gate' ? 'blur-2xl opacity-40 grayscale' : ''}
             ${phase === 'session' ? 'blur-0 opacity-100 grayscale-0' : ''} 
@@ -66,9 +68,34 @@ export default function GarciaCaseStudy() {
           `}
           priority
         />
-        {/* Overlay для читаемости текста. В session он чуть темнее (50%), чтобы текст читался на светлой картине */}
-        <div className={`absolute inset-0 transition-colors duration-1000 ${phase === 'session' ? 'bg-black/50' : 'bg-black/40'}`} />
       </div>
+
+      {/* ==========================================
+          LAYER 1: ATMOSPHERE (Grain & Scanner)
+          Only active during Session
+         ========================================== */}
+      {phase === 'session' && (
+        <>
+            {/* 1.1 NOISE/GRAIN OVERLAY (Cinema Feel) */}
+            <div className="absolute inset-0 z-1 pointer-events-none opacity-[0.08]" 
+                 style={{backgroundImage: 'url("https://grainy-gradients.vercel.app/noise.svg")'}}>
+            </div>
+
+            {/* 1.2 THE SCANNER (Data Analysis Feel) */}
+            <div className="absolute inset-0 z-1 pointer-events-none overflow-hidden">
+                <div className="w-full h-[5px] bg-white/10 shadow-[0_0_20px_rgba(255,255,255,0.2)] animate-[scan_8s_linear_infinite]" />
+            </div>
+            
+            {/* 1.3 VIGNETTE BREATHING (Focus) */}
+            <div className="absolute inset-0 z-2 bg-[radial-gradient(circle,transparent_20%,black_120%)] animate-[pulse_4s_ease-in-out_infinite]" />
+            
+            {/* 1.4 DARK OVERLAY (Readability) */}
+            <div className="absolute inset-0 z-3 bg-black/30" />
+        </>
+      )}
+      
+      {phase === 'gate' && <div className="absolute inset-0 z-1 bg-black/40" />}
+
 
       {/* --- AUDIO ENGINE --- */}
       <audio 
@@ -104,13 +131,13 @@ export default function GarciaCaseStudy() {
          ========================================== */}
       {phase === 'session' && (
         <div className="relative z-20 flex flex-col items-center justify-center h-full">
-          {/* Dynamic Text Layer with Text Shadow for readability */}
+          {/* Dynamic Text Layer */}
           <div className="h-[200px] flex items-center justify-center w-full max-w-5xl px-4 text-center">
             {activeEvent && (
               <h2 className={`
-                transition-all duration-700 ease-out transform drop-shadow-2xl
+                transition-all duration-500 ease-out transform drop-shadow-2xl
                 ${activeEvent.type === 'title' ? 'text-3xl font-serif italic text-stone-200' : ''}
-                ${activeEvent.type === 'keyword' ? 'text-5xl md:text-8xl font-bold tracking-tighter uppercase text-white' : ''}
+                ${activeEvent.type === 'keyword' ? 'text-5xl md:text-8xl font-bold tracking-tighter uppercase text-white scale-110' : ''}
                 ${activeEvent.type === 'big_number' ? 'text-6xl md:text-9xl font-mono text-white' : ''}
                 ${activeEvent.type === 'impact' ? 'text-5xl md:text-8xl font-black text-red-600 uppercase tracking-widest' : ''}
                 ${activeEvent.type === 'money' ? 'text-5xl md:text-8xl font-serif text-emerald-400' : ''}
@@ -125,7 +152,7 @@ export default function GarciaCaseStudy() {
           <div className="absolute bottom-10 w-full px-10 flex justify-between items-end text-xs font-mono text-stone-400">
             <div>
               <span className="animate-pulse text-red-500">● REC</span>
-              <span className="ml-2">ANTON_MERKUROV</span>
+              <span className="ml-2">ANTON_MERKUROV // ANALYZING</span>
             </div>
             <button onClick={() => setPhase('dossier')} className="hover:text-white transition-colors border-b border-transparent hover:border-white">
               SKIP BRIEFING
@@ -139,7 +166,6 @@ export default function GarciaCaseStudy() {
          ========================================== */}
       {phase === 'dossier' && (
         <div className="relative z-30 h-full flex items-center justify-center p-4 md:p-10 animate-in slide-in-from-bottom-10 duration-1000 overflow-y-auto">
-           {/* Кнопка закрыть в углу */}
            <a href="/selection" className="absolute top-6 right-6 p-2 bg-black/50 rounded-full hover:bg-white hover:text-black transition-all cursor-pointer z-50">
              <X className="w-6 h-6" />
            </a>
@@ -205,6 +231,20 @@ export default function GarciaCaseStudy() {
           </div>
         </div>
       )}
+      
+      {/* GLOBAL STYLES FOR ANIMATIONS */}
+      <style jsx global>{`
+        @keyframes scan {
+          0% { transform: translateY(-10vh); opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { transform: translateY(110vh); opacity: 0; }
+        }
+        @keyframes subtleZoom {
+          0% { transform: scale(1); }
+          100% { transform: scale(1.15); }
+        }
+      `}</style>
     </main>
   );
 }
