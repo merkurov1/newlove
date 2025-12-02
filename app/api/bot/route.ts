@@ -41,9 +41,9 @@ bot.use(async (ctx, next) => {
 
 // Шаг 1: Ловим фото
 bot.on(':photo', async (ctx) => {
-    // Берем последний (лучшее качество) элемент безопасно
-    const photos = ctx.message.photo;
-    const photo = photos?.at(-1)?.file_id || (photos && photos.length ? photos[photos.length - 1].file_id : undefined);
+    // Берем последний (лучшее качество) элемент безопасно — ctx.message может быть undefined
+    const photos = ctx.message?.photo;
+    const photo = photos?.at?.(-1)?.file_id || (photos && photos.length ? photos[photos.length - 1].file_id : undefined);
     if (!photo) return;
 
     drafts[MY_ID] = { photo, caption: '' };
@@ -56,11 +56,11 @@ bot.on(':photo', async (ctx) => {
 
 // Шаг 2: Ловим текст (или AI запрос)
 bot.on('message:text', async (ctx) => {
-    const text = ctx.message.text;
+    const text = ctx.message?.text || '';
     
     // А. ОБРАБОТКА REPLIES (WHISPERS)
     // Если это ответ на сообщение с меткой whisper-id
-    const replyTo = ctx.message.reply_to_message?.text;
+    const replyTo = ctx.message?.reply_to_message?.text;
     if (replyTo && replyTo.includes('whisper-id:')) {
         const m = replyTo.match(/whisper-id:(\S+)/);
         if (m) {
@@ -104,8 +104,8 @@ bot.on('message:text', async (ctx) => {
 
     // В. AI MODULE (GEMINI)
     // Если фото нет и это не ответ на whisper — идем в Gemini
-    const aiChatId = ctx.chat.id;
-    await ctx.api.sendChatAction(aiChatId, 'typing');
+    const aiChatId = ctx.chat?.id;
+    if (aiChatId) await ctx.api.sendChatAction(aiChatId, 'typing');
     
     try {
         if (!GOOGLE_KEY) throw new Error('No Google Key');
@@ -139,8 +139,9 @@ bot.callbackQuery("pub_post", async (ctx) => {
             parse_mode: 'MarkdownV2'
         });
         await ctx.answerCallbackQuery("Published!");
-        // editMessageCaption expects (caption, extra)
-        await ctx.editMessageCaption("✅ <b>PUBLISHED TO CHANNEL</b>", { parse_mode: 'HTML' });
+        // Confirm to the admin thread — editMessageCaption typing is type-strict in grammy typings,
+        // reply instead to avoid TypeScript overload issues.
+        await ctx.reply("✅ <b>PUBLISHED TO CHANNEL</b>", { parse_mode: 'HTML' });
         delete drafts[MY_ID]; // Чистим память
     } catch (e: any) {
         await ctx.reply(`Publish Error: ${e.description}`);
