@@ -41,13 +41,15 @@ bot.use(async (ctx, next) => {
 
 // Шаг 1: Ловим фото
 bot.on(':photo', async (ctx) => {
-    const photo = ctx.message.photo.pop()?.file_id; // Берем лучшее качество
+    // Берем последний (лучшее качество) элемент безопасно
+    const photos = ctx.message.photo;
+    const photo = photos?.at(-1)?.file_id || (photos && photos.length ? photos[photos.length - 1].file_id : undefined);
     if (!photo) return;
 
     drafts[MY_ID] = { photo, caption: '' };
 
     await ctx.reply(
-        '📸 <b>PHOTO SECURED.</b>\n\nТеперь пришли текст (MarkdownV2).\nНе забывай экранировать точки и минусы: \\. \\-', 
+        '📸 <b>PHOTO SECURED.</b>\n\nТеперь пришли текст (MarkdownV2).\nНе забывай экранировать точки и минусы: \\. \\-',
         { parse_mode: 'HTML' }
     );
 });
@@ -137,7 +139,8 @@ bot.callbackQuery("pub_post", async (ctx) => {
             parse_mode: 'MarkdownV2'
         });
         await ctx.answerCallbackQuery("Published!");
-        await ctx.editMessageCaption({ caption: "✅ <b>PUBLISHED TO CHANNEL</b>", parse_mode: 'HTML' });
+        // editMessageCaption expects (caption, extra)
+        await ctx.editMessageCaption("✅ <b>PUBLISHED TO CHANNEL</b>", { parse_mode: 'HTML' });
         delete drafts[MY_ID]; // Чистим память
     } catch (e: any) {
         await ctx.reply(`Publish Error: ${e.description}`);
