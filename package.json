@@ -106,6 +106,8 @@
     "wagmi": "^2.19.0",
     "yet-another-react-lightbox": "^3.25.0",
     "zod": "^4.1.11"
+    ,
+    "lucide-react": "latest"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [

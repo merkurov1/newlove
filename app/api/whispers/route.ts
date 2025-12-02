@@ -40,32 +40,42 @@ export async function POST(req: Request) {
     }
     const whisper = insert.data;
 
-    // Notify admin via bot (env vars BOT_TOKEN and ADMIN_CHAT_ID must be set)
-    const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-    const ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID;
+    // Notify admin via bot (prefer new Pierrot bot, fall back to legacy TELEGRAM_BOT_TOKEN)
+    const BOT_TOKEN = process.env.PIERROT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+    const ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.PIERROT_ADMIN_CHAT_ID;
+
+    if (!BOT_TOKEN) console.error('notify admin: bot token missing (set PIERROT_BOT_TOKEN or TELEGRAM_BOT_TOKEN)');
+    if (!ADMIN_CHAT_ID) console.error('notify admin: ADMIN_CHAT_ID missing (set TELEGRAM_ADMIN_CHAT_ID or PIERROT_ADMIN_CHAT_ID)');
 
     if (BOT_TOKEN && ADMIN_CHAT_ID) {
       try {
         const sendUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendVoice`;
-        // telegram can fetch public URLs; we assume storage path was uploaded to public bucket
-        const voiceUrl = telegram_file_id; // our client sent public URL
-
-        // compose inline keyboard for actions
-        const keyboard = {
-          inline_keyboard: [
-            [
-              { text: 'Транскрибировать', callback_data: `transcribe:${whisper.id}` },
-              { text: 'Ответить', callback_data: `reply:${whisper.id}` }
+        // Prefer the public storage path (URL) if provided; otherwise fall back to telegram_file_id
+        const voiceUrl = storage_path || telegram_file_id || null;
+        if (!voiceUrl) {
+          console.error('notify admin: no voice URL or file id provided for whisper', { whisperId: whisper.id });
+        } else {
+          // compose inline keyboard for actions
+          const keyboard = {
+            inline_keyboard: [
+              [
+                { text: 'Транскрибировать', callback_data: `transcribe:${whisper.id}` },
+                { text: 'Ответить', callback_data: `reply:${whisper.id}` }
+              ]
             ]
-          ]
-        };
+          };
 
-        // send voice to admin with caption
-        await fetch(sendUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: ADMIN_CHAT_ID, voice: voiceUrl, caption: `Новый шёпот в Храм от ${telegram_first_name || 'Pilgrim'}`, reply_markup: keyboard })
-        });
+          const res = await fetch(sendUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: ADMIN_CHAT_ID, voice: voiceUrl, caption: `Новый шёпот в Храм от ${telegram_first_name || 'Pilgrim'}`, reply_markup: keyboard })
+          });
+
+          if (!res.ok) {
+            const text = await res.text().catch(() => '<no body>');
+            console.error('notify admin telegram error', { status: res.status, body: text });
+          }
+        }
       } catch (e) {
         console.error('notify admin error', e);
       }
