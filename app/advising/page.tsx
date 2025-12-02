@@ -83,6 +83,29 @@ export default function AdvisingPage() {
                     </p>
                 </div>
             </Link>
+            
+            {/* Garcia Case Study (added) */}
+            <Link href="/case-study/garcia" className="group block mt-6">
+              <div className="border border-gray-300 bg-white p-6 hover:border-black hover:shadow-2xl transition-all duration-500 relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-black text-white text-[9px] font-mono px-2 py-1 uppercase">
+                  Case Study
+                </div>
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h4 className="text-xl font-serif font-bold group-hover:text-red-600 transition-colors">
+                      Case Study: The Anatomy of Quietude
+                    </h4>
+                    <p className="text-sm text-gray-500 font-mono mt-1">
+                      Asset: Aimée García (1995) // Provenance & Acquisition
+                    </p>
+                  </div>
+                  <span className="text-2xl group-hover:translate-x-2 transition-transform duration-300">→</span>
+                </div>
+                <p className="text-sm text-gray-600 leading-relaxed max-w-lg">
+                  A cinematic briefing and dossier on Lot 59 — material, dimensions, provenance and an acquisition protocol tailored for institutional collectors.
+                </p>
+              </div>
+            </Link>
         </section>
 
         {/* 4. SERVICES */}
