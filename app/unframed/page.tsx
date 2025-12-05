@@ -5,7 +5,8 @@ import dynamic from 'next/dynamic';
 const DynamicGlitchCanvas = dynamic(() => import('@/components/unframed/GlitchCanvas'), { ssr: false, loading: () => null });
 import { ErrorBoundaryWrapper as ErrorBoundary } from '@/components/unframed/ErrorBoundary';
 import { motion } from 'framer-motion';
-import { Terminal, Send, Lock, Cpu, Fingerprint, BookOpen, Volume2, Play } from 'lucide-react';
+// NOTE: lucide-react caused a runtime issue in some builds; use lightweight emoji placeholders to avoid importing that package on the server.
+
 import Image from 'next/image';
 
 // --- ASSETS ---
@@ -21,7 +22,7 @@ const ASSETS = {
 // GlitchCanvas is loaded dynamically (client-only) via DynamicGlitchCanvas
 
 // 2. TIMELINE ITEM
-const TimelineItem = ({ year, title, text, icon: Icon, image }: any) => (
+const TimelineItem = ({ year, title, text, icon, image }: any) => (
   <motion.div 
     initial={{ opacity: 0, x: -20 }}
     whileInView={{ opacity: 1, x: 0 }}
@@ -31,7 +32,7 @@ const TimelineItem = ({ year, title, text, icon: Icon, image }: any) => (
     <div className="absolute -left-[9px] top-11 w-4 h-4 bg-black border-2 border-red-600 rounded-full" />
     <div className="flex items-center gap-3 mb-2">
       <span className="font-mono text-red-500 font-bold text-xl">{year}</span>
-      {Icon && <Icon size={18} className="text-zinc-500" />}
+      {icon && <span className="text-zinc-500 text-lg">{icon}</span>}
     </div>
     <h3 className="text-xl md:text-2xl font-bold text-white mb-3 uppercase tracking-wider">{title}</h3>
     <p className="text-zinc-400 font-serif leading-relaxed text-lg max-w-2xl mb-4">
@@ -127,44 +128,44 @@ export default function UnframedPage() {
               year="1984" 
               title="The Floor" 
               text="I am four years old. I am lying on the warm parquet floor. The sun cuts through the tall Stalinist windows. I am drawing. For a brief moment, the chaotic energy of the Soviet intelligentsia aligns into harmony around a boy with a pencil."
-              icon={BookOpen}
+              icon={'📖'}
             />
             <TimelineItem 
               year="1998" 
               title="The Rooftops" 
               text="We drilled through walls built to withstand Nazi artillery. Minus 20 degrees Celsius. Balancing on the edge of seven-story buildings, running coaxial cables with frozen hands. We weren’t just connecting apartments; we were building the physical infrastructure of freedom."
-              icon={Cpu}
+              icon={'🧠'}
             />
              <TimelineItem 
               year="2003" 
               title="The Glass Cage" 
               text="Walking past the Khodorkovsky trial daily. Inside, the richest man in the country sat in a cage. Outside, the city pretended nothing was happening. It was a public flogging broadcast on all frequencies."
-              icon={Lock}
+              icon={'🔒'}
             />
             <TimelineItem 
               year="2008" 
               title="The Spectral Tiger" 
               text="While the global economy collapsed, the price of a virtual tiger in World of Warcraft held steady. I realized then: Digital value doesn’t need banks. It only needs Consensus."
-              icon={Terminal}
+              icon={'🖥️'}
               image={ASSETS.TIGER} 
             />
              <TimelineItem 
               year="2017" 
               title="The Source Code" 
               text="We took the original death mask of Vladimir Lenin and scanned it with lasers. We turned the idol into a file. The heavy stone of the Soviet legacy was dematerialized and sold as an NFT."
-              icon={Fingerprint}
+              icon={'🪪'}
             />
             <TimelineItem 
               year="2022" 
               title="The Smile" 
               text="I was lying in a dentist’s chair, getting expensive Hollywood veneers installed, while Russian tanks rolled across the border. I walked out onto Kutuzovsky Prospect with a blindingly white smile, facing a city that had just bitten its own tongue off."
-              icon={Volume2}
+              icon={'🔊'}
             />
              <TimelineItem 
               year="2024" 
               title="The Departure" 
               text="The loop closed. I didn’t look back at the library or the walls. I crossed the border at night, wearing a surgical mask, leaving the Granite behind. The Ether was ahead."
-              icon={Send}
+              icon={'✉️'}
             />
          </div>
       </section>
@@ -185,7 +186,7 @@ export default function UnframedPage() {
              <div className="bg-black border border-zinc-800 p-8 rounded-sm flex flex-col justify-between min-h-[300px]">
                 <div>
                     <div className="flex items-center gap-4 mb-4 text-zinc-400">
-                    <Volume2 size={24} className="text-red-500" />
+                    <span className="text-red-500 text-xl">🔊</span>
                     <span className="font-mono text-sm tracking-wider">NOTEBOOKLM PODCAST</span>
                     </div>
                     <h3 className="font-bold text-2xl mb-2 text-white">The Autopsy of an Empire</h3>
