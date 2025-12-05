@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Terminal, Volume2, ArrowDown, Hash, Globe, FileText, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { Inter, Space_Mono, Playfair_Display } from 'next/font/google';
+import { motion, useScroll, useTransform } from 'framer-motion';
 
 // --- FONTS ---
 const sans = Inter({ subsets: ['latin'], variable: '--font-sans' });
@@ -60,11 +61,10 @@ const TIMELINE = [
 // 1. REDACTED COMPONENT (Interactive "Whiteout")
 const Redacted = ({ children }: { children: React.ReactNode }) => (
   <span className="group relative inline-block cursor-help mx-1 align-bottom">
-    {/* Hidden text revealed on hover */}
     <span className="relative z-10 text-transparent transition-all duration-300 group-hover:text-red-600 font-bold select-none group-hover:select-auto">
       {children}
     </span>
-    {/* The "Correction Tape" Block */}
+    {/* White block that disappears on hover */}
     <span className="absolute inset-0 bg-zinc-200 group-hover:bg-transparent transition-colors duration-300" />
   </span>
 );
@@ -119,6 +119,14 @@ const TimelineSlide = ({ item, index }: any) => {
 export default function UnframedPage() {
   const [status, setStatus] = useState('idle');
   const [email, setEmail] = useState('');
+  
+  // SCROLL ANIMATION LOGIC
+  // We track the scroll position of the whole page
+  const { scrollYProgress } = useScroll();
+  
+  // Transform: Start at opacity 0, fade in to opacity 0.3 (visible but subtle) as we scroll past the first 10% of the page
+  const headerOpacity = useTransform(scrollYProgress, [0, 0.15], [0, 0.3]);
+  const headerBlur = useTransform(scrollYProgress, [0, 0.15], ["10px", "1px"]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,9 +141,13 @@ export default function UnframedPage() {
       <div className="fixed inset-0 pointer-events-none z-50 opacity-[0.04] mix-blend-overlay" 
            style={{ backgroundImage: `url("https://grainy-gradients.vercel.app/noise.svg")` }} />
 
-      {/* 2. FIXED BACKGROUND TITLE (The Anchor) */}
-      <div className="fixed inset-0 flex flex-col items-center justify-center z-0 pointer-events-none">
-        <h1 className="text-[15vw] font-black uppercase tracking-tighter leading-none text-white mix-blend-difference opacity-30 font-sans blur-[1px]">
+      {/* 2. FIXED BACKGROUND TITLE (The Reveal) */}
+      {/* Controlled by framer-motion: starts hidden, fades in on scroll */}
+      <motion.div 
+        style={{ opacity: headerOpacity, filter: `blur(${headerBlur})` }}
+        className="fixed inset-0 flex flex-col items-center justify-center z-0 pointer-events-none"
+      >
+        <h1 className="text-[15vw] font-black uppercase tracking-tighter leading-none text-white mix-blend-difference font-sans">
           UNFRAMED
         </h1>
         <div className="flex items-center gap-4 mt-4 opacity-50 mix-blend-difference">
@@ -143,10 +155,10 @@ export default function UnframedPage() {
            <p className="font-mono text-sm uppercase tracking-[0.3em] text-white">A Memoir by Anton Merkurov</p>
            <div className="h-[1px] w-12 bg-white" />
         </div>
-      </div>
+      </motion.div>
 
-      {/* 3. MANIFESTO (THE HOOK) */}
-      <section className="min-h-screen flex items-center justify-center px-6 relative z-10">
+      {/* 3. MANIFESTO (THE HOOK - Clean Black Background) */}
+      <section className="min-h-screen flex items-center justify-center px-6 relative z-10 bg-[#050505]">
          <div className="max-w-4xl text-center pt-20">
             <p className="text-3xl md:text-5xl font-serif text-zinc-100 leading-tight drop-shadow-2xl">
               "I spent forty years running away from the boy on the floor. 
@@ -157,8 +169,10 @@ export default function UnframedPage() {
               But the granite eventually cracks.
               UNFRAMED is the story of closing the loop. Of returning to the only thing that matters: The Line."
             </p>
-            <div className="mt-32 animate-bounce flex justify-center text-zinc-500">
-               <ArrowDown />
+            
+            <div className="mt-32 animate-bounce flex flex-col items-center gap-2 text-zinc-600 font-mono text-[10px] uppercase tracking-widest">
+               <span>Initialize Sequence</span>
+               <ArrowDown size={16} />
             </div>
          </div>
       </section>
