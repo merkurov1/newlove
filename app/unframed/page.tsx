@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import dynamic from 'next/dynamic';
-const DynamicGlitchCanvas = dynamic(() => import('@/components/unframed/GlitchCanvas'), { ssr: false });
+const DynamicGlitchCanvas = dynamic(() => import('@/components/unframed/GlitchCanvas'), { ssr: false, loading: () => null });
+import { ErrorBoundaryWrapper as ErrorBoundary } from '@/components/unframed/ErrorBoundary';
 import { motion } from 'framer-motion';
 import { Terminal, Send, Lock, Cpu, Fingerprint, BookOpen, Volume2, Play } from 'lucide-react';
 import Image from 'next/image';
@@ -78,7 +79,11 @@ export default function UnframedPage() {
 
         {/* 3D Layer (dynamically loaded client component) */}
         <div className="absolute inset-0 z-10 opacity-60 pointer-events-none">
-          <DynamicGlitchCanvas />
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              <DynamicGlitchCanvas />
+            </Suspense>
+          </ErrorBoundary>
         </div>
         
         <div className="z-20 text-center px-4 mix-blend-difference">
