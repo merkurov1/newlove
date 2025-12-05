@@ -28,7 +28,7 @@ export default function LettersArchiveClient({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/journal?cacheBust=${Date.now()}`);
+      const res = await fetch(`/api/letters?cacheBust=${Date.now()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = await res.json();
       if (Array.isArray(body.letters)) {
