@@ -2,9 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 
-export default function SafeGlitchLoader() {
+type LoaderError = { phase: string; message?: string; stack?: string } | null;
+
+export default function SafeGlitchLoader({ onError }: { onError?: (err: LoaderError) => void } = {}) {
   const [Comp, setComp] = useState<React.ComponentType | null>(null);
-  const [error, setError] = useState<{ phase: string; message?: string; stack?: string } | null>(null);
+  const [error, setError] = useState<LoaderError>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -16,7 +18,9 @@ export default function SafeGlitchLoader() {
       } catch (e: any) {
         if (!mounted) return;
         console.error('SafeGlitchLoader: failed to import three', e);
-        setError({ phase: 'three', message: String(e?.message || e), stack: e?.stack });
+        const err = { phase: 'three', message: String(e?.message || e), stack: e?.stack } as LoaderError;
+        setError(err);
+        onError?.(err);
         return;
       }
 
@@ -26,7 +30,9 @@ export default function SafeGlitchLoader() {
       } catch (e: any) {
         if (!mounted) return;
         console.error('SafeGlitchLoader: failed to import @react-three/fiber', e);
-        setError({ phase: '@react-three/fiber', message: String(e?.message || e), stack: e?.stack });
+        const err = { phase: '@react-three/fiber', message: String(e?.message || e), stack: e?.stack } as LoaderError;
+        setError(err);
+        onError?.(err);
         return;
       }
 
@@ -36,7 +42,9 @@ export default function SafeGlitchLoader() {
       } catch (e: any) {
         if (!mounted) return;
         console.error('SafeGlitchLoader: failed to import @react-three/drei', e);
-        setError({ phase: '@react-three/drei', message: String(e?.message || e), stack: e?.stack });
+        const err = { phase: '@react-three/drei', message: String(e?.message || e), stack: e?.stack } as LoaderError;
+        setError(err);
+        onError?.(err);
         return;
       }
 
@@ -48,7 +56,9 @@ export default function SafeGlitchLoader() {
       } catch (e: any) {
         if (!mounted) return;
         console.error('SafeGlitchLoader: failed to import GlitchCanvas', e);
-        setError({ phase: 'GlitchCanvas', message: String(e?.message || e), stack: e?.stack });
+        const err = { phase: 'GlitchCanvas', message: String(e?.message || e), stack: e?.stack } as LoaderError;
+        setError(err);
+        onError?.(err);
       }
     }
 
