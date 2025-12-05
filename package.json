@@ -108,7 +108,13 @@
     "zod": "^4.1.11",
     "lucide-react": "latest",
     "telegraf": "latest",
-    "dotenv": "latest"
+    "dotenv": "latest",
+    "three": "latest",
+    "@types/three": "latest",
+    "@react-three/fiber": "latest",
+    "@react-three/drei": "latest",
+    "clsx": "latest",
+    "tailwind-merge": "latest"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
