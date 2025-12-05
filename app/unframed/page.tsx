@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, Suspense, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 const DynamicGlitchCanvas = dynamic(() => import('@/components/unframed/GlitchCanvas'), { ssr: false, loading: () => null });
 import { ErrorBoundaryWrapper as ErrorBoundary } from '@/components/unframed/ErrorBoundary';
@@ -53,21 +53,36 @@ const TimelineItem = ({ year, title, text, icon, image }: any) => (
   </motion.div>
 );
 
-// REDACTED component
+// REDACTED component (glow on reveal)
 const Redacted = ({ children }: { children: React.ReactNode }) => {
   const [hover, setHover] = React.useState(false);
   return (
     <span
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      className={
-        "inline-block transition-all duration-200 px-1 " +
-        (hover ? "bg-transparent text-red-500 select-text" : "bg-zinc-800 text-transparent select-none")
-      }
+      className={`inline-block transition-all duration-200 px-1 ${hover ? 'bg-transparent text-red-500 select-text drop-shadow-[0_0_8px_rgba(220,38,38,0.8)]' : 'bg-zinc-800 text-transparent select-none'}`}
       aria-hidden={hover ? 'false' : 'true'}
     >
       {children}
     </span>
+  );
+};
+
+// Custom Cursor component
+const Cursor = () => {
+  const [pos, setPos] = React.useState({ x: -100, y: -100 });
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => setPos({ x: e.clientX, y: e.clientY });
+    window.addEventListener('mousemove', onMove);
+    return () => window.removeEventListener('mousemove', onMove);
+  }, []);
+
+  return (
+    <div aria-hidden className="pointer-events-none fixed left-0 top-0 z-70">
+      <div style={{ transform: `translate3d(${pos.x}px, ${pos.y}px, 0)` }} className="-translate-x-1/2 -translate-y-1/2">
+        <div className="w-4 h-4 rounded-full bg-red-500 opacity-90 mix-blend-screen" />
+      </div>
+    </div>
   );
 };
 
@@ -110,15 +125,26 @@ export default function UnframedPage() {
       </div>
 
       {/* MAIN GRID LAYOUT (Dossier) */}
-      <main className="max-w-[1200px] mx-auto border-y border-zinc-800">
-        {/* HERO / TITLE */}
-        <section className="grid grid-cols-12 items-center border-b border-zinc-800">
-          <div className="col-span-2 border-r border-zinc-800 p-6">
-            <div className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500">ARCHIVE</div>
+      <main className="max-w-[1400px] mx-auto border-y border-zinc-800 relative">
+        {/* SITE-WIDE SCANLINE (subtle) */}
+        <div aria-hidden className="pointer-events-none fixed inset-0 z-60 opacity-20 bg-[repeating-linear-gradient(0deg,rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px)]" />
+
+        {/* CUSTOM CURSOR (red crosshair that follows pointer) */}
+        <Cursor />
+
+        {/* HERO / TITLE (editorial, oversized) */}
+        <section className="relative overflow-visible border-b border-zinc-800">
+          <div className="absolute inset-0 -z-10">
+            <Image src={ASSETS.HERO_BG} alt="granite" fill className="object-cover opacity-28 mix-blend-overlay" />
           </div>
-          <div className="col-span-10 p-8">
-            <h1 className="text-[15vw] leading-[0.8] font-black uppercase tracking-tighter text-white">UNFRAMED</h1>
-            <div className="mt-4 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-t border-zinc-800 pt-3">The Granite. The Glitch. The Noir.</div>
+          <div className="max-w-[1200px] mx-auto py-20 px-6">
+            <div className="relative">
+              <h1 className="text-[20vw] leading-[0.7] font-black uppercase tracking-tight mix-blend-difference text-white pointer-events-none">UNFRAMED</h1>
+              <div className="absolute top-6 left-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-500">ARCHIVE</div>
+              <div className="mt-6 max-w-2xl">
+                <p className="text-lg md:text-xl font-serif text-zinc-200">The Granite. The Glitch. The Noir.</p>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -155,36 +181,50 @@ export default function UnframedPage() {
 
               {/** Items rendered as table rows */}
               <div className="divide-y divide-zinc-800">
-                <div className="grid grid-cols-12 items-start py-6">
-                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800">1984</div>
-                  <div className="col-span-10 p-6">
+                <div className="grid grid-cols-12 items-start py-6 relative">
+                  <div className="absolute left-6 top-0 z-0 opacity-10 select-none pointer-events-none">
+                    <div className="text-9xl font-black leading-[0.8] font-mono">1984</div>
+                  </div>
+                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800 z-10">1984</div>
+                  <div className="col-span-10 p-6 z-10">
                     <div className="font-bold text-lg uppercase">The Floor</div>
                     <div className="text-zinc-400 mt-2">I am four years old. The sun cuts through the tall Stalinist windows. I am drawing.</div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-12 items-start py-6">
-                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800">1998</div>
-                  <div className="col-span-10 p-6">
+                <div className="grid grid-cols-12 items-start py-6 relative">
+                  <div className="absolute left-6 top-0 z-0 opacity-10 select-none pointer-events-none">
+                    <div className="text-9xl font-black leading-[0.8] font-mono">1998</div>
+                  </div>
+                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800 z-10">1998</div>
+                  <div className="col-span-10 p-6 z-10">
                     <div className="font-bold text-lg uppercase">The Rooftops</div>
                     <div className="text-zinc-400 mt-2">Balancing on the edge of seven-story buildings, running coaxial cables with frozen hands.</div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-12 items-start py-6">
-                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800">2003</div>
-                  <div className="col-span-10 p-6">
+                <div className="grid grid-cols-12 items-start py-6 relative">
+                  <div className="absolute left-6 top-0 z-0 opacity-10 select-none pointer-events-none">
+                    <div className="text-9xl font-black leading-[0.8] font-mono">2003</div>
+                  </div>
+                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800 z-10">2003</div>
+                  <div className="col-span-10 p-6 z-10">
                     <div className="font-bold text-lg uppercase">The Glass Cage</div>
                     <div className="text-zinc-400 mt-2">Walking past the Khodorkovsky trial daily. A public flogging broadcast on all frequencies.</div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-12 items-start py-6">
-                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800">2008</div>
-                  <div className="col-span-10 p-6 flex items-center gap-6">
-                    <div className="w-48 h-36 grayscale group-hover:grayscale-0 overflow-hidden border border-zinc-800">
-                      <Image src={ASSETS.TIGER} alt="Tiger" fill className="object-cover" />
-                    </div>
+                <div className="grid grid-cols-12 items-start py-6 relative">
+                  <div className="absolute left-6 top-0 z-0 opacity-10 select-none pointer-events-none">
+                    <div className="text-9xl font-black leading-[0.8] font-mono">2008</div>
+                  </div>
+                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800 z-10">2008</div>
+                  <div className="col-span-10 p-6 z-10 flex items-center gap-6">
+                    <motion.div className="relative overflow-visible -ml-8" whileHover={{ scale: 1.03 }} transition={{ duration: 0.4 }}>
+                      <div className="w-64 h-44 rounded-sm overflow-hidden drop-shadow-2xl glitch-hover">
+                        <Image src={ASSETS.TIGER} alt="Tiger" fill className="object-cover grayscale" />
+                      </div>
+                    </motion.div>
                     <div>
                       <div className="font-bold text-lg uppercase">The Spectral Tiger</div>
                       <div className="text-zinc-400 mt-2">Digital value doesn’t need banks. It only needs Consensus.</div>
@@ -192,17 +232,23 @@ export default function UnframedPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-12 items-start py-6">
-                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800">2017</div>
-                  <div className="col-span-10 p-6">
+                <div className="grid grid-cols-12 items-start py-6 relative">
+                  <div className="absolute left-6 top-0 z-0 opacity-10 select-none pointer-events-none">
+                    <div className="text-9xl font-black leading-[0.8] font-mono">2017</div>
+                  </div>
+                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800 z-10">2017</div>
+                  <div className="col-span-10 p-6 z-10">
                     <div className="font-bold text-lg uppercase">The Source Code</div>
                     <div className="text-zinc-400 mt-2">We took the original death mask and scanned it with lasers. The idol became a file.</div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-12 items-start py-6">
-                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800">2022</div>
-                  <div className="col-span-10 p-6">
+                <div className="grid grid-cols-12 items-start py-6 relative">
+                  <div className="absolute left-6 top-0 z-0 opacity-10 select-none pointer-events-none">
+                    <div className="text-9xl font-black leading-[0.8] font-mono">2022</div>
+                  </div>
+                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800 z-10">2022</div>
+                  <div className="col-span-10 p-6 z-10">
                     <div className="font-bold text-lg uppercase">The Silence</div>
                     <div className="text-zinc-400 mt-2">February 24th. I walked past Kievsky Railway Station and Ukrainian Boulevard. The names of the 'enemy' were embedded in the granite geography of Moscow. The silence was louder than the explosions.</div>
                   </div>
