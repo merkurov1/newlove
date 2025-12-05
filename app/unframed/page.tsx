@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Terminal, Volume2, ArrowDown, Hash, Globe, FileText, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { Inter, Space_Mono, Playfair_Display } from 'next/font/google';
-import { motion, useScroll, useTransform } from 'framer-motion';
+// Note: framer-motion hooks were causing build-time type errors in this environment.
+// Use a small local scroll progress hook instead of `useScroll` / `useTransform`.
 
 // --- FONTS ---
 const sans = Inter({ subsets: ['latin'], variable: '--font-sans' });
@@ -121,12 +122,30 @@ export default function UnframedPage() {
   const [email, setEmail] = useState('');
   
   // SCROLL ANIMATION LOGIC
-  // We track the scroll position of the whole page
-  const { scrollYProgress } = useScroll();
-  
-  // Transform: Start at opacity 0, fade in to opacity 0.3 (visible but subtle) as we scroll past the first 10% of the page
-  const headerOpacity = useTransform(scrollYProgress, [0, 0.15], [0, 0.3]);
-  const headerBlur = useTransform(scrollYProgress, [0, 0.15], ["10px", "1px"]);
+  // We track the scroll position of the whole page with a small hook
+  const usePageScrollProgress = () => {
+    const [p, setP] = useState(0);
+    useEffect(() => {
+      const onScroll = () => {
+        const scrollTop = window.scrollY || window.pageYOffset;
+        const doc = document.documentElement;
+        const total = Math.max(1, doc.scrollHeight - window.innerHeight);
+        const v = Math.max(0, Math.min(1, scrollTop / total));
+        setP(v);
+      };
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+      return () => window.removeEventListener('scroll', onScroll);
+    }, []);
+    return p;
+  };
+
+  const scrollProgress = usePageScrollProgress();
+  const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  const headerT = clamp(scrollProgress / 0.15);
+  const headerOpacity = lerp(0, 0.3, headerT);
+  const headerBlurVal = lerp(10, 1, headerT);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,8 +162,8 @@ export default function UnframedPage() {
 
       {/* 2. FIXED BACKGROUND TITLE (The Reveal) */}
       {/* Controlled by framer-motion: starts hidden, fades in on scroll */}
-      <motion.div 
-        style={{ opacity: headerOpacity, filter: `blur(${headerBlur})` }}
+      <div 
+        style={{ opacity: headerOpacity, filter: `blur(${headerBlurVal}px)` }}
         className="fixed inset-0 flex flex-col items-center justify-center z-0 pointer-events-none"
       >
         <h1 className="text-[15vw] font-black uppercase tracking-tighter leading-none text-white mix-blend-difference font-sans">
@@ -155,7 +174,7 @@ export default function UnframedPage() {
            <p className="font-mono text-sm uppercase tracking-[0.3em] text-white">A Memoir by Anton Merkurov</p>
            <div className="h-[1px] w-12 bg-white" />
         </div>
-      </motion.div>
+      </div>
 
       {/* 3. MANIFESTO (THE HOOK - Clean Black Background) */}
       <section className="min-h-screen flex items-center justify-center px-6 relative z-10 bg-[#050505]">
