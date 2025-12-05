@@ -1,17 +1,15 @@
 {
-  "title": "UNFRAMED — Preview",
-  "description": "Audio preview and social metadata for UNFRAMED by Anton Merkurov.",
+  "title": "UNFRAMED",
+  "description": "UNFRAMED — a memoir by Anton Merkurov.",
   "openGraph": {
-    "title": "UNFRAMED — Anton Merkurov",
-    "description": "A memoir and audio preview from UNFRAMED.",
-    "image": "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg",
-    "audio": "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Digitize_the_Death_Mask_Encrypt_Freedom_Never.m4a"
+    "title": "UNFRAMED",
+    "description": "A memoir by Anton Merkurov.",
+    "image": "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg"
   },
   "twitter": {
-    "card": "player",
-    "title": "UNFRAMED — Audio Preview",
-    "description": "Listen to an excerpt from UNFRAMED.",
-    "image": "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg",
-    "player": "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Digitize_the_Death_Mask_Encrypt_Freedom_Never.m4a"
+    "card": "summary_large_image",
+    "title": "UNFRAMED",
+    "description": "UNFRAMED — a memoir by Anton Merkurov.",
+    "image": "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg"
   }
 }
