@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState, useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { Points, PointMaterial } from '@react-three/drei';
-import * as random from 'maath/random/dist/maath-random.esm';
+import React, { useState } from 'react';
+import dynamic from 'next/dynamic';
+const DynamicGlitchCanvas = dynamic(() => import('@/components/unframed/GlitchCanvas'), { ssr: false });
 import { motion } from 'framer-motion';
 import { Terminal, Send, Lock, Cpu, Fingerprint, BookOpen, Volume2, Play } from 'lucide-react';
 import Image from 'next/image';
@@ -18,41 +17,7 @@ const ASSETS = {
 
 // --- COMPONENTS ---
 
-// 1. 3D GLITCH OBJECT (Fixed Syntax)
-function GlitchParticles(props: any) {
-  const ref = useRef<any>();
-  // Generate particles safely
-  const [sphere] = useState(() => {
-    const data = new Float32Array(5000 * 3);
-    return random.inSphere(data, { radius: 1.5 });
-  });
-
-  useFrame((state: any, delta: number) => {
-    if (ref.current) {
-      ref.current.rotation.x -= delta / 10;
-      ref.current.rotation.y -= delta / 15;
-      const t = state.clock.getElapsedTime();
-      // Heartbeat / Glitch effect
-      ref.current.scale.x = 1 + Math.sin(t * 10) * 0.02; 
-    }
-  });
-
-  return React.createElement(
-    'group',
-    { rotation: [0, 0, Math.PI / 4] },
-    React.createElement(
-      Points,
-      { ref: ref, positions: sphere, stride: 3, frustumCulled: false, ...props },
-      React.createElement(PointMaterial, {
-        transparent: true,
-        color: '#ff3333',
-        size: 0.005,
-        sizeAttenuation: true,
-        depthWrite: false,
-      })
-    )
-  );
-}
+// GlitchCanvas is loaded dynamically (client-only) via DynamicGlitchCanvas
 
 // 2. TIMELINE ITEM
 const TimelineItem = ({ year, title, text, icon: Icon, image }: any) => (
@@ -111,11 +76,9 @@ export default function UnframedPage() {
           <div className="absolute inset-0 bg-black/70" />
         </div>
 
-        {/* 3D Layer */}
+        {/* 3D Layer (dynamically loaded client component) */}
         <div className="absolute inset-0 z-10 opacity-60 pointer-events-none">
-           <Canvas camera={{ position: [0, 0, 1] }}>
-            <GlitchParticles />
-          </Canvas>
+          <DynamicGlitchCanvas />
         </div>
         
         <div className="z-20 text-center px-4 mix-blend-difference">
