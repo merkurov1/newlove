@@ -1,8 +1,10 @@
 export default function Head() {
-  const IMAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg';
-  const TITLE = 'UNFRAMED - Memoir by Anton Merkurov';
-  const DESCRIPTION = 'UNFRAMED — a memoir by Anton Merkurov.';
-  const URL = 'https://www.unframed.example/unframed';
+  const image = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg';
+  const title = 'UNFRAMED - Memoir by Anton Merkurov';
+  const description = 'UNFRAMED — a memoir by Anton Merkurov.';
+  const url = 'https://www.merkurov.love/unframed';
+  const author = 'Anton Merkurov';
+  const keywords = 'UNFRAMED, Anton Merkurov, memoir, art, essays';
 
   return (
     <>
