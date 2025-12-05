@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Terminal, Volume2, ArrowDown } from 'lucide-react';
+import { Terminal, Volume2, ArrowDown, Hash, Globe, FileText, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { Inter, Space_Mono, Playfair_Display } from 'next/font/google';
 
@@ -57,22 +57,24 @@ const TIMELINE = [
 
 // --- COMPONENTS ---
 
+// 1. REDACTED COMPONENT (Interactive "Whiteout")
 const Redacted = ({ children }: { children: React.ReactNode }) => (
   <span className="group relative inline-block cursor-help mx-1 align-bottom">
-    <span className="relative z-10 bg-zinc-900 text-transparent select-none transition-all duration-300 group-hover:bg-transparent group-hover:text-red-500 group-hover:drop-shadow-[0_0_10px_rgba(220,38,38,0.8)]">
+    {/* Hidden text revealed on hover */}
+    <span className="relative z-10 text-transparent transition-all duration-300 group-hover:text-red-600 font-bold select-none group-hover:select-auto">
       {children}
     </span>
-    <span className="absolute inset-0 bg-white/20 animate-pulse group-hover:hidden" />
+    {/* The "Correction Tape" Block */}
+    <span className="absolute inset-0 bg-zinc-200 group-hover:bg-transparent transition-colors duration-300" />
   </span>
 );
 
+// 2. TIMELINE SLIDE (Glass Card)
 const TimelineSlide = ({ item, index }: any) => {
   return (
-    // STICKY STACKING with GLASS
     <div className="sticky top-0 h-screen w-full flex items-center justify-center">
-      {/* Container: 80% height to show the UNFRAMED title on top/bottom */}
-      <div className="relative w-full h-[85vh] md:h-[70vh] bg-black/70 backdrop-blur-md border-y border-white/10 flex items-center justify-center shadow-2xl">
-        
+      {/* Container: Glassmorphism over the fixed title */}
+      <div className="relative w-full h-[85vh] md:h-[70vh] bg-black/80 backdrop-blur-md border-y border-white/10 flex items-center justify-center shadow-2xl">
         <div className="max-w-7xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-24 items-center px-6">
           
           {/* LEFT: YEAR & TITLE */}
@@ -92,7 +94,7 @@ const TimelineSlide = ({ item, index }: any) => {
 
           {/* RIGHT: TEXT & IMAGE */}
           <div className="relative z-10">
-            <p className="text-xl md:text-3xl font-serif text-zinc-200 leading-relaxed drop-shadow-md">
+            <p className="text-xl md:text-3xl font-serif text-zinc-300 leading-relaxed drop-shadow-md">
               {item.text}
             </p>
             {item.img && (
@@ -131,9 +133,9 @@ export default function UnframedPage() {
       <div className="fixed inset-0 pointer-events-none z-50 opacity-[0.04] mix-blend-overlay" 
            style={{ backgroundImage: `url("https://grainy-gradients.vercel.app/noise.svg")` }} />
 
-      {/* 2. FIXED HERO (The "Stylish" Version) */}
-      <header className="fixed inset-0 flex flex-col items-center justify-center z-0 pointer-events-none">
-        <h1 className="text-[15vw] font-black uppercase tracking-tighter leading-none text-white mix-blend-difference font-sans opacity-40">
+      {/* 2. FIXED BACKGROUND TITLE (The Anchor) */}
+      <div className="fixed inset-0 flex flex-col items-center justify-center z-0 pointer-events-none">
+        <h1 className="text-[15vw] font-black uppercase tracking-tighter leading-none text-white mix-blend-difference opacity-30 font-sans blur-[1px]">
           UNFRAMED
         </h1>
         <div className="flex items-center gap-4 mt-4 opacity-50 mix-blend-difference">
@@ -141,15 +143,15 @@ export default function UnframedPage() {
            <p className="font-mono text-sm uppercase tracking-[0.3em] text-white">A Memoir by Anton Merkurov</p>
            <div className="h-[1px] w-12 bg-white" />
         </div>
-      </header>
+      </div>
 
-      {/* 3. MANIFESTO (Scrollable Start) */}
+      {/* 3. MANIFESTO (THE HOOK) */}
       <section className="min-h-screen flex items-center justify-center px-6 relative z-10">
          <div className="max-w-4xl text-center pt-20">
-            <p className="text-3xl md:text-5xl font-serif text-zinc-200 leading-tight drop-shadow-lg">
+            <p className="text-3xl md:text-5xl font-serif text-zinc-100 leading-tight drop-shadow-2xl">
               "I spent forty years running away from the boy on the floor. 
               <br/><br/>
-              <span className="text-zinc-400 text-2xl md:text-4xl block my-12">
+              <span className="text-zinc-400 text-2xl md:text-4xl block my-12 leading-normal">
                 <Redacted>The System</Redacted> demanded <Redacted>noise</Redacted>. I gave it <Redacted>noise</Redacted>.
               </span>
               But the granite eventually cracks.
@@ -161,7 +163,7 @@ export default function UnframedPage() {
          </div>
       </section>
 
-      {/* 4. THE STACK (Timeline) */}
+      {/* 4. THE STACK (TIMELINE) */}
       <main className="relative z-10">
         {TIMELINE.map((item, i) => (
           <TimelineSlide 
@@ -172,7 +174,7 @@ export default function UnframedPage() {
         ))}
       </main>
 
-      {/* 5. SOLID FOOTER */}
+      {/* 5. THE ASSET (SOLID FOOTER) */}
       <div className="relative z-20 bg-[#050505] border-t border-zinc-900 shadow-[0_-50px_100px_rgba(0,0,0,1)]">
         
         {/* ANALYSIS */}
@@ -210,39 +212,77 @@ export default function UnframedPage() {
            </div>
         </section>
 
+        {/* --- THE AGENT BAIT (Specs & Progress) --- */}
+        <section className="max-w-7xl mx-auto px-6 mb-24">
+           {/* Progress Bar */}
+           <div className="w-full h-[2px] bg-zinc-800 mb-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 h-full w-[75%] bg-red-600 shadow-[0_0_20px_red]" />
+           </div>
+           <div className="flex justify-between items-center font-mono text-xs text-red-600 uppercase tracking-widest mb-12">
+              <span>System Status: Uploading</span>
+              <span className="animate-pulse">75% Complete</span>
+           </div>
+
+           {/* Data Grid */}
+           <div className="grid grid-cols-2 md:grid-cols-4 border border-zinc-800 bg-zinc-900/20">
+              <div className="p-6 border-r border-b md:border-b-0 border-zinc-800">
+                 <Hash size={16} className="text-zinc-500 mb-4" />
+                 <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Length</p>
+                 <p className="text-white font-mono text-lg">~60k Words</p>
+              </div>
+              <div className="p-6 border-r border-b md:border-b-0 border-zinc-800">
+                 <FileText size={16} className="text-zinc-500 mb-4" />
+                 <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Genre</p>
+                 <p className="text-white font-mono text-lg">Memoir / Noir</p>
+              </div>
+              <div className="p-6 border-r border-zinc-800">
+                 <Globe size={16} className="text-zinc-500 mb-4" />
+                 <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Rights</p>
+                 <p className="text-white font-mono text-lg">Available</p>
+              </div>
+              <div className="p-6">
+                 <Lock size={16} className="text-zinc-500 mb-4" />
+                 <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Status</p>
+                 <p className="text-white font-mono text-lg">Proposal</p>
+              </div>
+           </div>
+        </section>
+
         {/* TERMINAL FORM */}
-        <section className="py-40 px-6 bg-black border-t border-zinc-900 flex justify-center">
-           <div className="max-w-2xl w-full">
+        <section className="pb-40 px-6 flex justify-center">
+           <div className="max-w-2xl w-full border border-zinc-800 p-12 bg-black">
               <div className="flex items-center gap-2 mb-12 text-zinc-500 font-mono text-xs uppercase tracking-widest border-b border-zinc-800 pb-4">
                  <Terminal size={14} /> Encrypted Channel
               </div>
               
-              <h2 className="text-6xl font-black uppercase mb-4 tracking-tighter text-white font-sans">Request Access</h2>
-              <p className="font-serif text-zinc-500 text-xl mb-12">Restricted to authorized agents & publishers.</p>
+              <h2 className="text-5xl font-black uppercase mb-4 tracking-tighter text-white font-sans">Request Proposal</h2>
+              <p className="font-serif text-zinc-500 text-lg mb-12">
+                Access restricted to authorized agents & publishers.
+              </p>
 
               {status === 'success' ? (
                 <div className="bg-green-900/10 border border-green-900/50 p-8 text-green-500 font-mono text-sm">
                   {'>'} TRANSMISSION SUCCESSFUL.<br/>{'>'} WE WILL ESTABLISH CONTACT.
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-12">
-                  <div className="relative group">
-                    <input type="text" className="w-full bg-transparent border-b border-zinc-800 py-4 text-white font-mono text-xl focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" placeholder="ENTER NAME" required />
+                <form onSubmit={handleSubmit} className="space-y-8">
+                  <div className="group">
+                    <input type="text" className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" placeholder="AGENT NAME" required />
                   </div>
-                  <div className="relative group">
-                    <input type="text" className="w-full bg-transparent border-b border-zinc-800 py-4 text-white font-mono text-xl focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" placeholder="ENTER AGENCY" required />
+                  <div className="group">
+                    <input type="text" className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" placeholder="AGENCY / HOUSE" required />
                   </div>
-                  <div className="relative group">
+                  <div className="group">
                     <input 
                       type="email" 
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-transparent border-b border-zinc-800 py-4 text-white font-mono text-xl focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" 
-                      placeholder="ENTER EMAIL" 
+                      className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" 
+                      placeholder="SECURE EMAIL" 
                       required 
                     />
                   </div>
-                  <button className="w-full bg-white text-black font-bold uppercase tracking-[0.2em] py-6 hover:bg-red-600 hover:text-white transition-colors text-sm font-mono mt-8">
+                  <button className="w-full bg-white text-black font-bold uppercase tracking-[0.2em] py-5 hover:bg-red-600 hover:text-white transition-colors mt-8 font-mono text-xs">
                     Initialize Request
                   </button>
                 </form>
@@ -250,7 +290,8 @@ export default function UnframedPage() {
            </div>
         </section>
 
-        <footer className="py-12 text-center text-zinc-800 font-mono text-[10px] uppercase tracking-widest border-t border-zinc-900/50 flex flex-col gap-2">
+        {/* SAFE FOOTER */}
+        <footer className="py-12 text-center text-zinc-800 font-mono text-[10px] uppercase tracking-widest border-t border-zinc-900/50 flex flex-col gap-2 bg-black">
           <span>Anton Merkurov / Unframed © 2025</span>
           <span>Moscow • London • Moscow • Ether</span>
         </footer>
