@@ -107,6 +107,29 @@ function TunnelScene() {
 // --- Page UI ---
 export default function UnframedPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success'>('idle');
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+
+  // Surface runtime errors to avoid white screen — useful during debugging
+  useEffect(() => {
+    const onError = (ev: ErrorEvent) => {
+      setRuntimeError(`${ev.message} @ ${ev.filename}:${ev.lineno}:${ev.colno}`);
+      return false;
+    };
+    const onRejection = (ev: PromiseRejectionEvent) => {
+      try {
+        const reason = ev.reason instanceof Error ? ev.reason.stack || ev.reason.message : String(ev.reason);
+        setRuntimeError(`UnhandledRejection: ${reason}`);
+      } catch (e) {
+        setRuntimeError('UnhandledRejection');
+      }
+    };
+    window.addEventListener('error', onError as unknown as EventListener);
+    window.addEventListener('unhandledrejection', onRejection as unknown as EventListener);
+    return () => {
+      window.removeEventListener('error', onError as unknown as EventListener);
+      window.removeEventListener('unhandledrejection', onRejection as unknown as EventListener);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +139,16 @@ export default function UnframedPage() {
 
   return (
     <div className="min-h-screen bg-black text-zinc-100 overflow-hidden antialiased">
+
+      {/* Runtime error overlay (visible when a runtime error occurs) */}
+      {runtimeError && (
+        <div className="fixed inset-0 z-[9999] bg-black/90 text-red-300 p-6 overflow-auto">
+          <div className="max-w-4xl mx-auto font-mono text-sm whitespace-pre-wrap">
+            <strong className="block text-lg mb-4">Runtime Error (debug):</strong>
+            <pre className="whitespace-pre-wrap">{runtimeError}</pre>
+          </div>
+        </div>
+      )}
 
       {/* MASSIVE FIXED HEADER */}
       <header className="fixed inset-0 z-50 pointer-events-none flex items-start justify-center">
