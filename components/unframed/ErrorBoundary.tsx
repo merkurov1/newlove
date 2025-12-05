@@ -30,6 +30,8 @@ export default class ErrorBoundary extends React.Component<React.PropsWithChildr
 }
 
 // Functional wrapper to ensure compatibility with JSX/TSX typing in some configs
-export const ErrorBoundaryWrapper: React.FC<React.PropsWithChildren<{}>> = ({ children }) => (
-  <ErrorBoundary>{children}</ErrorBoundary>
-);
+export const ErrorBoundaryWrapper: React.FC<React.PropsWithChildren<{}>> = ({ children }) => {
+  // Use React.createElement with `any` cast to avoid strict JSX construct-signature
+  // incompatibilities in some TypeScript/react typings during build.
+  return React.createElement(ErrorBoundary as any, null, children);
+};
