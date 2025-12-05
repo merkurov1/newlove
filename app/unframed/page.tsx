@@ -1,139 +1,94 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
-import Image from 'next/image';
-import { Terminal } from 'lucide-react';
+import { Terminal, Volume2 } from 'lucide-react';
 
-const UnframedTunnel = dynamic(() => import('@/components/unframed/UnframedTunnel'), { ssr: false, loading: () => <div className="fixed inset-0 z-30" /> });
+// Dynamically load the heavy 3D component
+const UnframedTunnel = dynamic(() => import('@/components/unframed/UnframedTunnel'), { 
+  ssr: false, 
+  loading: () => <div className="h-screen w-full bg-black flex items-center justify-center text-zinc-500 font-mono">INITIALIZING SYSTEM...</div> 
+});
 
-
-// --- Assets ---
 const ASSETS = {
-  HERO_BG:
-    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1055.png',
-  SYSTEM_MAP:
-    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1054.png',
-  TIGER:
-    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg',
-  AUDIO:
-    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Digitize_the_Death_Mask_Encrypt_Freedom_Never.m4a',
+  AUDIO: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Digitize_the_Death_Mask_Encrypt_Freedom_Never.m4a',
 };
 
-// Timeline data (Artist Arc)
-const TIMELINE = [
-  { year: '1984', title: 'The Floor', text: "I am four years old. The sun cuts through the tall Stalinist windows. I am drawing." },
-  { year: '1998', title: 'The Rooftops', text: 'We drilled through walls, running coaxial cables with frozen hands. We built the infrastructure of freedom.' },
-  { year: '2003', title: 'The Glass Cage', text: 'A city that kept walking. Silence louder than the noise.' },
-  { year: '2008', title: 'The Spectral Tiger', text: 'Digital value doesn’t need banks. It only needs Consensus.' , image: ASSETS.TIGER},
-  { year: '2017', title: 'The Source Code', text: 'We scanned the idol and turned stone into a file.' },
-  { year: '2022', title: 'The Silence', text: 'The city adjusted its headphones and kept walking.' , image: ASSETS.HERO_BG},
-  { year: '2025', title: 'The Canvas', text: 'The loop closed. I shut the door on the noise. I picked up the stylus. I am finally awake.' },
-];
-
-// 3D rendering moved into a client-only dynamically loaded component `UnframedTunnel`.
-
-// --- Page UI ---
 export default function UnframedPage() {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success'>('idle');
-  const [runtimeError, setRuntimeError] = useState<string | null>(null);
-
-  // Surface runtime errors to avoid white screen — useful during debugging
-  useEffect(() => {
-    const onError = (ev: ErrorEvent) => {
-      setRuntimeError(`${ev.message} @ ${ev.filename}:${ev.lineno}:${ev.colno}`);
-      return false;
-    };
-    const onRejection = (ev: PromiseRejectionEvent) => {
-      try {
-        const reason = ev.reason instanceof Error ? ev.reason.stack || ev.reason.message : String(ev.reason);
-        setRuntimeError(`UnhandledRejection: ${reason}`);
-      } catch (e) {
-        setRuntimeError('UnhandledRejection');
-      }
-    };
-    window.addEventListener('error', onError as unknown as EventListener);
-    window.addEventListener('unhandledrejection', onRejection as unknown as EventListener);
-    return () => {
-      window.removeEventListener('error', onError as unknown as EventListener);
-      window.removeEventListener('unhandledrejection', onRejection as unknown as EventListener);
-    };
-  }, []);
+  const [status, setStatus] = useState('idle');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus('loading');
-    setTimeout(() => setStatus('success'), 1200);
+    setTimeout(() => setStatus('success'), 1500);
   };
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 overflow-hidden antialiased">
+    <div className="bg-black text-white selection:bg-red-600 selection:text-white">
+      
+      {/* 1. FIXED HEADER (Always Visible) */}
+      <div className="fixed top-0 left-0 w-full z-50 pointer-events-none mix-blend-difference flex flex-col items-center pt-8">
+         <h1 className="text-[12vw] leading-none font-black uppercase tracking-tighter">UNFRAMED</h1>
+         <p className="font-mono text-xs uppercase tracking-[0.3em] mt-2">The Granite. The Glitch. The Ghost.</p>
+      </div>
 
-      {/* Runtime error overlay (visible when a runtime error occurs) */}
-      {runtimeError && (
-        <div className="fixed inset-0 z-[9999] bg-black/90 text-red-300 p-6 overflow-auto">
-          <div className="max-w-4xl mx-auto font-mono text-sm whitespace-pre-wrap">
-            <strong className="block text-lg mb-4">Runtime Error (debug):</strong>
-            <pre className="whitespace-pre-wrap">{runtimeError}</pre>
-          </div>
-        </div>
-      )}
+      {/* 2. THE TUNNEL (Scroll Experience) */}
+      {/* This component handles the first 600vh of scroll */}
+      <UnframedTunnel />
 
-      {/* MASSIVE FIXED HEADER */}
-      <header className="fixed inset-0 z-50 pointer-events-none flex items-start justify-center">
-        <div className="mt-12 text-center">
-          <h1 className="text-[18vw] leading-[0.7] font-extrabold uppercase mix-blend-difference select-none" style={{ fontFamily: 'serif' }}>
-            UNFRAMED
-          </h1>
-          <div className="mt-2 font-mono text-xs uppercase tracking-widest text-zinc-300">A MEMOIR BY ANTON MERKUROV</div>
-        </div>
-      </header>
+      {/* 3. FOOTER CONTENT (Appears after 3D scroll ends) */}
+      <div className="relative z-10 bg-black border-t border-zinc-900">
+        
+        {/* AI ANALYSIS */}
+        <section className="max-w-5xl mx-auto px-6 py-32 border-b border-zinc-900">
+           <div className="flex items-center gap-4 mb-12">
+             <Volume2 className="text-red-600" />
+             <span className="font-mono text-xs text-red-600 uppercase tracking-[0.2em]">AI Generated Analysis</span>
+           </div>
+           
+           <h3 className="text-4xl md:text-5xl font-bold mb-6">The Autopsy of an Empire</h3>
+           <p className="text-xl text-zinc-400 font-serif mb-8 max-w-2xl">
+             Two synthetic hosts deconstruct the manuscript, analyzing the shift from heavy Granite to weightless Ether.
+           </p>
 
-      {/* 3D Scroll Tunnel (client-only, dynamically loaded) */}
-      <section className="relative h-screen w-full">
-        <UnframedTunnel />
-      </section>
-
-      {/* AFTER TUNNEL: NotebookLM + Request Form (static sections) */}
-      <main className="relative z-40 bg-black px-6 md:px-20 py-24">
-        <section className="max-w-6xl mx-auto mb-20">
-          <div className="font-mono text-xs text-red-600 uppercase tracking-widest mb-4">03 / AI Analysis</div>
-          <h3 className="text-4xl font-bold text-white mb-4">The Autopsy of an Empire</h3>
-          <p className="text-lg text-zinc-400 font-serif leading-relaxed">Two synthetic hosts analyze the shift from the heavy Granite to the weightless Ether. NotebookLM generated insights and timestamps accompany the dossier.</p>
-
-          <div className="mt-8 p-6 border border-zinc-800 bg-black/40">
-            <audio controls className="w-full h-10">
-              <source src={ASSETS.AUDIO} type="audio/mp4" />
-            </audio>
-          </div>
+           <div className="bg-zinc-900/50 p-6 border border-zinc-800">
+             <audio controls className="w-full invert opacity-80 hover:opacity-100 transition-opacity">
+               <source src={ASSETS.AUDIO} type="audio/mp4" />
+             </audio>
+           </div>
         </section>
 
-        <section className="max-w-3xl mx-auto bg-[#050505] border border-zinc-900 p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <Terminal className="text-red-500" />
-            <div className="font-mono text-xs text-zinc-500 uppercase tracking-widest">Secure Transmission</div>
-          </div>
-
-          {status === 'success' ? (
-            <div className="p-6 bg-green-900/10 border border-green-900/30 text-green-400 font-mono">Signal received. Awaiting confirmation.</div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="font-mono text-xs text-zinc-400">NAME</label>
-                <input className="w-full mt-2 bg-black border border-zinc-800 p-3 text-white" required />
+        {/* REQUEST FORM */}
+        <section className="py-32 px-6 flex justify-center">
+           <div className="max-w-xl w-full">
+              <div className="mb-8 flex items-center gap-2 text-zinc-500 font-mono text-xs uppercase tracking-widest">
+                <Terminal size={14} /> Secure Transmission
               </div>
-              <div>
-                <label className="font-mono text-xs text-zinc-400">EMAIL</label>
-                <input type="email" className="w-full mt-2 bg-black border border-zinc-800 p-3 text-white" required />
-              </div>
-              <button className="w-full bg-red-600 text-black font-bold py-3">Initialize Request</button>
-            </form>
-          )}
+              
+              <h2 className="text-3xl font-bold mb-8 uppercase">Request Full Proposal</h2>
+              
+              {status === 'success' ? (
+                <div className="p-4 bg-green-900/20 text-green-500 font-mono text-sm border border-green-900">
+                  &gt; SIGNAL RECEIVED.<br/>&gt; STAND BY FOR CONNECTION.
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-0 border border-zinc-800">
+                  <input type="text" className="w-full bg-black p-4 border-b border-zinc-800 text-white font-mono text-sm focus:outline-none focus:bg-zinc-900 uppercase" placeholder="NAME" required />
+                  <input type="text" className="w-full bg-black p-4 border-b border-zinc-800 text-white font-mono text-sm focus:outline-none focus:bg-zinc-900 uppercase" placeholder="AGENCY" required />
+                  <input type="email" className="w-full bg-black p-4 border-b border-zinc-800 text-white font-mono text-sm focus:outline-none focus:bg-zinc-900 uppercase" placeholder="EMAIL" required />
+                  <button className="w-full bg-white text-black font-bold uppercase tracking-widest py-4 hover:bg-red-600 hover:text-white transition-colors">
+                    Initialize
+                  </button>
+                </form>
+              )}
+           </div>
         </section>
-      </main>
 
-      {/* Footer */}
-      <footer className="z-40 relative text-center py-8 font-mono text-xs text-zinc-600">MERKUROV.LOVE / UNFRAMED © 2025</footer>
+        <footer className="py-8 text-center text-zinc-700 font-mono text-[10px] uppercase tracking-widest">
+          Merkurov.Love © 2025
+        </footer>
+
+      </div>
     </div>
   );
 }
