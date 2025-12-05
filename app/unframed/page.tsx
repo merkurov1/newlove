@@ -5,7 +5,8 @@ import dynamic from 'next/dynamic';
 const DynamicGlitchCanvas = dynamic(() => import('@/components/unframed/GlitchCanvas'), { ssr: false, loading: () => null });
 import { ErrorBoundaryWrapper as ErrorBoundary } from '@/components/unframed/ErrorBoundary';
 import { motion } from 'framer-motion';
-// NOTE: lucide-react caused a runtime issue in some builds; use lightweight emoji placeholders to avoid importing that package on the server.
+// Import a single icon component for the timeline entry. If this causes SSR issues we can switch to a client-only dynamic import.
+import { MicOff } from 'lucide-react';
 
 import Image from 'next/image';
 
@@ -32,7 +33,13 @@ const TimelineItem = ({ year, title, text, icon, image }: any) => (
     <div className="absolute -left-[9px] top-11 w-4 h-4 bg-black border-2 border-red-600 rounded-full" />
     <div className="flex items-center gap-3 mb-2">
       <span className="font-mono text-red-500 font-bold text-xl">{year}</span>
-      {icon && <span className="text-zinc-500 text-lg">{icon}</span>}
+      {icon && (
+        typeof icon === 'string' ? (
+          <span className="text-zinc-500 text-lg">{icon}</span>
+        ) : (
+          React.createElement(icon as any, { size: 18, className: 'text-zinc-500' })
+        )
+      )}
     </div>
     <h3 className="text-xl md:text-2xl font-bold text-white mb-3 uppercase tracking-wider">{title}</h3>
     <p className="text-zinc-400 font-serif leading-relaxed text-lg max-w-2xl mb-4">
@@ -157,9 +164,9 @@ export default function UnframedPage() {
             />
             <TimelineItem 
               year="2022" 
-              title="The Smile" 
-              text="I was lying in a dentist’s chair, getting expensive Hollywood veneers installed, while Russian tanks rolled across the border. I walked out onto Kutuzovsky Prospect with a blindingly white smile, facing a city that had just bitten its own tongue off."
-              icon={'🔊'}
+              title="The Silence" 
+              text={`February 24th. I walked past Kievsky Railway Station and Ukrainian Boulevard. The names of the 'enemy' were embedded in the granite geography of Moscow. I expected rage. I expected screams. Instead, I saw a city that adjusted its headphones and kept walking to the office. The silence was louder than the explosions.`}
+              icon={MicOff}
             />
              <TimelineItem 
               year="2024" 
