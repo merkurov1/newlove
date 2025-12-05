@@ -278,7 +278,7 @@ export default function UnframedPage() {
 
       <footer className="py-12 text-center border-t border-zinc-900 text-zinc-600 font-mono text-xs">
         <p>MERKUROV.LOVE / UNFRAMED © 2025</p>
-        <p>BELGRADE — LONDON — ETHER</p>
+        <p> MOSCOW — LONDON - MOSCOW - LONDON — ETHER</p>
       </footer>
     </div>
   );
