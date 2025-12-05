@@ -1,15 +1,18 @@
 {
-  "title": "UNFRAMED",
+  "title": "UNFRAMED - Memoir by Anton Merkurov",
   "description": "UNFRAMED — a memoir by Anton Merkurov.",
   "openGraph": {
-    "title": "UNFRAMED",
+    "title": "UNFRAMED - Memoir by Anton Merkurov",
     "description": "A memoir by Anton Merkurov.",
-    "image": "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg"
+    "image": "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg",
+    "site_name": "UNFRAMED",
+    "url": "https://www.unframed.example/unframed"
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "UNFRAMED",
+    "title": "UNFRAMED - Memoir by Anton Merkurov",
     "description": "UNFRAMED — a memoir by Anton Merkurov.",
-    "image": "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg"
+    "image": "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg",
+    "site": "@unframed"
   }
 }
