@@ -19,6 +19,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "vercel:login": "vercel login",
     "vercel:deploy": "vercel --prod",
+    "vercel:install": "npm install --force && npm install framer-motion clsx tailwind-merge --no-save",
     "vercel:logs": "vercel logs --since 60m",
     "vercel:logs:grep": "vercel logs --since 60m | grep -E 'SANITIZE DIAG|Unsupported Server Component type|2153716801' -n -C 5",
     "render:logs": "echo 'Check logs at https://dashboard.render.com'",
@@ -109,10 +110,7 @@
     "lucide-react": "latest",
     "telegraf": "latest",
     "dotenv": "latest",
-    "three": "^0.158.0",
-    "@types/three": "^0.158.0",
-    "@react-three/fiber": "^8.0.0",
-    "@react-three/drei": "^9.0.0",
+    
     "clsx": "latest",
     "tailwind-merge": "latest"
   },

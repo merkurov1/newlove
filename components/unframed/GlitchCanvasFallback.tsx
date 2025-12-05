@@ -2,108 +2,76 @@
 
 import React, { useEffect, useRef } from 'react';
 
+// Canvas 2D particle fallback (no three.js)
 export default function GlitchCanvasFallback() {
-  const ref = useRef<HTMLDivElement | null>(null);
+  const ref = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
     let mounted = true;
-    let renderer: any = null;
-    let scene: any = null;
-    let camera: any = null;
-    let animationId: number | null = null;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    async function init() {
-      const THREE = await import('three');
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.floor((canvas.parentElement?.clientWidth || window.innerWidth) * dpr));
+      canvas.height = Math.max(1, Math.floor((canvas.parentElement?.clientHeight || window.innerHeight) * dpr));
+      canvas.style.width = (canvas.width / dpr) + 'px';
+      canvas.style.height = (canvas.height / dpr) + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
 
-      if (!mounted || !ref.current) return;
+    window.addEventListener('resize', resize);
+    resize();
 
-      const width = ref.current.clientWidth || window.innerWidth;
-      const height = ref.current.clientHeight || window.innerHeight;
+    const particles = new Array(800).fill(0).map(() => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      r: Math.random() * 1.6 + 0.4,
+      hue: 340 + Math.random() * 30,
+    }));
 
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      ref.current.appendChild(renderer.domElement);
+    let raf = 0;
+    const start = performance.now();
+    const loop = () => {
+      if (!mounted) return;
+      const t = (performance.now() - start) / 1000;
+      const w = canvas.width / (window.devicePixelRatio || 1);
+      const h = canvas.height / (window.devicePixelRatio || 1);
 
-      scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x000000);
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, w, h);
 
-      camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-      camera.position.z = 5;
+      for (let p of particles) {
+        p.x += p.vx + Math.sin(t * 0.2 + p.x * 0.001) * 0.2;
+        p.y += p.vy + Math.cos(t * 0.3 + p.y * 0.001) * 0.2;
+        if (p.x < -10) p.x = w + 10;
+        if (p.x > w + 10) p.x = -10;
+        if (p.y < -10) p.y = h + 10;
+        if (p.y > h + 10) p.y = -10;
 
-      // Particles
-      const count = 2000;
-      const positions = new Float32Array(count * 3);
-      for (let i = 0; i < count; i++) {
-        const r = Math.random() * 2.0;
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
-        positions[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta);
-        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-        positions[i * 3 + 2] = r * Math.cos(phi) - 1.5;
+        ctx.beginPath();
+        const alpha = 0.6 + 0.4 * Math.sin(t * 2 + p.x + p.y);
+        ctx.fillStyle = `hsla(${p.hue},80%,60%,${alpha})`;
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      raf = requestAnimationFrame(loop);
+    };
 
-      const material = new THREE.PointsMaterial({ size: 0.03, color: 0xff5555 });
-      const points = new THREE.Points(geometry, material);
-      scene.add(points);
-
-      // Lights
-      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-      scene.add(ambient);
-
-      const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-      dir.position.set(5, 5, 5);
-      scene.add(dir);
-
-      const onResize = () => {
-        if (!ref.current || !renderer || !camera) return;
-        const w = ref.current.clientWidth || window.innerWidth;
-        const h = ref.current.clientHeight || window.innerHeight;
-        renderer.setSize(w, h);
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-      };
-
-      window.addEventListener('resize', onResize);
-
-      const start = performance.now();
-      const animate = (t: number) => {
-        if (!mounted) return;
-        const elapsed = (t - start) / 1000;
-        points.rotation.x = elapsed * 0.02;
-        points.rotation.y = elapsed * 0.015;
-        renderer.render(scene, camera);
-        animationId = requestAnimationFrame(animate);
-      };
-
-      animationId = requestAnimationFrame(animate);
-
-      // cleanup
-      return () => {
-        mounted = false;
-        if (animationId) cancelAnimationFrame(animationId);
-        window.removeEventListener('resize', onResize);
-        if (renderer) {
-          renderer.dispose();
-          if (renderer.domElement && renderer.domElement.parentNode) {
-            renderer.domElement.parentNode.removeChild(renderer.domElement);
-          }
-        }
-        if (geometry) geometry.dispose();
-      };
-    }
-
-    let cleanup: any;
-    init().then((c) => (cleanup = c)).catch((e) => console.error('GlitchCanvasFallback init error', e));
+    raf = requestAnimationFrame(loop);
 
     return () => {
       mounted = false;
-      if (cleanup) cleanup();
+      window.removeEventListener('resize', resize);
+      cancelAnimationFrame(raf);
     };
   }, []);
 
-  return <div ref={ref} className="w-full h-full" />;
+  return <canvas ref={ref} className="w-full h-full block" />;
 }
