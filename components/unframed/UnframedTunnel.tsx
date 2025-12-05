@@ -63,7 +63,7 @@ function Scene() {
       <Text position={[2, 1, -25]} fontSize={4} color="#1a1a1a">
         2008
       </Text>
-      <DreiImage url={ASSETS.TIGER} position={[3, 0, -28]} scale={[4, 3]} transparent opacity={0.5} grayscale />
+      <DreiImage url={ASSETS.TIGER} position={[3, 0, -28]} scale={[4, 3]} transparent opacity={0.5} grayscale={1} />
 
       {/* 2025 */}
       <Text position={[0, 0, -45]} fontSize={6} color="#ffffff">
