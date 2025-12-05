@@ -3,13 +3,31 @@
 import React, { useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Points, PointMaterial } from '@react-three/drei';
-import * as random from 'maath/random/dist/maath-random.esm';
+
+// Local helper: fill a Float32Array with `count` points inside a sphere of given radius.
+function fillRandomInSphere(array: Float32Array, radius = 1) {
+  for (let i = 0; i < array.length; i += 3) {
+    // Generate a random point uniformly inside a sphere.
+    const u = Math.random();
+    const v = Math.random();
+    const theta = 2 * Math.PI * u;
+    const phi = Math.acos(2 * v - 1);
+    const r = radius * Math.cbrt(Math.random());
+    const x = r * Math.sin(phi) * Math.cos(theta);
+    const y = r * Math.sin(phi) * Math.sin(theta);
+    const z = r * Math.cos(phi);
+    array[i] = x;
+    array[i + 1] = y;
+    array[i + 2] = z;
+  }
+  return array;
+}
 
 function GlitchParticles(props: any) {
   const ref = useRef<any>();
   const [sphere] = React.useState(() => {
     const data = new Float32Array(5000 * 3);
-    return random.inSphere(data, { radius: 1.5 });
+    return fillRandomInSphere(data, 1.5);
   });
 
   useFrame((state: any, delta: number) => {

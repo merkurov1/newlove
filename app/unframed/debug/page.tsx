@@ -1,13 +1,8 @@
 "use client";
 
 import React from 'react';
-import dynamic from 'next/dynamic';
+import SafeGlitchLoader from '@/components/unframed/SafeGlitchLoader';
 import { ErrorBoundaryWrapper as ErrorBoundary } from '@/components/unframed/ErrorBoundary';
-
-const DynamicGlitchCanvas = dynamic(
-  () => import('@/components/unframed/GlitchCanvas'),
-  { ssr: false, loading: () => <div className="p-4 text-sm text-zinc-400">Loading 3D preview…</div> }
-);
 
 export default function UnframedDebugPage() {
   return (
@@ -20,7 +15,7 @@ export default function UnframedDebugPage() {
           <div className="bg-zinc-900/40 px-4 py-2 text-xs text-zinc-300">Canvas area — errors will be caught by the boundary below</div>
           <div className="h-[480px] w-full bg-black">
             <ErrorBoundary>
-              <DynamicGlitchCanvas />
+              <SafeGlitchLoader />
             </ErrorBoundary>
           </div>
         </div>
