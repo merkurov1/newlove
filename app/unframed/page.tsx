@@ -6,7 +6,7 @@ const DynamicGlitchCanvas = dynamic(() => import('@/components/unframed/GlitchCa
 import { ErrorBoundaryWrapper as ErrorBoundary } from '@/components/unframed/ErrorBoundary';
 import { motion } from 'framer-motion';
 // Import a single icon component for the timeline entry. If this causes SSR issues we can switch to a client-only dynamic import.
-import { MicOff } from 'lucide-react';
+import { MicOff, PenTool } from 'lucide-react';
 
 import Image from 'next/image';
 
@@ -53,6 +53,24 @@ const TimelineItem = ({ year, title, text, icon, image }: any) => (
   </motion.div>
 );
 
+// REDACTED component
+const Redacted = ({ children }: { children: React.ReactNode }) => {
+  const [hover, setHover] = React.useState(false);
+  return (
+    <span
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className={
+        "inline-block transition-all duration-200 px-1 " +
+        (hover ? "bg-transparent text-red-500 select-text" : "bg-zinc-800 text-transparent select-none")
+      }
+      aria-hidden={hover ? 'false' : 'true'}
+    >
+      {children}
+    </span>
+  );
+};
+
 export default function UnframedPage() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('idle');
@@ -70,6 +88,21 @@ export default function UnframedPage() {
     <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans selection:bg-red-600 selection:text-white overflow-x-hidden">
       {/* GLOBAL FILM GRAIN */}
       <div aria-hidden className="fixed inset-0 pointer-events-none z-50 opacity-40" style={{ backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='4' height='4'><filter id='f'><feTurbulence baseFrequency='0.9' numOctaves='1' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23f)' opacity='0.06' fill='black'/></svg>")`, backgroundSize: 'cover' }} />
+
+      {/* Local styles for scanner animation */}
+      <style>{`
+        @keyframes scan {
+          0% { transform: translateY(-120%); }
+          100% { transform: translateY(120%); }
+        }
+        .scanner-line {
+          position: absolute; left: 0; right: 0; height: 2px;
+          background: linear-gradient(90deg, transparent, rgba(255,40,40,0.9), transparent);
+          animation: scan 3s linear infinite;
+          mix-blend-mode: overlay;
+          pointer-events: none;
+        }
+      `}</style>
 
       {/* MARQUEE STATUS (Brutalist) */}
       <div className="w-full border-b border-zinc-800 bg-black/20">
@@ -95,7 +128,15 @@ export default function UnframedPage() {
             <div className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500">01 / The Premise</div>
           </div>
           <div className="col-span-9 p-8">
-            <p className="text-2xl font-serif text-zinc-200 leading-tight border-l border-zinc-800 pl-6">"This is not a story about politics. It is an autopsy of an illusion. Born to guard the granite of the Soviet Empire. We believed that data was the new marble."</p>
+            <p className="text-2xl font-serif text-zinc-200 leading-tight border-l border-zinc-800 pl-6">
+              "I spent forty years running away from the boy on the floor. <br />
+              I built networks on frozen rooftops. I hacked the first iPhones for the elite. I sold the ghost of the Empire as cryptocurrency. <br />
+              It was all a detour. <br />
+              <Redacted>The System</Redacted> demanded <Redacted>noise</Redacted>. I gave it <Redacted>noise</Redacted>.
+              <br />
+              But the granite eventually cracks. <br />
+              UNFRAMED is the story of closing the loop. Of returning to the only thing that matters: The Line."
+            </p>
           </div>
         </section>
 
@@ -168,10 +209,13 @@ export default function UnframedPage() {
                 </div>
 
                 <div className="grid grid-cols-12 items-start py-6">
-                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800">2024</div>
+                  <div className="col-span-2 p-6 font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 border-r border-zinc-800">2025</div>
                   <div className="col-span-10 p-6">
-                    <div className="font-bold text-lg uppercase">The Departure</div>
-                    <div className="text-zinc-400 mt-2">I crossed the border at night, wearing a surgical mask, leaving the Granite behind.</div>
+                    <div className="flex items-center gap-3">
+                      <div className="font-bold text-lg uppercase">THE CANVAS</div>
+                      <div className="text-zinc-500">{React.createElement(PenTool as any, { size: 16, className: 'text-zinc-400' })}</div>
+                    </div>
+                    <div className="text-zinc-400 mt-2">The loop closed. I shut the door on the noise. I picked up the stylus. No more strategies, no more signals. Just the discipline of the artist. I am finally awake.</div>
                   </div>
                 </div>
               </div>
@@ -188,7 +232,13 @@ export default function UnframedPage() {
             <div className="border-l border-zinc-800 pl-6 text-zinc-400 font-mono text-xs uppercase tracking-[0.2em]">AI GENERATED INSIGHTS</div>
             <div className="mt-4 grid md:grid-cols-2 gap-6">
               <div className="bg-black border border-zinc-800 p-6">The Autopsy of an Empire — NotebookLM</div>
-              <div className="bg-black border border-zinc-800 p-6">System Architecture visualized as collapse maps.</div>
+              <div className="relative bg-black border border-zinc-800 overflow-hidden">
+                <div className="relative w-full h-56 md:h-80">
+                  <Image src={ASSETS.SYSTEM_MAP} alt="System Map" fill className="object-cover" />
+                  <div className="scanner-line" style={{ top: '-20%' }} />
+                </div>
+                <div className="p-4 font-mono text-xs text-zinc-500">Fig. 1 — Digital Monolith: system map under scanner.</div>
+              </div>
             </div>
           </div>
         </section>
