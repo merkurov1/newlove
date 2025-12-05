@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Terminal, Volume2, ArrowDown, PenTool } from 'lucide-react';
+import { Terminal, Volume2, ArrowDown } from 'lucide-react';
 import Image from 'next/image';
 import { Inter, Space_Mono, Playfair_Display } from 'next/font/google';
 
@@ -14,7 +14,6 @@ const serif = Playfair_Display({ subsets: ['latin'], variable: '--font-serif' })
 const ASSETS = {
   HERO_BG: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1055.png',
   SYSTEM_MAP: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1054.png',
-  // Fixed URL typo (.co added)
   TIGER: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg',
   AUDIO: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Digitize_the_Death_Mask_Encrypt_Freedom_Never.m4a',
 };
@@ -67,44 +66,48 @@ const Redacted = ({ children }: { children: React.ReactNode }) => (
   </span>
 );
 
-const TimelineSlide = ({ item, index, total }: any) => {
+const TimelineSlide = ({ item, index }: any) => {
   return (
-    // STICKY STACKING MAGIC:
-    // top-0 + sticky makes them pile up like cards.
-    <div className="sticky top-0 h-screen w-full flex items-center justify-center bg-black border-t border-zinc-900 shadow-2xl">
-      <div className="max-w-7xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-24 items-center px-6 relative z-10">
+    // STICKY STACKING with GLASS
+    <div className="sticky top-0 h-screen w-full flex items-center justify-center">
+      {/* Container: 80% height to show the UNFRAMED title on top/bottom */}
+      <div className="relative w-full h-[85vh] md:h-[70vh] bg-black/70 backdrop-blur-md border-y border-white/10 flex items-center justify-center shadow-2xl">
         
-        {/* YEAR (Background) */}
-        <div className="relative">
-          <h2 className="text-[20vw] leading-none font-black text-zinc-900 absolute -left-10 md:-left-20 -top-20 select-none z-0 font-sans pointer-events-none">
-            {item.year}
-          </h2>
-          <div className="relative z-10 pl-6 border-l-2 border-red-600">
-            <span className="font-mono text-xs text-red-600 tracking-[0.4em] uppercase block mb-4">
-              Log Entry {item.year}
-            </span>
-            <h3 className="text-5xl md:text-8xl font-bold text-white uppercase tracking-tighter leading-[0.9] font-sans">
-              {item.title}
-            </h3>
-          </div>
-        </div>
-
-        {/* NARRATIVE */}
-        <div className="relative z-10 bg-[#050505]/80 backdrop-blur-md border border-zinc-800 p-8 md:p-12 shadow-2xl">
-          <p className="text-xl md:text-3xl font-serif text-zinc-300 leading-relaxed">
-            {item.text}
-          </p>
-          {item.img && (
-            <div className="mt-8 relative w-full aspect-video border border-zinc-700 grayscale contrast-125 overflow-hidden group">
-              <Image 
-                src={item.img} 
-                alt="Evidence" 
-                fill 
-                className="object-cover group-hover:scale-105 transition-transform duration-1000" 
-              />
-              <div className="absolute inset-0 bg-zinc-900/20 mix-blend-overlay" />
+        <div className="max-w-7xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-24 items-center px-6">
+          
+          {/* LEFT: YEAR & TITLE */}
+          <div className="relative">
+            <h2 className="text-[12vw] leading-none font-black text-transparent bg-clip-text bg-gradient-to-b from-white/20 to-transparent absolute -left-6 -top-16 select-none z-0 font-sans pointer-events-none">
+              {item.year}
+            </h2>
+            <div className="relative z-10 pl-6 border-l-2 border-red-600">
+              <span className="font-mono text-xs text-red-500 tracking-[0.4em] uppercase block mb-4">
+                Log Entry {item.year}
+              </span>
+              <h3 className="text-5xl md:text-7xl font-bold text-white uppercase tracking-tighter leading-[0.9] font-sans">
+                {item.title}
+              </h3>
             </div>
-          )}
+          </div>
+
+          {/* RIGHT: TEXT & IMAGE */}
+          <div className="relative z-10">
+            <p className="text-xl md:text-3xl font-serif text-zinc-200 leading-relaxed drop-shadow-md">
+              {item.text}
+            </p>
+            {item.img && (
+              <div className="mt-8 relative w-full aspect-video border border-zinc-500/30 overflow-hidden group">
+                <Image 
+                  src={item.img} 
+                  alt="Evidence" 
+                  fill 
+                  className="object-cover group-hover:scale-105 transition-transform duration-1000 grayscale hover:grayscale-0" 
+                />
+                <div className="absolute inset-0 bg-black/20 mix-blend-overlay" />
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     </div>
@@ -122,70 +125,55 @@ export default function UnframedPage() {
   };
 
   return (
-    <div className={`min-h-screen bg-[#030303] text-white selection:bg-red-600 selection:text-white font-sans overflow-x-hidden ${sans.variable} ${mono.variable} ${serif.variable}`}>
+    <div className={`min-h-screen bg-[#050505] text-white selection:bg-red-600 selection:text-white font-sans overflow-x-hidden ${sans.variable} ${mono.variable} ${serif.variable}`}>
       
-      {/* 1. ANIMATED GLOBAL GRAIN (THE NOISE) */}
-      <div className="fixed inset-0 pointer-events-none z-50 opacity-[0.05] mix-blend-overlay animate-grain" 
+      {/* 1. GLOBAL FILM GRAIN */}
+      <div className="fixed inset-0 pointer-events-none z-50 opacity-[0.04] mix-blend-overlay" 
            style={{ backgroundImage: `url("https://grainy-gradients.vercel.app/noise.svg")` }} />
-      <style jsx global>{`
-        @keyframes grain {
-          0%, 100% { transform: translate(0, 0); }
-          10% { transform: translate(-5%, -10%); }
-          20% { transform: translate(-15%, 5%); }
-          30% { transform: translate(7%, -25%); }
-          40% { transform: translate(-5%, 25%); }
-          50% { transform: translate(-15%, 10%); }
-          60% { transform: translate(15%, 0%); }
-          70% { transform: translate(0%, 15%); }
-          80% { transform: translate(3%, 35%); }
-          90% { transform: translate(-10%, 10%); }
-        }
-        .animate-grain {
-          animation: grain 8s steps(10) infinite;
-        }
-      `}</style>
 
-      {/* 2. FIXED HERO (INVERTED REALITY) */}
-      {/* mix-blend-difference allows this text to change color based on what slides over it */}
-      <div className="fixed inset-0 flex flex-col items-center justify-center z-0 pointer-events-none">
-        <h1 className="text-[25vw] font-black uppercase tracking-tighter leading-none text-white mix-blend-difference opacity-20 font-sans">
+      {/* 2. FIXED HERO (The "Stylish" Version) */}
+      <header className="fixed inset-0 flex flex-col items-center justify-center z-0 pointer-events-none">
+        <h1 className="text-[15vw] font-black uppercase tracking-tighter leading-none text-white mix-blend-difference font-sans opacity-40">
           UNFRAMED
         </h1>
-      </div>
+        <div className="flex items-center gap-4 mt-4 opacity-50 mix-blend-difference">
+           <div className="h-[1px] w-12 bg-white" />
+           <p className="font-mono text-sm uppercase tracking-[0.3em] text-white">A Memoir by Anton Merkurov</p>
+           <div className="h-[1px] w-12 bg-white" />
+        </div>
+      </header>
 
-      {/* 3. MANIFESTO (SCROLLABLE START) */}
-      <section className="min-h-screen flex items-center justify-center px-6 relative z-10 bg-transparent">
-         <div className="max-w-4xl text-center pt-32">
-            <p className="text-3xl md:text-6xl font-serif text-zinc-100 leading-tight">
+      {/* 3. MANIFESTO (Scrollable Start) */}
+      <section className="min-h-screen flex items-center justify-center px-6 relative z-10">
+         <div className="max-w-4xl text-center pt-20">
+            <p className="text-3xl md:text-5xl font-serif text-zinc-200 leading-tight drop-shadow-lg">
               "I spent forty years running away from the boy on the floor. 
               <br/><br/>
-              <span className="text-zinc-400 text-2xl md:text-4xl block my-8">
+              <span className="text-zinc-400 text-2xl md:text-4xl block my-12">
                 <Redacted>The System</Redacted> demanded <Redacted>noise</Redacted>. I gave it <Redacted>noise</Redacted>.
               </span>
               But the granite eventually cracks.
               UNFRAMED is the story of closing the loop. Of returning to the only thing that matters: The Line."
             </p>
-            <div className="mt-20 animate-bounce flex justify-center text-zinc-500">
+            <div className="mt-32 animate-bounce flex justify-center text-zinc-500">
                <ArrowDown />
             </div>
          </div>
       </section>
 
-      {/* 4. THE STACK (TIMELINE) */}
+      {/* 4. THE STACK (Timeline) */}
       <main className="relative z-10">
         {TIMELINE.map((item, i) => (
           <TimelineSlide 
             key={i} 
             item={item} 
             index={i} 
-            total={TIMELINE.length} 
           />
         ))}
       </main>
 
-      {/* 5. SOLID FOOTER (AUDIO & FORM) */}
-      {/* Z-Index ensures this sits ON TOP of the sticky stack when you reach the bottom */}
-      <div className="relative z-20 bg-[#030303] border-t border-zinc-900 shadow-[0_-50px_100px_rgba(0,0,0,1)]">
+      {/* 5. SOLID FOOTER */}
+      <div className="relative z-20 bg-[#050505] border-t border-zinc-900 shadow-[0_-50px_100px_rgba(0,0,0,1)]">
         
         {/* ANALYSIS */}
         <section className="py-32 px-6">
@@ -195,7 +183,7 @@ export default function UnframedPage() {
               <div className="border border-zinc-800 p-2 bg-zinc-900/30 group">
                  <div className="relative aspect-square overflow-hidden grayscale invert hover:grayscale-0 hover:invert-0 transition-all duration-700">
                     <Image src={ASSETS.SYSTEM_MAP} alt="Map" fill className="object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-50" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-60" />
                     <div className="absolute bottom-6 left-6 font-mono text-xs text-red-500 uppercase tracking-widest border border-red-500 px-2 py-1 bg-black">
                       Fig. 01: System Failure
                     </div>
