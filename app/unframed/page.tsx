@@ -1,4 +1,3 @@
-/// <reference path="../../types/jsx.d.ts" />
 "use client";
 
 import React, { useState, useRef } from 'react';
@@ -6,46 +5,56 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Points, PointMaterial } from '@react-three/drei';
 import * as random from 'maath/random/dist/maath-random.esm';
 import { motion } from 'framer-motion';
-import { Terminal, Send, Lock, Cpu, Fingerprint, BookOpen, Volume2 } from 'lucide-react';
+import { Terminal, Send, Lock, Cpu, Fingerprint, BookOpen, Volume2, Play } from 'lucide-react';
 import Image from 'next/image';
 
 // --- ASSETS ---
 const ASSETS = {
   HERO_BG: "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1055.png",
   SYSTEM_MAP: "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1054.png",
-  TIGER: "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg"
+  TIGER: "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg",
+  AUDIO: "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Digitize_the_Death_Mask_Encrypt_Freedom_Never.m4a"
 };
 
 // --- COMPONENTS ---
 
-// 1. 3D GLITCH OBJECT (Particle Cloud)
+// 1. 3D GLITCH OBJECT (Fixed Syntax)
 function GlitchParticles(props: any) {
   const ref = useRef<any>();
-  const [sphere] = useState(() => random.inSphere(new Float32Array(5000), { radius: 1.5 }));
+  // Generate particles safely
+  const [sphere] = useState(() => {
+    const data = new Float32Array(5000 * 3);
+    return random.inSphere(data, { radius: 1.5 });
+  });
 
   useFrame((state: any, delta: number) => {
-    ref.current.rotation.x -= delta / 10;
-    ref.current.rotation.y -= delta / 15;
-    const t = state.clock.getElapsedTime();
-    ref.current.scale.x = 1 + Math.sin(t * 10) * 0.02; 
+    if (ref.current) {
+      ref.current.rotation.x -= delta / 10;
+      ref.current.rotation.y -= delta / 15;
+      const t = state.clock.getElapsedTime();
+      // Heartbeat / Glitch effect
+      ref.current.scale.x = 1 + Math.sin(t * 10) * 0.02; 
+    }
   });
 
   return React.createElement(
-      'group',
-      { rotation: [0, 0, Math.PI / 4] },
-      <Points ref={ref} positions={sphere} stride={3} frustumCulled={false} {...props}>
-        <PointMaterial
-          transparent
-          color="#ff3333"
-          size={0.005}
-          sizeAttenuation={true}
-          depthWrite={false}
-        />
-      </Points>
-    );
+    'group',
+    { rotation: [0, 0, Math.PI / 4] },
+    React.createElement(
+      Points,
+      { ref: ref, positions: sphere, stride: 3, frustumCulled: false, ...props },
+      React.createElement(PointMaterial, {
+        transparent: true,
+        color: '#ff3333',
+        size: 0.005,
+        sizeAttenuation: true,
+        depthWrite: false,
+      })
+    )
+  );
 }
 
-// 2. TIMELINE ITEM (Updated with Image Support)
+// 2. TIMELINE ITEM
 const TimelineItem = ({ year, title, text, icon: Icon, image }: any) => (
   <motion.div 
     initial={{ opacity: 0, x: -20 }}
@@ -63,8 +72,8 @@ const TimelineItem = ({ year, title, text, icon: Icon, image }: any) => (
       {text}
     </p>
     {image && (
-      <div className="relative w-full max-w-md h-64 overflow-hidden rounded-sm border border-zinc-800 mt-4 grayscale hover:grayscale-0 transition-all duration-500">
-        <Image src={image} alt={title} fill className="object-cover" />
+      <div className="relative w-full max-w-md h-64 overflow-hidden rounded-sm border border-zinc-800 mt-4 grayscale hover:grayscale-0 transition-all duration-500 group">
+        <Image src={image} alt={title} fill className="object-cover group-hover:scale-105 transition-transform duration-700" />
       </div>
     )}
   </motion.div>
@@ -73,6 +82,8 @@ const TimelineItem = ({ year, title, text, icon: Icon, image }: any) => (
 export default function UnframedPage() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('idle');
+  // Debug: log render
+  if (typeof window !== 'undefined') console.debug('UnframedPage rendered');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +93,9 @@ export default function UnframedPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-red-900 selection:text-white overflow-x-hidden">
+    <div className="min-h-screen bg-black text-white selection:bg-red-900 selection:text-white overflow-x-hidden font-sans">
+      {/* DEBUG BANNER: remove after verification */}
+      <div className="fixed top-4 right-4 z-50 bg-red-600 text-white px-3 py-1 rounded shadow">DEBUG: PAGE LOADED</div>
       
       {/* --- HERO SECTION --- */}
       <section className="h-screen w-full relative flex flex-col justify-center items-center overflow-hidden">
@@ -95,7 +108,7 @@ export default function UnframedPage() {
             className="object-cover opacity-40 mix-blend-luminosity"
             priority
           />
-          <div className="absolute inset-0 bg-black/60" /> {/* Overlay for text readability */}
+          <div className="absolute inset-0 bg-black/70" />
         </div>
 
         {/* 3D Layer */}
@@ -111,7 +124,7 @@ export default function UnframedPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            <h1 className="text-6xl md:text-9xl font-black tracking-tighter mb-2 glitch-text text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-500">
+            <h1 className="text-6xl md:text-9xl font-black tracking-tighter mb-2 text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-600">
               UNFRAMED
             </h1>
             <p className="text-sm md:text-lg font-mono text-red-500 tracking-[0.2em] uppercase mb-8">
@@ -201,31 +214,48 @@ export default function UnframedPage() {
            
            <div className="grid md:grid-cols-2 gap-8">
              {/* AUDIO BLOCK */}
-             <div className="bg-black border border-zinc-800 p-8 rounded-sm flex flex-col justify-center min-h-[300px]">
-                <div className="flex items-center gap-4 mb-6 text-zinc-400">
-                  <Volume2 size={24} />
-                  <span className="font-mono text-sm">NOTEBOOKLM PODCAST</span>
+             <div className="bg-black border border-zinc-800 p-8 rounded-sm flex flex-col justify-between min-h-[300px]">
+                <div>
+                    <div className="flex items-center gap-4 mb-4 text-zinc-400">
+                    <Volume2 size={24} className="text-red-500" />
+                    <span className="font-mono text-sm tracking-wider">NOTEBOOKLM PODCAST</span>
+                    </div>
+                    <h3 className="font-bold text-2xl mb-2 text-white">The Autopsy of an Empire</h3>
+                    <p className="text-sm text-zinc-500 mb-6">Two AI hosts deconstruct the manuscript, analyzing the shift from Granite to Ether.</p>
                 </div>
-                {/* Embed your Audio Player Here */}
-                <div className="w-full h-32 bg-zinc-900/50 rounded flex items-center justify-center border border-zinc-800 animate-pulse">
-                  <p className="text-xs font-mono text-zinc-500">[ AUDIO PLAYER PLACEHOLDER ]</p>
+                
+                {/* Custom Audio Player Wrapper */}
+                <div className="w-full bg-zinc-900 border border-zinc-800 rounded p-4">
+                  <audio 
+                    controls 
+                    className="w-full h-8 invert opacity-80 hover:opacity-100 transition-opacity"
+                    style={{ filter: "invert(1) hue-rotate(180deg)" }} 
+                  >
+                    <source src={ASSETS.AUDIO} type="audio/mp4" />
+                    <source src={ASSETS.AUDIO} type="audio/x-m4a" />
+                    Your browser does not support the audio element.
+                  </audio>
+                  <div className="flex justify-between mt-2 font-mono text-[10px] text-zinc-600 uppercase">
+                     <span>Status: Online</span>
+                     <span>Source: NotebookLM</span>
+                  </div>
                 </div>
-                <h3 className="font-bold text-xl mt-6 text-white">The Autopsy of an Empire</h3>
-                <p className="text-sm text-zinc-500 mt-2">Two AI hosts deconstruct the manuscript, analyzing the shift from Granite to Ether.</p>
              </div>
              
              {/* VISUAL DATA BLOCK */}
-             <div className="relative group overflow-hidden border border-zinc-800 rounded-sm h-[300px] md:h-auto">
+             <div className="relative group overflow-hidden border border-zinc-800 rounded-sm min-h-[300px]">
                <Image 
                  src={ASSETS.SYSTEM_MAP} 
                  alt="System Architecture" 
                  fill 
                  className="object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
                />
-               <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black to-transparent">
-                  <p className="font-mono text-xs text-red-500 uppercase tracking-widest">
+               <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-90" />
+               <div className="absolute bottom-0 left-0 right-0 p-6">
+                  <p className="font-mono text-xs text-red-500 uppercase tracking-widest mb-1">
                     Fig 1. System Architecture
                   </p>
+                  <p className="text-zinc-400 text-sm">Visualizing the collapse of the vertical power structure.</p>
                </div>
              </div>
            </div>
@@ -239,19 +269,24 @@ export default function UnframedPage() {
           <p className="text-zinc-500 mb-8 font-serif">Access restricted to authorized agents and publishers.</p>
           
           {status === 'success' ? (
-            <div className="p-4 border border-green-900 bg-green-900/20 text-green-500 font-mono text-sm">
-              SIGNAL RECEIVED. WE WILL ESTABLISH CONNECTION SHORTLY.
-            </div>
+            <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-6 border border-green-900 bg-green-900/10 text-green-500 font-mono text-sm"
+            >
+              SIGNAL RECEIVED. <br/> WE WILL ESTABLISH CONNECTION SHORTLY.
+            </motion.div>
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-left">
-              <input type="text" className="w-full bg-zinc-900 border border-zinc-800 p-3 text-white focus:outline-none focus:border-red-900 transition-colors" placeholder="NAME" />
-              <input type="text" className="w-full bg-zinc-900 border border-zinc-800 p-3 text-white focus:outline-none focus:border-red-900 transition-colors" placeholder="AGENCY / HOUSE" />
+              <input type="text" className="w-full bg-zinc-900 border border-zinc-800 p-4 text-white focus:outline-none focus:border-red-900 transition-colors placeholder:text-zinc-700 font-mono text-sm" placeholder="NAME" required />
+              <input type="text" className="w-full bg-zinc-900 border border-zinc-800 p-4 text-white focus:outline-none focus:border-red-900 transition-colors placeholder:text-zinc-700 font-mono text-sm" placeholder="AGENCY / HOUSE" required />
               <input 
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 p-3 text-white focus:outline-none focus:border-red-900 transition-colors" 
+                className="w-full bg-zinc-900 border border-zinc-800 p-4 text-white focus:outline-none focus:border-red-900 transition-colors placeholder:text-zinc-700 font-mono text-sm" 
                 placeholder="EMAIL" 
+                required
               />
               <button 
                 type="submit" 
