@@ -23,40 +23,47 @@ export default function SafeGlitchLoader({ onError }: { onError?: (err: LoaderEr
         onError?.(err);
         return;
       }
-
+      // Try to import r3f and drei but don't abort on failure — we'll fall back
+      let missingR3F = false;
+      let missingDrei = false;
       try {
-        // Step 2: try loading r3f
         await import('@react-three/fiber');
       } catch (e: any) {
-        if (!mounted) return;
-        console.error('SafeGlitchLoader: failed to import @react-three/fiber', e);
-        const err = { phase: '@react-three/fiber', message: String(e?.message || e), stack: e?.stack } as LoaderError;
-        setError(err);
-        onError?.(err);
-        return;
+        console.warn('SafeGlitchLoader: @react-three/fiber not available, will use fallback', e);
+        missingR3F = true;
+        onError?.({ phase: '@react-three/fiber', message: String(e?.message || e), stack: e?.stack });
       }
 
       try {
-        // Step 3: try loading drei
         await import('@react-three/drei');
       } catch (e: any) {
-        if (!mounted) return;
-        console.error('SafeGlitchLoader: failed to import @react-three/drei', e);
-        const err = { phase: '@react-three/drei', message: String(e?.message || e), stack: e?.stack } as LoaderError;
-        setError(err);
-        onError?.(err);
-        return;
+        console.warn('SafeGlitchLoader: @react-three/drei not available, will use fallback', e);
+        missingDrei = true;
+        onError?.({ phase: '@react-three/drei', message: String(e?.message || e), stack: e?.stack });
       }
 
+      // Finally, try to load the app component — if r3f is missing use fallback
+      if (!missingR3F) {
+        try {
+          const m = await import('@/components/unframed/GlitchCanvas');
+          if (!mounted) return;
+          setComp(() => (m && m.default) ? m.default : null);
+          return;
+        } catch (e: any) {
+          console.warn('SafeGlitchLoader: failed to import GlitchCanvas, will attempt fallback', e);
+          onError?.({ phase: 'GlitchCanvas', message: String(e?.message || e), stack: e?.stack });
+        }
+      }
+
+      // Load fallback component implemented with plain three.js
       try {
-        // Finally, load the app component
-        const m = await import('@/components/unframed/GlitchCanvas');
+        const fb = await import('@/components/unframed/GlitchCanvasFallback');
         if (!mounted) return;
-        setComp(() => (m && m.default) ? m.default : null);
+        setComp(() => (fb && fb.default) ? fb.default : null);
       } catch (e: any) {
         if (!mounted) return;
-        console.error('SafeGlitchLoader: failed to import GlitchCanvas', e);
-        const err = { phase: 'GlitchCanvas', message: String(e?.message || e), stack: e?.stack } as LoaderError;
+        console.error('SafeGlitchLoader: failed to import fallback GlitchCanvasFallback', e);
+        const err = { phase: 'GlitchCanvasFallback', message: String(e?.message || e), stack: e?.stack } as LoaderError;
         setError(err);
         onError?.(err);
       }

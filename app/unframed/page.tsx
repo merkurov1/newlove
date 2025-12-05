@@ -1,11 +1,9 @@
-"use client";
-
-import React, { Suspense, useRef, useEffect, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { ScrollControls, Scroll, Text, useScroll } from '@react-three/drei';
+import React, { useRef, useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
-import * as THREE from 'three';
 import { Terminal } from 'lucide-react';
+
+const UnframedTunnel = dynamic(() => import('@/components/unframed/UnframedTunnel'), { ssr: false, loading: () => <div className="fixed inset-0 z-30" /> });
 
 
 // --- Assets ---
@@ -31,78 +29,7 @@ const TIMELINE = [
   { year: '2025', title: 'The Canvas', text: 'The loop closed. I shut the door on the noise. I picked up the stylus. I am finally awake.' },
 ];
 
-// --- 3D Components ---
-function TunnelText({ children, position = [0, 0, 0], size = 2 }: any) {
-  // Simple 3D text — large, editorial, fading into fog
-  return (
-    <Text
-      fontSize={size}
-      color="#ffffff"
-      anchorX="center"
-      anchorY="middle"
-      position={position}
-      material-toneMapped={false}
-    >
-      {children}
-    </Text>
-  );
-}
-
-function CameraFollower({ totalDepth = 40 }: { totalDepth?: number }) {
-  const { camera } = useThree();
-  const scroll = useScroll();
-
-  useFrame(() => {
-    // scroll.offset moves 0..1 across pages; map to camera z position
-    const z = 10 - scroll.offset * totalDepth; // start in front, move forward
-    camera.position.z = z;
-    // subtle parallax: tilt a bit based on offset
-    camera.rotation.y = (scroll.offset - 0.5) * 0.05;
-  });
-  return null;
-}
-
-function TunnelScene() {
-  const gap = 6; // distance between years along z
-  const { scene } = useThree();
-
-  useEffect(() => {
-    // Fog
-    const fog = new THREE.Fog('black', 5, 40);
-    scene.fog = fog;
-
-    // Lights
-    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-    dir.position.set(5, 5, 5);
-    scene.add(ambient);
-    scene.add(dir);
-
-    return () => {
-      scene.fog = null as any;
-      scene.remove(ambient);
-      scene.remove(dir);
-    };
-  }, [scene]);
-
-  return (
-    <>
-      {/* Camera follower reacts to scroll */}
-      <CameraFollower totalDepth={TIMELINE.length * gap + 10} />
-
-      {/* Place year texts along the z axis as individual Text components */}
-      {TIMELINE.map((item, i) => {
-        const z = -i * gap - 6; // push into scene
-        const size = Math.max(3.5, 6 - i * 0.4);
-        return (
-          <TunnelText key={item.year} size={size} position={[0, 0, z]}>
-            {item.year}
-          </TunnelText>
-        );
-      })}
-    </>
-  );
-}
+// 3D rendering moved into a client-only dynamically loaded component `UnframedTunnel`.
 
 // --- Page UI ---
 export default function UnframedPage() {
@@ -160,43 +87,9 @@ export default function UnframedPage() {
         </div>
       </header>
 
-      {/* 3D Scroll Tunnel */}
+      {/* 3D Scroll Tunnel (client-only, dynamically loaded) */}
       <section className="relative h-screen w-full">
-        <Canvas className="fixed inset-0 z-30" camera={{ position: [0, 0, 10], fov: 50 }}>
-          <Suspense fallback={null}>
-            <ScrollControls pages={6} damping={0.2}>
-              <Scroll>
-                <TunnelScene />
-              </Scroll>
-
-              {/* HTML overlay synchronized with scroll — narrative blocks */}
-              <Scroll html>
-                <div className="container mx-auto px-6 md:px-12" style={{ pointerEvents: 'auto' }}>
-                  {/* create a block for each timeline item; they will flow through the ScrollControls pages */}
-                  {TIMELINE.map((item, i) => (
-                    <section key={item.year} className="min-h-screen flex items-center" style={{ display: 'flex', alignItems: 'center' }}>
-                      <div className="max-w-3xl mx-auto">
-                        <div className="font-mono text-xs text-red-600 uppercase tracking-widest mb-4">{`0${i + 1} / ${item.year}`}</div>
-                        <h2 className="text-4xl md:text-6xl font-serif text-white mb-6">{item.title}</h2>
-                        <p className="text-xl md:text-2xl text-zinc-300 font-serif leading-relaxed">{item.text}</p>
-                        {item.image && (
-                          <div className="mt-8 w-full max-w-2xl relative overflow-hidden">
-                            <Image src={item.image} alt={item.title} width={1200} height={700} className="object-cover grayscale transition-all duration-500 hover:filter-none" />
-                          </div>
-                        )}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              </Scroll>
-            </ScrollControls>
-          </Suspense>
-        </Canvas>
-
-        {/* Fallback static visual while Canvas loads (accessible) */}
-        <div className="relative z-40 pointer-events-none" aria-hidden>
-          <div className="absolute inset-0 bg-black/20" />
-        </div>
+        <UnframedTunnel />
       </section>
 
       {/* AFTER TUNNEL: NotebookLM + Request Form (static sections) */}
