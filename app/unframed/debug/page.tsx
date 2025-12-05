@@ -37,8 +37,13 @@ function DebugInspector() {
 
   React.useEffect(() => {
     const onErr = (e: any) => setLast(e.detail);
+    const onUnframed = (e: any) => setLast({ phase: 'unframed', message: e.detail?.message, stack: e.detail?.stack });
     window.addEventListener('safeglitch:error', onErr as EventListener);
-    return () => window.removeEventListener('safeglitch:error', onErr as EventListener);
+    window.addEventListener('unframed:loadError', onUnframed as EventListener);
+    return () => {
+      window.removeEventListener('safeglitch:error', onErr as EventListener);
+      window.removeEventListener('unframed:loadError', onUnframed as EventListener);
+    };
   }, []);
 
   if (!last) return (
