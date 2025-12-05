@@ -1,8 +1,14 @@
 "use client";
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Terminal, Volume2 } from 'lucide-react';
+import { Terminal, Volume2, ArrowDown } from 'lucide-react';
 import Image from 'next/image';
+import { Inter, Space_Mono, Playfair_Display } from 'next/font/google';
+
+// --- FONTS ---
+const sans = Inter({ subsets: ['latin'], variable: '--font-sans' });
+const mono = Space_Mono({ weight: ['400', '700'], subsets: ['latin'], variable: '--font-mono' });
+const serif = Playfair_Display({ subsets: ['latin'], variable: '--font-serif' });
 
 // --- ASSETS ---
 const ASSETS = {
@@ -12,50 +18,50 @@ const ASSETS = {
   AUDIO: "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Digitize_the_Death_Mask_Encrypt_Freedom_Never.m4a"
 };
 
-// --- DATA: THE ARTIST ARC (SAFE) ---
+// --- DATA ---
 const TIMELINE = [
-  { 
-    year: "1984", 
-    title: "THE FLOOR", 
-    text: "I am four years old. The sun cuts through the tall Stalinist windows. I am drawing. For a brief moment, the chaotic energy of the Soviet intelligentsia aligns into harmony around a boy with a pencil.",
-    img: null
-  },
-  { 
-    year: "1998", 
-    title: "THE ROOFTOPS", 
-    text: "We drilled through walls built to withstand Nazi artillery. Minus 20 degrees Celsius. Balancing on the edge of seven-story buildings, running coaxial cables with frozen hands. Building the physical infrastructure of freedom.",
-    img: null
-  },
-  { 
-    year: "2008", 
-    title: "THE SPECTRAL TIGER", 
-    text: "While the global economy collapsed, the price of a virtual tiger in World of Warcraft held steady. I realized then: Digital value doesn’t need banks. It only needs Consensus.",
-    img: ASSETS.TIGER
-  },
-  { 
-    year: "2017", 
-    title: "THE SOURCE CODE", 
-    text: "We took the original death mask of Vladimir Lenin and scanned it with lasers. We turned the idol into a file. The heavy stone of the Soviet legacy was dematerialized and sold as an NFT.",
-    img: null
-  },
-  { 
-    year: "2022", 
-    title: "THE SILENCE", 
-    text: "February 24th. The names of the 'enemy' were embedded in the granite geography of Moscow. I expected rage. Instead, I saw a city that adjusted its headphones and kept walking. The silence was louder than the explosions.",
-    img: ASSETS.HERO_BG
-  },
-  { 
-    year: "2025", 
-    title: "THE CANVAS", 
-    text: "The loop closed. I shut the door on the noise. I picked up the stylus. No more strategies, no more signals. Just the discipline of the artist. I am finally awake.",
-    img: null,
-    isLast: true
-  }
+  { year: "1984", title: "THE FLOOR", text: "I am four years old. The sun cuts through the tall Stalinist windows. I am drawing. For a brief moment, the chaotic energy of the Soviet intelligentsia aligns into harmony around a boy with a pencil." },
+  { year: "1998", title: "THE ROOFTOPS", text: "We drilled through walls built to withstand Nazi artillery. Minus 20 degrees Celsius. Balancing on the edge of seven-story buildings, running coaxial cables with frozen hands." },
+  { year: "2008", title: "THE SPECTRAL TIGER", text: "While the global economy collapsed, the price of a virtual tiger in World of Warcraft held steady. I realized then: Digital value doesn’t need banks. It only needs Consensus.", img: ASSETS.TIGER },
+  { year: "2017", title: "THE SOURCE CODE", text: "We took the original death mask of Vladimir Lenin and scanned it with lasers. We turned the idol into a file. The heavy stone of the Soviet legacy was dematerialized and sold as an NFT." },
+  { year: "2022", title: "THE SILENCE", text: "February 24th. The names of the 'enemy' were embedded in the granite geography of Moscow. I expected rage. Instead, I saw a city that adjusted its headphones and kept walking.", img: ASSETS.HERO_BG },
+  { year: "2025", title: "THE CANVAS", text: "The loop closed. I shut the door on the noise. I picked up the stylus. No more strategies, no more signals. Just the discipline of the artist. I am finally awake.", isLast: true }
 ];
+
+// --- HOOKS ---
+function useScrollProgress(containerRef: React.RefObject<HTMLElement | null>) {
+  const [progress, setProgress] = useState(0);
+  
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!containerRef.current) return;
+      const { top, height } = containerRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      
+      // Calculate how far we are into the container
+      // Start: top touches bottom of screen
+      // End: bottom touches top of screen
+      // But for parallax tunnel, we want 0 to 1 mapping while inside
+      
+      const scrollDist = -top;
+      const totalDist = height - windowHeight;
+      
+      let p = scrollDist / totalDist;
+      p = Math.max(0, Math.min(1, p)); // Clamp 0-1
+      
+      setProgress(p);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll(); // Init
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [containerRef]);
+
+  return progress;
+}
 
 // --- COMPONENTS ---
 
-// 1. REDACTED TEXT
 const Redacted = ({ children }: { children: React.ReactNode }) => (
   <span className="group relative inline-block cursor-help mx-1 align-bottom">
     <span className="relative z-10 bg-zinc-900 text-transparent select-none transition-all duration-300 group-hover:bg-transparent group-hover:text-red-500 group-hover:drop-shadow-[0_0_10px_rgba(220,38,38,0.8)]">
@@ -65,77 +71,77 @@ const Redacted = ({ children }: { children: React.ReactNode }) => (
   </span>
 );
 
-// 2. PARALLAX SLIDE (THE DEEP DIVE)
-// Simple scroll progress hook (0..1) for the long container
-function useScrollProgress(targetRef: React.RefObject<HTMLElement | null>) {
-  const [progress, setProgress] = useState(0);
-  useEffect(() => {
-    const el = targetRef.current;
-    if (!el) return;
-    let raf = 0;
-    const onScroll = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        const rect = el.getBoundingClientRect();
-        const total = el.scrollHeight - window.innerHeight;
-        const scrollTop = window.scrollY || window.pageYOffset;
-        const containerTop = scrollTop + rect.top;
-        const offset = Math.max(0, scrollTop - containerTop);
-        const p = total > 0 ? Math.min(1, Math.max(0, offset / total)) : 0;
-        setProgress(p);
-        raf = 0;
-      });
-    };
+const Slide = ({ item, index, total, progress }: any) => {
+  // Logic: Active only when progress is within this slide's segment
+  const segmentLength = 1 / total;
+  const start = index * segmentLength;
+  const end = start + segmentLength;
+  const mid = start + (segmentLength / 2);
+  
+  // Calculate local progress for this slide (0 to 1)
+  // We add a buffer so slides overlap slightly for smoothness
+  const buffer = 0.05; 
+  
+  let opacity = 0;
+  let scale = 0.8;
+  let blur = 10;
+  let y = 100;
 
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
-  }, [targetRef]);
-  return progress;
-}
+  if (progress >= start - buffer && progress <= end + buffer) {
+    // Fade In Phase
+    if (progress < mid) {
+      const t = (progress - (start - buffer)) / (mid - (start - buffer));
+      opacity = t;
+      scale = 0.8 + (0.2 * t); // 0.8 -> 1.0
+      blur = (1 - t) * 10;
+      y = (1 - t) * 50;
+    } 
+    // Fade Out Phase
+    else {
+      const t = (progress - mid) / ((end + buffer) - mid);
+      opacity = 1 - t;
+      scale = 1.0 + (0.2 * t); // 1.0 -> 1.2 (Zoom in past camera)
+      blur = t * 10;
+      y = -t * 50;
+    }
+  }
 
-const ParallaxSlide = ({ item, index, total, progress }: any) => {
-  const segment = 1 / total;
-  const start = index * segment;
-  const peak = start + segment * 0.5;
-  const end = start + segment;
-
-  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-  const remap = (t: number, a: number, b: number) => (t - a) / (b - a);
-
-  const localT = (progress <= start || progress >= end) ? 0 : (progress <= peak ? remap(progress, start, peak) : 1 - remap(progress, peak, end));
-  const opacity = localT;
-  const scale = lerp(0.8, 1.1, Math.max(0, Math.min(1, (progress - start) / (end - start))));
-  const blur = `${lerp(10, 0, localT)}px`;
-  const y = `${lerp(50, -50, Math.max(0, Math.min(1, (progress - start) / (end - start))))}px`;
+  // Force visibility for active slide to prevent flicker
+  const isVisible = opacity > 0.01;
 
   return (
     <div 
-      style={{ opacity, transform: `translateY(${y}) scale(${scale})`, filter: `blur(${blur})` }}
-      className="absolute inset-0 flex items-center justify-center pointer-events-none p-6 transition-opacity duration-200"
+      className="absolute inset-0 flex items-center justify-center p-6 transition-transform duration-75 ease-linear will-change-transform"
+      style={{ 
+        opacity, 
+        transform: `scale(${scale}) translateY(${y}px)`, 
+        filter: `blur(${blur}px)`,
+        pointerEvents: isVisible ? 'auto' : 'none',
+        zIndex: Math.round(opacity * 100)
+      }}
     >
-      <div className="max-w-6xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-20 items-center">
-        {/* Left: Huge Year */}
+      <div className="max-w-7xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-24 items-center">
+        {/* YEAR (Left) */}
         <div className="relative">
-           <h2 className="text-[20vw] leading-none font-black text-zinc-900/50 absolute -left-10 md:-left-20 -top-20 select-none z-0 mix-blend-overlay">
+           <h2 className="text-[25vw] leading-none font-black text-zinc-800/30 absolute -left-10 md:-left-24 -top-24 select-none z-0 mix-blend-screen font-sans">
              {item.year}
            </h2>
-           <div className="relative z-10 border-l-2 border-red-600 pl-6">
-             <span className="font-mono text-xs text-red-600 tracking-[0.3em] uppercase block mb-4">Log Entry {item.year}</span>
-             <h3 className="text-4xl md:text-7xl font-bold text-white uppercase tracking-tighter leading-[0.9]">
+           <div className="relative z-10 pl-8 border-l-4 border-red-600">
+             <span className="font-mono text-xs text-red-600 tracking-[0.4em] uppercase block mb-4">Log Entry {item.year}</span>
+             <h3 className="text-5xl md:text-8xl font-bold text-white uppercase tracking-tighter leading-[0.9] font-sans">
                {item.title}
              </h3>
            </div>
         </div>
 
-        {/* Right: Narrative */}
-        <div className="relative z-10 bg-black/80 backdrop-blur-md border border-zinc-800 p-8 md:p-10 shadow-2xl">
-           <p className="text-lg md:text-2xl font-serif text-zinc-300 leading-relaxed">
+        {/* CONTENT (Right) */}
+        <div className="relative z-10 bg-[#0a0a0a]/90 backdrop-blur-xl border border-zinc-800 p-8 md:p-12 shadow-2xl">
+           <p className="text-xl md:text-3xl font-serif text-zinc-300 leading-relaxed">
              {item.text}
            </p>
            {item.img && (
-             <div className="mt-8 relative w-full aspect-video border border-zinc-700 grayscale contrast-125 overflow-hidden">
-               <Image src={item.img} alt="Evidence" fill className="object-cover" />
+             <div className="mt-8 relative w-full aspect-video border border-zinc-700 grayscale contrast-125 overflow-hidden group">
+               <Image src={item.img} alt="Evidence" fill className="object-cover group-hover:scale-105 transition-transform duration-1000" />
                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 mix-blend-overlay" />
              </div>
            )}
@@ -145,18 +151,15 @@ const ParallaxSlide = ({ item, index, total, progress }: any) => {
   );
 };
 
-
 export default function UnframedPage() {
   const [status, setStatus] = useState('idle');
+  const [email, setEmail] = useState('');
   const containerRef = useRef(null);
   const progress = useScrollProgress(containerRef);
 
-  // Header Parallax (simple mapping)
-  const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
-  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-  const headerT = clamp(progress / 0.2);
-  const headerY = `${lerp(0, -100, headerT)}%`;
-  const headerOpacity = lerp(1, 0, clamp(progress / 0.1));
+  // Parallax Header Logic
+  const headerOpacity = Math.max(0, 1 - progress * 10); // Disappears quickly on scroll
+  const headerY = -progress * 500; // Moves up
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,35 +168,42 @@ export default function UnframedPage() {
   };
 
   return (
-    <div className="bg-[#030303] text-white selection:bg-red-600 selection:text-white font-sans overflow-x-hidden">
+    <div className={`min-h-screen bg-[#030303] text-white selection:bg-red-600 selection:text-white font-sans overflow-x-hidden ${sans.variable} ${mono.variable} ${serif.variable}`}>
       
-      {/* GLOBAL GRAIN */}
-      <div className="fixed inset-0 pointer-events-none z-50 opacity-[0.04] mix-blend-overlay" 
+      {/* GLOBAL NOISE */}
+      <div className="fixed inset-0 pointer-events-none z-50 opacity-[0.03]" 
            style={{ backgroundImage: `url("https://grainy-gradients.vercel.app/noise.svg")` }} />
 
       {/* FIXED HEADER */}
       <header 
-        style={{ transform: `translateY(${headerY})`, opacity: headerOpacity }}
         className="fixed inset-0 flex flex-col items-center justify-center z-40 pointer-events-none"
+        style={{ opacity: headerOpacity, transform: `translateY(${headerY}px)` }}
       >
-        <h1 className="text-[18vw] font-black uppercase tracking-tighter leading-none text-white mix-blend-difference">
+        <h1 className="text-[18vw] font-black uppercase tracking-tighter leading-none text-white mix-blend-difference font-sans">
           UNFRAMED
         </h1>
-        <p className="font-mono text-sm uppercase tracking-[0.4em] text-red-600 mt-4 bg-black px-4 py-1">
-          A Memoir by Anton Merkurov
-        </p>
-        <div className="absolute bottom-10 animate-bounce text-zinc-500 font-mono text-xs">
-          SCROLL TO INITIALIZE
+        <div className="flex items-center gap-4 mt-6">
+           <div className="h-[1px] w-12 bg-red-600" />
+           <p className="font-mono text-sm uppercase tracking-[0.3em] text-zinc-400">A Memoir by Anton Merkurov</p>
+           <div className="h-[1px] w-12 bg-red-600" />
+        </div>
+        
+        <div className="absolute bottom-12 animate-bounce text-zinc-600 font-mono text-xs uppercase tracking-widest flex flex-col items-center gap-2">
+          <span>Initialize Sequence</span>
+          <ArrowDown size={14} />
         </div>
       </header>
 
-      {/* MANIFESTO SECTION (Static Top) */}
+      {/* MANIFESTO (Static Introduction) */}
       <section className="h-screen flex items-end pb-32 justify-center px-6 relative z-10">
-         <div className="max-w-3xl text-center">
-            <p className="text-2xl md:text-4xl font-serif text-zinc-400 leading-relaxed">
+         <div className="max-w-4xl text-center">
+            <p className="text-2xl md:text-5xl font-serif text-zinc-500 leading-tight">
               "I spent forty years running away from the boy on the floor. 
               <br/><br/>
-              <Redacted>The System</Redacted> demanded <Redacted>noise</Redacted>. I gave it <Redacted>noise</Redacted>.
+              <span className="text-zinc-300">
+                <Redacted>The System</Redacted> demanded <Redacted>noise</Redacted>. I gave it <Redacted>noise</Redacted>.
+              </span>
+              <br/><br/>
               But the granite eventually cracks.
               UNFRAMED is the story of closing the loop. Of returning to the only thing that matters: The Line."
             </p>
@@ -201,13 +211,15 @@ export default function UnframedPage() {
       </section>
 
       {/* --- SCROLL TUNNEL CONTAINER --- */}
-      {/* Height = Number of slides * 100vh */}
-      <div ref={containerRef} className="relative" style={{ height: `${TIMELINE.length * 100}vh` }}>
-        
-        {/* STICKY VIEWPORT */}
-        <div className="sticky top-0 h-screen w-full overflow-hidden flex items-center justify-center">
+      {/* 
+          This div is TALL (600vh). 
+          Inside, we have a STICKY container that stays fixed.
+          The content inside changes based on scroll progress (0 to 1).
+      */}
+      <div ref={containerRef} className="relative" style={{ height: `${(TIMELINE.length + 1) * 100}vh` }}>
+        <div className="sticky top-0 h-screen w-full overflow-hidden">
            {TIMELINE.map((item, i) => (
-             <ParallaxSlide 
+             <Slide 
                key={i} 
                item={item} 
                index={i} 
@@ -216,39 +228,37 @@ export default function UnframedPage() {
              />
            ))}
         </div>
-
       </div>
 
-      {/* --- STATIC FOOTER (Analysis & Form) --- */}
+      {/* --- FOOTER CONTENT --- */}
       <div className="relative z-20 bg-[#030303] border-t border-zinc-900">
         
-        {/* SYSTEM ANALYSIS */}
+        {/* ANALYSIS */}
         <section className="py-32 px-6">
-           <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-12">
-              <div className="border border-zinc-800 p-8 relative overflow-hidden group">
-                 <Image 
-                   src={ASSETS.SYSTEM_MAP} 
-                   alt="System Map" 
-                   fill 
-                   className="object-cover opacity-40 group-hover:opacity-60 transition-opacity grayscale invert"
-                 />
-                 <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent" />
-                 <div className="absolute bottom-8 left-8">
-                    <p className="font-mono text-xs text-red-600 uppercase tracking-widest mb-2">Fig. 01</p>
-                    <h3 className="text-2xl font-bold uppercase">System Architecture</h3>
+           <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-16">
+              
+              {/* Visual Map */}
+              <div className="border border-zinc-800 p-2 bg-zinc-900/30">
+                 <div className="relative aspect-square overflow-hidden grayscale invert hover:grayscale-0 hover:invert-0 transition-all duration-700">
+                    <Image src={ASSETS.SYSTEM_MAP} alt="Map" fill className="object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-50" />
+                    <div className="absolute bottom-6 left-6 font-mono text-xs text-red-500 uppercase tracking-widest border border-red-500 px-2 py-1">
+                      Fig. 01: System Failure
+                    </div>
                  </div>
               </div>
 
+              {/* Audio */}
               <div className="flex flex-col justify-center">
-                 <div className="flex items-center gap-3 mb-6 text-red-600 font-mono text-xs uppercase tracking-widest">
+                 <div className="flex items-center gap-3 mb-8 text-red-600 font-mono text-xs uppercase tracking-[0.2em]">
                     <Volume2 size={16} /> NotebookLM Audio Log
                  </div>
-                 <h3 className="text-4xl font-bold mb-6">The Autopsy of an Empire</h3>
-                 <p className="text-zinc-400 font-serif text-lg mb-8">
-                   Two synthetic intelligences discuss the collapse of the vertical power structure and the shift to the Ether.
+                 <h3 className="text-5xl font-bold mb-8 uppercase font-sans tracking-tighter text-white">The Autopsy <br/> of an Empire</h3>
+                 <p className="text-zinc-400 font-serif text-xl mb-12 leading-relaxed">
+                   "Two synthetic intelligences deconstruct the manuscript, analyzing the shift from the heavy Granite of the Soviet past to the weightless Ether of the digital present."
                  </p>
-                 <div className="bg-zinc-900 border border-zinc-800 p-4">
-                    <audio controls className="w-full invert opacity-70 hover:opacity-100 transition-opacity">
+                 <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-sm">
+                    <audio controls className="w-full invert opacity-60 hover:opacity-100 transition-opacity">
                       <source src={ASSETS.AUDIO} type="audio/mp4" />
                     </audio>
                  </div>
@@ -258,32 +268,37 @@ export default function UnframedPage() {
 
         {/* TERMINAL FORM */}
         <section className="py-40 px-6 bg-black border-t border-zinc-900 flex justify-center">
-           <div className="max-w-xl w-full">
-              <div className="flex items-center gap-2 mb-8 text-zinc-500 font-mono text-xs uppercase tracking-widest">
+           <div className="max-w-2xl w-full">
+              <div className="flex items-center gap-2 mb-12 text-zinc-500 font-mono text-xs uppercase tracking-widest border-b border-zinc-800 pb-4">
                  <Terminal size={14} /> Encrypted Channel
               </div>
               
-              <h2 className="text-5xl font-black uppercase mb-12 tracking-tighter">Request Access</h2>
+              <h2 className="text-6xl font-black uppercase mb-4 tracking-tighter text-white font-sans">Request Access</h2>
+              <p className="font-serif text-zinc-500 text-xl mb-12">Restricted to authorized agents & publishers.</p>
 
               {status === 'success' ? (
-                <div className="bg-green-900/10 border border-green-900/50 p-6 text-green-500 font-mono text-sm">
-                  &gt; TRANSMISSION SUCCESSFUL.<br/>&gt; WE WILL ESTABLISH CONTACT.
+                <div className="bg-green-900/10 border border-green-900/50 p-8 text-green-500 font-mono text-sm">
+                  {'>'} TRANSMISSION SUCCESSFUL.<br/>{'>'} WE WILL ESTABLISH CONTACT.
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-8">
-                  <div className="relative">
-                    <label className="absolute -top-3 left-0 font-mono text-xs text-zinc-500 bg-black pr-2">AGENT NAME</label>
-                    <input type="text" className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" placeholder="ENTER NAME" required />
+                <form onSubmit={handleSubmit} className="space-y-12">
+                  <div className="relative group">
+                    <input type="text" className="w-full bg-transparent border-b border-zinc-800 py-4 text-white font-mono text-xl focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" placeholder="ENTER NAME" required />
                   </div>
-                  <div className="relative">
-                    <label className="absolute -top-3 left-0 font-mono text-xs text-zinc-500 bg-black pr-2">AGENCY / HOUSE</label>
-                    <input type="text" className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" placeholder="ENTER AGENCY" required />
+                  <div className="relative group">
+                    <input type="text" className="w-full bg-transparent border-b border-zinc-800 py-4 text-white font-mono text-xl focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" placeholder="ENTER AGENCY" required />
                   </div>
-                  <div className="relative">
-                    <label className="absolute -top-3 left-0 font-mono text-xs text-zinc-500 bg-black pr-2">SECURE EMAIL</label>
-                    <input type="email" className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" placeholder="ENTER EMAIL" required />
+                  <div className="relative group">
+                    <input 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full bg-transparent border-b border-zinc-800 py-4 text-white font-mono text-xl focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" 
+                      placeholder="ENTER EMAIL" 
+                      required 
+                    />
                   </div>
-                  <button className="w-full bg-white text-black font-bold uppercase tracking-[0.2em] py-5 hover:bg-red-600 hover:text-white transition-colors mt-8">
+                  <button className="w-full bg-white text-black font-bold uppercase tracking-[0.2em] py-6 hover:bg-red-600 hover:text-white transition-colors text-sm font-mono mt-8">
                     Initialize Request
                   </button>
                 </form>
@@ -291,8 +306,8 @@ export default function UnframedPage() {
            </div>
         </section>
 
-        <footer className="py-8 text-center text-zinc-800 font-mono text-[10px] uppercase tracking-widest border-t border-zinc-900/50">
-          Anton Merkurov / Unframed © 2025
+        <footer className="py-12 text-center text-zinc-800 font-mono text-[10px] uppercase tracking-widest border-t border-zinc-900/50">
+          Anton Merkurov / Unframed © 2025 • Belgrade • London • Ether
         </footer>
 
       </div>
