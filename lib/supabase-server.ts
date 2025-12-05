@@ -18,18 +18,19 @@ export function createClient() {
     anonKey,
     {
       cookies: {
-        get(name) {
+        get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name, value, options) {
+        set(name: string, value: string, options?: Record<string, any>) {
           try {
             cookieStore.set({ name, value, ...options });
           } catch (error) {
             // Ошибка может возникать в Server Actions, это нормально
           }
         },
-        remove(name, options) {
+        remove(name: string, options?: Record<string, any>) {
           try {
+            // Setting an empty value and optionally other props to invalidate
             cookieStore.set({ name, value: '', ...options });
           } catch (error) {
             // Ошибка может возникать в Server Actions, это нормально
