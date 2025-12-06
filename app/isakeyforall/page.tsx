@@ -1,4 +1,5 @@
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import Link from 'next/link'
 
 export const metadata = sanitizeMetadata({
   title: 'Love is a Key for All | Anton Merkurov',
@@ -82,6 +83,35 @@ export default function IsAKeyForAllPage() {
               his message is singular and absolute:
             </p>
           </div>
+
+          {/* FEATURED: UNFRAMED (styled like advising use-cases) */}
+          <section className="mb-12">
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-6">
+              Featured Work
+            </h3>
+
+            <Link href="/unframed" className="group block">
+              <div className="border border-gray-300 bg-white p-6 hover:border-black hover:shadow-2xl transition-all duration-500 relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-black text-white text-[9px] font-mono px-2 py-1 uppercase">
+                  Memoir
+                </div>
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h4 className="text-xl font-serif font-bold group-hover:text-red-600 transition-colors">
+                      UNFRAMED — Memoir by Anton Merkurov
+                    </h4>
+                    <p className="text-sm text-gray-500 font-mono mt-1">
+                      A nonlinear recollection of art, exile, and the small violences of modern life.
+                    </p>
+                  </div>
+                  <span className="text-2xl group-hover:translate-x-2 transition-transform duration-300">→</span>
+                </div>
+                <p className="text-sm text-gray-600 leading-relaxed max-w-lg">
+                  Read the memoir-styled presentation — a quiet, contemplative piece that folds memory into design.
+                </p>
+              </div>
+            </Link>
+          </section>
 
           {/* Footer: The Seal */}
           <div className="mt-16 pt-12 border-t border-gray-200 text-center">
