@@ -120,6 +120,8 @@ const TimelineSlide = ({ item, index }: any) => {
 export default function UnframedPage() {
   const [status, setStatus] = useState('idle');
   const [email, setEmail] = useState('');
+  const [agentName, setAgentName] = useState('');
+  const [agency, setAgency] = useState('');
   
   // SCROLL ANIMATION LOGIC
   // We track the scroll position of the whole page with a small hook
@@ -150,7 +152,18 @@ export default function UnframedPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus('loading');
-    setTimeout(() => setStatus('success'), 1500);
+    try {
+      const res = await fetch('/api/unframed-contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: agentName, agency, email }),
+      });
+      if (!res.ok) throw new Error('network');
+      setStatus('success');
+    } catch (err) {
+      console.error(err);
+      setStatus('error');
+    }
   };
 
   return (
@@ -300,19 +313,33 @@ export default function UnframedPage() {
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-8">
                   <div className="group">
-                    <input type="text" className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" placeholder="AGENT NAME" required />
+                    <input
+                      type="text"
+                      value={agentName}
+                      onChange={(e) => setAgentName(e.target.value)}
+                      className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800"
+                      placeholder="AGENT NAME"
+                      required
+                    />
                   </div>
                   <div className="group">
-                    <input type="text" className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" placeholder="AGENCY / HOUSE" required />
+                    <input
+                      type="text"
+                      value={agency}
+                      onChange={(e) => setAgency(e.target.value)}
+                      className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800"
+                      placeholder="AGENCY / HOUSE"
+                      required
+                    />
                   </div>
                   <div className="group">
-                    <input 
-                      type="email" 
+                    <input
+                      type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800" 
-                      placeholder="SECURE EMAIL" 
-                      required 
+                      className="w-full bg-black border-b border-zinc-800 py-4 text-white font-mono text-lg focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-800"
+                      placeholder="SECURE EMAIL"
+                      required
                     />
                   </div>
                   <button className="w-full bg-white text-black font-bold uppercase tracking-[0.2em] py-5 hover:bg-red-600 hover:text-white transition-colors mt-8 font-mono text-xs">
