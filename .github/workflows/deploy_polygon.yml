@@ -1,10 +1,8 @@
 name: Deploy NeutralHeart to Polygon
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+  # Only allow manual dispatch for now to prevent accidental runs on push
+  workflow_dispatch: {}
 
 jobs:
   deploy:
