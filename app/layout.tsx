@@ -38,7 +38,7 @@ export const metadata = sanitizeMetadata({
     default: 'Anton Merkurov | Art x Love x Money',
     template: '%s | Anton Merkurov',
   },
-  description: 'Медиа, технологии и искусство. Персональный сайт и блог Антона Меркурова.',
+  description: 'Media, technology and art. Personal site and blog of Anton Merkurov.',
   keywords: [
     'Антон Меркуров',
     'медиа',
@@ -55,7 +55,7 @@ export const metadata = sanitizeMetadata({
   category: 'Technology',
   openGraph: {
     title: 'Anton Merkurov | Art x Love x Money',
-    description: 'Медиа, технологии и искусство.',
+    description: 'Media, technology and art.',
     url: 'https://www.merkurov.love',
     siteName: 'Anton Merkurov',
     images: [
@@ -66,13 +66,13 @@ export const metadata = sanitizeMetadata({
         alt: 'Anton Merkurov - Art x Love x Money',
       },
     ],
-    locale: 'ru_RU',
+    locale: 'en_US',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Anton Merkurov | Art x Love x Money',
-    description: 'Медиа, технологии и искусство',
+    description: 'Media, technology and art',
     images: [
       'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
     ],
