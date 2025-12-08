@@ -23,6 +23,8 @@ export default function VigilPage() {
   const [lastGuardian, setLastGuardian] = useState("Loading...");
   const [timeLeft, setTimeLeft] = useState("");
   const [flameData, setFlameData] = useState<any>(null);
+  const flameRef = useRef<any>(null);
+  const [guardians, setGuardians] = useState<string[]>([]);
   
   // UX State
   const [isLighting, setIsLighting] = useState(false);
@@ -42,23 +44,24 @@ export default function VigilPage() {
         if (u?.first_name) setUserName(u.first_name);
       } catch (e) {}
     }
-
+    // Initial load
     refreshData();
 
-    // Realtime
+    // Realtime - subscribe ONCE on mount
     const channel = supabase
       .channel('vigil_v3')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vigil_hearts' }, (payload: any) => {
-        // Narrow and guard payload.new to avoid TS2339 when shape is uncertain
         const newRow = payload?.new as { [key: string]: any } | undefined;
         if (newRow && newRow.id === FLAME_ID) {
+            flameRef.current = newRow;
             setFlameData(newRow);
-            setLastGuardian(newRow.owner_name);
+            setLastGuardian(newRow.owner_name || lastGuardian);
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, () => {
-          // When log adds, refresh intensity
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, (payload: any) => {
+          // When a new vigil log appears, refresh intensity and guardians
           calculateIntensity();
+          refreshGuardians();
       })
       .subscribe();
 
@@ -68,6 +71,13 @@ export default function VigilPage() {
       supabase.removeChannel(channel);
       clearInterval(timer);
     };
+  }, []);
+
+  // keep flameRef in sync when flameData changes
+  useEffect(() => {
+    flameRef.current = flameData;
+    // update timer immediately when flameData changes
+    updateTimer();
   }, [flameData]);
 
   // --- LOGIC ---
@@ -85,17 +95,54 @@ export default function VigilPage() {
   };
 
   const calculateIntensity = async () => {
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { count } = await supabase
-        .from('temple_log')
-        .select('*', { count: 'exact', head: true })
-        .eq('event_type', 'vigil')
-        .gt('created_at', yesterday);
-    
-    // Scale: 0 logs = size 1, 50 logs = size 3 (max)
-    const raw = count || 0;
-    const level = 1 + Math.min(raw / 10, 2); // 1.0 to 3.0
+    // Use unique participant count (guardians) in last 24h to determine intensity
+    const uniqueCount = await refreshGuardians();
+    // Map unique participants to intensity scale 1..5
+    // 0 -> 1, 1-4 -> 2, 5-9 -> 3, 10-14 -> 4, 15+ -> 5
+    let level = 1;
+    if (uniqueCount <= 0) level = 1;
+    else if (uniqueCount < 5) level = 2;
+    else if (uniqueCount < 10) level = 3;
+    else if (uniqueCount < 15) level = 4;
+    else level = 5;
     setIntensity(level);
+  };
+
+  // Refresh recent guardians (unique participant names) from temple_log
+  // Returns the number of unique guardians found in the last 24h
+  const refreshGuardians = async (): Promise<number> => {
+    try {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from('temple_log')
+        .select('message, created_at')
+        .eq('event_type', 'vigil')
+        .gt('created_at', yesterday)
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (error) {
+        console.error('refreshGuardians error', error);
+        return 0;
+      }
+
+      const names: string[] = [];
+      (data || []).forEach((row: any) => {
+        const msg: string = (row && row.message) || '';
+        // Try to parse patterns like "<Name> sent a spark"
+        const m = msg.match(/^(.+?)\s+(sent|lit|ignited|added)/i);
+        if (m && m[1]) names.push(m[1].trim());
+        else if (msg) names.push(msg.slice(0, 24));
+      });
+
+      // unique preserving order (most recent first)
+      const unique = Array.from(new Set(names));
+      setGuardians(unique.slice(0, 6));
+      return unique.length;
+    } catch (e) {
+      console.error(e);
+      return 0;
+    }
   };
 
   const updateTimer = () => {
@@ -234,6 +281,22 @@ export default function VigilPage() {
             <div className="text-xl font-serif font-bold text-white drop-shadow-md">
                 {lastGuardian}
             </div>
+        </div>
+
+        {/* Recent Guardians */}
+        <div className="w-full max-w-md mt-2">
+          <div className="text-[9px] uppercase tracking-[0.3em] text-zinc-600 mb-2">Recent Guardians</div>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {guardians.length === 0 ? (
+              <div className="text-xs text-zinc-500">No recent guardians</div>
+            ) : (
+              guardians.map((g, i) => (
+                <div key={g + i} className="text-xs px-2 py-1 bg-white/6 rounded text-zinc-100">
+                  {g}
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         {/* Button */}
