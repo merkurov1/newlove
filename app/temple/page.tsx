@@ -1,214 +1,294 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import MicrophoneButton from '@/components/MicrophoneButton';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Flame, 
+  Trash2, 
+  ScanFace, 
+  ReceiptText, 
+  Ear, 
+  Info, 
+  ChevronRight, 
+  ChevronLeft 
+} from 'lucide-react';
 import { createClient } from '@/lib/supabase-browser';
-// Removed framer-motion imports to reduce glitches
 
-// --- CONFIG ---
-const SERVICES = [
-  { 
-    id: 'vigil', 
-    name: 'JOIN THE FLAME', 
-    sub: 'LIGHT A CANDLE',
-    path: '/vigil?mode=temple', 
-    icon: '🕯',
-    color: 'text-orange-500' 
+// --- CONFIGURATION ---
+const RITUALS = [
+  {
+    id: 'vigil',
+    title: 'VIGIL',
+    subtitle: 'KEEP THE LIGHT',
+    desc: 'The flame dies in 24 hours unless witnessed. If it is dark, strike a match. If it is lit, you are not alone.',
+    path: '/vigil?mode=temple',
+    icon: <Flame className="w-6 h-6" />,
+    color: 'text-orange-500',
+    glow: 'shadow-[0_0_50px_rgba(249,115,22,0.4)]',
+    bg: 'bg-orange-500/10'
   },
-  { 
-    id: 'letitgo', 
-    name: 'BURN SECRET', 
-    sub: 'INCINERATOR READY',
-    path: '/heartandangel/letitgo?mode=temple', 
-    icon: '🔥',
-    color: 'text-red-500' 
+  {
+    id: 'letitgo',
+    title: 'ASH',
+    subtitle: 'INCINERATE NOISE',
+    desc: 'Write it down. Watch it burn. Nothing is saved. The database is fire.',
+    path: '/heartandangel/letitgo?mode=temple',
+    icon: <Trash2 className="w-6 h-6" />,
+    color: 'text-red-500',
+    glow: 'shadow-[0_0_50px_rgba(239,68,68,0.4)]',
+    bg: 'bg-red-900/10'
   },
-  { 
-    id: 'absolution', 
-    name: 'GET RECEIPT', 
-    sub: 'TRANSACTIONAL',
-    path: '/absolution?mode=temple', 
-    icon: '🧾',
-    color: 'text-white' 
+  {
+    id: 'cast',
+    title: 'CAST',
+    subtitle: 'FACE THE MIRROR',
+    desc: 'You are defined by what you hide. Find your archetype: Stone, Void, Noise, or Unframed.',
+    path: '/cast?mode=temple',
+    icon: <ScanFace className="w-6 h-6" />,
+    color: 'text-purple-400',
+    glow: 'shadow-[0_0_50px_rgba(192,132,252,0.4)]',
+    bg: 'bg-purple-900/10'
   },
-  { 
-    id: 'cast', 
-    name: 'WHO AM I?', 
-    sub: 'PSYCHOMETRICS',
-    path: '/cast?mode=temple', 
-    icon: '💀',
-    color: 'text-zinc-400' 
+  {
+    id: 'absolution',
+    title: 'DEBT',
+    subtitle: 'GET RECEIPT',
+    desc: 'Sin is just debt. Debt can be paid. Get a document that proves you are clean.',
+    path: '/absolution?mode=temple',
+    icon: <ReceiptText className="w-6 h-6" />,
+    color: 'text-white',
+    glow: 'shadow-[0_0_50px_rgba(255,255,255,0.2)]',
+    bg: 'bg-zinc-800/50'
   }
 ];
 
 export default function TemplePage() {
   const router = useRouter();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [showManifest, setShowManifest] = useState(true); // Show on load
   const [userName, setUserName] = useState('Pilgrim');
-  const [dbHearts, setDbHearts] = useState<any[]>([]);
-  const [logs, setLogs] = useState<any[]>([]); // For the ticker
+  
+  const activeRitual = RITUALS[activeIndex];
 
-  const supabase = createClient();
-
-  // --- REALTIME DATA ---
-  const activeFlames = dbHearts.filter(h => h?.last_lit_at && (Date.now() - new Date(h.last_lit_at).getTime()) < 24 * 60 * 60 * 1000).length;
-
-  // --- AUTH & INIT ---
+  // --- TELEGRAM & INIT ---
   useEffect(() => {
-    // 1. Telegram Init
-    const initTelegram = () => {
-      const tg = (window as any).Telegram?.WebApp;
-      if (tg) {
-        tg.ready();
-        tg.expand();
-        try { 
-            tg.setHeaderColor('#000000'); 
-            tg.setBackgroundColor('#000000'); 
-        } catch (e) {}
-
-        const user = tg.initDataUnsafe?.user;
-        if (user) setUserName(user.first_name || 'Pilgrim');
-      }
-    };
-
-    if ((window as any).Telegram?.WebApp) initTelegram();
-    else {
-        const script = document.createElement('script');
-        script.src = "https://telegram.org/js/telegram-web-app.js";
-        script.onload = initTelegram;
-        document.head.appendChild(script);
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      try {
+        tg.setHeaderColor('#000000');
+        tg.setBackgroundColor('#000000');
+        // Disable vertical swipes to prevent closing in some OS
+        tg.enableClosingConfirmation(); 
+      } catch (e) {}
+      
+      const user = tg.initDataUnsafe?.user;
+      if (user) setUserName(user.first_name || 'Pilgrim');
     }
-
-    // 2. Fetch Vigil Data
-    const fetchHearts = async () => {
-      const { data } = await supabase.from('vigil_hearts').select('*');
-      if (data) setDbHearts(data);
-    };
-    fetchHearts();
-
-    // 3. Fetch Recent Logs (Last 10 events) for Ticker
-    const fetchLogs = async () => {
-        const { data } = await supabase
-            .from('temple_logs')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(10);
-        if (data) setLogs(data);
-    };
-    fetchLogs();
-
-    // 4. Subscribe to changes
-    const channel = supabase
-      .channel('temple_dashboard_v4')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vigil_hearts' }, () => fetchHearts())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_logs' }, (payload) => {
-          setLogs(prev => [payload.new, ...prev].slice(0, 10));
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const handleNav = (path: string) => {
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-    router.push(path);
+  // --- NAVIGATION LOGIC ---
+  const handleNext = () => {
+    const next = (activeIndex + 1) % RITUALS.length;
+    changeSlide(next);
   };
 
-  // Format logs for ticker
-  const tickerText = logs.length > 0 
-    ? logs.map(l => `[${new Date(l.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}] ${l.message}`).join('  +++  ')
-    : "THE TEMPLE WAITS FOR YOU ... SILENCE IS CURRENCY ...";
+  const handlePrev = () => {
+    const prev = (activeIndex - 1 + RITUALS.length) % RITUALS.length;
+    changeSlide(prev);
+  };
 
+  const changeSlide = (index: number) => {
+    setActiveIndex(index);
+    // Haptics for Telegram
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.HapticFeedback) {
+      tg.HapticFeedback.selectionChanged();
+    }
+  };
+
+  const handleEnter = () => {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+    router.push(activeRitual.path);
+  };
+
+  // --- RENDER ---
   return (
     <div className="fixed inset-0 bg-black text-white font-mono flex flex-col overflow-hidden selection:bg-white selection:text-black">
       
-      {/* 
-         CRITICAL FIX: Hide global Header/Footer on this page specifically.
-         We use 'fixed inset-0' to cover everything, but just in case, we hide potential sticky headers.
-      */}
+      {/* GLOBAL STYLES FIX */}
       <style jsx global>{`
-        header, footer { display: none !important; } /* Hide global site layout */
-        .temple-root-header { display: flex !important; } /* Show local header */
-        .temple-root-footer { display: flex !important; } /* Show local footer */
-        
-        @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-        .animate-marquee { animation: marquee 40s linear infinite; }
-        
-        .grid-btn:active { transform: scale(0.98); border-color: #666; }
+        header, footer { display: none !important; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
-      {/* --- LOCAL HEADER --- */}
-      <header className="temple-root-header h-16 shrink-0 flex justify-between items-end px-6 pb-4 border-b border-white/10 z-20 bg-black/50 backdrop-blur-sm">
+      {/* --- BACKGROUND AMBIENCE --- */}
+      <div className={`absolute inset-0 transition-colors duration-700 ease-in-out opacity-20 ${activeRitual.bg}`} />
+      
+      {/* --- HEADER --- */}
+      <header className="relative z-10 h-16 flex justify-between items-end px-6 pb-4 border-b border-white/5">
         <div>
-            <h1 className="text-2xl font-serif font-bold tracking-[0.1em] leading-none">TEMPLE</h1>
-            <div className="text-[9px] text-zinc-500 tracking-[0.3em] uppercase mt-1">Bureau of Silence</div>
+          <h1 className="text-xl font-serif font-bold tracking-[0.1em] leading-none text-zinc-100">TEMPLE</h1>
+          <div className="text-[8px] text-zinc-500 tracking-[0.3em] uppercase mt-1">Bureau of Silence</div>
         </div>
-        <div className="text-[9px] text-zinc-600 text-right">
-            <div>{userName}</div>
-            <div className="tracking-widest">PROTOCOL v.4.2</div>
-        </div>
+        <button 
+          onClick={() => setShowManifest(true)}
+          className="p-2 text-zinc-600 hover:text-white transition-colors"
+        >
+          <Info size={18} />
+        </button>
       </header>
 
-      {/* --- MAIN CONTENT (CENTERED) --- */}
-      <main className="flex-1 flex flex-col items-center justify-center w-full px-6 z-10 gap-6 overflow-y-auto">
+      {/* --- MAIN STAGE (THE ALTAR) --- */}
+      <main className="flex-1 relative flex flex-col items-center justify-center z-10 w-full">
         
-        {/* 2x2 GRID - Made buttons brighter/clearer */}
-        <div className="grid grid-cols-2 gap-4 w-full max-w-sm aspect-square">
-            {SERVICES.map((s) => (
-                <button 
-                    key={s.id}
-                    onClick={() => handleNav(s.path)}
-                    className="grid-btn group relative bg-[#0A0A0A] border border-white/10 hover:border-white/40 hover:bg-[#111] transition-all duration-200 flex flex-col items-center justify-center p-4 rounded-sm shadow-[0_0_15px_rgba(0,0,0,0.5)]"
-                >
-                    {/* ICON / WIDGET */}
-                    <div className="mb-3 text-3xl filter grayscale group-hover:grayscale-0 transition-all duration-300">
-                        {s.id === 'vigil' ? (
-                            <div className="flex gap-1 items-center h-8">
-                                {[...Array(5)].map((_, i) => (
-                                    <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < activeFlames ? 'bg-orange-500 shadow-[0_0_6px_orange]' : 'bg-zinc-800'}`} />
-                                ))}
-                            </div>
-                        ) : (
-                            s.icon
-                        )}
-                    </div>
-
-                    {/* LABELS */}
-                    <div className="text-center">
-                        <div className={`text-[10px] font-bold tracking-widest ${s.color} opacity-80 group-hover:opacity-100`}>
-                            {s.name}
-                        </div>
-                        <div className="text-[7px] text-zinc-600 mt-1 uppercase tracking-wider group-hover:text-zinc-400">
-                            {s.sub}
-                        </div>
-                    </div>
-                </button>
-            ))}
+        {/* DYNAMIC ALTAR VISUAL */}
+        <div className="relative w-full max-w-md aspect-square flex items-center justify-center">
+          <AnimatePresence mode='wait'>
+            <motion.div
+              key={activeRitual.id}
+              initial={{ opacity: 0, scale: 0.9, blur: 10 }}
+              animate={{ opacity: 1, scale: 1, blur: 0 }}
+              exit={{ opacity: 0, scale: 1.1, blur: 10 }}
+              transition={{ duration: 0.4 }}
+              className={`relative flex items-center justify-center`}
+            >
+              {/* Glow Effect */}
+              <div className={`absolute inset-0 rounded-full blur-[60px] opacity-30 ${activeRitual.glow}`} />
+              
+              {/* Icon / Object */}
+              <div className={`${activeRitual.color} opacity-90`}>
+                {/* We scale the icon up significantly to act as the "Object" */}
+                <div style={{ transform: 'scale(4)' }}>
+                  {activeRitual.icon}
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
 
-        {/* --- THE WHISPER (Bottom Center) --- */}
-        <div className="w-full max-w-sm flex flex-col items-center gap-4 mt-2">
-            <div className="text-[8px] text-zinc-700 tracking-[0.4em] uppercase">
-                I am listening
-            </div>
-            
-            <div className="relative group">
-                <div className="absolute inset-0 bg-white/5 rounded-full blur-xl opacity-0 group-hover:opacity-20 transition-opacity" />
-                <div className="relative bg-black border border-zinc-800 rounded-full p-1 hover:border-zinc-500 transition-all scale-125 active:scale-110">
-                    <MicrophoneButton /> 
-                </div>
-            </div>
+        {/* TEXT DESCRIPTION */}
+        <div className="absolute top-10 w-full px-8 text-center">
+           <AnimatePresence mode='wait'>
+            <motion.div
+              key={activeRitual.id}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="flex flex-col gap-2"
+            >
+              <h2 className={`text-2xl font-bold tracking-widest ${activeRitual.color}`}>
+                {activeRitual.title}
+              </h2>
+              <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-400">
+                {activeRitual.subtitle}
+              </div>
+              <p className="mt-4 text-xs text-zinc-500 leading-relaxed max-w-xs mx-auto font-sans">
+                {activeRitual.desc}
+              </p>
+            </motion.div>
+          </AnimatePresence>
         </div>
 
       </main>
 
-      {/* --- FOOTER: REAL LOGS TICKER --- */}
-      <footer className="temple-root-footer h-10 bg-[#050505] border-t border-zinc-900 flex items-center overflow-hidden z-20 shrink-0">
-        <div className="whitespace-nowrap animate-marquee flex gap-12 text-[9px] font-mono text-zinc-500 uppercase tracking-widest px-4">
-            {tickerText}
+      {/* --- FOOTER: CAROUSEL & ACTIONS --- */}
+      <div className="relative z-20 pb-8 pt-4 bg-gradient-to-t from-black via-black/90 to-transparent">
+        
+        {/* CAROUSEL CONTROLS */}
+        <div className="flex items-center justify-between px-4 mb-6">
+          <button onClick={handlePrev} className="p-4 text-zinc-600 hover:text-white active:scale-95 transition-all">
+            <ChevronLeft />
+          </button>
+          
+          {/* ACTION BUTTON */}
+          <button 
+            onClick={handleEnter}
+            className={`
+              h-12 px-8 rounded-sm border border-white/20 
+              text-xs font-bold tracking-[0.2em] uppercase 
+              bg-white/5 hover:bg-white/10 backdrop-blur-md
+              transition-all active:scale-95 hover:border-${activeRitual.color.split('-')[1]}-500
+            `}
+          >
+            ENTER RITUAL
+          </button>
+
+          <button onClick={handleNext} className="p-4 text-zinc-600 hover:text-white active:scale-95 transition-all">
+            <ChevronRight />
+          </button>
         </div>
-      </footer>
+
+        {/* INDICATORS (THE WHEEL) */}
+        <div className="flex justify-center gap-3">
+          {RITUALS.map((r, i) => (
+            <button
+              key={r.id}
+              onClick={() => changeSlide(i)}
+              className={`
+                w-2 h-2 rounded-full transition-all duration-300
+                ${i === activeIndex ? `bg-${r.color.split('-')[1]}-500 scale-125` : 'bg-zinc-800'}
+                ${i === activeIndex ? activeRitual.color.replace('text-', 'bg-') : ''}
+              `}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* --- PIERROT (WHISPER) --- */}
+      <div className="absolute bottom-6 right-6 z-30">
+        <button 
+          className="w-12 h-12 bg-black border border-zinc-800 rounded-full flex items-center justify-center text-zinc-500 hover:text-white hover:border-zinc-500 hover:shadow-[0_0_15px_rgba(255,255,255,0.2)] transition-all active:scale-90"
+          onClick={() => {
+             // Placeholder for Whisper Logic
+             alert("I am listening... (Module Loading)");
+          }}
+        >
+          <Ear size={20} />
+        </button>
+      </div>
+
+      {/* --- MANIFEST OVERLAY --- */}
+      <AnimatePresence>
+        {showManifest && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center"
+            onClick={() => setShowManifest(false)}
+          >
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="max-w-md space-y-6"
+            >
+              <h2 className="text-xl font-serif font-bold tracking-widest text-white border-b border-white/20 pb-4 inline-block">
+                BUREAU OF SILENCE
+              </h2>
+              
+              <div className="space-y-4 text-xs text-zinc-400 font-mono leading-relaxed">
+                <p>The world outside is Noise.</p>
+                <p>Data is Entropy.</p>
+                <p>You are here to clean your cache.</p>
+                <p className="text-zinc-500 italic">
+                  This is not a church. This is a utility for the soul.
+                  We trade in peace, receipts, and sparks in the dark.
+                </p>
+              </div>
+
+              <div className="pt-8 animate-pulse text-[9px] tracking-[0.3em] uppercase text-zinc-600">
+                Tap anywhere to begin
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
