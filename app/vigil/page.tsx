@@ -30,10 +30,17 @@ export default function VigilPage() {
   const [isLighting, setIsLighting] = useState(false);
   const [spark, setSpark] = useState<{start:{x:number, y:number}, end:{x:number, y:number}} | null>(null);
   const [userName, setUserName] = useState("Pilgrim");
+  const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
 
   useEffect(() => {
     // Telegram Init
     const tg = (window as any).Telegram?.WebApp;
+    // Prefer locally-saved name to persist across anonymous WebApp sessions
+    try {
+      const local = window.localStorage.getItem('vigil_userName');
+      if (local) setUserName(local);
+    } catch (e) {}
+
     if (tg) {
       tg.ready();
       tg.expand();
@@ -41,7 +48,10 @@ export default function VigilPage() {
         tg.setHeaderColor('#000000');
         tg.setBackgroundColor('#000000');
         const u = tg.initDataUnsafe?.user;
-        if (u?.first_name) setUserName(u.first_name);
+        if (u?.first_name) {
+          setUserName(u.first_name);
+          try { window.localStorage.setItem('vigil_userName', u.first_name); } catch (e) {}
+        }
       } catch (e) {}
     }
     // Initial load
@@ -161,6 +171,36 @@ export default function VigilPage() {
   const triggerRitual = async () => {
     if (isLighting) return;
     setIsLighting(true);
+
+    // Rate limit: allow one ritual per user every 3 hours (client-side guard)
+    setRateLimitMsg(null);
+    try {
+      const check = await supabase
+        .from('temple_log')
+        .select('created_at')
+        .eq('event_type', 'vigil')
+        .ilike('message', `${userName} sent%`)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (check.error) console.error('rate check error', check.error);
+      const rows = (check.data as any[]) || [];
+      if (rows.length > 0) {
+        const last = new Date(rows[0].created_at).getTime();
+        const diff = Date.now() - last;
+        const limitMs = 3 * 60 * 60 * 1000;
+        if (diff < limitMs) {
+          const remain = limitMs - diff;
+          const h = Math.floor(remain / 3600000);
+          const m = Math.floor((remain % 3600000) / 60000);
+          setRateLimitMsg(`You can light again in ${h}h ${m}m`);
+          setIsLighting(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('rate check failed', e);
+    }
 
     // 1. Calculate Spark Path
     if (angelRef.current && fireRef.current) {
@@ -300,21 +340,48 @@ export default function VigilPage() {
         </div>
 
         {/* Button */}
-        <button 
+        <div className="w-full max-w-md">
+          <div className="flex items-center gap-2 mb-3">
+            <input
+              value={userName}
+              onChange={(e) => { setUserName(e.target.value); try { window.localStorage.setItem('vigil_userName', e.target.value); } catch (e) {} }}
+              className="flex-1 bg-white/3 px-3 py-2 rounded text-sm"
+              placeholder="Your name"
+            />
+            <button
+              onClick={() => {
+                // attempt to re-sync Telegram-provided user
+                const tg = (window as any).Telegram?.WebApp;
+                const u = tg?.initDataUnsafe?.user;
+                if (u?.first_name) {
+                  setUserName(u.first_name);
+                  try { window.localStorage.setItem('vigil_userName', u.first_name); } catch (e) {}
+                }
+              }}
+              className="px-3 py-2 text-xs bg-white/5 rounded"
+            >Sync</button>
+          </div>
+
+          <button 
             onClick={triggerRitual}
             disabled={isLighting}
             className={`
-                group relative w-full h-16 border border-white/10 bg-white/5 
-                flex items-center justify-center gap-3 rounded-sm
-                transition-all active:scale-95 hover:bg-white/10
+              group relative w-full h-16 border border-white/10 bg-white/5 
+              flex items-center justify-center gap-3 rounded-sm
+              transition-all active:scale-95 hover:bg-white/10
             `}
-        >
+          >
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
             <Flame size={14} className={`text-orange-500 ${isLighting ? 'animate-bounce' : ''}`} />
             <span className="text-xs font-bold tracking-[0.2em] uppercase">
-                {isLighting ? "TRANSMITTING..." : "SEND SPARK"}
+              {isLighting ? "TRANSMITTING..." : "SEND SPARK"}
             </span>
-        </button>
+          </button>
+
+          {rateLimitMsg && (
+            <div className="text-xs text-rose-400 mt-2 text-center">{rateLimitMsg}</div>
+          )}
+        </div>
 
       </div>
     </div>
