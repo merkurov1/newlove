@@ -1,252 +1,258 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createClient } from '@/lib/supabase-browser';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { Flame, Clock, ArrowLeft, History, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Flame, ArrowLeft, History, Clock } from 'lucide-react';
 
+// --- ASSETS ---
+const ANGEL_GIF = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
 const FLAME_ID = 1;
-const FLAME_DURATION = 24 * 60 * 60 * 1000;
 
 export default function VigilPage() {
   const router = useRouter();
   const supabase = createClient();
 
+  // Refs for animation coordinates
+  const angelRef = useRef<HTMLDivElement>(null);
+  const fireRef = useRef<HTMLDivElement>(null);
+
+  // Data State
+  const [intensity, setIntensity] = useState(1); // 1 to 5 scale based on activity
+  const [lastGuardian, setLastGuardian] = useState("Loading...");
+  const [timeLeft, setTimeLeft] = useState("");
   const [flameData, setFlameData] = useState<any>(null);
-  const [timeLeft, setTimeLeft] = useState("CONNECTING...");
-  const [isExtinguished, setIsExtinguished] = useState(false);
-  const [logs, setLogs] = useState<any[]>([]);
+  
+  // UX State
   const [isLighting, setIsLighting] = useState(false);
+  const [spark, setSpark] = useState<{start:{x:number, y:number}, end:{x:number, y:number}} | null>(null);
   const [userName, setUserName] = useState("Pilgrim");
-  const [debugError, setDebugError] = useState<string | null>(null); // Для отладки
 
   useEffect(() => {
-    // 1. AGGRESSIVE TELEGRAM INIT (Retry logic)
-    let attempts = 0;
-    const initTg = () => {
-      const tg = (window as any).Telegram?.WebApp;
-      if (tg && tg.initDataUnsafe?.user) {
-        setUserName(tg.initDataUnsafe.user.first_name);
-        tg.ready();
-        tg.expand();
-        try {
-            tg.setHeaderColor('#000000');
-            tg.setBackgroundColor('#000000');
-        } catch (e) {}
-      } else {
-        if (attempts < 10) {
-          attempts++;
-          setTimeout(initTg, 300); // Try again every 300ms
-        }
-      }
-    };
-    initTg();
+    // Telegram Init
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      try {
+        tg.setHeaderColor('#000000');
+        tg.setBackgroundColor('#000000');
+        const u = tg.initDataUnsafe?.user;
+        if (u?.first_name) setUserName(u.first_name);
+      } catch (e) {}
+    }
 
-    // 2. Data Fetch
-    fetchData();
+    refreshData();
 
-    // 3. Realtime
+    // Realtime
     const channel = supabase
-      .channel('vigil_fix')
+      .channel('vigil_v3')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vigil_hearts' }, (payload: any) => {
         // Narrow and guard payload.new to avoid TS2339 when shape is uncertain
         const newRow = payload?.new as { [key: string]: any } | undefined;
         if (newRow && newRow.id === FLAME_ID) {
             setFlameData(newRow);
-            updateTimer(newRow);
-            fetchLogs();
+            setLastGuardian(newRow.owner_name);
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, () => fetchLogs())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, () => {
+          // When log adds, refresh intensity
+          calculateIntensity();
+      })
       .subscribe();
 
-    const timer = setInterval(() => updateTimer(flameData), 1000);
+    const timer = setInterval(updateTimer, 1000);
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(timer);
     };
-  }, []); // Run once on mount
+  }, [flameData]);
 
-  const fetchData = async () => {
-    try {
-        // Fetch Flame
-        const { data: flame, error: flameError } = await supabase
-            .from('vigil_hearts')
-            .select('*')
-            .eq('id', FLAME_ID)
-            .maybeSingle();
-        
-        if (flameError) throw flameError;
-        
-        if (flame) {
-            setFlameData(flame);
-            updateTimer(flame);
-        } else {
-            // Если записи нет, создадим "фейковую" локально, чтобы интерфейс ожил
-            setDebugError("No Flame ID=1 found in DB");
-            setFlameData({ last_lit_at: new Date().toISOString(), owner_name: 'System' });
-        }
+  // --- LOGIC ---
 
-        fetchLogs();
-    } catch (e: any) {
-        console.error(e);
-        setDebugError(e.message || "Connection Error");
+  const refreshData = async () => {
+    // 1. Get Flame Status
+    const { data: flame } = await supabase.from('vigil_hearts').select('*').eq('id', FLAME_ID).maybeSingle();
+    if (flame) {
+        setFlameData(flame);
+        setLastGuardian(flame.owner_name);
+    }
+
+    // 2. Calculate Intensity (Count logs in last 24h)
+    calculateIntensity();
+  };
+
+  const calculateIntensity = async () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count } = await supabase
+        .from('temple_log')
+        .select('*', { count: 'exact', head: true })
+        .eq('event_type', 'vigil')
+        .gt('created_at', yesterday);
+    
+    // Scale: 0 logs = size 1, 50 logs = size 3 (max)
+    const raw = count || 0;
+    const level = 1 + Math.min(raw / 10, 2); // 1.0 to 3.0
+    setIntensity(level);
+  };
+
+  const updateTimer = () => {
+    if (!flameData?.last_lit_at) return;
+    const diff = Date.now() - new Date(flameData.last_lit_at).getTime();
+    const remaining = (24 * 60 * 60 * 1000) - diff;
+    
+    if (remaining <= 0) setTimeLeft("EXTINGUISHED");
+    else {
+        const h = Math.floor(remaining / (3600000));
+        const m = Math.floor((remaining % 3600000) / 60000);
+        setTimeLeft(`${h}h ${m}m`);
     }
   };
 
-  const fetchLogs = async () => {
-    const { data } = await supabase
-      .from('temple_log')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(3);
-    if (data) setLogs(data);
-  };
-
-  const updateTimer = (data: any = flameData) => {
-    if (!data?.last_lit_at) return;
-
-    const now = new Date().getTime();
-    const litTime = new Date(data.last_lit_at).getTime();
-    const diff = now - litTime;
-    const remaining = FLAME_DURATION - diff;
-
-    if (remaining <= 0) {
-        setTimeLeft("EXTINGUISHED");
-        setIsExtinguished(true);
-    } else {
-        setIsExtinguished(false);
-        const h = Math.floor(remaining / (1000 * 60 * 60));
-        const m = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-        const s = Math.floor((remaining % (1000 * 60)) / 1000);
-        setTimeLeft(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
-    }
-  };
-
-  const handleIgnite = async () => {
+  const triggerRitual = async () => {
     if (isLighting) return;
     setIsLighting(true);
 
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
-
-    try {
-      const nowISO = new Date().toISOString();
-      
-      // Optimistic Update (Immediate UI response)
-      setFlameData({ ...flameData, last_lit_at: nowISO, owner_name: userName });
-      setIsExtinguished(false);
-      setTimeLeft("23:59:59");
-
-      // DB Update
-      const { error } = await supabase
-        .from('vigil_hearts')
-        .upsert({ 
-            id: FLAME_ID, 
-            owner_name: userName, 
-            last_lit_at: nowISO, 
-            intention: 'KEPT THE LIGHT' 
+    // 1. Calculate Spark Path
+    if (angelRef.current && fireRef.current) {
+        const angelRect = angelRef.current.getBoundingClientRect();
+        const fireRect = fireRef.current.getBoundingClientRect();
+        
+        setSpark({
+            start: { x: angelRect.left + angelRect.width/2, y: angelRect.top + angelRect.height/2 },
+            end: { x: fireRect.left + fireRect.width/2, y: fireRect.top + fireRect.height/2 }
         });
-
-      if (error) throw error;
-
-      await supabase.from('temple_log').insert({
-        message: `${userName} fueled the flame`,
-        event_type: 'vigil'
-      });
-      
-      fetchLogs();
-
-    } catch (e: any) {
-      setDebugError(`Write Error: ${e.message}`);
-    } finally {
-      setIsLighting(false);
     }
+
+    // 2. Database Action (in background)
+    try {
+        const nowISO = new Date().toISOString();
+        await supabase.from('vigil_hearts').update({ 
+            owner_name: userName, 
+            last_lit_at: nowISO 
+        }).eq('id', FLAME_ID);
+        
+        await supabase.from('temple_log').insert({
+            message: `${userName} sent a spark`,
+            event_type: 'vigil'
+        });
+        
+        // Optimistic
+        setLastGuardian(userName);
+        setFlameData({...flameData, last_lit_at: nowISO});
+        
+    } catch (e) { console.error(e); }
+
+    // 3. Cleanup Animation
+    setTimeout(() => {
+        setSpark(null);
+        setIsLighting(false);
+        // Haptic Impact when spark hits
+        const tg = (window as any).Telegram?.WebApp;
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    }, 1000); // Spark flight time
   };
 
+  // --- RENDER ---
   return (
     <div className="fixed inset-0 bg-black text-white font-mono flex flex-col overflow-hidden selection:bg-orange-500/30">
       <style jsx global>{`header, footer { display: none !important; }`}</style>
 
-      {/* HEADER */}
+      {/* --- LAYER 1: AMBIENT BACKGROUND --- */}
+      <div 
+        className="absolute inset-0 transition-opacity duration-1000"
+        style={{ 
+            background: `radial-gradient(circle at center, rgba(255,100,0,${0.1 * intensity}) 0%, rgba(0,0,0,1) 70%)` 
+        }} 
+      />
+
+      {/* --- LAYER 2: HEADER --- */}
       <div className="relative z-20 h-20 flex justify-between items-start p-6">
         <button onClick={() => router.push('/temple')} className="text-zinc-500 hover:text-white">
             <ArrowLeft size={20} />
         </button>
-        <div className="text-right">
-            <div className="flex items-center justify-end gap-2 text-orange-500/80 mb-1">
-                <Clock size={12} className={!isExtinguished ? 'animate-pulse' : ''} />
-                <span className="text-[10px] tracking-[0.2em] uppercase">Time Left</span>
+        <div className="text-right flex flex-col items-end">
+            <div className="text-[9px] tracking-[0.2em] text-zinc-500 uppercase flex items-center gap-1">
+                <Clock size={10} /> Time Left
             </div>
-            <div className={`text-xl font-bold tracking-widest ${isExtinguished ? 'text-zinc-600' : 'text-white'}`}>
-                {timeLeft}
-            </div>
+            <div className="text-sm font-bold text-zinc-300">{timeLeft}</div>
         </div>
       </div>
 
-      {/* FLAME */}
-      <div className="flex-1 relative flex items-center justify-center z-10 w-full">
-        {/* Glow */}
-        <motion.div 
-            animate={{ opacity: isExtinguished ? 0.1 : [0.4, 0.6, 0.4] }}
-            transition={{ duration: 4, repeat: Infinity }}
-            className="absolute w-64 h-64 bg-orange-500/20 blur-[100px] rounded-full"
+      {/* --- LAYER 3: THE ANGEL (Conduit) --- */}
+      <div 
+        ref={angelRef}
+        className="absolute top-24 right-8 z-30 w-20 h-20 opacity-80"
+      >
+        {/* Halo Glow */}
+        <div className={`absolute inset-0 bg-white/10 blur-xl rounded-full transition-opacity duration-500 ${isLighting ? 'opacity-100' : 'opacity-0'}`} />
+        <img 
+            src={ANGEL_GIF} 
+            className={`w-full h-full object-contain grayscale contrast-125 transition-all duration-300 ${isLighting ? 'brightness-150 scale-110' : 'brightness-75'}`} 
+            alt="Angel" 
         />
-        {/* Core Flame */}
-        <div className="relative flex flex-col items-center justify-center">
-            {isExtinguished ? (
-                <Flame size={64} className="text-zinc-800" strokeWidth={1} />
-            ) : (
-                <div className="relative w-32 h-32 flex items-center justify-center">
-                    <div className="absolute inset-0 bg-orange-500/20 blur-xl rounded-full animate-pulse" />
-                    <Flame size={80} className="text-white drop-shadow-[0_0_15px_rgba(255,100,0,0.8)] fill-orange-500/20 relative z-10" />
-                </div>
-            )}
-            
-            {/* Owner Name */}
-            {!isExtinguished && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-8 text-center">
-                    <div className="text-[9px] uppercase tracking-[0.3em] text-zinc-500 mb-1">Guardian</div>
-                    <div className="text-lg font-serif font-bold text-white">{flameData?.owner_name || userName}</div>
-                </motion.div>
-            )}
-        </div>
       </div>
 
-      {/* DEBUG MESSAGE (Если есть ошибки - покажем тут) */}
-      {debugError && (
-          <div className="absolute top-20 left-0 right-0 text-center">
-              <span className="bg-red-900/80 text-white text-[10px] px-2 py-1 rounded border border-red-500">
-                  DEBUG: {debugError}
-              </span>
-          </div>
-      )}
-
-      {/* FOOTER */}
-      <div className="relative z-20 bg-gradient-to-t from-zinc-950 to-transparent pt-10 pb-8 px-6 flex flex-col gap-6">
-        <button 
-            onClick={handleIgnite}
-            disabled={isLighting}
-            className={`w-full h-16 rounded-sm border flex items-center justify-center gap-3 uppercase tracking-[0.2em] text-xs font-bold transition-all active:scale-95 ${isLighting ? 'bg-orange-500 border-orange-500 text-black' : 'bg-zinc-900/50 border-orange-500/30 text-orange-500'}`}
+      {/* --- LAYER 4: THE FIRE (Center) --- */}
+      <div className="flex-1 relative flex items-center justify-center z-10 w-full" ref={fireRef}>
+        <div 
+            className="relative transition-all duration-[2000ms] ease-in-out"
+            style={{ transform: `scale(${intensity})` }}
         >
-            {isLighting ? "IGNITING..." : (isExtinguished ? "REIGNITE THE FLAME" : "FUEL THE FLAME")}
+            {/* Core procedural flame */}
+            <motion.div 
+                animate={{ scale: [1, 1.05, 1], opacity: [0.8, 1, 0.8] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="w-32 h-32 bg-gradient-to-t from-orange-500 via-red-500 to-transparent rounded-full blur-[30px] opacity-80 mix-blend-screen"
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+                <Flame size={64} className="text-white fill-white/20 drop-shadow-[0_0_20px_rgba(255,200,0,0.5)]" />
+            </div>
+        </div>
+
+        {/* SPARK ANIMATION */}
+        <AnimatePresence>
+            {spark && (
+                <motion.div
+                    initial={{ x: spark.start.x - window.innerWidth/2, y: spark.start.y - window.innerHeight/2, opacity: 1, scale: 1 }}
+                    animate={{ x: 0, y: 0, opacity: 0, scale: 0.5 }} // Moves to center (0,0 relative to flex center)
+                    transition={{ duration: 0.8, ease: "circIn" }}
+                    className="absolute z-50 w-3 h-3 bg-white rounded-full shadow-[0_0_15px_white]"
+                />
+            )}
+        </AnimatePresence>
+      </div>
+
+      {/* --- LAYER 5: INFO & CONTROLS --- */}
+      <div className="relative z-30 pb-12 pt-4 px-8 flex flex-col items-center gap-8">
+        
+        {/* Status */}
+        <div className="text-center space-y-1">
+            <div className="text-[9px] uppercase tracking-[0.3em] text-zinc-600">Last Guardian</div>
+            <div className="text-xl font-serif font-bold text-white drop-shadow-md">
+                {lastGuardian}
+            </div>
+        </div>
+
+        {/* Button */}
+        <button 
+            onClick={triggerRitual}
+            disabled={isLighting}
+            className={`
+                group relative w-full h-16 border border-white/10 bg-white/5 
+                flex items-center justify-center gap-3 rounded-sm
+                transition-all active:scale-95 hover:bg-white/10
+            `}
+        >
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+            <Flame size={14} className={`text-orange-500 ${isLighting ? 'animate-bounce' : ''}`} />
+            <span className="text-xs font-bold tracking-[0.2em] uppercase">
+                {isLighting ? "TRANSMITTING..." : "SEND SPARK"}
+            </span>
         </button>
 
-        <div className="flex flex-col gap-2 h-16 overflow-hidden">
-            {logs.map((log) => (
-                <div key={log.id} className="flex items-center gap-2 text-[9px] text-zinc-400">
-                    <History size={8} />
-                    <span className="uppercase tracking-wider">
-                        {log.message?.toUpperCase()}
-                    </span>
-                    <span className="opacity-50 ml-auto">
-                        {new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </span>
-                </div>
-            ))}
-        </div>
       </div>
     </div>
   );
