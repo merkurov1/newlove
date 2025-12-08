@@ -172,7 +172,28 @@ export default function UnframedPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus('loading');
-    setTimeout(() => setStatus('success'), 1500);
+
+    try {
+      const payload = { form: formData };
+      const res = await fetch('/api/unframed/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('Telegram API error:', text);
+        setStatus('error');
+        return;
+      }
+
+      setStatus('success');
+      setFormData({ name: '', agency: '', email: '' });
+    } catch (err) {
+      console.error('Submit error', err);
+      setStatus('error');
+    }
   };
 
   return (
