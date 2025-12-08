@@ -6,25 +6,22 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Flame, Clock, ArrowLeft, History } from 'lucide-react';
 
-// --- CONSTANTS ---
 const FLAME_ID = 1;
-const FLAME_DURATION = 24 * 60 * 60 * 1000; // 24h
+const FLAME_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 export default function VigilPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  // State
   const [flameData, setFlameData] = useState<any>(null);
-  const [timeLeft, setTimeLeft] = useState("LOADING...");
+  const [timeLeft, setTimeLeft] = useState("SYNCING...");
   const [isExtinguished, setIsExtinguished] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [isLighting, setIsLighting] = useState(false);
   const [userName, setUserName] = useState("Pilgrim");
 
-  // --- INIT ---
   useEffect(() => {
-    // 1. Telegram
+    // Telegram Init
     const tg = (window as any).Telegram?.WebApp;
     if (tg) {
       tg.ready();
@@ -37,45 +34,55 @@ export default function VigilPage() {
       } catch (e) {}
     }
 
-    // 2. Data
-    fetchFlame();
-    fetchLogs();
+    fetchData();
 
-    // 3. Realtime
+    // Realtime Subscriptions
     const channel = supabase
-      .channel('vigil_updates')
+      .channel('vigil_room')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vigil_hearts' }, (payload: any) => {
-        // Supabase realtime payload types can be loose — guard and narrow safely.
+        // Supabase realtime payload types can be broad; narrow safely and guard access.
         const newRow = payload?.new as { [key: string]: any } | undefined;
         if (newRow && newRow.id === FLAME_ID) {
             setFlameData(newRow);
-            fetchLogs(); 
+            fetchLogs(); // Refresh logs immediately
         }
-      })
-      // ВАЖНО: Слушаем temple_log (единственное число)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, () => {
-          fetchLogs();
       })
       .subscribe();
 
-    // 4. Timer
-    const interval = setInterval(updateTimer, 1000);
+    const timer = setInterval(updateTimer, 1000);
 
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(interval);
+      clearInterval(timer);
     };
   }, [flameData]);
 
-  // --- LOGIC ---
+  const fetchData = async () => {
+    await fetchFlame();
+    await fetchLogs();
+  };
+
   const fetchFlame = async () => {
-    const { data } = await supabase.from('vigil_hearts').select('*').eq('id', FLAME_ID).maybeSingle();
+    const { data, error } = await supabase
+      .from('vigil_hearts')
+      .select('*')
+      .eq('id', FLAME_ID)
+      .maybeSingle();
+    
+    if (error) console.error("Flame Fetch Error:", error);
     if (data) setFlameData(data);
+    else setTimeLeft("OFFLINE");
   };
 
   const fetchLogs = async () => {
-    // ВАЖНО: Читаем из temple_log
-    const { data } = await supabase.from('temple_log').select('*').order('created_at', { ascending: false }).limit(5);
+    // Берем последние логи, где event_type = 'vigil'
+    const { data } = await supabase
+      .from('temple_log')
+      .select('*')
+      .eq('event_type', 'vigil') 
+      .order('created_at', { ascending: false })
+      .limit(5);
+      
     if (data) setLogs(data);
   };
 
@@ -112,22 +119,29 @@ export default function VigilPage() {
       // 1. Update Flame
       const { error: heartError } = await supabase
         .from('vigil_hearts')
-        .upsert({ id: FLAME_ID, owner_name: userName, last_lit_at: nowISO, intention: 'KEPT THE LIGHT' });
+        .update({ 
+            owner_name: userName, 
+            last_lit_at: nowISO, 
+            intention: 'KEPT THE LIGHT' 
+        })
+        .eq('id', FLAME_ID);
 
       if (heartError) throw heartError;
 
-      // 2. Write Log (ВАЖНО: temple_log)
+      // 2. Write Log (using event_type column based on your table dump)
       await supabase.from('temple_log').insert({
         message: `${userName} fueled the flame`,
-        metadata: { type: 'vigil' }
+        event_type: 'vigil' 
       });
 
-      // 3. Optimistic Update
+      // 3. Optimistic UI
       setFlameData({ ...flameData, last_lit_at: nowISO, owner_name: userName });
+      fetchLogs(); // Force log refresh
       setIsExtinguished(false);
 
-    } catch (e) {
+    } catch (e: any) {
       console.error("Ignite Error:", e);
+      alert(`Error: ${e.message || 'Connection failed'}`);
     } finally {
       setIsLighting(false);
     }
@@ -140,7 +154,7 @@ export default function VigilPage() {
 
       {/* HEADER */}
       <div className="relative z-20 h-20 flex justify-between items-start p-6">
-        <button onClick={() => router.push('/temple')} className="text-zinc-500 hover:text-white transition-colors">
+        <button onClick={() => router.push('/temple')} className="text-zinc-500 hover:text-white">
             <ArrowLeft size={20} />
         </button>
         <div className="text-right">
@@ -156,13 +170,11 @@ export default function VigilPage() {
 
       {/* FLAME */}
       <div className="flex-1 relative flex items-center justify-center z-10 w-full">
-        {/* Glow */}
         <motion.div 
             animate={{ opacity: isExtinguished ? 0.1 : [0.4, 0.6, 0.4] }}
             transition={{ duration: 4, repeat: Infinity }}
             className="absolute w-64 h-64 bg-orange-500/20 blur-[100px] rounded-full"
         />
-        {/* Core */}
         <div className="relative">
             {isExtinguished ? (
                 <Flame size={64} className="text-zinc-800" strokeWidth={1} />
@@ -176,7 +188,7 @@ export default function VigilPage() {
             )}
         </div>
         
-        {/* Owner Name */}
+        {/* Guardian Name */}
         {!isExtinguished && flameData?.owner_name && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="absolute bottom-10 text-center">
                 <div className="text-[9px] uppercase tracking-[0.3em] text-zinc-500 mb-1">Guardian</div>
