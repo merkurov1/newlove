@@ -68,7 +68,7 @@ const Redacted = ({ children }: { children: React.ReactNode }) => (
   </span>
 );
 
-// PARALLAX SECTION
+// PARALLAX SECTION (PRO VERSION)
 const TimelineSection = ({ item }: any) => {
   const ref = useRef<HTMLElement | null>(null);
 
@@ -94,20 +94,11 @@ const TimelineSection = ({ item }: any) => {
     return () => { window.removeEventListener('scroll', handler); window.removeEventListener('resize', handler); cancelAnimationFrame(raf); };
   }, []);
 
-  const y = (() => {
-    // map progress 0..1 to 100..-100
-    return 100 + ( -200 * progress );
-  })();
-
-  const opacity = (() => {
-    if (progress <= 0) return 0;
-    if (progress < 0.2) return (progress / 0.2);
-    if (progress < 0.9) return 1;
-    return Math.max(0, 1 - ( (progress - 0.9) / 0.1 ));
-  })();
+  const y = 100 + (-200 * progress);
+  const opacity = progress <= 0 ? 0 : (progress < 0.2 ? progress / 0.2 : (progress < 0.9 ? 1 : Math.max(0, 1 - ((progress - 0.9) / 0.1))));
 
   return (
-    <section ref={ref as any} className="min-h-screen flex items-center justify-center relative py-24 border-t border-zinc-900">
+    <section ref={ref} className="min-h-screen flex items-center justify-center relative py-24 border-t border-zinc-900 bg-[#050505]">
       <div className="max-w-7xl w-full grid grid-cols-1 md:grid-cols-2 gap-12 px-6 items-center">
         
         {/* LEFT: STICKY TITLE */}
@@ -130,7 +121,7 @@ const TimelineSection = ({ item }: any) => {
         </div>
 
         {/* RIGHT: CONTENT */}
-        <motion.div style={{ y, opacity }} className="relative z-10">
+        <motion.div style={{ y }} className="relative z-10">
           <p className="text-xl md:text-2xl font-serif text-zinc-300 leading-relaxed drop-shadow-xl">
             {item.text}
           </p>
@@ -155,34 +146,32 @@ const TimelineSection = ({ item }: any) => {
 
 export default function UnframedPage() {
   const [status, setStatus] = useState('idle');
-  
-  // Hero Scroll Animation (local replacement for framer-motion hooks)
-  const [scrollY, setScrollY] = useState(0);
-  useEffect(() => {
-    const onScroll = () => setScrollY(window.scrollY || window.pageYOffset || 0);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); };
-  }, []);
-
-  const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
-  const map = (v: number, inMin: number, inMax: number, outMin: number, outMax: number) => {
-    const t = clamp((v - inMin) / (inMax - inMin), 0, 1);
-    return outMin + (outMax - outMin) * t;
-  };
-
-  const heroOpacity = map(scrollY, 0, 500, 1, 0);
-  const heroScale = map(scrollY, 0, 500, 1, 0.9);
-  const titleY = map(scrollY, 0, 500, 0, 100);
-
-  // Form
   const [formData, setFormData] = useState({ name: '', agency: '', email: '' });
+  
+  // PRO SCROLL ANIMATION (HOOKS RESTORED)
+    // Hero Scroll Animation (local replacement for framer-motion hooks)
+    const [scrollY, setScrollY] = useState(0);
+    useEffect(() => {
+      const onScroll = () => setScrollY(window.scrollY || window.pageYOffset || 0);
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll);
+      return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); };
+    }, []);
+
+    const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+    const map = (v: number, inMin: number, inMax: number, outMin: number, outMax: number) => {
+      const t = clamp((v - inMin) / (inMax - inMin), 0, 1);
+      return outMin + (outMax - outMin) * t;
+    };
+
+    const heroOpacity = map(scrollY, 0, 500, 1, 0);
+    const heroScale = map(scrollY, 0, 500, 1, 0.9);
+    const titleY = map(scrollY, 0, 500, 0, 100);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus('loading');
-    // Simulate API call
     setTimeout(() => setStatus('success'), 1500);
   };
 
@@ -198,17 +187,23 @@ export default function UnframedPage() {
         style={{ opacity: heroOpacity, scale: heroScale, y: titleY }}
         className="h-screen w-full flex flex-col items-center justify-center sticky top-0 z-0"
       >
-        <h1 className="text-[18vw] font-black uppercase tracking-tighter leading-none text-white mix-blend-difference font-sans">
+        <h1 className="text-[18vw] font-black uppercase tracking-tighter leading-none text-white mix-blend-difference font-sans text-center">
           UNFRAMED
         </h1>
-        <div className="flex items-center gap-6 mt-8 opacity-60">
-           <div className="h-[1px] w-20 bg-white" />
-           <p className="font-mono text-xs uppercase tracking-[0.4em] text-white">Anton Merkurov</p>
-           <div className="h-[1px] w-20 bg-white" />
+        
+        {/* --- DESIGN UPDATE: RED LINES & MEMOIR TEXT --- */}
+        <div className="flex items-center gap-6 mt-8 z-10 mix-blend-difference">
+           <div className="h-[2px] w-12 bg-red-600 shadow-[0_0_15px_red]" />
+           <p className="font-mono text-xs md:text-sm uppercase tracking-[0.3em] text-zinc-300">
+             A Memoir by Anton Merkurov
+           </p>
+           <div className="h-[2px] w-12 bg-red-600 shadow-[0_0_15px_red]" />
         </div>
+        {/* ---------------------------------------------- */}
+
       </motion.div>
 
-      {/* --- MANIFESTO (SCROLLS OVER HERO) --- */}
+      {/* --- MANIFESTO --- */}
       <div className="relative z-10 bg-[#050505] min-h-screen flex items-center justify-center px-6 pt-32 pb-32 border-t border-zinc-900 shadow-[0_-50px_100px_rgba(0,0,0,1)]">
          <div className="max-w-4xl text-center">
             <p className="text-3xl md:text-5xl font-serif text-zinc-100 leading-tight">
@@ -239,7 +234,7 @@ export default function UnframedPage() {
       {/* --- THE FOOTER ASSET --- */}
       <div className="relative z-20 bg-[#050505] border-t border-zinc-900 pb-20">
         
-        {/* AUDIO ANALYSIS */}
+        {/* AUDIO */}
         <section className="py-32 px-6 border-b border-zinc-900">
            <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-16 items-center">
               
@@ -339,6 +334,12 @@ export default function UnframedPage() {
               )}
            </div>
         </section>
+
+        {/* FOOTER */}
+        <footer className="py-12 text-center text-zinc-800 font-mono text-[10px] uppercase tracking-widest border-t border-zinc-900/50 flex flex-col gap-2 bg-black">
+          <span>Anton Merkurov / Unframed © 2025</span>
+          <span>Moscow • London • Moscow • Ether</span>
+        </footer>
 
       </div>
     </div>
