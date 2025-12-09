@@ -47,11 +47,16 @@ export default function VigilPage() {
       try {
         tg.setHeaderColor('#000000');
         tg.setBackgroundColor('#000000');
-        const u = tg.initDataUnsafe?.user;
+        // try both safe and unsafe init payloads
+        const u = tg.initData?.user || tg.initDataUnsafe?.user || tg.initDataUnsafe?.user;
         if (u?.first_name) {
           setUserName(u.first_name);
           try { window.localStorage.setItem('vigil_userName', u.first_name); } catch (e) {}
         }
+      } catch (e) {}
+      // Listen for when Telegram provides data later (edge cases)
+      try {
+        tg.onEvent && tg.onEvent('themeChanged', () => {});
       } catch (e) {}
     }
     // Initial load
@@ -171,6 +176,13 @@ export default function VigilPage() {
   const triggerRitual = async () => {
     if (isLighting) return;
     setIsLighting(true);
+
+    // Require Telegram identity (no manual name input allowed)
+    if (!userName || userName === 'Pilgrim') {
+      setRateLimitMsg('Please open this page in Telegram to authenticate');
+      setIsLighting(false);
+      return;
+    }
 
     // Rate limit: allow one ritual per user every 3 hours (client-side guard)
     setRateLimitMsg(null);
@@ -339,32 +351,19 @@ export default function VigilPage() {
           </div>
         </div>
 
-        {/* Button */}
+        {/* Button / Identity (Telegram-only) */}
         <div className="w-full max-w-md">
-          <div className="flex items-center gap-2 mb-3">
-            <input
-              value={userName}
-              onChange={(e) => { setUserName(e.target.value); try { window.localStorage.setItem('vigil_userName', e.target.value); } catch (e) {} }}
-              className="flex-1 bg-white/3 px-3 py-2 rounded text-sm"
-              placeholder="Your name"
-            />
-            <button
-              onClick={() => {
-                // attempt to re-sync Telegram-provided user
-                const tg = (window as any).Telegram?.WebApp;
-                const u = tg?.initDataUnsafe?.user;
-                if (u?.first_name) {
-                  setUserName(u.first_name);
-                  try { window.localStorage.setItem('vigil_userName', u.first_name); } catch (e) {}
-                }
-              }}
-              className="px-3 py-2 text-xs bg-white/5 rounded"
-            >Sync</button>
+          <div className="mb-3 text-center text-sm text-zinc-300">
+            {userName && userName !== 'Pilgrim' ? (
+              <div>Signed in as <span className="font-semibold text-white">{userName}</span></div>
+            ) : (
+              <div className="text-xs text-zinc-500">Open this page in Telegram to authenticate your name</div>
+            )}
           </div>
 
           <button 
             onClick={triggerRitual}
-            disabled={isLighting}
+            disabled={isLighting || !userName || userName === 'Pilgrim'}
             className={`
               group relative w-full h-16 border border-white/10 bg-white/5 
               flex items-center justify-center gap-3 rounded-sm
