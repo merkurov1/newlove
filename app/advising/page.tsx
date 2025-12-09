@@ -113,23 +113,12 @@ export default function AdvisingPage() {
           </div>
         </section>
 
-        {/* 5. THE RULES & STATUS */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-24 border-t border-gray-200 pt-12">
-            <div>
-                <h2 className="font-mono text-xs font-bold uppercase tracking-widest mb-6">The Rules</h2>
-                <ul className="space-y-3 font-serif italic text-lg text-gray-700">
-                    <li>— No public portfolio.</li>
-                    <li>— No social media hype.</li>
-                    <li>— Only direct access.</li>
-                </ul>
-            </div>
-            <div>
-                <h2 className="font-mono text-xs font-bold uppercase tracking-widest mb-6">Current Status</h2>
-                <div className="bg-gray-100 p-6 text-center">
-                    <p className="font-mono text-sm text-gray-500 mb-2">AVAILABILITY 2025</p>
-                    <p className="text-2xl font-bold text-blue-600 animate-pulse">[ 1 SLOT OPEN ]</p>
-                </div>
-            </div>
+        {/* 5. THE RULES */}
+        <section className="mb-24 border-t border-gray-200 pt-12">
+          <h2 className="font-mono text-xs font-bold uppercase tracking-widest mb-6">The Rules</h2>
+          <p className="font-serif italic text-lg text-gray-700">
+            — No public portfolio. — No social media hype. — Only direct access.
+          </p>
         </section>
 
         {/* 6. CTA */}
