@@ -1,5 +1,7 @@
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Link from 'next/link'
+import HeroMotion from '@/components/advising/HeroMotion'
+import CaseStudyCard from '@/components/advising/CaseStudyCard'
 
 export const metadata = sanitizeMetadata({
   title: 'Love is a Key for All | Anton Merkurov',
@@ -15,30 +17,13 @@ export default function IsAKeyForAllPage() {
 
       <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
         
-        {/* Header: The Monument */}
+        {/* Header: The Monument (motion) */}
         <header className="mb-16 border-b border-gray-200 pb-8">
-           <div className="flex justify-between items-center mb-6">
-            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400">
-              Identity Protocol
-            </span>
-            <span className="font-mono text-[10px] tracking-widest uppercase text-gray-400">
-               Est. 19XX
-            </span>
-          </div>
-          <h1 
-            className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-8"
-            style={{ fontFamily: 'Playfair Display, Cormorant Garamond, serif' }}
-          >
-            Love is a<br/>key for all.
-          </h1>
-          <div className="flex flex-col gap-2">
-            <p className="font-mono text-xs font-bold tracking-[0.2em] uppercase text-black">
-              Anton Merkurov
-            </p>
-            <p className="text-xl font-serif italic text-gray-600">
-              Artist. Digital Architect. Humanist.
-            </p>
-          </div>
+          <HeroMotion
+            title={(<><span>Love is a</span><br/>key for all.</>)}
+            subtitle={<>Artist. Digital Architect. Humanist.</>}
+            status="Identity Protocol"
+          />
         </header>
 
         {/* Content: The Narrative */}
@@ -90,27 +75,13 @@ export default function IsAKeyForAllPage() {
               Featured Work
             </h3>
 
-            <Link href="/unframed" className="group block">
-              <div className="border border-gray-300 bg-white p-6 hover:border-black hover:shadow-2xl transition-all duration-500 relative overflow-hidden">
-                <div className="absolute top-0 right-0 bg-black text-white text-[9px] font-mono px-2 py-1 uppercase">
-                  Memoir
-                </div>
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h4 className="text-xl font-serif font-bold group-hover:text-red-600 transition-colors">
-                      UNFRAMED — Memoir by Anton Merkurov
-                    </h4>
-                    <p className="text-sm text-gray-500 font-mono mt-1">
-                      A nonlinear recollection of art, exile, and the small violences of modern life.
-                    </p>
-                  </div>
-                  <span className="text-2xl group-hover:translate-x-2 transition-transform duration-300">→</span>
-                </div>
-                <p className="text-sm text-gray-600 leading-relaxed max-w-lg">
-                  Read the memoir-styled presentation — a quiet, contemplative piece that folds memory into design.
-                </p>
-              </div>
-            </Link>
+            <CaseStudyCard
+              href="/unframed"
+              badge="Memoir"
+              title={<>UNFRAMED — Memoir by Anton Merkurov</>}
+              subtitle={<>A nonlinear recollection of art, exile, and the small violences of modern life.</>}
+              layoutId="case-unframed"
+            />
           </section>
 
           {/* Footer: The Seal */}
