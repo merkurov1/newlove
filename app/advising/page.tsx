@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import HeroMotion from '@/components/advising/HeroMotion'
+import CaseStudyCard from '@/components/advising/CaseStudyCard'
 
 export const metadata: Metadata = {
   title: 'The Private Office // Anton Merkurov',
@@ -25,20 +27,11 @@ export default function AdvisingPage() {
         
         {/* 1. HEADER: STATUS & IDENTITY */}
         <header className="mb-16 border-b border-gray-200 pb-8">
-          <div className="flex justify-between items-center mb-6">
-            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400">
-              Merkurov Private Office
-            </span>
-            <span className="font-mono text-[10px] tracking-widest uppercase text-green-600 border border-green-600 px-2 py-1 rounded-full animate-pulse">
-              System Online
-            </span>
-          </div>
-          <h1 className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-6">
-            The Private<br />Office.
-          </h1>
-          <p className="text-xl md:text-2xl font-serif italic text-gray-600">
-            Heritage Architecture for the Post-Digital Age.
-          </p>
+          <HeroMotion
+            title={(<><span>The Private</span><br />Office.</>)}
+            subtitle={<>Heritage Architecture for the Post-Digital Age.</>}
+            status="System Online"
+          />
         </header>
 
         {/* 2. MANIFESTO */}
@@ -61,51 +54,24 @@ export default function AdvisingPage() {
                 Capability Demonstration
             </h3>
             
-            <Link href="/case-study/fontana" className="group block">
-                <div className="border border-gray-300 bg-white p-6 hover:border-black hover:shadow-2xl transition-all duration-500 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 bg-black text-white text-[9px] font-mono px-2 py-1 uppercase">
-                        Declassified Sample
-                    </div>
-                    <div className="flex items-start justify-between mb-4">
-                        <div>
-                            <h4 className="text-xl font-serif font-bold group-hover:text-red-600 transition-colors">
-                                Case Study: The White Absolute
-                            </h4>
-                            <p className="text-sm text-gray-500 font-mono mt-1">
-                                Asset: Lucio Fontana (1968) // Valuation & Arbitrage
-                            </p>
-                        </div>
-                        <span className="text-2xl group-hover:translate-x-2 transition-transform duration-300">→</span>
-                    </div>
-                    <p className="text-sm text-gray-600 leading-relaxed max-w-lg">
-                        See how the Curator Engine analyzes liquidity, risk, and market arbitrage for institutional-grade assets. 
-                        This is the level of depth I bring to every acquisition.
-                    </p>
-                </div>
-            </Link>
+            <CaseStudyCard
+              href="/case-study/fontana"
+              badge="Declassified Sample"
+              title={<>Case Study: The White Absolute</>}
+              subtitle={<>Asset: Lucio Fontana (1968) // Valuation & Arbitrage</>}
+              layoutId="case-fontana"
+            />
             
             {/* Garcia Case Study (added) */}
-            <Link href="/case-study/garcia" className="group block mt-6">
-              <div className="border border-gray-300 bg-white p-6 hover:border-black hover:shadow-2xl transition-all duration-500 relative overflow-hidden">
-                <div className="absolute top-0 right-0 bg-black text-white text-[9px] font-mono px-2 py-1 uppercase">
-                  Case Study
-                </div>
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h4 className="text-xl font-serif font-bold group-hover:text-red-600 transition-colors">
-                      Case Study: The Anatomy of Quietude
-                    </h4>
-                    <p className="text-sm text-gray-500 font-mono mt-1">
-                      Asset: Aimée García (1995) // Provenance & Acquisition
-                    </p>
-                  </div>
-                  <span className="text-2xl group-hover:translate-x-2 transition-transform duration-300">→</span>
-                </div>
-                <p className="text-sm text-gray-600 leading-relaxed max-w-lg">
-                  A cinematic briefing and dossier on Lot 59 — material, dimensions, provenance and an acquisition protocol tailored for institutional collectors.
-                </p>
-              </div>
-            </Link>
+            <div className="mt-6">
+              <CaseStudyCard
+                href="/case-study/garcia"
+                badge="Case Study"
+                title={<>Case Study: The Anatomy of Quietude</>}
+                subtitle={<>Asset: Aimée García (1995) // Provenance & Acquisition</>}
+                layoutId="case-garcia"
+              />
+            </div>
         </section>
 
         {/* 4. SERVICES */}
