@@ -123,9 +123,7 @@ export default function ProposalPage() {
             <p className="font-serif text-2xl md:text-3xl text-zinc-600 max-w-2xl mx-auto leading-relaxed">
                 The Granite, The Glitch, and <br className="hidden md:block"/> The Ghost of an Empire.
             </p>
-            <div className="mt-4 flex justify-center">
-                <div className="h-8 w-[1px] bg-red-600" />
-            </div>
+            {/* divider removed to reduce vertical line/spacing */}
         </section>
 
         {/* --- SYNOPSIS GRID --- */}
