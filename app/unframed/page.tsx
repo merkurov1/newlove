@@ -319,7 +319,7 @@ export default function UnframedPage() {
                     <Link
                       key={i}
                       href="/unframed/proposal"
-                      className={`${base} group block bg-gradient-to-br from-red-700 via-red-600 to-red-500 hover:scale-[1.02] transform transition-all duration-200 ring-1 ring-red-600/30 shadow-sm hover:shadow-[0_8px_30px_rgba(220,38,38,0.12)]`
+                      className={`${base} group block bg-gradient-to-br from-red-700 via-red-600 to-red-500 hover:scale-[1.02] transform transition-all duration-200 ring-1 ring-red-600/30 shadow-sm hover:shadow-[0_8px_30px_rgba(220,38,38,0.12)]`}
                       aria-label="Proposal: view publishing proposal"
                     >
                       <s.icon size={16} className="text-red-100 mb-4 group-hover:text-white" />
