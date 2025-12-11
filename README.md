@@ -23,6 +23,8 @@ npm run dev
 
 ## 🗂️ Структура проекта
 
+Note: trivial whitespace/tiny-note change (auto-commit).
+
 ```
 ├── app/                # Next.js App Router, страницы и API
 │   ├── api/            # Серверные endpoints (Bluesky, Medium, YouTube, проекты, статьи)
