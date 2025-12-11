@@ -107,23 +107,23 @@ export default function ProposalPage() {
         </div>
       </header>
 
-      <main className="pt-32 pb-24 max-w-5xl mx-auto px-6">
+      <main className="pt-28 pb-24 max-w-5xl mx-auto px-6">
         
         {/* --- TITLE SECTION --- */}
-        <section className="mb-24 text-center">
+        <section className="mb-12 text-center">
             <h1 className="text-6xl md:text-9xl font-black tracking-tighter uppercase mb-6 font-sans leading-none">
                 Unframed
             </h1>
             <p className="font-serif text-2xl md:text-3xl text-zinc-600 max-w-2xl mx-auto leading-relaxed">
                 The Granite, The Glitch, and <br className="hidden md:block"/> The Ghost of an Empire.
             </p>
-            <div className="mt-12 flex justify-center">
+            <div className="mt-8 flex justify-center">
                 <div className="h-16 w-[1px] bg-red-600" />
             </div>
         </section>
 
         {/* --- SYNOPSIS GRID --- */}
-        <section className="grid md:grid-cols-12 gap-12 mb-32 border-t border-[#E5E5E5] pt-12">
+        <section className="grid md:grid-cols-12 gap-12 mb-24 border-t border-[#E5E5E5] pt-12">
             <div className="md:col-span-4">
                 <h3 className="font-mono text-xs uppercase tracking-widest text-zinc-400 mb-4">The Pitch</h3>
                 <div className="space-y-4 font-serif text-lg leading-relaxed text-zinc-800">
