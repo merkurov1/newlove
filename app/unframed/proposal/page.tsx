@@ -110,20 +110,26 @@ export default function ProposalPage() {
       <main className="pt-28 pb-24 max-w-5xl mx-auto px-6">
         
         {/* --- TITLE SECTION --- */}
-        <section className="mb-12 text-center">
-            <h1 className="text-6xl md:text-9xl font-black tracking-tighter uppercase mb-6 font-sans leading-none">
+        <section className="mb-6 text-center">
+            <h1 className="text-6xl md:text-9xl font-black tracking-tighter uppercase mb-4 font-sans leading-none">
                 Unframed
             </h1>
+            {/* Subheading mirrored from /unframed */}
+            <div className="flex items-center gap-6 mt-2 justify-center mb-4">
+               <div className="h-[2px] w-12 bg-red-600 shadow-[0_0_15px_red]" />
+               <p className="font-mono text-xs md:text-sm uppercase tracking-[0.3em] text-zinc-500">A Memoir by Anton Merkurov</p>
+               <div className="h-[2px] w-12 bg-red-600 shadow-[0_0_15px_red]" />
+            </div>
             <p className="font-serif text-2xl md:text-3xl text-zinc-600 max-w-2xl mx-auto leading-relaxed">
                 The Granite, The Glitch, and <br className="hidden md:block"/> The Ghost of an Empire.
             </p>
-            <div className="mt-8 flex justify-center">
-                <div className="h-16 w-[1px] bg-red-600" />
+            <div className="mt-4 flex justify-center">
+                <div className="h-8 w-[1px] bg-red-600" />
             </div>
         </section>
 
         {/* --- SYNOPSIS GRID --- */}
-        <section className="grid md:grid-cols-12 gap-12 mb-24 border-t border-[#E5E5E5] pt-12">
+        <section className="grid md:grid-cols-12 gap-12 mb-24 border-t border-[#E5E5E5] pt-6">
             <div className="md:col-span-4">
                 <h3 className="font-mono text-xs uppercase tracking-widest text-zinc-400 mb-4">The Pitch</h3>
                 <div className="space-y-4 font-serif text-lg leading-relaxed text-zinc-800">

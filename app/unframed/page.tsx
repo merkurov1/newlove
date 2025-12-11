@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal, Volume2, ArrowDown, Hash, Globe, FileText, Lock, ChevronDown } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Inter, Space_Mono, Playfair_Display } from 'next/font/google';
 
 // --- FONTS ---
@@ -309,13 +310,34 @@ export default function UnframedPage() {
                 { icon: FileText, label: 'Genre', val: 'Memoir / Noir' },
                 { icon: Globe, label: 'Rights', val: 'Available' },
                 { icon: Lock, label: 'Status', val: 'Proposal' },
-              ].map((s, i) => (
-                <div key={i} className="p-8 border-r border-b md:border-b-0 border-zinc-800 last:border-r-0">
-                   <s.icon size={16} className="text-zinc-600 mb-4" />
-                   <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">{s.label}</p>
-                   <p className="text-white font-mono text-lg">{s.val}</p>
-                </div>
-              ))}
+              ].map((s, i) => {
+                const isProposal = s.label === 'Status' && String(s.val).toLowerCase().includes('proposal');
+                const base = "p-8 border-r border-b md:border-b-0 border-zinc-800 last:border-r-0";
+
+                if (isProposal) {
+                  return (
+                    <Link
+                      key={i}
+                      href="/unframed/proposal"
+                      className={`${base} group block bg-gradient-to-br from-red-700 via-red-600 to-red-500 hover:scale-[1.02] transform transition-all duration-200 ring-1 ring-red-600/30 shadow-sm hover:shadow-[0_8px_30px_rgba(220,38,38,0.12)]`
+                      aria-label="Proposal: view publishing proposal"
+                    >
+                      <s.icon size={16} className="text-red-100 mb-4 group-hover:text-white" />
+                      <p className="text-[9px] text-red-100 uppercase tracking-widest mb-2 group-hover:text-white">{s.label}</p>
+                      <p className="text-white font-mono text-lg font-bold tracking-tight">{s.val}</p>
+                      <span className="absolute -inset-px rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                    </Link>
+                  );
+                }
+
+                return (
+                  <div key={i} className={base}>
+                    <s.icon size={16} className="text-zinc-600 mb-4" />
+                    <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">{s.label}</p>
+                    <p className="text-white font-mono text-lg">{s.val}</p>
+                  </div>
+                );
+              })}
            </div>
         </section>
 
