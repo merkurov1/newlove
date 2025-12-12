@@ -157,13 +157,18 @@ export default async function SelectionPage() {
                       </div>
                       
                       {previewImage ? (
-                        <Image
-                          src={previewImage}
-                          alt={article.title}
-                          fill
-                          className="object-cover w-full h-full grayscale group-hover:grayscale-0 transition-all duration-500 ease-in-out transform group-hover:scale-105"
-                          sizes="(max-width: 1024px) 100vw, 25vw"
-                        />
+                        <>
+                          <Image
+                            src={previewImage}
+                            alt={article.title}
+                            fill
+                            className="object-cover w-full h-full grayscale group-hover:grayscale-0 transition-all duration-500 ease-in-out transform group-hover:scale-105"
+                            sizes="(max-width: 1024px) 100vw, 25vw"
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-white text-[10px] font-mono px-2 py-1 truncate">
+                            {previewImage}
+                          </div>
+                        </>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-300 font-mono text-xs uppercase tracking-widest">
                           [ NO VISUAL ]
