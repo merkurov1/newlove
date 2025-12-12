@@ -14,7 +14,7 @@ const bot = new Bot(token);
 const MY_ID = Number(process.env.MY_TELEGRAM_ID);
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const GOOGLE_KEY = process.env.GOOGLE_API_KEY;
-const MODEL_NAME = 'gemini-2.0-flash'; 
+const MODEL_NAME = 'gemini-2.0-flash';
 const RESEARCH_AGENT = 'deep-research-pro-preview-12-2025';
 
 // --- MEMORY ---
@@ -26,26 +26,25 @@ const SYSTEM_PROMPT = `
 Отвечай сжато, по делу.
 `;
 
-// --- MIDDLEWARE: SECURITY ---
+// --- MIDDLEWARE ---
 bot.use(async (ctx, next) => {
     if (ctx.callbackQuery) return next();
-    if (ctx.from?.id !== MY_ID) return; 
+    if (ctx.from?.id !== MY_ID) return;
     await next();
 });
 
 // ==========================================
-// 1. DEEP RESEARCH MODULE (FULL FIX)
+// 1. RESEARCH MODULE
 // ==========================================
 
-// A. INIT RESEARCH
+// A. INIT TASK
 bot.command("research", async (ctx) => {
     const topic = ctx.match;
     if (!topic) return ctx.reply("⚠️ Syntax: `/research Topic`", { parse_mode: 'Markdown' });
 
-    const statusMsg = await ctx.reply(`🕵️‍♂️ <b>Deep Research Init:</b> ${topic}...`, { parse_mode: 'HTML' });
+    const statusMsg = await ctx.reply(`🕵️‍♂️ <b>Init Research:</b> ${topic}...`, { parse_mode: 'HTML' });
 
     try {
-        // 1. Request (v1beta, Header Auth)
         const url = "https://generativelanguage.googleapis.com/v1beta/interactions";
         
         const payload = {
@@ -58,93 +57,108 @@ bot.command("research", async (ctx) => {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'x-goog-api-key': GOOGLE_KEY! // AUTH HERE
+                'x-goog-api-key': GOOGLE_KEY! 
             },
             body: JSON.stringify(payload)
         });
         
         const data = await res.json();
 
-        // 2. Error Check
         if (data.error) {
-            console.error("API Error:", data.error);
             return ctx.api.editMessageText(
-                ctx.chat.id, 
-                statusMsg.message_id, 
-                `❌ <b>API Error</b>\nCode: ${data.error.code}\nMessage: ${data.error.message}`,
-                { parse_mode: 'HTML' }
+                ctx.chat.id, statusMsg.message_id, 
+                `❌ API Error: ${data.error.message}`
             );
         }
 
-        // 3. Get ID (Fallback to 'id' if 'name' is missing)
         const interactionId = data.name || data.id;
 
         if (!interactionId) {
-             return ctx.api.editMessageText(
-                ctx.chat.id, 
-                statusMsg.message_id, 
-                `❌ <b>Unknown Response</b>\n${JSON.stringify(data).substring(0, 500)}`
-            );
+             return ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, `❌ Unknown Response: ${JSON.stringify(data)}`);
         }
 
-        // 4. Save to DB
+        // Save DB
         try {
             const supabase = getServerSupabaseClient({ useServiceRole: true });
             await supabase.from('research_tasks').insert({
                 id: interactionId,
                 topic: topic,
-                status: data.status || 'created'
+                status: 'created'
             });
-        } catch (e) { console.error("DB Error:", e); }
+        } catch {}
 
-        // 5. Create UI
+        // UI
         const callbackData = `check_res:${interactionId}`;
         const isIdTooLong = new TextEncoder().encode(callbackData).length > 64;
 
         if (isIdTooLong) {
-             // FALLBACK FOR LONG IDs: Ask user to use /check command
              await ctx.api.editMessageText(
                 ctx.chat.id,
                 statusMsg.message_id,
-                `✅ <b>Task Created</b>\n\nID is too long for buttons.\nCopy and use command:\n\n<code>/check ${interactionId}</code>`,
+                `✅ <b>Started</b>\nID too long for button.\nUse:\n<code>/check ${interactionId}</code>`,
                 { parse_mode: 'HTML' }
             );
         } else {
-            // Standard Button
             const keyboard = new InlineKeyboard().text("🔄 Check Status", callbackData);
             await ctx.api.editMessageText(
                 ctx.chat.id,
                 statusMsg.message_id,
-                `✅ <b>Task Created</b>\nID: <code>${interactionId}</code>\nWait 2-5 min.`,
+                `✅ <b>Started</b>\nID: <code>${interactionId}</code>`,
                 { parse_mode: 'HTML', reply_markup: keyboard }
             );
         }
 
     } catch (e: any) {
-        await ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, `❌ System Error: ${e.message}`);
+        await ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, `❌ Error: ${e.message}`);
     }
 });
 
-// B. MANUAL CHECK (For Long IDs)
+// B. DEBUG CHECK COMMAND (Use this if button fails!)
 bot.command("check", async (ctx) => {
-    const interactionId = ctx.match; // /check <ID>
-    if (!interactionId) return ctx.reply("⚠️ Syntax: `/check <LONG_ID>`");
+    const idInput = ctx.match;
+    if (!idInput) return ctx.reply("Syntax: `/check <ID>`", { parse_mode: 'Markdown' });
 
-    await ctx.reply(`🕵️‍♂️ Checking...`, { parse_mode: 'HTML' });
-    await checkStatus(ctx, interactionId.trim());
+    const cleanId = idInput.trim();
+    await ctx.reply(`🐞 <b>DEBUG MODE</b>\nID: ${cleanId.substring(0, 15)}...`, { parse_mode: 'HTML' });
+
+    try {
+        const resourcePath = cleanId.includes('interactions/') ? cleanId : `interactions/${cleanId}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/${resourcePath}`;
+        
+        await ctx.reply(`🔗 GET ${url}`);
+
+        const res = await fetch(url, {
+            method: 'GET',
+            headers: { 'x-goog-api-key': GOOGLE_KEY! }
+        });
+
+        await ctx.reply(`📡 HTTP ${res.status}`);
+
+        const rawText = await res.text();
+        
+        // 1. DUMP RAW JSON (Это самое важное)
+        // Обрезаем до 3500 символов, чтобы влезло в сообщение
+        await ctx.reply(`📦 <b>RAW JSON:</b>\n\n${rawText.substring(0, 3500)}`, { parse_mode: 'HTML' });
+
+        // 2. TRY PARSE
+        const data = JSON.parse(rawText);
+        const status = data.status || "NO_STATUS";
+        
+        if (status === "succeeded" || status === "completed") {
+             const outputText = data.outputs?.[0]?.text || "No text found in outputs.";
+             await ctx.reply(`📄 <b>Extracted Text:</b>\n${outputText.substring(0, 500)}... (truncated)`);
+        }
+
+    } catch (e: any) {
+        await ctx.reply(`☠️ <b>CRASH:</b>\n${e.message}`);
+    }
 });
 
-// C. BUTTON CHECK (For Short IDs)
+// C. STANDARD BUTTON CHECK
 bot.callbackQuery(/^check_res:(.+)/, async (ctx) => {
     const interactionId = ctx.match[1];
-    await checkStatus(ctx, interactionId, true); // true = isCallback
-});
-
-// D. UNIVERSAL CHECKER FUNCTION (BULLETPROOF VERSION)
-async function checkStatus(ctx: any, interactionId: string, isCallback = false) {
+    
     try {
-        if (!isCallback) await ctx.reply("🛰 Connecting to Google Grid...", { parse_mode: 'HTML' });
-
         const resourcePath = interactionId.includes('interactions/') ? interactionId : `interactions/${interactionId}`;
         const url = `https://generativelanguage.googleapis.com/v1beta/${resourcePath}`;
 
@@ -154,81 +168,92 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
         });
         
         const data = await res.json();
+        const status = data.status;
 
-        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-
-        const status = data.status; // "in_progress", "succeeded", "failed"
-        
         if (status === "succeeded" || status === "completed") {
-            // Ищем текст где угодно
-            const outputText = data.outputs?.[0]?.text || JSON.stringify(data.outputs, null, 2) || "Empty result.";
-            
-            // 1. Сначала сообщаем, что скачали
-            if (isCallback) await ctx.deleteMessage();
-            await ctx.reply(`✅ <b>DOWNLOAD COMPLETE.</b>\nSize: ${outputText.length} chars.\nSending stream...`, { parse_mode: 'HTML' });
-            
-            // 2. Режем на куски
+            const outputText = data.outputs?.[0]?.text || "Empty.";
             const chunks = outputText.match(/.{1,4000}/g) || [outputText];
             
-            // 3. Отправляем БЕЗ Markdown (Plain Text), чтобы точно дошло
+            await ctx.deleteMessage();
+            await ctx.reply(`📚 <b>REPORT READY</b>`, { parse_mode: 'HTML' });
+            
             for (const chunk of chunks) {
-                // Ждем небольшую паузу, чтобы Telegram не забанил за спам (429 Too Many Requests)
-                await new Promise(r => setTimeout(r, 500)); 
-                await ctx.reply(chunk); // <--- БЕЗ parse_mode!
+                // Отправляем БЕЗ парсинга (Plain Text), чтобы избежать ошибок Markdown
+                await ctx.reply(chunk); 
             }
             
-            await ctx.reply("🏁 <b>End of Report.</b>", { parse_mode: 'HTML' });
-            
-            // Close Ticket
+            // DB Update
             try {
                 const supabase = getServerSupabaseClient({ useServiceRole: true });
                 await supabase.from('research_tasks').update({ status: 'completed' }).eq('id', interactionId);
             } catch {}
 
         } else if (status === "failed") {
-            if (isCallback) await ctx.answerCallbackQuery("FAILED ❌");
-            await ctx.reply(`❌ <b>FAILED:</b>\n${JSON.stringify(data.error || data)}`, { parse_mode: 'HTML' });
+            await ctx.answerCallbackQuery("FAILED");
+            await ctx.reply(`❌ Failed: ${JSON.stringify(data.error)}`);
         } else {
-            const msg = `Status: ${status}... ⏳`;
-            if (isCallback) await ctx.answerCallbackQuery(msg);
-            else await ctx.reply(msg);
+            await ctx.answerCallbackQuery(`Status: ${status || 'Unknown'} ⏳`);
         }
 
     } catch (e: any) {
-        if (isCallback) await ctx.answerCallbackQuery("Error");
-        await ctx.reply(`Check Error: ${e.message}`);
+        await ctx.answerCallbackQuery("Error");
     }
-}
+});
+
 // ==========================================
-// 2. PUBLISHER MODULE
+// 2. PUBLISHER & CHAT
 // ==========================================
 
 bot.on(':photo', async (ctx) => {
     const photos = ctx.message?.photo;
     const photo = photos?.at?.(-1)?.file_id;
     if (!photo) return;
-
     drafts[MY_ID] = { photo, caption: '' };
-
-    await ctx.reply(
-        '📸 <b>PHOTO SECURED.</b>\nSend caption (MarkdownV2).',
-        { parse_mode: 'HTML' }
-    );
+    await ctx.reply('📸 Photo secured. Send text.');
 });
 
-bot.callbackQuery("pub_post", async (ctx) => {
-    if (!drafts[MY_ID] || !CHANNEL_ID) return ctx.answerCallbackQuery("No draft");
-    try {
-        await ctx.api.sendPhoto(CHANNEL_ID, drafts[MY_ID].photo!, {
-            caption: drafts[MY_ID].caption,
-            parse_mode: 'MarkdownV2'
-        });
-        await ctx.answerCallbackQuery("Published!");
-        await ctx.reply("✅ Published.");
-        delete drafts[MY_ID];
-    } catch (e: any) {
-        await ctx.reply(`Publish Error: ${e.description}`);
+bot.on('message:text', async (ctx) => {
+    const text = ctx.message?.text || '';
+
+    // PUBLISHER
+    if (drafts[MY_ID] && drafts[MY_ID].photo) {
+        drafts[MY_ID].caption = text;
+        const keyboard = new InlineKeyboard().text("🚀 PUBLISH", "pub_post").text("❌ CANCEL", "pub_cancel");
+        try {
+            await ctx.replyWithPhoto(drafts[MY_ID].photo!, { caption: text, parse_mode: 'MarkdownV2', reply_markup: keyboard });
+        } catch {
+            await ctx.reply("⚠️ Markdown error. Posting plain text preview.");
+            await ctx.replyWithPhoto(drafts[MY_ID].photo!, { caption: text, reply_markup: keyboard });
+        }
+        return;
     }
+
+    // AI CHAT
+    const aiChatId = ctx.chat?.id;
+    if (aiChatId) await ctx.api.sendChatAction(aiChatId, 'typing');
+    
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GOOGLE_KEY}`;
+        const payload = {
+            contents: [{ role: 'user', parts: [{ text }] }],
+            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }
+        };
+        const res = await fetch(url, { method: 'POST', body: JSON.stringify(payload) });
+        const data = await res.json();
+        const aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (aiResponse) await ctx.reply(aiResponse, { parse_mode: 'Markdown' });
+    } catch (err: any) {
+        await ctx.reply(`Error: ${err.message}`);
+    }
+});
+
+// CALLBACKS
+bot.callbackQuery("pub_post", async (ctx) => {
+    if (!drafts[MY_ID] || !CHANNEL_ID) return;
+    await ctx.api.sendPhoto(CHANNEL_ID, drafts[MY_ID].photo!, { caption: drafts[MY_ID].caption, parse_mode: 'MarkdownV2' });
+    await ctx.answerCallbackQuery("Done");
+    delete drafts[MY_ID];
 });
 
 bot.callbackQuery("pub_cancel", async (ctx) => {
@@ -237,81 +262,9 @@ bot.callbackQuery("pub_cancel", async (ctx) => {
     await ctx.deleteMessage();
 });
 
-// ==========================================
-// 3. CHAT MODULE
-// ==========================================
-
-bot.on('message:text', async (ctx) => {
-    const text = ctx.message?.text || '';
-    
-    // A. WHISPERS
-    const replyTo = ctx.message?.reply_to_message?.text;
-    if (replyTo && replyTo.includes('whisper-id:')) {
-        const m = replyTo.match(/whisper-id:(\S+)/);
-        if (m) {
-            const whisperId = m[1];
-            try {
-                const supabase = getServerSupabaseClient({ useServiceRole: true });
-                const { data: whisper } = await supabase.from('whispers').select('*').eq('id', whisperId).single();
-                if (whisper && whisper.telegram_user_id) {
-                    await ctx.api.sendMessage(whisper.telegram_user_id, text);
-                    await supabase.from('whispers').update({ my_response: text, status: 'answered' }).eq('id', whisperId);
-                    return ctx.reply('✅ Reply sent.');
-                }
-            } catch (e) { return ctx.reply('❌ DB Error.'); }
-        }
-    }
-
-    // B. PUBLISHER DRAFT
-    if (drafts[MY_ID] && drafts[MY_ID].photo) {
-        drafts[MY_ID].caption = text;
-        const keyboard = new InlineKeyboard()
-            .text("🚀 PUBLISH", "pub_post")
-            .text("❌ CANCEL", "pub_cancel");
-
-        try {
-            await ctx.replyWithPhoto(drafts[MY_ID].photo!, {
-                caption: text,
-                parse_mode: 'MarkdownV2',
-                reply_markup: keyboard
-            });
-        } catch (e: any) {
-            await ctx.reply(`❌ Markdown Error: ${e.description}`);
-        }
-        return;
-    }
-
-    // C. AI CHAT
-    const aiChatId = ctx.chat?.id;
-    if (aiChatId) await ctx.api.sendChatAction(aiChatId, 'typing');
-    
-    try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GOOGLE_KEY}`;
-        const payload = {
-            contents: [{ role: 'user', parts: [{ text }] }],
-            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            generationConfig: { temperature: 0.7 }
-        };
-        const res = await fetch(url, { method: 'POST', body: JSON.stringify(payload) });
-        const data = await res.json();
-        const aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        if (aiResponse) await ctx.reply(aiResponse, { parse_mode: 'Markdown' });
-    } catch (err: any) {
-        await ctx.reply(`🧠 Error: ${err.message}`);
-    }
-});
-
-// ==========================================
-// SERVER HANDLER
-// ==========================================
+// SERVER
 const handleUpdate = webhookCallback(bot, 'std/http');
-
 export async function POST(req: Request) {
-    try {
-        return await handleUpdate(req);
-    } catch (e) {
-        console.error(e);
-        return new Response('Error', { status: 500 });
-    }
+    try { return await handleUpdate(req); }
+    catch (e) { return new Response('Error', { status: 500 }); }
 }
