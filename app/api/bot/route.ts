@@ -38,7 +38,7 @@ bot.use(async (ctx, next) => {
 });
 
 // ==========================================
-// 1. DEEP RESEARCH MODULE (GOOGLE v1beta)
+// 1. DEEP RESEARCH MODULE (FIXED JSON PARSING)
 // ==========================================
 
 // CMD: /research <Topic>
@@ -49,7 +49,7 @@ bot.command("research", async (ctx) => {
     const statusMsg = await ctx.reply(`🕵️‍♂️ <b>Deep Research Init:</b> ${topic}...`, { parse_mode: 'HTML' });
 
     try {
-        // 1. Prepare Request (v1beta, Auth via Header)
+        // 1. Prepare Request
         const url = "https://generativelanguage.googleapis.com/v1beta/interactions";
         
         const payload = {
@@ -80,7 +80,10 @@ bot.command("research", async (ctx) => {
             );
         }
 
-        if (!data.name) {
+        // FIX: Берем ID или Name
+        const interactionId = data.name || data.id;
+
+        if (!interactionId) {
              return ctx.api.editMessageText(
                 ctx.chat.id, 
                 statusMsg.message_id, 
@@ -88,22 +91,20 @@ bot.command("research", async (ctx) => {
             );
         }
 
-        const interactionId = data.name; // Format: "interactions/12345..."
-
-        // 3. Save to Supabase (Optional but recommended)
+        // 3. Save to Supabase
         try {
             const supabase = getServerSupabaseClient({ useServiceRole: true });
             await supabase.from('research_tasks').insert({
                 id: interactionId,
                 topic: topic,
-                status: 'running'
+                status: data.status || 'created'
             });
         } catch (e) { 
             console.error("DB Error (ignoring):", e); 
         }
 
         // 4. Create UI
-        // Telegram callback payload limit = 64 bytes.
+        // ID может быть длинным, проверяем лимит
         const callbackData = `check_res:${interactionId}`;
         const isIdTooLong = new TextEncoder().encode(callbackData).length > 64;
 
@@ -134,9 +135,10 @@ bot.callbackQuery(/^check_res:(.+)/, async (ctx) => {
     const interactionId = ctx.match[1];
     
     try {
-        // GET Request (Auth via Header)
-        // interactionId usually includes "interactions/", so just append to base
-        const url = `https://generativelanguage.googleapis.com/v1beta/${interactionId}`;
+        // GET Request
+        // Если ID не содержит 'interactions/', добавляем его для URL
+        const resourcePath = interactionId.includes('interactions/') ? interactionId : `interactions/${interactionId}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/${resourcePath}`;
 
         const res = await fetch(url, {
             method: 'GET',
@@ -147,37 +149,38 @@ bot.callbackQuery(/^check_res:(.+)/, async (ctx) => {
         
         const data = await res.json();
 
-        if (data.error) throw new Error(data.error.message);
+        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
 
-        const status = data.status; // RUNNING, COMPLETED, FAILED
+        const status = data.status; // "in_progress", "succeeded", "failed"
         
-        if (status === "COMPLETED") {
-            const outputText = data.outputs?.[0]?.text || "Empty result.";
-            // Split into chunks (Telegram limit 4096)
+        // FIX: Проверяем разные статусы успеха
+        if (status === "succeeded" || status === "completed" || status === "COMPLETED") {
+            // Ищем output. Обычно он в outputs[0].text, но структура может меняться
+            const outputText = data.outputs?.[0]?.text || JSON.stringify(data.outputs) || "Empty result.";
+            
+            // Нарезка на чанки
             const chunks = outputText.match(/.{1,4000}/g) || [outputText];
             
-            await ctx.deleteMessage(); // Remove waiting button
+            await ctx.deleteMessage();
             await ctx.reply(`📚 <b>REPORT READY</b>`, { parse_mode: 'HTML' });
             
             for (const chunk of chunks) {
                 try {
-                    // Try Markdown first
                     await ctx.reply(chunk, { parse_mode: 'Markdown' });
                 } catch {
-                    // Fallback to plain text if Markdown fails
                     await ctx.reply(chunk); 
                 }
             }
             
-            // Close Ticket in DB
+            // Close Ticket
             const supabase = getServerSupabaseClient({ useServiceRole: true });
             await supabase.from('research_tasks').update({ status: 'completed' }).eq('id', interactionId);
 
-        } else if (status === "FAILED") {
+        } else if (status === "failed" || status === "FAILED") {
             await ctx.answerCallbackQuery("FAILED ❌");
             await ctx.reply(`❌ Research Failed: ${JSON.stringify(data.error || data)}`);
         } else {
-            // Still Running
+            // "in_progress" и любые другие
             await ctx.answerCallbackQuery(`Status: ${status}... ⏳`);
         }
 
@@ -186,7 +189,6 @@ bot.callbackQuery(/^check_res:(.+)/, async (ctx) => {
         await ctx.reply(`Check Error: ${e.message}`);
     }
 });
-
 
 // ==========================================
 // 2. PUBLISHER MODULE (Channel Posting)
