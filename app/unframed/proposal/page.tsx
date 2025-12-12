@@ -215,7 +215,6 @@ export default function ProposalPage() {
                     </p>
                 </div>
                 <div className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest">
-                    Based in: Belgrade / London <br/>
                     Status: Unframed
                 </div>
              </div>
