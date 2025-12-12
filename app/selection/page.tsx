@@ -56,6 +56,11 @@ export default async function SelectionPage() {
         }
       }
 
+      // Collapse duplicate slashes in URL paths (preserve protocol "https://")
+      if (preview && typeof preview === 'string') {
+        preview = preview.replace(/([^:]\/)\/+/g, '$1');
+      }
+
       // Если URL относительный — попытаемся его превратить в полный URL, используя переменные окружения Supabase
       if (preview && !/^https?:\/\//i.test(preview)) {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
