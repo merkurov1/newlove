@@ -392,13 +392,23 @@ function ArticleComponent({ article }: { article: any }) {
 
   const previewImage = extractFirstImage(content);
 
+  // Normalize preview URL to collapse duplicate slashes (preserve protocol)
+  let normalizedPreview = previewImage;
+  try {
+    if (normalizedPreview && typeof normalizedPreview === 'string') {
+      normalizedPreview = normalizedPreview.replace(/([^:]\/)\/+/g, '$1');
+    }
+  } catch (e) {
+    normalizedPreview = previewImage;
+  }
+
   return (
     <div className="min-h-screen bg-white flex flex-col items-center py-8 sm:py-16 px-4">
       {/* Component 1: The Visual - Max width 1200px */}
-      {previewImage && (
+      {normalizedPreview && (
         <div className="w-full max-w-7xl mb-8 sm:mb-12 px-4">
           <Image
-            src={previewImage}
+            src={normalizedPreview}
             alt={title || artist}
             width={1200}
             height={900}
