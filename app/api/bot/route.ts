@@ -34,10 +34,10 @@ bot.use(async (ctx, next) => {
 });
 
 // ==========================================
-// 1. RESEARCH MODULE
+// 1. DEEP RESEARCH (PRODUCTION)
 // ==========================================
 
-// A. INIT TASK
+// A. INIT
 bot.command("research", async (ctx) => {
     const topic = ctx.match;
     if (!topic) return ctx.reply("⚠️ Syntax: `/research Topic`", { parse_mode: 'Markdown' });
@@ -65,19 +65,17 @@ bot.command("research", async (ctx) => {
         const data = await res.json();
 
         if (data.error) {
-            return ctx.api.editMessageText(
-                ctx.chat.id, statusMsg.message_id, 
-                `❌ API Error: ${data.error.message}`
-            );
+            return ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, `❌ API Error: ${data.error.message}`);
         }
 
+        // Google returns 'name' (resource path) OR 'id'
         const interactionId = data.name || data.id;
 
         if (!interactionId) {
-             return ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, `❌ Unknown Response: ${JSON.stringify(data)}`);
+             return ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, `❌ Error: No ID returned.`);
         }
 
-        // Save DB
+        // Save to DB
         try {
             const supabase = getServerSupabaseClient({ useServiceRole: true });
             await supabase.from('research_tasks').insert({
@@ -87,7 +85,7 @@ bot.command("research", async (ctx) => {
             });
         } catch {}
 
-        // UI
+        // UI Logic
         const callbackData = `check_res:${interactionId}`;
         const isIdTooLong = new TextEncoder().encode(callbackData).length > 64;
 
@@ -95,7 +93,7 @@ bot.command("research", async (ctx) => {
              await ctx.api.editMessageText(
                 ctx.chat.id,
                 statusMsg.message_id,
-                `✅ <b>Started</b>\nID too long for button.\nUse:\n<code>/check ${interactionId}</code>`,
+                `✅ <b>Started</b>\n\nID is long. Use command:\n<code>/check ${interactionId}</code>`,
                 { parse_mode: 'HTML' }
             );
         } else {
@@ -109,56 +107,28 @@ bot.command("research", async (ctx) => {
         }
 
     } catch (e: any) {
-        await ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, `❌ Error: ${e.message}`);
+        await ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, `❌ Sys Error: ${e.message}`);
     }
 });
 
-// B. DEBUG CHECK COMMAND (Use this if button fails!)
+// B. MANUAL CHECK (/check <ID>)
 bot.command("check", async (ctx) => {
     const idInput = ctx.match;
-    if (!idInput) return ctx.reply("Syntax: `/check <ID>`", { parse_mode: 'Markdown' });
-
-    const cleanId = idInput.trim();
-    await ctx.reply(`🐞 <b>DEBUG MODE</b>\nID: ${cleanId.substring(0, 15)}...`, { parse_mode: 'HTML' });
-
-    try {
-        const resourcePath = cleanId.includes('interactions/') ? cleanId : `interactions/${cleanId}`;
-        const url = `https://generativelanguage.googleapis.com/v1beta/${resourcePath}`;
-        
-        await ctx.reply(`🔗 GET ${url}`);
-
-        const res = await fetch(url, {
-            method: 'GET',
-            headers: { 'x-goog-api-key': GOOGLE_KEY! }
-        });
-
-        await ctx.reply(`📡 HTTP ${res.status}`);
-
-        const rawText = await res.text();
-        
-        // 1. DUMP RAW JSON (Это самое важное)
-        // Обрезаем до 3500 символов, чтобы влезло в сообщение
-        await ctx.reply(`📦 <b>RAW JSON:</b>\n\n${rawText.substring(0, 3500)}`, { parse_mode: 'HTML' });
-
-        // 2. TRY PARSE
-        const data = JSON.parse(rawText);
-        const status = data.status || "NO_STATUS";
-        
-        if (status === "succeeded" || status === "completed") {
-             const outputText = data.outputs?.[0]?.text || "No text found in outputs.";
-             await ctx.reply(`📄 <b>Extracted Text:</b>\n${outputText.substring(0, 500)}... (truncated)`);
-        }
-
-    } catch (e: any) {
-        await ctx.reply(`☠️ <b>CRASH:</b>\n${e.message}`);
-    }
+    if (!idInput) return ctx.reply("Syntax: `/check <ID>`");
+    await checkStatus(ctx, idInput.trim(), false);
 });
 
-// C. STANDARD BUTTON CHECK
+// C. BUTTON CHECK
 bot.callbackQuery(/^check_res:(.+)/, async (ctx) => {
     const interactionId = ctx.match[1];
-    
+    await checkStatus(ctx, interactionId, true);
+});
+
+// D. CORE LOGIC (SAFE SEND)
+async function checkStatus(ctx: any, interactionId: string, isCallback = false) {
     try {
+        if (!isCallback) await ctx.reply("🛰 Connecting...");
+
         const resourcePath = interactionId.includes('interactions/') ? interactionId : `interactions/${interactionId}`;
         const url = `https://generativelanguage.googleapis.com/v1beta/${resourcePath}`;
 
@@ -168,40 +138,68 @@ bot.callbackQuery(/^check_res:(.+)/, async (ctx) => {
         });
         
         const data = await res.json();
-        const status = data.status;
+        
+        // Handle API Errors
+        if (data.error) {
+            const msg = `❌ API Error: ${data.error.message}`;
+            if (isCallback) await ctx.answerCallbackQuery("Error");
+            return ctx.reply(msg);
+        }
 
+        const status = data.status; // "completed", "succeeded", "in_progress"
+        
         if (status === "succeeded" || status === "completed") {
-            const outputText = data.outputs?.[0]?.text || "Empty.";
-            const chunks = outputText.match(/.{1,4000}/g) || [outputText];
+            const outputText = data.outputs?.[0]?.text || "Empty result.";
             
-            await ctx.deleteMessage();
-            await ctx.reply(`📚 <b>REPORT READY</b>`, { parse_mode: 'HTML' });
+            if (isCallback) await ctx.deleteMessage();
+            else await ctx.reply("✅ <b>DOWNLOADED</b>", { parse_mode: 'HTML' });
             
+            // --- SAFE SENDING LOOP ---
+            const chunks = outputText.match(/.{1,3800}/g) || [outputText]; // Margin for safety
+
             for (const chunk of chunks) {
-                // Отправляем БЕЗ парсинга (Plain Text), чтобы избежать ошибок Markdown
-                await ctx.reply(chunk); 
+                try {
+                    // 1. Try Markdown (Prettiest)
+                    await ctx.reply(chunk, { parse_mode: 'Markdown' });
+                } catch (mdError) {
+                    try {
+                         // 2. If fails, try HTML (Google sometimes sends HTML?)
+                         await ctx.reply(chunk, { parse_mode: 'HTML' });
+                    } catch (htmlError) {
+                         // 3. Fallback: PLAIN TEXT (Guaranteed delivery)
+                         await ctx.reply(chunk); 
+                    }
+                }
+                // Anti-spam delay
+                await new Promise(r => setTimeout(r, 500));
             }
             
-            // DB Update
+            await ctx.reply("🏁 <b>End of Report.</b>", { parse_mode: 'HTML' });
+
+            // Close DB Ticket
             try {
                 const supabase = getServerSupabaseClient({ useServiceRole: true });
                 await supabase.from('research_tasks').update({ status: 'completed' }).eq('id', interactionId);
             } catch {}
 
         } else if (status === "failed") {
-            await ctx.answerCallbackQuery("FAILED");
-            await ctx.reply(`❌ Failed: ${JSON.stringify(data.error)}`);
+            if (isCallback) await ctx.answerCallbackQuery("Failed");
+            await ctx.reply(`❌ <b>FAILED</b>\n${JSON.stringify(data)}`, { parse_mode: 'HTML' });
         } else {
-            await ctx.answerCallbackQuery(`Status: ${status || 'Unknown'} ⏳`);
+            // Still running
+            const msg = `Status: ${status}... ⏳`;
+            if (isCallback) await ctx.answerCallbackQuery(msg);
+            else await ctx.reply(msg);
         }
 
     } catch (e: any) {
-        await ctx.answerCallbackQuery("Error");
+        if (isCallback) await ctx.answerCallbackQuery("Error");
+        await ctx.reply(`System Error: ${e.message}`);
     }
-});
+}
 
 // ==========================================
-// 2. PUBLISHER & CHAT
+// 2. STANDARD MODULES
 // ==========================================
 
 bot.on(':photo', async (ctx) => {
@@ -222,7 +220,7 @@ bot.on('message:text', async (ctx) => {
         try {
             await ctx.replyWithPhoto(drafts[MY_ID].photo!, { caption: text, parse_mode: 'MarkdownV2', reply_markup: keyboard });
         } catch {
-            await ctx.reply("⚠️ Markdown error. Posting plain text preview.");
+            await ctx.reply("⚠️ Markdown Error. Preview (Plain):");
             await ctx.replyWithPhoto(drafts[MY_ID].photo!, { caption: text, reply_markup: keyboard });
         }
         return;
@@ -248,7 +246,6 @@ bot.on('message:text', async (ctx) => {
     }
 });
 
-// CALLBACKS
 bot.callbackQuery("pub_post", async (ctx) => {
     if (!drafts[MY_ID] || !CHANNEL_ID) return;
     await ctx.api.sendPhoto(CHANNEL_ID, drafts[MY_ID].photo!, { caption: drafts[MY_ID].caption, parse_mode: 'MarkdownV2' });
