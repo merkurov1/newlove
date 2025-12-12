@@ -3,7 +3,7 @@ import { getServerSupabaseClient } from '@/lib/serverAuth';
 
 // --- CONFIG ---
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs'; // Node.js нужен для fetch и стабильности
+export const runtime = 'nodejs';
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) throw new Error('TELEGRAM_BOT_TOKEN is unset');
@@ -14,10 +14,10 @@ const bot = new Bot(token);
 const MY_ID = Number(process.env.MY_TELEGRAM_ID);
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const GOOGLE_KEY = process.env.GOOGLE_API_KEY;
-const MODEL_NAME = 'gemini-2.0-flash'; // Для быстрого чата
-const RESEARCH_AGENT = 'deep-research-pro-preview-12-2025'; // Для /research
+const MODEL_NAME = 'gemini-2.0-flash'; 
+const RESEARCH_AGENT = 'deep-research-pro-preview-12-2025';
 
-// --- MEMORY (Drafts) ---
+// --- MEMORY ---
 const drafts: Record<number, { photo?: string; caption?: string }> = {};
 
 const SYSTEM_PROMPT = `
@@ -28,20 +28,16 @@ const SYSTEM_PROMPT = `
 
 // --- MIDDLEWARE: SECURITY ---
 bot.use(async (ctx, next) => {
-    // Разрешаем колбэки (нажатия кнопок) и сообщения только от Админа
-    if (ctx.callbackQuery) {
-        // Можно добавить проверку ctx.callbackQuery.from.id, если параноим
-        return next();
-    }
+    if (ctx.callbackQuery) return next();
     if (ctx.from?.id !== MY_ID) return; 
     await next();
 });
 
 // ==========================================
-// 1. DEEP RESEARCH MODULE (FIXED JSON PARSING)
+// 1. DEEP RESEARCH MODULE (FULL FIX)
 // ==========================================
 
-// CMD: /research <Topic>
+// A. INIT RESEARCH
 bot.command("research", async (ctx) => {
     const topic = ctx.match;
     if (!topic) return ctx.reply("⚠️ Syntax: `/research Topic`", { parse_mode: 'Markdown' });
@@ -49,7 +45,7 @@ bot.command("research", async (ctx) => {
     const statusMsg = await ctx.reply(`🕵️‍♂️ <b>Deep Research Init:</b> ${topic}...`, { parse_mode: 'HTML' });
 
     try {
-        // 1. Prepare Request
+        // 1. Request (v1beta, Header Auth)
         const url = "https://generativelanguage.googleapis.com/v1beta/interactions";
         
         const payload = {
@@ -62,7 +58,7 @@ bot.command("research", async (ctx) => {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'x-goog-api-key': GOOGLE_KEY! 
+                'x-goog-api-key': GOOGLE_KEY! // AUTH HERE
             },
             body: JSON.stringify(payload)
         });
@@ -80,7 +76,7 @@ bot.command("research", async (ctx) => {
             );
         }
 
-        // FIX: Берем ID или Name
+        // 3. Get ID (Fallback to 'id' if 'name' is missing)
         const interactionId = data.name || data.id;
 
         if (!interactionId) {
@@ -91,7 +87,7 @@ bot.command("research", async (ctx) => {
             );
         }
 
-        // 3. Save to Supabase
+        // 4. Save to DB
         try {
             const supabase = getServerSupabaseClient({ useServiceRole: true });
             await supabase.from('research_tasks').insert({
@@ -99,23 +95,22 @@ bot.command("research", async (ctx) => {
                 topic: topic,
                 status: data.status || 'created'
             });
-        } catch (e) { 
-            console.error("DB Error (ignoring):", e); 
-        }
+        } catch (e) { console.error("DB Error:", e); }
 
-        // 4. Create UI
-        // ID может быть длинным, проверяем лимит
+        // 5. Create UI
         const callbackData = `check_res:${interactionId}`;
         const isIdTooLong = new TextEncoder().encode(callbackData).length > 64;
 
         if (isIdTooLong) {
+             // FALLBACK FOR LONG IDs: Ask user to use /check command
              await ctx.api.editMessageText(
                 ctx.chat.id,
                 statusMsg.message_id,
-                `✅ <b>Task Created</b>\n\nID: <code>${interactionId}</code>\n(ID too long for button, save it)`,
+                `✅ <b>Task Created</b>\n\nID is too long for buttons.\nCopy and use command:\n\n<code>/check ${interactionId}</code>`,
                 { parse_mode: 'HTML' }
             );
         } else {
+            // Standard Button
             const keyboard = new InlineKeyboard().text("🔄 Check Status", callbackData);
             await ctx.api.editMessageText(
                 ctx.chat.id,
@@ -130,21 +125,32 @@ bot.command("research", async (ctx) => {
     }
 });
 
-// BTN: Check Status
+// B. MANUAL CHECK (For Long IDs)
+bot.command("check", async (ctx) => {
+    const interactionId = ctx.match; // /check <ID>
+    if (!interactionId) return ctx.reply("⚠️ Syntax: `/check <LONG_ID>`");
+
+    await ctx.reply(`🕵️‍♂️ Checking...`, { parse_mode: 'HTML' });
+    await checkStatus(ctx, interactionId.trim());
+});
+
+// C. BUTTON CHECK (For Short IDs)
 bot.callbackQuery(/^check_res:(.+)/, async (ctx) => {
     const interactionId = ctx.match[1];
-    
+    await checkStatus(ctx, interactionId, true); // true = isCallback
+});
+
+// D. UNIVERSAL CHECKER FUNCTION
+async function checkStatus(ctx: any, interactionId: string, isCallback = false) {
     try {
-        // GET Request
-        // Если ID не содержит 'interactions/', добавляем его для URL
+        // Fix URL: ensure "interactions/" prefix exists or not based on ID format
+        // Google might return just "v1_..." or "interactions/v1_..."
         const resourcePath = interactionId.includes('interactions/') ? interactionId : `interactions/${interactionId}`;
         const url = `https://generativelanguage.googleapis.com/v1beta/${resourcePath}`;
 
         const res = await fetch(url, {
             method: 'GET',
-            headers: { 
-                'x-goog-api-key': GOOGLE_KEY! 
-            }
+            headers: { 'x-goog-api-key': GOOGLE_KEY! }
         });
         
         const data = await res.json();
@@ -153,50 +159,48 @@ bot.callbackQuery(/^check_res:(.+)/, async (ctx) => {
 
         const status = data.status; // "in_progress", "succeeded", "failed"
         
-        // FIX: Проверяем разные статусы успеха
-        if (status === "succeeded" || status === "completed" || status === "COMPLETED") {
-            // Ищем output. Обычно он в outputs[0].text, но структура может меняться
-            const outputText = data.outputs?.[0]?.text || JSON.stringify(data.outputs) || "Empty result.";
-            
-            // Нарезка на чанки
+        if (status === "succeeded" || status === "completed") {
+            const outputText = data.outputs?.[0]?.text || "Empty result.";
             const chunks = outputText.match(/.{1,4000}/g) || [outputText];
             
-            await ctx.deleteMessage();
-            await ctx.reply(`📚 <b>REPORT READY</b>`, { parse_mode: 'HTML' });
+            if (isCallback) await ctx.deleteMessage();
+            else await ctx.reply("✅ <b>DONE</b>", { parse_mode: 'HTML' });
+
+            await ctx.reply(`📚 <b>REPORT:</b>`, { parse_mode: 'HTML' });
             
             for (const chunk of chunks) {
-                try {
-                    await ctx.reply(chunk, { parse_mode: 'Markdown' });
-                } catch {
-                    await ctx.reply(chunk); 
-                }
+                try { await ctx.reply(chunk, { parse_mode: 'Markdown' }); } 
+                catch { await ctx.reply(chunk); } // Fallback
             }
             
             // Close Ticket
-            const supabase = getServerSupabaseClient({ useServiceRole: true });
-            await supabase.from('research_tasks').update({ status: 'completed' }).eq('id', interactionId);
+            try {
+                const supabase = getServerSupabaseClient({ useServiceRole: true });
+                await supabase.from('research_tasks').update({ status: 'completed' }).eq('id', interactionId);
+            } catch {}
 
-        } else if (status === "failed" || status === "FAILED") {
-            await ctx.answerCallbackQuery("FAILED ❌");
-            await ctx.reply(`❌ Research Failed: ${JSON.stringify(data.error || data)}`);
+        } else if (status === "failed") {
+            if (isCallback) await ctx.answerCallbackQuery("FAILED ❌");
+            await ctx.reply(`❌ <b>FAILED:</b>\n${JSON.stringify(data.error || data)}`, { parse_mode: 'HTML' });
         } else {
-            // "in_progress" и любые другие
-            await ctx.answerCallbackQuery(`Status: ${status}... ⏳`);
+            const msg = `Status: ${status}... ⏳`;
+            if (isCallback) await ctx.answerCallbackQuery(msg);
+            else await ctx.reply(msg);
         }
 
     } catch (e: any) {
-        await ctx.answerCallbackQuery("Error");
+        if (isCallback) await ctx.answerCallbackQuery("Error");
         await ctx.reply(`Check Error: ${e.message}`);
     }
-});
+}
 
 // ==========================================
-// 2. PUBLISHER MODULE (Channel Posting)
+// 2. PUBLISHER MODULE
 // ==========================================
 
 bot.on(':photo', async (ctx) => {
     const photos = ctx.message?.photo;
-    const photo = photos?.at?.(-1)?.file_id || (photos && photos.length ? photos[photos.length - 1].file_id : undefined);
+    const photo = photos?.at?.(-1)?.file_id;
     if (!photo) return;
 
     drafts[MY_ID] = { photo, caption: '' };
@@ -229,13 +233,13 @@ bot.callbackQuery("pub_cancel", async (ctx) => {
 });
 
 // ==========================================
-// 3. CHAT MODULE (Text & Whispers)
+// 3. CHAT MODULE
 // ==========================================
 
 bot.on('message:text', async (ctx) => {
     const text = ctx.message?.text || '';
     
-    // A. WHISPER REPLY (Legacy Logic)
+    // A. WHISPERS
     const replyTo = ctx.message?.reply_to_message?.text;
     if (replyTo && replyTo.includes('whisper-id:')) {
         const m = replyTo.match(/whisper-id:(\S+)/);
@@ -272,12 +276,11 @@ bot.on('message:text', async (ctx) => {
         return;
     }
 
-    // C. AI CHAT (Standard Gemini)
+    // C. AI CHAT
     const aiChatId = ctx.chat?.id;
     if (aiChatId) await ctx.api.sendChatAction(aiChatId, 'typing');
     
     try {
-        // Using REST for consistency
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GOOGLE_KEY}`;
         const payload = {
             contents: [{ role: 'user', parts: [{ text }] }],
