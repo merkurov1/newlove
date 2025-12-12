@@ -42,6 +42,47 @@ export default async function SelectionPage() {
     console.error('Supabase fetch articles error', error);
   }
 
+  // Нормализуем превью-изображения: если нет поля preview_image — извлекаем первое изображение из контента
+  try {
+    const { getFirstImage } = await import('@/lib/contentUtils');
+    const normalized = await Promise.all((articles || []).map(async (a: any) => {
+      let preview = a.preview_image || null;
+      if (!preview && a.content) {
+        try {
+          preview = await getFirstImage(a.content);
+        } catch (e) {
+          preview = null;
+        }
+      }
+
+      // Если URL относительный — попытаемся его превратить в полный URL, используя переменные окружения Supabase
+      if (preview && !/^https?:\/\//i.test(preview)) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+        if (supabaseUrl) {
+          const base = supabaseUrl.replace(/\/$/, '');
+          if (preview.startsWith('/')) {
+            preview = `${base}${preview}`;
+          } else if (!preview.startsWith('storage')) {
+            // Если это просто путь внутри bucket, предположим публичный путь
+            preview = `${base}/storage/v1/object/public/${preview}`;
+          } else {
+            preview = `${base}/${preview}`;
+          }
+        }
+      }
+
+      return { ...a, preview_image: preview };
+    }));
+
+    // Заменяем articles на нормализованный набор
+    // eslint-disable-next-line no-unused-vars
+    // @ts-ignore
+    articles = normalized;
+  } catch (e) {
+    // Если что-то пошло не так — оставляем оригинальные данные
+    if (process.env.NODE_ENV === 'development') console.error('Error normalizing preview images', e);
+  }
+
   function extractFirstImage(content: any): string | null {
     if (!content) return null;
     try {
