@@ -15,21 +15,28 @@ async function getDigestBySlug(slug: string) {
     notFound();
   }
 
-  const { data, error } = await supabaseClient
-    .from('digests')
-    .select('title, content, created_at')
-    .eq('slug', slug) // Находим запись с совпадающим slug
-    .single(); // .single() выбирает только одну запись. Если ничего не найдено, вернет null.
+  try {
+    const { data, error } = await supabaseClient
+      .from('digests')
+      .select('title, content, created_at')
+      .eq('slug', slug)
+      .single();
 
-  if (error && !data) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error fetching digest:', error);
+    if (error || !data) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching digest:', error);
+      }
+      notFound();
     }
-    // Если дайджест не найден, показываем страницу 404
+
+    return data;
+  } catch (err) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Unexpected error querying digests table:', err);
+    }
+    // На проде: если таблицы нет или запрос упал — показываем 404, не даём развалить сервер
     notFound();
   }
-
-  return data;
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {

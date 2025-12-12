@@ -16,6 +16,7 @@ export default async function SelectionPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
   const { getSupabaseForRequest } = await import('@/lib/getSupabaseForRequest');
   let { supabase } = await getSupabaseForRequest(globalReq) || {};
+  
   if (!supabase) {
     try {
       const serverAuth = await import('@/lib/serverAuth');
@@ -29,7 +30,14 @@ export default async function SelectionPage() {
       );
     }
   }
-  const { data: articles = [], error } = await supabase.from('articles').select('id,title,slug,publishedAt,preview_image,content,artist,curatorNote,quote,specs').eq('published', true).order('publishedAt', { ascending: false });
+
+  // Тянем поля, включая artist и specs
+  const { data: articles = [], error } = await supabase
+    .from('articles')
+    .select('id,title,slug,publishedAt,preview_image,content,artist,curatorNote,quote,specs')
+    .eq('published', true)
+    .order('publishedAt', { ascending: false });
+
   if (error) {
     console.error('Supabase fetch articles error', error);
   }
@@ -63,15 +71,18 @@ export default async function SelectionPage() {
 
       <div className="max-w-7xl mx-auto px-6 py-20 md:py-32">
         
-        {/* Header */}
+        {/* Header: Investment Terminal Style */}
         <header className="mb-16 border-b border-gray-200 pb-8">
            <div className="flex justify-between items-center mb-6">
-            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400">
-              Curated Assets
+            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-500">
+              Curated Inventory
             </span>
-            <span className="font-mono text-[10px] tracking-widest uppercase text-gray-400">
-              Live
-            </span>
+            <div className="flex items-center gap-4">
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+              <span className="font-mono text-[10px] tracking-widest uppercase text-gray-500">
+                Assets: {articles ? articles.length : 0}
+              </span>
+            </div>
           </div>
           <h1 className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-6">
             Selection.
@@ -81,37 +92,69 @@ export default async function SelectionPage() {
           </p>
         </header>
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-12">
+        {/* Grid: Auction Catalog Style */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-16">
           {articles && articles.length > 0 ? (
             articles.map((article: any) => {
               const previewImage = extractFirstImage(article.content);
+              // Fallback, если артист не указан в базе
+              const artistName = article.artist || 'MERKUROV ESTATE'; 
+              const specs = article.specs || null;
+
               return (
                 <Link key={article.id} href={`/${article.slug}`} className="block group">
-                  <div className="border border-gray-200 bg-white p-2 group-hover:border-black transition-all duration-300 shadow-sm group-hover:shadow-md">
-                    <div className="aspect-[3/2] w-full bg-gray-100 relative overflow-hidden">
+                  <div className="border border-gray-100 bg-white p-3 hover:border-black transition-all duration-300 shadow-sm hover:shadow-xl">
+                    
+                    {/* Image Area with Badge */}
+                    <div className="aspect-[3/2] w-full bg-[#f4f4f4] relative overflow-hidden mb-3">
+                      {/* STATUS BADGE (появляется на ховер) */}
+                      <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-1 group-hover:translate-y-0">
+                         <span className="bg-black text-white text-[9px] font-mono uppercase tracking-widest px-2 py-1">
+                           Acquirable
+                         </span>
+                      </div>
+                      
                       {previewImage ? (
                         <Image
                           src={previewImage}
-                          alt="Artwork preview"
+                          alt={article.title}
                           fill
-                          className="object-cover w-full h-full grayscale group-hover:grayscale-0 transition-all duration-500"
+                          className="object-cover w-full h-full grayscale group-hover:grayscale-0 transition-all duration-500 ease-in-out transform group-hover:scale-105"
                           sizes="(max-width: 1024px) 100vw, 25vw"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-[#F0F0F0] text-gray-300 font-serif italic">
-                          No Image
+                        <div className="w-full h-full flex items-center justify-center text-gray-300 font-mono text-xs uppercase tracking-widest">
+                          [ NO VISUAL ]
                         </div>
                       )}
                     </div>
-                    <div className="mt-4 px-2 pb-2">
-                      <h3 className="font-serif text-lg leading-tight group-hover:text-red-700 transition-colors">
-                        {article.title}
-                      </h3>
-                      <p className="font-mono text-[10px] text-gray-400 mt-2 uppercase tracking-widest">
-                        {article.publishedAt ? new Date(article.publishedAt).getFullYear() : 'N/A'}
-                      </p>
+
+                    {/* Meta Data Block (Upper) */}
+                    <div className="flex justify-between items-end border-b border-gray-100 pb-2 mb-3">
+                      <span className="font-mono text-[9px] font-bold tracking-[0.1em] uppercase text-gray-500">
+                        {artistName}
+                      </span>
+                      <span className="font-mono text-[9px] text-gray-400">
+                         {article.publishedAt ? new Date(article.publishedAt).getFullYear() : '—'}
+                      </span>
                     </div>
+
+                    {/* Title */}
+                    <h3 className="font-serif text-2xl leading-none text-gray-900 group-hover:text-red-700 transition-colors mb-2">
+                      {article.title}
+                    </h3>
+
+                    {/* Specs / Quote / Curator Note fallback */}
+                    <div className="min-h-[20px]">
+                      {specs ? (
+                         <p className="font-mono text-[9px] text-gray-400 uppercase tracking-wide truncate">
+                           {specs}
+                         </p>
+                      ) : (
+                         <div className="h-px bg-transparent"></div>
+                      )}
+                    </div>
+
                   </div>
                 </Link>
               );
