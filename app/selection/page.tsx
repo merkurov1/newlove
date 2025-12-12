@@ -43,9 +43,10 @@ export default async function SelectionPage() {
   }
 
   // Нормализуем превью-изображения: если нет поля preview_image — извлекаем первое изображение из контента
+  let normalizedArticles: any[] | null = null;
   try {
     const { getFirstImage } = await import('@/lib/contentUtils');
-    const normalized = await Promise.all((articles || []).map(async (a: any) => {
+    normalizedArticles = await Promise.all((articles || []).map(async (a: any) => {
       let preview = a.preview_image || null;
       if (!preview && a.content) {
         try {
@@ -74,14 +75,14 @@ export default async function SelectionPage() {
       return { ...a, preview_image: preview };
     }));
 
-    // Заменяем articles на нормализованный набор
-    // eslint-disable-next-line no-unused-vars
-    // @ts-ignore
-    articles = normalized;
+    // Сохраняем нормализованный набор в отдельную переменную, не переназначая `articles`
+    // normalizedArticles уже установлен выше
   } catch (e) {
     // Если что-то пошло не так — оставляем оригинальные данные
     if (process.env.NODE_ENV === 'development') console.error('Error normalizing preview images', e);
   }
+
+  const articlesToRender = normalizedArticles ?? articles;
 
   function extractFirstImage(content: any): string | null {
     if (!content) return null;
@@ -121,7 +122,7 @@ export default async function SelectionPage() {
             <div className="flex items-center gap-4">
               <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
               <span className="font-mono text-[10px] tracking-widest uppercase text-gray-500">
-                Assets: {articles ? articles.length : 0}
+                  Assets: {articlesToRender ? articlesToRender.length : 0}
               </span>
             </div>
           </div>
@@ -135,9 +136,9 @@ export default async function SelectionPage() {
 
         {/* Grid: Auction Catalog Style */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-16">
-          {articles && articles.length > 0 ? (
-            articles.map((article: any) => {
-              const previewImage = extractFirstImage(article.content);
+          {articlesToRender && articlesToRender.length > 0 ? (
+            articlesToRender.map((article: any) => {
+              const previewImage = article.preview_image || extractFirstImage(article.content);
               // Fallback, если артист не указан в базе
               const artistName = article.artist || 'MERKUROV ESTATE'; 
               const specs = article.specs || null;
