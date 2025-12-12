@@ -140,11 +140,11 @@ bot.callbackQuery(/^check_res:(.+)/, async (ctx) => {
     await checkStatus(ctx, interactionId, true); // true = isCallback
 });
 
-// D. UNIVERSAL CHECKER FUNCTION
+// D. UNIVERSAL CHECKER FUNCTION (BULLETPROOF VERSION)
 async function checkStatus(ctx: any, interactionId: string, isCallback = false) {
     try {
-        // Fix URL: ensure "interactions/" prefix exists or not based on ID format
-        // Google might return just "v1_..." or "interactions/v1_..."
+        if (!isCallback) await ctx.reply("🛰 Connecting to Google Grid...", { parse_mode: 'HTML' });
+
         const resourcePath = interactionId.includes('interactions/') ? interactionId : `interactions/${interactionId}`;
         const url = `https://generativelanguage.googleapis.com/v1beta/${resourcePath}`;
 
@@ -160,18 +160,24 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
         const status = data.status; // "in_progress", "succeeded", "failed"
         
         if (status === "succeeded" || status === "completed") {
-            const outputText = data.outputs?.[0]?.text || "Empty result.";
+            // Ищем текст где угодно
+            const outputText = data.outputs?.[0]?.text || JSON.stringify(data.outputs, null, 2) || "Empty result.";
+            
+            // 1. Сначала сообщаем, что скачали
+            if (isCallback) await ctx.deleteMessage();
+            await ctx.reply(`✅ <b>DOWNLOAD COMPLETE.</b>\nSize: ${outputText.length} chars.\nSending stream...`, { parse_mode: 'HTML' });
+            
+            // 2. Режем на куски
             const chunks = outputText.match(/.{1,4000}/g) || [outputText];
             
-            if (isCallback) await ctx.deleteMessage();
-            else await ctx.reply("✅ <b>DONE</b>", { parse_mode: 'HTML' });
-
-            await ctx.reply(`📚 <b>REPORT:</b>`, { parse_mode: 'HTML' });
-            
+            // 3. Отправляем БЕЗ Markdown (Plain Text), чтобы точно дошло
             for (const chunk of chunks) {
-                try { await ctx.reply(chunk, { parse_mode: 'Markdown' }); } 
-                catch { await ctx.reply(chunk); } // Fallback
+                // Ждем небольшую паузу, чтобы Telegram не забанил за спам (429 Too Many Requests)
+                await new Promise(r => setTimeout(r, 500)); 
+                await ctx.reply(chunk); // <--- БЕЗ parse_mode!
             }
+            
+            await ctx.reply("🏁 <b>End of Report.</b>", { parse_mode: 'HTML' });
             
             // Close Ticket
             try {
@@ -193,7 +199,6 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
         await ctx.reply(`Check Error: ${e.message}`);
     }
 }
-
 // ==========================================
 // 2. PUBLISHER MODULE
 // ==========================================
