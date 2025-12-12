@@ -191,16 +191,7 @@ export default async function SelectionPage() {
                       {article.title}
                     </h3>
 
-                    {/* Specs / Quote / Curator Note fallback */}
-                    <div className="min-h-[20px]">
-                      {specs ? (
-                         <p className="font-mono text-[9px] text-gray-400 uppercase tracking-wide truncate">
-                           {specs}
-                         </p>
-                      ) : (
-                         <div className="h-px bg-transparent"></div>
-                      )}
-                    </div>
+                    {/* Specs removed intentionally */}
 
                   </div>
                 </Link>
