@@ -14,8 +14,8 @@ const bot = new Bot(token);
 const MY_ID = Number(process.env.MY_TELEGRAM_ID);
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const GOOGLE_KEY = process.env.GOOGLE_API_KEY;
-const MODEL_NAME = 'gemini-2.0-flash'; // For Chat
-const RESEARCH_AGENT = 'deep-research-pro-preview-12-2025'; // For Research
+const MODEL_NAME = 'gemini-2.0-flash'; // Fast Chat
+const RESEARCH_AGENT = 'deep-research-pro-preview-12-2025'; // Deep Research
 
 // --- MEMORY ---
 const drafts: Record<number, { photo?: string; caption?: string }> = {};
@@ -28,6 +28,7 @@ const SYSTEM_PROMPT = `
 
 // --- MIDDLEWARE ---
 bot.use(async (ctx, next) => {
+    // Разрешаем callback (кнопки) и сообщения только от Админа
     if (ctx.callbackQuery) return next();
     if (ctx.from?.id !== MY_ID) return;
     await next();
@@ -57,13 +58,14 @@ bot.command("research", async (ctx) => {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'x-goog-api-key': GOOGLE_KEY! // Header Auth
+                'x-goog-api-key': GOOGLE_KEY! // Header Auth is critical
             },
             body: JSON.stringify(payload)
         });
         
         const data = await res.json();
 
+        // Error Check
         if (data.error) {
             return ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, `❌ API Error: ${data.error.message}`);
         }
@@ -74,7 +76,7 @@ bot.command("research", async (ctx) => {
              return ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, `❌ Error: No ID returned.`);
         }
 
-        // 1. SAVE TASK TO DB
+        // 1. INIT TASK IN DB
         try {
             const supabase = getServerSupabaseClient({ useServiceRole: true });
             await supabase.from('research_tasks').insert({
@@ -92,7 +94,7 @@ bot.command("research", async (ctx) => {
              await ctx.api.editMessageText(
                 ctx.chat.id,
                 statusMsg.message_id,
-                `✅ <b>Started</b>\n\nID too long for button. Send this code to check status:\n<code>${interactionId}</code>`,
+                `✅ <b>Started</b>\n\nID is long. Send this code later:\n<code>${interactionId}</code>`,
                 { parse_mode: 'HTML' }
             );
         } else {
@@ -155,7 +157,7 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
             // 2. SAVE TO SUPABASE (PRIORITY #1)
             try {
                 const supabase = getServerSupabaseClient({ useServiceRole: true });
-                // Обновляем статус и записываем ВЕСЬ текст в колонку result
+                // Сохраняем ВЕСЬ текст в колонку result
                 const { error } = await supabase
                     .from('research_tasks')
                     .update({ 
@@ -165,8 +167,9 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
                     .eq('id', interactionId);
                 
                 if (error) throw error;
-                await ctx.reply("💾 <b>REPORT SAVED TO DATABASE.</b>", { parse_mode: 'HTML' });
+                await ctx.reply("💾 <b>SAVED TO DATABASE.</b>", { parse_mode: 'HTML' });
             } catch (dbError: any) {
+                console.error(dbError);
                 await ctx.reply(`⚠️ DB Save Error: ${dbError.message}`);
             }
 
@@ -181,7 +184,7 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
                     parse_mode: 'HTML'
                 });
             } catch (sendError: any) {
-                // Если файл не ушел (таймаут), мы не плачем, потому что данные уже в базе
+                // Если файл не ушел (таймаут), данные уже в базе
                 await ctx.reply(`⚠️ File delivery failed (Timeout), but data is safe in DB.`);
             }
 
@@ -189,7 +192,7 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
             if (isCallback) await ctx.answerCallbackQuery("Failed");
             await ctx.reply(`❌ <b>FAILED</b>\n${JSON.stringify(data)}`);
             
-            // Log failure to DB
+            // Log failure
             try {
                 const supabase = getServerSupabaseClient({ useServiceRole: true });
                 await supabase.from('research_tasks').update({ status: 'failed' }).eq('id', interactionId);
