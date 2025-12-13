@@ -228,6 +228,10 @@ bot.on('message:text', async (ctx) => {
 
 // PHOTO HANDLER
 bot.on(':photo', async (ctx) => {
+    if (!ctx.message || !ctx.message.photo) {
+        await ctx.reply('⚠️ No photo found in the message.');
+        return;
+    }
     const photos = ctx.message.photo;
     drafts[MY_ID] = { photo: photos.at(-1)?.file_id, caption: '' };
     await ctx.reply('📸 Photo secured. Send text.');
