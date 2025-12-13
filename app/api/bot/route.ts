@@ -1,9 +1,9 @@
 import { Bot, webhookCallback, InlineKeyboard, InputFile } from 'grammy';
-import { getServerSupabaseClient } from '@/lib/serverAuth'; // Твой клиент
+import { getServerSupabaseClient } from '@/lib/serverAuth';
 
 // --- CONFIG ---
 export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs'; // Важно для Buffer и InputFile
+export const runtime = 'nodejs';
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) throw new Error('TELEGRAM_BOT_TOKEN is unset');
@@ -15,9 +15,9 @@ const MY_ID = Number(process.env.MY_TELEGRAM_ID);
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const GOOGLE_KEY = process.env.GOOGLE_API_KEY;
 const MODEL_NAME = 'gemini-2.0-flash'; 
-const RESEARCH_AGENT = 'deep-research-pro-preview-12-2025'; // Проверь актуальность названия модели
+const RESEARCH_AGENT = 'deep-research-pro-preview-12-2025';
 
-// --- MEMORY (Временная, для паблишера) ---
+// --- MEMORY ---
 const drafts: Record<number, { photo?: string; caption?: string }> = {};
 
 const SYSTEM_PROMPT = `
@@ -28,7 +28,6 @@ const SYSTEM_PROMPT = `
 
 // --- MIDDLEWARE ---
 bot.use(async (ctx, next) => {
-    // Разрешаем callback (кнопки) и сообщения только от Админа
     if (ctx.callbackQuery) return next();
     if (ctx.from?.id !== MY_ID) return;
     await next();
@@ -38,7 +37,7 @@ bot.use(async (ctx, next) => {
 // 1. DEEP RESEARCH MODULE
 // ==========================================
 
-// A. START RESEARCH (/research Topic)
+// A. START RESEARCH
 bot.command("research", async (ctx) => {
     const topic = ctx.match;
     if (!topic) return ctx.reply("⚠️ Syntax: `/research Topic`", { parse_mode: 'Markdown' });
@@ -75,7 +74,7 @@ bot.command("research", async (ctx) => {
              return ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, `❌ Error: No ID returned.`);
         }
 
-        // 1. INIT TASK IN DB (Создаем задачу)
+        // INIT TASK IN DB
         try {
             const supabase = getServerSupabaseClient({ useServiceRole: true });
             await supabase.from('research_tasks').upsert({
@@ -86,17 +85,15 @@ bot.command("research", async (ctx) => {
             });
         } catch (e) { console.error("DB Init Error", e); }
 
-        // 2. UI RESPONSE
+        // UI RESPONSE
         const callbackData = `check_res:${interactionId}`;
-        
-        // Проверка длины callback data (Telegram limit 64 bytes)
         const isIdTooLong = new TextEncoder().encode(callbackData).length > 64;
 
         if (isIdTooLong) {
              await ctx.api.editMessageText(
                 ctx.chat.id,
                 statusMsg.message_id,
-                `✅ <b>Started</b>\n\nTask ID:\n<code>${interactionId}</code>\n\n<i>(Use /check <ID>)</i>`,
+                `✅ <b>Started</b>\nID:\n<code>${interactionId}</code>\n\n<i>(Copy ID and use /check)</i>`,
                 { parse_mode: 'HTML' }
             );
         } else {
@@ -114,18 +111,20 @@ bot.command("research", async (ctx) => {
     }
 });
 
-// B. MANUAL CHECK (/check <ID> or Reply) - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// B. MANUAL CHECK (/check <ID>)
 bot.command("check", async (ctx) => {
-    // 1. Пытаемся взять аргумент
+    // 1. Берем аргумент
     let idInput = (typeof ctx.match === 'string' ? ctx.match : '').trim();
 
-    // 2. Если аргумента нет, проверяем Reply
+    // 2. Если пусто — проверяем Reply
     if (!idInput && ctx.message?.reply_to_message?.text) {
         idInput = ctx.message.reply_to_message.text;
     }
 
-    // 3. Чистим мусор (если скопировано "ID: v1_...")
-    const cleanMatch = idInput.match(/(interactions\/)?v1_[a-zA-Z0-9\-]+/);
+    // 3. АГРЕССИВНАЯ ЧИСТКА (FIX)
+    // Ищем строку, начинающуюся на v1_ и содержащую ЛЮБЫЕ непробельные символы
+    const cleanMatch = idInput.match(/(interactions\/)?v1_[^\s]+/);
+    
     if (cleanMatch) {
         idInput = cleanMatch[0];
     } else {
@@ -136,7 +135,9 @@ bot.command("check", async (ctx) => {
         return ctx.reply("⚠️ Syntax: `/check <ID>` or Reply to ID.");
     }
 
-    await ctx.reply(`🔎 Checking: <code>${idInput}</code>...`, { parse_mode: 'HTML' });
+    // Отладочный вывод, чтобы ты видел, что именно мы проверяем
+    await ctx.reply(`🔎 Parsing ID:\n<code>${idInput}</code>`, { parse_mode: 'HTML' });
+    
     await checkStatus(ctx, idInput, false);
 });
 
@@ -146,12 +147,15 @@ bot.callbackQuery(/^check_res:(.+)/, async (ctx) => {
     await checkStatus(ctx, interactionId, true);
 });
 
-// D. CORE LOGIC (GET -> SAVE -> SEND)
+// D. CORE LOGIC
 async function checkStatus(ctx: any, interactionId: string, isCallback = false) {
     try {
         const supabase = getServerSupabaseClient({ useServiceRole: true });
 
-        if (!isCallback) await ctx.reply("🛰 Connecting to Google Grid...");
+        // Если не коллбэк, даем фидбек
+        if (!isCallback) {
+            // await ctx.reply("🛰 Connecting to Grid..."); // Можно убрать лишний шум
+        }
 
         const resourcePath = interactionId.includes('interactions/') ? interactionId : `interactions/${interactionId}`;
         const url = `https://generativelanguage.googleapis.com/v1beta/${resourcePath}`;
@@ -164,9 +168,11 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
         
         const data = await res.json();
         
-        // FALLBACK: Если Google говорит 404/403, пробуем достать из БД
+        // --- FALLBACK (DB) ---
+        // Если Google дал ошибку (404/403/400), проверяем БД
         if (data.error) {
-            console.log("Google Error, trying DB fallback...");
+            console.log(`Google Error (${data.error.code}), falling back to DB...`);
+            
             const { data: dbData } = await supabase
                 .from('research_tasks')
                 .select('result, status')
@@ -175,11 +181,11 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
 
             if (dbData && dbData.result) {
                 if (isCallback) await ctx.deleteMessage();
-                await ctx.reply("⚠️ Google Link Expired. Loading from Archive (DB)...");
+                await ctx.reply("⚠️ Google Link Expired. Loading form Archive...");
                 return await sendResultAsFile(ctx, dbData.result, interactionId);
             }
 
-            const msg = `❌ API Error: ${data.error.message}`;
+            const msg = `❌ API Error: ${data.error.message}\n(No local archive found)`;
             if (isCallback) await ctx.answerCallbackQuery("Error");
             return ctx.reply(msg);
         }
@@ -191,8 +197,7 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
             
             if (isCallback) await ctx.deleteMessage();
 
-            // 2. SAVE TO SUPABASE (CRITICAL)
-            // Сохраняем полный текст, чтобы не потерять
+            // 2. SAVE TO DB (CRITICAL)
             try {
                 const { error } = await supabase
                     .from('research_tasks')
@@ -203,20 +208,27 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
                     })
                     .eq('id', interactionId);
                 
-                if (error) throw error;
-                await ctx.reply("💾 <b>SAVED TO DATABASE.</b>", { parse_mode: 'HTML' });
+                if (error) {
+                    // Если записи не было (например, создали вручную через API, а не бота), создаем
+                    await supabase.from('research_tasks').insert({
+                        id: interactionId,
+                        status: 'completed',
+                        result: outputText
+                    });
+                }
+                
+                await ctx.reply("💾 <b>SAVED.</b>", { parse_mode: 'HTML' });
             } catch (dbError: any) {
                 console.error(dbError);
-                await ctx.reply(`⚠️ DB Save Error: ${dbError.message}`);
+                await ctx.reply(`⚠️ DB Save Warning: ${dbError.message}`);
             }
 
-            // 3. SEND AS FILE
+            // 3. SEND FILE
             await sendResultAsFile(ctx, outputText, interactionId);
 
         } else if (status === "failed") {
             if (isCallback) await ctx.answerCallbackQuery("Failed");
-            await ctx.reply(`❌ <b>FAILED</b>\n${JSON.stringify(data)}`);
-            
+            await ctx.reply(`❌ <b>FAILED</b>\n${JSON.stringify(data, null, 2)}`);
             await supabase.from('research_tasks').update({ status: 'failed' }).eq('id', interactionId);
 
         } else {
@@ -232,13 +244,13 @@ async function checkStatus(ctx: any, interactionId: string, isCallback = false) 
     }
 }
 
-// HELPER: Отправка файла
+// HELPER: Send File
 async function sendResultAsFile(ctx: any, text: string, id: string) {
     try {
         await ctx.reply("📤 Packing Dossier...");
         const buffer = Buffer.from(text, 'utf-8');
-        // Очищаем ID от слешей для имени файла
-        const safeId = id.replace(/[^a-zA-Z0-9]/g, '_').slice(-6); 
+        // Безопасное имя файла
+        const safeId = id.replace(/[^a-zA-Z0-9]/g, '_').slice(-10); 
         const fileName = `Research_${safeId}.md`;
         
         await ctx.replyWithDocument(new InputFile(buffer, fileName), {
@@ -246,7 +258,7 @@ async function sendResultAsFile(ctx: any, text: string, id: string) {
             parse_mode: 'HTML'
         });
     } catch (sendError: any) {
-        await ctx.reply(`⚠️ File delivery failed (Timeout). Data is safe in Supabase.`);
+        await ctx.reply(`⚠️ File delivery failed (Timeout). Data saved in DB.`);
     }
 }
 
@@ -266,10 +278,10 @@ bot.callbackQuery("pub_post", async (ctx) => {
     if (!drafts[MY_ID] || !CHANNEL_ID) return;
     try {
         await ctx.api.sendPhoto(CHANNEL_ID, drafts[MY_ID].photo!, { caption: drafts[MY_ID].caption, parse_mode: 'MarkdownV2' });
-        await ctx.answerCallbackQuery("Published!");
-        await ctx.editMessageCaption({ caption: "✅ PUBLISHED to Channel." });
+        await ctx.answerCallbackQuery("Sent!");
+        await ctx.editMessageCaption({ caption: "✅ PUBLISHED." });
     } catch (e: any) {
-        await ctx.reply(`Publish Error: ${e.message}`);
+        await ctx.reply(`Pub Error: ${e.message}`);
     }
     delete drafts[MY_ID];
 });
@@ -287,21 +299,19 @@ bot.callbackQuery("pub_cancel", async (ctx) => {
 bot.on('message:text', async (ctx) => {
     const text = ctx.message?.text?.trim() || '';
 
-    // A. AUTO-DETECT ID (Если просто скинул ID без команды)
+    // A. AUTO-DETECT ID
     if (text.startsWith('v1_') || text.startsWith('interactions/')) {
         await ctx.reply("🕵️‍♂️ ID Detected. Checking...");
         return await checkStatus(ctx, text, false);
     }
 
-    // B. PUBLISHER DRAFT
+    // B. PUBLISHER
     if (drafts[MY_ID] && drafts[MY_ID].photo) {
         drafts[MY_ID].caption = text;
         const keyboard = new InlineKeyboard().text("🚀 PUBLISH", "pub_post").text("❌ CANCEL", "pub_cancel");
         try {
             await ctx.replyWithPhoto(drafts[MY_ID].photo!, { caption: text, parse_mode: 'MarkdownV2', reply_markup: keyboard });
         } catch {
-            // Fallback если Markdown кривой
-            await ctx.reply("⚠️ Markdown Error (Escaping). Preview Plain:");
             await ctx.replyWithPhoto(drafts[MY_ID].photo!, { caption: text, reply_markup: keyboard });
         }
         return;
