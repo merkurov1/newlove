@@ -3,8 +3,27 @@ import { SubmitButton } from "./submit-button"; // Создадим ниже к�
 import { submitInquiry } from "./actions";
 
 export const metadata = {
-  title: "The Merkurov Doctrine | Research",
-  description: "A Chronicle of Voluntary Submission (2010–2025).",
+  title: 'The Merkurov Doctrine — Research',
+  description: 'A forensic study: The Digital Decay — a chronicle and analysis (2010–2025).',
+  openGraph: {
+    title: 'The Merkurov Doctrine — Research',
+    description: 'A forensic study: The Digital Decay — a chronicle and analysis (2010–2025).',
+    url: 'https://www.merkurov.love/research',
+    images: [
+      {
+        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
+        width: 1200,
+        height: 630,
+        alt: 'Merkurov.love',
+      },
+    ],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'The Merkurov Doctrine — Research',
+    description: 'A forensic study: The Digital Decay — a chronicle and analysis (2010–2025).',
+  },
 };
 
 export default function ResearchPage() {
