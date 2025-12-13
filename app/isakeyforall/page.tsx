@@ -82,6 +82,15 @@ export default function IsAKeyForAllPage() {
               subtitle={<>A nonlinear recollection of art, exile, and the small violences of modern life.</>}
               layoutId="case-unframed"
             />
+            <div className="mt-6">
+              <CaseStudyCard
+                href="/research"
+                badge="Research"
+                title={(<>RESEARCH — Essays & Notes</>)}
+                subtitle={(<>Long-form research, essays and archival notes by Anton Merkurov.</>)}
+                layoutId="case-research"
+              />
+            </div>
           </section>
 
           {/* Footer: The Seal */}
