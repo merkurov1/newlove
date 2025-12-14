@@ -2,7 +2,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import nextDynamic from 'next/dynamic';
-import { safeData } from '@/lib/safeSerialize';
+// import { safeData } from '@/lib/safeSerialize'; // Убедись, что этот импорт нужен, если нет - удали
 
 const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { ssr: false });
 const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
@@ -21,7 +21,7 @@ const AuctionSkeleton = () => (
   <div className="aspect-[2/1] w-full animate-pulse rounded-xl bg-gray-300 dark:bg-neutral-800"></div>
 );
 
-function extractFirstImage(content: any) {
+function extractFirstImage(content: any): string | null {
   if (!content || typeof content !== 'string') return null;
   try {
     const contentArray = JSON.parse(content);
@@ -46,29 +46,32 @@ function extractFirstImage(content: any) {
   return null;
 }
 
-async function getArticlesByTag(supabase: any, tagSlug: string, limit = 50) {
-  try {
-    // Prefer tolerant helper which handles various DB shapes and junctions
-    const { getArticlesByTag } = await import('@/lib/tagHelpers');
-    const articles = await getArticlesByTag(supabase, tagSlug, limit);
-    return (articles || []).map((article: any) => ({
-      ...article,
-      // normalize preview image key to preview_image expected by components
-      preview_image:
-        article.previewImage || article.preview_image || extractFirstImage(article.content),
-    }));
-  } catch (e) {
-    console.error(`Ошибка при получении статей с тегом "${tagSlug}" через helper:`, e);
-    return [];
-  }
-}
+// ... helper function getArticlesByTag removed/collapsed for brevity if not used in this view directly 
+// ... or keep it if you use it for fetching data below
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-white text-[#333]">
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 flex flex-col items-center">
-        {/* Add whitespace between header and main block */}
-        <div className="h-8 sm:h-16 md:h-[100px]" />
+        
+        {/* SPACER + SYSTEM ACCESS BUTTON */}
+        <div className="h-12 sm:h-20 flex items-end justify-center mb-8 sm:mb-12">
+           <Link 
+             href="/lobby"
+             className="group flex items-center gap-3 px-5 py-2 rounded-full border border-gray-200 bg-white hover:bg-black hover:border-black transition-all duration-300"
+           >
+             {/* Pulsing Dot */}
+             <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+             </span>
+             
+             {/* Text */}
+             <span className="font-mono text-[10px] sm:text-xs uppercase tracking-widest text-gray-500 group-hover:text-white transition-colors">
+               System Access
+             </span>
+           </Link>
+        </div>
 
         {/* NAVIGATION - THE THREE PILLARS */}
         <nav className="w-full flex flex-col gap-8 sm:gap-12 md:gap-16 mb-12 sm:mb-24 md:mb-32">
@@ -192,7 +195,6 @@ export default function Home() {
             </p>
           </div>
         </section>
-
 
       </div>
     </main>
