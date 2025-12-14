@@ -132,11 +132,11 @@ export default async function JournalPage({ searchParams }: Props) {
         
         {/* HEADER (match /advising) */}
         <div className="max-w-3xl mx-auto px-6 mb-12 md:mb-20">
-          <div className="flex flex-col md:items-end justify-between border-b border-gray-100 pb-8 gap-6">
-            <div className="max-w-2xl">
+          <div className="flex flex-col items-center justify-between border-b border-gray-100 pb-8 gap-6 text-center">
+            <div className="w-full">
               <span className="block font-mono text-xs text-red-600 uppercase tracking-widest mb-4">// System Logs</span>
               <h1 className="text-4xl md:text-5xl font-serif font-medium tracking-tight text-black leading-none">The Journal</h1>
-              <p className="mt-4 text-lg text-gray-500 font-serif italic max-w-xl">Notes on art, technology, and the architecture of value.</p>
+              <p className="mt-4 text-lg text-gray-500 font-serif italic max-w-xl mx-auto">Notes on art, technology, and the architecture of value.</p>
             </div>
           </div>
         </div>

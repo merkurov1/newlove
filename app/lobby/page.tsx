@@ -9,7 +9,9 @@ export const metadata: Metadata = {
 
 export default function LobbyPage() {
   return (
-    <main className="min-h-screen bg-white text-[#1C1917] font-serif selection:bg-black selection:text-white">
+    <main className="min-h-screen bg-[#FDFBF7] text-[#111] font-sans selection:bg-black selection:text-white">
+      {/* Decorative border top */}
+      <div className="h-1 w-full bg-black fixed top-0 z-50" />
       
       {/* --- SECTION 1: HERO (THE MANIFESTO) --- */}
       <section className="min-h-screen flex flex-col justify-center px-6 md:px-12 relative border-b border-gray-100">

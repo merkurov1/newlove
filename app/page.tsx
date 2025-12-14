@@ -8,10 +8,13 @@ export const metadata = {
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-white text-zinc-900 pt-8 md:pt-20 flex flex-col justify-center items-center relative overflow-hidden selection:bg-red-600 selection:text-white">
+    <main className="min-h-screen bg-[#FDFBF7] text-[#111] font-sans selection:bg-black selection:text-white">
+
+      {/* Decorative border top */}
+      <div className="h-1 w-full bg-black fixed top-0 z-50" />
 
       {/* CENTER CONTAINER */}
-      <div className="w-full max-w-4xl md:max-w-6xl px-6 flex flex-col items-center z-10">
+      <div className="w-full max-w-3xl mx-auto px-6 py-20 md:py-32 flex flex-col items-center z-10">
 
         {/* 1. STATUS BADGE */}
         <div className="mb-4 md:mb-8 animate-fade-in-down">
