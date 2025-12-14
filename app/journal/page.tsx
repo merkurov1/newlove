@@ -55,7 +55,8 @@ export default async function JournalPage({ searchParams }: Props) {
       .from('letters')
       .select(selectCols as any)
       .eq('published', true)
-      .order('publishedAt', { ascending: false })
+      // Oldest first (ascending) so chronological reading
+      .order('publishedAt', { ascending: true })
       .limit(100);
 
     if (!error && Array.isArray(lettersData)) {
@@ -73,58 +74,51 @@ export default async function JournalPage({ searchParams }: Props) {
   }
 
   return (
-    <main className="min-h-screen bg-white text-[#1C1917] selection:bg-red-600 selection:text-white pt-24 md:pt-32 pb-20">
-        
+    <main className="min-h-screen bg-[#FDFBF7] text-[#1C1917] selection:bg-red-600 selection:text-white pt-20 pb-20">
+
+        {/* Decorative top border (like /advising) */}
+        <div className="h-1 w-full bg-black fixed top-0 z-50" />
+
         {/* HEADER SECTION */}
-        <div className="max-w-7xl mx-auto px-6 mb-20 md:mb-32">
-          <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-gray-100 pb-8 gap-8">
+        <div className="max-w-3xl mx-auto px-6 mb-12 md:mb-20">
+          <div className="flex flex-col md:items-end justify-between border-b border-gray-100 pb-8 gap-6">
             <div className="max-w-2xl">
-              <span className="block font-mono text-xs text-red-600 uppercase tracking-widest mb-4">
+              <span className="block font-mono text-xs text-red-600 uppercase tracking-widest mb-3">
                 // System Logs
               </span>
-              <h1 className="text-5xl md:text-7xl font-serif font-medium tracking-tight text-black leading-none">
+              <h1 className="text-4xl md:text-5xl font-serif font-medium tracking-tight text-black leading-none">
                 The Journal.
               </h1>
-              <p className="mt-6 text-lg text-gray-500 font-serif italic max-w-xl">
+              <p className="mt-4 text-lg text-gray-500 font-serif italic max-w-xl">
                 Chronicles of the unframed. Notes on art, tech, and the void.
               </p>
-            </div>
-            
-            {/* Status Widget */}
-            <div className="hidden md:block text-right">
-               <div className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-1">
-                 Latest Update
-               </div>
-               <div className="font-mono text-sm text-black">
-                 {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-               </div>
             </div>
           </div>
         </div>
 
         {/* MAIN GRID LAYOUT */}
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-24">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20">
             
             {/* LEFT COLUMN: ARTICLES FEED (8 COLS) */}
-            <div className="lg:col-span-8 space-y-20">
+            <div className="lg:col-span-8">
                {initialLetters.map((article) => (
-                 <article key={article.id} className="group cursor-pointer">
+                 <article key={article.id} className="group cursor-pointer border-b border-gray-100 pb-8 mb-6 last:mb-0">
                     <Link href={`/journal/${article.slug}`} className="block">
                       
                       {/* Meta Data */}
-                      <div className="flex items-center gap-3 mb-4 font-mono text-[10px] uppercase tracking-widest text-gray-400">
+                      <div className="flex items-center gap-3 mb-3 font-mono text-[10px] uppercase tracking-widest text-gray-400">
                         <span>{new Date(article.publishedAt).toLocaleDateString('en-GB')}</span>
                         <span className="w-8 h-[1px] bg-gray-200"></span>
                         <span>Intelligence</span>
                       </div>
 
                       {/* Title */}
-                      <h2 className="text-3xl md:text-5xl font-serif font-medium text-black mb-6 group-hover:text-red-600 transition-colors duration-300 leading-tight">
+                      <h2 className="text-2xl md:text-4xl font-serif font-medium text-black mb-3 group-hover:text-red-600 transition-colors duration-300 leading-tight">
                         {article.title}
                       </h2>
 
                       {/* Preview Text */}
-                      <p className="text-base md:text-lg text-gray-500 font-serif leading-relaxed mb-6 max-w-2xl">
+                      <p className="text-base md:text-lg text-gray-600 font-serif leading-relaxed mb-4 max-w-2xl">
                         {article.preview}
                       </p>
 
