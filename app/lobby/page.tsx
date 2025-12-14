@@ -29,7 +29,7 @@ export default function LobbyPage() {
         </div>
 
         <div className="max-w-5xl mx-auto w-full pt-20">
-          <h1 className="text-6xl md:text-8xl lg:text-9xl font-medium tracking-tight leading-[0.9] mb-12 text-black">
+          <h1 className="text-6xl md:text-8xl lg:text-9xl font-serif font-medium tracking-tight leading-[0.9] mb-12 text-black">
             I architect <br/>
             <span className="text-gray-400 italic">futures.</span>
           </h1>
@@ -69,7 +69,7 @@ export default function LobbyPage() {
             <span className="block font-mono text-xs uppercase tracking-[0.2em] text-gray-400 mb-8">
               01 / The Track Record
             </span>
-            <h2 className="text-4xl md:text-6xl font-medium leading-[1.1] mb-8">
+            <h2 className="text-4xl md:text-6xl font-serif font-medium leading-[1.1] mb-8">
               Predicting the collapse before it happens.
             </h2>
             <p className="text-lg text-gray-500 leading-relaxed max-w-md font-serif">
@@ -84,21 +84,21 @@ export default function LobbyPage() {
             <div className="relative">
               <span className="absolute -left-[37px] md:-left-[53px] top-2 w-3 h-3 bg-white border border-black rounded-full"></span>
               <div className="font-mono text-gray-400 text-xs mb-2 uppercase tracking-widest">2012 — The Splinternet</div>
-              <h4 className="text-xl md:text-2xl font-medium text-black">The Fragmentation Prediction</h4>
+              <h4 className="text-xl md:text-2xl font-serif font-medium text-black">The Fragmentation Prediction</h4>
             </div>
 
             {/* 2018 */}
             <div className="relative">
               <span className="absolute -left-[37px] md:-left-[53px] top-2 w-3 h-3 bg-white border border-black rounded-full"></span>
               <div className="font-mono text-gray-400 text-xs mb-2 uppercase tracking-widest">2018 — The Resistance</div>
-              <h4 className="text-xl md:text-2xl font-medium text-black">The Telegram War</h4>
+              <h4 className="text-xl md:text-2xl font-serif font-medium text-black">The Telegram War</h4>
             </div>
 
             {/* 2025 */}
             <div className="relative">
               <span className="absolute -left-[37px] md:-left-[53px] top-2 w-3 h-3 bg-black rounded-full"></span>
               <div className="font-mono text-black text-xs mb-2 uppercase tracking-widest font-bold">2025 — The Reality</div>
-              <h4 className="text-xl md:text-2xl font-medium text-black">The Digital Collar</h4>
+              <h4 className="text-xl md:text-2xl font-serif font-medium text-black">The Digital Collar</h4>
             </div>
 
           </div>

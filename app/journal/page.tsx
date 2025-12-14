@@ -131,14 +131,12 @@ export default async function JournalPage({ searchParams }: Props) {
     <main className="min-h-screen bg-[#FDFBF7] text-[#111] font-sans selection:bg-black selection:text-white">
         
         {/* HEADER (match /advising) */}
-        <div className="max-w-3xl mx-auto px-6 mb-12 md:mb-20">
-          <div className="flex flex-col items-center justify-between border-b border-gray-100 pb-8 gap-6 text-center">
-            <div className="w-full">
-              <span className="block font-mono text-xs text-red-600 uppercase tracking-widest mb-4">// System Logs</span>
-              <h1 className="text-4xl md:text-5xl font-serif font-medium tracking-tight text-black leading-none">The Journal</h1>
-              <p className="mt-4 text-lg text-gray-500 font-serif italic max-w-xl mx-auto">Notes on art, technology, and the architecture of value.</p>
-            </div>
-          </div>
+        <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
+          <header className="mb-16 border-b border-gray-200 pb-8 text-center">
+            <span className="block font-mono text-[10px] tracking-[0.3em] uppercase text-gray-500 mb-6">// System Logs</span>
+            <h1 className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-6 text-black">The Journal</h1>
+            <p className="text-xl md:text-2xl text-gray-600 font-serif italic max-w-xl mx-auto">Notes on art, technology, and the architecture of value.</p>
+          </header>
         </div>
 
         {/* ARTICLES: single-column, centered like /advising */}

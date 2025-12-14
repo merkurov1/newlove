@@ -116,19 +116,15 @@ export default async function SelectionPage() {
       {/* DECORATIVE BORDER TOP */}
       <div className="h-1 w-full bg-black fixed top-0 z-50"></div>
 
-      <div className="max-w-7xl mx-auto px-6 py-20 md:py-32">
-        
-        {/* Header: Investment Terminal Style */}
-        <header className="mb-16 border-b border-gray-200 pb-8">
-           <div className="flex justify-between items-center mb-6">
-            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-500">
+      {/* HEADER (narrow container like /advising) */}
+      <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
+        <header className="mb-16 border-b border-gray-200 pb-8 text-center">
+           <div className="mb-6">
+            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-500 block mb-2">
               Curated Inventory
             </span>
-            <div className="flex items-center gap-4">
-              <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              <span className="font-mono text-[10px] tracking-widest uppercase text-gray-500">
-                  Assets: {articlesToRender ? articlesToRender.length : 0}
-              </span>
+            <div className="text-[10px] font-mono tracking-widest uppercase text-gray-500">
+              Assets: {articlesToRender ? articlesToRender.length : 0}
             </div>
           </div>
           <h1 className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-6">
@@ -138,8 +134,10 @@ export default async function SelectionPage() {
              Chronicles of silence & art.
           </p>
         </header>
+      </div>
 
-        {/* Grid: Auction Catalog Style */}
+      {/* Grid: Auction Catalog Style (wider container) */}
+      <div className="max-w-7xl mx-auto px-6 pb-20">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-16">
           {articlesToRender && articlesToRender.length > 0 ? (
             articlesToRender.map((article: any) => {
