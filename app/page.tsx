@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 export const metadata = {
   title: 'Merkurov | The Interface',
@@ -8,82 +8,85 @@ export const metadata = {
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-white text-[#1C1917] pt-32 pb-12 selection:bg-red-600 selection:text-white">
+    <main className="h-screen min-h-[700px] bg-white text-zinc-900 pt-20 flex flex-col justify-center items-center relative overflow-hidden selection:bg-red-600 selection:text-white">
 
-      {/* SECTION 1: SYSTEM STATUS (Small Header) */}
-      <div className="max-w-4xl mx-auto px-6 mb-24 text-center">
-        <div className="inline-flex items-center gap-2 border border-gray-100 px-3 py-1 rounded-full mb-6">
-           <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-           <span className="text-[10px] font-mono uppercase tracking-widest text-gray-400">
-             System Operational
-           </span>
+      {/* CENTER CONTAINER */}
+      <div className="w-full max-w-6xl px-6 flex flex-col items-center z-10">
+
+        {/* 1. STATUS BADGE */}
+        <div className="mb-8 animate-fade-in-down">
+          <div className="inline-flex items-center gap-3 border border-zinc-200 px-4 py-1.5 rounded-full bg-white/50 backdrop-blur-sm">
+             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]"></span>
+             <span className="font-mono text-[10px] md:text-xs font-bold uppercase tracking-[0.15em] text-zinc-500">
+               System Online
+             </span>
+          </div>
         </div>
-        <h1 className="text-xl md:text-2xl font-serif italic text-gray-400">
+
+        {/* 2. QUOTE */}
+        <h1 className="text-xl md:text-2xl font-serif italic text-zinc-400 mb-10 text-center max-w-lg leading-relaxed">
           "Structure is the antidote to chaos."
         </h1>
-      </div>
 
-      {/* SECTION 2: THE TRINITY (Navigation) */}
-      <nav className="max-w-4xl mx-auto px-6 flex flex-col items-center gap-16 md:gap-24 mb-32">
-        
-        {/* PILLAR 1: ART */}
-        <Link href="/heartandangel" className="group text-center block w-full">
-          <span className="block text-5xl md:text-8xl font-serif font-medium text-black group-hover:italic transition-all duration-500">
-            [ ART ]
-          </span>
-          <div className="mt-4 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500 transform translate-y-2 group-hover:translate-y-0">
-             <span className="font-mono text-xs text-red-600 tracking-widest uppercase">The Digital Ritual</span>
-             <ArrowUpRight size={12} className="text-red-600"/>
-          </div>
-        </Link>
+        {/* 3. LOBBY BUTTON (ONBOARDING) - Central & Prominent */}
+        <div className="mb-16 md:mb-20">
+            <Link 
+              href="/lobby" 
+              className="group flex items-center gap-4 bg-zinc-900 text-white px-8 py-4 rounded-sm hover:bg-red-600 transition-all duration-500 shadow-xl hover:shadow-red-600/20"
+            >
+                <div className="flex flex-col text-left">
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-400 group-hover:text-white/80">
+                        Private Office
+                    </span>
+                    <span className="font-serif text-lg leading-none italic pr-2">
+                        Enter The Lobby
+                    </span>
+                </div>
+                <ArrowRight size={18} className="text-zinc-500 group-hover:text-white group-hover:translate-x-1 transition-all duration-300" />
+            </Link>
+        </div>
 
-        {/* PILLAR 2: SELECTION */}
-        <Link href="/selection" className="group text-center block w-full">
-          <span className="block text-5xl md:text-8xl font-serif font-medium text-black group-hover:italic transition-all duration-500">
-            [ SELECTION ]
-          </span>
-          <div className="mt-4 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500 transform translate-y-2 group-hover:translate-y-0">
-             <span className="font-mono text-xs text-red-600 tracking-widest uppercase">Curated Inventory</span>
-             <ArrowUpRight size={12} className="text-red-600"/>
-          </div>
-        </Link>
+        {/* 4. THE PILLARS (Navigation) */}
+        <nav className="flex flex-col items-center gap-4 md:gap-8 w-full">
+          
+          {/* PILLAR 1: ART */}
+          <Link href="/heartandangel" className="group relative block w-full text-center py-2">
+            <span className="block text-5xl sm:text-7xl md:text-8xl font-serif font-medium text-zinc-900 group-hover:italic group-hover:scale-105 transition-all duration-500 ease-out">
+              [ ART ]
+            </span>
+            <span className="absolute left-1/2 -translate-x-1/2 bottom-0 font-mono text-[10px] sm:text-xs text-red-600 tracking-[0.2em] uppercase opacity-0 group-hover:opacity-100 group-hover:-translate-y-2 transition-all duration-500 whitespace-nowrap">
+               The Digital Ritual
+            </span>
+          </Link>
 
-        {/* PILLAR 3: ADVISING */}
-        <Link href="/advising" className="group text-center block w-full">
-          <span className="block text-5xl md:text-8xl font-serif font-medium text-black group-hover:italic transition-all duration-500">
-            [ ADVISING ]
-          </span>
-          <div className="mt-4 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500 transform translate-y-2 group-hover:translate-y-0">
-             <span className="font-mono text-xs text-red-600 tracking-widest uppercase">Private Acquisition</span>
-             <ArrowUpRight size={12} className="text-red-600"/>
-          </div>
-        </Link>
+          {/* PILLAR 2: SELECTION */}
+          <Link href="/selection" className="group relative block w-full text-center py-2">
+            <span className="block text-5xl sm:text-7xl md:text-8xl font-serif font-medium text-zinc-900 group-hover:italic group-hover:scale-105 transition-all duration-500 ease-out">
+              [ SELECTION ]
+            </span>
+            <span className="absolute left-1/2 -translate-x-1/2 bottom-0 font-mono text-[10px] sm:text-xs text-red-600 tracking-[0.2em] uppercase opacity-0 group-hover:opacity-100 group-hover:-translate-y-2 transition-all duration-500 whitespace-nowrap">
+               Curated Inventory
+            </span>
+          </Link>
 
-      </nav>
+          {/* PILLAR 3: ADVISING */}
+          <Link href="/advising" className="group relative block w-full text-center py-2">
+            <span className="block text-5xl sm:text-7xl md:text-8xl font-serif font-medium text-zinc-900 group-hover:italic group-hover:scale-105 transition-all duration-500 ease-out">
+              [ ADVISING ]
+            </span>
+            <span className="absolute left-1/2 -translate-x-1/2 bottom-0 font-mono text-[10px] sm:text-xs text-red-600 tracking-[0.2em] uppercase opacity-0 group-hover:opacity-100 group-hover:-translate-y-2 transition-all duration-500 whitespace-nowrap">
+               Private Acquisition
+            </span>
+          </Link>
 
-      {/* SECTION 3: MANIFESTO & SYSTEM ACCESS */}
-      <div className="max-w-2xl mx-auto px-6 text-center border-t border-gray-100 pt-16">
-        <p className="font-mono text-sm md:text-base text-gray-500 leading-relaxed mb-12">
-          I traded complexity for truth. <br className="hidden md:block" />
-          My art is a return to the fundamental source code. <br className="hidden md:block" />
-          No politics. Just the raw transmission of empathy.
-        </p>
+        </nav>
 
-        <Link 
-          href="/lobby"
-          className="inline-flex items-center gap-3 px-8 py-4 bg-black text-white rounded-full hover:bg-red-600 transition-colors duration-300 group"
-        >
-          <span className="font-mono text-xs uppercase tracking-widest">
-            Enter Private Office
-          </span>
-          <span className="w-1.5 h-1.5 bg-white rounded-full group-hover:animate-ping"></span>
-        </Link>
       </div>
 
       {/* FOOTER */}
-      <footer className="mt-24 text-center pb-8">
-         <span className="text-[10px] font-mono text-gray-300 uppercase tracking-widest">
-            M — 2025 • Global
+      <footer className="absolute bottom-6 left-0 right-0 text-center pointer-events-none">
+         <span className="text-[10px] font-mono text-zinc-300 uppercase tracking-[0.2em]">
+            Merkurov Executive Build v.3.0
          </span>
       </footer>
 
