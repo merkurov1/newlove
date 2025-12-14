@@ -29,6 +29,7 @@ export default function AdvisingPage() {
         {/* 1. HEADER: STATUS & IDENTITY */}
         <CenteredHeader>
           <HeroMotion
+            brand={<>Advising</>}
             title={(<><span>The Private</span><br />Office.</>)}
             subtitle={<>Heritage Architecture for the Post-Digital Age.</>}
             status="System Online"

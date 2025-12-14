@@ -7,6 +7,7 @@ type Props = {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   status?: string;
+  brand?: React.ReactNode;
 };
 
 const container = {
@@ -25,7 +26,7 @@ export default function HeroMotion({ title, subtitle, status }: Props) {
     <motion.div initial="hidden" animate="show" variants={container}>
       <div className="flex flex-col items-center mb-6 text-center">
         <motion.span variants={item} className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 mb-3">
-          Merkurov Private Office
+          {brand || 'Merkurov Private Office'}
         </motion.span>
 
         <motion.div variants={item} className="font-mono text-[10px] tracking-widest uppercase text-green-600 border border-green-600 px-2 py-1 rounded-full mb-3">
