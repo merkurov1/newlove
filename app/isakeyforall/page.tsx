@@ -1,6 +1,7 @@
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Link from 'next/link'
 import HeroMotion from '@/components/advising/HeroMotion'
+import CenteredHeader from '@/components/CenteredHeader'
 import CaseStudyCard from '@/components/advising/CaseStudyCard'
 
 export const metadata = sanitizeMetadata({
@@ -18,13 +19,13 @@ export default function IsAKeyForAllPage() {
       <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
         
         {/* Header: The Monument (motion) */}
-        <header className="mb-16 border-b border-gray-200 pb-8">
+        <CenteredHeader>
           <HeroMotion
-            title={(<><span>Love is a</span><br/>key for all.</>)}
+            title={(<><span>Love is a</span><br/>key for all.</>) }
             subtitle={<>Artist. Digital Architect. Humanist.</>}
             status="Identity Protocol"
           />
-        </header>
+        </CenteredHeader>
 
         {/* Content: The Narrative */}
         <article className="prose prose-lg prose-stone prose-p:font-light prose-p:leading-relaxed prose-headings:font-serif max-w-none">

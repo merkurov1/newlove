@@ -3,6 +3,7 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Image from 'next/image';
 import './swiper-init';
 import dynamic from 'next/dynamic';
+import CenteredHeader from '@/components/CenteredHeader';
 
 const AuctionSlider = dynamic(() => import('@/components/AuctionSlider'), { ssr: false });
 
@@ -118,22 +119,14 @@ export default async function SelectionPage() {
 
       {/* HEADER (narrow container like /advising) */}
       <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
-        <header className="mb-16 border-b border-gray-200 pb-8 text-center">
-           <div className="mb-6">
-            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-500 block mb-2">
-              Curated Inventory
-            </span>
-            <div className="text-[10px] font-mono tracking-widest uppercase text-gray-500">
-              Assets: {articlesToRender ? articlesToRender.length : 0}
-            </div>
+        <CenteredHeader>
+          <div className="mb-6">
+            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-500 block mb-2">Curated Inventory</span>
+            <div className="text-[10px] font-mono tracking-widest uppercase text-gray-500">Assets: {articlesToRender ? articlesToRender.length : 0}</div>
           </div>
-          <h1 className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-6">
-            Selection.
-          </h1>
-          <p className="text-xl font-serif italic text-gray-600">
-             Chronicles of silence & art.
-          </p>
-        </header>
+          <h1 className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-6">Selection.</h1>
+          <p className="text-xl font-serif italic text-gray-600">Chronicles of silence & art.</p>
+        </CenteredHeader>
       </div>
 
       {/* Grid: Auction Catalog Style (wider container) */}

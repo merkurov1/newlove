@@ -111,12 +111,10 @@ export default function LetterCommentsClient({
   }
   return (
     <div className="mt-8">
-      <h3 className="text-lg font-semibold mb-3">Comments</h3>
+      <h3 className="font-serif text-2xl mb-4">Comments</h3>
       {loading && <div className="text-sm text-gray-500">Loading comments...</div>}
       {error === 'unauthenticated' && (
-        <div className="text-sm text-gray-600 mb-3">
-          Comments are available to registered users only.
-        </div>
+        <div className="text-sm text-gray-600 mb-3">Comments are available to registered users only.</div>
       )}
       {error && error !== 'unauthenticated' && (
         <div className="text-sm text-red-600">Error: {error}</div>
@@ -124,42 +122,42 @@ export default function LetterCommentsClient({
       {!loading && !error && comments.length === 0 && (
         <div className="text-sm text-gray-500 mb-3">No comments yet — be the first!</div>
       )}
+
       <ul className="space-y-4">
         {comments.map((c) => (
-          <li key={c.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-gray-700 font-semibold">
-                {c.author_display || 'Anonymous'}
-              </div>
+          <li key={c.id} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-mono uppercase tracking-widest text-gray-700">{c.author_display || 'Anonymous'}</div>
               <div className="text-xs text-gray-400">{new Date(c.created_at).toLocaleString()}</div>
             </div>
-            <div className="text-gray-800">{c.content}</div>
+            <div className="text-gray-900 font-serif leading-relaxed">{c.content}</div>
           </li>
         ))}
       </ul>
+
       <form onSubmit={handlePost} className="mt-6">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-md">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Leave a comment</label>
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <label className="block font-mono text-xs uppercase tracking-widest text-gray-500 mb-2">Leave a comment</label>
           <textarea
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
-            className="w-full p-3 border border-gray-100 rounded-md resize-none focus:ring-2 focus:ring-blue-200"
+            className="w-full p-4 border border-gray-100 rounded-md resize-none focus:ring-2 focus:ring-black/10 font-serif text-base"
             rows={4}
             placeholder="Share your thoughts or feedback..."
           />
-          <div className="mt-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="mt-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
               <button
                 disabled={posting || error === 'unauthenticated' || hasSession === false}
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md shadow"
+                className="inline-block border-b-2 border-black pb-1 text-sm font-mono uppercase tracking-widest"
               >
                 Send
               </button>
               <button
                 type="button"
                 onClick={() => setNewContent('')}
-                className="px-3 py-2 border rounded-md"
+                className="px-3 py-2 border rounded-md text-sm"
               >
                 Clear
               </button>

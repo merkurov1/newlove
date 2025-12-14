@@ -2,6 +2,7 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import CenteredHeader from '@/components/CenteredHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -132,11 +133,7 @@ export default async function JournalPage({ searchParams }: Props) {
         
         {/* HEADER (match /advising) */}
         <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
-          <header className="mb-16 border-b border-gray-200 pb-8 text-center">
-            <span className="block font-mono text-[10px] tracking-[0.3em] uppercase text-gray-500 mb-6">// System Logs</span>
-            <h1 className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-6 text-black">The Journal</h1>
-            <p className="text-xl md:text-2xl text-gray-600 font-serif italic max-w-xl mx-auto">Notes on art, technology, and the architecture of value.</p>
-          </header>
+          <CenteredHeader eyebrow={<>// System Logs</>} title={<>The Journal</>} subtitle={<>Notes on art, technology, and the architecture of value.</>} />
         </div>
 
         {/* ARTICLES: single-column, centered like /advising */}

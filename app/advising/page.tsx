@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import HeroMotion from '@/components/advising/HeroMotion'
+import CenteredHeader from '@/components/CenteredHeader'
 import CaseStudyCard from '@/components/advising/CaseStudyCard'
 
 export const metadata: Metadata = {
@@ -26,13 +27,13 @@ export default function AdvisingPage() {
       <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
         
         {/* 1. HEADER: STATUS & IDENTITY */}
-        <header className="mb-16 border-b border-gray-200 pb-8">
+        <CenteredHeader>
           <HeroMotion
             title={(<><span>The Private</span><br />Office.</>)}
             subtitle={<>Heritage Architecture for the Post-Digital Age.</>}
             status="System Online"
           />
-        </header>
+        </CenteredHeader>
 
         {/* 2. MANIFESTO */}
         <section className="mb-20 prose prose-lg prose-stone">

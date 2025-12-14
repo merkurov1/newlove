@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import React from 'react';
 import HeartAndAngelSection from '@/components/HeartAndAngelSection';
+import CenteredHeader from '@/components/CenteredHeader';
 
 export const metadata = {
   title: 'Heart & Angel | Merkurov.love',
@@ -25,18 +26,11 @@ export default function HeartAndAngelPage() {
       <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
         <div className="flex flex-col items-center w-full">
 
-          {/* Header Section */}
-          <div className="text-center mb-16 border-b border-gray-200 pb-8 w-full">
-            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 block mb-6">
-              Visual Mythology
-            </span>
-            <h1 className="font-serif text-5xl md:text-7xl mb-6 text-black tracking-tight leading-none">
-              Heart & Angel
-            </h1>
-            <p className="font-serif italic text-xl text-gray-600">
-              A universal mythology for a fragmented world.
-            </p>
-          </div>
+          <CenteredHeader
+            eyebrow={<>Visual Mythology</>}
+            title={<>Heart &amp; Angel</>}
+            subtitle={<>A universal mythology for a fragmented world.</>}
+          />
 
           {/* Gallery Component */}
           <div className="w-full">
