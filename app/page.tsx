@@ -56,7 +56,7 @@ export default function Home() {
       {/* DECORATIVE BORDER TOP */}
       <div className="h-1 w-full bg-black fixed top-0 z-50"></div>
 
-      <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
+      <div className="max-w-3xl mx-auto px-6 pt-6 pb-12 md:pt-8 md:pb-16">
         <div className="flex flex-col items-center w-full">
 
           {/* Header Section (styling only; removed empty spacer per request) */}
@@ -110,7 +110,7 @@ export default function Home() {
           </nav>
 
           {/* MANIFESTO */}
-          <section className="w-full mb-16 sm:mb-24 md:mb-[120px]">
+          <section className="w-full mb-12 sm:mb-16 md:mb-24">
             <div className="mx-auto px-3" style={{ maxWidth: 600, fontFamily: 'Space Mono, Courier Prime, monospace', color: '#222', fontSize: 'clamp(13px, 3vw, 14px)', lineHeight: 1.8, textAlign: 'center' }}>
               <p className="mb-6">
                 <span style={{ textWrap: 'balance' }}>
