@@ -104,19 +104,18 @@ export default function LobbyPage() {
 
       {/* --- SECTION 3: MEDIA TICKER (Clean White) --- */}
       <section className="py-12 border-b border-gray-100 overflow-hidden whitespace-nowrap bg-gray-50">
-        <div className="animate-marquee inline-block">
-          <span className="text-xl md:text-3xl font-mono text-zinc-400 mx-8">
-            <span className="text-white font-bold">THE NEW YORK TIMES (2018):</span> "Putin never really uses the internet, so he doesn't understand how it works." — Anton Merkurov
+        <div className="animate-marquee inline-block font-mono text-xs md:text-sm uppercase tracking-[0.15em] text-gray-500">
+          <span className="mx-12">
+            <span className="font-bold text-black">THE NEW YORK TIMES (2018):</span> "Putin never really uses the internet, so he doesn't understand how it works."
           </span>
-          <span className="text-xl md:text-3xl font-mono text-zinc-500 mx-8">///</span>
-          <span className="text-xl md:text-3xl font-mono text-zinc-400 mx-8">
-            <span className="text-white font-bold">THE WASHINGTON POST (2018):</span> "The result will be millions of digital emigres turning their backs on the state."
+          <span className="mx-12 text-gray-400">///</span>
+          <span className="mx-12">
+            <span className="font-bold text-black">THE WASHINGTON POST (2018):</span> "The result will be millions of digital emigres turning their backs on the state."
           </span>
-          <span className="text-xl md:text-3xl font-mono text-zinc-500 mx-8">///</span>
-          <span className="text-xl md:text-3xl font-mono text-zinc-400 mx-8">
-            <span className="text-white font-bold">EURACTIV (2020):</span> "The main danger is physical access to the device. Biology is the weak link."
+          <span className="mx-12 text-gray-400">///</span>
+          <span className="mx-12">
+            <span className="font-bold text-black">EURACTIV (2020):</span> "The main danger is physical access to the device. Biology is the weak link."
           </span>
-          <span className="text-xl md:text-3xl font-mono text-zinc-500 mx-8">///</span>
         </div>
       </section>
 
