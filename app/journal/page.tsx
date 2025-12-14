@@ -15,29 +15,55 @@ interface Props {
   searchParams?: { [key: string]: string | string[] | undefined };
 }
 
-// Функция для очистки текста превью
-function getPreviewText(content: any, limit = 240) {
+// Функция для очистки текста превью — поддерживает `data.html` и `data.text` в блоках
+function getPreviewText(content: any, limit = 320) {
   if (!content) return '';
+
+  const stripHtml = (html: string) =>
+    String(html || '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]*>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
   let text = '';
-  
+
   if (typeof content === 'string') {
+    // Try JSON (EditorJS-like or custom blocks)
     try {
       const json = JSON.parse(content);
-      if (Array.isArray(json) || (json.blocks && Array.isArray(json.blocks))) {
-        const blocks = Array.isArray(json) ? json : json.blocks;
-        text = blocks.map((b: any) => b.data?.text || '').join(' ');
-      } else {
-        text = content;
+      const blocks = Array.isArray(json) ? json : json?.blocks || [];
+      const parts: string[] = [];
+      for (const b of blocks) {
+        if (!b || !b.data) continue;
+        // Support different shapes: b.data.html, b.data.text, or plain string
+        const html = typeof b.data === 'string' ? b.data : b.data.html || b.data.text || '';
+        const part = stripHtml(html);
+        if (part) parts.push(part);
+      }
+      text = parts.join(' ');
+      if (!text) {
+        // Fallback: treat original string as HTML/plain text
+        text = stripHtml(content);
       }
     } catch {
-      text = content.replace(/<[^>]*>?/gm, '');
+      // Not JSON — treat as HTML/plain text
+      text = stripHtml(content);
     }
   } else if (typeof content === 'object') {
-     const blocks = Array.isArray(content) ? content : content.blocks || [];
-     text = blocks.map((b: any) => b.data?.text || '').join(' ');
+    const blocks = Array.isArray(content) ? content : content.blocks || [];
+    const parts: string[] = [];
+    for (const b of blocks) {
+      if (!b || !b.data) continue;
+      const html = typeof b.data === 'string' ? b.data : b.data.html || b.data.text || '';
+      const part = stripHtml(html);
+      if (part) parts.push(part);
+    }
+    text = parts.join(' ');
   }
 
-  const clean = text.replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  const clean = (text || '').replace(/\s+/g, ' ').trim();
   return clean.length > limit ? clean.substring(0, limit) + '...' : clean;
 }
 
