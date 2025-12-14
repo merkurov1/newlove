@@ -1,12 +1,18 @@
-'use client';
+"use client";
 
 import { useEffect, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Activity, Shield, Zap } from 'lucide-react';
 
+export const metadata = {
+  title: 'Silence Index | Merkurov Private Office',
+  description:
+    'The Silence Index — a composite tracking Heritage vs Noise (Gold, Hermes vs BTC, NVDA). Interactive chart and brief analysis.',
+};
+
 export default function SilenceIndexPage() {
   const [data, setData] = useState<any[]>([]);
-  const [meta, setMeta] = useState<any>(null);
+  const [meta, setMeta] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,13 +31,13 @@ export default function SilenceIndexPage() {
     </div>
   );
 
-  const isPositive = meta.trend === 'up';
+  const isPositive = meta?.trend === 'up';
 
   return (
     <div className="min-h-screen bg-[#F2F0E9] text-[#1C1917] p-6 md:p-12 font-serif selection:bg-[#B91C1C] selection:text-white">
       
       {/* HEADER */}
-      <header className="max-w-4xl mx-auto mb-16 border-b border-[#1C1917]/10 pb-6">
+      <header className="max-w-4xl mx-auto mb-12 border-b border-[#1C1917]/10 pb-6">
         <div className="flex justify-between items-end">
           <div>
             <h1 className="text-4xl md:text-6xl tracking-tight font-bold mb-2">
@@ -43,22 +49,26 @@ export default function SilenceIndexPage() {
           </div>
           <div className="text-right hidden md:block">
             <div className="text-xs uppercase tracking-widest text-[#57534E] mb-1">Current Value</div>
-            <div className="text-5xl font-mono">{meta.currentValue}</div>
+            <div className="text-5xl font-mono">{meta?.currentValue ?? 0}</div>
           </div>
         </div>
       </header>
 
       {/* MAIN METRIC MOBILE */}
-      <div className="md:hidden mb-12 text-center">
-        <div className="text-6xl font-mono mb-2">{meta.currentValue}</div>
-        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm ${isPositive ? 'bg-[#E7E5DE] text-green-800' : 'bg-[#E7E5DE] text-[#B91C1C]'}`}>
+      <div className="md:hidden mb-8 text-center">
+        <div className="text-5xl sm:text-6xl font-mono mb-2">{meta?.currentValue ?? 0}</div>
+        <div
+          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
+            isPositive ? 'bg-[#E7E5DE] text-green-800' : 'bg-[#E7E5DE] text-[#B91C1C]'
+          }`}
+        >
           {isPositive ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-          {Math.abs(meta.percentChange)}% (24h)
+          {Math.abs(meta?.percentChange ?? 0)}% (24h)
         </div>
       </div>
 
       {/* CHART AREA */}
-      <main className="max-w-5xl mx-auto h-[400px] md:h-[500px] mb-16 relative">
+      <main className="max-w-5xl mx-auto h-[260px] sm:h-[320px] md:h-[500px] mb-12 md:mb-16 relative">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
             <XAxis 
