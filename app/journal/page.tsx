@@ -60,7 +60,13 @@ export default async function JournalPage({ searchParams }: Props) {
         id: l.id,
         title: l.title,
         slug: l.slug,
-        preview: l.summary || getPreviewText(l.content),
+        // Use summary when available, else try parsed preview, else fallback to stripped raw content
+        preview:
+          l.summary ||
+          getPreviewText(l.content) ||
+          (typeof l.content === 'string'
+            ? (l.content.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 320) + (l.content.length > 320 ? '...' : ''))
+            : ''),
         publishedAt: l.publishedAt,
       }));
     }
