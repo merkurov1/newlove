@@ -16,7 +16,7 @@ interface Props {
 }
 
 // Helper to strip HTML/JSON and get plain text for preview
-function getPreviewText(content: any, limit = 240) {
+function getPreviewText(content: any, limit = 320) {
   if (!content) return '';
   let text = '';
   
@@ -55,8 +55,8 @@ export default async function JournalPage({ searchParams }: Props) {
       .from('letters')
       .select(selectCols as any)
       .eq('published', true)
-      // Oldest first (ascending) so chronological reading
-      .order('publishedAt', { ascending: true })
+      // Newest first (descending) — show latest publications first
+      .order('publishedAt', { ascending: false })
       .limit(100);
 
     if (!error && Array.isArray(lettersData)) {
@@ -118,7 +118,7 @@ export default async function JournalPage({ searchParams }: Props) {
                       </h2>
 
                       {/* Preview Text */}
-                      <p className="text-base md:text-lg text-gray-600 font-serif leading-relaxed mb-4 max-w-2xl">
+                      <p className="text-base md:text-lg text-gray-700 font-serif italic leading-relaxed mb-4 max-w-2xl whitespace-pre-line">
                         {article.preview}
                       </p>
 
