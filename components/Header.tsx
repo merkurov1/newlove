@@ -7,7 +7,7 @@ import { Menu, X } from 'lucide-react';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
 
   useEffect(() => {
     setIsMenuOpen(false);
@@ -24,7 +24,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 transition-all duration-300">
+      <header className="fixed top-0 left-0 right-0 z-60 bg-white/95 backdrop-blur-md border-b border-gray-100 transition-all duration-300">
         <div className="max-w-[1800px] mx-auto px-6 h-16 md:h-24 flex items-center justify-between">
           
           {/* LOGO */}
@@ -35,14 +35,14 @@ export default function Header() {
           </Link>
 
           {/* DESKTOP NAV */}
-          <nav className="hidden md:flex items-center gap-8 lg:gap-12">
+          <nav role="navigation" className="hidden md:flex items-center gap-8 lg:gap-12">
             {navLinks.map((link) => (
               <Link
                 key={link.name}
                 href={link.href}
                 className={`text-sm md:text-base font-mono uppercase tracking-[0.15em] transition-all duration-300 ${
-                  pathname === link.href 
-                    ? 'text-red-600 font-bold border-b border-red-600 pb-0.5' 
+                  (pathname?.startsWith(link.href) ?? false)
+                    ? 'text-red-600 font-bold border-b border-red-600 pb-0.5'
                     : 'text-zinc-500 hover:text-zinc-900'
                 }`}
               >
@@ -55,6 +55,9 @@ export default function Header() {
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="md:hidden z-50 p-2 text-zinc-900"
+            aria-expanded={isMenuOpen}
+            aria-controls="mobile-menu"
+            aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
           >
             {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -63,6 +66,8 @@ export default function Header() {
 
       {/* MOBILE MENU */}
       <div
+        id="mobile-menu"
+        aria-hidden={!isMenuOpen}
         className={`fixed inset-0 z-40 bg-white transform transition-transform duration-500 ease-in-out ${
           isMenuOpen ? 'translate-x-0' : 'translate-x-full'
         }`}

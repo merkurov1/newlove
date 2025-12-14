@@ -28,29 +28,25 @@ export default function LobbyPage() {
            </div>
         </div>
 
-        <div className="max-w-5xl mx-auto w-full pt-20">
-          <h1 className="text-6xl md:text-8xl lg:text-9xl font-serif font-medium tracking-tight leading-[0.9] mb-12 text-black">
+        <div className="max-w-5xl mx-auto w-full pt-20 text-center">
+          <h1 className="text-6xl md:text-8xl lg:text-9xl font-serif font-medium tracking-tight leading-[0.9] mb-8 text-black">
             I architect <br/>
             <span className="text-gray-400 italic">futures.</span>
           </h1>
-          
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-12">
-             <div className="md:col-span-7">
-                <p className="text-xl md:text-2xl text-gray-800 leading-relaxed font-serif">
-                  The world is drowning in noise. Algorithms dictate attention. Politics dictate geography.
-                  <br/><br/>
-                  Here, there are no algorithms. Only structure.
-                </p>
-                
-                <div className="mt-12">
-                  <Link href="/advising" className="group inline-flex items-center gap-4 border-b border-black pb-1 hover:opacity-50 transition-opacity">
-                    <span className="font-mono text-xs uppercase tracking-widest text-black">
-                       Enter The Office
-                    </span>
-                    <ArrowRight size={14} />
-                  </Link>
-                </div>
-             </div>
+
+          <div className="mx-auto max-w-2xl">
+            <p className="text-xl md:text-2xl text-gray-800 leading-relaxed font-serif mb-8">
+              The world is drowning in noise. Algorithms dictate attention. Politics dictate geography.
+              <br/><br/>
+              Here, there are no algorithms. Only structure.
+            </p>
+
+            <div className="mt-6">
+              <Link href="/advising" className="group inline-flex items-center gap-4 border-b border-black pb-1 hover:opacity-50 transition-opacity">
+                <span className="font-mono text-xs uppercase tracking-widest text-black">Enter The Office</span>
+                <ArrowRight size={14} />
+              </Link>
+            </div>
           </div>
         </div>
         
