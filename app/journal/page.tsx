@@ -71,7 +71,7 @@ export default async function JournalPage({ searchParams }: Props) {
   let initialLetters: any[] = [];
   try {
     const supabase = createClient();
-    const selectCols = 'id, title, slug, content, summary, published, publishedAt, sentAt, createdAt, authorId';
+    const selectCols = 'id, title, slug, content, published, publishedAt, sentAt, createdAt, authorId';
 
     // Try ordering by `sentAt` (newest first). If that errors or returns no rows,
     // fall back to ordering by `publishedAt` to avoid showing an empty list.
