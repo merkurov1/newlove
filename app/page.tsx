@@ -59,18 +59,8 @@ export default function Home() {
       <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
         <div className="flex flex-col items-center w-full">
 
-          {/* Header Section */}
-          <div className="text-center mb-12 border-b border-gray-200 pb-8 w-full">
-            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 block mb-6">
-              Digital Temple
-            </span>
-            <h1 className="font-serif text-5xl md:text-7xl mb-6 text-black tracking-tight leading-none">
-              Anton Merkurov
-            </h1>
-            <p className="font-serif italic text-xl text-gray-600">
-              A conceptual portal by Anton Merkurov. Art, advising, and curated selection.
-            </p>
-          </div>
+          {/* Header Section (styling only; text removed as requested) */}
+          <div className="text-center mb-12 border-b border-gray-200 pb-8 w-full" aria-hidden="true"></div>
 
           {/* SPACER + SYSTEM ACCESS BUTTON */}
           <div className="h-12 sm:h-20 flex items-end justify-center mb-8 sm:mb-12 w-full">
