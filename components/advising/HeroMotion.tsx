@@ -21,7 +21,7 @@ const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.45 } },
 };
 
-export default function HeroMotion({ title, subtitle, status }: Props) {
+export default function HeroMotion({ title, subtitle, status, brand }: Props) {
   return (
     <motion.div initial="hidden" animate="show" variants={container}>
       <div className="flex flex-col items-center mb-6 text-center">

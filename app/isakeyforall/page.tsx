@@ -21,9 +21,9 @@ export default function IsAKeyForAllPage() {
         {/* Header: The Monument (motion) */}
         <CenteredHeader>
           <HeroMotion
-            title={(<><span>Love is a</span><br/>key for all.</>) }
+            brand={<>IDENTITY PROTOCOL</>}
+            title={(<><span>Love is a</span><br/>key for all.</>)}
             subtitle={<>Artist. Digital Architect. Humanist.</>}
-            status="Identity Protocol"
           />
         </CenteredHeader>
 
