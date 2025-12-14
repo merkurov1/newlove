@@ -196,7 +196,7 @@ function sanitizeLinksInHtml(html) {
 }
 
 // Эта обертка нужна, чтобы наш компонент мог работать на сервере
-const NewsletterEmail = ({ title = 'Тема письма', content = '', unsubscribeUrl }) => {
+const NewsletterEmail = ({ title = 'Newsletter', content = '', unsubscribeUrl }) => {
   // Конвертируем блочный контент в HTML
   const contentHtml = blocksToHtml(content);
   const contentHtmlSanitized = sanitizeLinksInHtml(contentHtml);
@@ -256,12 +256,12 @@ const NewsletterEmail = ({ title = 'Тема письма', content = '', unsubs
             <div dangerouslySetInnerHTML={{ __html: contentHtmlSanitized }} />
             <Hr style={hr} />
             <Text style={footer}>
-              Anton Merkurov | Вы получили это письмо, потому что подписались на рассылку на сайте new.merkurov.love
+              Anton Merkurov | You are receiving this email because you subscribed to updates at new.merkurov.love
             </Text>
             {unsubscribeUrl && (
               <div style={{ textAlign: 'center', marginTop: 16 }}>
                 <a href={unsubscribeUrl} style={{ color: '#007cba', textDecoration: 'underline', fontSize: '14px', fontWeight: 500 }}>
-                  Отписаться от рассылки
+                  Unsubscribe
                 </a>
               </div>
             )}

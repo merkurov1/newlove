@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import CenteredHeader from '@/components/CenteredHeader';
+import SubscribeFormClient from '@/components/journal/SubscribeFormClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -134,6 +135,7 @@ export default async function JournalPage({ searchParams }: Props) {
         {/* HEADER (match /advising) */}
         <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
           <CenteredHeader eyebrow={<>// System Logs</>} title={<>The Journal</>} subtitle={<>Notes on art, technology, and the architecture of value.</>} />
+          <SubscribeFormClient />
         </div>
 
         {/* ARTICLES: single-column, centered like /advising */}

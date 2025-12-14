@@ -1,7 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import AuthLoginModal from '@/components/AuthLoginModal';
 
 export default function LetterCommentsClient({
   slug,
@@ -17,6 +18,7 @@ export default function LetterCommentsClient({
   const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [newContent, setNewContent] = useState('');
   const [posting, setPosting] = useState(false);
+  const modalRef = useRef<any>(null);
   useEffect(() => {
     let mounted = true;
     async function load() {
@@ -114,7 +116,7 @@ export default function LetterCommentsClient({
       <h3 className="font-serif text-2xl mb-4">Comments</h3>
       {loading && <div className="text-sm text-gray-500">Loading comments...</div>}
       {error === 'unauthenticated' && (
-        <div className="text-sm text-gray-600 mb-3">Comments are available to registered users only.</div>
+        <div className="text-sm text-gray-600 mb-3">You must be logged in to view or post comments. <button onClick={() => modalRef.current?.open()} className="underline">Sign in</button></div>
       )}
       {error && error !== 'unauthenticated' && (
         <div className="text-sm text-red-600">Error: {error}</div>
@@ -166,6 +168,7 @@ export default function LetterCommentsClient({
           </div>
         </div>
       </form>
+      <AuthLoginModal ref={modalRef} />
     </div>
   );
 }
