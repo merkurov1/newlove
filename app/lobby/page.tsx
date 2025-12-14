@@ -2,116 +2,103 @@ import Link from "next/link";
 
 export const metadata = {
   title: "Merkurov | System Access",
-  description: "25 Years in the Ether. System Status: Building.",
+  description: "The Digital Monumentalist. System Status: Live Construction.",
 };
 
 export default function LobbyPage() {
   return (
-    <main className="min-h-screen bg-[#050505] text-zinc-400 font-sans p-4 md:p-12 flex flex-col selection:bg-red-900 selection:text-white">
+    <main className="min-h-screen bg-zinc-50 text-zinc-900 font-serif p-6 md:p-12 flex flex-col selection:bg-red-500 selection:text-white">
       
-      {/* 1. STATUS BAR (LINK TO JOURNAL) */}
-      <div className="w-full border border-zinc-800 bg-zinc-900/30 p-4 mb-12 flex flex-col md:flex-row justify-between items-center gap-4">
+      {/* 1. STATUS BAR (SYSTEM LOGS) */}
+      <div className="w-full border-b border-zinc-200 pb-4 mb-16 flex flex-col md:flex-row justify-between items-center gap-4 font-sans">
         <div className="flex items-center gap-3">
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600"></span>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
           </span>
-          <span className="text-[10px] md:text-xs font-mono tracking-widest uppercase text-zinc-500">
-            System Architecture: Construction in Progress
+          <span className="text-[10px] font-mono tracking-widest uppercase text-zinc-500">
+            System Status: Architecting Self [Live Build]
           </span>
         </div>
         
-        <Link href="/journal" className="text-xs font-mono text-white hover:text-red-500 border-b border-zinc-600 hover:border-red-500 transition-colors pb-0.5">
-          VIEW SYSTEM LOGS (JOURNAL) →
+        <Link href="/journal" className="text-xs font-mono text-zinc-900 hover:text-red-600 transition-colors border-b border-zinc-300 hover:border-red-600 pb-0.5">
+          READ JOURNAL LOGS →
         </Link>
       </div>
 
-      {/* 2. THE CORE (25 YEARS) */}
-      <div className="flex-grow flex flex-col items-center justify-center mb-16 relative">
-        {/* Decorative Grid Lines */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-          <div className="w-[1px] h-full bg-zinc-800"></div>
-          <div className="h-[1px] w-full bg-zinc-800 absolute"></div>
-        </div>
-
-        <div className="bg-[#050505] z-10 p-8 text-center border border-zinc-900">
-          <h1 className="text-6xl md:text-9xl font-bold text-zinc-200 tracking-tighter leading-none">
-            25
-          </h1>
-          <p className="text-lg md:text-2xl font-serif text-zinc-500 italic mt-2">
-            Years in the Ether
-          </p>
-          <p className="text-[10px] font-mono text-zinc-700 uppercase tracking-[0.2em] mt-2">
-            From FidoNet to Neural Networks
-          </p>
-        </div>
+      {/* 2. THE CORE (MONUMENTALIST) */}
+      <div className="flex-grow flex flex-col items-center justify-center mb-24 text-center">
+        <h1 className="text-5xl md:text-8xl font-bold text-zinc-900 tracking-tight leading-none mb-6">
+          The Digital<br className="hidden md:block" /> Monumentalist
+        </h1>
+        <p className="text-lg md:text-2xl text-zinc-500 italic max-w-2xl mx-auto leading-relaxed">
+          Bridging the gap between the Soviet Granite of the past <br/>
+          and the Digital Ether of the future.
+        </p>
+        <div className="mt-8 h-px w-24 bg-red-600"></div>
       </div>
 
       {/* 3. THE QUADRANT (NAVIGATION) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-zinc-900 border border-zinc-900 max-w-6xl mx-auto w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-6xl mx-auto w-full mb-24 font-sans">
         
         {/* QUADRANT 1: INTELLIGENCE */}
-        <Link href="/research" className="bg-[#050505] p-8 md:p-12 hover:bg-zinc-900/50 transition-colors group relative overflow-hidden">
-          <div className="text-[10px] font-mono text-zinc-600 mb-4 uppercase tracking-widest group-hover:text-red-500">
+        <Link href="/research" className="group border-t border-zinc-200 pt-6 hover:border-red-600 transition-colors duration-500">
+          <div className="text-[10px] font-mono text-zinc-400 mb-2 uppercase tracking-widest group-hover:text-red-600">
             01 / Intelligence
           </div>
-          <h3 className="text-2xl md:text-3xl font-serif text-zinc-200 mb-2 group-hover:text-white">
-            The Doctrine
+          <h3 className="text-3xl font-serif text-zinc-900 mb-3 group-hover:italic transition-all">
+            The Foresight
           </h3>
-          <p className="text-sm font-mono text-zinc-500 leading-relaxed max-w-sm">
-            Forensic analysis of digital decay. 15 years of geopolitical foresight.
+          <p className="text-sm text-zinc-600 leading-relaxed max-w-sm">
+            From "Digital Decay" to the Sovereign Internet. A forensic timeline of predictions that history validated.
           </p>
-          <span className="absolute bottom-8 right-8 text-zinc-800 group-hover:text-zinc-600 font-mono text-xs">→ PDF ACCESS</span>
         </Link>
 
         {/* QUADRANT 2: CAPITAL */}
-        <Link href="/advising" className="bg-[#050505] p-8 md:p-12 hover:bg-zinc-900/50 transition-colors group relative overflow-hidden">
-          <div className="text-[10px] font-mono text-zinc-600 mb-4 uppercase tracking-widest group-hover:text-red-500">
+        <Link href="/advising" className="group border-t border-zinc-200 pt-6 hover:border-red-600 transition-colors duration-500">
+          <div className="text-[10px] font-mono text-zinc-400 mb-2 uppercase tracking-widest group-hover:text-red-600">
             02 / Capital
           </div>
-          <h3 className="text-2xl md:text-3xl font-serif text-zinc-200 mb-2 group-hover:text-white">
-            The Engine
+          <h3 className="text-3xl font-serif text-zinc-900 mb-3 group-hover:italic transition-all">
+            The Valuation
           </h3>
-          <p className="text-sm font-mono text-zinc-500 leading-relaxed max-w-sm">
-            Algorithmic art advisory. Data is the new marble. Converting chaos into assets.
+          <p className="text-sm text-zinc-600 leading-relaxed max-w-sm">
+            Transmuting heritage into asset classes. Algorithmic advisory for the age of data is the new marble.
           </p>
-          <span className="absolute bottom-8 right-8 text-zinc-800 group-hover:text-zinc-600 font-mono text-xs">→ VALUATION</span>
         </Link>
 
         {/* QUADRANT 3: ART */}
-        <Link href="/heartandangel" className="bg-[#050505] p-8 md:p-12 hover:bg-zinc-900/50 transition-colors group relative overflow-hidden">
-          <div className="text-[10px] font-mono text-zinc-600 mb-4 uppercase tracking-widest group-hover:text-red-500">
-            03 / Art
+        <Link href="/heartandangel" className="group border-t border-zinc-200 pt-6 hover:border-red-600 transition-colors duration-500">
+          <div className="text-[10px] font-mono text-zinc-400 mb-2 uppercase tracking-widest group-hover:text-red-600">
+            03 / Creation
           </div>
-          <h3 className="text-2xl md:text-3xl font-serif text-zinc-200 mb-2 group-hover:text-white">
-            The Symbol
+          <h3 className="text-3xl font-serif text-zinc-900 mb-3 group-hover:italic transition-all">
+            The Reinvention
           </h3>
-          <p className="text-sm font-mono text-zinc-500 leading-relaxed max-w-sm">
-            2022 unique artifacts. Love as the only coordinate that remains constant.
+          <p className="text-sm text-zinc-600 leading-relaxed max-w-sm">
+            "Love is never enough." 2022 artifacts created in the void. A naive rebellion against cynical times.
           </p>
-          <span className="absolute bottom-8 right-8 text-zinc-800 group-hover:text-zinc-600 font-mono text-xs">→ VIEW COLLECTION</span>
         </Link>
 
         {/* QUADRANT 4: LEGACY */}
-        <Link href="/unframed" className="bg-[#050505] p-8 md:p-12 hover:bg-zinc-900/50 transition-colors group relative overflow-hidden">
-          <div className="text-[10px] font-mono text-zinc-600 mb-4 uppercase tracking-widest group-hover:text-red-500">
-            04 / Legacy
+        <Link href="/unframed" className="group border-t border-zinc-200 pt-6 hover:border-red-600 transition-colors duration-500">
+          <div className="text-[10px] font-mono text-zinc-400 mb-2 uppercase tracking-widest group-hover:text-red-600">
+            04 / Heritage
           </div>
-          <h3 className="text-2xl md:text-3xl font-serif text-zinc-200 mb-2 group-hover:text-white">
-            The Codex
+          <h3 className="text-3xl font-serif text-zinc-900 mb-3 group-hover:italic transition-all">
+            The Foundation
           </h3>
-          <p className="text-sm font-mono text-zinc-500 leading-relaxed max-w-sm">
-            A techno-political biography. The transition from Soviet Granite to Digital Ether.
+          <p className="text-sm text-zinc-600 leading-relaxed max-w-sm">
+            Managing the shadow of the colossal. How to sell the ghost of an Empire without selling your soul.
           </p>
-          <span className="absolute bottom-8 right-8 text-zinc-800 group-hover:text-zinc-600 font-mono text-xs">→ READ PROPOSAL</span>
         </Link>
 
       </div>
 
       {/* FOOTER */}
-      <footer className="mt-16 text-center border-t border-zinc-900 pt-8">
-        <p className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">
-          Merkurov Private Office. Est. 20XX. Protocol: Signal Only.
+      <footer className="text-center font-sans">
+        <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+          Merkurov Private Office. Est. 20XX.
         </p>
       </footer>
 
