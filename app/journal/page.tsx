@@ -1,8 +1,7 @@
-import NewsletterSubscribe from '@/components/journal/NewsletterSubscribe';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -129,96 +128,33 @@ export default async function JournalPage({ searchParams }: Props) {
   }
 
   return (
-    <main className="min-h-screen bg-white text-zinc-900 selection:bg-black selection:text-white pt-24 md:pt-32 pb-20">
+    <main className="min-h-screen bg-[#FDFBF7] text-[#111] font-sans selection:bg-black selection:text-white">
         
-        {/* HEADER */}
-        <div className="max-w-7xl mx-auto px-6 mb-20 md:mb-28 border-b border-zinc-100 pb-12">
-          <h1 className="text-6xl md:text-8xl font-serif font-medium tracking-tight text-black mb-6">
-            The Journal
-          </h1>
-          <p className="text-xl md:text-2xl text-zinc-500 font-serif max-w-2xl leading-relaxed">
-            Notes on art, technology, and the architecture of value.
-          </p>
+        {/* HEADER (match /advising) */}
+        <div className="max-w-3xl mx-auto px-6 mb-12 md:mb-20">
+          <div className="flex flex-col md:items-end justify-between border-b border-gray-100 pb-8 gap-6">
+            <div className="max-w-2xl">
+              <span className="block font-mono text-xs text-red-600 uppercase tracking-widest mb-4">// System Logs</span>
+              <h1 className="text-4xl md:text-5xl font-serif font-medium tracking-tight text-black leading-none">The Journal</h1>
+              <p className="mt-4 text-lg text-gray-500 font-serif italic max-w-xl">Notes on art, technology, and the architecture of value.</p>
+            </div>
+          </div>
         </div>
 
-        {/* LAYOUT */}
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-16">
-            
-            {/* ARTICLES FEED (8 cols) */}
-            <div className="lg:col-span-8 space-y-20">
-               {initialLetters.map((article) => (
-                 <article key={article.id} className="group cursor-pointer">
-                    <Link href={`/journal/${article.slug}`} className="block">
-                      
-                      {/* Date */}
-                      <div className="mb-3 font-mono text-xs uppercase tracking-widest text-zinc-400">
-                        {new Date(article.publishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </div>
-
-                      {/* Title */}
-                      <h2 className="text-3xl md:text-5xl font-serif font-medium text-black mb-4 group-hover:opacity-60 transition-opacity duration-300 leading-[1.1]">
-                        {article.title}
-                      </h2>
-
-                      {/* Preview */}
-                      <p className="text-base md:text-lg text-zinc-600 font-serif leading-relaxed mb-6 max-w-3xl">
-                        {article.preview}
-                      </p>
-
-                      {/* Link */}
-                      <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest border-b border-zinc-200 pb-1 group-hover:border-black transition-all">
-                        Read <ArrowRight size={12} />
-                      </div>
-
-                    </Link>
-                 </article>
-               ))}
-            </div>
-
-
-            {/* SIDEBAR (4 cols) */}
-            <aside className="lg:col-span-4 space-y-12 h-fit lg:sticky lg:top-32">
-               
-               {/* NEWSLETTER / OFFICE ACCESS */}
-               <div className="bg-zinc-50 p-8 border border-zinc-100">
-                  <h3 className="font-serif text-2xl text-black mb-3">
-                    Private Office
-                  </h3>
-                  <p className="text-sm text-zinc-600 mb-6 leading-relaxed font-medium">
-                    Subscribe to receive investment memorandums and updates directly. No noise.
-                  </p>
-                  <NewsletterSubscribe />
-               </div>
-
-               {/* LINKS */}
-               <div>
-                 <span className="block font-mono text-[10px] uppercase tracking-widest text-zinc-400 mb-4 border-b border-zinc-100 pb-2">
-                    Explore
-                 </span>
-                 <ul className="space-y-3">
-                    <li>
-                       <Link href="/heartandangel" className="flex items-center justify-between text-sm font-bold uppercase tracking-widest text-zinc-800 hover:text-black hover:pl-2 transition-all">
-                          <span>Art</span>
-                          <ArrowUpRight size={14} className="text-zinc-400" />
-                       </Link>
-                    </li>
-                    <li>
-                       <Link href="/advising" className="flex items-center justify-between text-sm font-bold uppercase tracking-widest text-zinc-800 hover:text-black hover:pl-2 transition-all">
-                          <span>Advising</span>
-                          <ArrowUpRight size={14} className="text-zinc-400" />
-                       </Link>
-                    </li>
-                    <li>
-                       <Link href="/lobby" className="flex items-center justify-between text-sm font-bold uppercase tracking-widest text-zinc-800 hover:text-black hover:pl-2 transition-all">
-                          <span>Lobby</span>
-                          <ArrowUpRight size={14} className="text-zinc-400" />
-                       </Link>
-                    </li>
-                 </ul>
-               </div>
-
-            </aside>
-
+        {/* ARTICLES: single-column, centered like /advising */}
+        <div className="max-w-3xl mx-auto px-6 space-y-12">
+          {initialLetters.map((article) => (
+            <article key={article.id} className="group">
+              <Link href={`/journal/${article.slug}`} className="block">
+                <div className="mb-3 font-mono text-[10px] uppercase tracking-widest text-gray-400">
+                  {new Date(article.publishedAt || article.sentAt || article.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </div>
+                <h2 className="text-2xl md:text-4xl font-serif font-medium text-black mb-3 group-hover:text-red-600 transition-colors duration-300 leading-tight">{article.title}</h2>
+                <p className="text-base md:text-lg text-gray-700 font-serif leading-relaxed mb-4 whitespace-pre-line">{article.preview}</p>
+                <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest border-b border-black pb-1 group-hover:border-red-600 group-hover:text-red-600 transition-all">Read Dispatch <ArrowRight size={12} /></div>
+              </Link>
+            </article>
+          ))}
         </div>
     </main>
   );
