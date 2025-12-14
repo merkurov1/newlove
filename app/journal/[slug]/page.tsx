@@ -5,6 +5,7 @@ import BlockRenderer from '@/components/BlockRenderer';
 import LetterCommentsClient from '@/components/journal/LetterCommentsClient';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
+import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const slug = params.slug;
@@ -19,21 +20,41 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
     if (!letter) return { title: 'Journal | Merkurov' };
 
-    let rawText = '';
+    // Try to build a short description and extract the first image for social cards
+    let description = '';
     try {
-        const parsed = typeof letter.content === 'string' ? JSON.parse(letter.content) : letter.content;
-        if (Array.isArray(parsed)) {
-            rawText = parsed.map((b: any) => b.data?.text || '').join(' ');
-        } else if (parsed?.blocks) {
-            rawText = parsed.blocks.map((b: any) => b.data?.text || '').join(' ');
-        }
+      description = generateDescription(letter.content || '') || '';
     } catch {
-        rawText = 'Read the full report.';
+      description = '';
     }
-    
+
+    let imageUrl: string | null = null;
+    try {
+      imageUrl = await getFirstImage(letter.content || '');
+    } catch {
+      imageUrl = null;
+    }
+
+    const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love';
+    const canonical = `${site.replace(/\/$/, '')}/journal/${encodeURIComponent(slug)}`;
+
     return sanitizeMetadata({
       title: letter.title,
-      description: rawText.slice(0, 160),
+      description: (description || 'Read the full dispatch.').slice(0, 160),
+      openGraph: {
+        title: letter.title,
+        description: (description || '').slice(0, 160),
+        url: canonical,
+        type: 'article',
+        images: imageUrl ? [imageUrl] : undefined,
+      },
+      twitter: {
+        card: imageUrl ? 'summary_large_image' : 'summary',
+        title: letter.title,
+        description: (description || '').slice(0, 160),
+        images: imageUrl ? [imageUrl] : undefined,
+      },
+      alternates: { canonical },
     });
   } catch (e) {
     return { title: 'Journal | Merkurov' };

@@ -104,12 +104,19 @@ export default function LobbyPage() {
 
       {/* --- SECTION 3: MEDIA TICKER (Clean White) --- */}
       <section className="py-12 border-b border-gray-100 overflow-hidden whitespace-nowrap bg-gray-50">
-        <div className="animate-marquee inline-block font-mono text-xs md:text-sm uppercase tracking-[0.15em] text-gray-500">
-          <span className="mx-12">NYT (2018): "Putin never really uses the internet..."</span>
-          <span className="mx-12 text-black font-bold">MERKUROV WAS RIGHT</span>
-          <span className="mx-12">WaPo (2018): "Millions of digital emigres..."</span>
-          <span className="mx-12 text-black font-bold">MERKUROV WAS RIGHT</span>
-          <span className="mx-12">EURACTIV (2020): "Biology is the weak link..."</span>
+        <div className="animate-marquee inline-block">
+          <span className="text-xl md:text-3xl font-mono text-zinc-400 mx-8">
+            <span className="text-white font-bold">THE NEW YORK TIMES (2018):</span> "Putin never really uses the internet, so he doesn't understand how it works." — Anton Merkurov
+          </span>
+          <span className="text-xl md:text-3xl font-mono text-zinc-500 mx-8">///</span>
+          <span className="text-xl md:text-3xl font-mono text-zinc-400 mx-8">
+            <span className="text-white font-bold">THE WASHINGTON POST (2018):</span> "The result will be millions of digital emigres turning their backs on the state."
+          </span>
+          <span className="text-xl md:text-3xl font-mono text-zinc-500 mx-8">///</span>
+          <span className="text-xl md:text-3xl font-mono text-zinc-400 mx-8">
+            <span className="text-white font-bold">EURACTIV (2020):</span> "The main danger is physical access to the device. Biology is the weak link."
+          </span>
+          <span className="text-xl md:text-3xl font-mono text-zinc-500 mx-8">///</span>
         </div>
       </section>
 
@@ -154,10 +161,10 @@ export default function LobbyPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-0 border-t border-l border-gray-200 bg-white">
               
               {[
-                { id: '01', title: 'Intelligence', desc: 'Forensic analysis of digital decay.', link: '/research', label: 'Research' },
-                { id: '02', title: 'Capital', desc: 'Algorithmic art advisory. Data is the new marble.', link: '/advising', label: 'Advisory' },
-                { id: '03', title: 'Creation', desc: 'The Symbol. 2022 unique artifacts.', link: '/heartandangel', label: 'Art' },
-                { id: '04', title: 'Legacy', desc: 'The Codex. Unframed biography.', link: '/unframed', label: 'Story' }
+                { id: '01', title: 'INTELLIGENCE', desc: 'Deep-dive forensic analysis of geopolitical fracture and digital decay. We map the cracks in the global system before they break, providing asymmetric information for those who cannot afford to be wrong.', link: '/research', label: 'Research' },
+                  { id: '02', title: 'CAPITAL', desc: 'Converting cultural chaos into liquid assets. A data-driven approach to Blue Chip acquisition, designed for the 100-year portfolio. We do not buy decoration; we acquire history.', link: '/advising', label: 'Advisory' },
+                  { id: '03', title: 'CREATION', desc: 'The immutable archive. 2022 unique digital artifacts forged in the Void, serving as the aesthetic anchor of the brand. A ritual of preservation in an age of ephemeral noise.', link: '/heartandangel', label: 'Art' },
+                  { id: '04', title: 'LEGACY', desc: 'The source code of the Unframed. A techno-political manual on navigating exile, managing crisis, and converting local status into global sovereignty. Not just a biography, but a blueprint.', link: '/unframed', label: 'Story' }
               ].map((card) => (
                 <Link key={card.id} href={card.link} className="group relative p-8 border-r border-b border-gray-200 hover:bg-gray-50 transition-colors duration-300 h-[320px] flex flex-col justify-between">
                     <div>

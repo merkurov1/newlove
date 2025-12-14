@@ -87,7 +87,7 @@ export default function IsAKeyForAllPage() {
               <CaseStudyCard
                 href="/research"
                 badge="Research"
-                title={(<>RESEARCH — Essays & Notes</>)}
+                title={(<>The Digital Decay: A Chronicle of Voluntary Submission.</>)}
                 subtitle={(<>Long-form research, essays and archival notes by Anton Merkurov.</>)}
                 layoutId="case-research"
               />
