@@ -110,7 +110,9 @@
     "lucide-react": "latest",
     "telegraf": "latest",
     "dotenv": "latest",
-    
+    "yahoo-finance2": "latest",
+    "recharts": "latest",
+    "date-fns": "latest",
     "clsx": "latest",
     "tailwind-merge": "latest"
   },
