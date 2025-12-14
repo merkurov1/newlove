@@ -59,8 +59,7 @@ export default function Home() {
       <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
         <div className="flex flex-col items-center w-full">
 
-          {/* Header Section (styling only; text removed as requested) */}
-          <div className="text-center mb-12 border-b border-gray-200 pb-8 w-full" aria-hidden="true"></div>
+          {/* Header Section (styling only; removed empty spacer per request) */}
 
           {/* SPACER + SYSTEM ACCESS BUTTON */}
           <div className="h-12 sm:h-20 flex items-end justify-center mb-8 sm:mb-12 w-full">
