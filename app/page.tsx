@@ -1,131 +1,115 @@
-// app/page.js
-import { Suspense } from 'react';
 import Link from 'next/link';
-import nextDynamic from 'next/dynamic';
-// import { safeData } from '@/lib/safeSerialize'; // Убедись, что этот импорт нужен, если нет - удали
+import { ArrowRight, BarChart3, Shield, Zap } from 'lucide-react';
+import type { Metadata } from 'next';
 
-const CloseableHero = nextDynamic(() => import('@/components/CloseableHero'), { ssr: false });
-const AuctionSlider = nextDynamic(() => import('@/components/AuctionSlider'), { ssr: false });
-const BentoArticlesFeed = nextDynamic(() => import('@/components/BentoArticlesFeed'), {
-  ssr: false,
-});
-const FlowFeed = nextDynamic(() => import('@/components/FlowFeed'), { ssr: false });
-const BackgroundShapes = nextDynamic(() => import('@/components/BackgroundShapes'), { ssr: false });
-
-export const metadata = {
-  title: 'Anton Merkurov | Digital Temple',
-  description: 'A conceptual portal by Anton Merkurov. Art, advising, and curated selection.',
+export const metadata: Metadata = {
+  title: 'Merkurov | Private Office',
+  description: 'Data is the new marble. Art advisory and heritage architecture.',
 };
-
-const AuctionSkeleton = () => (
-  <div className="aspect-[2/1] w-full animate-pulse rounded-xl bg-gray-300 dark:bg-neutral-800"></div>
-);
-
-function extractFirstImage(content: any): string | null {
-  if (!content || typeof content !== 'string') return null;
-  try {
-    const contentArray = JSON.parse(content);
-    if (Array.isArray(contentArray)) {
-      for (const block of contentArray) {
-        const html = block?.data?.html;
-        if (html && typeof html === 'string') {
-          const match = html.match(/<img[^>]+src="([^"]+)"/);
-          if (match && match[1]) {
-            return match[1].replace(/([^:]\/)\/+/g, '$1');
-          }
-        }
-      }
-    }
-  } catch (e) {
-    /* Игнорируем ошибку */
-  }
-  const fallbackMatch = content.match(/<img[^>]+src="([^"]+)"/);
-  if (fallbackMatch && fallbackMatch[1]) {
-    return fallbackMatch[1].replace(/([^:]\/)\/+/g, '$1');
-  }
-  return null;
-}
-
-// ... helper function getArticlesByTag removed/collapsed for brevity if not used in this view directly 
-// ... or keep it if you use it for fetching data below
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-white text-[#333]">
+    <main className="min-h-screen bg-[#F2F0E9] text-[#1C1917] font-serif selection:bg-[#B91C1C] selection:text-white">
 
-      {/* DECORATIVE BORDER TOP */}
-      <div className="h-1 w-full bg-black fixed top-0 z-50"></div>
-
-      <div className="max-w-3xl mx-auto px-6 pt-6 pb-12 md:pt-8 md:pb-16">
-        <div className="flex flex-col items-center w-full">
-
-          {/* Header Section (styling only; removed empty spacer per request) */}
-
-          {/* SPACER + SYSTEM ACCESS BUTTON */}
-          <div className="h-12 sm:h-20 flex items-end justify-center mb-8 sm:mb-12 w-full">
-            <div className="flex justify-center">
-              <Link
-                href="/lobby"
-                className="group flex items-center gap-3 px-5 py-2 rounded-full border border-gray-200 bg-white hover:bg-black hover:border-black transition-all duration-300"
-              >
+      {/* HERO SECTION */}
+      <section className="border-b border-[#1C1917] pt-20 pb-16 px-4 md:px-8">
+        <div className="max-w-7xl mx-auto text-center">
+            
+            <div className="inline-flex items-center gap-2 px-3 py-1 border border-[#1C1917] rounded-full mb-8 bg-white">
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#B91C1C] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#B91C1C]"></span>
                 </span>
-                <span className="font-mono text-[10px] sm:text-xs uppercase tracking-widest text-gray-500 group-hover:text-white transition-colors">
-                  System Access
+                <span className="text-[10px] font-mono uppercase tracking-widest">
+                    Executive Build v.3.0
                 </span>
-              </Link>
             </div>
-          </div>
 
-          {/* NAVIGATION - THE THREE PILLARS */}
-          <nav className="w-full flex flex-col gap-8 sm:gap-12 md:gap-16 mb-12 sm:mb-24 md:mb-32">
-            <ul className="flex flex-col gap-8 sm:gap-12 md:gap-16">
-              <li>
-                <a href="/heartandangel" className="block text-center no-underline hover:opacity-60 transition" style={{ textDecoration: 'none' }}>
-                  <span className="block text-4xl sm:text-6xl md:text-7xl" style={{ fontFamily: 'Cormorant Garamond, Playfair Display, serif', color: '#000', letterSpacing: '-0.02em', lineHeight: 1.1 }}>[ ART ]</span>
-                  <div className="mt-2 text-xs sm:text-sm" style={{ fontFamily: 'Space Mono, Courier Prime, monospace', color: '#000', letterSpacing: 1 }}>
-                    The digital ritual
-                  </div>
-                </a>
-              </li>
-              <li>
-                <a href="/selection" className="block text-center no-underline hover:opacity-60 transition" style={{ textDecoration: 'none' }}>
-                  <span className="block text-3xl sm:text-5xl md:text-6xl" style={{ fontFamily: 'Cormorant Garamond, Playfair Display, serif', color: '#000', letterSpacing: '-0.02em', lineHeight: 1.1 }}>[ SELECTION ]</span>
-                  <div className="mt-2 text-xs sm:text-sm" style={{ fontFamily: 'Space Mono, Courier Prime, monospace', color: '#000', letterSpacing: 1 }}>
-                    Curated works. Buffet & Non-conformists.
-                  </div>
-                </a>
-              </li>
-              <li>
-                <a href="/advising" className="block text-center no-underline hover:opacity-60 transition" style={{ textDecoration: 'none' }}>
-                  <span className="block text-3xl sm:text-5xl md:text-6xl" style={{ fontFamily: 'Cormorant Garamond, Playfair Display, serif', color: '#000', letterSpacing: '-0.02em', lineHeight: 1.1 }}>[ ADVISING ]</span>
-                  <div className="mt-2 text-xs sm:text-sm" style={{ fontFamily: 'Space Mono, Courier Prime, monospace', color: '#000', letterSpacing: 1 }}>
-                    Private art acquisition
-                  </div>
-                </a>
-              </li>
-            </ul>
-          </nav>
+            <h1 className="text-5xl md:text-8xl font-black uppercase tracking-tighter leading-[0.9] mb-8">
+                Selling Silence<br/>
+                <span className="font-serif italic font-normal text-4xl md:text-7xl lowercase tracking-normal text-[#57534E]">and</span><br/>
+                Structure.
+            </h1>
 
-          {/* MANIFESTO */}
-          <section className="w-full mb-12 sm:mb-16 md:mb-24">
-            <div className="mx-auto px-3" style={{ maxWidth: 600, fontFamily: 'Space Mono, Courier Prime, monospace', color: '#222', fontSize: 'clamp(13px, 3vw, 14px)', lineHeight: 1.8, textAlign: 'center' }}>
-              <p className="mb-6">
-                <span style={{ textWrap: 'balance' }}>
-                  I spent 20 years building digital networks. Now I build human connections.
-                  <br />
-                  I traded complexity for truth. My art is a return to the fundamental source code of humanity. No politics, no borders, no social burden. Just the raw, unfiltered transmission of empathy.
-                  <br />
-                  Love is necessary. Love is never enough.
-                </span>
-              </p>
+            <p className="max-w-2xl mx-auto text-lg md:text-xl font-serif italic text-[#57534E] mb-12 leading-relaxed">
+                "In a noisy world, history is the only reliable asset class. 
+                I transmute heritage into equity for the intellectual elite."
+            </p>
+
+            {/* QUICK ACTIONS */}
+            <div className="flex flex-col sm:flex-row justify-center gap-4 font-mono text-xs uppercase tracking-widest">
+                <Link href="/lobby" className="bg-[#1C1917] text-[#F2F0E9] px-8 py-4 hover:bg-[#B91C1C] transition-colors flex items-center justify-center gap-2">
+                    Enter Lobby <ArrowRight size={14}/>
+                </Link>
+                <Link href="/journal" className="border border-[#1C1917] px-8 py-4 hover:bg-white transition-colors flex items-center justify-center gap-2">
+                    Read Intelligence
+                </Link>
             </div>
-          </section>
-
         </div>
-      </div>
+      </section>
+
+      {/* THE DEPARTMENTS (GRID NAVIGATION) */}
+      <section className="border-b border-[#1C1917]">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#1C1917]">
+              
+              {/* DEPT 1: ART */}
+              <Link href="/heartandangel" className="group block p-8 md:p-12 hover:bg-white transition-all h-full">
+                 <div className="flex justify-between items-start mb-12">
+                    <span className="font-mono text-xs text-[#B91C1C]">01</span>
+                    <Zap size={20} className="text-[#57534E] group-hover:text-[#B91C1C]"/>
+                 </div>
+                 <h2 className="text-4xl font-bold mb-4 group-hover:underline decoration-2 underline-offset-4">Art</h2>
+                 <p className="font-mono text-xs uppercase tracking-widest text-[#57534E] mb-6">
+                    The Ritual
+                 </p>
+                 <p className="text-sm leading-relaxed opacity-80">
+                    2022 unique artifacts created in the void. Pure transmission of empathy without algorithmic interference.
+                 </p>
+              </Link>
+
+              {/* DEPT 2: SELECTION */}
+              <Link href="/selection" className="group block p-8 md:p-12 hover:bg-white transition-all h-full">
+                 <div className="flex justify-between items-start mb-12">
+                    <span className="font-mono text-xs text-[#B91C1C]">02</span>
+                    <BarChart3 size={20} className="text-[#57534E] group-hover:text-[#B91C1C]"/>
+                 </div>
+                 <h2 className="text-4xl font-bold mb-4 group-hover:underline decoration-2 underline-offset-4">Selection</h2>
+                 <p className="font-mono text-xs uppercase tracking-widest text-[#57534E] mb-6">
+                    The Inventory
+                 </p>
+                 <p className="text-sm leading-relaxed opacity-80">
+                    Curated works. Buffet & Non-conformists. Assets vetted for provenance and liquidity.
+                 </p>
+              </Link>
+
+              {/* DEPT 3: ADVISING */}
+              <Link href="/advising" className="group block p-8 md:p-12 hover:bg-white transition-all h-full">
+                 <div className="flex justify-between items-start mb-12">
+                    <span className="font-mono text-xs text-[#B91C1C]">03</span>
+                    <Shield size={20} className="text-[#57534E] group-hover:text-[#B91C1C]"/>
+                 </div>
+                 <h2 className="text-4xl font-bold mb-4 group-hover:underline decoration-2 underline-offset-4">Advising</h2>
+                 <p className="font-mono text-xs uppercase tracking-widest text-[#57534E] mb-6">
+                    The Office
+                 </p>
+                 <p className="text-sm leading-relaxed opacity-80">
+                    Private acquisition and legacy architecture. We maintain silence while you build capital.
+                 </p>
+              </Link>
+
+          </div>
+      </section>
+
+      {/* FOOTER MANIFESTO */}
+      <section className="py-24 px-6 text-center">
+        <p className="max-w-xl mx-auto font-mono text-xs leading-loose text-[#57534E]">
+            MERKUROV PRIVATE OFFICE IS A NON-JURISDICTIONAL ENTITY OPERATING AT THE INTERSECTION OF HERITAGE, TECHNOLOGY, AND FINANCE. <br/>
+            DATA IS THE NEW MARBLE.
+        </p>
+        <div className="mt-12 opacity-50">
+             <div className="font-serif italic text-xl">A.M.</div>
+        </div>
+      </section>
 
     </main>
   );

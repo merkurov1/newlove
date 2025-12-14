@@ -1,171 +1,119 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
+import { ArrowUpRight, Menu, X } from 'lucide-react';
 
 export default function Header() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [hideOnScroll, setHideOnScroll] = useState(false);
-  const [tick, setTick] = useState(0);
-  const lastScrollY = useRef(0);
+  const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  const pathname = usePathname();
 
-  // Умный скролл
+  // Close menu on route change
   useEffect(() => {
-    let ticking = false;
-    const handleScroll = () => {
-      const currentY = window.scrollY;
-      setScrolled(currentY > 0);
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          if (currentY > lastScrollY.current && currentY > 100) {
-            setHideOnScroll(true);
-          } else {
-            setHideOnScroll(false);
-          }
-          lastScrollY.current = currentY;
-          ticking = false;
-        });
-        ticking = true;
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    setIsMenuOpen(false);
+  }, [pathname]);
 
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 768) {
-        setIsMenuOpen(false);
-      }
-    };
-    const onSessionChanged = () => {
-      // force re-render
-      try {
-        setTick((t) => t + 1);
-      } catch (e) {}
-    };
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('supabase:session-changed', onSessionChanged);
-    const closeMenuHandler = () => setIsMenuOpen(false);
-    window.addEventListener('newlove:close-mobile-menu', closeMenuHandler);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('supabase:session-changed', onSessionChanged);
-      window.removeEventListener('newlove:close-mobile-menu', closeMenuHandler);
-    };
-  }, []);
+  const navItems = [
+    { label: 'ART', href: '/heartandangel' },
+    { label: 'SELECTION', href: '/selection' },
+    { label: 'ADVISING', href: '/advising' },
+    { label: 'ABOUT', href: '/isakeyforall' },
+    { label: 'JOURNAL', href: '/journal' }
+  ];
 
   return (
-    <div>
-      {/* Opt-in debug overlay when ?auth_debug=1 */}
-      {/* Debug overlay removed for production */}
-      <header className="sticky top-0 z-50 w-full bg-white border-b border-gray-100">
-        <div className="w-full max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
-          {/* Left: Site name only */}
+    <div className="sticky top-0 z-50 font-sans">
+      
+      {/* 1. TICKER BAR (MARKET DATA) */}
+      <div className="bg-[#1C1917] text-[#F2F0E9] text-[10px] md:text-xs font-mono py-1.5 px-4 overflow-hidden border-b border-black flex justify-between items-center relative z-50">
+        <div className="flex gap-8 whitespace-nowrap overflow-x-auto no-scrollbar w-full">
+           <span className="opacity-80">SYSTEM: ONLINE</span>
+           <span className="text-[#B91C1C]">NOISE: HIGH</span>
+           <span>SILENCE INDEX: 142.5 (+1.2%)</span>
+           <span>GOLD: $2,650</span>
+           <span>HERMES: €2,100</span>
+           <span className="opacity-80">LOC: BELGRADE/LONDON</span>
+        </div>
+      </div>
+
+      {/* 2. MAIN NAVIGATION */}
+      <header className="w-full bg-[#F2F0E9] border-b border-[#1C1917]">
+        <div className="w-full max-w-7xl mx-auto flex items-stretch justify-between h-16 md:h-20">
+          
+          {/* LOGO AREA */}
           <Link
             href="/"
-            className="font-bold text-black uppercase tracking-widest text-base sm:text-lg md:text-xl"
-            style={{ fontFamily: 'Inter, Helvetica, Arial, sans-serif' }}
+            className="flex items-center px-4 sm:px-6 border-r border-[#1C1917] hover:bg-white transition-colors"
           >
-            MERKUROV
+            <div className="flex flex-col">
+                <span className="font-serif font-black text-xl md:text-2xl tracking-tighter leading-none text-[#1C1917]">
+                    MERKUROV
+                </span>
+                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#57534E] mt-1">
+                    Private Office
+                </span>
+            </div>
           </Link>
           
-          {/* Desktop Navigation - hidden on mobile */}
-          <nav className="hidden md:flex items-center">
-            <ul className="flex gap-6 lg:gap-10 text-sm lg:text-base font-semibold uppercase tracking-widest">
-              <li>
-                <Link href="/heartandangel" className="hover:opacity-60 transition">
-                  ART
-                </Link>
-              </li>
-              <li>
-                <Link href="/selection" className="hover:opacity-60 transition">
-                  SELECTION
-                </Link>
-              </li>
-              <li>
-                <Link href="/advising" className="hover:opacity-60 transition">
-                  ADVISING
-                </Link>
-              </li>
-              <li>
-                <Link href="/isakeyforall" className="hover:opacity-60 transition">
-                  ABOUT
-                </Link>
-              </li>
-              <li>
-                <Link href="/journal" className="hover:opacity-60 transition">
-                  JOURNAL
-                </Link>
-              </li>
+          {/* DESKTOP MENU */}
+          <nav className="hidden md:flex flex-1 items-stretch justify-end">
+            <ul className="flex h-full">
+              {navItems.map((item) => {
+                const currentPath = pathname ?? '';
+                const isActive = currentPath.startsWith(item.href);
+
+                return (
+                  <li key={item.label} className="h-full border-l border-[#1C1917]">
+                    <Link
+                      href={item.href}
+                      className={`h-full flex items-center px-6 text-xs font-bold font-mono tracking-widest uppercase hover:bg-[#1C1917] hover:text-[#F2F0E9] transition-all ${isActive ? 'bg-[#1C1917] text-[#F2F0E9]' : 'text-[#1C1917]'}`}
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </nav>
           
-          {/* Mobile menu button */}
+          {/* MOBILE TOGGLE */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden flex flex-col gap-1.5 w-8 h-8 justify-center items-center p-1"
+            className="md:hidden flex items-center justify-center w-16 border-l border-[#1C1917] hover:bg-[#1C1917] hover:text-[#F2F0E9] transition-colors"
             aria-label="Toggle menu"
           >
-            <span className={`block h-0.5 w-6 bg-black transition-transform ${isMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
-            <span className={`block h-0.5 w-6 bg-black transition-opacity ${isMenuOpen ? 'opacity-0' : ''}`}></span>
-            <span className={`block h-0.5 w-6 bg-black transition-transform ${isMenuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
+            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
       </header>
-      {/* Animated gradient line убрана по финальному ТЗ */}
 
-      {/* Mobile menu: same links, slide-in */}
+      {/* 3. MOBILE MENU OVERLAY */}
       <div
-        className={`fixed inset-0 z-40 bg-white pt-20 transition-transform duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed inset-0 z-40 bg-[#F2F0E9] pt-28 px-6 transition-transform duration-300 md:hidden border-r border-[#1C1917] ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
-        <nav className="px-6">
-          <ul className="flex flex-col items-end gap-6 text-xl font-semibold uppercase tracking-widest">
-            <li>
-              <Link
-                href="/heartandangel"
-                onClick={() => setIsMenuOpen(false)}
-                className="hover:opacity-60 transition"
-              >
-                ART
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/selection"
-                onClick={() => setIsMenuOpen(false)}
-                className="hover:opacity-60 transition"
-              >
-                SELECTION
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/advising"
-                onClick={() => setIsMenuOpen(false)}
-                className="hover:opacity-60 transition"
-              >
-                ADVISING
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/isakeyforall"
-                onClick={() => setIsMenuOpen(false)}
-                className="hover:opacity-60 transition"
-              >
-                ABOUT
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/journal"
-                onClick={() => setIsMenuOpen(false)}
-                className="hover:opacity-60 transition"
-              >
-                JOURNAL
-              </Link>
+        <nav>
+          <ul className="flex flex-col gap-6">
+            {[
+              { name: 'Art (The Ritual)', href: '/heartandangel' },
+              { name: 'Selection (Inventory)', href: '/selection' },
+              { name: 'Advising (Office)', href: '/advising' },
+              { name: 'About (Protocol)', href: '/isakeyforall' },
+              { name: 'Journal (Logs)', href: '/journal' }
+            ].map((link) => (
+              <li key={link.name} className="border-b border-[#1C1917]/20 pb-4">
+                <Link
+                  href={link.href}
+                  className="text-3xl font-serif font-bold text-[#1C1917] active:text-[#B91C1C]"
+                >
+                  {link.name}
+                </Link>
+              </li>
+            ))}
+            <li className="mt-8">
+                 <Link href="/lobby" className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-[#B91C1C]">
+                    Enter System Lobby <ArrowUpRight size={14}/>
+                 </Link>
             </li>
           </ul>
         </nav>

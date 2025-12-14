@@ -1,123 +1,97 @@
 import Link from "next/link";
+import { ArrowDown, ArrowUpRight } from "lucide-react";
+import type { Metadata } from 'next';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Merkurov | System Access",
   description: "The Digital Monumentalist. System Status: Live.",
 };
 
 export default function LobbyPage() {
   return (
-    <main className="bg-zinc-50 text-zinc-900 font-serif h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth selection:bg-red-600 selection:text-white">
+    <main className="bg-[#F2F0E9] text-[#1C1917] font-serif h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth selection:bg-[#B91C1C] selection:text-white">
       
       {/* --- SECTION 1: INTRO (THE MANIFESTO) --- */}
-      <section className="min-h-screen md:h-screen snap-start flex flex-col items-center justify-center p-4 md:p-12 text-center relative border-b border-zinc-200">
+      <section className="h-screen snap-start flex flex-col items-center justify-center p-4 md:p-12 text-center relative border-b border-[#1C1917]">
         
         {/* Status Header */}
-        <div className="absolute top-6 w-full flex justify-between px-6 md:px-12 text-[10px] font-mono tracking-widest text-zinc-400 uppercase">
+        <div className="absolute top-24 w-full flex justify-between px-6 md:px-12 text-[10px] font-mono tracking-widest text-[#57534E] uppercase">
           <span>System: Online</span>
           <span>Loc: Global / Unframed</span>
         </div>
 
-        <div className="max-w-3xl md:max-w-4xl mx-auto space-y-6">
-          <p className="text-xs font-mono text-red-600 tracking-[0.2em] uppercase">
+        <div className="max-w-3xl md:max-w-5xl mx-auto space-y-8">
+          <p className="text-xs font-mono text-[#B91C1C] tracking-[0.2em] uppercase">
             // Operating System v.3.0
           </p>
           
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-zinc-900 leading-tight tracking-tight">
-            I architect futures<br/>in the digital void.
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-[#1C1917] leading-[0.9] tracking-tighter uppercase">
+            I architect futures<br/>
+            <span className="text-[#57534E]">in the digital void.</span>
           </h1>
           
-          <div className="max-w-lg md:max-w-2xl mx-auto space-y-4 text-base md:text-lg text-zinc-600 leading-relaxed">
+          <div className="max-w-lg md:max-w-2xl mx-auto space-y-4 text-lg md:text-xl text-[#1C1917] leading-relaxed italic">
             <p>
               The world is drowning in noise. Algorithms dictate your attention. 
               Politics dictate your geography.
             </p>
             <p>
               Here, there are no algorithms. Only structure. 
-              I am Anton Merkurov. This is my private office. 
-              I transmute Chaos (History, Data, Art) into Assets.
             </p>
           </div>
 
-          {/* Audio Button Placeholder */}
-          <button className="group mt-6 flex items-center gap-3 mx-auto px-4 py-2 md:px-6 md:py-3 border border-zinc-300 rounded-full hover:border-red-600 hover:text-red-600 transition-all cursor-pointer text-sm md:text-base">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-            </span>
-            <span className="text-xs font-mono tracking-widest uppercase">Listen to Protocol</span>
-          </button>
+          <Link href="/advising" className="inline-block mt-8 border border-[#1C1917] px-8 py-3 text-xs font-mono uppercase tracking-widest hover:bg-[#1C1917] hover:text-[#F2F0E9] transition-all">
+             Initiate Protocol
+          </Link>
         </div>
         
         {/* Scroll Indicator */}
-        <div className="absolute bottom-6 animate-bounce text-zinc-400 text-xl md:text-2xl">
-          ↓
+        <div className="absolute bottom-12 animate-bounce text-[#1C1917]">
+          <ArrowDown size={24} />
         </div>
       </section>
 
 
       {/* --- SECTION 2: FORESIGHT (THE PROOF) --- */}
-      <section className="min-h-screen md:h-screen snap-start flex items-start md:items-center justify-center p-4 md:p-12 bg-zinc-100 border-b border-zinc-200">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 md:gap-16 max-w-7xl w-full items-start md:items-center">
+      <section className="min-h-screen md:h-screen snap-start flex items-center justify-center p-6 md:p-12 bg-[#E7E5DE] border-b border-[#1C1917]">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 md:gap-24 max-w-7xl w-full">
           
           {/* Left: Introduction */}
-          <div className="space-y-4 md:space-y-6">
-            <h2 className="text-xs font-mono text-red-600 uppercase tracking-widest">
+          <div className="space-y-6">
+            <h2 className="text-xs font-mono text-[#B91C1C] uppercase tracking-widest border-b border-[#1C1917] pb-2 inline-block">
               01 / The Track Record
             </h2>
-            <h3 className="text-4xl md:text-6xl font-bold text-zinc-900 leading-tight">
+            <h3 className="text-4xl md:text-6xl font-bold leading-none">
               Predicting the collapse <br/> before it happens.
             </h3>
-            <p className="text-lg text-zinc-600 leading-relaxed">
+            <p className="text-lg text-[#57534E] leading-relaxed max-w-md">
               I don't use crystal balls. I use forensic data analysis. 
-              For 15 years, I have documented the inevitable collision between 
-              Authoritarianism and Technology. Being right is boring, but profitable.
+              Being right is boring, but profitable.
             </p>
           </div>
 
           {/* Right: Timeline */}
-          <div className="space-y-8 relative md:border-l-2 md:border-zinc-300 md:pl-8">
+          <div className="space-y-12 border-l-2 border-[#1C1917] pl-8 py-4">
             
             {/* 2012 */}
-            <div className="relative">
-              <span className="hidden md:block absolute -left-[39px] top-2 w-4 h-4 bg-zinc-300 rounded-full border-4 border-zinc-100"></span>
-              <div className="flex items-center gap-3 mb-1">
-                <span className="inline-block md:hidden w-2 h-2 bg-zinc-300 rounded-full"></span>
-                <div className="font-mono text-zinc-400 text-sm">2012 — The Splinternet</div>
-              </div>
-              <h4 className="text-xl font-bold text-zinc-900">The Fragmentation Prediction</h4>
-              <p className="text-sm text-zinc-600 mt-2 max-w-md">
-                Predicted that the global web would fracture into sovereign intranets. 
-                Warned that economic isolation would precede physical isolation.
-              </p>
+            <div className="relative group">
+              <span className="absolute -left-[41px] top-1 w-5 h-5 bg-[#F2F0E9] border-4 border-[#1C1917] rounded-full group-hover:bg-[#B91C1C] transition-colors"></span>
+              <div className="font-mono text-[#57534E] text-xs mb-1">2012 — The Splinternet</div>
+              <h4 className="text-xl font-bold">The Fragmentation Prediction</h4>
             </div>
 
             {/* 2018 */}
-            <div className="relative">
-              <span className="hidden md:block absolute -left-[39px] top-2 w-4 h-4 bg-zinc-300 rounded-full border-4 border-zinc-100"></span>
-              <div className="flex items-center gap-3 mb-1">
-                <span className="inline-block md:hidden w-2 h-2 bg-zinc-300 rounded-full"></span>
-                <div className="font-mono text-zinc-400 text-sm">2018 — The Resistance</div>
-              </div>
-              <h4 className="text-xl font-bold text-zinc-900">The Telegram War</h4>
-              <p className="text-sm text-zinc-600 mt-2 max-w-md">
-                Forecasted the rise of "Digital Emigres" and the failure of state blocking attempts. 
-                Identified the shift from "Compliance" to "Evasion" as a business model.
-              </p>
+            <div className="relative group">
+              <span className="absolute -left-[41px] top-1 w-5 h-5 bg-[#F2F0E9] border-4 border-[#1C1917] rounded-full group-hover:bg-[#B91C1C] transition-colors"></span>
+              <div className="font-mono text-[#57534E] text-xs mb-1">2018 — The Resistance</div>
+              <h4 className="text-xl font-bold">The Telegram War & Digital Emigres</h4>
             </div>
 
             {/* 2025 */}
-            <div className="relative">
-              <span className="hidden md:block absolute -left-[39px] top-2 w-4 h-4 bg-red-600 rounded-full border-4 border-red-100 animate-pulse"></span>
-              <div className="flex items-center gap-3 mb-1">
-                <span className="inline-block md:hidden w-2 h-2 bg-red-600 rounded-full"></span>
-                <div className="font-mono text-red-600 text-sm">2025 — The Reality</div>
-              </div>
-              <h4 className="text-xl font-bold text-zinc-900">The Digital Collar</h4>
-              <p className="text-sm text-zinc-600 mt-2 max-w-md">
-                The era of voluntary submission. The infrastructure of control is no longer external; 
-                it is internal. We register ourselves.
-              </p>
+            <div className="relative group">
+              <span className="absolute -left-[41px] top-1 w-5 h-5 bg-[#B91C1C] border-4 border-[#B91C1C] rounded-full animate-pulse"></span>
+              <div className="font-mono text-[#B91C1C] text-xs mb-1">2025 — The Reality</div>
+              <h4 className="text-xl font-bold">The Digital Collar & Institutional Capital</h4>
             </div>
 
           </div>
@@ -125,161 +99,97 @@ export default function LobbyPage() {
       </section>
 
 
-      {/* --- SECTION 3: MEDIA TICKER (THE VALIDATION) --- */}
-      <section className="snap-start py-12 bg-zinc-900 border-y border-zinc-800 flex items-center overflow-hidden whitespace-nowrap relative">
-        <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-zinc-900 to-transparent z-10"></div>
-        <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-zinc-900 to-transparent z-10"></div>
-        
-        <div className="animate-marquee inline-block">
-          <span className="text-xl md:text-3xl font-mono text-zinc-400 mx-8">
-            <span className="text-white font-bold">THE NEW YORK TIMES (2018):</span> "Putin never really uses the internet, so he doesn't understand how it works." — Anton Merkurov
-          </span>
-          <span className="text-xl md:text-3xl font-mono text-zinc-500 mx-8">///</span>
-          <span className="text-xl md:text-3xl font-mono text-zinc-400 mx-8">
-            <span className="text-white font-bold">THE WASHINGTON POST (2018):</span> "The result will be millions of digital emigres turning their backs on the state."
-          </span>
-          <span className="text-xl md:text-3xl font-mono text-zinc-500 mx-8">///</span>
-          <span className="text-xl md:text-3xl font-mono text-zinc-400 mx-8">
-            <span className="text-white font-bold">EURACTIV (2020):</span> "The main danger is physical access to the device. Biology is the weak link."
-          </span>
-           <span className="text-xl md:text-3xl font-mono text-zinc-500 mx-8">///</span>
+      {/* --- SECTION 3: MEDIA TICKER --- */}
+      <section className="snap-start py-16 bg-[#1C1917] text-[#F2F0E9] border-y border-black flex items-center overflow-hidden whitespace-nowrap relative">
+        <div className="animate-marquee inline-block font-mono text-lg md:text-2xl">
+          <span className="mx-8 opacity-50">///</span>
+          <span className="mx-8">NYT (2018): "Putin never really uses the internet..."</span>
+          <span className="mx-8 text-[#B91C1C]">MERKUROV WAS RIGHT</span>
+          <span className="mx-8">WaPo (2018): "Millions of digital emigres..."</span>
+          <span className="mx-8 text-[#B91C1C]">MERKUROV WAS RIGHT</span>
+          <span className="mx-8 opacity-50">///</span>
         </div>
       </section>
 
 
-      {/* --- SECTION 4: PHILOSOPHY (THE BRIDGE) --- */}
-      <section className="h-screen snap-start flex items-center justify-center p-6 md:p-12 bg-white">
-        <div className="max-w-5xl text-center space-y-12">
-          <h2 className="text-xs font-mono text-zinc-400 uppercase tracking-widest">
-            02 / The Philosophy
-          </h2>
-          
-          <h3 className="text-4xl md:text-7xl font-bold text-zinc-900">
-            From Granite to Ether.
-          </h3>
+      {/* --- SECTION 4: PHILOSOPHY --- */}
+      <section className="h-screen snap-start flex items-center justify-center p-6 md:p-12 bg-[#F2F0E9]">
+        <div className="max-w-6xl w-full grid grid-cols-1 md:grid-cols-2 gap-0 border border-[#1C1917]">
+            
+            {/* GRANITE */}
+            <div className="p-12 md:p-16 bg-white border-b md:border-b-0 md:border-r border-[#1C1917] flex flex-col justify-between h-[50vh] md:h-[60vh]">
+                <h4 className="font-mono text-[#B91C1C] text-xs uppercase tracking-widest">Heritage</h4>
+                <p className="text-2xl md:text-4xl font-serif leading-tight">
+                    My great-grandfather carved the Empire in <span className="font-black">Granite</span>. 
+                    Heavy. Immovable. Eternal.
+                </p>
+                <span className="font-mono text-xs opacity-50">SERGEY MERKUROV</span>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 text-left mt-12">
-            <div className="p-8 bg-zinc-50 border border-zinc-200">
-              <h4 className="font-mono text-red-600 text-xs uppercase mb-4">The Past</h4>
-              <p className="text-lg text-zinc-800 font-serif leading-relaxed">
-                My great-grandfather, Sergey Merkurov, carved the Soviet Empire in <span className="font-bold">Granite</span>. 
-                He created the death masks of Lenin and Tolstoy. 
-                He solidified history into heavy, immovable monuments.
-              </p>
+            {/* ETHER */}
+            <div className="p-12 md:p-16 bg-[#1C1917] text-[#F2F0E9] flex flex-col justify-between h-[50vh] md:h-[60vh]">
+                <h4 className="font-mono text-[#F2F0E9] text-xs uppercase tracking-widest opacity-50">Future</h4>
+                <p className="text-2xl md:text-4xl font-serif leading-tight">
+                    I operate in the <span className="font-black text-white">Ether</span>. 
+                    Transmuting heavy history into light, liquid digital assets.
+                </p>
+                <span className="font-mono text-xs opacity-50">ANTON MERKUROV</span>
             </div>
-            <div className="p-8 bg-zinc-900 text-zinc-100 border border-zinc-800">
-              <h4 className="font-mono text-zinc-400 text-xs uppercase mb-4">The Future</h4>
-              <p className="text-lg font-serif leading-relaxed">
-                I operate in the <span className="font-bold text-white">Ether</span>. 
-                I transmute that heavy heritage into digital assets. 
-                My monuments are made of code, blockchain, and data. 
-                Granite crumbles. Data is forever.
-              </p>
-            </div>
-          </div>
+
         </div>
       </section>
 
 
-      {/* --- SECTION 5: DOMAINS (THE PROTOCOLS) --- */}
-      <section className="min-h-screen snap-start flex flex-col justify-center p-6 md:p-12 bg-zinc-50">
-        <h2 className="text-xs font-mono text-red-600 uppercase tracking-widest mb-12 text-center md:text-left">
-          03 / Select Your Protocol
+      {/* --- SECTION 5: PROTOCOLS (CARDS) --- */}
+      <section className="min-h-screen snap-start flex flex-col justify-center p-6 md:p-12 bg-[#E7E5DE]">
+        <h2 className="text-xs font-mono text-[#1C1917] uppercase tracking-widest mb-12 text-center">
+          03 / Select Protocol
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full max-w-7xl mx-auto w-full">
           
-          {/* CARD 1 */}
-          <Link href="/research" className="group bg-white border border-zinc-200 p-8 hover:border-red-600 hover:shadow-xl transition-all duration-300 flex flex-col justify-between h-[400px]">
-            <div>
-              <div className="text-zinc-400 font-mono text-xs mb-4">01</div>
-              <h3 className="text-3xl font-serif text-zinc-900 mb-4 group-hover:text-red-600">Intelligence</h3>
-              <p className="text-sm text-zinc-600 leading-relaxed">
-                <strong className="block text-zinc-900 mb-2">The Foresight</strong>
-                Access forensic analysis of digital decay and geopolitical risk. 
-                For universities, think tanks, and those who need truth, not news.
-              </p>
-            </div>
-            <span className="text-xs font-mono text-zinc-400 group-hover:text-red-600">ACCESS RESEARCH →</span>
-          </Link>
-
-          {/* CARD 2 */}
-          <Link href="/advising" className="group bg-white border border-zinc-200 p-8 hover:border-red-600 hover:shadow-xl transition-all duration-300 flex flex-col justify-between h-[400px]">
-            <div>
-              <div className="text-zinc-400 font-mono text-xs mb-4">02</div>
-              <h3 className="text-3xl font-serif text-zinc-900 mb-4 group-hover:text-red-600">Capital</h3>
-              <p className="text-sm text-zinc-600 leading-relaxed">
-                <strong className="block text-zinc-900 mb-2">The Engine</strong>
-                Algorithmic art advisory and valuation. 
-                Data is the new marble. Converting chaos into liquid assets for Family Offices.
-              </p>
-            </div>
-            <span className="text-xs font-mono text-zinc-400 group-hover:text-red-600">ACCESS ADVISORY →</span>
-          </Link>
-
-          {/* CARD 3 */}
-          <Link href="/heartandangel" className="group bg-white border border-zinc-200 p-8 hover:border-red-600 hover:shadow-xl transition-all duration-300 flex flex-col justify-between h-[400px]">
-            <div>
-              <div className="text-zinc-400 font-mono text-xs mb-4">03</div>
-              <h3 className="text-3xl font-serif text-zinc-900 mb-4 group-hover:text-red-600">Creation</h3>
-              <p className="text-sm text-zinc-600 leading-relaxed">
-                <strong className="block text-zinc-900 mb-2">The Symbol</strong>
-                2022 unique artifacts created in the void. 
-                Love is the only coordinate that remains constant when the map burns.
-              </p>
-            </div>
-            <span className="text-xs font-mono text-zinc-400 group-hover:text-red-600">VIEW ART →</span>
-          </Link>
-
-          {/* CARD 4 */}
-          <Link href="/unframed" className="group bg-white border border-zinc-200 p-8 hover:border-red-600 hover:shadow-xl transition-all duration-300 flex flex-col justify-between h-[400px]">
-            <div>
-              <div className="text-zinc-400 font-mono text-xs mb-4">04</div>
-              <h3 className="text-3xl font-serif text-zinc-900 mb-4 group-hover:text-red-600">Legacy</h3>
-              <p className="text-sm text-zinc-600 leading-relaxed">
-                <strong className="block text-zinc-900 mb-2">The Codex</strong>
-                "Unframed": A techno-political biography. 
-                The story of how I survived the collapse of the Empire and the rise of the Matrix.
-              </p>
-            </div>
-            <span className="text-xs font-mono text-zinc-400 group-hover:text-red-600">READ STORY →</span>
-          </Link>
+          {[
+            { id: '01', title: 'Intelligence', desc: 'Forensic analysis of digital decay.', link: '/research', label: 'Research' },
+            { id: '02', title: 'Capital', desc: 'Algorithmic art advisory. Data is the new marble.', link: '/advising', label: 'Advisory' },
+            { id: '03', title: 'Creation', desc: 'The Symbol. 2022 unique artifacts.', link: '/heartandangel', label: 'Art' },
+            { id: '04', title: 'Legacy', desc: 'The Codex. Unframed biography.', link: '/unframed', label: 'Story' }
+          ].map((card) => (
+            <Link key={card.id} href={card.link} className="group bg-[#F2F0E9] border border-[#1C1917] p-8 hover:bg-[#1C1917] hover:text-[#F2F0E9] transition-all duration-300 flex flex-col justify-between h-[350px]">
+                <div>
+                    <div className="font-mono text-xs opacity-50 mb-4">{card.id}</div>
+                    <h3 className="text-3xl font-serif font-bold mb-4">{card.title}</h3>
+                    <p className="text-sm leading-relaxed opacity-80 group-hover:opacity-100">
+                        {card.desc}
+                    </p>
+                </div>
+                <div className="flex justify-between items-center border-t border-[#1C1917]/20 group-hover:border-[#F2F0E9]/20 pt-4 mt-4">
+                    <span className="text-xs font-mono uppercase tracking-widest">{card.label}</span>
+                    <ArrowUpRight size={16} />
+                </div>
+            </Link>
+          ))}
 
         </div>
       </section>
 
 
-      {/* --- SECTION 6: FINALE (CTA) --- */}
-      <section className="h-[60vh] snap-start flex flex-col items-center justify-center p-8 bg-zinc-900 text-center relative overflow-hidden">
+      {/* --- SECTION 6: FOOTER --- */}
+      <section className="h-[50vh] snap-start flex flex-col items-center justify-center p-8 bg-[#1C1917] text-center">
         
-        {/* Background Noise/Grid */}
-        <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '30px 30px'}}></div>
-
-        <div className="z-10 max-w-2xl w-full space-y-8">
-          <h2 className="text-4xl md:text-5xl font-serif text-white mb-8">
-            Stay in the loop.
-          </h2>
-          <p className="text-zinc-400 text-sm md:text-lg mb-12">
-            I am currently building this system in real-time. 
-            Join the signal. Ignore the noise.
-          </p>
-          
-          <div className="flex flex-col md:flex-row gap-6 w-full">
-            <Link href="/journal" className="flex-1 py-5 bg-white text-black font-mono text-xs uppercase tracking-widest hover:bg-zinc-200 transition">
-              Read System Logs (Journal)
+        <h2 className="text-4xl md:text-6xl font-serif text-[#F2F0E9] mb-8">
+            Join the Signal.
+        </h2>
+        
+        <div className="flex flex-col sm:flex-row gap-6 w-full max-w-md">
+            <Link href="/journal" className="flex-1 py-4 bg-[#F2F0E9] text-[#1C1917] font-mono text-xs uppercase tracking-widest hover:bg-[#B91C1C] hover:text-white transition-colors">
+              Access Journal
             </Link>
-            <a href="mailto:anton@merkurov.love" className="flex-1 py-5 border border-zinc-600 text-white font-mono text-xs uppercase tracking-widest hover:bg-black hover:border-white transition">
-              Request Access
-            </a>
-          </div>
         </div>
 
-        <footer className="absolute bottom-8 text-[10px] font-mono text-zinc-600 uppercase tracking-widest">
-          © 2025 Merkurov Private Office. London / Global.
+        <footer className="mt-16 text-[10px] font-mono text-[#57534E] uppercase tracking-widest">
+          Merkurov Private Office © 2025
         </footer>
       </section>
-
-      {/* Marquee animation moved to global CSS (app/main.css) */}
 
     </main>
   );
