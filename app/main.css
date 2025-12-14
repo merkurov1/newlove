@@ -205,6 +205,15 @@ button:focus {
   }
 }
 
+/* Marquee animation used on Lobby page */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
 /* Исправление для columns блоков внутри prose */
 .prose .grid {
   display: grid !important;

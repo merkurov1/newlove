@@ -270,16 +270,7 @@ export default function LobbyPage() {
         </footer>
       </section>
 
-      {/* CSS for Marquee Animation */}
-      <style jsx global>{`
-        @keyframes marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .animate-marquee {
-          animation: marquee 30s linear infinite;
-        }
-      `}</style>
+      {/* Marquee animation moved to global CSS (app/main.css) */}
 
     </main>
   );
