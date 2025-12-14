@@ -73,15 +73,41 @@ export default async function JournalPage({ searchParams }: Props) {
     const supabase = createClient();
     const selectCols = 'id, title, slug, content, summary, published, publishedAt, sentAt, createdAt, authorId';
 
-    const { data: lettersData, error } = await supabase
-      .from('letters')
-      .select(selectCols as any)
-      .eq('published', true)
-      // Prefer `sentAt` for ordering (newest first). Fallbacks on server if null.
-      .order('sentAt', { ascending: false })
-      .limit(50);
+    // Try ordering by `sentAt` (newest first). If that errors or returns no rows,
+    // fall back to ordering by `publishedAt` to avoid showing an empty list.
+    let lettersData: any[] | null = null;
+    let queryError: any = null;
 
-    if (!error && Array.isArray(lettersData)) {
+    try {
+      const res = await supabase
+        .from('letters')
+        .select(selectCols as any)
+        .eq('published', true)
+        .order('sentAt', { ascending: false })
+        .limit(50);
+      lettersData = res.data as any[] | null;
+      queryError = res.error;
+    } catch (e) {
+      queryError = e;
+    }
+
+    if ((!lettersData || lettersData.length === 0) && !queryError) {
+      // If sentAt produced zero rows, try publishedAt as a fallback
+      try {
+        const res2 = await supabase
+          .from('letters')
+          .select(selectCols as any)
+          .eq('published', true)
+          .order('publishedAt', { ascending: false })
+          .limit(50);
+        lettersData = res2.data as any[] | null;
+        queryError = res2.error;
+      } catch (e) {
+        queryError = e;
+      }
+    }
+
+    if (!queryError && Array.isArray(lettersData) && lettersData.length > 0) {
       initialLetters = lettersData.map((l: any) => ({
         id: l.id,
         title: l.title,
@@ -95,6 +121,8 @@ export default async function JournalPage({ searchParams }: Props) {
             : ''),
         publishedAt: l.publishedAt,
       }));
+    } else if (queryError) {
+      console.error('Journal query error:', queryError);
     }
   } catch (e) {
     console.error('Server initial letters fetch unexpected error', e);
