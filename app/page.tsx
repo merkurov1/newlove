@@ -52,151 +52,92 @@ function extractFirstImage(content: any): string | null {
 export default function Home() {
   return (
     <main className="min-h-screen bg-white text-[#333]">
-      <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 flex flex-col items-center">
-        
-        {/* SPACER + SYSTEM ACCESS BUTTON */}
-        <div className="h-12 sm:h-20 flex items-end justify-center mb-8 sm:mb-12">
-           <Link 
-             href="/lobby"
-             className="group flex items-center gap-3 px-5 py-2 rounded-full border border-gray-200 bg-white hover:bg-black hover:border-black transition-all duration-300"
-           >
-             {/* Pulsing Dot */}
-             <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-             </span>
-             
-             {/* Text */}
-             <span className="font-mono text-[10px] sm:text-xs uppercase tracking-widest text-gray-500 group-hover:text-white transition-colors">
-               System Access
-             </span>
-           </Link>
-        </div>
 
-        {/* NAVIGATION - THE THREE PILLARS */}
-        <nav className="w-full flex flex-col gap-8 sm:gap-12 md:gap-16 mb-12 sm:mb-24 md:mb-32">
-          <ul className="flex flex-col gap-8 sm:gap-12 md:gap-16">
-            {/* ART first */}
-            <li>
-              <a
-                href="/heartandangel"
-                className="block text-center no-underline hover:opacity-60 transition"
-                style={{ textDecoration: 'none' }}
-              >
-                <span
-                  className="block text-4xl sm:text-6xl md:text-7xl"
-                  style={{
-                    fontFamily: 'Cormorant Garamond, Playfair Display, serif',
-                    color: '#000',
-                    letterSpacing: '-0.02em',
-                    lineHeight: 1.1,
-                  }}
-                >
-                  [ ART ]
-                </span>
-                <div
-                  className="mt-2 text-xs sm:text-sm"
-                  style={{
-                    fontFamily: 'Space Mono, Courier Prime, monospace',
-                    color: '#000',
-                    letterSpacing: 1,
-                  }}
-                >
-                  The digital ritual
-                </div>
-              </a>
-            </li>
-            {/* SELECTION second, link to /selection */}
-            <li>
-              <a
-                href="/selection"
-                className="block text-center no-underline hover:opacity-60 transition"
-                style={{ textDecoration: 'none' }}
-              >
-                <span
-                  className="block text-3xl sm:text-5xl md:text-6xl"
-                  style={{
-                    fontFamily: 'Cormorant Garamond, Playfair Display, serif',
-                    color: '#000',
-                    letterSpacing: '-0.02em',
-                    lineHeight: 1.1,
-                  }}
-                >
-                  [ SELECTION ]
-                </span>
-                <div
-                  className="mt-2 text-xs sm:text-sm"
-                  style={{
-                    fontFamily: 'Space Mono, Courier Prime, monospace',
-                    color: '#000',
-                    letterSpacing: 1,
-                  }}
-                >
-                  Curated works. Buffet & Non-conformists.
-                </div>
-              </a>
-            </li>
-            {/* ADVISING third */}
-            <li>
-              <a
-                href="/advising"
-                className="block text-center no-underline hover:opacity-60 transition"
-                style={{ textDecoration: 'none' }}
-              >
-                <span
-                  className="block text-3xl sm:text-5xl md:text-6xl"
-                  style={{
-                    fontFamily: 'Cormorant Garamond, Playfair Display, serif',
-                    color: '#000',
-                    letterSpacing: '-0.02em',
-                    lineHeight: 1.1,
-                  }}
-                >
-                  [ ADVISING ]
-                </span>
-                <div
-                  className="mt-2 text-xs sm:text-sm"
-                  style={{
-                    fontFamily: 'Space Mono, Courier Prime, monospace',
-                    color: '#000',
-                    letterSpacing: 1,
-                  }}
-                >
-                  Private art acquisition
-                </div>
-              </a>
-            </li>
-          </ul>
-        </nav>
+      {/* DECORATIVE BORDER TOP */}
+      <div className="h-1 w-full bg-black fixed top-0 z-50"></div>
 
-        {/* MANIFESTO */}
-        <section className="w-full mb-16 sm:mb-24 md:mb-[120px]">
-          <div
-            className="mx-auto px-3"
-            style={{
-              maxWidth: 600,
-              fontFamily: 'Space Mono, Courier Prime, monospace',
-              color: '#222',
-              fontSize: 'clamp(13px, 3vw, 14px)',
-              lineHeight: 1.8,
-              textAlign: 'center',
-            }}
-          >
-            <p className="mb-6">
-              <span style={{ textWrap: 'balance' }}>
-                I spent 20 years building digital networks. Now I build human connections.
-                <br />
-                I traded complexity for truth. My art is a return to the fundamental source code of
-                humanity. No politics, no borders, no social burden. Just the raw, unfiltered
-                transmission of empathy.
-                <br />
-                Love is necessary. Love is never enough.
-              </span>
+      <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
+        <div className="flex flex-col items-center w-full">
+
+          {/* Header Section */}
+          <div className="text-center mb-12 border-b border-gray-200 pb-8 w-full">
+            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 block mb-6">
+              Digital Temple
+            </span>
+            <h1 className="font-serif text-5xl md:text-7xl mb-6 text-black tracking-tight leading-none">
+              Anton Merkurov
+            </h1>
+            <p className="font-serif italic text-xl text-gray-600">
+              A conceptual portal by Anton Merkurov. Art, advising, and curated selection.
             </p>
           </div>
-        </section>
 
+          {/* SPACER + SYSTEM ACCESS BUTTON */}
+          <div className="h-12 sm:h-20 flex items-end justify-center mb-8 sm:mb-12 w-full">
+            <div className="flex justify-center">
+              <Link
+                href="/lobby"
+                className="group flex items-center gap-3 px-5 py-2 rounded-full border border-gray-200 bg-white hover:bg-black hover:border-black transition-all duration-300"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                </span>
+                <span className="font-mono text-[10px] sm:text-xs uppercase tracking-widest text-gray-500 group-hover:text-white transition-colors">
+                  System Access
+                </span>
+              </Link>
+            </div>
+          </div>
+
+          {/* NAVIGATION - THE THREE PILLARS */}
+          <nav className="w-full flex flex-col gap-8 sm:gap-12 md:gap-16 mb-12 sm:mb-24 md:mb-32">
+            <ul className="flex flex-col gap-8 sm:gap-12 md:gap-16">
+              <li>
+                <a href="/heartandangel" className="block text-center no-underline hover:opacity-60 transition" style={{ textDecoration: 'none' }}>
+                  <span className="block text-4xl sm:text-6xl md:text-7xl" style={{ fontFamily: 'Cormorant Garamond, Playfair Display, serif', color: '#000', letterSpacing: '-0.02em', lineHeight: 1.1 }}>[ ART ]</span>
+                  <div className="mt-2 text-xs sm:text-sm" style={{ fontFamily: 'Space Mono, Courier Prime, monospace', color: '#000', letterSpacing: 1 }}>
+                    The digital ritual
+                  </div>
+                </a>
+              </li>
+              <li>
+                <a href="/selection" className="block text-center no-underline hover:opacity-60 transition" style={{ textDecoration: 'none' }}>
+                  <span className="block text-3xl sm:text-5xl md:text-6xl" style={{ fontFamily: 'Cormorant Garamond, Playfair Display, serif', color: '#000', letterSpacing: '-0.02em', lineHeight: 1.1 }}>[ SELECTION ]</span>
+                  <div className="mt-2 text-xs sm:text-sm" style={{ fontFamily: 'Space Mono, Courier Prime, monospace', color: '#000', letterSpacing: 1 }}>
+                    Curated works. Buffet & Non-conformists.
+                  </div>
+                </a>
+              </li>
+              <li>
+                <a href="/advising" className="block text-center no-underline hover:opacity-60 transition" style={{ textDecoration: 'none' }}>
+                  <span className="block text-3xl sm:text-5xl md:text-6xl" style={{ fontFamily: 'Cormorant Garamond, Playfair Display, serif', color: '#000', letterSpacing: '-0.02em', lineHeight: 1.1 }}>[ ADVISING ]</span>
+                  <div className="mt-2 text-xs sm:text-sm" style={{ fontFamily: 'Space Mono, Courier Prime, monospace', color: '#000', letterSpacing: 1 }}>
+                    Private art acquisition
+                  </div>
+                </a>
+              </li>
+            </ul>
+          </nav>
+
+          {/* MANIFESTO */}
+          <section className="w-full mb-16 sm:mb-24 md:mb-[120px]">
+            <div className="mx-auto px-3" style={{ maxWidth: 600, fontFamily: 'Space Mono, Courier Prime, monospace', color: '#222', fontSize: 'clamp(13px, 3vw, 14px)', lineHeight: 1.8, textAlign: 'center' }}>
+              <p className="mb-6">
+                <span style={{ textWrap: 'balance' }}>
+                  I spent 20 years building digital networks. Now I build human connections.
+                  <br />
+                  I traded complexity for truth. My art is a return to the fundamental source code of humanity. No politics, no borders, no social burden. Just the raw, unfiltered transmission of empathy.
+                  <br />
+                  Love is necessary. Love is never enough.
+                </span>
+              </p>
+            </div>
+          </section>
+
+        </div>
       </div>
+
     </main>
   );
 }

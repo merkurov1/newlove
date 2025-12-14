@@ -17,15 +17,16 @@ const images = [
 
 export default function HeartAndAngelPage() {
   return (
-    <div className="min-h-screen bg-[#FDFBF7] text-[#111] selection:bg-black selection:text-white">
+    <main className="min-h-screen bg-[#FDFBF7] text-[#111] font-sans selection:bg-black selection:text-white">
+
       {/* DECORATIVE BORDER TOP */}
       <div className="h-1 w-full bg-black fixed top-0 z-50"></div>
 
-      <main className="container mx-auto px-4 py-20 md:py-32">
+      <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
         <div className="flex flex-col items-center w-full">
-          
+
           {/* Header Section */}
-          <div className="text-center mb-16 border-b border-gray-200 pb-8 w-full max-w-2xl">
+          <div className="text-center mb-16 border-b border-gray-200 pb-8 w-full">
             <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 block mb-6">
               Visual Mythology
             </span>
@@ -43,7 +44,7 @@ export default function HeartAndAngelPage() {
           </div>
 
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
