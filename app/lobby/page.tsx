@@ -10,7 +10,7 @@ export default function LobbyPage() {
     <main className="bg-zinc-50 text-zinc-900 font-serif h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth selection:bg-red-600 selection:text-white">
       
       {/* --- SECTION 1: INTRO (THE MANIFESTO) --- */}
-      <section className="h-screen snap-start flex flex-col items-center justify-center p-6 md:p-12 text-center relative border-b border-zinc-200">
+      <section className="min-h-screen md:h-screen snap-start flex flex-col items-center justify-center p-4 md:p-12 text-center relative border-b border-zinc-200">
         
         {/* Status Header */}
         <div className="absolute top-6 w-full flex justify-between px-6 md:px-12 text-[10px] font-mono tracking-widest text-zinc-400 uppercase">
@@ -18,16 +18,16 @@ export default function LobbyPage() {
           <span>Loc: Global / Unframed</span>
         </div>
 
-        <div className="max-w-4xl mx-auto space-y-8">
+        <div className="max-w-3xl md:max-w-4xl mx-auto space-y-6">
           <p className="text-xs font-mono text-red-600 tracking-[0.2em] uppercase">
             // Operating System v.3.0
           </p>
           
-          <h1 className="text-5xl md:text-8xl font-bold text-zinc-900 leading-[0.9] tracking-tight">
-            I architect futures <br/> in the digital void.
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-zinc-900 leading-tight tracking-tight">
+            I architect futures<br/>in the digital void.
           </h1>
           
-          <div className="max-w-2xl mx-auto space-y-6 text-lg md:text-xl text-zinc-600 leading-relaxed">
+          <div className="max-w-lg md:max-w-2xl mx-auto space-y-4 text-base md:text-lg text-zinc-600 leading-relaxed">
             <p>
               The world is drowning in noise. Algorithms dictate your attention. 
               Politics dictate your geography.
@@ -40,7 +40,7 @@ export default function LobbyPage() {
           </div>
 
           {/* Audio Button Placeholder */}
-          <button className="group mt-8 flex items-center gap-3 mx-auto px-6 py-3 border border-zinc-300 rounded-full hover:border-red-600 hover:text-red-600 transition-all cursor-pointer">
+          <button className="group mt-6 flex items-center gap-3 mx-auto px-4 py-2 md:px-6 md:py-3 border border-zinc-300 rounded-full hover:border-red-600 hover:text-red-600 transition-all cursor-pointer text-sm md:text-base">
             <span className="relative flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
@@ -50,18 +50,18 @@ export default function LobbyPage() {
         </div>
         
         {/* Scroll Indicator */}
-        <div className="absolute bottom-8 animate-bounce text-zinc-400">
+        <div className="absolute bottom-6 animate-bounce text-zinc-400 text-xl md:text-2xl">
           ↓
         </div>
       </section>
 
 
       {/* --- SECTION 2: FORESIGHT (THE PROOF) --- */}
-      <section className="h-screen snap-start flex items-center justify-center p-6 md:p-12 bg-zinc-100 border-b border-zinc-200">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 max-w-7xl w-full items-center">
+      <section className="min-h-screen md:h-screen snap-start flex items-start md:items-center justify-center p-4 md:p-12 bg-zinc-100 border-b border-zinc-200">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 md:gap-16 max-w-7xl w-full items-start md:items-center">
           
           {/* Left: Introduction */}
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <h2 className="text-xs font-mono text-red-600 uppercase tracking-widest">
               01 / The Track Record
             </h2>
@@ -76,12 +76,15 @@ export default function LobbyPage() {
           </div>
 
           {/* Right: Timeline */}
-          <div className="space-y-8 border-l-2 border-zinc-300 pl-8 relative">
+          <div className="space-y-8 relative md:border-l-2 md:border-zinc-300 md:pl-8">
             
             {/* 2012 */}
             <div className="relative">
-              <span className="absolute -left-[39px] top-2 w-4 h-4 bg-zinc-300 rounded-full border-4 border-zinc-100"></span>
-              <div className="font-mono text-zinc-400 text-sm mb-1">2012 — The Splinternet</div>
+              <span className="hidden md:block absolute -left-[39px] top-2 w-4 h-4 bg-zinc-300 rounded-full border-4 border-zinc-100"></span>
+              <div className="flex items-center gap-3 mb-1">
+                <span className="inline-block md:hidden w-2 h-2 bg-zinc-300 rounded-full"></span>
+                <div className="font-mono text-zinc-400 text-sm">2012 — The Splinternet</div>
+              </div>
               <h4 className="text-xl font-bold text-zinc-900">The Fragmentation Prediction</h4>
               <p className="text-sm text-zinc-600 mt-2 max-w-md">
                 Predicted that the global web would fracture into sovereign intranets. 
@@ -91,8 +94,11 @@ export default function LobbyPage() {
 
             {/* 2018 */}
             <div className="relative">
-              <span className="absolute -left-[39px] top-2 w-4 h-4 bg-zinc-300 rounded-full border-4 border-zinc-100"></span>
-              <div className="font-mono text-zinc-400 text-sm mb-1">2018 — The Resistance</div>
+              <span className="hidden md:block absolute -left-[39px] top-2 w-4 h-4 bg-zinc-300 rounded-full border-4 border-zinc-100"></span>
+              <div className="flex items-center gap-3 mb-1">
+                <span className="inline-block md:hidden w-2 h-2 bg-zinc-300 rounded-full"></span>
+                <div className="font-mono text-zinc-400 text-sm">2018 — The Resistance</div>
+              </div>
               <h4 className="text-xl font-bold text-zinc-900">The Telegram War</h4>
               <p className="text-sm text-zinc-600 mt-2 max-w-md">
                 Forecasted the rise of "Digital Emigres" and the failure of state blocking attempts. 
@@ -102,8 +108,11 @@ export default function LobbyPage() {
 
             {/* 2025 */}
             <div className="relative">
-              <span className="absolute -left-[39px] top-2 w-4 h-4 bg-red-600 rounded-full border-4 border-red-100 animate-pulse"></span>
-              <div className="font-mono text-red-600 text-sm mb-1">2025 — The Reality</div>
+              <span className="hidden md:block absolute -left-[39px] top-2 w-4 h-4 bg-red-600 rounded-full border-4 border-red-100 animate-pulse"></span>
+              <div className="flex items-center gap-3 mb-1">
+                <span className="inline-block md:hidden w-2 h-2 bg-red-600 rounded-full"></span>
+                <div className="font-mono text-red-600 text-sm">2025 — The Reality</div>
+              </div>
               <h4 className="text-xl font-bold text-zinc-900">The Digital Collar</h4>
               <p className="text-sm text-zinc-600 mt-2 max-w-md">
                 The era of voluntary submission. The infrastructure of control is no longer external; 
