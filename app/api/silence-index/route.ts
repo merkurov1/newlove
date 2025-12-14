@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import yahooFinance from 'yahoo-finance2';
+import YahooFinance from 'yahoo-finance2';
 import { subDays, format } from 'date-fns';
 
 // КОНФИГУРАЦИЯ АКТИВОВ
@@ -14,6 +14,8 @@ const ASSETS = {
 
 export async function GET() {
   try {
+    // Инициализируем клиент согласно v3 API
+    const yahooFinance = new YahooFinance();
     const endDate = new Date();
     const startDate = subDays(endDate, 30); // Берем данные за 30 дней
 
@@ -24,18 +26,27 @@ export async function GET() {
     };
 
     // 1. Забираем данные параллельно
-    const [goldData, hermesData, btcData, nvidiaData] = await Promise.all([
+    const [goldDataRaw, hermesDataRaw, btcDataRaw, nvidiaDataRaw] = await Promise.all([
       yahooFinance.historical(ASSETS.gold, queryOptions),
       yahooFinance.historical(ASSETS.hermes, queryOptions),
       yahooFinance.historical(ASSETS.btc, queryOptions),
       yahooFinance.historical(ASSETS.nvidia, queryOptions),
     ]);
 
+    // Некоторые endpoints могут вернуть undefined/null — нормализуем в массивы
+    const goldData = Array.isArray(goldDataRaw) ? goldDataRaw : (goldDataRaw ? [goldDataRaw] : []);
+    const hermesData = Array.isArray(hermesDataRaw) ? hermesDataRaw : (hermesDataRaw ? [hermesDataRaw] : []);
+    const btcData = Array.isArray(btcDataRaw) ? btcDataRaw : (btcDataRaw ? [btcDataRaw] : []);
+    const nvidiaData = Array.isArray(nvidiaDataRaw) ? nvidiaDataRaw : (nvidiaDataRaw ? [nvidiaDataRaw] : []);
+
     // 2. Функция для создания словаря { date: closePrice }
     const createMap = (data: any[]) => {
       return data.reduce((acc, item) => {
-        const dateStr = item.date.toISOString().split('T')[0];
-        acc[dateStr] = item.close;
+        if (!item) return acc;
+        const d = item.date ? new Date(item.date) : null;
+        if (!d || Number.isNaN(d.getTime())) return acc;
+        const dateStr = d.toISOString().split('T')[0];
+        acc[dateStr] = typeof item.close === 'number' ? item.close : (item.adjClose ?? item.close ?? 0);
         return acc;
       }, {} as Record<string, number>);
     };
@@ -48,6 +59,9 @@ export async function GET() {
     // 3. Собираем единый массив дат (исключаем выходные, где нет биржевых данных)
     // Ориентируемся на Gold (он торгуется 5/7), так как крипта торгуется 24/7, но нам нужно пересечение.
     const validDates = Object.keys(goldMap).sort();
+    if (validDates.length === 0) {
+      return NextResponse.json({ data: [], meta: { message: 'No market data available' } }, { status: 204 });
+    }
 
     const chartData = validDates.map(date => {
       const pGold = goldMap[date] || 0;
@@ -80,9 +94,9 @@ export async function GET() {
 
     // Получаем текущий тренд (последний vs предпоследний)
     const last = chartData[chartData.length - 1];
-    const prev = chartData[chartData.length - 2];
-    const trend = last.value > prev.value ? 'up' : 'down';
-    const percentChange = ((last.value - prev.value) / prev.value) * 100;
+    const prev = chartData.length > 1 ? chartData[chartData.length - 2] : null;
+    const trend = prev ? (last.value > prev.value ? 'up' : 'down') : 'stable';
+    const percentChange = prev && prev.value !== 0 ? ((last.value - prev.value) / prev.value) * 100 : 0;
 
     return NextResponse.json({
       data: chartData,
