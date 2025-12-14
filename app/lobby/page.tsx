@@ -2,105 +2,147 @@ import Link from "next/link";
 
 export const metadata = {
   title: "Merkurov | System Access",
-  description: "The Digital Monumentalist. System Status: Live Construction.",
+  description: "I architect futures in the digital void.",
 };
 
 export default function LobbyPage() {
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900 font-serif p-6 md:p-12 flex flex-col selection:bg-red-500 selection:text-white">
+    <main className="bg-[#050505] text-zinc-300 font-sans selection:bg-red-900 selection:text-white h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth">
       
-      {/* 1. STATUS BAR (SYSTEM LOGS) */}
-      <div className="w-full border-b border-zinc-200 pb-4 mb-16 flex flex-col md:flex-row justify-between items-center gap-4 font-sans">
-        <div className="flex items-center gap-3">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
-          </span>
-          <span className="text-[10px] font-mono tracking-widest uppercase text-zinc-500">
-            System Status: Architecting Self [Live Build]
-          </span>
-        </div>
-        
-        <Link href="/journal" className="text-xs font-mono text-zinc-900 hover:text-red-600 transition-colors border-b border-zinc-300 hover:border-red-600 pb-0.5">
-          READ JOURNAL LOGS →
-        </Link>
-      </div>
-
-      {/* 2. THE CORE (MONUMENTALIST) */}
-      <div className="flex-grow flex flex-col items-center justify-center mb-24 text-center">
-        <h1 className="text-5xl md:text-8xl font-bold text-zinc-900 tracking-tight leading-none mb-6">
-          The Digital<br className="hidden md:block" /> Monumentalist
+      {/* --- SECTION 1: INTRO (THE HOOK) --- */}
+      <section className="h-screen snap-start flex flex-col items-center justify-center p-8 text-center relative border-b border-zinc-900">
+        <p className="text-xs font-mono text-red-600 mb-6 tracking-widest uppercase animate-pulse">
+          Incoming Signal...
+        </p>
+        <h1 className="text-4xl md:text-7xl font-bold text-white mb-6 leading-tight max-w-4xl">
+          I architect futures <br/> in the digital void.
         </h1>
-        <p className="text-lg md:text-2xl text-zinc-500 italic max-w-2xl mx-auto leading-relaxed">
-          Bridging the gap between the Soviet Granite of the past <br/>
-          and the Digital Ether of the future.
+        <p className="text-lg md:text-xl font-serif text-zinc-500 max-w-xl mx-auto leading-relaxed">
+          The world is noisy. This interface is silent.
+          <br/>Welcome to the private office of Anton Merkurov.
         </p>
-        <div className="mt-8 h-px w-24 bg-red-600"></div>
-      </div>
-
-      {/* 3. THE QUADRANT (NAVIGATION) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-6xl mx-auto w-full mb-24 font-sans">
         
-        {/* QUADRANT 1: INTELLIGENCE */}
-        <Link href="/research" className="group border-t border-zinc-200 pt-6 hover:border-red-600 transition-colors duration-500">
-          <div className="text-[10px] font-mono text-zinc-400 mb-2 uppercase tracking-widest group-hover:text-red-600">
-            01 / Intelligence
+        {/* Scroll Indicator */}
+        <div className="absolute bottom-12 flex flex-col items-center gap-2 opacity-50 animate-bounce">
+          <span className="text-[10px] font-mono uppercase tracking-widest">Initialise Protocol</span>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+        </div>
+      </section>
+
+
+      {/* --- SECTION 2: FORESIGHT (THE PROOF) --- */}
+      <section className="h-screen snap-start flex flex-col items-center justify-center p-8 bg-[#080808] border-b border-zinc-900">
+        <div className="max-w-4xl w-full">
+          <h2 className="text-xs font-mono text-zinc-500 mb-12 uppercase tracking-widest text-center">
+            01 / FORESIGHT METRICS
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+            {/* Connecting Line */}
+            <div className="hidden md:block absolute top-4 left-0 w-full h-[1px] bg-zinc-800 z-0"></div>
+
+            {/* Item 1 */}
+            <div className="relative z-10 bg-[#080808] pr-4">
+              <span className="block w-2 h-2 bg-zinc-600 rounded-full mb-4"></span>
+              <div className="font-mono text-red-500 text-sm mb-2">2012</div>
+              <h3 className="text-xl text-white font-bold mb-2">The Splinternet</h3>
+              <p className="text-sm text-zinc-500">Predicted the fragmentation of the global web and the rise of digital borders.</p>
+            </div>
+
+            {/* Item 2 */}
+            <div className="relative z-10 bg-[#080808] pr-4">
+              <span className="block w-2 h-2 bg-zinc-600 rounded-full mb-4"></span>
+              <div className="font-mono text-red-500 text-sm mb-2">2018</div>
+              <h3 className="text-xl text-white font-bold mb-2">Crypto Utility</h3>
+              <p className="text-sm text-zinc-500">Forecasted the shift from "speculation" to "infrastructure" long before the ETF.</p>
+            </div>
+
+            {/* Item 3 */}
+            <div className="relative z-10 bg-[#080808] pr-4">
+              <span className="block w-2 h-2 bg-white rounded-full mb-4 shadow-[0_0_10px_white]"></span>
+              <div className="font-mono text-red-500 text-sm mb-2">2025</div>
+              <h3 className="text-xl text-white font-bold mb-2">The Digital Collar</h3>
+              <p className="text-sm text-zinc-500">Documenting the era of voluntary submission to algorithms.</p>
+            </div>
           </div>
-          <h3 className="text-3xl font-serif text-zinc-900 mb-3 group-hover:italic transition-all">
-            The Foresight
-          </h3>
-          <p className="text-sm text-zinc-600 leading-relaxed max-w-sm">
-            From "Digital Decay" to the Sovereign Internet. A forensic timeline of predictions that history validated.
-          </p>
-        </Link>
+        </div>
+      </section>
 
-        {/* QUADRANT 2: CAPITAL */}
-        <Link href="/advising" className="group border-t border-zinc-200 pt-6 hover:border-red-600 transition-colors duration-500">
-          <div className="text-[10px] font-mono text-zinc-400 mb-2 uppercase tracking-widest group-hover:text-red-600">
-            02 / Capital
-          </div>
-          <h3 className="text-3xl font-serif text-zinc-900 mb-3 group-hover:italic transition-all">
-            The Valuation
-          </h3>
-          <p className="text-sm text-zinc-600 leading-relaxed max-w-sm">
-            Transmuting heritage into asset classes. Algorithmic advisory for the age of data is the new marble.
-          </p>
-        </Link>
 
-        {/* QUADRANT 3: ART */}
-        <Link href="/heartandangel" className="group border-t border-zinc-200 pt-6 hover:border-red-600 transition-colors duration-500">
-          <div className="text-[10px] font-mono text-zinc-400 mb-2 uppercase tracking-widest group-hover:text-red-600">
-            03 / Creation
-          </div>
-          <h3 className="text-3xl font-serif text-zinc-900 mb-3 group-hover:italic transition-all">
-            The Reinvention
-          </h3>
-          <p className="text-sm text-zinc-600 leading-relaxed max-w-sm">
-            "Love is never enough." 2022 artifacts created in the void. A naive rebellion against cynical times.
-          </p>
-        </Link>
+      {/* --- SECTION 3: PHILOSOPHY (THE BRIDGE) --- */}
+      <section className="h-screen snap-start flex flex-col items-center justify-center p-8 bg-[#050505] border-b border-zinc-900">
+        <h2 className="text-xs font-mono text-zinc-500 mb-8 uppercase tracking-widest">
+          02 / THE DIGITAL MONUMENTALIST
+        </h2>
+        
+        <blockquote className="text-2xl md:text-4xl font-serif text-center max-w-3xl leading-relaxed text-zinc-200">
+          "My great-grandfather carved the Empire in <span className="text-white border-b border-zinc-700">granite</span>.
+          <br className="hidden md:block" />
+          I preserve its ghost in the <span className="text-white border-b border-zinc-700">digital ether</span>."
+        </blockquote>
 
-        {/* QUADRANT 4: LEGACY */}
-        <Link href="/unframed" className="group border-t border-zinc-200 pt-6 hover:border-red-600 transition-colors duration-500">
-          <div className="text-[10px] font-mono text-zinc-400 mb-2 uppercase tracking-widest group-hover:text-red-600">
-            04 / Heritage
-          </div>
-          <h3 className="text-3xl font-serif text-zinc-900 mb-3 group-hover:italic transition-all">
-            The Foundation
-          </h3>
-          <p className="text-sm text-zinc-600 leading-relaxed max-w-sm">
-            Managing the shadow of the colossal. How to sell the ghost of an Empire without selling your soul.
-          </p>
-        </Link>
-
-      </div>
-
-      {/* FOOTER */}
-      <footer className="text-center font-sans">
-        <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
-          Merkurov Private Office. Est. 20XX.
+        <p className="mt-8 text-sm font-mono text-zinc-500 text-center max-w-md">
+          Transmuting history into assets. <br/>
+          From physical monuments to blockchain provenance.
         </p>
-      </footer>
+      </section>
+
+
+      {/* --- SECTION 4: DOMAINS (THE GRID) --- */}
+      <section className="min-h-screen snap-start flex flex-col items-center justify-center p-4 md:p-12 bg-[#050505]">
+        <h2 className="text-xs font-mono text-zinc-500 mb-8 uppercase tracking-widest mt-12 md:mt-0">
+          03 / SELECT YOUR PROTOCOL
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-zinc-800 border border-zinc-800 w-full max-w-5xl">
+          
+          <Link href="/research" className="bg-black p-8 hover:bg-zinc-900 transition group">
+            <div className="text-red-900 font-mono text-[10px] mb-2 uppercase group-hover:text-red-500">Intelligence</div>
+            <h3 className="text-2xl text-white font-serif mb-2">Foresight</h3>
+            <p className="text-xs text-zinc-500">Forensic analysis & geopolitical risk.</p>
+          </Link>
+
+          <Link href="/advising" className="bg-black p-8 hover:bg-zinc-900 transition group">
+            <div className="text-red-900 font-mono text-[10px] mb-2 uppercase group-hover:text-red-500">Capital</div>
+            <h3 className="text-2xl text-white font-serif mb-2">Valuation</h3>
+            <p className="text-xs text-zinc-500">Art advisory & algorithmic assessment.</p>
+          </Link>
+
+          <Link href="/heartandangel" className="bg-black p-8 hover:bg-zinc-900 transition group">
+            <div className="text-red-900 font-mono text-[10px] mb-2 uppercase group-hover:text-red-500">Creation</div>
+            <h3 className="text-2xl text-white font-serif mb-2">Art</h3>
+            <p className="text-xs text-zinc-500">The symbol. The naive rebellion.</p>
+          </Link>
+
+          <Link href="/unframed" className="bg-black p-8 hover:bg-zinc-900 transition group">
+            <div className="text-red-900 font-mono text-[10px] mb-2 uppercase group-hover:text-red-500">Heritage</div>
+            <h3 className="text-2xl text-white font-serif mb-2">Legacy</h3>
+            <p className="text-xs text-zinc-500">The book & the biography.</p>
+          </Link>
+
+        </div>
+      </section>
+
+
+      {/* --- SECTION 5: FINALE (CTA) --- */}
+      <section className="h-[50vh] snap-start flex flex-col items-center justify-center p-8 bg-zinc-900 text-center">
+        <h2 className="text-3xl font-serif text-white mb-8">
+          Stay in the loop.
+        </h2>
+        
+        <div className="flex flex-col md:flex-row gap-4 w-full max-w-md">
+          <Link href="/journal" className="flex-1 py-4 bg-white text-black font-mono text-xs uppercase tracking-widest hover:bg-zinc-200 transition">
+            Read Journal
+          </Link>
+          <a href="mailto:anton@merkurov.love" className="flex-1 py-4 border border-zinc-600 text-white font-mono text-xs uppercase tracking-widest hover:bg-black hover:border-black transition">
+            Let's Talk
+          </a>
+        </div>
+
+        <footer className="mt-16 text-[10px] font-mono text-zinc-500">
+          © 2025 MERKUROV PRIVATE OFFICE
+        </footer>
+      </section>
 
     </main>
   );
