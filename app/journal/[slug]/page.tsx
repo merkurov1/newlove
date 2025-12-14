@@ -1,195 +1,164 @@
-import { createClient } from '@/lib/supabase/server';
-import { notFound } from 'next/navigation';
-import Link from 'next/link';
-import BlockRenderer from '@/components/BlockRenderer';
-import LetterCommentsClient from '@/components/journal/LetterCommentsClient';
+import NewsletterSubscribe from '@/components/journal/NewsletterSubscribe';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import { ArrowLeft, MessageSquare, Share2 } from 'lucide-react';
+import { createClient } from '@/lib/supabase/server';
+import Link from 'next/link';
+import { ArrowRight, ArrowUpRight } from 'lucide-react';
 
-// --- METADATA GENERATION ---
-export async function generateMetadata({ params }: { params: { slug: string } }) {
-  const slug = params.slug;
-  try {
-    const supabase = createClient();
-    const { data: letter, error } = await supabase
-      .from('letters')
-      .select('title, content')
-      .eq('slug', slug)
-      .eq('published', true)
-      .single();
+export const dynamic = 'force-dynamic';
 
-    if (error || !letter) return { title: 'Journal | Merkurov' };
+export const metadata = sanitizeMetadata({
+  title: 'Journal | Merkurov',
+  description: 'Chronicles of the unframed. Market intelligence and heritage architecture.',
+});
 
-    const title = letter.title || 'Intelligence Report';
-    let rawText = '';
-    try {
-        const parsed = typeof letter.content === 'string' ? JSON.parse(letter.content) : letter.content;
-        if (Array.isArray(parsed)) {
-            rawText = parsed.map((b: any) => b.data?.text || '').join(' ');
-        } else if (parsed?.blocks) {
-            rawText = parsed.blocks.map((b: any) => b.data?.text || '').join(' ');
-        }
-    } catch {
-        rawText = 'Read the full report.';
-    }
-    
-    const description = rawText.slice(0, 160) || 'Market intelligence and heritage architecture.';
-    const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love';
-    const image = `${site}/default-og.png`;
-
-    return sanitizeMetadata({
-      title: `${title}`,
-      description,
-      openGraph: {
-        title,
-        description,
-        url: `${site}/journal/${slug}`,
-        images: [image],
-        type: 'article',
-      },
-      twitter: {
-        card: 'summary_large_image',
-        title,
-        description,
-        images: [image],
-      },
-    });
-  } catch (e) {
-    return { title: 'Journal | Merkurov' };
-  }
+interface Props {
+  searchParams?: { [key: string]: string | string[] | undefined };
 }
 
-// --- MAIN COMPONENT ---
-export default async function LetterPage({ params }: { params: { slug: string } }) {
-  const slug = params.slug;
-  const supabase = createClient();
-
-  const { data: letter, error } = await supabase
-    .from('letters')
-    .select(
-      'id, title, slug, content, published, publishedAt, createdAt, authorId, users(name, email)'
-    )
-    .eq('slug', slug)
-    .eq('published', true)
-    .single();
-
-  if (error || !letter) {
-    notFound();
+// Функция для очистки текста превью
+function getPreviewText(content: any, limit = 240) {
+  if (!content) return '';
+  let text = '';
+  
+  if (typeof content === 'string') {
+    try {
+      const json = JSON.parse(content);
+      if (Array.isArray(json) || (json.blocks && Array.isArray(json.blocks))) {
+        const blocks = Array.isArray(json) ? json : json.blocks;
+        text = blocks.map((b: any) => b.data?.text || '').join(' ');
+      } else {
+        text = content;
+      }
+    } catch {
+      text = content.replace(/<[^>]*>?/gm, '');
+    }
+  } else if (typeof content === 'object') {
+     const blocks = Array.isArray(content) ? content : content.blocks || [];
+     text = blocks.map((b: any) => b.data?.text || '').join(' ');
   }
 
-  const letterAuthor = Array.isArray(letter.users) ? letter.users[0] : letter.users;
-  const dateStr = new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'long', year: 'numeric'
-  });
+  const clean = text.replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  return clean.length > limit ? clean.substring(0, limit) + '...' : clean;
+}
 
-  // Block Parsing
-  let blocks: any[] = [];
+export default async function JournalPage({ searchParams }: Props) {
+  let initialLetters: any[] = [];
   try {
-    const raw = typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content);
-    const parsed = JSON.parse(raw || '[]');
-    blocks = Array.isArray(parsed) ? parsed : (parsed.blocks ? parsed.blocks : [parsed]);
+    const supabase = createClient();
+    const selectCols = 'id, title, slug, content, summary, published, publishedAt, createdAt, authorId';
+
+    const { data: lettersData, error } = await supabase
+      .from('letters')
+      .select(selectCols as any)
+      .eq('published', true)
+      .order('publishedAt', { ascending: false })
+      .limit(50);
+
+    if (!error && Array.isArray(lettersData)) {
+      initialLetters = lettersData.map((l: any) => ({
+        id: l.id,
+        title: l.title,
+        slug: l.slug,
+        preview: l.summary || getPreviewText(l.content),
+        publishedAt: l.publishedAt,
+      }));
+    }
   } catch (e) {
-    blocks = [];
+    console.error('Server initial letters fetch unexpected error', e);
   }
 
   return (
-    <main className="min-h-screen bg-white text-[#1C1917] selection:bg-red-600 selection:text-white font-serif">
-      
-      {/* NAVBAR (Sticky, White, Clean) */}
-      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 py-4 px-6 md:px-12 flex justify-between items-center transition-all">
-        <Link 
-          href="/journal" 
-          className="group flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-gray-500 hover:text-black transition-colors"
-        >
-          <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform"/> 
-          <span>Journal Index</span>
-        </Link>
-        <span className="hidden md:block font-mono text-[10px] uppercase text-gray-300 tracking-[0.2em]">
-            Merkurov Intelligence
-        </span>
-      </nav>
-
-      <article className="max-w-3xl mx-auto px-6 py-16 md:py-24">
+    <main className="min-h-screen bg-white text-zinc-900 selection:bg-black selection:text-white pt-24 md:pt-32 pb-20">
         
-        {/* ARTICLE HEADER */}
-        <header className="mb-16 md:mb-24 text-center">
-          <div className="inline-flex items-center gap-2 mb-8">
-            <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-red-600">
-                System Log
-            </span>
-          </div>
-          
-          <h1 className="text-4xl md:text-6xl font-serif font-medium leading-[1.1] mb-8 text-black tracking-tight">
-            {letter.title}
+        {/* HEADER */}
+        <div className="max-w-7xl mx-auto px-6 mb-20 md:mb-28 border-b border-zinc-100 pb-12">
+          <h1 className="text-6xl md:text-8xl font-serif font-medium tracking-tight text-black mb-6">
+            The Journal
           </h1>
-          
-          {/* Meta Row */}
-          <div className="flex justify-center items-center gap-6 border-t border-b border-gray-100 py-4 mt-8">
-             <div className="text-xs font-mono uppercase tracking-widest text-gray-500">
-                {dateStr}
-             </div>
-             <div className="w-px h-3 bg-gray-200"></div>
-             <div className="text-xs font-mono uppercase tracking-widest text-gray-900">
-                {letterAuthor?.name || 'A. Merkurov'}
-             </div>
-          </div>
-        </header>
-
-        {/* CONTENT BODY */}
-        <div className="prose prose-lg md:prose-xl prose-stone max-w-none 
-          
-          /* Headings */
-          prose-headings:font-serif prose-headings:font-medium prose-headings:text-black prose-headings:tracking-tight
-          
-          /* Paragraphs */
-          prose-p:font-serif prose-p:text-gray-800 prose-p:leading-[1.8] prose-p:mb-8
-          
-          /* Links */
-          prose-a:text-red-600 prose-a:no-underline hover:prose-a:underline hover:prose-a:decoration-1 hover:prose-a:underline-offset-4 transition-all
-          
-          /* Blockquotes */
-          prose-blockquote:border-l-2 prose-blockquote:border-red-600 prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-2xl prose-blockquote:font-serif prose-blockquote:text-black
-          
-          /* Code */
-          prose-code:font-mono prose-code:text-sm prose-code:bg-gray-50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-red-600
-          
-          /* Images */
-          prose-img:rounded-sm prose-img:grayscale hover:prose-img:grayscale-0 prose-img:transition-all prose-img:duration-700
-          
-          mb-24">
-            
-            {blocks && blocks.length > 0 ? (
-              <BlockRenderer blocks={blocks} />
-            ) : (
-              <div className="text-center py-12">
-                 <p className="font-mono text-xs text-gray-400">Content rendering...</p>
-              </div>
-            )}
-            
+          <p className="text-xl md:text-2xl text-zinc-500 font-serif max-w-2xl leading-relaxed">
+            Notes on art, technology, and the architecture of value.
+          </p>
         </div>
 
-        {/* SIGNATURE */}
-        <div className="flex justify-center mb-24 opacity-50">
-           <span className="font-serif italic text-2xl">A.M.</span>
-        </div>
-
-        {/* COMMENTS SECTION */}
-        <section className="border-t border-gray-100 pt-16">
-            <div className="flex items-center justify-between mb-8">
-               <h3 className="text-sm font-mono font-bold uppercase tracking-widest text-gray-900">
-                 Discussion Protocol
-               </h3>
-               <MessageSquare size={16} className="text-gray-400" />
-            </div>
+        {/* LAYOUT */}
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-16">
             
-            {/* Чистый контейнер для комментариев */}
-            <div className="bg-gray-50/50 rounded-xl p-6 md:p-8">
-                <LetterCommentsClient slug={slug} />
-            </div>
-        </section>
+            {/* ARTICLES FEED (8 cols) */}
+            <div className="lg:col-span-8 space-y-20">
+               {initialLetters.map((article) => (
+                 <article key={article.id} className="group cursor-pointer">
+                    <Link href={`/journal/${article.slug}`} className="block">
+                      
+                      {/* Date */}
+                      <div className="mb-3 font-mono text-xs uppercase tracking-widest text-zinc-400">
+                        {new Date(article.publishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </div>
 
-      </article>
+                      {/* Title */}
+                      <h2 className="text-3xl md:text-5xl font-serif font-medium text-black mb-4 group-hover:opacity-60 transition-opacity duration-300 leading-[1.1]">
+                        {article.title}
+                      </h2>
+
+                      {/* Preview */}
+                      <p className="text-base md:text-lg text-zinc-600 font-serif leading-relaxed mb-6 max-w-3xl">
+                        {article.preview}
+                      </p>
+
+                      {/* Link */}
+                      <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest border-b border-zinc-200 pb-1 group-hover:border-black transition-all">
+                        Read <ArrowRight size={12} />
+                      </div>
+
+                    </Link>
+                 </article>
+               ))}
+            </div>
+
+
+            {/* SIDEBAR (4 cols) */}
+            <aside className="lg:col-span-4 space-y-12 h-fit lg:sticky lg:top-32">
+               
+               {/* NEWSLETTER / OFFICE ACCESS */}
+               <div className="bg-zinc-50 p-8 border border-zinc-100">
+                  <h3 className="font-serif text-2xl text-black mb-3">
+                    Private Office
+                  </h3>
+                  <p className="text-sm text-zinc-600 mb-6 leading-relaxed font-medium">
+                    Subscribe to receive investment memorandums and updates directly. No noise.
+                  </p>
+                  <NewsletterSubscribe />
+               </div>
+
+               {/* LINKS */}
+               <div>
+                 <span className="block font-mono text-[10px] uppercase tracking-widest text-zinc-400 mb-4 border-b border-zinc-100 pb-2">
+                    Explore
+                 </span>
+                 <ul className="space-y-3">
+                    <li>
+                       <Link href="/heartandangel" className="flex items-center justify-between text-sm font-bold uppercase tracking-widest text-zinc-800 hover:text-black hover:pl-2 transition-all">
+                          <span>Art</span>
+                          <ArrowUpRight size={14} className="text-zinc-400" />
+                       </Link>
+                    </li>
+                    <li>
+                       <Link href="/advising" className="flex items-center justify-between text-sm font-bold uppercase tracking-widest text-zinc-800 hover:text-black hover:pl-2 transition-all">
+                          <span>Advising</span>
+                          <ArrowUpRight size={14} className="text-zinc-400" />
+                       </Link>
+                    </li>
+                    <li>
+                       <Link href="/lobby" className="flex items-center justify-between text-sm font-bold uppercase tracking-widest text-zinc-800 hover:text-black hover:pl-2 transition-all">
+                          <span>Lobby</span>
+                          <ArrowUpRight size={14} className="text-zinc-400" />
+                       </Link>
+                    </li>
+                 </ul>
+               </div>
+
+            </aside>
+
+        </div>
     </main>
   );
 }
