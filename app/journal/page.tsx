@@ -45,13 +45,14 @@ export default async function JournalPage({ searchParams }: Props) {
   let initialLetters: any[] = [];
   try {
     const supabase = createClient();
-    const selectCols = 'id, title, slug, content, summary, published, publishedAt, createdAt, authorId';
+    const selectCols = 'id, title, slug, content, summary, published, publishedAt, sentAt, createdAt, authorId';
 
     const { data: lettersData, error } = await supabase
       .from('letters')
       .select(selectCols as any)
       .eq('published', true)
-      .order('publishedAt', { ascending: false })
+      // Prefer `sentAt` for ordering (newest first). Fallbacks on server if null.
+      .order('sentAt', { ascending: false })
       .limit(50);
 
     if (!error && Array.isArray(lettersData)) {
