@@ -4,10 +4,9 @@ import Link from 'next/link';
 import BlockRenderer from '@/components/BlockRenderer';
 import LetterCommentsClient from '@/components/journal/LetterCommentsClient';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import { parseRichTextContent } from '@/lib/contentParser';
-import { ArrowLeft, MessageSquare } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Share2 } from 'lucide-react';
 
-// --- METADATA GENERATION (SEO) ---
+// --- METADATA GENERATION ---
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const slug = params.slug;
   try {
@@ -19,16 +18,16 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       .eq('published', true)
       .single();
 
-    if (error || !letter) return { title: 'Journal | Anton Merkurov' };
+    if (error || !letter) return { title: 'Journal | Merkurov' };
 
     const title = letter.title || 'Intelligence Report';
-    // Парсим контент для description, если он в JSON формате
     let rawText = '';
     try {
         const parsed = typeof letter.content === 'string' ? JSON.parse(letter.content) : letter.content;
-        // Простая эвристика для извлечения текста из блоков EditorJS
         if (Array.isArray(parsed)) {
             rawText = parsed.map((b: any) => b.data?.text || '').join(' ');
+        } else if (parsed?.blocks) {
+            rawText = parsed.blocks.map((b: any) => b.data?.text || '').join(' ');
         }
     } catch {
         rawText = 'Read the full report.';
@@ -39,7 +38,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     const image = `${site}/default-og.png`;
 
     return sanitizeMetadata({
-      title: `${title} | Merkurov Journal`,
+      title: `${title}`,
       description,
       openGraph: {
         title,
@@ -56,16 +55,15 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       },
     });
   } catch (e) {
-    return { title: 'Journal | Anton Merkurov' };
+    return { title: 'Journal | Merkurov' };
   }
 }
 
-// --- MAIN PAGE COMPONENT ---
+// --- MAIN COMPONENT ---
 export default async function LetterPage({ params }: { params: { slug: string } }) {
   const slug = params.slug;
   const supabase = createClient();
 
-  // Забираем данные (уже без проверки авторизации для редиректа)
   const { data: letter, error } = await supabase
     .from('letters')
     .select(
@@ -84,111 +82,109 @@ export default async function LetterPage({ params }: { params: { slug: string } 
     day: 'numeric', month: 'long', year: 'numeric'
   });
 
-  // Парсинг блоков для BlockRenderer
+  // Block Parsing
   let blocks: any[] = [];
   try {
     const raw = typeof letter.content === 'string' ? letter.content : JSON.stringify(letter.content);
     const parsed = JSON.parse(raw || '[]');
-    blocks = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+    blocks = Array.isArray(parsed) ? parsed : (parsed.blocks ? parsed.blocks : [parsed]);
   } catch (e) {
     blocks = [];
   }
 
   return (
-    <main className="min-h-screen bg-[#F3E5D8] text-[#1C1917] selection:bg-[#B91C1C] selection:text-white font-serif">
+    <main className="min-h-screen bg-white text-[#1C1917] selection:bg-red-600 selection:text-white font-serif">
       
-      {/* NAVIGATION BAR */}
-      <nav className="sticky top-0 z-50 bg-[#F3E5D8]/95 backdrop-blur-sm border-b border-black py-4 px-4 md:px-8 flex justify-between items-center transition-all">
+      {/* NAVBAR (Sticky, White, Clean) */}
+      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 py-4 px-6 md:px-12 flex justify-between items-center transition-all">
         <Link 
           href="/journal" 
-          className="group flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:text-[#B91C1C] transition-colors"
+          className="group flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-gray-500 hover:text-black transition-colors"
         >
           <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform"/> 
-          <span>Index</span>
+          <span>Journal Index</span>
         </Link>
-        <span className="font-mono text-[10px] uppercase opacity-60 hidden md:block">
-            Merkurov Intelligence • {slug}
+        <span className="hidden md:block font-mono text-[10px] uppercase text-gray-300 tracking-[0.2em]">
+            Merkurov Intelligence
         </span>
       </nav>
 
-      <article className="max-w-4xl mx-auto px-4 md:px-6 py-12 md:py-20">
+      <article className="max-w-3xl mx-auto px-6 py-16 md:py-24">
         
         {/* ARTICLE HEADER */}
-        <header className="mb-12 md:mb-16 text-center">
-          <div className="inline-block border-y border-black py-1 mb-6">
-            <span className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em]">
-                Official Dispatch
+        <header className="mb-16 md:mb-24 text-center">
+          <div className="inline-flex items-center gap-2 mb-8">
+            <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-red-600">
+                System Log
             </span>
           </div>
           
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-[1.05] mb-8 text-[#111]">
+          <h1 className="text-4xl md:text-6xl font-serif font-medium leading-[1.1] mb-8 text-black tracking-tight">
             {letter.title}
           </h1>
           
-          <div className="flex flex-col md:flex-row justify-center items-center gap-2 md:gap-6 text-xs font-mono uppercase text-[#57534E] border-t border-black/10 pt-6 max-w-lg mx-auto">
-             <div className="flex items-center gap-2">
-                <span className="font-bold text-[#1C1917]">{letterAuthor?.name || 'Anton Merkurov'}</span>
+          {/* Meta Row */}
+          <div className="flex justify-center items-center gap-6 border-t border-b border-gray-100 py-4 mt-8">
+             <div className="text-xs font-mono uppercase tracking-widest text-gray-500">
+                {dateStr}
              </div>
-             <span className="hidden md:block">•</span>
-             <time dateTime={letter.publishedAt || letter.createdAt}>
-               {dateStr}
-             </time>
+             <div className="w-px h-3 bg-gray-200"></div>
+             <div className="text-xs font-mono uppercase tracking-widest text-gray-900">
+                {letterAuthor?.name || 'A. Merkurov'}
+             </div>
           </div>
         </header>
 
-        {/* MAIN CONTENT (BlockRenderer) */}
-        {/* Стилизация Typography под FT: крупный засечный шрифт, жесткие отступы */}
+        {/* CONTENT BODY */}
         <div className="prose prose-lg md:prose-xl prose-stone max-w-none 
           
           /* Headings */
-          prose-headings:font-serif prose-headings:font-bold prose-headings:text-[#1C1917] prose-headings:tracking-tight
+          prose-headings:font-serif prose-headings:font-medium prose-headings:text-black prose-headings:tracking-tight
           
           /* Paragraphs */
-          prose-p:font-serif prose-p:text-[#2C2C2C] prose-p:leading-[1.8] prose-p:mb-6
+          prose-p:font-serif prose-p:text-gray-800 prose-p:leading-[1.8] prose-p:mb-8
           
           /* Links */
-          prose-a:text-[#B91C1C] prose-a:no-underline prose-a:border-b prose-a:border-[#B91C1C]/30 
-          hover:prose-a:bg-[#B91C1C] hover:prose-a:text-white hover:prose-a:border-transparent transition-all
+          prose-a:text-red-600 prose-a:no-underline hover:prose-a:underline hover:prose-a:decoration-1 hover:prose-a:underline-offset-4 transition-all
           
           /* Blockquotes */
-          prose-blockquote:border-l-4 prose-blockquote:border-black prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-2xl prose-blockquote:font-serif prose-blockquote:bg-black/5 prose-blockquote:py-4 prose-blockquote:pr-4
+          prose-blockquote:border-l-2 prose-blockquote:border-red-600 prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-2xl prose-blockquote:font-serif prose-blockquote:text-black
           
-          /* Code/Pre */
-          prose-code:font-mono prose-code:text-sm prose-code:bg-[#E7E5DE] prose-code:px-1 prose-code:text-[#B91C1C]
-          prose-pre:bg-[#1C1917] prose-pre:text-[#F3E5D8]
+          /* Code */
+          prose-code:font-mono prose-code:text-sm prose-code:bg-gray-50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-red-600
           
-          /* Lists */
-          prose-li:marker:text-black
+          /* Images */
+          prose-img:rounded-sm prose-img:grayscale hover:prose-img:grayscale-0 prose-img:transition-all prose-img:duration-700
           
           mb-24">
             
             {blocks && blocks.length > 0 ? (
               <BlockRenderer blocks={blocks} />
             ) : (
-              <div className="text-center py-20 border border-dashed border-black/20">
-                 <p className="font-mono text-sm text-gray-500">Content rendering...</p>
+              <div className="text-center py-12">
+                 <p className="font-mono text-xs text-gray-400">Content rendering...</p>
               </div>
             )}
             
         </div>
 
-        {/* FOOTER SIGNATURE */}
-        <div className="flex justify-center mb-24">
-            <div className="text-center">
-                <div className="w-16 h-1 bg-black mx-auto mb-4"></div>
-                <p className="font-serif italic text-lg">A.M.</p>
-            </div>
+        {/* SIGNATURE */}
+        <div className="flex justify-center mb-24 opacity-50">
+           <span className="font-serif italic text-2xl">A.M.</span>
         </div>
 
         {/* COMMENTS SECTION */}
-        <section className="border-t-4 border-black pt-12">
-            <div className="flex items-center gap-3 mb-8">
-                <MessageSquare size={20} className="text-[#B91C1C]" />
-                <h3 className="text-xl font-bold uppercase tracking-widest">Discussion</h3>
+        <section className="border-t border-gray-100 pt-16">
+            <div className="flex items-center justify-between mb-8">
+               <h3 className="text-sm font-mono font-bold uppercase tracking-widest text-gray-900">
+                 Discussion Protocol
+               </h3>
+               <MessageSquare size={16} className="text-gray-400" />
             </div>
             
-            {/* Обертка для компонента комментариев, чтобы он выглядел как часть газеты */}
-            <div className="bg-[#EAE0D5] border border-black/10 p-4 md:p-8 rounded-sm">
+            {/* Чистый контейнер для комментариев */}
+            <div className="bg-gray-50/50 rounded-xl p-6 md:p-8">
                 <LetterCommentsClient slug={slug} />
             </div>
         </section>
