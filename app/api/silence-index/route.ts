@@ -103,7 +103,7 @@ export async function GET() {
       meta: {
         currentValue: last.value,
         trend,
-        percentChange: percentChange.toFixed(2),
+        percentChange: parseFloat(percentChange.toFixed(2)),
         lastUpdate: new Date().toISOString()
       }
     });

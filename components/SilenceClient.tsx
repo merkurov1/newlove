@@ -10,18 +10,31 @@ export default function SilenceClient() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/silence-index')
-      .then(res => res.json())
-      .then(json => {
+    let mounted = true;
+
+    const fetchData = async () => {
+      try {
+        const res = await fetch('/api/silence-index', { cache: 'no-store' });
+        const json = await res.json();
+        if (!mounted) return;
         setData(json.data || []);
         setMeta(json.meta || { currentValue: 0, trend: 'stable', percentChange: 0 });
         setLoading(false);
-      })
-      .catch(() => {
+      } catch (e) {
+        if (!mounted) return;
         setData([]);
         setMeta({ currentValue: 0, trend: 'stable', percentChange: 0 });
         setLoading(false);
-      });
+      }
+    };
+
+    fetchData();
+    const id = setInterval(fetchData, 60_000); // refresh every 60s
+
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
   }, []);
 
   if (loading)
@@ -60,7 +73,7 @@ export default function SilenceClient() {
           }`}
         >
           {isPositive ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-          {Math.abs(meta?.percentChange ?? 0)}% (24h)
+          {Math.abs(Number(meta?.percentChange ?? 0)).toFixed(2)}% (24h)
         </div>
       </div>
 
