@@ -19,7 +19,8 @@ async function fetchShares() {
     .from('liveheart_shares')
     .select('slug, title, dna, created_at')
     .order('created_at', { ascending: false })
-    .limit(5000);
+    // Use range to explicitly fetch up to 5000 rows (0..4999)
+    .range(0, 4999);
 
   if (error) throw error;
   return (data || []) as ShareData[];
@@ -73,6 +74,17 @@ export default async function StatisticsPage({ searchParams }: { searchParams?: 
     rows = await fetchShares();
   } catch (err) {
     console.error('Failed to load shares', err);
+  }
+
+  // Also fetch exact count using Supabase head/count to verify total rows in DB
+  let exactCount: number | null = null;
+  try {
+    const supabase = createClient({ useServiceRole: true });
+    const headRes = await supabase.from('liveheart_shares').select('*', { head: true, count: 'exact' });
+    // @ts-ignore
+    exactCount = typeof headRes.count === 'number' ? headRes.count : null;
+  } catch (err) {
+    console.error('Failed to fetch exact count', err);
   }
 
   const total = rows.length;
@@ -133,6 +145,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams?: 
             <div className="font-semibold mb-2">Debug: query results</div>
             <pre className="whitespace-pre-wrap overflow-x-auto">{JSON.stringify({
               total,
+              exactCount,
               sample: rows.slice(0, 16).map(r => ({ slug: r.slug, created_at: r.created_at })),
               supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'not-set'
             }, null, 2)}</pre>
