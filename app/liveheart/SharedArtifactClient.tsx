@@ -1,6 +1,3 @@
-export default function SharedArtifact() {
-  return null;
-}
 "use client";
 
 import React from "react";
@@ -17,7 +14,6 @@ type HeartDNA = {
   rotationSpeed?: number;
 };
 
-// Simple, stable SVG renderer for saved artifacts.
 export default function SharedArtifact({ dna }: { dna: HeartDNA }) {
   const palette = dna?.palette && dna.palette.length ? dna.palette : ["#ff6b6b", "#ffd166"];
   const id = `grad-${Math.random().toString(36).slice(2, 9)}`;
@@ -54,4 +50,3 @@ export default function SharedArtifact({ dna }: { dna: HeartDNA }) {
     </div>
   );
 }
-                  if (curDNA.physics === "STILL") ease = 0.1;

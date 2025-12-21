@@ -1,6 +1,6 @@
 import React from 'react';
 import { createClient } from '../../../lib/supabase/server';
-import SharedArtifact from '../SharedArtifact';
+import SharedArtifact from '../SharedArtifactClient';
 
 type Props = { params: { slug: string } };
 
