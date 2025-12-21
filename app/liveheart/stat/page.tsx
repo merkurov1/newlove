@@ -67,7 +67,7 @@ const BigNumber = ({ label, value, icon }: { label: string, value: string | numb
 );
 
 // --- PAGE ---
-export default async function StatisticsPage() {
+export default async function StatisticsPage({ searchParams }: { searchParams?: { debug?: string } }) {
   let rows: ShareData[] = [];
   try {
     rows = await fetchShares();
@@ -100,6 +100,8 @@ export default async function StatisticsPage() {
 
   const top = rows.slice(0, 32); 
 
+  const showDebug = (searchParams?.debug === '1') || process.env.NODE_ENV === 'development';
+
   return (
     <div className="min-h-screen bg-black text-white selection:bg-pink-500 selection:text-white pb-20">
       
@@ -125,6 +127,17 @@ export default async function StatisticsPage() {
           <BigNumber icon="✨" label="Shapes" value={Object.keys(stats.structure).length} />
           <BigNumber icon="⚡️" label="Moods" value={Object.keys(stats.physics).length} />
         </div>
+
+        {showDebug && (
+          <div className="mb-8 p-4 bg-zinc-800/60 rounded-lg border border-white/5 text-xs">
+            <div className="font-semibold mb-2">Debug: query results</div>
+            <pre className="whitespace-pre-wrap overflow-x-auto">{JSON.stringify({
+              total,
+              sample: rows.slice(0, 16).map(r => ({ slug: r.slug, created_at: r.created_at })),
+              supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'not-set'
+            }, null, 2)}</pre>
+          </div>
+        )}
 
         {/* CHARTS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20">
