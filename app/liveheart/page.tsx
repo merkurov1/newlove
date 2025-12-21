@@ -18,7 +18,7 @@ type HeartDNA = {
 };
 
 const CONFIG = {
-  COLLECTION_THRESHOLD: 2500, // Slightly faster to generate
+  COLLECTION_THRESHOLD: 3000, 
 };
 
 // --- PARTICLE CLASS ---
@@ -29,7 +29,7 @@ class Particle {
   vx: number;
   vy: number;
   size: number;
-  baseSize: number;
+  baseSize: number; // Target size
   color: string; // HSL string
   alpha: number;
   
@@ -47,8 +47,8 @@ class Particle {
     this.z = 0;
     this.vx = (Math.random() - 0.5) * 4;
     this.vy = (Math.random() - 0.5) * 4;
-    this.size = 0;
-    this.baseSize = Math.random() * 2 + 1;
+    this.size = 0; // Starts invisible
+    this.baseSize = Math.random() * 3 + 1;
     this.color = "0, 0%, 100%";
     this.alpha = 1;
     this.t = Math.random() * Math.PI * 2;
@@ -126,12 +126,10 @@ export default function LiveHeartPage() {
 
       // 2. CLEAR
       if (curPhase === "artifact") {
-         // Trail length depends on structure
          const alpha = curDNA?.physics === "SPIN" ? 0.2 : 0.12;
          ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
          ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
       } else {
-         // Full clear for clean collecting phase
          ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
       }
 
@@ -148,7 +146,6 @@ export default function LiveHeartPage() {
           for (let i = 0; i < particlesRef.current.length; i+=10) {
              const p = particlesRef.current[i];
              const p2 = particlesRef.current[(i+4) % particlesRef.current.length];
-             // Only draw short lines
              if (Math.abs(p.x - p2.x) < 100 && Math.abs(p.y - p2.y) < 100) {
                  ctx.moveTo(p.x, p.y);
                  ctx.lineTo(p2.x, p2.y);
@@ -159,13 +156,23 @@ export default function LiveHeartPage() {
 
       particlesRef.current.forEach((p) => {
         // --- PHYSICS ---
+        
+        // PHASE: COLLECTING (Trails)
         if (curPhase === "collecting" || curPhase === "idle") {
             p.x += p.vx;
             p.y += p.vy;
             p.size *= 0.95; 
             p.alpha -= 0.02;
         } 
+        
+        // PHASE: ARTIFACT (The Heart)
         else if (curPhase === "crystallizing" || curPhase === "artifact") {
+            
+            // !!! CRITICAL FIX: GROW PARTICLES !!!
+            if (p.size < p.baseSize) {
+                p.size += (p.baseSize - p.size) * 0.1;
+            }
+
             if (curDNA && p.targetX !== undefined && p.targetY !== undefined) {
                 
                 // --- ANIMATION LOGIC ---
@@ -173,7 +180,6 @@ export default function LiveHeartPage() {
                     const w = window.innerWidth;
                     const h = window.innerHeight;
                     
-                    // BASE SCALE
                     let scale = Math.min(w, h) / 35;
                     if (curDNA.scaleMode === "MICRO") scale /= 2.5;
                     if (curDNA.scaleMode === "MACRO") scale *= 1.3;
@@ -184,7 +190,6 @@ export default function LiveHeartPage() {
                         const rot = time * curDNA.rotationSpeed;
                         const pt = getHeartPos(p.t, scale, w, h, rot);
                         
-                        // Atom/Galaxy Offset
                         if (curDNA.structure === "ATOM" || curDNA.structure === "GALAXY") {
                             const orbitR = 40 + Math.sin(time * 2 + p.t) * 20;
                             pt.x += Math.cos(time * 3 + p.offset) * orbitR;
@@ -201,12 +206,11 @@ export default function LiveHeartPage() {
                         p.targetX = pt.x + (Math.random()-0.5) * curDNA.glitchFactor;
                         p.targetY = pt.y + (Math.random()-0.5) * curDNA.glitchFactor;
                     }
-                    // 3. PULSE / BREATHE
+                    // 3. PULSE
                     else if (curDNA.physics === "PULSE" || curDNA.physics === "BREATHE") {
                         const beat = Math.pow(Math.sin(time * 3), 4) * 25;
                         const cx = window.innerWidth / 2;
                         const cy = window.innerHeight / 2;
-                        // Push out from center
                         p.targetX! += ((p.x - cx) / 100) * beat * 0.02;
                         p.targetY! += ((p.y - cy) / 100) * beat * 0.02;
                     }
@@ -229,7 +233,8 @@ export default function LiveHeartPage() {
         }
 
         // --- DRAW ---
-        if (p.size > 0.1 && p.alpha > 0.01) {
+        // Allow even small particles to be drawn
+        if (p.size > 0.01) {
             ctx.fillStyle = `hsla(${p.color}, ${p.alpha})`;
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -269,12 +274,14 @@ export default function LiveHeartPage() {
     metricsRef.current.lastX = x;
     metricsRef.current.lastY = y;
 
-    // Beautiful Trail
+    // Trail
     const p = new Particle(window.innerWidth, window.innerHeight);
     p.x = x; p.y = y;
     p.size = Math.random() * 4 + 1;
     p.color = "0, 0%, 100%";
     p.alpha = 0.5;
+    // Set explicit baseSize for trails
+    p.baseSize = p.size;
     particlesRef.current.push(p);
 
     const pct = Math.min(100, (metricsRef.current.totalDist / CONFIG.COLLECTION_THRESHOLD) * 100);
@@ -352,7 +359,6 @@ export default function LiveHeartPage() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     
-    // Scale Logic
     let sVal = Math.min(w, h) / 35;
     if (dna.scaleMode === "MICRO") sVal /= 2.5;
     if (dna.scaleMode === "MACRO") sVal *= 1.3;
@@ -374,13 +380,15 @@ export default function LiveHeartPage() {
         p.targetX = pt.x + (Math.random() - 0.5) * scatter;
         p.targetY = pt.y + (Math.random() - 0.5) * scatter;
         
-        // Colors
         p.color = dna.palette[i % dna.palette.length];
         
-        // Size
+        // Base Size
         p.baseSize = dna.particleSize + Math.random();
         if (dna.scaleMode === "MICRO") p.baseSize *= 0.6;
         if (dna.structure === "GRID") p.baseSize = 1.5;
+
+        // CRITICAL: Start size at 0, will grow in render loop
+        p.size = 0; 
 
         particlesRef.current.push(p);
     }
@@ -407,6 +415,7 @@ export default function LiveHeartPage() {
       
       setProgress(0);
       setDna(null);
+      dnaRef.current = null;
   };
 
   const cursorClass = phase === "crystallizing" ? "cursor-none" : "cursor-crosshair";
