@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 type Phase = "idle" | "collecting" | "crystallizing" | "artifact";
 
 type HeartDNA = {
-  name: string; // generated name like "NEON VORTEX"
+  name: string;
   palette: string[];
   structure: "CONTOUR" | "CLOUD" | "GRID" | "ORBIT" | "RAIN" | "ATOM" | "SPIRAL" | "NOISE";
   physics: "PULSE" | "FLOW" | "VIBRATE" | "STILL" | "SPIN" | "IMPLODE";
@@ -18,14 +18,13 @@ type HeartDNA = {
 };
 
 const CONFIG = {
-  COLLECTION_THRESHOLD: 4000, 
+  COLLECTION_THRESHOLD: 3000, 
 };
 
 // --- PARTICLE CLASS ---
 class Particle {
   x: number;
   y: number;
-  z: number; // For pseudo-3D
   vx: number;
   vy: number;
   size: number;
@@ -36,7 +35,6 @@ class Particle {
   // Artifact props
   targetX?: number;
   targetY?: number;
-  targetZ?: number;
   t: number; 
   offset: number;
   speed: number;
@@ -45,12 +43,11 @@ class Particle {
   constructor(w: number, h: number) {
     this.x = Math.random() * w;
     this.y = Math.random() * h;
-    this.z = 0;
     this.vx = (Math.random() - 0.5) * 4;
     this.vy = (Math.random() - 0.5) * 4;
     this.size = 0;
     this.baseSize = Math.random() * 2 + 0.5;
-    this.color = "100, 100%, 100%";
+    this.color = "0, 0%, 100%";
     this.alpha = 1;
     this.t = Math.random() * Math.PI * 2;
     this.offset = (Math.random() - 0.5) * 30;
@@ -77,15 +74,13 @@ export default function LiveHeartPage() {
 
   // --- HEART MATH (Pseudo-3D) ---
   const getHeartPos = (t: number, scale: number, w: number, h: number, rotationY: number) => {
-    // Base 2D Heart
     let x = 16 * Math.pow(Math.sin(t), 3);
     let y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
     
-    // Apply Scale
     x *= scale;
-    y *= -scale; // Flip Y for canvas
+    y *= -scale; 
 
-    // 3D Rotation simulation (around Y axis)
+    // 3D Rotation
     const z = x * Math.sin(rotationY);
     x = x * Math.cos(rotationY);
 
@@ -120,30 +115,33 @@ export default function LiveHeartPage() {
       const curPhase = phaseRef.current;
       const curDNA = dnaRef.current;
 
-      // 1. CLEAR & TRAIL EFFECTS
+      // 1. CRITICAL FIX: RESET BLENDING MODE TO NORMAL BEFORE CLEARING
+      ctx.globalCompositeOperation = "source-over";
+
+      // 2. CLEAR / TRAIL LOGIC
       if (curPhase === "artifact") {
-         // Different trail lengths based on physics
-         const alpha = curDNA?.physics === "SPIN" || curDNA?.structure === "SPIRAL" ? 0.2 : 0.1;
+         // Trail length depends on physics
+         const alpha = curDNA?.physics === "SPIN" || curDNA?.structure === "SPIRAL" ? 0.25 : 0.15;
          ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
          ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
       } else {
          ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
       }
 
-      // 2. BLENDING FOR GLOW
+      // 3. ENABLE GLOW ONLY FOR PARTICLES
       ctx.globalCompositeOperation = "lighter"; 
 
-      // 3. DRAW PARTICLES
+      // 4. DRAW PARTICLES
       
-      // GRID CONNECTIONS
+      // Grid Lines
       if (curPhase === "artifact" && curDNA?.structure === "GRID") {
           ctx.strokeStyle = `hsla(${curDNA.palette[0]}, 0.1)`;
           ctx.lineWidth = 0.5;
           ctx.beginPath();
-          for (let i = 0; i < particlesRef.current.length; i+=12) {
+          for (let i = 0; i < particlesRef.current.length; i+=15) {
              const p = particlesRef.current[i];
-             const p2 = particlesRef.current[(i+4) % particlesRef.current.length];
-             if (Math.abs(p.x - p2.x) < 100 && Math.abs(p.y - p2.y) < 100) {
+             const p2 = particlesRef.current[(i+5) % particlesRef.current.length];
+             if (Math.abs(p.x - p2.x) < 150 && Math.abs(p.y - p2.y) < 150) {
                  ctx.moveTo(p.x, p.y);
                  ctx.lineTo(p2.x, p2.y);
              }
@@ -162,12 +160,11 @@ export default function LiveHeartPage() {
         else if (curPhase === "crystallizing" || curPhase === "artifact") {
             if (curDNA && p.targetX !== undefined && p.targetY !== undefined) {
                 
-                // Recalculate target if Spinning or Flowing
+                // Animation Logic
                 if (curPhase === "artifact") {
                     if (curDNA.physics === "SPIN" || curDNA.structure === "ATOM") {
                         const w = window.innerWidth;
                         const h = window.innerHeight;
-                        // Calculate Scale
                         let scale = Math.min(w, h) / 35;
                         if (curDNA.scaleMode === "MICRO") scale /= 3;
                         if (curDNA.scaleMode === "MACRO") scale *= 1.4;
@@ -176,11 +173,10 @@ export default function LiveHeartPage() {
                         const rot = time * curDNA.rotationSpeed;
                         const pt = getHeartPos(p.t, scale, w, h, rot);
                         
-                        // Atom orbit logic
                         if (curDNA.structure === "ATOM") {
-                            const orbitR = 20 + Math.sin(time * 2 + p.t) * 20;
-                            pt.x += Math.cos(time * 5 + p.offset) * orbitR;
-                            pt.y += Math.sin(time * 5 + p.offset) * orbitR;
+                            const orbitR = 30 + Math.sin(time * 2 + p.t) * 20;
+                            pt.x += Math.cos(time * 4 + p.offset) * orbitR;
+                            pt.y += Math.sin(time * 4 + p.offset) * orbitR;
                         }
 
                         p.targetX = pt.x + (Math.cos(time + p.offset) * curDNA.glitchFactor);
@@ -200,45 +196,33 @@ export default function LiveHeartPage() {
                         const beat = Math.pow(Math.sin(time * 3), 4) * 20;
                         const cx = window.innerWidth / 2;
                         const cy = window.innerHeight / 2;
-                        const dx = p.x - cx;
-                        const dy = p.y - cy;
-                        const dist = Math.sqrt(dx*dx + dy*dy);
-                        p.targetX! += (dx/dist) * beat * 0.01;
-                        p.targetY! += (dy/dist) * beat * 0.01;
+                        p.targetX! += ((p.x - cx) / 100) * beat * 0.01;
+                        p.targetY! += ((p.y - cy) / 100) * beat * 0.01;
                     }
                 }
 
-                // Move to target
                 const dx = p.targetX - p.x;
                 const dy = p.targetY - p.y;
-                let ease = 0.05;
+                let ease = 0.08;
                 if (curDNA.physics === "IMPLODE") ease = 0.01;
                 
                 p.x += dx * ease;
                 p.y += dy * ease;
 
-                // Sparkle Effect
                 const sparkle = Math.sin(time * 10 + p.sparkleOffset);
-                p.alpha = sparkle > 0.8 ? 1 : 0.6;
+                p.alpha = sparkle > 0.8 ? 1 : 0.7;
             }
         }
 
-        // --- DRAW ---
         if (p.size > 0.1 && p.alpha > 0.01) {
             ctx.fillStyle = `hsla(${p.color}, ${p.alpha})`;
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            // Dynamic Glow based on Particle Size
-            ctx.shadowBlur = p.size * 3;
+            ctx.shadowBlur = p.size * 2; 
             ctx.shadowColor = `hsla(${p.color}, 0.5)`;
             ctx.fill();
         }
       });
-
-      // Spawn trail
-      if (curPhase === "collecting" && particlesRef.current.length < 500) {
-         // buffer
-      }
 
       animId = requestAnimationFrame(render);
     };
@@ -270,12 +254,12 @@ export default function LiveHeartPage() {
     metricsRef.current.lastX = x;
     metricsRef.current.lastY = y;
 
-    // Beautiful Trail
+    // Trail
     const p = new Particle(window.innerWidth, window.innerHeight);
     p.x = x; p.y = y;
-    p.size = Math.random() * 3 + 1;
-    p.color = "200, 100%, 80%"; // Blueish
-    p.alpha = 0.8;
+    p.size = Math.random() * 4 + 1;
+    p.color = "200, 100%, 80%";
+    p.alpha = 0.6;
     particlesRef.current.push(p);
 
     const pct = Math.min(100, (metricsRef.current.totalDist / CONFIG.COLLECTION_THRESHOLD) * 100);
@@ -284,16 +268,15 @@ export default function LiveHeartPage() {
     if (pct >= 100) generateArtifact();
   };
 
-  // --- DNA GENERATOR (THE BRAIN) ---
+  // --- GENERATOR ---
   const generateArtifact = () => {
     phaseRef.current = "crystallizing";
     setPhase("crystallizing");
 
-    // RANDOMIZER ENGINE
     const rand = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
     const r = Math.random();
 
-    // 1. PALETTES (HSL Strings)
+    // PALETTES
     const palettes = [
         { name: "CYBERPUNK", colors: ["320, 100%, 50%", "190, 100%, 50%", "280, 100%, 60%"] },
         { name: "GOLDEN HOUR", colors: ["40, 100%, 60%", "20, 100%, 60%", "0, 0%, 100%"] },
@@ -306,23 +289,22 @@ export default function LiveHeartPage() {
     ];
     const palette = rand(palettes);
 
-    // 2. SCALE (Constrained)
+    // SCALE
     const scaleModes = ["MICRO", "NORMAL", "NORMAL", "MACRO", "TITAN"];
     const scale = scaleModes[Math.floor(r * scaleModes.length)] as HeartDNA['scaleMode'];
 
-    // 3. STRUCTURE
+    // STRUCTURE
     const structures = ["CONTOUR", "CLOUD", "GRID", "ORBIT", "RAIN", "ATOM", "SPIRAL", "NOISE"];
     const structure = structures[Math.floor(Math.random() * structures.length)] as HeartDNA['structure'];
 
-    // 4. PHYSICS
+    // PHYSICS
     const physicsList = ["PULSE", "FLOW", "VIBRATE", "STILL", "SPIN", "IMPLODE"];
     let physics = physicsList[Math.floor(Math.random() * physicsList.length)] as HeartDNA['physics'];
     
-    // Constraints to avoid ugly combos
-    if (structure === "GRID") physics = "STILL"; // Grid looks bad moving too fast
-    if (structure === "ATOM") physics = "SPIN";  // Atoms must spin
+    // Constraints
+    if (structure === "GRID") physics = "STILL";
+    if (structure === "ATOM") physics = "SPIN";
 
-    // 5. NAME GENERATION
     const name = `${palette.name} ${structure}`;
 
     const newDNA: HeartDNA = {
@@ -331,7 +313,7 @@ export default function LiveHeartPage() {
         structure,
         physics,
         scaleMode: scale,
-        particleCount: scale === "TITAN" ? 2500 : 1500, // Optimize count
+        particleCount: scale === "TITAN" ? 2500 : 1500,
         particleSize: Math.random() * 2 + 0.5,
         glitchFactor: Math.random() * 20,
         rotationSpeed: (Math.random() - 0.5) * 0.05
@@ -353,37 +335,26 @@ export default function LiveHeartPage() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     
-    // Scale Value
     let sVal = Math.min(w, h) / 35;
     if (dna.scaleMode === "MICRO") sVal /= 3;
     if (dna.scaleMode === "MACRO") sVal *= 1.3;
-    if (dna.scaleMode === "TITAN") sVal *= 1.8; // Capped max size
+    if (dna.scaleMode === "TITAN") sVal *= 1.8;
 
     for(let i=0; i<dna.particleCount; i++) {
         const p = new Particle(w, h);
-        
-        // Distribute T
         const t = (Math.PI * 2 * i) / dna.particleCount;
         p.t = t;
         
-        // Initial Target Calc
         const pt = getHeartPos(t, sVal, w, h, 0);
 
-        // Structure Scatter Logic
         let scatter = 5;
         if (dna.structure === "CLOUD") scatter = 50;
         if (dna.structure === "NOISE") scatter = 150;
-        if (dna.structure === "SPIRAL") {
-            p.t += i * 0.01; // Offset for spiral look
-        }
+        if (dna.structure === "SPIRAL") p.t += i * 0.01;
 
         p.targetX = pt.x + (Math.random() - 0.5) * scatter;
         p.targetY = pt.y + (Math.random() - 0.5) * scatter;
-        
-        // Color Assignment
         p.color = dna.palette[i % dna.palette.length];
-        
-        // Size Variation
         p.baseSize = dna.particleSize + Math.random();
         if (dna.scaleMode === "MICRO") p.baseSize *= 0.8;
         if (dna.structure === "GRID") p.baseSize = 1.5;
@@ -392,9 +363,7 @@ export default function LiveHeartPage() {
     }
   };
 
-  // --- RESTART LOGIC ---
   const handleRestart = () => {
-      // Don't reload page, just regenerate
       metricsRef.current = { totalDist: 0, lastX: 0, lastY: 0, stops: 0 };
       particlesRef.current = [];
       setPhase("collecting");
@@ -402,7 +371,8 @@ export default function LiveHeartPage() {
       setDna(null);
   };
 
-  const cursorClass = (phase === "crystallizing" || phase === "artifact") ? "cursor-none" : "cursor-crosshair";
+  // Cursor is HIDDEN in crystallizing, but AUTO in artifact to allow clicking
+  const cursorClass = phase === "crystallizing" ? "cursor-none" : "cursor-crosshair";
 
   return (
     <div 
@@ -412,11 +382,10 @@ export default function LiveHeartPage() {
     >
       <canvas ref={canvasRef} className="block w-full h-full" />
 
-      {/* NOISE & VIGNETTE OVERLAY */}
+      {/* NOISE */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.1] z-10" 
            style={{ 
                backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-               boxShadow: "inset 0 0 100px rgba(0,0,0,0.9)"
            }} 
       />
 
@@ -442,7 +411,7 @@ export default function LiveHeartPage() {
                     </div>
                     <button 
                         onClick={handleRestart}
-                        className="pointer-events-auto px-8 py-3 bg-white/10 border border-white/30 backdrop-blur-md text-white text-[10px] uppercase tracking-[0.3em] hover:bg-white hover:text-black hover:border-white transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+                        className="pointer-events-auto px-8 py-3 bg-white/10 border border-white/30 backdrop-blur-md text-white text-[10px] uppercase tracking-[0.3em] hover:bg-white hover:text-black hover:border-white transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0.5)] cursor-pointer"
                     >
                         Reshuffle
                     </button>
