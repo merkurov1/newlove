@@ -1,5 +1,5 @@
 import React from 'react';
-import { createClient } from '../../../../lib/supabase/server';
+import { createClient } from '../../../lib/supabase/server';
 
 type CountMap = Record<string, number>;
 
