@@ -4,12 +4,11 @@ import React, { useEffect, useRef, useState } from "react";
 
 // --- TYPES & CONFIG ---
 type Phase = "idle" | "collecting" | "crystallizing" | "artifact";
-type Archetype = "VOID" | "MERCURY" | "WEB" | "NOVA";
+type Archetype = "VOID" | "MERCURY" | "WEB" | "NOVA" | "GLITCH";
 
 const CONFIG = {
-  COLLECTION_THRESHOLD: 1000, // Reduced for faster generation (approx 3-4s)
-  PARTICLE_COUNT: 800,        // Base count
-  WEB_PARTICLE_COUNT: 300,    // Lower for Web to save FPS on line calculations
+  COLLECTION_THRESHOLD: 3500, // Increased: Requires more movement (~6-8s)
+  PARTICLE_COUNT: 900,
 };
 
 class Particle {
@@ -18,60 +17,58 @@ class Particle {
   vx: number;
   vy: number;
   size: number;
-  baseColor: string;
+  baseSize: number; // Remember original size for pulsing
   color: string;
   
   // Artifact properties
   targetX?: number;
   targetY?: number;
-  angle: number; // for orbital motion
+  angle: number;
   speed: number;
+  wobble: number;
 
   constructor(x: number, y: number) {
     this.x = x;
     this.y = y;
     this.vx = (Math.random() - 0.5) * 2;
     this.vy = (Math.random() - 0.5) * 2;
-    this.size = Math.random() * 2 + 1;
-    this.baseColor = "rgba(255, 255, 255, 0.8)";
-    this.color = this.baseColor;
+    this.size = Math.random() * 2 + 0.5;
+    this.baseSize = this.size;
+    this.color = "rgba(255, 255, 255, 0.8)";
     this.angle = Math.random() * Math.PI * 2;
-    this.speed = 0.02 + Math.random() * 0.03;
+    this.speed = 0.01 + Math.random() * 0.02;
+    this.wobble = Math.random() * 100;
   }
 }
 
 export default function LiveHeartPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   
-  // State Refs (Mutable for performance)
   const particlesRef = useRef<Particle[]>([]);
   const metricsRef = useRef({ 
     speeds: [] as number[], 
     angles: [] as number[],
     totalDist: 0,
     lastX: 0,
-    lastY: 0
+    lastY: 0,
+    minX: 9999, maxX: 0, minY: 9999, maxY: 0 // For bounding box (Amplitude)
   });
 
-  // UI State
   const [phase, setPhase] = useState<Phase>("idle");
   const phaseRef = useRef<Phase>("idle");
   const [progress, setProgress] = useState(0);
   const [archetype, setArchetype] = useState<Archetype | null>(null);
   const archetypeRef = useRef<Archetype | null>(null);
 
-  // --- HEART GENERATOR ---
+  // --- HEART FORMULA ---
   const getHeartPoint = (t: number, scale: number, w: number, h: number) => {
-    // Parametric Heart Formula
-    const x = 16 * Math.pow(Math.sin(t), 3);
-    const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
-    return {
-      x: w / 2 + x * scale,
-      y: h / 2 - y * scale
-    };
+    // Basic Heart
+    let x = 16 * Math.pow(Math.sin(t), 3);
+    let y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    return { x: w / 2 + x * scale, y: h / 2 - y * scale };
   };
 
-  // --- CORE LOOP ---
+  // --- LOOP ---
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -93,34 +90,43 @@ export default function LiveHeartPage() {
     resize();
 
     const render = () => {
-      time += 0.01;
+      time += 0.015;
+      const curArchetype = archetypeRef.current;
       
-      // 1. Clear Canvas
-      // "Nova" gets a trails effect, others get clean clear
-      if (archetypeRef.current === "NOVA") {
-        ctx.fillStyle = "rgba(0, 0, 0, 0.2)"; // Trails
+      // CLEAR CANVAS & BLENDING MODES
+      // NOVA/GLITCH get trails. VOID gets clean clear.
+      if (curArchetype === "NOVA" || curArchetype === "GLITCH") {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+        ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+        ctx.globalCompositeOperation = "lighter"; // Glow effect
+      } else if (curArchetype === "WEB") {
+         ctx.globalCompositeOperation = "source-over";
+         ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+         ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
       } else {
-        ctx.fillStyle = "rgba(0, 0, 0, 1)"; // Clean
+        ctx.globalCompositeOperation = "source-over";
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
       }
-      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
-      // 2. Render Particles
-      const currentPhase = phaseRef.current;
-      const currentArchetype = archetypeRef.current;
+      // RENDER PARTICLES
+      const curPhase = phaseRef.current;
 
-      // OPTIMIZATION: Connect lines only for WEB archetype
-      if (currentPhase === "artifact" && currentArchetype === "WEB") {
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      // WEB CONNECTIONS (Draw lines before particles)
+      if (curPhase === "artifact" && curArchetype === "WEB") {
+        ctx.strokeStyle = "rgba(0, 255, 255, 0.1)";
         ctx.lineWidth = 0.5;
-        // Simple neighbor check (expensive, so we use fewer particles for WEB)
-        for (let i = 0; i < particlesRef.current.length; i++) {
+        // Optimization: only connect every Nth particle to close neighbors
+        const limit = particlesRef.current.length;
+        for (let i = 0; i < limit; i+=2) {
             const p1 = particlesRef.current[i];
-            // Connect to random neighbors to save perf
-            for (let j = i + 1; j < particlesRef.current.length; j += 5) {
+            if (p1.size < 0.1) continue;
+            // Connect to nearby randoms
+            for (let j = i + 1; j < Math.min(i + 15, limit); j++) {
                 const p2 = particlesRef.current[j];
                 const dx = p1.x - p2.x;
                 const dy = p1.y - p2.y;
-                if (dx*dx + dy*dy < 2000) { // Distance < ~45px
+                if (dx*dx + dy*dy < 1500) { 
                     ctx.beginPath();
                     ctx.moveTo(p1.x, p1.y);
                     ctx.lineTo(p2.x, p2.y);
@@ -131,82 +137,71 @@ export default function LiveHeartPage() {
       }
 
       particlesRef.current.forEach((p) => {
-        // --- PHYSICS ---
-        
-        if (currentPhase === "collecting" || currentPhase === "idle") {
-            // Float physics
+        // --- PHYSICS ENGINE ---
+        if (curPhase === "collecting" || curPhase === "idle") {
             p.x += p.vx;
             p.y += p.vy;
-            p.size *= 0.95; // Shrink trails
+            p.size *= 0.94; // Fast fade for trails
         } 
-        else if (currentPhase === "crystallizing" || currentPhase === "artifact") {
+        else if (curPhase === "crystallizing" || curPhase === "artifact") {
             if (p.targetX !== undefined && p.targetY !== undefined) {
-                // Easing to target
                 const dx = p.targetX - p.x;
                 const dy = p.targetY - p.y;
                 
-                // Stiffness depends on Archetype
+                // Tightness of the heart shape
                 let ease = 0.05;
-                if (currentArchetype === "MERCURY") ease = 0.1; // Snappy
-                if (currentArchetype === "VOID") ease = 0.02;    // Slow/Ghostly
+                if (curArchetype === "MERCURY") ease = 0.15;
+                if (curArchetype === "WEB") ease = 0.03;
+                if (curArchetype === "GLITCH") ease = 0.2;
 
                 p.x += dx * ease;
                 p.y += dy * ease;
 
-                // --- ARTIFACT ANIMATION ---
-                if (currentPhase === "artifact") {
-                    // VOID: Drifting smoke
-                    if (currentArchetype === "VOID") {
-                        p.x += Math.sin(time + p.angle) * 0.5;
-                        p.y += Math.cos(time + p.angle) * 0.5;
+                // --- ARTIFACT BEHAVIOR ---
+                if (curPhase === "artifact") {
+                    // VOID: Ghostly drift, size pulse
+                    if (curArchetype === "VOID") {
+                        p.x += Math.sin(time + p.angle) * 0.3;
+                        p.y += Math.cos(time + p.angle) * 0.3;
+                        p.size = p.baseSize + Math.sin(time * 2 + p.wobble) * 0.5;
                     }
-                    // MERCURY: Tight liquid pulse
-                    else if (currentArchetype === "MERCURY") {
-                        // Heartbeat
-                        const beat = Math.pow(Math.sin(time * 3), 63) * 15; // Sharp beat
+                    // MERCURY: Liquid surface, breathing
+                    else if (curArchetype === "MERCURY") {
+                        const beat = Math.pow(Math.sin(time * 2), 4); // Soft heavy beat
                         const cx = window.innerWidth / 2;
                         const cy = window.innerHeight / 2;
                         const dirX = p.x - cx;
                         const dirY = p.y - cy;
-                        // Normalize and apply
-                        const len = Math.sqrt(dirX*dirX + dirY*dirY);
-                        p.x += (dirX/len) * beat * 0.05;
-                        p.y += (dirY/len) * beat * 0.05;
+                        p.x += dirX * 0.002 * beat;
+                        p.y += dirY * 0.002 * beat;
                     }
-                    // NOVA: Explosion vibration
-                    else if (currentArchetype === "NOVA") {
-                        p.x += (Math.random() - 0.5) * 3;
-                        p.y += (Math.random() - 0.5) * 3;
+                    // NOVA: Chaotic vibration + Orbit
+                    else if (curArchetype === "NOVA") {
+                        p.x += (Math.random() - 0.5) * 4;
+                        p.y += (Math.random() - 0.5) * 4;
                     }
-                    // WEB: Vibration
-                    else if (currentArchetype === "WEB") {
-                         p.x += Math.sin(time * 5 + p.angle) * 0.2;
+                    // GLITCH: Digital noise
+                    else if (curArchetype === "GLITCH") {
+                        if (Math.random() > 0.95) {
+                            p.x += (Math.random() - 0.5) * 20;
+                        }
                     }
                 }
             }
         }
 
-        // --- DRAW PARTICLE ---
+        // --- DRAW ---
         if (p.size > 0.1) {
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
             ctx.fillStyle = p.color;
-            
-            // Glow for Nova
-            if (currentArchetype === "NOVA") {
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = p.color;
-            } else {
-                ctx.shadowBlur = 0;
-            }
-            
             ctx.fill();
         }
       });
 
-      // Cleanup invisible particles during collection
-      if (currentPhase === "collecting") {
-        particlesRef.current = particlesRef.current.filter(p => p.size > 0.2);
+      // Cleanup
+      if (curPhase === "collecting") {
+        particlesRef.current = particlesRef.current.filter(p => p.size > 0.1);
       }
 
       animId = requestAnimationFrame(render);
@@ -230,31 +225,38 @@ export default function LiveHeartPage() {
         metricsRef.current.lastY = y;
     }
 
-    // 1. Calculate Metrics
     const dx = x - metricsRef.current.lastX;
     const dy = y - metricsRef.current.lastY;
     const dist = Math.sqrt(dx*dx + dy*dy);
     
-    // Ignore micro-movements
+    // Ignore idle
     if (dist < 2) return;
 
-    // Record Speed
+    // Metrics
     metricsRef.current.speeds.push(dist);
-    // Record Angle (Chaos)
-    const angle = Math.atan2(dy, dx);
-    metricsRef.current.angles.push(angle);
+    metricsRef.current.angles.push(Math.atan2(dy, dx));
     
+    // Bounding box for Amplitude
+    if (x < metricsRef.current.minX) metricsRef.current.minX = x;
+    if (x > metricsRef.current.maxX) metricsRef.current.maxX = x;
+    if (y < metricsRef.current.minY) metricsRef.current.minY = y;
+    if (y > metricsRef.current.maxY) metricsRef.current.maxY = y;
+
     metricsRef.current.totalDist += dist;
     metricsRef.current.lastX = x;
     metricsRef.current.lastY = y;
 
-    // 2. Spawn Trail
-    for(let i=0; i<2; i++) {
+    // Visual Trail (Size depends on speed!)
+    const pCount = 2; 
+    for(let i=0; i<pCount; i++) {
         const p = new Particle(x + (Math.random()-0.5)*10, y + (Math.random()-0.5)*10);
+        // Faster movement = Bigger particles (Shards)
+        p.size = Math.min(15, (dist / 3)) * Math.random(); 
+        if (p.size < 1) p.size = 1;
+        
         particlesRef.current.push(p);
     }
 
-    // 3. Progress
     const pct = Math.min(100, (metricsRef.current.totalDist / CONFIG.COLLECTION_THRESHOLD) * 100);
     setProgress(pct);
 
@@ -265,103 +267,125 @@ export default function LiveHeartPage() {
     phaseRef.current = "crystallizing";
     setPhase("crystallizing");
 
-    // --- ANALYZE METRICS ---
-    const speeds = metricsRef.current.speeds;
-    const angles = metricsRef.current.angles;
+    // --- DECISION ENGINE ---
+    const { speeds, angles, minX, maxX, minY, maxY } = metricsRef.current;
     
-    // Avg Speed
+    // 1. Avg Speed
     const avgSpeed = speeds.reduce((a,b) => a+b, 0) / speeds.length;
     
-    // Chaos (Jerkiness) - sum of angle changes
-    let totalAngleChange = 0;
+    // 2. Chaos (Angle variance)
+    let angleChanges = 0;
     for(let i=1; i<angles.length; i++) {
         let diff = Math.abs(angles[i] - angles[i-1]);
-        if (diff > Math.PI) diff = Math.PI * 2 - diff; // Normalize wrap-around
-        totalAngleChange += diff;
+        if (diff > 3) diff = 0; // Filter huge jumps
+        angleChanges += diff;
     }
-    const avgChaos = totalAngleChange / angles.length;
+    const chaos = angleChanges / angles.length; // 0.1 (smooth) to 1.0+ (crazy)
 
-    // --- DETERMINE ARCHETYPE ---
-    // Thresholds: Speed ~ 5-20, Chaos ~ 0.1 - 1.0
+    // 3. Amplitude (Screen coverage)
+    const widthCov = maxX - minX;
+    const heightCov = maxY - minY;
+    const areaCov = (widthCov * heightCov) / (window.innerWidth * window.innerHeight); // 0.0 to 1.0
+
+    // LOGIC TREE
     let type: Archetype = "VOID";
     
-    const isFast = avgSpeed > 15;
-    const isChaotic = avgChaos > 0.5;
-
-    if (!isFast && !isChaotic) type = "VOID";
-    if (isFast && !isChaotic) type = "MERCURY";
-    if (!isFast && isChaotic) type = "WEB";
-    if (isFast && isChaotic) type = "NOVA";
+    // Default to VOID (Zen)
+    if (areaCov < 0.1 && avgSpeed < 10) type = "VOID";
+    // Large smooth movements -> MERCURY
+    else if (areaCov > 0.3 && chaos < 0.4) type = "MERCURY";
+    // Small erratic movements -> WEB
+    else if (areaCov < 0.2 && chaos > 0.5) type = "WEB";
+    // Fast large movements -> NOVA
+    else if (avgSpeed > 20) type = "NOVA";
+    // Extreme chaos -> GLITCH
+    else if (chaos > 0.8) type = "GLITCH";
+    // Fallback based on speed
+    else type = avgSpeed > 15 ? "NOVA" : "MERCURY";
 
     setArchetype(type);
     archetypeRef.current = type;
 
-    // --- GENERATE HEART TARGETS ---
+    // --- REGENERATE FOR ARTIFACT ---
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const scale = Math.min(w, h) / 35;
+    const scale = Math.min(w, h) / 35; // Standard scale
     
-    // Adjust particle count for optimization
-    const targetCount = type === "WEB" ? CONFIG.WEB_PARTICLE_COUNT : CONFIG.PARTICLE_COUNT;
+    let targetCount = CONFIG.PARTICLE_COUNT;
+    if (type === "WEB") targetCount = 300; // Less for web
+    if (type === "NOVA") targetCount = 1200; // More for explosion
+
+    particlesRef.current = [];
     
-    // Resample particles
-    particlesRef.current = []; // Clear trails
     for(let i=0; i<targetCount; i++) {
-        // Spawn from random positions (implosion effect)
-        const p = new Particle(
-            (Math.random() - 0.5) * w * 1.5 + w/2, 
-            (Math.random() - 0.5) * h * 1.5 + h/2
-        );
+        // Start pos: Center implosion or Random
+        const startX = type === "NOVA" ? w/2 : (Math.random()*w);
+        const startY = type === "NOVA" ? h/2 : (Math.random()*h);
         
-        // Calculate Target on Heart
-        // Add random "t" to distribute points around the heart
-        // Some archetypes (VOID) use partial heart
+        const p = new Particle(startX, startY);
+        
+        // Target on Heart
         const t = (Math.PI * 2 * i) / targetCount;
-        
-        // Modifiers per Archetype
         let modT = t;
-        if (type === "VOID") modT += (Math.random() - 0.5) * 0.5; // Messy
         
+        // Glitch distorts shape
+        if (type === "GLITCH" && Math.random() > 0.8) modT += Math.random(); 
+
         const pt = getHeartPoint(modT, scale, w, h);
         
-        // Scatter targets based on archetype
+        // Scatter targets
         let scatter = 0;
-        if (type === "VOID") scatter = 20;
-        if (type === "NOVA") scatter = 40;
-        
+        if (type === "VOID") scatter = 15;
+        if (type === "NOVA") scatter = 50;
+        if (type === "GLITCH") scatter = 100;
+
         p.targetX = pt.x + (Math.random() - 0.5) * scatter;
         p.targetY = pt.y + (Math.random() - 0.5) * scatter;
 
-        // Colors
+        // SIZE & COLOR LOGIC
+        p.baseSize = Math.random() * 2;
+        
         if (type === "VOID") {
-            p.color = "rgba(200, 200, 255, 0.4)";
-            p.size = Math.random() * 1.5;
+            // Tiny dust
+            p.color = "rgba(150, 150, 200, 0.5)";
+            p.baseSize = Math.random() * 1.5;
         }
-        if (type === "MERCURY") {
-            p.color = i % 2 === 0 ? "#FFFFFF" : "#A0A0A0";
-            p.size = Math.random() * 3 + 1;
+        else if (type === "MERCURY") {
+            // Large metallic blobs
+            p.color = i % 2 === 0 ? "#FFFFFF" : "#AAAAAA";
+            p.baseSize = Math.random() * 6 + 2; 
         }
-        if (type === "WEB") {
+        else if (type === "WEB") {
+            // Cyan Nodes
             p.color = "#00FFFF";
-            p.size = 2;
+            p.baseSize = 2;
         }
-        if (type === "NOVA") {
-            p.color = Math.random() > 0.5 ? "#FF0040" : "#FFFFFF";
-            p.size = Math.random() * 4 + 1;
+        else if (type === "NOVA") {
+            // Fire
+            p.color = Math.random() > 0.5 ? "#FF4400" : "#FFCC00";
+            p.baseSize = Math.random() * 4 + 1;
         }
+        else if (type === "GLITCH") {
+            // Green/Pink
+            p.color = Math.random() > 0.5 ? "#00FF00" : "#FF00FF";
+            p.baseSize = Math.random() * 3;
+        }
+        
+        // Apply calculated size from movement speed to some particles
+        if (Math.random() > 0.7) p.baseSize *= (avgSpeed / 10);
 
+        p.size = 0.1; // Start invisible, grow in
         particlesRef.current.push(p);
     }
 
-    // Transition to Artifact
+    // Delay to let old trails fade, then grow new heart
     setTimeout(() => {
         phaseRef.current = "artifact";
         setPhase("artifact");
-    }, 1500); // 1.5s Crystallization time
+        particlesRef.current.forEach(p => p.size = p.baseSize);
+    }, 1000);
   };
 
-  // --- RENDER ---
-  // Cursor Logic: Hide cursor when finished
   const cursorClass = (phase === "crystallizing" || phase === "artifact") ? "cursor-none" : "cursor-crosshair";
 
   return (
@@ -372,40 +396,37 @@ export default function LiveHeartPage() {
     >
       <canvas ref={canvasRef} className="block w-full h-full" />
 
-      {/* TEXT LAYER */}
-      <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center font-sans z-10">
+      {/* UI */}
+      <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center font-sans z-10 mix-blend-difference">
         
-        {/* INSTRUCTIONS */}
         {(phase === "idle" || phase === "collecting") && (
-          <div className="text-center transition-opacity duration-500">
-             <h1 className="text-white/80 text-xs tracking-[0.3em] uppercase animate-pulse">
-                Imprint Your State
+          <div className="text-center opacity-70">
+             <h1 className="text-white text-[10px] md:text-xs tracking-[0.4em] uppercase animate-pulse">
+                Draw Your Chaos
              </h1>
           </div>
         )}
 
-        {/* REVEAL */}
         {phase === "artifact" && archetype && (
-             <div className="absolute bottom-12 text-center animate-in fade-in duration-1000 slide-in-from-bottom-4 pointer-events-auto">
-                <div className="text-white/40 text-[10px] font-mono mb-2 uppercase tracking-widest">
-                    Archetype Detected
+             <div className="absolute bottom-12 text-center animate-in fade-in zoom-in duration-1000 pointer-events-auto">
+                <div className="text-white/50 text-[10px] font-mono mb-3 uppercase tracking-widest">
+                    Signature Detected
                 </div>
-                <div className="text-3xl font-light text-white mb-8 tracking-widest uppercase">
+                <div className="text-4xl md:text-5xl font-extralight text-white mb-8 tracking-[0.2em] uppercase blur-[0.5px]">
                     {archetype}
                 </div>
                 <button 
                     onClick={() => window.location.reload()}
-                    className="px-8 py-3 border border-white/10 bg-white/5 text-white/60 text-xs uppercase tracking-[0.2em] hover:bg-white hover:text-black hover:border-white transition-all duration-300 backdrop-blur-sm cursor-pointer"
+                    className="px-8 py-3 border border-white/20 bg-black/20 text-white/80 text-[10px] uppercase tracking-[0.25em] hover:bg-white hover:text-black transition-all duration-500"
                 >
-                    Reset
+                    Reset Ritual
                 </button>
              </div>
         )}
       </div>
 
-      {/* PROGRESS LINE */}
       {phase === "collecting" && (
-        <div className="absolute bottom-0 left-0 h-[2px] bg-white transition-all duration-75 ease-linear"
+        <div className="absolute bottom-0 left-0 h-[3px] bg-white mix-blend-overlay transition-all duration-100 ease-linear"
              style={{ width: `${progress}%` }} />
       )}
     </div>
