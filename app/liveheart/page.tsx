@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 
 // --- DNA ARCHITECTURE ---
 type Phase = "idle" | "collecting" | "crystallizing" | "artifact";
@@ -74,6 +75,7 @@ export default function LiveHeartPage() {
   const [progress, setProgress] = useState(0);
   const [dna, setDna] = useState<HeartDNA | null>(null);
   const dnaRef = useRef<HeartDNA | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // --- HEART MATH ---
   const getHeartPos = (t: number, scale: number, w: number, h: number, rotationY: number) => {
@@ -455,12 +457,42 @@ export default function LiveHeartPage() {
                     <div className="text-3xl md:text-5xl font-extralight text-white mb-8 tracking-[0.2em] uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]">
                         {dna.name}
                     </div>
-                    <button 
-                        onClick={handleRestart}
-                        className="pointer-events-auto px-8 py-3 bg-white/10 border border-white/30 backdrop-blur-md text-white text-[10px] uppercase tracking-[0.3em] hover:bg-white hover:text-black hover:border-white transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0.5)] cursor-pointer"
-                    >
-                        Reshuffle
-                    </button>
+                    <div className="flex gap-3 items-center justify-center">
+                      <button 
+                          onClick={handleRestart}
+                          className="pointer-events-auto px-6 py-2 bg-white/10 border border-white/30 backdrop-blur-md text-white text-[10px] uppercase tracking-[0.3em] hover:bg-white hover:text-black hover:border-white transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0.5)] cursor-pointer"
+                      >
+                          Reshuffle
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          if (!dna || saving) return;
+                          setSaving(true);
+                          try {
+                            const res = await fetch('/api/liveheart/save', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ dna, title: dna.name })
+                            });
+                            if (!res.ok) throw new Error('Save failed');
+                            const json = await res.json();
+                            if (json?.slug) {
+                              window.location.href = `/liveheart/${json.slug}`;
+                            } else {
+                              throw new Error('No slug returned');
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            setSaving(false);
+                            alert('Could not save artifact.');
+                          }
+                        }}
+                        className="pointer-events-auto px-6 py-2 bg-indigo-600/80 border border-indigo-400 text-white text-[10px] uppercase tracking-[0.3em] hover:bg-indigo-500 transition-all duration-300 shadow-[0_0_20px_rgba(0,0,0,0.5)] cursor-pointer"
+                      >
+                        {saving ? 'Saving...' : 'Save & Share'}
+                      </button>
+                    </div>
                 </div>
              </div>
         )}
