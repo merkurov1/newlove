@@ -24,7 +24,7 @@ class Particle {
   }
 }
 
-export default function LiveHeartPage(): JSX.Element {
+export default function LiveHeartPage(): React.ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const particlesRef = useRef<Particle[]>([]);
