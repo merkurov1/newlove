@@ -1,8 +1,6 @@
 import React from 'react';
 import { createClient } from '../../../../lib/supabase/server';
 
-export const runtime = 'edge';
-
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -26,6 +24,34 @@ export async function GET(req: Request) {
     };
 
     const palette = [formatColor(rawPalette[0]), formatColor(rawPalette[1] || rawPalette[0]), formatColor(rawPalette[2] || rawPalette[1] || rawPalette[0])];
+    // First try to serve a pre-rendered PNG from Supabase Storage, if present.
+    try {
+      const supabase = createClient({ useServiceRole: true });
+      const bucket = 'liveheart-og';
+      const path = `og/${slug}.png`;
+      const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path);
+      const publicUrl = publicData?.publicUrl;
+      if (publicUrl) {
+        // Try fetching the public URL — if object exists this will be 200
+        try {
+          const resp = await fetch(publicUrl);
+          if (resp.ok) {
+            const arr = await resp.arrayBuffer();
+            return new Response(arr, {
+              status: 200,
+              headers: {
+                'Content-Type': 'image/png',
+                'Cache-Control': 'public, immutable, no-transform, max-age=31536000'
+              }
+            });
+          }
+        } catch (err) {
+          // ignore and fall back to SVG
+        }
+      }
+    } catch (err) {
+      console.error('OG storage check failed', err);
+    }
 
     // Always return SVG fallback to ensure compatibility across platforms.
     const svg = `

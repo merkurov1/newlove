@@ -474,10 +474,20 @@ export default function LiveHeartPage() {
                           if (!dna || saving) return;
                           setSaving(true);
                           try {
+                            let imageData: string | undefined = undefined;
+                            const canvas = canvasRef.current;
+                            if (canvas && typeof canvas.toDataURL === 'function') {
+                              try {
+                                imageData = canvas.toDataURL('image/png');
+                              } catch (e) {
+                                console.warn('Failed to capture canvas image', e);
+                              }
+                            }
+
                             const res = await fetch('/api/liveheart/save', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ dna, title: dna.name })
+                              body: JSON.stringify({ dna, title: dna.name, imageData })
                             });
                             if (!res.ok) throw new Error('Save failed');
                             const json = await res.json();
