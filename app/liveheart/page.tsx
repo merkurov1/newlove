@@ -27,6 +27,7 @@ class Particle {
   x: number;
   y: number;
   z: number;
+  vz: number;
   vx: number;
   vy: number;
   size: number;
@@ -41,11 +42,14 @@ class Particle {
   offset: number;
   speed: number;
   sparkleOffset: number;
+  // 3D target
+  targetZ?: number;
   
   constructor(w: number, h: number) {
     this.x = Math.random() * w;
     this.y = Math.random() * h;
-    this.z = 0;
+    this.z = (Math.random() - 0.5) * 80; // pseudo-depth
+    this.vz = (Math.random() - 0.5) * 1.5;
     this.vx = (Math.random() - 0.5) * 4;
     this.vy = (Math.random() - 0.5) * 4;
     this.size = 0; // Starts invisible
@@ -98,6 +102,16 @@ export default function LiveHeartPage() {
         z: z 
     };
   };
+
+    // Simple perspective projection for pseudo-3D
+    const project3D = (x: number, y: number, z: number, width: number, height: number) => {
+      const FOV = 250; // larger -> shallower perspective
+      const denom = FOV + z;
+      const scale = denom > 0.1 ? (FOV / denom) : 0.001;
+      const sx = (x - width / 2) * scale + width / 2;
+      const sy = (y - height / 2) * scale + height / 2;
+      return { x: sx, y: sy, scale };
+    };
 
   // --- RENDER LOOP ---
   useEffect(() => {
@@ -200,6 +214,7 @@ export default function LiveHeartPage() {
 
                         p.targetX = pt.x + (Math.cos(time + p.offset) * curDNA.glitchFactor);
                         p.targetY = pt.y + (Math.sin(time + p.offset) * curDNA.glitchFactor);
+                        p.targetZ = pt.z;
                     }
                     // 2. FLOW
                     else if (curDNA.physics === "FLOW") {
@@ -207,6 +222,7 @@ export default function LiveHeartPage() {
                         const pt = getHeartPos(p.t, scale, w, h, 0);
                         p.targetX = pt.x + (Math.random()-0.5) * curDNA.glitchFactor;
                         p.targetY = pt.y + (Math.random()-0.5) * curDNA.glitchFactor;
+                        p.targetZ = pt.z;
                     }
                     // 3. PULSE
                     else if (curDNA.physics === "PULSE" || curDNA.physics === "BREATHE") {
@@ -224,26 +240,78 @@ export default function LiveHeartPage() {
                 let ease = 0.08;
                 if (curDNA.physics === "IMPLODE") ease = 0.01;
                 if (curDNA.physics === "STILL") ease = 0.1;
-                
+
+                // Move in XY
                 p.x += dx * ease;
                 p.y += dy * ease;
+
+                // Move in Z toward targetZ (pseudo-3D)
+                if (p.targetZ !== undefined) {
+                  const dz = p.targetZ - p.z;
+                  // slightly slower easing for depth
+                  p.z += dz * (ease * 0.6);
+                }
 
                 // SPARKLE
                 const sparkle = Math.sin(time * 8 + p.sparkleOffset);
                 p.alpha = sparkle > 0.8 ? 1 : 0.6;
             }
         }
+            // --- DRAW (with pseudo-3D projection, turbulence and glow) ---
+            if (p.size > 0.01) {
+              const w = window.innerWidth;
+              const h = window.innerHeight;
 
-        // --- DRAW ---
-        // Allow even small particles to be drawn
-        if (p.size > 0.01) {
-            ctx.fillStyle = `hsla(${p.color}, ${p.alpha})`;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.shadowBlur = p.size * 2; 
-            ctx.shadowColor = `hsla(${p.color}, 0.5)`;
-            ctx.fill();
-        }
+              // Optionally apply a global spin rotation to each particle in 3D
+              let drawX = p.x;
+              let drawY = p.y;
+              let drawZ = p.z || 0;
+              const rot = curDNA ? (time * (curDNA.rotationSpeed || 0)) : 0;
+              if (curDNA && (curDNA.physics === "SPIN" || ["ATOM","GALAXY","VORTEX"].includes(curDNA.structure))) {
+                // rotate around Y-axis (affects X/Z)
+                const lx = p.x - w / 2;
+                const lz = drawZ;
+                const rx = lx * Math.cos(rot) - lz * Math.sin(rot);
+                const rz = lx * Math.sin(rot) + lz * Math.cos(rot);
+                drawX = rx + w / 2;
+                drawZ = rz;
+              }
+
+              // Project to 2D
+              const proj = project3D(drawX, drawY, drawZ, w, h);
+
+              // Skip drawing if projected scale is too small / behind camera
+              if (proj.scale > 0.05) {
+                // Turbulence: subtle motion based on time and vertical position
+                const turbX = Math.sin(time * 2 + p.y * 0.01) * 0.5;
+                const turbY = Math.cos(time * 1.7 + p.x * 0.01) * 0.35;
+
+                const sx = proj.x + turbX;
+                const sy = proj.y + turbY;
+
+                // Size scales with depth
+                const screenSize = Math.max(0.01, p.size * proj.scale);
+
+                // Dynamic bloom: bigger for closer/large particles
+                const bloom = Math.min(40, screenSize * 8 * proj.scale);
+
+                ctx.fillStyle = `hsla(${p.color}, ${p.alpha})`;
+                ctx.beginPath();
+                ctx.shadowBlur = bloom;
+                ctx.shadowColor = `hsla(${p.color}, 0.6)`;
+                ctx.arc(sx, sy, screenSize, 0, Math.PI * 2);
+                ctx.fill();
+
+                // subtle additive flare for very close particles
+                if (proj.scale > 0.9) {
+                  ctx.beginPath();
+                  ctx.globalAlpha = Math.min(0.6, p.alpha * 0.6);
+                  ctx.arc(sx, sy, screenSize * 2.2, 0, Math.PI * 2);
+                  ctx.fill();
+                  ctx.globalAlpha = 1;
+                }
+              }
+            }
       });
 
       animId = requestAnimationFrame(render);
@@ -381,6 +449,14 @@ export default function LiveHeartPage() {
 
         p.targetX = pt.x + (Math.random() - 0.5) * scatter;
         p.targetY = pt.y + (Math.random() - 0.5) * scatter;
+        // assign pseudo-3D depth targets
+        const zBase = (Math.random() - 0.5) * 80;
+        let zVar = zBase;
+        if (dna.scaleMode === "MICRO") zVar *= 0.6;
+        if (dna.scaleMode === "MACRO") zVar *= 1.2;
+        if (dna.scaleMode === "TITAN") zVar *= 1.6;
+        p.z = zVar;
+        p.targetZ = zVar + (Math.random() - 0.5) * 40;
         
         p.color = dna.palette[i % dna.palette.length];
         
