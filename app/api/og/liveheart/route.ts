@@ -9,8 +9,60 @@ export async function GET(req: Request) {
     const supabase = createClient({ useServiceRole: true });
     const { data } = await supabase.from('liveheart_shares').select('*').eq('slug', slug).single();
 
-    if (!data) return new Response('Not found', { status: 404 });
 
+      if (!data) return new Response('Not found', { status: 404 });
+    
+      const title = (data.title ?? data.dna?.name ?? 'LiveHeart').toString();
+      const rawPalette: any = (data.dna?.palette && Array.isArray(data.dna.palette)) ? data.dna.palette : ['260,100%,70%','320,100%,60%','200,50%,60%'];
+    
+      const formatColor = (c: any) => {
+        if (!c) return '#ffffff';
+        const s = String(c).trim();
+        if (s.includes('%') || s.includes(',')) return `hsl(${s})`;
+        if (s.startsWith('#') || s.startsWith('rgb') || s.startsWith('hsl')) return s;
+        return s;
+      };
+    
+      const palette = [formatColor(rawPalette[0]), formatColor(rawPalette[1] || rawPalette[0]), formatColor(rawPalette[2] || rawPalette[1] || rawPalette[0])];
+    
+      const ogImage = await generateOgImage(title, palette);
+    
+      return new Response(ogImage, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=3600'
+        }
+      });
+    } catch (err) {
+      console.error(err);
+      return new Response('Server error', { status: 500 });
+    }
+  }
+  
+  async function generateOgImage(title: string, palette: string[]) {
+    const { ImageResponse } = require('@vercel/og');
+  
+    return new ImageResponse(
+      (
+        <div style={{ backgroundColor: '#000', width: '1200px', height: '630px', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: '120px', left: '100px', fontSize: '40px', color: 'white' }}>
+            {title}
+          </div>
+          <div style={{ position: 'absolute', top: '260px', left: '100px', fontSize: '20px', color: 'white' }}>
+            Generated with LiveHeart
+          </div>
+          <div style={{ position: 'absolute', top: '150px', left: '980px', width: '80px', height: '80px', backgroundColor: palette[0], borderRadius: '50%' }} />
+          <div style={{ position: 'absolute', top: '230px', left: '1040px', width: '60px', height: '60px', backgroundColor: palette[1], borderRadius: '50%' }} />
+          <div style={{ position: 'absolute', top: '240px', left: '900px', width: '50px', height: '50px', backgroundColor: palette[2], borderRadius: '50%' }} />
+        </div>
+      ),
+      {
+        width: 1200,
+        height: 630,
+      }
+    );
+  }
     const title = (data.title ?? data.dna?.name ?? 'LiveHeart').toString();
     const rawPalette: any = (data.dna?.palette && Array.isArray(data.dna.palette)) ? data.dna.palette : ['260,100%,70%','320,100%,60%','200,50%,60%'];
 
