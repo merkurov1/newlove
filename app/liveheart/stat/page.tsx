@@ -16,7 +16,7 @@ async function fetchShares() {
     .from('liveheart_shares')
     .select('slug, title, dna, created_at')
     .order('created_at', { ascending: false })
-    .limit(5000); // Limit for performance
+    .limit(5000);
 
   if (error) throw error;
   return (data || []) as ShareData[];
@@ -24,26 +24,26 @@ async function fetchShares() {
 
 // --- COMPONENTS ---
 
-// 1. The Stat Bar (Visualizing distribution)
-const StatGroup = ({ title, data }: { title: string, data: Record<string, number> }) => {
-  const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
+// Colorful Stat Bar
+const FunStatBar = ({ title, data, colorClass }: { title: string, data: Record<string, number>, colorClass: string }) => {
+  const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, 6); // Top 6 only
   const maxVal = sorted[0]?.[1] || 1;
 
   return (
-    <div className="border border-white/10 p-6 bg-white/[0.02]">
-      <h3 className="text-[10px] uppercase tracking-[0.2em] text-white/40 mb-4 font-mono">
-        {title} Distribution
+    <div className="bg-zinc-900/50 rounded-2xl p-6 backdrop-blur-sm border border-white/5">
+      <h3 className="text-sm font-bold text-white/90 mb-6 flex items-center gap-2">
+        {title}
       </h3>
-      <div className="space-y-3">
+      <div className="space-y-4">
         {sorted.map(([label, count]) => (
-          <div key={label} className="group">
-            <div className="flex justify-between text-xs text-white/70 mb-1 font-mono">
+          <div key={label} className="relative">
+            <div className="flex justify-between text-xs text-gray-400 mb-1 z-10 relative font-medium">
               <span>{label}</span>
-              <span className="opacity-50">{count}</span>
+              <span>{count}</span>
             </div>
-            <div className="h-[2px] w-full bg-white/5 relative overflow-hidden">
+            <div className="h-3 w-full bg-white/5 rounded-full overflow-hidden">
               <div 
-                className="absolute top-0 left-0 h-full bg-white group-hover:bg-cyan-400 transition-colors duration-300"
+                className={`h-full rounded-full ${colorClass}`}
                 style={{ width: `${(count / maxVal) * 100}%` }}
               />
             </div>
@@ -54,14 +54,12 @@ const StatGroup = ({ title, data }: { title: string, data: Record<string, number
   );
 };
 
-// 2. The KPI Box (Big Numbers)
-const KpiBox = ({ label, value, sub }: { label: string, value: string | number, sub?: string }) => (
-  <div className="border border-white/10 p-6 flex flex-col justify-between h-32 hover:bg-white/[0.02] transition-colors">
-    <span className="text-[9px] uppercase tracking-[0.2em] text-white/40 font-mono">{label}</span>
-    <div>
-      <div className="text-4xl font-light tracking-tight text-white">{value}</div>
-      {sub && <div className="text-[10px] text-white/30 mt-1 font-mono">{sub}</div>}
-    </div>
+// Big Number Card
+const BigNumber = ({ label, value, icon }: { label: string, value: string | number, icon: string }) => (
+  <div className="bg-zinc-900/50 p-6 rounded-2xl border border-white/5 flex flex-col justify-center items-center text-center hover:bg-zinc-800/50 transition-colors cursor-default">
+    <div className="text-2xl mb-2">{icon}</div>
+    <div className="text-4xl font-bold text-white mb-1 tracking-tight">{value}</div>
+    <div className="text-xs text-gray-400 font-medium uppercase tracking-wider">{label}</div>
   </div>
 );
 
@@ -74,10 +72,8 @@ export default async function StatisticsPage() {
     console.error('Failed to load shares', err);
   }
 
-  // --- PROCESSING ---
   const total = rows.length;
   
-  // Counters
   const stats = {
     structure: {} as Record<string, number>,
     physics: {} as Record<string, number>,
@@ -87,11 +83,11 @@ export default async function StatisticsPage() {
 
   rows.forEach((r) => {
     const dna = r.dna || {};
-    const s = (dna.structure || 'UNKNOWN').toString();
-    const p = (dna.physics || 'UNKNOWN').toString();
-    const sc = (dna.scaleMode || 'UNKNOWN').toString();
-    // Clean up palette name if possible (sometimes it's full DNA string)
-    const pal = (dna.name ? dna.name.split(' ')[0] : 'UNKNOWN').toString();
+    // Fallbacks with nicer names
+    const s = (dna.structure || 'Mystery').toString();
+    const p = (dna.physics || 'Unknown').toString();
+    const sc = (dna.scaleMode || 'Standard').toString();
+    const pal = (dna.name ? dna.name.split(' ')[0] : 'Custom').toString();
 
     stats.structure[s] = (stats.structure[s] || 0) + 1;
     stats.physics[p] = (stats.physics[p] || 0) + 1;
@@ -99,91 +95,104 @@ export default async function StatisticsPage() {
     stats.palettes[pal] = (stats.palettes[pal] || 0) + 1;
   });
 
-  const top = rows.slice(0, 24); // Show more recent items
+  const top = rows.slice(0, 32); 
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-white selection:text-black">
+    <div className="min-h-screen bg-black text-white selection:bg-pink-500 selection:text-white pb-20">
       
       {/* HEADER */}
-      <header className="border-b border-white/10 p-6 md:p-12">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-[10px] font-mono text-white/40 mb-2 uppercase tracking-[0.3em]">
-            Merkurov System // Telemetry
-          </div>
-          <h1 className="text-5xl md:text-6xl font-extralight tracking-tight mb-4">
-            The Ledger
+      <div className="relative bg-gradient-to-b from-zinc-900 to-black pt-20 pb-16 px-6">
+        <div className="max-w-7xl mx-auto text-center">
+          <h1 className="text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 mb-6 pb-2">
+            Global Gallery
           </h1>
-          <p className="text-sm text-white/50 max-w-xl font-light">
-            Real-time analytics of generated artifacts. Tracking entropy, structure, and user chaos across the network.
+          <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto font-light leading-relaxed">
+            Thousands of unique hearts generated by human movement. <br/>
+            From chaotic scribbles to smooth flows — everything is preserved here.
           </p>
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-7xl mx-auto p-6 md:p-12">
+      <main className="max-w-7xl mx-auto px-6 -mt-8">
         
-        {/* KPI GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
-          <KpiBox label="Total Artifacts" value={total} sub="GENERATED & SAVED" />
-          <KpiBox label="Unique Structures" value={Object.keys(stats.structure).length} sub="GEOMETRY TYPES" />
-          <KpiBox label="Physics Engines" value={Object.keys(stats.physics).length} sub="BEHAVIOR MODES" />
-          <KpiBox label="Dominant Palette" value={
-             Object.entries(stats.palettes).sort((a,b)=>b[1]-a[1])[0]?.[0] || "N/A"
-          } sub="MOST POPULAR AESTHETIC" />
+        {/* BIG NUMBERS */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+          <BigNumber icon="❤️" label="Total Hearts" value={total} />
+          <BigNumber icon="🎨" label="Unique Colors" value={Object.keys(stats.palettes).length} />
+          <BigNumber icon="✨" label="Shapes" value={Object.keys(stats.structure).length} />
+          <BigNumber icon="⚡️" label="Moods" value={Object.keys(stats.physics).length} />
         </div>
 
-        {/* ANALYTICS GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-16">
-          <StatGroup title="Structure" data={stats.structure} />
-          <StatGroup title="Physics" data={stats.physics} />
-          <StatGroup title="Scale Mode" data={stats.scale} />
+        {/* CHARTS */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20">
+          <FunStatBar 
+            title="Most Popular Shapes" 
+            data={stats.structure} 
+            colorClass="bg-gradient-to-r from-blue-400 to-cyan-300"
+          />
+          <FunStatBar 
+            title="Common Vibes (Physics)" 
+            data={stats.physics} 
+            colorClass="bg-gradient-to-r from-purple-400 to-pink-300"
+          />
+          <FunStatBar 
+            title="Scale Preferences" 
+            data={stats.scale} 
+            colorClass="bg-gradient-to-r from-amber-400 to-orange-300"
+          />
         </div>
 
-        {/* RECENT ARTIFACTS (GALLERY) */}
-        <div className="border-t border-white/10 pt-12">
-          <div className="flex justify-between items-end mb-8">
-            <h2 className="text-2xl font-light tracking-wide">Recent Signals</h2>
-            <div className="text-[10px] font-mono text-white/40">LATEST 24 ENTRIES</div>
-          </div>
+        {/* GALLERY GRID */}
+        <div className="mb-8 flex items-center justify-between">
+          <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-500">
+            Fresh Arrivals
+          </h2>
+          <a href="/liveheart" className="text-sm font-medium text-pink-400 hover:text-pink-300 transition-colors">
+            Create yours →
+          </a>
+        </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-px bg-white/10 border border-white/10">
-            {top.map((r) => {
-              const palette = (r.dna?.palette && Array.isArray(r.dna.palette)) 
-                ? r.dna.palette 
-                : ['#333', '#000'];
-              
-              const grad = `linear-gradient(135deg, hsla(${palette[0]}, 1) 0%, hsla(${palette[1]||palette[0]}, 1) 100%)`;
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          {top.map((r) => {
+            const palette = (r.dna?.palette && Array.isArray(r.dna.palette)) 
+              ? r.dna.palette 
+              : ['#333', '#000'];
+            
+            // Generate a nice gradient based on the heart's DNA
+            const grad = `linear-gradient(45deg, hsla(${palette[0]}, 1) 0%, hsla(${palette[1]||palette[0]}, 1) 100%)`;
 
-              return (
-                <a 
-                  key={r.slug} 
-                  href={`/liveheart/${r.slug}`} 
-                  className="group relative aspect-square bg-black p-4 hover:bg-white/[0.03] transition-colors overflow-hidden"
-                >
-                  {/* Color Orb */}
-                  <div 
-                    className="w-8 h-8 rounded-full mb-3 opacity-80 group-hover:scale-110 transition-transform duration-500 blur-sm" 
-                    style={{ background: grad }} 
-                  />
-                  
-                  {/* Data */}
-                  <div className="space-y-1 relative z-10">
-                    <div className="text-[9px] font-mono text-white/30 uppercase tracking-widest">
-                        {r.dna?.structure || "UNKNOWN"}
-                    </div>
-                    <div className="text-xs font-medium text-white/90 truncate group-hover:text-cyan-400 transition-colors">
-                        {r.title || r.dna?.name || "Untitled"}
-                    </div>
-                    <div className="text-[9px] text-white/20 font-mono mt-2">
-                        {new Date(r.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </div>
+            return (
+              <a 
+                key={r.slug} 
+                href={`/liveheart/${r.slug}`} 
+                className="group relative bg-zinc-900 rounded-2xl overflow-hidden hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-pink-500/20"
+              >
+                {/* Visual Preview */}
+                <div className="aspect-square p-6 flex items-center justify-center bg-black relative">
+                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+                    <div 
+                      className="w-16 h-16 rounded-full blur-xl opacity-60 group-hover:opacity-100 group-hover:scale-125 transition-all duration-500"
+                      style={{ background: grad }}
+                    ></div>
+                    <div 
+                      className="w-12 h-12 rounded-full relative z-10"
+                      style={{ background: grad, boxShadow: `0 0 20px hsla(${palette[0]}, 0.5)` }}
+                    ></div>
+                </div>
+                
+                {/* Caption */}
+                <div className="p-4 bg-zinc-900 border-t border-white/5">
+                  <h4 className="text-white font-bold text-sm truncate mb-1">
+                    {r.title || r.dna?.name || "Untitled"}
+                  </h4>
+                  <div className="flex justify-between items-center text-[10px] text-gray-500 font-medium uppercase tracking-wide">
+                    <span>{r.dna?.structure || "Shape"}</span>
+                    <span>{new Date(r.created_at).toLocaleDateString()}</span>
                   </div>
-
-                  {/* Hover Border Effect */}
-                  <div className="absolute inset-0 border border-white/0 group-hover:border-white/20 transition-colors pointer-events-none" />
-                </a>
-              );
-            })}
-          </div>
+                </div>
+              </a>
+            );
+          })}
         </div>
 
       </main>

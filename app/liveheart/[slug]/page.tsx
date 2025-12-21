@@ -15,6 +15,10 @@ export async function generateMetadata({ params }: Props) {
   const title = data.title ?? data?.dna?.name ?? 'LiveHeart Artifact';
   const description = `A LiveHeart artifact — ${title}`;
 
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL && String(process.env.NEXT_PUBLIC_SITE_URL).replace(/\/$/, '')) || 'https://www.merkurov.love';
+  const svgUrl = `${siteUrl}/api/og/liveheart?slug=${params.slug}`;
+  const fallbackPng = `${siteUrl}/api/og/liveheart?slug=${params.slug}&format=png`;
+
   return {
     title,
     description,
@@ -22,9 +26,16 @@ export async function generateMetadata({ params }: Props) {
       title,
       description,
       images: [
-        `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/api/og/liveheart?slug=${params.slug}`,
+        // primary: dynamic SVG (some platforms accept it)
+        { url: svgUrl, alt: title },
+        // fallback: PNG (many social crawlers require PNG/JPEG)
+        { url: fallbackPng, alt: title, type: 'image/png' },
       ],
-      url: `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/liveheart/${params.slug}`,
+      url: `${siteUrl}/liveheart/${params.slug}`,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      images: [fallbackPng],
     },
   };
 }
