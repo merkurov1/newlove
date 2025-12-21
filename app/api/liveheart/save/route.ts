@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { nanoid } from 'nanoid';
 import { createClient } from '../../../../lib/supabase/server';
 
@@ -46,6 +47,13 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ slug: data?.slug ?? slug });
+    // Revalidate the stats page so fresh data is shown immediately
+    try {
+      revalidatePath('/liveheart/stat');
+    } catch (err) {
+      // ignore in environments where revalidation isn't available
+      console.warn('revalidatePath failed', err);
+    }
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: 'Unexpected error' }, { status: 500 });
