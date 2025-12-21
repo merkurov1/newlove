@@ -149,30 +149,54 @@ export default function LiveHeartPage(): React.ReactElement {
           ctx.fill();
         }
       } else if (phaseRef.current === "crystallizing") {
-        // Move particles towards heart points
-        const pts = generateHeartPoints(Math.max(200, particles.length), canvas.width / dpr, canvas.height / dpr, Math.min(canvas.width / dpr, canvas.height / dpr) / 40);
+        // Move particles towards pre-assigned heart targets.
+        // Assign targets only once (if any particle lacks a target).
+        const needAssign = particles.some(p => p.targetX == null || p.targetY == null);
+        let pts: { x: number; y: number }[] = [];
+        if (needAssign) {
+          pts = generateHeartPoints(Math.max(200, particles.length), canvas.width / dpr, canvas.height / dpr, Math.min(canvas.width / dpr, canvas.height / dpr) / 40);
+          for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            if (p.targetX == null || p.targetY == null) {
+              const target = pts[i % pts.length];
+              p.targetX = target.x + (Math.random() - 0.5) * 4;
+              p.targetY = target.y + (Math.random() - 0.5) * 4;
+              // give them slight velocity toward center
+              p.vx = (p.targetX - p.x) * 0.01;
+              p.vy = (p.targetY - p.y) * 0.01;
+            }
+          }
+        }
+
+        // Interpolate toward fixed targets
         for (let i = 0; i < particles.length; i++) {
           const p = particles[i];
-          const target = pts[i % pts.length];
-          p.targetX = target.x + (Math.random() - 0.5) * 4;
-          p.targetY = target.y + (Math.random() - 0.5) * 4;
-          // interpolate
-          p.x += (p.targetX - p.x) * 0.12;
-          p.y += (p.targetY - p.y) * 0.12;
+          if (p.targetX == null || p.targetY == null) continue;
+          // stronger interpolation for faster convergence
+          p.x += (p.targetX - p.x) * 0.18;
+          p.y += (p.targetY - p.y) * 0.18;
           ctx.fillStyle = p.color;
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
           ctx.fill();
         }
 
-        // check convergence
+        // check convergence with a relaxed threshold (within ~5px)
         const settled = particles.every(p => {
           if (p.targetX == null || p.targetY == null) return false;
           const dx = p.x - p.targetX;
           const dy = p.y - p.targetY;
-          return dx * dx + dy * dy < 1.5;
+          return dx * dx + dy * dy < 25;
         });
         if (settled) {
+          // snap particles exactly to their targets to avoid jitter
+          for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            if (p.targetX != null && p.targetY != null) {
+              p.x = p.targetX;
+              p.y = p.targetY;
+            }
+          }
           phaseRef.current = "artifact";
           setPhase("artifact");
         }
