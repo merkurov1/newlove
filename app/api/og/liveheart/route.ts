@@ -1,3 +1,4 @@
+import React from 'react';
 import { createClient } from '../../../../lib/supabase/server';
 
 export async function GET(req: Request) {
@@ -30,19 +31,17 @@ export async function GET(req: Request) {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { ImageResponse } = await import('@vercel/og');
 
-      const image = new ImageResponse(
-        (
-          <div style={{ backgroundColor: '#000', width: '1200px', height: '630px', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: '120px', left: '100px', fontSize: '40px', color: 'white' }}>{title}</div>
-            <div style={{ position: 'absolute', top: '260px', left: '100px', fontSize: '20px', color: 'white' }}>Generated with LiveHeart</div>
-            <div style={{ position: 'absolute', top: '150px', left: '980px', width: '80px', height: '80px', backgroundColor: palette[0], borderRadius: '50%' }} />
-            <div style={{ position: 'absolute', top: '230px', left: '1040px', width: '60px', height: '60px', backgroundColor: palette[1], borderRadius: '50%' }} />
-            <div style={{ position: 'absolute', top: '240px', left: '900px', width: '50px', height: '50px', backgroundColor: palette[2], borderRadius: '50%' }} />
-          </div>
-        ),
-        { width: 1200, height: 630 }
+      const el = React.createElement(
+        'div',
+        { style: { backgroundColor: '#000', width: '1200px', height: '630px', position: 'relative' } },
+        React.createElement('div', { style: { position: 'absolute', top: '120px', left: '100px', fontSize: '40px', color: 'white' } }, title),
+        React.createElement('div', { style: { position: 'absolute', top: '260px', left: '100px', fontSize: '20px', color: 'white' } }, 'Generated with LiveHeart'),
+        React.createElement('div', { style: { position: 'absolute', top: '150px', left: '980px', width: '80px', height: '80px', backgroundColor: palette[0], borderRadius: '50%' } }),
+        React.createElement('div', { style: { position: 'absolute', top: '230px', left: '1040px', width: '60px', height: '60px', backgroundColor: palette[1], borderRadius: '50%' } }),
+        React.createElement('div', { style: { position: 'absolute', top: '240px', left: '900px', width: '50px', height: '50px', backgroundColor: palette[2], borderRadius: '50%' } })
       );
 
+      const image = new ImageResponse(el, { width: 1200, height: 630 });
       return image;
     } catch (e) {
       // Fallback to SVG (safe, no native deps)

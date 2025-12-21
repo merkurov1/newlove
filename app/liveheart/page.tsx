@@ -430,6 +430,10 @@ export default function LiveHeartPage() {
     >
       <canvas ref={canvasRef} className="block w-full h-full" />
 
+      <div className="absolute top-4 right-4 z-50 pointer-events-auto">
+        <a href="/liveheart/stat" className="text-sm text-white/70 hover:text-white">Stats</a>
+      </div>
+
       {/* NOISE */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.1] z-10" 
            style={{ 
