@@ -1,6 +1,8 @@
 import React from 'react';
 import { createClient } from '../../../../lib/supabase/server';
 
+export const runtime = 'edge';
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
