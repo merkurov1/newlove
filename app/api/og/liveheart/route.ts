@@ -1,4 +1,4 @@
-import { createClient } from '../../../../../lib/supabase/server';
+import { createClient } from '../../../../lib/supabase/server';
 import sharp from 'sharp';
 
 export async function GET(req: Request) {
