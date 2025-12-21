@@ -1,5 +1,4 @@
 import { createClient } from '../../../../lib/supabase/server';
-import sharp from 'sharp';
 
 export async function GET(req: Request) {
   try {
@@ -42,13 +41,11 @@ export async function GET(req: Request) {
       </svg>
     `;
 
-    const png = await sharp(Buffer.from(svg)).png().toBuffer();
-
-    const uint8 = new Uint8Array(png);
-    return new Response(uint8, {
+    // Return SVG directly to avoid native sharp dependency during build
+    return new Response(svg, {
       status: 200,
       headers: {
-        'Content-Type': 'image/png',
+        'Content-Type': 'image/svg+xml; charset=utf-8',
         'Cache-Control': 'public, max-age=3600'
       }
     });
