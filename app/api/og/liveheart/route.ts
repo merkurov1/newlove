@@ -41,7 +41,9 @@ export async function GET(req: Request) {
               status: 200,
               headers: {
                 'Content-Type': 'image/png',
-                'Cache-Control': 'public, immutable, no-transform, max-age=31536000'
+                'Cache-Control': 'public, immutable, no-transform, max-age=31536000',
+                'X-OG-Source': 'storage',
+                'X-OG-Public-Url': publicUrl || ''
               }
             });
           }
@@ -83,7 +85,8 @@ export async function GET(req: Request) {
       status: 200,
       headers: {
         'Content-Type': 'image/svg+xml; charset=utf-8',
-        'Cache-Control': 'public, immutable, no-transform, max-age=31536000'
+        'Cache-Control': 'public, immutable, no-transform, max-age=31536000',
+        'X-OG-Source': 'svg'
       }
     });
   } catch (err) {

@@ -1,6 +1,9 @@
 import React from 'react';
 import { createClient } from '../../../lib/supabase/server';
 
+// Force dynamic rendering so data is fetched on each request
+export const dynamic = 'force-dynamic';
+
 // --- TYPES ---
 type ShareData = {
   slug: string;
