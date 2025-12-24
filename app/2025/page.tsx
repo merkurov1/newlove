@@ -5,11 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowUpRight, Globe, Lock, Activity, Zap, Layers, FileText } from 'lucide-react';
 import Link from 'next/link';
 
-export const metadata = {
-  title: '2025 — Merkurov',
-  description: 'Year review 2025 — inventory and visuals.',
-};
-
 // --- 1. DATA: THE FULL INVENTORY (10 ITEMS) ---
 
 const WORKS = [
