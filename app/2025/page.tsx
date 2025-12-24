@@ -5,6 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowUpRight, Globe, Lock, Activity, Zap, Layers, FileText } from 'lucide-react';
 import Link from 'next/link';
 
+export const metadata = {
+  title: '2025 — Merkurov',
+  description: 'Year review 2025 — inventory and visuals.',
+};
+
 // --- 1. DATA: THE FULL INVENTORY (10 ITEMS) ---
 
 const WORKS = [
@@ -408,21 +413,21 @@ export default function YearReviewComplete() {
           animate={{ x: [0, -1000] }}
           transition={{ repeat: Infinity, duration: 30, ease: "linear" }}
         >
-          <span>London 2026</span>
+          <span>MERKUROV.LOVE</span>
           <span className="text-[#CC0000]">///</span>
-          <span>Assets Loaded: 10</span>
+          <span>UNFRAMED STATUS: ACTIVE</span>
           <span className="text-[#CC0000]">///</span>
-          <span>Silence Strategy</span>
+          <span>COMPILED IN 60 DAYS</span>
           <span className="text-[#CC0000]">///</span>
-          <span>Freedom costs $1000</span>
+          <span>EVERYTHING ELSE IS NOISE</span>
+          {/* repeat for continuous loop */}
+          <span>MERKUROV.LOVE</span>
           <span className="text-[#CC0000]">///</span>
-          <span>Life costs $1150</span>
+          <span>UNFRAMED STATUS: ACTIVE</span>
           <span className="text-[#CC0000]">///</span>
-          <span>Everything else is noise</span>
-          {/* Repeat */}
-          <span>London 2026</span>
+          <span>COMPILED IN 60 DAYS</span>
           <span className="text-[#CC0000]">///</span>
-          <span>Assets Loaded: 10</span>
+          <span>EVERYTHING ELSE IS NOISE</span>
         </motion.div>
       </div>
 
