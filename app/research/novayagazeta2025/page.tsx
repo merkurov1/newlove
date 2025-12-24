@@ -449,9 +449,14 @@ export default function DeepResearchPage() {
                 <button className="flex items-center gap-2 px-6 py-3 border border-black hover:bg-black hover:text-white transition-all uppercase text-xs font-bold tracking-widest">
                   <Share2 className="w-4 h-4" /> Share Report
                 </button>
-                <button className="flex items-center gap-2 px-6 py-3 bg-[#CC0000] text-white hover:bg-red-700 transition-all uppercase text-xs font-bold tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]">
+                <a
+                  href="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Analytical%20Report%20The%20Transformation%20of%20Digital%20Control%20in%20the.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-6 py-3 bg-[#CC0000] text-white hover:bg-red-700 transition-all uppercase text-xs font-bold tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+                >
                   Download PDF <Printer className="w-4 h-4" />
-                </button>
+                </a>
               </div>
             </footer>
           </motion.div>
