@@ -1,7 +1,15 @@
-"use client";
+'use client';
 
 import { useEffect, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Activity, Shield, Zap } from 'lucide-react';
 
 export default function SilenceClient() {
@@ -52,13 +60,18 @@ export default function SilenceClient() {
       <header className="max-w-4xl mx-auto mb-12 border-b border-[#1C1917]/10 pb-6">
         <div className="flex justify-between items-end">
           <div>
-            <h1 className="text-4xl md:text-6xl tracking-tight font-bold mb-2">The Silence Index</h1>
+            <h1 className="text-4xl md:text-6xl tracking-tight font-bold mb-2">
+              The Silence Index
+            </h1>
             <p className="text-[#57534E] text-sm md:text-base italic max-w-md">
-              "Volatility is a tax on the impatient. We track the ratio of Heritage (Gold, Hermes) to Hype (BTC, Nvidia)."
+              "Volatility is a tax on the impatient. We track the ratio of Heritage (Gold, Hermes)
+              to Hype (BTC, Nvidia)."
             </p>
           </div>
           <div className="text-right hidden md:block">
-            <div className="text-xs uppercase tracking-widest text-[#57534E] mb-1">Current Value</div>
+            <div className="text-xs uppercase tracking-widest text-[#57534E] mb-1">
+              Current Value
+            </div>
             <div className="text-5xl font-mono">{meta?.currentValue ?? 0}</div>
           </div>
         </div>
@@ -82,19 +95,40 @@ export default function SilenceClient() {
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
             <XAxis dataKey="date" hide={true} />
-            <YAxis domain={["auto", "auto"]} hide={true} />
+            <YAxis domain={['auto', 'auto']} hide={true} />
             <Tooltip
-              contentStyle={{ backgroundColor: '#F2F0E9', border: '1px solid #1C1917', fontFamily: 'monospace' }}
+              contentStyle={{
+                backgroundColor: '#F2F0E9',
+                border: '1px solid #1C1917',
+                fontFamily: 'monospace',
+              }}
               itemStyle={{ color: '#1C1917' }}
-              formatter={(value: number) => [value, 'Index']}
+              formatter={(value) => [
+                typeof value === 'number' ? value : Number(value ?? 0),
+                'Index',
+              ]}
               labelStyle={{ color: '#57534E', marginBottom: '5px' }}
             />
-            <Line type="monotone" dataKey="value" stroke="#1C1917" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#1C1917' }} />
-            <ReferenceLine y={meta?.currentValue ?? 0} stroke="#B91C1C" strokeDasharray="3 3" opacity={0.3} />
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke="#1C1917"
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4, fill: '#1C1917' }}
+            />
+            <ReferenceLine
+              y={meta?.currentValue ?? 0}
+              stroke="#B91C1C"
+              strokeDasharray="3 3"
+              opacity={0.3}
+            />
           </LineChart>
         </ResponsiveContainer>
 
-        <div className="absolute top-0 left-0 text-xs font-mono text-[#57534E]">High Sensitivity</div>
+        <div className="absolute top-0 left-0 text-xs font-mono text-[#57534E]">
+          High Sensitivity
+        </div>
         <div className="absolute bottom-0 right-0 text-xs font-mono text-[#57534E]">T-30 Days</div>
       </main>
 
@@ -105,7 +139,10 @@ export default function SilenceClient() {
             <Shield size={16} />
             <h3 className="text-xs uppercase tracking-widest font-bold">The Silence Basket</h3>
           </div>
-          <p className="text-sm leading-relaxed">Composed of Assets that reject time: Physical Gold (XAU) and Hermes (RMS.PA). Represents stability and provenance.</p>
+          <p className="text-sm leading-relaxed">
+            Composed of Assets that reject time: Physical Gold (XAU) and Hermes (RMS.PA). Represents
+            stability and provenance.
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -113,7 +150,10 @@ export default function SilenceClient() {
             <Zap size={16} />
             <h3 className="text-xs uppercase tracking-widest font-bold">The Noise Basket</h3>
           </div>
-          <p className="text-sm leading-relaxed">Composed of Assets driven by attention: Bitcoin (BTC) and Nvidia (NVDA). Represents volatility and hype cycles.</p>
+          <p className="text-sm leading-relaxed">
+            Composed of Assets driven by attention: Bitcoin (BTC) and Nvidia (NVDA). Represents
+            volatility and hype cycles.
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -121,11 +161,17 @@ export default function SilenceClient() {
             <Activity size={16} />
             <h3 className="text-xs uppercase tracking-widest font-bold">Merkurov Analysis</h3>
           </div>
-          <p className="text-sm leading-relaxed font-mono text-[#B91C1C]">{isPositive ? "STATUS: SILENCE PREVAILS. Capital is seeking refuge in history." : "STATUS: NOISE DOMINATES. The market is drunk on future promises."}</p>
+          <p className="text-sm leading-relaxed font-mono text-[#B91C1C]">
+            {isPositive
+              ? 'STATUS: SILENCE PREVAILS. Capital is seeking refuge in history.'
+              : 'STATUS: NOISE DOMINATES. The market is drunk on future promises.'}
+          </p>
         </div>
       </section>
 
-      <footer className="max-w-4xl mx-auto mt-24 text-center text-xs text-[#57534E] uppercase tracking-widest opacity-50">Merkurov Private Office © 2025 • Data via Yahoo Finance • Zero-Waste Execution</footer>
+      <footer className="max-w-4xl mx-auto mt-24 text-center text-xs text-[#57534E] uppercase tracking-widest opacity-50">
+        Merkurov Private Office © 2025 • Data via Yahoo Finance • Zero-Waste Execution
+      </footer>
     </div>
   );
 }
