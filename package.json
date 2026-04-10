@@ -74,7 +74,10 @@
     "@web3-onboard/core": "^2.24.1",
     "@web3-onboard/injected-wallets": "^2.11.3",
     "@web3-onboard/walletconnect": "^2.6.3",
+    "clsx": "latest",
+    "date-fns": "latest",
     "dompurify": "^3.2.7",
+    "dotenv": "latest",
     "ethers": "^6.15.0",
     "express-rate-limit": "^8.1.0",
     "framer-motion": "^12.23.24",
@@ -85,6 +88,7 @@
     "jsdom": "^27.0.0",
     "jsonwebtoken": "^9.0.2",
     "lowlight": "^3.3.0",
+    "lucide-react": "latest",
     "markdown-to-jsx": "^7.5.0",
     "next": "14.2.5",
     "node-fetch": "^2.7.0",
@@ -94,6 +98,10 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-dropzone": "^14.3.8",
+    "react-markdown": "^10.1.0",
+    "recharts": "latest",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
     "resend": "^3.5.0",
     "rimraf": "^6.0.1",
     "rss-parser": "^3.13.0",
@@ -101,20 +109,15 @@
     "sharp": "^0.34.4",
     "stripe": "^18.5.0",
     "swiper": "^12.0.3",
+    "tailwind-merge": "latest",
     "tailwindcss": "^3.4.17",
+    "telegraf": "latest",
     "turndown": "^7.2.0",
     "viem": "^2.38.5",
     "wagmi": "^2.19.0",
-    "yet-another-react-lightbox": "^3.25.0",
-    "zod": "^4.1.11",
-    "lucide-react": "latest",
-    "telegraf": "latest",
-    "dotenv": "latest",
     "yahoo-finance2": "latest",
-    "recharts": "latest",
-    "date-fns": "latest",
-    "clsx": "latest",
-    "tailwind-merge": "latest"
+    "yet-another-react-lightbox": "^3.25.0",
+    "zod": "^4.1.11"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
@@ -139,7 +142,6 @@
     "lint-staged": "^16.2.6",
     "postcss-nesting": "^13.0.2",
     "prettier": "^3.6.2"
-  }
-  ,
+  },
   "vercel-build": "pnpm build"
 }
