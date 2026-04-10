@@ -20,7 +20,7 @@ export default function Paywall({ onUnlock }: PaywallProps) {
     if (VALID_PASSWORDS.includes(password.trim())) {
       onUnlock();
     } else {
-      setError('Неверный пароль.');
+      setError('Incorrect password.');
     }
   };
 
@@ -40,22 +40,24 @@ export default function Paywall({ onUnlock }: PaywallProps) {
       if (data?.url) {
         window.location.href = data.url;
       } else {
-        setStripeError(data?.error || 'Ошибка при создании Stripe-сессии');
+        setStripeError(data?.error || 'Error creating Stripe session');
       }
     } catch (e: any) {
-      setStripeError(e.message || 'Ошибка Stripe');
+      setStripeError(e.message || 'Stripe error');
     }
   };
 
   return (
     <div className="max-w-md mx-auto mt-16 p-8 bg-white rounded shadow text-center">
-      <h2 className="text-2xl font-bold mb-4">Доступ к книге Unframed</h2>
-      <p className="mb-6">Книга доступна после оплаты или по паролю (для приглашённых).</p>
+      <h2 className="text-2xl font-bold mb-4">Access to Unframed Book</h2>
+      <p className="mb-6">
+        The book is available after payment or by password (for invited users).
+      </p>
       <form onSubmit={handlePassword} className="mb-4">
         <input
           type="password"
           className="border px-4 py-2 rounded w-full mb-2"
-          placeholder="Введите пароль"
+          placeholder="Enter password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
@@ -63,17 +65,17 @@ export default function Paywall({ onUnlock }: PaywallProps) {
           type="submit"
           className="w-full bg-pink-600 text-white py-2 rounded font-semibold hover:bg-pink-700 transition"
         >
-          Войти по паролю
+          Unlock with password
         </button>
         {error && <div className="text-red-600 mt-2">{error}</div>}
       </form>
-      <div className="my-4 text-gray-500">или</div>
+      <div className="my-4 text-gray-500">or</div>
       <button
         className="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700 transition"
         onClick={handleStripe}
         disabled={showStripe}
       >
-        {showStripe ? 'Переход к оплате...' : 'Купить доступ через Stripe'}
+        {showStripe ? 'Redirecting to payment...' : 'Buy access via Stripe'}
       </button>
       {stripeError && <div className="text-red-600 mt-4">{stripeError}</div>}
     </div>

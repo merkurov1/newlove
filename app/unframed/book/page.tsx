@@ -25,7 +25,7 @@ export default function BookReaderPage() {
   }
 
   if (!fileContent) {
-    return <div className="text-center mt-16 text-lg text-gray-500">Загрузка книги...</div>;
+    return <div className="text-center mt-16 text-lg text-gray-500">Loading book...</div>;
   }
 
   return (
