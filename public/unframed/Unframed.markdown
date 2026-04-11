@@ -1,42 +1,44 @@
-UNFRAMED
+# UNFRAMED
 
 By Anton Merkurov
 
-\#
+---
 
 To my family
 
-\#
+---
 
-📑 TABLE OF CONTENTS
+## Table of Contents
 
-INTRODUCTION: UNFRAMED  
+## INTRODUCTION: UNFRAMED
+
 (Noun vs Verb, Snobbery, The Definition of Freedom)
 
-PROLOGUE: THE LOOP  
+## PROLOGUE: THE LOOP
+
 (The Arrest and The Boy on the Floor)
 
-PART I: THE GRANITE AND THE GLITCH (1980s - 1999)
+## PART I — THE GRANITE AND THE GLITCH (1980s - 1999)
 
-Chapter 01: The Granite and The Glitch _(Family, Lenin's Mask, School)_
+### Chapter 01: The Granite and The Glitch _(Family, Lenin's Mask, School)_
 
-Chapter 02: The Library and The Lie (Encyclopedias, God, The Zero-Point)
+### Chapter 02: The Library and The Lie (Encyclopedias, God, The Zero-Point)
 
-Chapter 03: The Canon and The Glitch _(Museums, Rejection of Classics)_
+### Chapter 03: The Canon and The Glitch _(Museums, Rejection of Classics)_
 
-Chapter 04: The Smell of Abroad (Deficit, Pizza Hut, 1993 Shelling)
+### Chapter 04: The Smell of Abroad (Deficit, Pizza Hut, 1993 Shelling)
 
-Chapter 05: The Basement (Teenage years, Metal, Vocational School)
+### Chapter 05: The Basement (Teenage years, Metal, Vocational School)
 
-Chapter 06: The Digital Awakening _(FidoNet, The First Modem)_
+### Chapter 06: The Digital Awakening _(FidoNet, The First Modem)_
 
-Chapter 07: Architects of The Glitch _(Roof ISPs, 1998 Crash, NetArt)_
+### Chapter 07: Architects of The Glitch _(Roof ISPs, 1998 Crash, NetArt)_
 
-PART II: THE EXPERT AND THE GHOST (2000 - 2013)
+## PART II — THE EXPERT AND THE GHOST (2000 - 2013)
 
-Chapter 08: The LiveJournal Era (Pirogi, Nossik, The Blogosphere)
+### Chapter 08: The LiveJournal Era (Pirogi, Nossik, The Blogosphere)
 
-Chapter 09: The Accidental Journalist _(CDPro, Black PR, Pelevin)_
+### Chapter 09: The Accidental Journalist _(CDPro, Black PR, Pelevin)_
 
 Chapter 10: The War and The Grey Suit (Chechnya, Putin's Rise, Apartment Bombings)
 

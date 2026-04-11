@@ -48,22 +48,22 @@ export default function Paywall({ onUnlock }: PaywallProps) {
   };
 
   return (
-    <div className="max-w-md mx-auto mt-16 p-8 bg-white rounded shadow text-center">
-      <h2 className="text-2xl font-bold mb-4">Access to Unframed Book</h2>
-      <p className="mb-6">
-        The book is available after payment or by password (for invited users).
+    <div className="max-w-md mx-auto mt-12 p-8 bg-white/90 dark:bg-gray-900/75 backdrop-blur-sm rounded-lg shadow-lg text-center">
+      <h2 className="text-2xl font-extrabold mb-3">Access to Unframed</h2>
+      <p className="mb-6 text-sm text-gray-600 dark:text-gray-300">
+        The book is available after payment or by password (invited users).
       </p>
       <form onSubmit={handlePassword} className="mb-4">
         <input
           type="password"
-          className="border px-4 py-2 rounded w-full mb-2"
+          className="border px-4 py-2 rounded w-full mb-2 bg-white dark:bg-gray-800 text-sm"
           placeholder="Enter password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
         <button
           type="submit"
-          className="w-full bg-pink-600 text-white py-2 rounded font-semibold hover:bg-pink-700 transition"
+          className="w-full bg-brand-500 text-white py-2 rounded font-semibold hover:bg-brand-600 transition"
         >
           Unlock with password
         </button>
@@ -71,7 +71,7 @@ export default function Paywall({ onUnlock }: PaywallProps) {
       </form>
       <div className="my-4 text-gray-500">or</div>
       <button
-        className="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700 transition"
+        className="w-full bg-primary text-white py-2 rounded font-semibold hover:opacity-90 transition"
         onClick={handleStripe}
         disabled={showStripe}
       >
