@@ -1,6 +1,6 @@
-UNFRAMED 
+UNFRAMED
 
-By Anton Merkurov 
+By Anton Merkurov
 
 \#
 
@@ -18,29 +18,29 @@ PROLOGUE: THE LOOP
 
 PART I: THE GRANITE AND THE GLITCH (1980s - 1999)
 
-Chapter 01: The Granite and The Glitch *(Family, Lenin's Mask, School)*
+Chapter 01: The Granite and The Glitch _(Family, Lenin's Mask, School)_
 
 Chapter 02: The Library and The Lie (Encyclopedias, God, The Zero-Point)
 
-Chapter 03: The Canon and The Glitch *(Museums, Rejection of Classics)*
+Chapter 03: The Canon and The Glitch _(Museums, Rejection of Classics)_
 
 Chapter 04: The Smell of Abroad (Deficit, Pizza Hut, 1993 Shelling)
 
 Chapter 05: The Basement (Teenage years, Metal, Vocational School)
 
-Chapter 06: The Digital Awakening *(FidoNet, The First Modem)*
+Chapter 06: The Digital Awakening _(FidoNet, The First Modem)_
 
-Chapter 07: Architects of The Glitch *(Roof ISPs, 1998 Crash, NetArt)*
+Chapter 07: Architects of The Glitch _(Roof ISPs, 1998 Crash, NetArt)_
 
 PART II: THE EXPERT AND THE GHOST (2000 - 2013)
 
 Chapter 08: The LiveJournal Era (Pirogi, Nossik, The Blogosphere)
 
-Chapter 09: The Accidental Journalist *(CDPro, Black PR, Pelevin)*
+Chapter 09: The Accidental Journalist _(CDPro, Black PR, Pelevin)_
 
 Chapter 10: The War and The Grey Suit (Chechnya, Putin's Rise, Apartment Bombings)
 
-Chapter 11: The Theater and The Passport *(Nord-Ost, First Emigration)*
+Chapter 11: The Theater and The Passport _(Nord-Ost, First Emigration)_
 
 Chapter 12: The Lens and The Limo (Photography, Glamour, Government Taxis)
 
@@ -58,49 +58,49 @@ Chapter 18: The Mountain and The Selfie (Armenia, Museums, President Sargsyan)
 
 Chapter 19: The Duma and The Dose (Digital Sovereignty, Cocaine in the Limo)
 
-Chapter 20: The Embassy and The Jester *(US/EU Diplomats, IRI, No Adults)*
+Chapter 20: The Embassy and The Jester _(US/EU Diplomats, IRI, No Adults)_
 
 Chapter 21: The Zeroing and The Silence (2020 Constitution, The Paradox of Intellect)
 
 PART III: THE ETHER AND THE SILENCE (2013 - 2021)
 
-Chapter 22: The Visa and The Walk *(London as Diagnosis)*
+Chapter 22: The Visa and The Walk _(London as Diagnosis)_
 
-Chapter 23: The Witch and The Granite *(Thatcher's Funeral)*
+Chapter 23: The Witch and The Granite _(Thatcher's Funeral)_
 
-Chapter 24: The Concrete and The Hallucination *(Sochi, Crimea, MH17)*
+Chapter 24: The Concrete and The Hallucination _(Sochi, Crimea, MH17)_
 
-Chapter 25: The Mansion and The Message *(Strana Detey, MSU Lectures)*
+Chapter 25: The Mansion and The Message _(Strana Detey, MSU Lectures)_
 
 Chapter 26: The Bridge and The Stone (Nemtsov, Mesh Networks, GreenStone)
 
-Chapter 27: The Nanny, The Pikachu and The Porsche *(2016 Madness, World Cup 2018)*
+Chapter 27: The Nanny, The Pikachu and The Porsche _(2016 Madness, World Cup 2018)_
 
-Chapter 28: The Drill and The Vampire *(Runet Isolation, Empire V)*
+Chapter 28: The Drill and The Vampire _(Runet Isolation, Empire V)_
 
-Chapter 29: The Agency and The Algorithm *(Sokhnut, Identity Crisis)*
+Chapter 29: The Agency and The Algorithm _(Sokhnut, Identity Crisis)_
 
-Chapter 30: The Gaze and The Market *(Art-Capital, German Klimenko)*
+Chapter 30: The Gaze and The Market _(Art-Capital, German Klimenko)_
 
-Chapter 31: The Stone Strikes Back *(Dynamo Stadium Battle)*
+Chapter 31: The Stone Strikes Back _(Dynamo Stadium Battle)_
 
-Chapter 32: The Ledger and The Queue *(Crypto Hype, Serov Queue)*
+Chapter 32: The Ledger and The Queue _(Crypto Hype, Serov Queue)_
 
-Chapter 33: The Charity and The Kitchen *(Podari Zhizn, Cooking)*
+Chapter 33: The Charity and The Kitchen _(Podari Zhizn, Cooking)_
 
 Chapter 34: The Cell and The Server (Article 228, Hepatitis C, Telegram War)
 
-Chapter 35: The Blacklist and The Blueprint *(Artsakh, Nossik's Death, Izmailovo Park)*
+Chapter 35: The Blacklist and The Blueprint _(Artsakh, Nossik's Death, Izmailovo Park)_
 
-Chapter 36: The Silent City and The New Deal *(Covid, The Pivot to Art Dealer)*
+Chapter 36: The Silent City and The New Deal _(Covid, The Pivot to Art Dealer)_
 
-Chapter 37: The Poison and The Return *(Navalny 2020-2021)*
+Chapter 37: The Poison and The Return _(Navalny 2020-2021)_
 
-Chapter 38: The Room and The Painting *(Clubhouse Era)*
+Chapter 38: The Room and The Painting _(Clubhouse Era)_
 
-Chapter 39: The Alphabet and The Token *(Erotic Alphabet, Lenin NFT)*
+Chapter 39: The Alphabet and The Token _(Erotic Alphabet, Lenin NFT)_
 
-Chapter 40: The Vodka and The Vow *(Birth of The Hearts)*
+Chapter 40: The Vodka and The Vow _(Birth of The Hearts)_
 
 PART IV: UNFRAMED (2022 - 2024)
 
@@ -110,11 +110,11 @@ Chapter 42: The Silence and The Cost (Concentration Camp Effect, "Fuck You Money
 
 Chapter 43: The Mutiny and The Name (Prigozhin, Navalny's Death, Graffiti)
 
-Chapter 44: The Asphalt and The Article *(The Arrest)*
+Chapter 44: The Asphalt and The Article _(The Arrest)_
 
-Chapter 45: The Radio and The Carousel *(The Jail)*
+Chapter 45: The Radio and The Carousel _(The Jail)_
 
-Chapter 46: The Hoodie and The Stamp *(The Escape)*
+Chapter 46: The Hoodie and The Stamp _(The Escape)_
 
 EPILOGUE: THE RETURN ON INVESTMENT
 
@@ -176,16 +176,6 @@ But then, I stood up. I went to school. And I forgot who I was for forty years. 
 
 The pencil was replaced by the keyboard. The canvas was replaced by the screen. And the warm parquet floor became just another piece of real estate in an apartment that was too expensive to heat. But the memory didn't die. It just waited. Hidden. Quiet. Waiting for the moment when the noise finally stops, and you remember what silence sounds like.
 
-
-
-
-
-
-
-
-
-
-
 # PART I
 
 CHAPTER 01: THE GRANITE AND THE GLITCH (1980s - 1999)
@@ -226,18 +216,18 @@ The true legacy of the family wasn't found in the plaster or marble scattered on
 
 But the real action happened on the shelves. Walls were lined with encyclopedias. This library became the graveyard of my childish beliefs and the birthplace of my lifelong cynicism. I had access to two distinct versions of reality, sitting side by side:
 
-On the left: *Brockhaus and Efron*, the pre-revolutionary encyclopedia. Thick, leather-bound volumes printed before 1917. The world of the Tsar, gold, aesthetics, and God.  
-On the right: *The Great Soviet Encyclopedia*. Red spines. The world of the Party, concrete, quotas, and Dialectical Materialism.
+On the left: _Brockhaus and Efron_, the pre-revolutionary encyclopedia. Thick, leather-bound volumes printed before 1917. The world of the Tsar, gold, aesthetics, and God.  
+On the right: _The Great Soviet Encyclopedia_. Red spines. The world of the Party, concrete, quotas, and Dialectical Materialism.
 
 I devised a game. I would open them to the same letter and compare the definitions. It was my first experience with how history is edited in real time.
 
-Take the word "Merchant" (*Kupets*).  
-In *Brockhaus*, a merchant was a respected pillar of society, a philanthropist, a driver of commerce and civilization. The text praised his contributions to art, education, and public welfare. The merchants built theaters. They funded universities. They were the engine of progress.  
-In the *Soviet Encyclopedia*, the definition shifted violently. He was a parasite, a class enemy exploiting the labor of the working class. A bloodsucker who extracted value from the proletariat. A criminal element destroyed by the Revolution.
+Take the word "Merchant" (_Kupets_).  
+In _Brockhaus_, a merchant was a respected pillar of society, a philanthropist, a driver of commerce and civilization. The text praised his contributions to art, education, and public welfare. The merchants built theaters. They funded universities. They were the engine of progress.  
+In the _Soviet Encyclopedia_, the definition shifted violently. He was a parasite, a class enemy exploiting the labor of the working class. A bloodsucker who extracted value from the proletariat. A criminal element destroyed by the Revolution.
 
 You have to understand: in the Soviet Union, the algorithm of "buy low, sell high" wasn't called Business. It was called Speculation--a criminal offense punishable by prison or a bullet. Same word. Two different truths. Two different moralities.
 
-I tried other words. "Church." "Property." "Freedom." Every entry was a case study in how language is twisted by power. The *Brockhaus* version described the world as it was. The Soviet version described the world as it should be, according to the Central Committee.
+I tried other words. "Church." "Property." "Freedom." Every entry was a case study in how language is twisted by power. The _Brockhaus_ version described the world as it was. The Soviet version described the world as it should be, according to the Central Committee.
 
 Naturally, I decided to audit God. I didn't look at the sky; I opened the Encyclopedia to the letter "G". I cross-referenced the detailed articles from both editions. I read about Zeus, Ra, and Yahweh, and realized they follow the same template: an omnipotent authority figure, a moral code enforced by fear, and a promise of afterlife as compensation for obedience.  
 The conclusion was clear: religion was a construct, an invention of humanity. The sociological function was obvious--it is a control system. It works because it is unfalsifiable. You can't disprove Heaven, so the priests always win the argument.
@@ -260,15 +250,15 @@ The apartment was vast. But my world was even larger. It contained multitudes, c
 CHAPTER 03: THE CANON AND THE GLITCH
 
 Of course, they tried to induct me into the world of art. Or at least, they made the attempt. My grandmother took me to Leningrad (now Saint Petersburg), dragging me through the Hermitage and the Russian Museum.  
-For some reason, I always liked Karl Bryullov's *The Last Day of Pompeii*. Perhaps, even then, a sense of taste was being unconsciously calibrated--surrounded by paintings at home, and paintings in museums.  
+For some reason, I always liked Karl Bryullov's _The Last Day of Pompeii_. Perhaps, even then, a sense of taste was being unconsciously calibrated--surrounded by paintings at home, and paintings in museums.  
 But out of sheer protest, I denied it all.
 
 I remember when I was brought to the Pushkin Museum of Fine Arts--an institution my great-grandfather had actually directed in the 1950s. After the excursion, the legendary director of the museum, Irina Antonova, approached me. She looked down at me and asked:  
 "Well, tell me, what did you like the most?"  
 "The pies in the buffet," I answered honestly.
 
-This attitude defined my early intellectual life. I have a confession that usually horrifies the Russian intelligentsia: I ignored the Canon. I didn't open *War and Peace* until I was 35. I had no interest in the emotional turbulence of fictional characters; their suffering seemed inefficient.  
-The only exception was children's literature, provided it was well-illustrated. I loved *The Wizard of the Emerald City*--the Russian version of the Oz stories--along with *Karlsson-on-the-Roof* and the *Moomins*. I wasn't looking for drama; I was looking for worlds with clear rules and vivid imagery.
+This attitude defined my early intellectual life. I have a confession that usually horrifies the Russian intelligentsia: I ignored the Canon. I didn't open _War and Peace_ until I was 35. I had no interest in the emotional turbulence of fictional characters; their suffering seemed inefficient.  
+The only exception was children's literature, provided it was well-illustrated. I loved _The Wizard of the Emerald City_--the Russian version of the Oz stories--along with _Karlsson-on-the-Roof_ and the _Moomins_. I wasn't looking for drama; I was looking for worlds with clear rules and vivid imagery.
 
 My real addiction was structure. The library was arranged by height, and my access to information was dictated by my physical growth. To know more, I literally had to grow taller. I pulled volumes like pulling slot machine levers, looking for the jackpot of a fact.  
 This is where I learned the most important skill of my life: Information Arbitrage.  
@@ -367,7 +357,7 @@ We didn't win the tariff battle, but the market solved it for us. Broadband arri
 Then came the real Internet via dial-up. It was slow and expensive. We bought scratch cards in kiosks, rationing our minutes like oxygen. We navigated by the Rambler Top100, and mostly, we went to Krovatka ("The Little Bed").  
 Krovatka was a legendary web chat where thousands of people met in total anonymity. It was the first time I realized the power of the avatar. In the chat room, age and muscle didn't matter. The fact that I was a skinny teenager with circles under my eyes didn't matter. Only your words mattered. I spent nights there, honing my rhetoric, typing faster than I could think.
 
-We developed a specific kind of cynicism to filter the weak. I remember a popular joke we played on newcomers. We would type into the main chat: "System Tip: If you unplug your modem wire and plug it back in very quickly, your connection speed will double." We would watch with cruel satisfaction as user after user timed out. *User\_19 has left the chat. Natasha\_77 has left the chat.* It was a literacy test. If you fell for it, you didn't deserve the bandwidth.
+We developed a specific kind of cynicism to filter the weak. I remember a popular joke we played on newcomers. We would type into the main chat: "System Tip: If you unplug your modem wire and plug it back in very quickly, your connection speed will double." We would watch with cruel satisfaction as user after user timed out. _User_19 has left the chat. Natasha_77 has left the chat._ It was a literacy test. If you fell for it, you didn't deserve the bandwidth.
 
 But Krovatka was for the masses. The professionals sat in IRC (Internet Relay Chat). I migrated with the former Fido veterans to the channel #fidorus.  
 IRC was the first real example of mass real-time communication. ICQ didn't even exist yet. Looking back, it was pure technological delight--a complex network of multiple servers and clients for different systems. And, of course, it offered the ability to talk to friends 24/7. Whenever you logged in, day or night, someone was always there.  
@@ -393,16 +383,6 @@ NetArt didn't make us rich in the traditional sense. I didn't get stacks of cash
 The meetings were surreal. I would sit in their offices--marble floors, leather chairs, secretaries in too much makeup--and explain the basic topology of a local network. They would nod seriously, pretending to understand. I would quote prices that I had made up on the spot, inflating the hardware cost to cover our labor and risk. They would agree without negotiation. Money wasn't real to them. It was just numbers they moved around. But for us, every contract meant new equipment and more freedom.
 
 At the same time, my family pushed me toward formal education. I enrolled in the Institute of Instrument Engineering. It was a concession to their anxieties. They wanted me to have a "real" career, a degree, a safety net. It was excruciating. I sat in lecture halls listening to old men teach from textbooks written before the microprocessor revolution. They were explaining analog circuits while I was building TCP/IP networks. They were teaching DOS while I was running Linux servers. I lasted a couple of months. I walked out one day and never went back. I didn't say goodbye. I didn't submit paperwork. I just stopped showing up. I didn't need a degree to prove I existed. The Network was my university. The modem was my diploma. And the clients who paid me in cash were my grades. The empire of the roofs didn't last forever. By 2000, the major telecom companies had figured out that Moscow was worth investing in. They laid fiber. They built infrastructure that made our coaxial cables look like toys. The market consolidated. But it didn't matter. By then, I had moved on. I had learned the most important lesson of the era: If the system doesn't provide what you need, you build it yourself. First on the roof, then in the office.
-
-
-
-
-
-
-
-
-
-
 
 # PART II
 
@@ -562,13 +542,13 @@ CHAPTER 12: THE LENS AND THE LIMO
 
 Luck in Moscow is not random. I posted a few photos on LiveJournal, and the city responded immediately. A friend introduced me to Vladimir Pavlenko. Vladimir was a real war photographer. He had seen hell through a lens--Chechnya, conflicts, blood. Now he was building a photo agency. The deal was a classic barter: I built his website, and he taught me the trade. I already had the hardware--a digital Sony for speed and a heavy film camera for the soul. But Vladimir gave me something more important than a lens: a laminated piece of plastic that said "PRESS."
 
-My first day on the job was a lesson in the physics of power. I went to Kutuzovsky Prospect--the main artery of the Empire, the direct line from the President's residence to the Kremlin. I witnessed the phenomenon of the "Green Street" (*Zelenaya Ulitsa*). Suddenly, the chaotic, aggressive traffic of Moscow stops. The police clear the road completely. Silence falls in the center of a city of 12 million people. It is a mystical experience. The noise cuts off. Even the birds seem to know the rules and fall silent. Everyone waits for the Czar.
+My first day on the job was a lesson in the physics of power. I went to Kutuzovsky Prospect--the main artery of the Empire, the direct line from the President's residence to the Kremlin. I witnessed the phenomenon of the "Green Street" (_Zelenaya Ulitsa_). Suddenly, the chaotic, aggressive traffic of Moscow stops. The police clear the road completely. Silence falls in the center of a city of 12 million people. It is a mystical experience. The noise cuts off. Even the birds seem to know the rules and fall silent. Everyone waits for the Czar.
 
 I sat at a bus stop, naive and eager. I decided to snap the perfect shot of the Presidential cortege flying by at 140 km/h. I opened my backpack. I reached for the camera. Before I could even remove the lens cap, they materialized. FSO (Federal Protective Service). The Praetorian Guard. They didn't run; they appeared out of thin air. They checked my bag. The contents were damning: one laptop, one professional digital camera, one analog film camera, one Russian internal passport, one Israeli passport. I didn't look like a photographer. I looked like a parody of a Mossad saboteur sent to assassinate the President, equipped with enough tech to document the act in two formats.
 
 Today, in 2025, this setup would guarantee me a black bag over the head, a basement in Lefortovo Prison, and a 20-year sentence for high treason. But 2003 was different. It was what we called "Vegetarian Times." The regime was still on a diet--it ate grass, not people. We stood there for two hours. They made calls. They checked the database. I explained, I charmed, I flashed the fresh Press Card. And miraculously, reason worked. They realized I wasn't a spy; I was just an idiot with a zoom lens. "Get out of here," the officer said, handing back my passports. I missed the shot. I was late for the editorial meeting. But I walked away free. I learned that day that a Press Card isn't a shield; it's an invitation to a conversation. Back then, the State was still willing to talk.
 
-My photographic career continued, following the same pattern: I fell upwards. I landed at Amedia. The company was founded by Alexander Akopov, a titan of the industry who had just left the position of General Director of VGTRK. He took 15 people--I was one of them--and we began to manufacture the first Russian soap opera, *Poor Nastya*. It was a happy time. I fell out of reality and into the artificial bubble of the Mosfilm soundstages. My world narrowed to actors, producers, and the endless cycle of production. We had location shoots where you would freeze all night and drink that specific, terrible cinema coffee that tastes like burnt plastic.
+My photographic career continued, following the same pattern: I fell upwards. I landed at Amedia. The company was founded by Alexander Akopov, a titan of the industry who had just left the position of General Director of VGTRK. He took 15 people--I was one of them--and we began to manufacture the first Russian soap opera, _Poor Nastya_. It was a happy time. I fell out of reality and into the artificial bubble of the Mosfilm soundstages. My world narrowed to actors, producers, and the endless cycle of production. We had location shoots where you would freeze all night and drink that specific, terrible cinema coffee that tastes like burnt plastic.
 
 My role, as usual, was hybrid. I wasn't just a photographer; I was the Gatekeeper. I organized access for other photographers to the set. But the real value was the economics of the skill. Cinema is a specific process, demanding perfect lighting and expensive consumables. Working for Amedia gave me a perfect opportunity: I learned to shoot professionally using Other People's Money. I burned through kilometers of expensive film, experimenting with light and composition, and they paid the bill. Later, I used those skills to shoot the same actresses for glossy magazines. Those photos are still being published today. Technically, for every reprint, I'm supposed to receive a royalty. Honestly, I haven't seen that money in years.
 
@@ -576,13 +556,13 @@ I saw an ad: "Photographer Wanted." It was a startup glossy magazine. The office
 
 For a year, I lived the life of a bohemian photographer. My social map shrank to a tight triangle of early "Oil Glamour." My mornings started at Café Moscow-Rome in Stoleshnikov Lane. Years later, this sacred spot would become the legendary Denis Simachev Shop & Bar, the epicenter of the era, but back then it was just a quiet place to cure a hangover. My evenings ended at Café Moscow-Berlin on Tverskaya-Yamskaya. I shot covers. I bought expensive lenses. I played the role of Photo Editor, deciding whose face was worthy of the glossy page. It was a life of free drinks, easy access, and superficial beauty.
 
-A separate vignette from those years perfectly illustrates the mechanics of the city. Moscow was already drowning in gridlock, and public transport was a humiliation I refused to endure. The primary mode of transport was the "hand"--you stood by the curb and negotiated with whoever stopped. But geography, once again, was my ally. My morning commute coincided with the government fleet leaving their garages. Black Mercedes and BMWs with blue flashing lights (*migalki*) cruised past my door on Berezhkovskaya. The drivers were bored, underpaid, and greedy. For 150 rubles--about five dollars--the machinery of the State became my personal taxi service. The trip to the office on Pushkin Square usually took an hour of suffocating traffic. But I had an upgrade option. "Turn on the blues," I would tell the driver. "I'll add extra." We would mount the median strip--the *razdel*, reserved for the gods. Immune to police, immune to the traffic code, we flew toward the center. The trip took ten minutes. It was a scene of pure Moscow absurdity: The Publisher, the serious owner of the magazine, would be parking his civilian Audi A8, exhausted from the gridlock. And right next to him, his twenty-year-old photographer would roll up in a government limousine with the sirens wailing.
+A separate vignette from those years perfectly illustrates the mechanics of the city. Moscow was already drowning in gridlock, and public transport was a humiliation I refused to endure. The primary mode of transport was the "hand"--you stood by the curb and negotiated with whoever stopped. But geography, once again, was my ally. My morning commute coincided with the government fleet leaving their garages. Black Mercedes and BMWs with blue flashing lights (_migalki_) cruised past my door on Berezhkovskaya. The drivers were bored, underpaid, and greedy. For 150 rubles--about five dollars--the machinery of the State became my personal taxi service. The trip to the office on Pushkin Square usually took an hour of suffocating traffic. But I had an upgrade option. "Turn on the blues," I would tell the driver. "I'll add extra." We would mount the median strip--the _razdel_, reserved for the gods. Immune to police, immune to the traffic code, we flew toward the center. The trip took ten minutes. It was a scene of pure Moscow absurdity: The Publisher, the serious owner of the magazine, would be parking his civilian Audi A8, exhausted from the gridlock. And right next to him, his twenty-year-old photographer would roll up in a government limousine with the sirens wailing.
 
 On the whole, I reveled in this existence. And why not? I was twenty-one. I had the deliverables: covers, editorials, the full production circus--makeup artists, assistants, studio lights. It felt adult. It felt legitimate. But the real drug was the leverage. Because I was also the Photo Editor, I wasn't just pressing the shutter; I was the Gatekeeper. I had the budget. I could publish other photographers' work and, more importantly, I could sign their checks. In Moscow, the ability to dispense money turns you from a peer into a patron. The level of respect from the community didn't just grow; it verticalized. Even seasoned professionals looked at me differently when they realized I held the keys to the printing press.
 
 But while I was editing retouched faces by day, I was mining deep layers of history by night. To fund a renovation of the family apartment, we decided to monetize the archive. We sold vintage prints from Sergey Merkurov's personal collection--original works by Alexander Rodchenko, Svishchev-Paola, and Moisei Nappelbaum. This was my entry into the real art market. I met the first generation of Russian art dealers. They weren't just buyers; they became partners and friends.
 
-One episode perfectly captures the texture of the time. We organized an exhibition at the Bulgakov Museum--the legendary "Bad Apartment" on Bolshaya Sadovaya, immortalized in *The Master and Margarita*. It was run by the formidable Marietta Chudakova, the country's leading Bulgakov scholar. But this was Moscow. Nothing is simple. The building was a war zone. A rival "museum," run by guys who looked and acted like bandits, occupied the ground floor. They wanted the space. We had to physically hold the line.  
+One episode perfectly captures the texture of the time. We organized an exhibition at the Bulgakov Museum--the legendary "Bad Apartment" on Bolshaya Sadovaya, immortalized in _The Master and Margarita_. It was run by the formidable Marietta Chudakova, the country's leading Bulgakov scholar. But this was Moscow. Nothing is simple. The building was a war zone. A rival "museum," run by guys who looked and acted like bandits, occupied the ground floor. They wanted the space. We had to physically hold the line.  
 Sometimes this meant guard duty. I remember spending a night locked inside the "Bad Apartment" to prevent a break-in. I slept on a sofa where the literary character Berlioz might have sat before losing his head. I must disappoint the mystics: I felt no supernatural presence. No giant cats, no Woland. I woke up, handed over the shift, and went to shoot another glossy cover. Just business.
 
 Somewhere in the middle of this glossy loop, I actually went to Berlin. Not the café, but the city. It was my second real trip abroad after Israel. I went for a few days with a girlfriend, expecting a heavy, historical city crushed by the weight of the 20th century. Instead, I found a revelation. I remember standing in a park. The scene was chaotic and harmonious. Young people playing football. Young mothers pushing expensive strollers. And right next to them, people openly smoking weed, laughing, lying on the grass. No police. No tension. No aggression. It was absolute, effortless freedom.  
@@ -627,7 +607,7 @@ CHAPTER 14: THE LONDON SHUTTLE
 
 In the middle of my RBC years, I left. It happened by accident on my birthday. I was not yet a sophisticated traveler; I had only visited Berlin and Israel. When I decided to move, I simply asked the embassies which of them processed visas the fastest. The British were the most efficient. I handed in the papers, received the stamp, and flew.
 
-I arrived with the heavy baggage of a Soviet childhood. I remembered the glossy *Angliya* magazine that used to lie on our coffee table, promising a world of tweed and polite, distant smiles. I knew the schoolboy mantra: "London is the capital of Great Britain." To us, it wasn't a geographical fact; it was a concept of "The Elsewhere."  
+I arrived with the heavy baggage of a Soviet childhood. I remembered the glossy _Angliya_ magazine that used to lie on our coffee table, promising a world of tweed and polite, distant smiles. I knew the schoolboy mantra: "London is the capital of Great Britain." To us, it wasn't a geographical fact; it was a concept of "The Elsewhere."  
 I landed, walked into the city, and mentally, I would remain for a decade.
 
 From that first trip, my life split in two. There was the Moscow Anton: aging, cynical, fighting in corporate trenches, inhaling exhaust and ambient aggression. And there was the London Anton: younger, calmer, lighter. I realized quickly that London is the most convenient city on earth. It is built for people.  
@@ -726,15 +706,15 @@ Ultimately, the fatigue came not from the failure, but from the lack of agency. 
 
 CHAPTER 16: THE BROADCAST AND THE BAR
 
-I moved from local tabloids to the global giants: BBC, Euronews, and the *Frankfurter Allgemeine Zeitung*. It wasn't dozens of appearances; it was hundreds. I lost count. The topics were predictable: internet censorship, new services, and bans. For Euronews, I remember explaining the absurdity of Russia trying to block Telegram--a classic example of the State fighting a technology it didn't understand.  
+I moved from local tabloids to the global giants: BBC, Euronews, and the _Frankfurter Allgemeine Zeitung_. It wasn't dozens of appearances; it was hundreds. I lost count. The topics were predictable: internet censorship, new services, and bans. For Euronews, I remember explaining the absurdity of Russia trying to block Telegram--a classic example of the State fighting a technology it didn't understand.  
 Giving a comment to the world press wasn't an achievement; it was just part of the morning routine. A producer would call, I would find a quiet corner, open Skype, and talk for five minutes. The segment would air, and I would move on to the next call.
 
-I secured a column on Radio Mayak (*The Lighthouse*)--the oldest, most iconic station in the country. The voice that had announced the death of Stalin was now broadcasting my thoughts on digital trends. I don't remember exactly how I got the gig; they had likely been calling me for expert comments so often that someone suggested making it a regular thing. The format was simple: a weekly segment on the news of the blogosphere. What was trending, who was fighting, and what the government was trying to ban that week. It was a comfortable rhythm--predictable and visible enough to keep my name circulating.
+I secured a column on Radio Mayak (_The Lighthouse_)--the oldest, most iconic station in the country. The voice that had announced the death of Stalin was now broadcasting my thoughts on digital trends. I don't remember exactly how I got the gig; they had likely been calling me for expert comments so often that someone suggested making it a regular thing. The format was simple: a weekly segment on the news of the blogosphere. What was trending, who was fighting, and what the government was trying to ban that week. It was a comfortable rhythm--predictable and visible enough to keep my name circulating.
 
 It was an era of speed. Opportunities didn't knock; they fell out of the sky. One afternoon, I was standing on a friend's balcony in London, smoking. I was bored. I pulled out my phone and typed a single sentence into Facebook: "I want to work on TV."  
 Minutes later, a comment popped up from Ekaterina Shergova. I knew her from the network--part of the same loose circle of media people who floated between Moscow and the West. She didn't ask for a CV or schedule a meeting. She just said: "Come."
 
-Just like that, I was hosting my own program, *Freedom of Access*, on the Top Secret channel. The format was straightforward: one hour with a guest, covering tech, culture, and politics. I wasn't performing; I was just talking. It was the same conversations I'd been having in cafés and on balconies, but now with cameras.  
+Just like that, I was hosting my own program, _Freedom of Access_, on the Top Secret channel. The format was straightforward: one hour with a guest, covering tech, culture, and politics. I wasn't performing; I was just talking. It was the same conversations I'd been having in cafés and on balconies, but now with cameras.  
 The show lasted less than a year, but not because of censorship. The channel was technically incompetent. YouTube was rising, and they couldn't figure out how to publish content online. For me, that was a dealbreaker. If the show wasn't accessible on-demand and people couldn't share clips, if it existed only within the limits of broadcast television, there was no point.  
 I had learned what I needed to learn about the process. I understood the mechanics of TV production. I knew how to hold a shot, how to keep a conversation moving, and how to edit in real-time by controlling the flow of speech. The duration didn't matter. The fact that I could make things happen with a status update did.
 
@@ -746,12 +726,12 @@ My only real qualification was my refusal to believe the default settings.
 Curiosity is not just a hobby; in an authoritarian state, it is a survival mechanism. When the TV says "A", you must ask "Why not B?". When the boss says "This is impossible," you must ask "How does it work?".  
 Arguing with reality is the only way to understand it. I spent my life dismantling assertions--technical, political, social. Not because I wanted to be difficult (though I am), but because blind acceptance is the first step to becoming furniture. And in Russia, furniture usually gets broken. To survive, you must remain a moving target. You must question everything.
 
-My methodology was never deep craftsmanship; it was speed and *Chuika*--that untranslatable Russian gut instinct. The Specialist spends ten years learning how the engine works. I spend two weeks reading the manual, subscribing to the top industry reports, and mapping the terrain.  
+My methodology was never deep craftsmanship; it was speed and _Chuika_--that untranslatable Russian gut instinct. The Specialist spends ten years learning how the engine works. I spend two weeks reading the manual, subscribing to the top industry reports, and mapping the terrain.  
 It's a simple algorithm: consume the data, spot the patterns, and jump in before the experts finish their coffee. I realized early on that you don't need to know every detail to be effective; you just need to know enough to navigate. While the academics were debating definitions, I was already closing deals. It's far from deep expertise, but in a fast-moving world, depth is often just gravity.
 
 To understand the social stratification of the era, you had to navigate the Holy Trinity of Moscow nightlife.  
 First, Denis Simachev Shop & Bar. Friday night. A fusion of Journalism Faculty students, mid-level managers from oil-adjacent corporations, and golden youth. It was an oasis of high-end chaos on Stoleshnikov Lane. You pushed through the crowd, greeted Denis at the DJ decks, checked the bathroom for old girlfriends, and felt like you were at the center of the universe.  
-Then, there was Mayak (*The Lighthouse*). The anti-glamour headquarters. The legends said you could find the editors of Kommersant or scandalous directors drinking here. And you could. You would see familiar faces in the mirror of the restroom, wondering how you were still communicating after that amount of vodka. It was the place where the intelligentsia went to decompose gracefully.  
+Then, there was Mayak (_The Lighthouse_). The anti-glamour headquarters. The legends said you could find the editors of Kommersant or scandalous directors drinking here. And you could. You would see familiar faces in the mirror of the restroom, wondering how you were still communicating after that amount of vodka. It was the place where the intelligentsia went to decompose gracefully.  
 But the only truth existed on The Kitchen.  
 You could be at the hottest party, but the real Moscow happened when you ended up in someone's kitchen at 4:00 AM. Tea, cigarettes, and philosophy. We sat there, dismissing the glitter of Simachev and the noise of the deals, convincing ourselves that this--the talk, the smoke, the intimacy--was the only reality. We thought we were smart. We thought the world outside was fake. We didn't know yet that the world outside was coming for the kitchen, too.
 
@@ -768,20 +748,20 @@ CHAPTER 17: THE ANALYST AND THE HERITAGE
 
 I returned to professional writing the same way I did everything else: by accident. My previous experiment with CDPro had been for fun and pocket money. I didn't take it seriously. I viewed the text as code--something to be compiled and executed, not crafted for eternity. But year by year, my media optics were sharpening.
 
-One day, surfing the debris of the Russian internet, I stumbled upon a new project: *Private Correspondent* (Chaskor.ru). It was an anomaly. While the rest of the web was racing toward clickbait and short attention spans, Chaskor was publishing long, deep, academic-level texts. It felt like a university department that had accidentally wandered onto the internet.  
+One day, surfing the debris of the Russian internet, I stumbled upon a new project: _Private Correspondent_ (Chaskor.ru). It was an anomaly. While the rest of the web was racing toward clickbait and short attention spans, Chaskor was publishing long, deep, academic-level texts. It felt like a university department that had accidentally wandered onto the internet.  
 I wrote a post on my blog, half-cynical, half-admiring: "Unbelievable. Someone is running media for the intelligentsia. The texts are long, deep, and brilliant. But I don't understand--who is this for, exactly? Except for me?"
 
-The algorithm of fate responded immediately. *Private Correspondent* was established by Ivan Zassoursky. If the name doesn't ring a bell, you don't know the architecture of the Russian media elite. Ivan is the grandson of Yasen Zasoursky, the legendary Dean of the Faculty of Journalism at Moscow State University. Yasen was the "Granite" of Soviet Journalism--the man who taught the entire industry how to write. Ivan had his own Department of New Media and Communications.  
+The algorithm of fate responded immediately. _Private Correspondent_ was established by Ivan Zassoursky. If the name doesn't ring a bell, you don't know the architecture of the Russian media elite. Ivan is the grandson of Yasen Zasoursky, the legendary Dean of the Faculty of Journalism at Moscow State University. Yasen was the "Granite" of Soviet Journalism--the man who taught the entire industry how to write. Ivan had his own Department of New Media and Communications.  
 It was a collision of legacies. The grandson of the Dean meeting the great-grandson of the Sculptor. Ivan read my post. He didn't take offense; he saw an asset. He invited me to the office. "You should write for us," he said, cutting through the formalities. "About the internet. You deeply understand the theme, and you have the skills. It will be successful."
 
 So, I went back to the keyboard. But I set a strict internal boundary. I never identified myself as a "Journalist." Why? First: I lack professional convictions. Journalism assumes a mission--to serve the public, to uncover the truth, to suffer for the story. I had no mission. I had interests. Second: Journalists, historically, do not earn money. They earn bylines. I preferred to dream about a rich lifestyle, and the economics of journalism did not support the lifestyle I felt entitled to. Third: I am an Analyst. A Columnist. A Publicist. A journalist records reality. An analyst deconstructs it.  
 I wasn't there to report the news. I was there to explain why the news didn't matter, and what was happening underneath the hood. Ivan gave me the platform. I gave him the "Bureaucratic Magic" of explaining the digital shift to the academic elite. It was another step away from the office cubicle and toward the Ether.
 
-This craving for high-density information didn't come from nowhere. It was a habit cultivated in London. Whenever I was in the UK, I indulged in a specific ritual. On Sunday mornings, I would take two pounds, walk to the newsstand near the Tube, and buy the physical edition of *The Sunday Times*. It was a heavy, tactile brick of paper. I would spend three hours dissecting it. I read everything--not just the Politics and Business sections, which were my trade, but the Gardening, the Sport, the Culture. I didn't care about cricket or hydrangeas, but I cared about the quality of the narrative. It was the best edition in the world.  
-My love for *The Sunday Times* was also personal. In my previous life as a photographer, I had contributed to it. My photos had graced those pages--a portrait of a high-profile lawyer, a shot of Zhanna Nemtsova (the daughter of Boris Nemtsov) standing on Red Square. Seeing my work printed on that paper felt different than seeing it on a screen. It felt legitimate. It felt like history.
+This craving for high-density information didn't come from nowhere. It was a habit cultivated in London. Whenever I was in the UK, I indulged in a specific ritual. On Sunday mornings, I would take two pounds, walk to the newsstand near the Tube, and buy the physical edition of _The Sunday Times_. It was a heavy, tactile brick of paper. I would spend three hours dissecting it. I read everything--not just the Politics and Business sections, which were my trade, but the Gardening, the Sport, the Culture. I didn't care about cricket or hydrangeas, but I cared about the quality of the narrative. It was the best edition in the world.  
+My love for _The Sunday Times_ was also personal. In my previous life as a photographer, I had contributed to it. My photos had graced those pages--a portrait of a high-profile lawyer, a shot of Zhanna Nemtsova (the daughter of Boris Nemtsov) standing on Red Square. Seeing my work printed on that paper felt different than seeing it on a screen. It felt legitimate. It felt like history.
 
-This addiction to quality media has deep roots. It goes back to the "Stalinka" on Berezhkovskaya. My family subscribed to everything: *Koster* (Bonfire), *Yuniy Tekhnik* (Young Technician). We kept archives of *USSR in Construction*--propaganda, yes, but propaganda designed by Alexander Rodchenko. I grew up looking at the best avant-garde layout in history. I learned early that the medium is the message.  
-When the iPad appeared, I was one of the first subscribers to the digital edition of *The Sunday Times*. I transferred the ritual from paper to glass, but the principle remained the same. Even today, I prefer *The Financial Times* and Bloomberg. I do not read the yellow press. I do not consume junk food, and I do not consume junk data. In a world of noise, the most expensive asset is a clean signal.
+This addiction to quality media has deep roots. It goes back to the "Stalinka" on Berezhkovskaya. My family subscribed to everything: _Koster_ (Bonfire), _Yuniy Tekhnik_ (Young Technician). We kept archives of _USSR in Construction_--propaganda, yes, but propaganda designed by Alexander Rodchenko. I grew up looking at the best avant-garde layout in history. I learned early that the medium is the message.  
+When the iPad appeared, I was one of the first subscribers to the digital edition of _The Sunday Times_. I transferred the ritual from paper to glass, but the principle remained the same. Even today, I prefer _The Financial Times_ and Bloomberg. I do not read the yellow press. I do not consume junk food, and I do not consume junk data. In a world of noise, the most expensive asset is a clean signal.
 
 Looking back, the tragedy wasn't that I failed. The tragedy was that I refused to land.  
 The 2000s and early 2010s were a historical anomaly--a long, warm autumn before the winter. It was the only time in Russian history when the State stepped back just enough to let us breathe. We mistook this pause for freedom.  
@@ -809,7 +789,7 @@ The Pussy Riot trial took place in the same Khamovnichesky Court I passed every 
 The contrast was sharp. In the West, a performance in a church is a minor issue or a prank. In Russia, it became a criminal case. The process lacked all logic. If they had sinned, where was the Christian mercy or the biblical tradition of forgiveness? Instead, we entered the "era of insults." From that moment on, anyone could demand a ban on anything because their "feelings" were hurt.  
 The Pussy Riot prayer--"Mother of God, Drive Putin Away"--didn't work. That alone cast doubt on the divine. But the result was clear: it was a foundation stone for the "Orthodox Iran" Russia was becoming.
 
-My life wasn't just online. Being a "blogger" gave me mobility. But to use it, I needed a product. In 2012, I published a book: *Sergey Merkurov. Memories*.  
+My life wasn't just online. Being a "blogger" gave me mobility. But to use it, I needed a product. In 2012, I published a book: _Sergey Merkurov. Memories_.  
 To understand my approach, you have to understand the context. Usually, dealing with cultural heritage in Russia is a depressing business. It is the world of aging heirs--grandmothers and grandfathers living in dusty apartments--who spend their pensions to publish small-circulation albums that nobody buys. They are driven by sentiment, duty, and a desperate desire to keep the past alive.  
 I looked at this landscape and realized immediately: This is not my path.
 
@@ -873,7 +853,7 @@ He listened with blank eyes. He wasn't processing the technicalities; he was cal
 It was pure theater. On one side: young lobbyists selling "filtering solutions"--digital barbed wire. On the other: old men who printed out their emails to read them. Their rule was simple: if you can't control it, ban it. If you can't ban it, buy it.
 
 But the real revelation didn't happen in the office. It happened in the car.  
-After the meeting, a rising star of the apparatus offered me a lift. We got into his black Audi A8. The driver turned on the blue light--the *migalka*--parting the Moscow traffic instantly.  
+After the meeting, a rising star of the apparatus offered me a lift. We got into his black Audi A8. The driver turned on the blue light--the _migalka_--parting the Moscow traffic instantly.  
 Inside the soundproof bubble, the official loosened his tie. The mask of the "State Patriot" slid off.  
 "So," he turned to me. "You spend time in London?"  
 "Yes."  
@@ -910,7 +890,7 @@ Despite the obvious ideological divide, he left me with a positive impression. I
 
 I have always navigated the world on the assumption of absolute equality. I simply do not possess the psychological apparatus for any other mode of communication. Whether I was speaking to a government minister, a billionaire, or a technician, the frequency remained the same. This isn't a practiced technique or a form of performance; it is a default setting. If the dialogue is not peer-to-peer, it ceases to be a dialogue and becomes a lecture or a script--neither of which interests me.
 
-During my years analyzing the regulation of digital space, I formulated a simple, universal law for why things collapse: The Mob, The Money, and The Bureaucracy. In Russian, it's *Bydlo*, *Babki*, and *Bureaucracy*. The three Bs. This is not a local phenomenon; it functions in every jurisdiction from Washington to Canberra. Watch the hands.  
+During my years analyzing the regulation of digital space, I formulated a simple, universal law for why things collapse: The Mob, The Money, and The Bureaucracy. In Russian, it's _Bydlo_, _Babki_, and _Bureaucracy_. The three Bs. This is not a local phenomenon; it functions in every jurisdiction from Washington to Canberra. Watch the hands.  
 First, the Mob--the byproduct of systemic illiteracy. It breeds a visceral intolerance for anything new or complex. Show them contemporary art, and they will call it filth. They look at the internet, and their only reflex is to ban it--"for the children," naturally, and eventually for everyone else.  
 Then, the Bureaucracy. It is reactionary by design. They hide behind the mask of public service: "It's not us, it's what the voters demand." This is how the regulatory thickets are grown.  
 Finally, the Money. Business is cynical by definition. Its task is to extract profit, even if that profit comes from building the infrastructure of censorship. I have no grievances with them; it is simply professional conduct.  
@@ -981,25 +961,15 @@ The moment you realize there are no Adults, you lose the right to complain. But 
 
 CHAPTER 21: THE ZEROING AND THE SILENCE
 
-Then came "The Zeroing" (*Obnulenie*). In essence, the rewriting of the Constitution to reset Putin's presidential terms was a coup d'état staged as a theatrical performance. But like so many other markers of the end times, this was obvious only to me and a very narrow circle of people. The country swallowed it whole, without chewing. Perhaps this has always been my personal tragedy. In a civilized democracy, such a brazen move is a guaranteed path to revolution. In Russia, it was just "Breaking News." Scroll, click, forget.
+Then came "The Zeroing" (_Obnulenie_). In essence, the rewriting of the Constitution to reset Putin's presidential terms was a coup d'état staged as a theatrical performance. But like so many other markers of the end times, this was obvious only to me and a very narrow circle of people. The country swallowed it whole, without chewing. Perhaps this has always been my personal tragedy. In a civilized democracy, such a brazen move is a guaranteed path to revolution. In Russia, it was just "Breaking News." Scroll, click, forget.
 
 Yes, the liberal media--what was left of it--screamed about it. It was discussed, dissected, and condemned in the bubbles where people still practiced logic. But they were bringing a knife to a nuclear gunfight. Against a state machine operating with billions in propaganda budget, a servile Duma, obedient courts, and the entire vertical of power, the truth didn't stand a chance.
 
-This is the central paradox of the Russian intellectual. For people like me, events like the annexation of Crimea or the Donbas intervention were transparent. We saw the mechanics clearly because we consumed clean data--we read Arkady Ostrovsky in *The Economist* or checked independent wires. We saw the chessboard from above. But for the average citizen, the narrative was hermetically sealed. Their logic was comfortable: "The guys at the top are smart, they know what they are doing," followed by the eternal classic: "Ukraine attacked us." We lived in the same city, but on different planets.
+This is the central paradox of the Russian intellectual. For people like me, events like the annexation of Crimea or the Donbas intervention were transparent. We saw the mechanics clearly because we consumed clean data--we read Arkady Ostrovsky in _The Economist_ or checked independent wires. We saw the chessboard from above. But for the average citizen, the narrative was hermetically sealed. Their logic was comfortable: "The guys at the top are smart, they know what they are doing," followed by the eternal classic: "Ukraine attacked us." We lived in the same city, but on different planets.
 
 Theoretically, the "Zeroing" was a pivotal moment in Russian political history. It was the legal point of no return, the moment the autocracy calcified into a monarchy. In practice? The laws were signed, the propaganda billboards were taken down, and the country just kept living its life. The dictatorship was finalized not with a bang, but with a collective shrug.
 
 It is a specific kind of loneliness. To be an analyst is to voluntarily examine reality from its most unpleasant angles. You look at the structure, while everyone else looks at the flags. I spent my life surrounded by Believers--people armed with unshakable convictions on both sides of the barricades. They were happy in their certainty. They knew exactly who was Good and who was Evil. I did not share that luxury. I was cursed with the willingness to turn the object around and look at the ugly side. When you refuse to join the choir, you end up singing alone.
-
-
-
-
-
-
-
-
-
-
 
 # PART III
 
@@ -1064,7 +1034,7 @@ Long before I packaged "Digital Hygiene" as a high-end service, I practiced it a
 CHAPTER 25: THE MANSION AND THE MESSAGE
 
 While I was building digital fortresses, I needed a physical one.  
-My base of operations during this period was a mansion on Malaya Bronnaya, right in the pulsating heart of the Patriarch's Ponds. It was the headquarters of "Country of Children" (*Strana Detey*), a utopian project by Leonid Khanukayev that had crashed against the rocks of financing.  
+My base of operations during this period was a mansion on Malaya Bronnaya, right in the pulsating heart of the Patriarch's Ponds. It was the headquarters of "Country of Children" (_Strana Detey_), a utopian project by Leonid Khanukayev that had crashed against the rocks of financing.  
 I sat in the empty mansion, surrounded by a strange entourage: bored armed guards. They were part of the scenery. Strong, silent men with holsters, rotting in the corridors of a dead project. They played shooters on dusty monitors, ran errands for food, and waited for orders that never came.
 
 I looked at them not as people, but as underutilized inventory. I racked my brain: "Here is a standing army. Ready-made personnel. And I know that across Russia, there are millions of them--men who didn't find themselves in the new economy, sitting in guard booths, staring at walls, waiting." I tried to invent a use for them. Could they be couriers? Drivers? A private logistics network?  
@@ -1083,7 +1053,7 @@ I lived lightly. I didn't accumulate. I simply processed the incoming liquidity 
 To be honest, looking back, I sometimes think I should have sent a bouquet of flowers to Irina Yarovaya. The "Yarovaya Package"--that draconian cluster of laws on data retention, localized servers, and censorship disguised as "protecting children"--essentially built my career. It sounds like a joke, but the irony is structural.  
 If the State had simply left the internet alone, who would have needed me? The media pulled me out of the shadows solely because the deputies decided to stick their fingers into the server rack. If they hadn't touched it, nobody would have been interested in "High Tech." For the average user, technology is boring. If the pictures load and the music plays, the magic is working. Nobody asks how. But the moment the State tries to strangle the signal, the architecture becomes visible. And they needed someone to explain the strangulation. I became the beneficiary of their stupidity. Every time a deputy proposed a new ban, my phone rang. I was selling the explanation of their incompetence.
 
-My collaboration with Viber started with a threat, not a pitch. The "Yarovaya Law" was looming. I wrote a column for *Republic* (formerly *Slon.ru*) dropping a casual grenade: "And Viber has agreed to comply with Russian laws." It was a dangerous accusation for a tech company that prided itself on privacy.  
+My collaboration with Viber started with a threat, not a pitch. The "Yarovaya Law" was looming. I wrote a column for _Republic_ (formerly _Slon.ru_) dropping a casual grenade: "And Viber has agreed to comply with Russian laws." It was a dangerous accusation for a tech company that prided itself on privacy.  
 I hit "publish" and flew to Italy. I was relaxing on the shores of Lake Garda, enjoying the Dolce Vita, when the email arrived. It was Viber. They didn't threaten to sue; they wanted to meet. I returned to Moscow, and we shook hands. I became their "PR and GR Consultant."
 
 On paper, I was there to guide them through the legislative minefield. In reality, the arrangement was far more cynical. I didn't achieve any grand lobbying victories. The problem was that I knew too much about the architecture of the system and their vulnerabilities within it. Essentially, for a year, a global tech giant paid me a monthly retainer not to fix their problems, but to stop writing about them. I was paid for my silence. It was the easiest money I ever made, and a perfect lesson in corporate risk management: If you can't refute the critic, put him on the payroll.
@@ -1176,8 +1146,8 @@ I laughed. 'You can't unplug Russia,' I told them. 'Our internet wasn't built by
 
 I was right about the technology, but I was wrong about the persistence. They couldn't find the switch, so they forced every provider to install a 'Black Box' (TSPU) on their network. They realized they didn't need to cut the cable; they just needed to filter the flow. It wasn't an instant blackout; it was a slow strangulation.
 
-Then, reality shifted into high-definition satire. I stepped into the role of Producer for *Empire V*.  
-This role wasn't random; it was earned. Years earlier, I had managed the social media rollout for the director Victor Ginzburg's previous manifesto, *Generation P*. That film was the definitive snapshot of the 90s. I had proven I understood the source material.
+Then, reality shifted into high-definition satire. I stepped into the role of Producer for _Empire V_.  
+This role wasn't random; it was earned. Years earlier, I had managed the social media rollout for the director Victor Ginzburg's previous manifesto, _Generation P_. That film was the definitive snapshot of the 90s. I had proven I understood the source material.
 
 For the uninitiated, the context is essential. The novel was written by Victor Pelevin--a recluse, a visionary, and essentially the Russian Orwell on acid. In his world, humanity is secretly ruled not by politicians, but by a hidden elite of vampires. They don't suck blood; they suck "Bablos" (money-energy). They control the herd through two substances: "Glamour" (the aesthetics of submission) and "Discourse" (the philosophy of submission).  
 I wasn't just producing a film about a surreal, drug-fueled dystopian elite; I was inhabiting it.
@@ -1255,7 +1225,7 @@ I spent twenty years arguing with my own reflection. In the end, I simply stoppe
 
 Around this time, I felt a pull toward the art market. It wasn't a strategy yet; it was an instinct. I looked at the digital noise around me--volatile crypto and the censoring internet--and realized I needed to deal with something physical.
 
-I launched a radio show called *Art-Capital*. It aired on Mediametrics, a platform founded by German Klimenko. To the public, Klimenko was an internet entrepreneur and the owner of the statistics service LiveInternet. To those in the know, he was the newly appointed "Internet Advisor" to Vladimir Putin--the man who advised the State on the digital future.  
+I launched a radio show called _Art-Capital_. It aired on Mediametrics, a platform founded by German Klimenko. To the public, Klimenko was an internet entrepreneur and the owner of the statistics service LiveInternet. To those in the know, he was the newly appointed "Internet Advisor" to Vladimir Putin--the man who advised the State on the digital future.  
 German wasn't just a colleague; he was a neighbor. His office was directly across the street from my apartment on Kutuzovsky Prospekt. We lived in a strange sort of proximity. I could look out my window at night and see the lights burning in the office of the President's Advisor.
 
 It was a friendship built on geography and paradox. Politically, we were on different planets. He was a statist and a loyalist who believed in a "Sovereign Internet." I was a liberal and a believer in open, decentralized networks. But in the evenings, when the boredom became unbearable, I would cross the street. The ritual was constant. We drank whiskey in his office, surrounded by servers and the silence of the Moscow River. We didn't discuss work, censorship, or blacklists. We discussed life. It was a neutral zone where two people from opposing sides could acknowledge that we were both just trying to navigate the absurdity of Moscow.
@@ -1310,9 +1280,9 @@ To understand the hype, you don't need to look at charts. You need to look at th
 
 I, of course, didn't stand in that line. I have a biological aversion to competition and crowds. I visited the exhibition later, slipping in through the side door with a delegation of ambassadors and bureaucrats. I wasn't there for the art; I was simply passing through for a meeting. And honestly? The exhibition was mediocre. Deprived of historical context, Serov's portraits looked flat. The hysteria wasn't about the paintings. The crowd wasn't there for culture; they were there because Vladimir Putin had visited earlier. In Russia, the President's gaze confers value. If he hadn't looked, the hall would have been empty.
 
-It was exactly the same with *Satoshi.fm*. The raw feed of the crypto market was garbage--chaos, scams, and a total mess. Just like the exhibition, it lacked context. But thanks to my previous experience in filtering signal from noise, I could curate it. I launched a daily podcast. It was a grind. The glamour of the crypto-revolution looked very different from the inside. It looked like waking up at 5:00 AM in a dark Moscow apartment. While the city slept, I brewed coffee and scanned the wires. Bitcoin up. Ethereum down. Another scam, another hack, another regulator waking up. By 6:00 AM, I was on a call with my co-host, Natalia Smirnova. We recorded the news for people who were still dreaming of a Lamborghini.
+It was exactly the same with _Satoshi.fm_. The raw feed of the crypto market was garbage--chaos, scams, and a total mess. Just like the exhibition, it lacked context. But thanks to my previous experience in filtering signal from noise, I could curate it. I launched a daily podcast. It was a grind. The glamour of the crypto-revolution looked very different from the inside. It looked like waking up at 5:00 AM in a dark Moscow apartment. While the city slept, I brewed coffee and scanned the wires. Bitcoin up. Ethereum down. Another scam, another hack, another regulator waking up. By 6:00 AM, I was on a call with my co-host, Natalia Smirnova. We recorded the news for people who were still dreaming of a Lamborghini.
 
-One of the tangible successes of the *Satoshi.fm* era wasn't digital; it was consular. The trading platform eToro invited a group of us--crypto-journalists and influencers--to Israel. It was a press tour. For me, it was a logistical operation. I hadn't been to Israel in twenty years and, honestly, had no intention of returning for spiritual reasons. But the timing was perfect. I landed at Ben Gurion Airport with a specific goal. I wasn't there to pray at the Wall; I was there to upgrade my status. In the chaotic, shouting atmosphere of the Israeli Ministry of Interior, I performed a transaction. For a fee of about $300, I swapped my defective Red Passport (*Lesse-Passe*) for the "Golden Ticket"--the Darkon. The Blue Passport. This document opened the gates of the United Kingdom without a visa. For a few years, I felt like a free man. I could wake up in Moscow and go to sleep in London without asking anyone's permission. Of course, nothing lasts forever in the world of paperwork. Eventually, the Israeli Knesset changed the legislation again. They decided that if you want the Blue Passport, you must actually live in the Levant. The Darkon turned back into a pumpkin--a Red document useful only for Europe. But for a brief, beautiful window of time, I had hacked the system. I bought my freedom at the airport kiosk, paid for by the crypto-economy.
+One of the tangible successes of the _Satoshi.fm_ era wasn't digital; it was consular. The trading platform eToro invited a group of us--crypto-journalists and influencers--to Israel. It was a press tour. For me, it was a logistical operation. I hadn't been to Israel in twenty years and, honestly, had no intention of returning for spiritual reasons. But the timing was perfect. I landed at Ben Gurion Airport with a specific goal. I wasn't there to pray at the Wall; I was there to upgrade my status. In the chaotic, shouting atmosphere of the Israeli Ministry of Interior, I performed a transaction. For a fee of about $300, I swapped my defective Red Passport (_Lesse-Passe_) for the "Golden Ticket"--the Darkon. The Blue Passport. This document opened the gates of the United Kingdom without a visa. For a few years, I felt like a free man. I could wake up in Moscow and go to sleep in London without asking anyone's permission. Of course, nothing lasts forever in the world of paperwork. Eventually, the Israeli Knesset changed the legislation again. They decided that if you want the Blue Passport, you must actually live in the Levant. The Darkon turned back into a pumpkin--a Red document useful only for Europe. But for a brief, beautiful window of time, I had hacked the system. I bought my freedom at the airport kiosk, paid for by the crypto-economy.
 
 \#
 
@@ -1352,7 +1322,7 @@ I approached this professionally. I didn't just consume; I studied. I read hundr
 
 But in Moscow, biology collided with the Penal Code. That morning, the nausea wasn't a hangover. It was a symptom. I didn't know it yet, but my liver was failing. I had Hepatitis C. The weed was the only logical way to suppress the nausea so I could function, sit in a radio booth, and sound like an expert. So, I drove to a friend. I bought the medicine. On the way back, the blue lights flashed in the rearview mirror.
 
-Article 228. In Russia, we call it the "People's Article" (*Narodnaya Statya*). It is the most common entry point into the Gulag system. Possession. It is the universal silencer used against activists, ravers, and idiots alike. I tried to throw the bag out the window. I failed. Instead of the radio booth, I spent two days in a police cell.
+Article 228. In Russia, we call it the "People's Article" (_Narodnaya Statya_). It is the most common entry point into the Gulag system. Possession. It is the universal silencer used against activists, ravers, and idiots alike. I tried to throw the bag out the window. I failed. Instead of the radio booth, I spent two days in a police cell.
 
 The cell smells of damp concrete and hopelessness. It strips you of your "Expert" status instantly. In the cage, you are not a Director, you are not a descendant of the granite, you are just a body with a number. They take everything. Shoelaces, belt, phone. But they missed one thing. My Fitbit tracker. In the absolute timelessness of a Russian jail, where the lights never turn off and the sun never rises, that cheap plastic bracelet became my anchor. I could see the time. I could track the hours passing. I maintained a digital tether to reality while sitting on a wooden bench in hell.
 
@@ -1428,7 +1398,7 @@ Before the world closed, I tried to build one last physical altar. In early 2020
 
 I decided to rebuild it. Not as a workshop, but as a "Thematic Sculpture Park. The concept was ambitious and beautiful. A public space dedicated to the monumental. A place where the "Granite" would finally find peace in the modern city. I saw renders in my head: clean lines, architectural concrete, the heavy legacy of the 1930s merging with the hipster urbanism of 2020.
 
-I started the game. The media campaign was surgical. *Moskvich Mag* broke the story: "Great-grandson of Merkurov to open Sculpture Park in Izmailovo." The headline sounded like a fait accompli. It sounded real. Then came the meetings. I sat in the offices of the Moscow Government. Department of Culture. Park Administration. The endless beige corridors of power. I showed them the presentation. I spoke about "Tourist Magnets," "Cultural Codes," and "Urban Regeneration." I spoke their language--the language of KPIs and "Comfortable Urban Environment." They nodded. They liked the renders. They liked the sound of it. "Yes, Anton," they said, drinking tea from cups with the grandiose coat of arms of Moscow. "This is interesting. Let's form a working group. Let's draft a roadmap."
+I started the game. The media campaign was surgical. _Moskvich Mag_ broke the story: "Great-grandson of Merkurov to open Sculpture Park in Izmailovo." The headline sounded like a fait accompli. It sounded real. Then came the meetings. I sat in the offices of the Moscow Government. Department of Culture. Park Administration. The endless beige corridors of power. I showed them the presentation. I spoke about "Tourist Magnets," "Cultural Codes," and "Urban Regeneration." I spoke their language--the language of KPIs and "Comfortable Urban Environment." They nodded. They liked the renders. They liked the sound of it. "Yes, Anton," they said, drinking tea from cups with the grandiose coat of arms of Moscow. "This is interesting. Let's form a working group. Let's draft a roadmap."
 
 To the outside world, I was a Developer. A Visionary. But internally, I knew the truth. It was "Paper Architecture." I had no investor. I had no budget. I had no permits. I was trading air. I was capitalizing on the idea of the park, converting the bureaucratic process itself into status. As long as the negotiations were ongoing, the project existed. It was a Schrödinger's Park--simultaneously built and impossible.
 
@@ -1459,7 +1429,7 @@ But I couldn't stay inside. The urge to map the territory was stronger than the 
 My diary from those months is a repetitive loop of financial ruin: "March 21: Money - 0. Mood - Happy."  
 I had a lot of time to think. What is to be done? The past was cancelled. Contracts were voided. Connections were broken. I was forty years old. Did I really want to remain an "Internet Expert" forever? Did I want to be a talking head for a dying medium?
 
-I sat in Regent's Park and opened the *Financial Times*. "Sotheby's Online Sales Soar 38%," the headline read. The puzzle clicked. The logic aligned.
+I sat in Regent's Park and opened the _Financial Times_. "Sotheby's Online Sales Soar 38%," the headline read. The puzzle clicked. The logic aligned.
 
 I ran a mental audit:  
 **Analytics.** I am a good analyst. Not just of the internet, but of the Art Market. For years, I had tracked Russian Art Week in London purely for sport. I understood the mechanics. I just needed to calibrate the lens.  
@@ -1480,7 +1450,7 @@ CHAPTER 37: THE POISON AND THE RETURN
 
 When they poisoned Alexey, I didn't blink. I wasn't surprised.
 
-I was in Moscow, watching the signal emerge from the noise of my news feeds. August 2020. A flight from Tomsk. A collapse mid-air. An emergency landing in Omsk. A coma. By then, the pattern was etched in acid: a decade of arrests, endless criminal cases, the tightening noose. *Kirovles*. Insulting a veteran. Creating an "extremist" organization. He had been drowning in charges for years, each one designed to exhaust and contain. But this was different. This was an execution attempt.
+I was in Moscow, watching the signal emerge from the noise of my news feeds. August 2020. A flight from Tomsk. A collapse mid-air. An emergency landing in Omsk. A coma. By then, the pattern was etched in acid: a decade of arrests, endless criminal cases, the tightening noose. _Kirovles_. Insulting a veteran. Creating an "extremist" organization. He had been drowning in charges for years, each one designed to exhaust and contain. But this was different. This was an execution attempt.
 
 He was the State's personal enemy. That creates a specific gravity from which light rarely escapes.
 
@@ -1520,9 +1490,9 @@ Clubhouse was the perfect drug for a locked-down world. The physical borders wer
 
 I dove in with the hunger of a starving man. For a few months, I didn't live in London; I lived in the Ether. I woke up, grabbed my phone, and started talking. It was an infinite corridor of "Rooms." The hierarchy flattened instantly. I remember seeing Yevgeny Kafelnikov--the former world number one tennis player--in my audience. In the real world, getting a meeting with him would take weeks of scheduling. Here, he was just another avatar listening to my voice.
 
-I realized quickly: If people are listening, they are ready to buy. But what could I sell in an audio-only chat? I couldn't show them a car or a house. So, I decided to sell the most difficult thing possible: Visual Art. The lot was provided by a partner. It was a painting by a famous contemporary artist. The subject was... distinct. The painting was titled *Dick*(*Khuy*). And yes, it depicted exactly what you think.
+I realized quickly: If people are listening, they are ready to buy. But what could I sell in an audio-only chat? I couldn't show them a car or a house. So, I decided to sell the most difficult thing possible: Visual Art. The lot was provided by a partner. It was a painting by a famous contemporary artist. The subject was... distinct. The painting was titled _Dick_(_Khuy_). And yes, it depicted exactly what you think.
 
-It was the ultimate test of salesmanship. I had to sell a phallus to people who couldn't see it. I wasn't selling the canvas; I was selling the vibe, the absurdity of the moment, the collective hallucination of the lockdown. And it worked. The industry noticed. *The Art Newspaper*--the global bible of the market--wrote a feature about the sale. They recognized the precedent: we had monetized air. Ironically, the Russian edition of the same newspaper decided to censor the news. They opted for silence, pretending the event didn't exist. It was a classic divide: the West saw innovation; the Homeland saw indecency.
+It was the ultimate test of salesmanship. I had to sell a phallus to people who couldn't see it. I wasn't selling the canvas; I was selling the vibe, the absurdity of the moment, the collective hallucination of the lockdown. And it worked. The industry noticed. _The Art Newspaper_--the global bible of the market--wrote a feature about the sale. They recognized the precedent: we had monetized air. Ironically, the Russian edition of the same newspaper decided to censor the news. They opted for silence, pretending the event didn't exist. It was a classic divide: the West saw innovation; the Homeland saw indecency.
 
 My cynical bet paid off. While the skeptics were writing posts about why Clubhouse was "stupid," I was cashing checks. Radio Liberty--the veteran of Cold War broadcasting--approached me as the recognized authority on emerging social technologies. They were a legacy machine trying to navigate a world that had suddenly lost its script. I taught them how to exist in this new medium, consulting the giants, collecting donations for interviews, and even selling my own "Hearts," foreshadowing the project that would eventually sustain me.
 
@@ -1621,16 +1591,6 @@ Then there is the question of accessibility. Much of contemporary art demands a 
 There is also something fundamentally human and unpretentious about it. I see this clearly in the winter, when the first snow covers the cars in Moscow or London, and children use their fingers to trace hearts on the windshields. You walk past, you see that simple shape, and you feel a momentary, uncomplicated joy.  
 Perhaps this sounds overly pragmatic, but art, at its core, serves a decorative and functional purpose. While high-concept performances and profound political statements have their place in a specific moment, they rarely survive the transition to the private sphere. Globally, we want art we can live with--on our walls, in our gardens. The heart is the ultimate universal symbol in this regard. It is appropriate in a bedroom, a kitchen, or even on a grave. It is a symbol that fits the entirety of the human experience without the friction of explanation.
 
-
-
-
-
-
-
-
-
-
-
 # PART IV
 
 CHAPTER 41: THE TEETH AND THE TRAP
@@ -1652,7 +1612,7 @@ I felt a profound fatigue. I looked in the mirror. I was over 40. I was an adult
 The contract with Clostra ended. I took the money and stepped away from the barricades. I retreated to my sofa in the center of Moscow. "Where am I?" I thought. "And where is the reality?" The contrast was deafening. How can you worry about the shade of red in a digital drawing when people you know are being designated as "Foreign Agents" and enemies of the state?
 
 I adopted a new philosophy: Self-preservation. There is me. There is my family. There is everyone else. "There is no God but the Heart, and the Little Angel is his Prophet." It wasn't cynicism. It was a mental air-raid shelter. I knew that the horror outside was just beginning. In Russia, the war hadn't even truly started yet.  
-So I started working on my portfolio--the paperwork for the UK Global Talent Visa. I prepared my exit. I waited for the knock on the door, whispering the new Moscow mantra: *Inshallah*.
+So I started working on my portfolio--the paperwork for the UK Global Talent Visa. I prepared my exit. I waited for the knock on the door, whispering the new Moscow mantra: _Inshallah_.
 
 Let's be precise about why I stayed. It wasn't just the comfort, the money, or the dental work. Those are excuses for the poor. The real reason was much darker and infinitely more arrogant: I thought I had Admin Access.  
 For twenty years, I had operated in the grey zone between the State and the Street. I drank whiskey with the men who wrote the laws and smoked joints with the men who broke them. I walked through walls. While others were getting stopped at the entrance, I was being waved through to the VIP room.  
@@ -1672,7 +1632,7 @@ But beneath the arrogance, there was a biological imperative. To understand the 
 
 By the winter of 2021, I finally had the money to defy my genetics. The irony was structural: the funds came from my contract with Clostra. The money I earned building tools for digital freedom was used to build a perfect facade. I decided to buy a "Hollywood smile." It was a total reconstruction. For months, doctors dismantled the ruins of my mouth to install a new, blindingly white reality. It was painful, invasive, and expensive. While I lay in the dentist's chair, the world prepared to burn.
 
-For months, my relative and friend, the Ukrainian TV host Matvey Ganapolsky, had been warning me: "Anton, war is coming." I didn't believe him. I refused to accept the data. My answer was always the same: "Matvey, I'm an artist now. I draw hearts. I don't care about geopolitics." The war was my ultimate failure as an analyst. It was a catastrophic glitch in my predictive model. I watched the dreary government meetings and dismissed them as theater. I thought it was a geriatric hallucination. I saw old men rambling about imperial grievances and assumed it was just noise. My logic was chronological: this is the 21st century--we have Tesla, Starlink, and AI. Meanwhile, they were discussing *lapti*--medieval bast shoes. I refused to believe anyone would try to drag a modern country back to the 16th century by force.
+For months, my relative and friend, the Ukrainian TV host Matvey Ganapolsky, had been warning me: "Anton, war is coming." I didn't believe him. I refused to accept the data. My answer was always the same: "Matvey, I'm an artist now. I draw hearts. I don't care about geopolitics." The war was my ultimate failure as an analyst. It was a catastrophic glitch in my predictive model. I watched the dreary government meetings and dismissed them as theater. I thought it was a geriatric hallucination. I saw old men rambling about imperial grievances and assumed it was just noise. My logic was chronological: this is the 21st century--we have Tesla, Starlink, and AI. Meanwhile, they were discussing _lapti_--medieval bast shoes. I refused to believe anyone would try to drag a modern country back to the 16th century by force.
 
 My second error was sociological. For years, the Russian opposition believed that the people were asleep only because the repression was targeted. We thought that to wake the masses, you needed a shock that touched everyone at once. We were wrong. Even the horror of war failed to penetrate the absolute apathy. I checked the local district chats and waited for the outrage. There was nothing. Zero reaction. The population didn't wake up; they just rolled over.
 
@@ -1699,7 +1659,7 @@ CHAPTER 42: THE SILENCE AND THE COST
 The Concentration Camp Effect.  
 There are two questions constantly thrown at us from the outside: "Why don't they protest?" and "Why don't you leave?" They are two sides of the same coin, and they must be answered together.
 
-The lack of resistance has already been dissected in tonnes of research. It's deep in the firmware. Tolstoy captured it in *War and Peace*--the peasant telling the master that they don't need this "freedom," they are simply used to their lot. Even in my childhood, in the late Soviet 80s, the "cultural layer"--the dissidents, the non-conformists--was a statistical error compared to the gray mass.
+The lack of resistance has already been dissected in tonnes of research. It's deep in the firmware. Tolstoy captured it in _War and Peace_--the peasant telling the master that they don't need this "freedom," they are simply used to their lot. Even in my childhood, in the late Soviet 80s, the "cultural layer"--the dissidents, the non-conformists--was a statistical error compared to the gray mass.
 
 Add to this the genetic memory of repression. From kindergarten, you are taught: "Hush. Keep your head down. It's dangerous." Multiply that by state propaganda designed to sever horizontal ties, and the result is inevitable.  
 It plays out like the old joke:  
