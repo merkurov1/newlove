@@ -2,10 +2,18 @@
 import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 
-const Markdown = dynamic(() => import('react-markdown'), { ssr: false });
-const remarkGfm = require('remark-gfm');
-const rehypeHighlight = require('rehype-highlight');
+// Импортируем стили
 import 'highlight.js/styles/github.css';
+
+// Плагины лучше импортировать через import
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
+
+// Динамический импорт Markdown с отключенным SSR
+const Markdown = dynamic(() => import('react-markdown'), { 
+  ssr: false,
+  loading: () => <p>Loading Renderer...</p> 
+});
 
 export default function BookReaderPage() {
   const [fileContent, setFileContent] = useState<string | null>(null);
@@ -16,28 +24,28 @@ export default function BookReaderPage() {
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    setError(null);
+    
+    // Убедитесь, что путь к файлу верный. 
+    // Файл должен лежать в public/unframed/Unframed.markdown
     fetch('/unframed/Unframed.markdown')
       .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(`Ошибка загрузки: ${res.status} ${res.statusText}`);
         return res.text();
       })
       .then((text) => {
-        if (!mounted) return;
-        setFileContent(text);
+        if (mounted) {
+          setFileContent(text);
+          setLoading(false);
+        }
       })
       .catch((err) => {
-        if (!mounted) return;
-        setError(err?.message || 'Error loading book');
-      })
-      .finally(() => {
-        if (!mounted) return;
-        setLoading(false);
+        if (mounted) {
+          setError(err.message);
+          setLoading(false);
+        }
       });
-    return () => {
-      mounted = false;
-    };
+
+    return () => { mounted = false; };
   }, []);
 
   const sizeClass = {
@@ -50,54 +58,43 @@ export default function BookReaderPage() {
   const containerBg = theme === 'light' ? 'bg-white text-gray-900' : 'bg-gray-900 text-gray-100';
 
   return (
-    <div
-      className={`min-h-screen py-12 px-4 sm:px-6 lg:px-8 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}
-    >
+    <div className={`min-h-screen py-12 px-4 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
       <div className="mx-auto max-w-4xl">
         <header className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-extrabold">Unframed</h1>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              <label className="text-sm mr-1">Font</label>
-              <select
-                value={fontSize}
-                onChange={(e) => setFontSize(e.target.value as any)}
-                className="border rounded px-2 py-1 bg-white text-sm"
-              >
-                <option value="sm">S</option>
-                <option value="base">M</option>
-                <option value="lg">L</option>
-                <option value="xl">XL</option>
-              </select>
-            </div>
-            <button
-              onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
-              className="px-3 py-1 border rounded text-sm"
+          <h1 className="text-3xl font-bold">Unframed</h1>
+          <div className="flex gap-4 items-center">
+            <select 
+              value={fontSize} 
+              onChange={(e) => setFontSize(e.target.value as any)}
+              className="p-1 border rounded"
             >
-              {theme === 'light' ? 'Dark' : 'Light'}
+              <option value="sm">S</option>
+              <option value="base">M</option>
+              <option value="lg">L</option>
+              <option value="xl">XL</option>
+            </select>
+            <button 
+              onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
+              className="px-4 py-1 border rounded bg-white text-black"
+            >
+              {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
             </button>
           </div>
         </header>
 
-        <main className={`prose prose-lg mx-auto p-8 rounded-lg shadow-lg ${containerBg}`}>
-          {loading && <div className="text-center py-12 text-gray-500">Loading book…</div>}
-          {error && (
-            <div className="text-center py-6 text-red-500">Error loading book: {error}</div>
-          )}
+        <main className={`prose max-w-none p-8 rounded-lg shadow-lg ${containerBg} ${sizeClass}`}>
+          {loading && <div className="text-center py-12">Загрузка...</div>}
+          {error && <div className="text-center py-12 text-red-500">{error}</div>}
+          
           {fileContent && (
-            <article className={sizeClass}>
-              <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                {fileContent}
-              </Markdown>
-            </article>
+            <Markdown 
+              remarkPlugins={[remarkGfm]} 
+              rehypePlugins={[rehypeHighlight]}
+            >
+              {fileContent}
+            </Markdown>
           )}
         </main>
-
-        <footer className="mt-6 text-center text-sm text-gray-500">
-          <div>
-            Rendered from <strong>/public/unframed/Unframed.markdown</strong>
-          </div>
-        </footer>
       </div>
     </div>
   );
