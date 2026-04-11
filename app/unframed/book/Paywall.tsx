@@ -74,7 +74,7 @@ export default function Paywall({ onUnlock }: PaywallProps) {
   };
 
   return (
-    <div className="max-w-md mx-auto mt-12 p-8 bg-white/90 dark:bg-gray-900/75 backdrop-blur-sm rounded-lg shadow-lg text-center">
+    <div className="max-w-md mx-auto mt-24 p-8 bg-white/90 dark:bg-gray-900/75 backdrop-blur-sm rounded-lg shadow-lg text-center">
       <h2 className="text-2xl font-extrabold mb-3">Access to Unframed</h2>
       <p className="mb-6 text-sm text-gray-600 dark:text-gray-300">
         The book is available after payment or by password (invited users).

@@ -28,8 +28,9 @@ export default function BookReaderPage() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   const readerRef = useRef<HTMLDivElement | null>(null);
-  const [fullscreen, setFullscreen] = useState<boolean>(false);
-  const [tocCollapsed, setTocCollapsed] = useState<boolean>(false);
+  // Start in a fullscreen-like mode and hide the TOC by default
+  const [fullscreen, setFullscreen] = useState<boolean>(true);
+  const [tocCollapsed, setTocCollapsed] = useState<boolean>(true);
   const [progress, setProgress] = useState<number>(0);
 
   useEffect(() => {
