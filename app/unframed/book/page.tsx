@@ -115,35 +115,61 @@ export default function BookReaderPage() {
   if (!unlocked) return <Paywall onUnlock={unlockHandler} />;
 
   return (
-    <div className={`${theme === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} min-h-screen py-8 px-4`}>
+    <div
+      className={`${theme === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} min-h-screen py-8 px-4`}
+    >
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-3xl font-bold">Unframed</h1>
           <div className="flex items-center gap-3">
-            <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value as any)} className="border rounded px-2 py-1 bg-white text-sm">
+            <select
+              value={fontFamily}
+              onChange={(e) => setFontFamily(e.target.value as any)}
+              className="border rounded px-2 py-1 bg-white text-sm"
+            >
               <option value="serif">Serif</option>
               <option value="sans">Sans</option>
               <option value="mono">Mono</option>
             </select>
-            <select value={fontSize} onChange={(e) => setFontSize(e.target.value as any)} className="border rounded px-2 py-1 bg-white text-sm">
+            <select
+              value={fontSize}
+              onChange={(e) => setFontSize(e.target.value as any)}
+              className="border rounded px-2 py-1 bg-white text-sm"
+            >
               <option value="sm">S</option>
               <option value="base">M</option>
               <option value="lg">L</option>
               <option value="xl">XL</option>
             </select>
-            <select value={lineHeight} onChange={(e) => setLineHeight(e.target.value as any)} className="border rounded px-2 py-1 bg-white text-sm">
+            <select
+              value={lineHeight}
+              onChange={(e) => setLineHeight(e.target.value as any)}
+              className="border rounded px-2 py-1 bg-white text-sm"
+            >
               <option value="normal">Normal</option>
               <option value="relaxed">Relaxed</option>
               <option value="loose">Loose</option>
             </select>
-            <select value={String(columns)} onChange={(e) => setColumns(Number(e.target.value))} className="border rounded px-2 py-1 bg-white text-sm">
+            <select
+              value={String(columns)}
+              onChange={(e) => setColumns(Number(e.target.value))}
+              className="border rounded px-2 py-1 bg-white text-sm"
+            >
               <option value={1}>1 col</option>
               <option value={2}>2 col</option>
             </select>
-            <button onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))} className="px-3 py-1 border rounded text-sm">
+            <button
+              onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+              className="px-3 py-1 border rounded text-sm"
+            >
               {theme === 'light' ? 'Dark' : 'Light'}
             </button>
-            <button onClick={savePrefs} className="px-3 py-1 bg-pink-600 text-white rounded text-sm">Save</button>
+            <button
+              onClick={savePrefs}
+              className="px-3 py-1 bg-pink-600 text-white rounded text-sm"
+            >
+              Save
+            </button>
           </div>
         </div>
 
@@ -154,10 +180,18 @@ export default function BookReaderPage() {
           <div className="absolute right-2 top-0 text-sm text-gray-500">{progress}%</div>
         </div>
 
-        <div ref={readerRef} style={{ height: '70vh', overflow: 'auto' }} className="rounded shadow-lg">
-          <article className={`prose mx-auto p-8 ${sizeClass} ${familyClass} ${lhClass} ${columns === 2 ? 'prose-col-2' : ''} bg-white`}>
+        <div
+          ref={readerRef}
+          style={{ height: '70vh', overflow: 'auto' }}
+          className="rounded shadow-lg"
+        >
+          <article
+            className={`prose mx-auto p-8 ${sizeClass} ${familyClass} ${lhClass} ${columns === 2 ? 'prose-col-2' : ''} bg-white`}
+          >
             {loading && <div className="text-center py-12 text-gray-500">Loading book…</div>}
-            {error && <div className="text-center py-6 text-red-500">Error loading book: {error}</div>}
+            {error && (
+              <div className="text-center py-6 text-red-500">Error loading book: {error}</div>
+            )}
             {fileContent && (
               <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                 {fileContent}
@@ -166,7 +200,9 @@ export default function BookReaderPage() {
           </article>
         </div>
 
-        <footer className="mt-6 text-center text-sm text-gray-500">Rendered from <strong>/public/unframed/Unframed.markdown</strong></footer>
+        <footer className="mt-6 text-center text-sm text-gray-500">
+          Rendered from <strong>/public/unframed/Unframed.markdown</strong>
+        </footer>
       </div>
     </div>
   );
