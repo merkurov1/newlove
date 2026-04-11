@@ -50,7 +50,9 @@ export default function BookReaderPage() {
   const containerBg = theme === 'light' ? 'bg-white text-gray-900' : 'bg-gray-900 text-gray-100';
 
   return (
-    <div className={`min-h-screen py-12 px-4 sm:px-6 lg:px-8 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
+    <div
+      className={`min-h-screen py-12 px-4 sm:px-6 lg:px-8 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}
+    >
       <div className="mx-auto max-w-4xl">
         <header className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-extrabold">Unframed</h1>
@@ -79,16 +81,22 @@ export default function BookReaderPage() {
 
         <main className={`prose prose-lg mx-auto p-8 rounded-lg shadow-lg ${containerBg}`}>
           {loading && <div className="text-center py-12 text-gray-500">Loading book…</div>}
-          {error && <div className="text-center py-6 text-red-500">Error loading book: {error}</div>}
+          {error && (
+            <div className="text-center py-6 text-red-500">Error loading book: {error}</div>
+          )}
           {fileContent && (
             <article className={sizeClass}>
-              <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>{fileContent}</Markdown>
+              <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                {fileContent}
+              </Markdown>
             </article>
           )}
         </main>
 
         <footer className="mt-6 text-center text-sm text-gray-500">
-          <div>Rendered from <strong>/public/unframed/Unframed.markdown</strong></div>
+          <div>
+            Rendered from <strong>/public/unframed/Unframed.markdown</strong>
+          </div>
         </footer>
       </div>
     </div>
