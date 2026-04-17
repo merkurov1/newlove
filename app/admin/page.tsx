@@ -16,21 +16,15 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
     .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
     .join('; ');
   const globalReq = new Request('http://localhost', { headers: { cookie: cookieHeader } });
-
-  // Allow deployments that set ADMIN_API_SECRET to bypass interactive admin session
-  // (useful for server-only admin access controlled via environment variables).
-  const adminSecretPresent = Boolean(process.env.ADMIN_API_SECRET);
-  if (!adminSecretPresent) {
-    try {
-      await requireAdminFromRequest(globalReq);
-    } catch {
-      // SSR: return 403 page or redirect
-      return (
-        <div className="p-8 text-center text-red-600 font-bold text-xl">
-          403 Forbidden — Admins only
-        </div>
-      );
-    }
+  try {
+    await requireAdminFromRequest(globalReq);
+  } catch {
+    // SSR: return 403 page or redirect
+    return (
+      <div className="p-8 text-center text-red-600 font-bold text-xl">
+        403 Forbidden — Admins only
+      </div>
+    );
   }
   // Получаем статистику по основным сущностям
   // For admin dashboard always use the service-role server client to guarantee
