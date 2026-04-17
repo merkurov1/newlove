@@ -15,6 +15,22 @@ export async function middleware(request: NextRequest) {
     // UI can render. Authentication/authorization remains enforced
     // inside server actions and API routes. This lets the UI load while
     // we troubleshoot session/RPC issues.
+    // Diagnostics: log cookie names (NOT values) to help determine whether
+    // the browser sends Supabase session cookies to the server.
+    try {
+      const cookieHeader = request.headers.get('cookie') || '';
+      const cookieNames = cookieHeader
+        ? cookieHeader
+            .split(';')
+            .map((c) => c.split('=')[0].trim())
+            .filter(Boolean)
+        : [];
+      // eslint-disable-next-line no-console
+      console.info('[middleware] /admin request cookieNames=', JSON.stringify(cookieNames));
+    } catch (e) {
+      // ignore diagnostics failures
+    }
+
     const response = NextResponse.next();
     return process.env.NODE_ENV === 'production'
       ? addSecurityHeaders(response)
