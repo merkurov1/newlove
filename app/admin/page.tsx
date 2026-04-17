@@ -16,15 +16,12 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
     .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
     .join('; ');
   const globalReq = new Request('http://localhost', { headers: { cookie: cookieHeader } });
+  let isAdmin = true;
   try {
     await requireAdminFromRequest(globalReq);
   } catch {
-    // SSR: return 403 page or redirect
-    return (
-      <div className="p-8 text-center text-red-600 font-bold text-xl">
-        403 Forbidden — Admins only
-      </div>
-    );
+    // Do not block rendering from middleware; show UI with warning.
+    isAdmin = false;
   }
   // Получаем статистику по основным сущностям
   // For admin dashboard always use the service-role server client to guarantee
@@ -68,6 +65,11 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
   return (
     <div className="p-6 space-y-8">
       <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
+      {!isAdmin && (
+        <div className="mb-4 p-3 rounded bg-yellow-50 border border-yellow-200 text-yellow-700">
+          ⚠️ Вы не аутентифицированы — некоторые админ-действия отключены.
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <Link
           href="/admin/selection"

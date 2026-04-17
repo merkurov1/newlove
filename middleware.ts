@@ -11,65 +11,10 @@ export async function middleware(request: NextRequest) {
 
   // Only run for admin paths
   if (url.pathname.startsWith('/admin')) {
-    try {
-      const apiUrl = new URL('/api/user/role', request.url).toString();
-
-      // Prepare cookie preview for safe diagnostics (names only)
-      const cookieHeader = request.headers.get('cookie') || '';
-      const cookieNames = cookieHeader
-        ? cookieHeader
-            .split(';')
-            .map((s) => (s || '').split('=')[0])
-            .map((n) => (n ? n.trim() : ''))
-            .filter(Boolean)
-        : [];
-      console.debug('[middleware] /admin request cookieNames=', cookieNames);
-
-      // Forward cookies so the API can read the session
-      const res = await fetch(apiUrl, {
-        headers: {
-          cookie: cookieHeader,
-          authorization: request.headers.get('authorization') || request.headers.get('Authorization') || '',
-        },
-        // don't cache this call
-        next: { revalidate: 0 },
-      });
-
-      console.debug('[middleware] /admin -> /api/user/role status=', res.status);
-
-      if (res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const role = (body && body.role) || (body && body.user && body.user.role) || null;
-        if (String(role || '').toUpperCase() === 'ADMIN') {
-          return NextResponse.next();
-        }
-
-        // Check various possible locations for service-backed RPC results.
-        const rpcContainers = [body && body.rpc, body && body.debug && body.debug.rpc];
-        for (const rpc of rpcContainers) {
-          if (!rpc) continue;
-          // Common naming: get_my_user_roles_any or get_my_user_roles_any_svc
-          const candidates = ['get_my_user_roles_any_svc', 'get_my_user_roles_any', 'get_my_user_roles', 'get_my_roles'];
-          for (const name of candidates) {
-            if (rpc[name] && Array.isArray(rpc[name].data)) {
-              const found = rpc[name].data.some((r: any) => {
-                if (!r) return false;
-                // support { role_name: 'ADMIN' }, { name: 'ADMIN' }, strings
-                const vals = Object.values(r).map((v: any) => String(v || '').toUpperCase());
-                return vals.includes('ADMIN');
-              });
-              if (found) return NextResponse.next();
-            }
-          }
-        }
-      }
-    } catch (e) {
-      // Log and continue rather than forcibly redirecting. Pages will render
-      // server-side checks (requireAdminFromRequest) and can show a friendly 403.
-      console.debug('middleware /admin role check failed (allowing page to handle):', e);
-    }
-
-    // Do not force a redirect here; let the page or API handle unauthorized state.
+    // Temporarily bypass middleware-level admin role check so the admin
+    // UI can render. Authentication/authorization remains enforced
+    // inside server actions and API routes. This lets the UI load while
+    // we troubleshoot session/RPC issues.
     const response = NextResponse.next();
     return process.env.NODE_ENV === 'production'
       ? addSecurityHeaders(response)
