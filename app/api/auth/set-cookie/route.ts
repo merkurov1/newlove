@@ -9,18 +9,25 @@ export async function POST(req: Request) {
     const refreshToken = body?.refresh_token || null;
     const expiresAt = Number(body?.expires_at) || null;
 
-    if (!accessToken) return NextResponse.json({ ok: false, error: 'no access_token' }, { status: 400 });
+    if (!accessToken)
+      return NextResponse.json({ ok: false, error: 'no access_token' }, { status: 400 });
 
     // In production require a same-origin Referer/Origin to mitigate abuse.
     try {
       if (process.env.NODE_ENV === 'production') {
         const origin = req.headers.get('origin');
         const referer = req.headers.get('referer');
-        const expected = process.env.NEXT_PUBLIC_SITE_URL || (origin || referer || null);
+        const expected = process.env.NEXT_PUBLIC_SITE_URL || origin || referer || null;
         if (expected && origin && !origin.startsWith(expected)) {
+          try {
+            console.warn('set-cookie: origin mismatch', { expected, origin, referer });
+          } catch (e) {}
           return NextResponse.json({ ok: false, error: 'origin_mismatch' }, { status: 403 });
         }
         if (expected && referer && !referer.startsWith(expected)) {
+          try {
+            console.warn('set-cookie: referer mismatch', { expected, origin, referer });
+          } catch (e) {}
           return NextResponse.json({ ok: false, error: 'referer_mismatch' }, { status: 403 });
         }
       }
@@ -41,13 +48,18 @@ export async function POST(req: Request) {
       cookies.push(`supabase-refresh-token=${encodeURIComponent(refreshToken)}; ${cookieOpts}`);
     }
 
-  // Build response and append multiple Set-Cookie headers
-  const res = new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-  for (const c of cookies) res.headers.append('Set-Cookie', c);
-  return res;
+    // Build response and append multiple Set-Cookie headers
+    const res = new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+    for (const c of cookies) res.headers.append('Set-Cookie', c);
+    return res;
   } catch (e) {
     // Log details server-side but do not expose raw error text to the client
-    try { console.error('set-cookie error', e); } catch (err) {}
+    try {
+      console.error('set-cookie error', e);
+    } catch (err) {}
     return NextResponse.json({ ok: false, error: 'internal_error' }, { status: 500 });
   }
 }

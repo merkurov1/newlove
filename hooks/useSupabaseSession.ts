@@ -1,4 +1,4 @@
-"use client";
+'use client';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase-browser';
 
@@ -11,7 +11,9 @@ export default function useSupabaseSession() {
   const mountedRef = useRef(true);
 
   // debug mode opt-in via URL param
-  const isDebug = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('auth_debug') === '1';
+  const isDebug =
+    typeof window !== 'undefined' &&
+    new URL(window.location.href).searchParams.get('auth_debug') === '1';
   const pushDebug = (entry: any) => {
     try {
       if (typeof window === 'undefined') return;
@@ -27,6 +29,65 @@ export default function useSupabaseSession() {
 
   useEffect(() => {
     mountedRef.current = true;
+
+    // If the OAuth provider redirected back with tokens in the URL hash,
+    // parse them, persist HttpOnly cookies server-side, and clean the URL.
+    (async () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const hasTokenInHash =
+            typeof window.location.hash === 'string' &&
+            (window.location.hash.includes('access_token') ||
+              window.location.hash.includes('refresh_token'));
+          const hasTokenInQuery =
+            typeof window.location.search === 'string' &&
+            window.location.search.includes('access_token');
+          if (hasTokenInHash || hasTokenInQuery) {
+            try {
+              // Parse session from URL using supabase helper (supported in v2.x)
+              // This will remove the hash params from supabase client state.
+              // @ts-ignore
+              const sessionRes = await supabase.auth.getSessionFromUrl();
+              const s =
+                sessionRes && sessionRes.data && sessionRes.data.session
+                  ? sessionRes.data.session
+                  : null;
+              if (s && s.access_token) {
+                // Persist server-side cookies so RSCs can see session
+                try {
+                  await fetch('/api/auth/set-cookie', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      access_token: s.access_token,
+                      refresh_token: s.refresh_token,
+                      expires_at: s.expires_at,
+                    }),
+                  });
+                } catch (e) {
+                  // non-fatal: continue
+                  console.warn('Failed to call /api/auth/set-cookie after OAuth redirect', e);
+                }
+
+                // Clean URL to remove tokens and avoid leaking in referrers
+                try {
+                  const clean =
+                    window.location.origin +
+                    window.location.pathname +
+                    window.location.search.replace(/[#].*$/, '');
+                  window.history.replaceState({}, document.title, clean);
+                } catch (e) {
+                  // ignore
+                }
+              }
+            } catch (e) {
+              // ignore parsing errors and continue normal flow
+            }
+          }
+        }
+      } catch (e) {}
+    })();
 
     // Try to hydrate from a client-side cache in localStorage to avoid flicker
     // and enable cross-tab synchronization (localStorage is shared across tabs).
@@ -47,7 +108,10 @@ export default function useSupabaseSession() {
     }
 
     const emit = () => {
-      try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('supabase:session-changed')); } catch {}
+      try {
+        if (typeof window !== 'undefined')
+          window.dispatchEvent(new Event('supabase:session-changed'));
+      } catch {}
     };
 
     // Optional BroadcastChannel for platforms where storage events are unreliable
@@ -91,34 +155,56 @@ export default function useSupabaseSession() {
           if (typeof window !== 'undefined') {
             // persist minimal user info to localStorage to survive client-side navigation
             // and to be visible to other tabs
-            const toStore = { id: s.user.id, email: s.user.email, name: s.user.name, image: s.user.user_metadata?.avatar_url || s.user?.picture || s.user?.image, role: s.user.role };
-            try { localStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {}
-            try { if (bc) bc.postMessage({ type: 'login', user: toStore }); } catch (e) {}
+            const toStore = {
+              id: s.user.id,
+              email: s.user.email,
+              name: s.user.name,
+              image: s.user.user_metadata?.avatar_url || s.user?.picture || s.user?.image,
+              role: s.user.role,
+            };
+            try {
+              localStorage.setItem('newlove_auth_user', JSON.stringify(toStore));
+            } catch (e) {}
+            try {
+              if (bc) bc.postMessage({ type: 'login', user: toStore });
+            } catch (e) {}
           }
         } catch (e) {}
         // One-time redirect after auth state change to respect stored redirect path
         try {
           if (typeof window !== 'undefined') {
-            const redirectKey1 = sessionStorage.getItem('login_redirect_path') || localStorage.getItem('login_redirect_path');
+            const redirectKey1 =
+              sessionStorage.getItem('login_redirect_path') ||
+              localStorage.getItem('login_redirect_path');
             const redirectKey2 = localStorage.getItem('supabase_oauth_redirect');
-            const redirectTo = (redirectKey1 || redirectKey2) || null;
+            const redirectTo = redirectKey1 || redirectKey2 || null;
             if (redirectTo) {
-              try { sessionStorage.removeItem('login_redirect_path'); } catch {}
-              try { localStorage.removeItem('login_redirect_path'); } catch {}
-              try { localStorage.removeItem('supabase_oauth_redirect'); } catch {}
+              try {
+                sessionStorage.removeItem('login_redirect_path');
+              } catch {}
+              try {
+                localStorage.removeItem('login_redirect_path');
+              } catch {}
+              try {
+                localStorage.removeItem('supabase_oauth_redirect');
+              } catch {}
               const current = window.location.pathname + window.location.search;
               if (redirectTo !== current) {
                 try {
                   const targetUrl = new URL(redirectTo, window.location.origin);
                   const isAdminTarget = targetUrl.pathname.startsWith('/admin');
-                  const userRole = (s && s.user && s.user.role) ? String(s.user.role).toUpperCase() : null;
+                  const userRole =
+                    s && s.user && s.user.role ? String(s.user.role).toUpperCase() : null;
                   if (!isAdminTarget || (isAdminTarget && userRole === 'ADMIN')) {
                     window.location.replace(redirectTo);
                     return;
                   }
                 } catch (e) {
                   // If URL parsing fails, play safe and do not redirect to admin
-                  try { window.location.replace(redirectTo); return; } catch (err) {}
+                  try {
+                    window.location.replace(redirectTo);
+                    return;
+                  } catch (err) {}
                 }
               }
             }
@@ -128,8 +214,12 @@ export default function useSupabaseSession() {
       } else {
         setSession(null);
         setStatus('unauthenticated');
-  try { if (typeof window !== 'undefined') localStorage.removeItem('newlove_auth_user'); } catch (e) {}
-  try { if (bc) bc.postMessage({ type: 'logout' }); } catch (e) {}
+        try {
+          if (typeof window !== 'undefined') localStorage.removeItem('newlove_auth_user');
+        } catch (e) {}
+        try {
+          if (bc) bc.postMessage({ type: 'logout' });
+        } catch (e) {}
         pushDebug({ where: 'onAuthStateChange', note: 'no-session' });
       }
       emit();
@@ -145,11 +235,23 @@ export default function useSupabaseSession() {
           // restore if needed
           setSession({ user: s.user, accessToken: s.access_token });
           setStatus('authenticated');
-          try { if (typeof window !== 'undefined') {
-            const toStore = { id: s.user.id, email: s.user.email, name: s.user.name, image: s.user.user_metadata?.avatar_url || s.user?.picture || s.user?.image, role: s.user.role };
-            try { localStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {}
-            try { if (bc) bc.postMessage({ type: 'login', user: toStore }); } catch (e) {}
-          } } catch (e) {}
+          try {
+            if (typeof window !== 'undefined') {
+              const toStore = {
+                id: s.user.id,
+                email: s.user.email,
+                name: s.user.name,
+                image: s.user.user_metadata?.avatar_url || s.user?.picture || s.user?.image,
+                role: s.user.role,
+              };
+              try {
+                localStorage.setItem('newlove_auth_user', JSON.stringify(toStore));
+              } catch (e) {}
+              try {
+                if (bc) bc.postMessage({ type: 'login', user: toStore });
+              } catch (e) {}
+            }
+          } catch (e) {}
           return;
         }
 
@@ -161,7 +263,23 @@ export default function useSupabaseSession() {
             if (j?.user) {
               setSession({ user: j.user, accessToken: null });
               setStatus('authenticated');
-              try { if (typeof window !== 'undefined') { const toStore = { id: j.user.id, email: j.user.email, name: j.user.name, image: j.user.image, role: null }; try { localStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {} try { if (bc) bc.postMessage({ type: 'login', user: toStore }); } catch (e) {} } } catch (e) {}
+              try {
+                if (typeof window !== 'undefined') {
+                  const toStore = {
+                    id: j.user.id,
+                    email: j.user.email,
+                    name: j.user.name,
+                    image: j.user.image,
+                    role: null,
+                  };
+                  try {
+                    localStorage.setItem('newlove_auth_user', JSON.stringify(toStore));
+                  } catch (e) {}
+                  try {
+                    if (bc) bc.postMessage({ type: 'login', user: toStore });
+                  } catch (e) {}
+                }
+              } catch (e) {}
               return;
             }
           }
@@ -172,7 +290,9 @@ export default function useSupabaseSession() {
         // if nothing found, mark unauthenticated
         setSession(null);
         setStatus('unauthenticated');
-        try { if (typeof window !== 'undefined') localStorage.removeItem('newlove_auth_user'); } catch (e) {}
+        try {
+          if (typeof window !== 'undefined') localStorage.removeItem('newlove_auth_user');
+        } catch (e) {}
       } catch (e) {
         // ignore
       }
@@ -185,9 +305,17 @@ export default function useSupabaseSession() {
         }
       } catch (e) {}
     };
-    const onFocus = () => { try { checkSession(); } catch (e) {} };
-    try { window.addEventListener('visibilitychange', onVisibility); } catch (e) {}
-    try { window.addEventListener('focus', onFocus); } catch (e) {}
+    const onFocus = () => {
+      try {
+        checkSession();
+      } catch (e) {}
+    };
+    try {
+      window.addEventListener('visibilitychange', onVisibility);
+    } catch (e) {}
+    try {
+      window.addEventListener('focus', onFocus);
+    } catch (e) {}
 
     (async () => {
       try {
@@ -197,30 +325,55 @@ export default function useSupabaseSession() {
         if (s && s.user) {
           pushDebug({ where: 'init', note: 'client-session-found', userId: s.user?.id });
           setSession({ user: s.user, accessToken: s.access_token });
-          try { if (typeof window !== 'undefined') { const toStore = { id: s.user.id, email: s.user.email, name: s.user.name, image: s.user.user_metadata?.avatar_url || s.user?.picture || s.user?.image, role: s.user.role }; try { localStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {} } } catch (e) {}
+          try {
+            if (typeof window !== 'undefined') {
+              const toStore = {
+                id: s.user.id,
+                email: s.user.email,
+                name: s.user.name,
+                image: s.user.user_metadata?.avatar_url || s.user?.picture || s.user?.image,
+                role: s.user.role,
+              };
+              try {
+                localStorage.setItem('newlove_auth_user', JSON.stringify(toStore));
+              } catch (e) {}
+            }
+          } catch (e) {}
           // After successful client-side session detection, attempt one-time post-login redirect
           try {
             if (typeof window !== 'undefined') {
-              const redirectKey1 = sessionStorage.getItem('login_redirect_path') || localStorage.getItem('login_redirect_path');
+              const redirectKey1 =
+                sessionStorage.getItem('login_redirect_path') ||
+                localStorage.getItem('login_redirect_path');
               const redirectKey2 = localStorage.getItem('supabase_oauth_redirect');
-              const redirectTo = (redirectKey1 || redirectKey2) || null;
+              const redirectTo = redirectKey1 || redirectKey2 || null;
               if (redirectTo) {
-                try { sessionStorage.removeItem('login_redirect_path'); } catch {}
-                try { localStorage.removeItem('login_redirect_path'); } catch {}
-                try { localStorage.removeItem('supabase_oauth_redirect'); } catch {}
+                try {
+                  sessionStorage.removeItem('login_redirect_path');
+                } catch {}
+                try {
+                  localStorage.removeItem('login_redirect_path');
+                } catch {}
+                try {
+                  localStorage.removeItem('supabase_oauth_redirect');
+                } catch {}
                 // If already on that path, don't navigate
                 const current = window.location.pathname + window.location.search;
                 if (redirectTo !== current) {
                   try {
                     const targetUrl = new URL(redirectTo, window.location.origin);
                     const isAdminTarget = targetUrl.pathname.startsWith('/admin');
-                    const userRole = (s && s.user && s.user.role) ? String(s.user.role).toUpperCase() : null;
+                    const userRole =
+                      s && s.user && s.user.role ? String(s.user.role).toUpperCase() : null;
                     if (!isAdminTarget || (isAdminTarget && userRole === 'ADMIN')) {
                       window.location.replace(redirectTo);
                       return;
                     }
                   } catch (e) {
-                    try { window.location.replace(redirectTo); return; } catch (err) {}
+                    try {
+                      window.location.replace(redirectTo);
+                      return;
+                    } catch (err) {}
                   }
                 }
               }
@@ -234,34 +387,62 @@ export default function useSupabaseSession() {
           pushDebug({ where: 'init', step: 'server-fallback' });
           const resp = await fetch('/api/auth/me', { credentials: 'same-origin' });
           pushDebug({ where: 'init', step: 'server-fallback-response', status: resp?.status });
-              if (resp.ok) {
+          if (resp.ok) {
             const j = await resp.json();
             if (j?.user) {
               pushDebug({ where: 'init', note: 'server-session-found', userId: j.user?.id });
               setSession({ user: j.user, accessToken: null });
-            try { if (typeof window !== 'undefined') { const toStore = { id: j.user.id, email: j.user.email, name: j.user.name, image: j.user.image, role: null }; try { localStorage.setItem('newlove_auth_user', JSON.stringify(toStore)); } catch (e) {} try { if (bc) bc.postMessage({ type: 'login', user: toStore }); } catch (e) {} } } catch (e) {}
+              try {
+                if (typeof window !== 'undefined') {
+                  const toStore = {
+                    id: j.user.id,
+                    email: j.user.email,
+                    name: j.user.name,
+                    image: j.user.image,
+                    role: null,
+                  };
+                  try {
+                    localStorage.setItem('newlove_auth_user', JSON.stringify(toStore));
+                  } catch (e) {}
+                  try {
+                    if (bc) bc.postMessage({ type: 'login', user: toStore });
+                  } catch (e) {}
+                }
+              } catch (e) {}
               // One-time redirect after server-side session detected (e.g., after OAuth)
               try {
                 if (typeof window !== 'undefined') {
-                  const redirectKey1 = sessionStorage.getItem('login_redirect_path') || localStorage.getItem('login_redirect_path');
+                  const redirectKey1 =
+                    sessionStorage.getItem('login_redirect_path') ||
+                    localStorage.getItem('login_redirect_path');
                   const redirectKey2 = localStorage.getItem('supabase_oauth_redirect');
-                  const redirectTo = (redirectKey1 || redirectKey2) || null;
+                  const redirectTo = redirectKey1 || redirectKey2 || null;
                   if (redirectTo) {
-                    try { sessionStorage.removeItem('login_redirect_path'); } catch {}
-                    try { localStorage.removeItem('login_redirect_path'); } catch {}
-                    try { localStorage.removeItem('supabase_oauth_redirect'); } catch {}
+                    try {
+                      sessionStorage.removeItem('login_redirect_path');
+                    } catch {}
+                    try {
+                      localStorage.removeItem('login_redirect_path');
+                    } catch {}
+                    try {
+                      localStorage.removeItem('supabase_oauth_redirect');
+                    } catch {}
                     const current = window.location.pathname + window.location.search;
                     if (redirectTo !== current) {
                       try {
                         const targetUrl = new URL(redirectTo, window.location.origin);
                         const isAdminTarget = targetUrl.pathname.startsWith('/admin');
-                        const userRole = (j && j.user && j.user.role) ? String(j.user.role).toUpperCase() : null;
+                        const userRole =
+                          j && j.user && j.user.role ? String(j.user.role).toUpperCase() : null;
                         if (!isAdminTarget || (isAdminTarget && userRole === 'ADMIN')) {
                           window.location.replace(redirectTo);
                           return;
                         }
                       } catch (e) {
-                        try { window.location.replace(redirectTo); return; } catch (err) {}
+                        try {
+                          window.location.replace(redirectTo);
+                          return;
+                        } catch (err) {}
                       }
                     }
                   }
@@ -275,10 +456,17 @@ export default function useSupabaseSession() {
                     await fetch('/api/auth/upsert', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ id: j.user.id, email: j.user.email, name: j.user.name || null, image: j.user.image || null }),
+                      body: JSON.stringify({
+                        id: j.user.id,
+                        email: j.user.email,
+                        name: j.user.name || null,
+                        image: j.user.image || null,
+                      }),
                     });
                   } catch (e) {
-                    try { console.warn('upsert after server fallback failed', e); } catch {}
+                    try {
+                      console.warn('upsert after server fallback failed', e);
+                    } catch {}
                   }
                 })();
               } catch (e) {}
@@ -289,9 +477,9 @@ export default function useSupabaseSession() {
           pushDebug({ where: 'init', step: 'server-fallback-error', error: String(e) });
         }
 
-  pushDebug({ where: 'init', note: 'no-session' });
-  setSession(null);
-  setStatus('unauthenticated');
+        pushDebug({ where: 'init', note: 'no-session' });
+        setSession(null);
+        setStatus('unauthenticated');
       } catch (e) {
         setError(String(e));
         pushDebug({ where: 'init', step: 'init-error', error: String(e) });
@@ -310,7 +498,11 @@ export default function useSupabaseSession() {
             if (parsed && parsed.id) {
               setSession({ user: parsed, accessToken: null });
               setStatus('authenticated');
-              pushDebug({ where: 'storage-event', note: 'hydrated-from-storage', userId: parsed.id });
+              pushDebug({
+                where: 'storage-event',
+                note: 'hydrated-from-storage',
+                userId: parsed.id,
+              });
             }
           } else {
             // cleared -> logged out in another tab
@@ -323,26 +515,49 @@ export default function useSupabaseSession() {
         // ignore
       }
     };
-  try { window.addEventListener('storage', onStorage); } catch (e) {}
+    try {
+      window.addEventListener('storage', onStorage);
+    } catch (e) {}
 
     return () => {
       mountedRef.current = false;
-      try { (unsub as any)?.data?.subscription?.unsubscribe?.(); } catch {}
-      try { window.removeEventListener('storage', onStorage); } catch (e) {}
-      try { window.removeEventListener('visibilitychange', onVisibility); } catch (e) {}
-      try { window.removeEventListener('focus', onFocus); } catch (e) {}
-      try { if (bc) bc.close(); } catch (e) {}
+      try {
+        (unsub as any)?.data?.subscription?.unsubscribe?.();
+      } catch {}
+      try {
+        window.removeEventListener('storage', onStorage);
+      } catch (e) {}
+      try {
+        window.removeEventListener('visibilitychange', onVisibility);
+      } catch (e) {}
+      try {
+        window.removeEventListener('focus', onFocus);
+      } catch (e) {}
+      try {
+        if (bc) bc.close();
+      } catch (e) {}
       pushDebug({ where: 'cleanup' });
     };
   }, []);
 
-  const signOut = async () => { try { await supabase.auth.signOut(); } catch {} };
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch {}
+  };
 
   // Wrap signOut to also clear localStorage so other tabs are notified
   const wrappedSignOut = async () => {
-    try { await supabase.auth.signOut(); } catch (e) {}
-    try { if (typeof window !== 'undefined') localStorage.removeItem('newlove_auth_user'); } catch (e) {}
-    try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('supabase:session-changed')); } catch (e) {}
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {}
+    try {
+      if (typeof window !== 'undefined') localStorage.removeItem('newlove_auth_user');
+    } catch (e) {}
+    try {
+      if (typeof window !== 'undefined')
+        window.dispatchEvent(new Event('supabase:session-changed'));
+    } catch (e) {}
   };
 
   return { session, status, signOut: wrappedSignOut, error };
