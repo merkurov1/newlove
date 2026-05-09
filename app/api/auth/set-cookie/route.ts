@@ -48,7 +48,13 @@ export async function POST(req: Request) {
     const secureFlag = isSecureContext ? 'Secure; ' : '';
     const cookieOpts = `Path=/; HttpOnly; ${secureFlag}SameSite=Lax; Max-Age=${maxAge}`;
 
-    try { console.info('set-cookie: creating cookies', { isSecureContext, origin, cookieCount: refreshToken ? 4 : 2 }); } catch (e) {}
+    try {
+      console.info('set-cookie: creating cookies', {
+        isSecureContext,
+        origin,
+        cookieCount: refreshToken ? 4 : 2,
+      });
+    } catch (e) {}
 
     cookies.push(`sb-access-token=${encodeURIComponent(accessToken)}; ${cookieOpts}`);
     cookies.push(`supabase-access-token=${encodeURIComponent(accessToken)}; ${cookieOpts}`);
