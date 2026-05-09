@@ -40,7 +40,16 @@ export async function POST(req: Request) {
 
     // Build cookies. We set both sb- and supabase- prefixed cookies to be compatible with helpers in codebase.
     const cookies: string[] = [];
-    const cookieOpts = `Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+    // Determine whether to set the Secure flag. Browsers WILL ignore cookies with
+    // Secure flag over plain http (localhost during dev), so only include it when
+    // running in production or when the incoming origin is https.
+    const origin = req.headers.get('origin') || '';
+    const isSecureContext = process.env.NODE_ENV === 'production' || origin.startsWith('https');
+    const secureFlag = isSecureContext ? 'Secure; ' : '';
+    const cookieOpts = `Path=/; HttpOnly; ${secureFlag}SameSite=Lax; Max-Age=${maxAge}`;
+
+    try { console.info('set-cookie: creating cookies', { isSecureContext, origin, cookieCount: refreshToken ? 4 : 2 }); } catch (e) {}
+
     cookies.push(`sb-access-token=${encodeURIComponent(accessToken)}; ${cookieOpts}`);
     cookies.push(`supabase-access-token=${encodeURIComponent(accessToken)}; ${cookieOpts}`);
     if (refreshToken) {
