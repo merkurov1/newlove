@@ -1,37 +1,18 @@
 import Link from 'next/link';
-import { safeData } from '@/lib/safeSerialize';
-
 export const dynamic = 'force-dynamic';
 
-import { requireAdminFromRequest } from '@/lib/serverAuth';
-import { cookies } from 'next/headers';
 import { revalidateLetters } from './actions';
 
 export default async function AdminDashboard({ searchParams }: { searchParams?: any }) {
-  // SSR RBAC: only allow admins
-  // Construct a Request that contains the server cookies so request-scoped
-  // helpers can validate the session consistently across runtimes.
-  const cookieHeader = cookies()
-    .getAll()
-    .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
-    .join('; ');
-  const globalReq = new Request('http://localhost', { headers: { cookie: cookieHeader } });
-  let isAdmin = true;
-  try {
-    await requireAdminFromRequest(globalReq);
-  } catch {
-    // Do not block rendering from middleware; show UI with warning.
-    isAdmin = false;
-  }
-  // Получаем статистику по основным сущностям
-  // For admin dashboard always use the service-role server client to guarantee
-  // we can read counts and recent items regardless of request-scoped RLS.
-  const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-  const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
+  // Authorization is enforced by app/admin/layout.tsx.  Keep dashboard data
+  // failures isolated so a missing service-role key does not make /admin a 500.
   let stats = { articles: 0, projects: 0, letters: 0, postcards: 0 };
   let recentArticles: any[] = [];
   let recentProjects: any[] = [];
+  let dataUnavailable = false;
   try {
+    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+    const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
     const [articlesCount, projectsCount, lettersCount, postcardsCount, articlesData, projectsData] =
       await Promise.all([
         serverSupabase.from('articles').select('id', { count: 'exact', head: true }),
@@ -59,15 +40,16 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
     recentProjects = Array.isArray(projectsData.data) ? projectsData.data : [];
   } catch (e) {
     console.error('Admin dashboard data fetch error:', e);
+    dataUnavailable = true;
   }
   const revalidated = searchParams?.revalidated === '1';
 
   return (
     <div className="p-6 space-y-8">
       <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
-      {!isAdmin && (
+      {dataUnavailable && (
         <div className="mb-4 p-3 rounded bg-yellow-50 border border-yellow-200 text-yellow-700">
-          ⚠️ Вы не аутентифицированы — некоторые админ-действия отключены.
+          ⚠️ Данные панели временно недоступны. Проверьте настройки серверного Supabase-ключа.
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -136,54 +118,6 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         </div>
       )}
 
-      <div className="mt-6">
-        <h2 className="text-lg font-semibold mb-2">Диагностика окружения</h2>
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          {/* Compute masked values server-side */}
-          {(() => {
-            const env = ((globalThis as any).process && (globalThis as any).process.env) || {};
-            const resendKey = env.RESEND_API_KEY || null;
-            const noreply = env.NOREPLY_EMAIL || env.NEXT_PUBLIC_NOREPLY_EMAIL || null;
-            const siteUrl = env.NEXT_PUBLIC_SITE_URL || env.NEXT_PUBLIC_VERCEL_URL || null;
-            const mask = (k: string | null) =>
-              typeof k === 'string' && k.length > 8 ? `${k.slice(0, 4)}...${k.slice(-4)}` : k;
-            return (
-              <div className="space-y-2 text-sm text-gray-700">
-                <div>
-                  <strong>Resend API key:</strong>{' '}
-                  {resendKey ? (
-                    <span className="font-mono">{mask(resendKey)}</span>
-                  ) : (
-                    <span className="text-red-600">не настроен</span>
-                  )}
-                </div>
-                <div>
-                  <strong>From (noreply):</strong>{' '}
-                  {noreply ? (
-                    <span className="font-mono">{noreply}</span>
-                  ) : (
-                    <span className="text-yellow-600">
-                      по умолчанию будет использован noreply@merkurov.love
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <strong>SITE URL:</strong>{' '}
-                  {siteUrl ? (
-                    <span className="font-mono">{siteUrl}</span>
-                  ) : (
-                    <span className="text-yellow-600">используется https://merkurov.love</span>
-                  )}
-                </div>
-                <div className="text-xs text-gray-500 mt-2">
-                  (Ключ маскируется в целях безопасности. Если ключ есть в Vercel — проверьте, что
-                  он доступен на рантайме сервера.)
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </div>
       <div className="mt-6">
         <h2 className="text-lg font-semibold mb-2">Админ: ручная переиндексация</h2>
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">

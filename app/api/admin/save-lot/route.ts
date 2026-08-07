@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireAdminFromRequest } from '@/lib/serverAuth'
 
 export const runtime = 'nodejs' // Важно для скачивания файлов
 
@@ -12,6 +13,7 @@ const supabase = createClient(
 
 export async function POST(req: Request) {
   try {
+    await requireAdminFromRequest(req)
     const body = await req.json()
     const { artist, title, link, rawText, ai_content, image_url, ...specs } = body
 

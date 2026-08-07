@@ -258,13 +258,11 @@ export async function requireAdminFromRequest(req?: Request | null): Promise<any
     }
   }
 
-  // Admin API secret fallback (keeps CI/dev workflows compatible)
-  if (process.env.ADMIN_API_SECRET) {
-    return { id: 'server', role: 'ADMIN' } as any;
-  }
-
-  // Final fallback: use server-key-based check which throws if unauthorized
-  return await requireAdmin();
+  // Do not turn the mere presence of ADMIN_API_SECRET into admin access.  The
+  // previous fallback granted every request administrator privileges whenever
+  // that environment variable was configured.  Calling requireAdmin() here
+  // also recursed back into this function for anonymous requests.
+  throw new Error('Unauthorized');
 }
 
 // Provide a default export object to be resilient to different import styles
@@ -277,4 +275,3 @@ const serverAuthDefault = {
 };
 
 export default serverAuthDefault;
-

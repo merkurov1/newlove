@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 // Увеличиваем таймаут, так как парсинг может занять время
@@ -10,6 +11,7 @@ const genAI = new GoogleGenerativeAI(apiKey);
 
 export async function POST(req: Request) {
   try {
+    await requireAdminFromRequest(req);
     const { url } = await req.json();
 
     if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 });

@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextResponse } from 'next/server'
+import { requireAdminFromRequest } from '@/lib/serverAuth'
 
 export const runtime = 'nodejs'
 
@@ -8,6 +9,7 @@ const genAI = new GoogleGenerativeAI(apiKey)
 
 export async function POST(req: Request) {
   try {
+    await requireAdminFromRequest(req)
     const { rawText, artist, title, link } = await req.json()
 
     // Используем Flash модель (она быстрее и дешевле)
