@@ -41,28 +41,43 @@ export async function POST(req: Request) {
     const ogDescription = getMetaContent('og:description');
     const ogImage = getMetaContent('og:image');
 
-    // 2. Парсим __NEXT_DATA__ для извлечения скрытых данных лота
+    // 2. Парсим JSON-LD (Schema.org / VisualArtwork), так как сайт на Stencil.js и не имеет __NEXT_DATA__
     let lotData: any = {};
-    const nextDataMatch = htmlContent.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
-    if (nextDataMatch) {
+    const jsonLdMatches = htmlContent.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
+    
+    for (const match of jsonLdMatches) {
       try {
-        const json = JSON.parse(nextDataMatch[1]);
-        // Рекурсивно или точечно ищем объект лота в пропсах Next.js
-        lotData = findLotObject(json) || {};
+        const json = JSON.parse(match[1]);
+        const target = Array.isArray(json) 
+          ? json.find(item => item['@type'] === 'VisualArtwork' || item['@type'] === 'Product' || item['@type'] === 'ArtGallery') 
+          : json;
+        
+        if (target && (target['@type'] === 'VisualArtwork' || target.name || target.creator)) {
+          lotData = {
+            artist: target.creator?.name || target.author?.name || '',
+            title: target.name || target.headline || '',
+            medium: target.artMedium || target.material || '',
+            dimensions: target.size || (target.width ? `${target.width} x ${target.height} ${target.unitText || ''}` : ''),
+            date: target.dateCreated || target.releaseDate || '',
+            image_url: target.image || '',
+            description: target.description || ''
+          };
+          break;
+        }
       } catch (e) {
-        console.warn('[Curator Engine] Failed to parse __NEXT_DATA__ JSON');
+        // Пропускаем невалидные JSON-блоки
       }
     }
 
-    // Извлекаем поля с приоритетом из структурированного __NEXT_DATA__, с фоллбеком на метатеги/текст
+    // Собираем итоговые данные с фоллбеками на Open Graph
     const parsedData = {
       artist: lotData.artist || extractArtist(ogTitle),
       title: lotData.title || extractTitle(ogTitle),
-      medium: lotData.medium || extractPattern(htmlContent, /medium/i) || 'N/A',
-      dimensions: lotData.dimensions || extractPattern(htmlContent, /dimensions|size/i) || 'N/A',
+      medium: lotData.medium || 'N/A',
+      dimensions: lotData.dimensions || 'N/A',
       date: lotData.date || extractPattern(htmlContent, /\b(19\d{2}|20\d{2})\b/) || 'N/A',
-      estimate: lotData.estimate || extractPattern(htmlContent, /estimate/i) || 'N/A',
-      provenance: lotData.provenance || extractSection(htmlContent, 'provenance') || 'N/A',
+      estimate: 'N/A', 
+      provenance: 'N/A',
       image_url: ogImage || lotData.image_url || '',
       raw_description: ogDescription || lotData.description || 'N/A'
     };
@@ -102,25 +117,7 @@ function extractTitle(ogTitle: string): string {
   return parts[1]?.trim() || 'N/A';
 }
 
-// Рекурсивный поиск объекта, похожего на лот, в дереве Next.js
-function findLotObject(obj: any): any {
-  if (!obj || typeof obj !== 'object') return null;
-  if (obj.lot || obj.artwork || (obj.title && obj.artist)) {
-    return obj.lot || obj.artwork || obj;
-  }
-  for (const key of Object.keys(obj)) {
-    const found: any = findLotObject(obj[key]);
-    if (found) return found;
-  }
-  return null;
-}
-
 function extractPattern(html: string, regex: RegExp): string {
-  // Упрощенный поиск текстовых совпадений в HTML для заглушек
-  return '';
-}
-
-function extractSection(html: string, keyword: string): string {
-  // Базовый поиск секций по ключевым словам
-  return '';
+  const match = html.match(regex);
+  return match ? match[0] : '';
 }
