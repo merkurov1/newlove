@@ -6,18 +6,15 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // --- CONFIG & VALIDATION ---
-// 1. Исправленная и безопасная инициализация ключей
 const token = process.env.PIERROT_BOT_TOKEN;
 const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const rawApiKey = process.env.GOOGLE_API_KEY;
 
-// Проверяем ключи ДО запуска бота, чтобы видеть ошибку в логах Vercel
 if (!token) throw new Error('PIERROT_BOT_TOKEN is unset');
 if (!sbUrl || !sbKey) throw new Error('SUPABASE credentials missing');
 if (!rawApiKey) throw new Error('GOOGLE_API_KEY is unset');
 
-// Чистим API ключ от случайных пробелов
 const apiKey = rawApiKey.trim();
 
 // --- INIT ---
@@ -75,7 +72,6 @@ LANGUAGE:
 - Reply in the EXACT SAME language as the user.
 `;
 
-// --- GLOBAL ERROR HANDLER (Чтобы бот не падал молча) ---
 bot.catch((err) => {
   console.error("Global Bot Error:", err);
 });
@@ -84,7 +80,7 @@ bot.catch((err) => {
 async function getSession(chatId: number) {
   try {
     const { data, error } = await supabase.from('bot_sessions').select('*').eq('chat_id', chatId).single();
-    if (error && error.code !== 'PGRST116') { // PGRST116 = not found, это ок
+    if (error && error.code !== 'PGRST116') {
         console.error("Supabase Error:", error);
     }
     return data;
@@ -110,12 +106,11 @@ async function safeReply(ctx: any, text: string) {
     try {
         await ctx.reply(text, { parse_mode: 'Markdown' });
     } catch (e) {
-        await ctx.reply(text); // Фолбек на обычный текст
+        await ctx.reply(text);
     }
 }
 
 // --- COMMANDS ---
-
 bot.command("start", async (ctx) => {
   await ctx.reply(
     "I am listening. The noise outside is unbearable, isn't it?\n\nChoose your path:",
@@ -162,11 +157,10 @@ bot.on('message:text', async (ctx) => {
   const chatId = ctx.chat.id;
   const text = ctx.message.text;
   
-  // Добавил try/catch на весь хендлер, чтобы ловить любые сбои
   try {
       const session = await getSession(chatId);
 
-      // === REJIM 1: ADVISOR ===
+      // === ADVISOR MODE ===
       if (!session) {
         await ctx.api.sendChatAction(chatId, "typing");
         console.log(`[Pierrot Advisor] Query: ${text.substring(0, 20)}...`);
@@ -176,7 +170,7 @@ bot.on('message:text', async (ctx) => {
         return;
       }
 
-      // === REJIM 2: CAST PROTOCOL ===
+      // === CAST PROTOCOL MODE ===
       const step = session.step;
       const lang = session.language || 'en';
       const questions = lang === 'ru' ? QUESTIONS_RU : QUESTIONS_EN;
@@ -203,7 +197,7 @@ bot.on('message:text', async (ctx) => {
             TASK: Analyze user based on 10 answers.
             TONE: Cold, Clinical.
             USER ANSWERS:
-            ${newAnswers.map((a: string, i: number) => `${i+1}. ${a}`).join('\n')}
+            ${newAnswers.map((a: string, i: number) => `${i+1}.${a}`).join('\n')}
             INSTRUCTION: Answer strictly in ${langPrompt}.
             OUTPUT FORMAT:
             [ARCHETYPE: VOID/NOISE/STONE/UNFRAMED]
@@ -221,7 +215,6 @@ bot.on('message:text', async (ctx) => {
           const analysisText = result.response.text();
           await safeReply(ctx, analysisText);
 
-          // Сохраняем в БД и ловим ошибки если база недоступна
           try {
               const match = analysisText.match(/\[ARCHETYPE:\s*(.*?)\]/);
               const archetype = match ? match[1] : 'VOID';
@@ -238,7 +231,6 @@ bot.on('message:text', async (ctx) => {
               await updateSession(chatId, { step: 11, record_id: record?.id, answers: newAnswers });
           } catch (dbError) {
               console.error("DB Save Error:", dbError);
-              // Не прерываем флоу, даже если база упала
           }
 
           await ctx.reply(

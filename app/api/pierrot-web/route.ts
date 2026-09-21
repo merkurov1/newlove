@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// Чистим ключ от пробелов
 const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
 const genAI = new GoogleGenerativeAI(apiKey);
 
+// Используем актуальную модель
 const MODEL_NAME = 'gemini-2.5-flash';
 
 const PIERROT_PROMPT = `
@@ -27,11 +27,12 @@ IMPORTANT:
 export async function POST(req: Request) {
   try {
     if (!apiKey) {
-      return NextResponse.json({ error: 'API Key missing' }, { status: 500 });
+      console.error('[Pierrot Web] GOOGLE_API_KEY is missing or empty.');
+      return NextResponse.json({ error: 'API Key missing in environment variables.' }, { status: 500 });
     }
 
     const body = await req.json();
-    const { message, history } = body; // history можно будет подключить позже, пока берем message
+    const { message, history } = body;
 
     if (!message) {
       return NextResponse.json({ error: 'Silence is golden, but I need text.' }, { status: 400 });
@@ -42,17 +43,26 @@ export async function POST(req: Request) {
       systemInstruction: PIERROT_PROMPT
     });
 
-    const result = await model.generateContent(message);
+    // Если передан массив истории, передаем его в чат для сохранения контекста диалога
+    const chatHistory = Array.isArray(history) ? history : [];
+    
+    const chat = model.startChat({
+      history: chatHistory,
+    });
+
+    const result = await chat.sendMessage(message);
     const response = await result.response;
     const text = response.text();
 
     return NextResponse.json({ reply: text });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[Pierrot Web] Error:', error);
     return NextResponse.json(
-      { error: 'The ether is disrupted.', details: String(error) }, 
+      { error: 'The ether is disrupted.', details: error?.message || String(error) }, 
       { status: 500 }
     );
   }
 }
+
+export const dynamic = 'force-dynamic';
