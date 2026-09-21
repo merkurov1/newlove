@@ -3,10 +3,9 @@ import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
-export const maxDuration = 30; 
+export const maxDuration = 60; 
 
-const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
-const groq = new Groq({ apiKey });
+const groq = new Groq({ apiKey: (process.env.GOOGLE_API_KEY || "").trim() });
 const MODEL_NAME = 'llama-3.1-8b-instant';
 
 export async function POST(req: Request) {
@@ -16,64 +15,71 @@ export async function POST(req: Request) {
 
     if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 });
 
-    console.log(`[Parser] Harvesting protected URL: ${url}`);
-    
-    // Используем альтернативный эндпоинт или передаем расширенные заголовки для обхода Cloudflare
-    const jinaResponse = await fetch(`https://r.jina.ai/${url}`, {
-      headers: {
-        'X-Return-Format': 'markdown',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5'
-      }
-    });
-
-    if (!jinaResponse.ok) {
-      throw new Error(`Harvester blocked by target site: ${jinaResponse.status} ${jinaResponse.statusText}`);
+    const scrapingAntKey = process.env.SCRAPINGANT_API_KEY;
+    if (!scrapingAntKey) {
+      return NextResponse.json({ error: 'SCRAPINGANT_API_KEY is missing in environment variables.' }, { status: 500 });
     }
 
-    const markdown = await jinaResponse.text();
+    console.log(`[Curator Engine] Scraping via ScrapingAnt: ${url}`);
 
+    // Формируем запрос через ScrapingAnt с включенным обходом Cloudflare
+    const scrapingAntUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(url)}&x-api-key=${scrapingAntKey}&render_js=true&bypass_cloudflare=true`;
+
+    const scraperRes = await fetch(scrapingAntUrl);
+    
+    if (!scraperRes.ok) {
+      const errText = await scraperRes.text();
+      throw new Error(`ScrapingAnt failed (${scraperRes.status}): ${errText}`);
+    }
+
+    const scraperData = await scraperRes.json();
+    const htmlContent = scraperData.content || '';
+
+    if (!htmlContent || htmlContent.length < 200) {
+      throw new Error('Retrieved content is empty or blocked.');
+    }
+
+    console.log(`[Curator Engine] Page fetched successfully. Length: ${htmlContent.length}. Parsing with Groq...`);
+
+    // ИИ структурирует полученный HTML/текст в чистый JSON
     const prompt = `
-      TASK: You are an Art Data Specialist.
-      Extract structured data and the main artwork image URL from the scraped auction page content below.
+      TASK: You are an elite Art Data Specialist. 
+      Extract structured data and the primary artwork image URL from the raw page content below.
 
-      SOURCE CONTENT (Markdown):
-      ${markdown.substring(0, 25000)}
+      RAW CONTENT:
+      ${htmlContent.substring(0, 35000)}
 
-      Return ONLY a valid JSON object in this exact format:
+      Return ONLY a strict JSON object in this exact format:
       {
         "artist": "Name (Year-Year)",
         "title": "Title of work",
-        "medium": "Oil on canvas, etc",
-        "dimensions": "Height x Width cm/in",
-        "date": "Year of execution",
-        "estimate": "Currency X - Currency Y",
-        "provenance": "List of previous owners (summary)",
+        "medium": "Medium description",
+        "dimensions": "Dimensions",
+        "date": "Year",
+        "estimate": "Estimate price",
+        "provenance": "Provenance summary",
         "image_url": "Direct image URL of the artwork if found, otherwise empty string",
-        "raw_description": "The main essay/description text about the lot"
+        "raw_description": "Main essay/description text about the lot"
       }
     `;
 
     const completion = await groq.chat.completions.create({
       model: MODEL_NAME,
       messages: [
-        { role: 'system', content: 'You extract structured JSON data from auction text. Output strict JSON only.' },
+        { role: 'system', content: 'You extract structured JSON data from HTML content. Output strict JSON only.' },
         { role: 'user', content: prompt }
       ],
       response_format: { type: "json_object" },
       temperature: 0.1,
     });
 
-    const contentText = completion.choices[0]?.message?.content || '{}';
-    const jsonResponse = JSON.parse(contentText);
-
+    const jsonResponse = JSON.parse(completion.choices[0]?.message?.content || '{}');
     return NextResponse.json(jsonResponse);
 
   } catch (error: any) {
-    console.error('[Parser Error Details]:', error);
+    console.error('[Parser Error]:', error);
     return NextResponse.json(
-      { error: 'Parsing failed. The site is protected by anti-bot rules.', details: error?.message || String(error) }, 
+      { error: 'Parsing failed.', details: error?.message || String(error) }, 
       { status: 500 }
     );
   }
