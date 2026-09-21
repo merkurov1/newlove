@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// Переключаемся на базовую рабочую модель, доступную на всех бесплатных ключах Groq
+// Используем самую стабильную и доступную модель Groq на бесплатном тарифе
 const MODEL_NAME = 'llama-3.1-8b-instant';
 
 const PIERROT_PROMPT = `
@@ -22,12 +22,9 @@ IMPORTANT:
 `;
 
 export async function POST(req: Request) {
-  console.log('[Pierrot Web] Incoming request received.');
-  
   try {
     const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
     if (!apiKey) {
-      console.error('[Pierrot Web] ERROR: API Key is missing or empty!');
       return NextResponse.json({ error: 'API Key missing.' }, { status: 500 });
     }
 
@@ -54,7 +51,6 @@ export async function POST(req: Request) {
 
     messages.push({ role: 'user', content: message });
 
-    console.log('[Pierrot Web] Sending request to Groq API using model:', MODEL_NAME);
     const completion = await groq.chat.completions.create({
       model: MODEL_NAME,
       messages: messages,
@@ -62,12 +58,12 @@ export async function POST(req: Request) {
     });
 
     const reply = completion.choices[0]?.message?.content || '...';
-    console.log('[Pierrot Web Success] Reply generated successfully.');
 
+    // Возвращаем ответ с маркером успешной работы через Groq
     return NextResponse.json({ reply: `${reply} [groq: active]` });
 
   } catch (error: any) {
-    console.error('[Pierrot Web Fatal Error]:', error);
+    console.error('[Pierrot Web Error]:', error);
     return NextResponse.json(
       { error: 'The ether is disrupted.', details: error?.message || String(error) }, 
       { status: 500 }
