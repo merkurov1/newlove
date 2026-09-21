@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// Актуальная модель Groq на текущий момент
-const MODEL_NAME = 'llama-3.3-70b-versatile';
+// Переключаемся на базовую рабочую модель, доступную на всех бесплатных ключах Groq
+const MODEL_NAME = 'llama-3.1-8b-instant';
 
 const PIERROT_PROMPT = `
 IDENTITY:
