@@ -1,50 +1,59 @@
 'use client'
 import { useState } from 'react'
-import Image from 'next/image'
 
 export default function CuratorTool() {
-  // Добавили image_url в стейт
   const [input, setInput] = useState({ artist: '', title: '', link: '', raw: '', image_url: '', specs: {} as any })
   const [output, setOutput] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [parsing, setParsing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [imgError, setImgError] = useState(false) // Стейт для отслеживания битых картинок
 
   // 1. ПАРСИНГ
   const handleAutoParse = async () => {
     if (!input.link) return alert('Paste link')
     setParsing(true)
+    setImgError(false)
     try {
         const res = await fetch('/api/admin/parse-url', {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: input.link })
         })
         const data = await res.json()
+        console.log('[Parser Response]:', data) // Логируем, что пришло от бэкенда
+
+        if (!res.ok) throw new Error(data.error || 'Parse failed on server')
         
         setInput(prev => ({
             ...prev,
             artist: data.artist || prev.artist,
             title: data.title || prev.title,
-            image_url: data.image_url || '', // Парсер должен вернуть это
+            image_url: data.image_url || data.imageUrl || '', // Учитываем разные варианты написания ключа
             specs: {
-                medium: data.medium,
-                dimensions: data.dimensions,
-                estimate: data.estimate,
-                date: data.date,
-                provenance: data.provenance
+                medium: data.medium || '',
+                dimensions: data.dimensions || '',
+                estimate: data.estimate || '',
+                date: data.date || '',
+                provenance: data.provenance || ''
             },
-            raw: `Medium: ${data.medium}\nDimensions: ${data.dimensions}\nEstimate: ${data.estimate}\nDate: ${data.date}\n\nProvenance:\n${data.provenance}\n\nOriginal Description:\n${data.raw_description}`
+            raw: `Medium: ${data.medium || 'N/A'}\nDimensions: ${data.dimensions || 'N/A'}\nEstimate: ${data.estimate || 'N/A'}\nDate: ${data.date || 'N/A'}\n\nProvenance:\n${data.provenance || 'N/A'}\n\nOriginal Description:\n${data.raw_description || data.raw || 'N/A'}`
         }))
-    } catch (e) { alert('Parse failed') } 
-    finally { setParsing(false) }
+    } catch (e: any) { 
+        console.error(e)
+        alert(`Parse failed: ${e.message}`) 
+    } finally { 
+        setParsing(false) 
+    }
   }
 
-  // 2. ГЕНЕРАЦИЯ (Без изменений)
+  // 2. ГЕНЕРАЦИЯ
   const generate = async () => {
     setLoading(true)
     try {
       const res = await fetch('/api/admin/generate_lot', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             artist: input.artist,
             title: input.title,
@@ -58,16 +67,17 @@ export default function CuratorTool() {
     finally { setLoading(false) }
   }
 
-  // 3. СОХРАНЕНИЕ (НОВОЕ)
+  // 3. СОХРАНЕНИЕ
   const saveToVault = async () => {
     if (!output) return alert('Generate content first')
     setSaving(true)
     try {
         const res = await fetch('/api/admin/save-lot', {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 ...input,
-                ...input.specs, // Разворачиваем спеки
+                ...input.specs,
                 ai_content: output
             })
         })
@@ -93,31 +103,42 @@ export default function CuratorTool() {
         <div className="flex gap-2">
             <input 
               placeholder="Auction URL" 
-              className="w-full bg-zinc-900 p-3 border border-gray-700"
+              className="w-full bg-zinc-900 p-3 border border-gray-700 text-sm"
               value={input.link}
               onChange={e => setInput({...input, link: e.target.value})}
             />
-            <button onClick={handleAutoParse} disabled={parsing} className="bg-blue-900 px-4 text-xs hover:bg-blue-800">
+            <button onClick={handleAutoParse} disabled={parsing} className="bg-blue-900 px-4 text-xs hover:bg-blue-800 transition">
                 {parsing ? '...' : 'PARSE'}
             </button>
         </div>
 
-        {/* ПРЕДПРОСМОТР КАРТИНКИ (ЕСЛИ НАШЛИ) */}
-        {input.image_url && (
-            <div className="relative h-48 w-full bg-zinc-900 border border-gray-800 overflow-hidden">
-                <img src={input.image_url} className="object-contain w-full h-full opacity-80" alt="Preview" />
-                <div className="absolute bottom-0 right-0 bg-black text-xs px-2 py-1 text-green-500">IMAGE FOUND</div>
+        {/* ПРЕДПРОСМОТР КАРТИНКИ */}
+        {input.image_url && !imgError && (
+            <div className="relative h-48 w-full bg-zinc-900 border border-gray-800 overflow-hidden flex items-center justify-center">
+                <img 
+                  src={input.image_url} 
+                  className="object-contain max-h-full max-w-full opacity-90" 
+                  alt="Preview" 
+                  onError={() => setImgError(true)}
+                />
+                <div className="absolute bottom-0 right-0 bg-black/80 text-xs px-2 py-1 text-green-500 border-t border-l border-gray-800">IMAGE LOADED</div>
+            </div>
+        )}
+
+        {imgError && (
+            <div className="h-20 w-full bg-zinc-900 border border-red-900/50 flex items-center justify-center text-red-400 text-xs">
+                ⚠️ IMAGE FAILED TO LOAD (CORS OR BROKEN URL)
             </div>
         )}
 
         <div className="grid grid-cols-2 gap-4">
-            <input placeholder="Artist" className="bg-zinc-900 p-3 border border-gray-700" value={input.artist} onChange={e => setInput({...input, artist: e.target.value})} />
-            <input placeholder="Title" className="bg-zinc-900 p-3 border border-gray-700" value={input.title} onChange={e => setInput({...input, title: e.target.value})} />
+            <input placeholder="Artist" className="bg-zinc-900 p-3 border border-gray-700 text-sm" value={input.artist} onChange={e => setInput({...input, artist: e.target.value})} />
+            <input placeholder="Title" className="bg-zinc-900 p-3 border border-gray-700 text-sm" value={input.title} onChange={e => setInput({...input, title: e.target.value})} />
         </div>
         
-        <textarea placeholder="Raw Data..." className="w-full h-64 bg-zinc-900 p-3 border border-gray-700 text-xs" value={input.raw} onChange={e => setInput({...input, raw: e.target.value})} />
+        <textarea placeholder="Raw Data..." className="w-full h-48 bg-zinc-900 p-3 border border-gray-700 text-xs" value={input.raw} onChange={e => setInput({...input, raw: e.target.value})} />
         
-        <button onClick={generate} disabled={loading} className="w-full bg-white text-black py-3 hover:bg-gray-200 font-bold">
+        <button onClick={generate} disabled={loading} className="w-full bg-white text-black py-3 hover:bg-gray-200 font-bold transition">
             {loading ? 'SYNTHESIZING...' : 'GENERATE ASSETS'}
         </button>
       </div>
@@ -130,7 +151,7 @@ export default function CuratorTool() {
                     <button 
                         onClick={saveToVault} 
                         disabled={saving}
-                        className="w-full bg-green-700 text-white py-3 tracking-widest hover:bg-green-600 flex justify-center items-center gap-2"
+                        className="w-full bg-green-700 text-white py-3 tracking-widest hover:bg-green-600 transition flex justify-center items-center gap-2"
                     >
                         {saving ? 'ENCRYPTING...' : '💾 SAVE TO VAULT'}
                     </button>
@@ -140,7 +161,6 @@ export default function CuratorTool() {
                     <h3 className="text-green-500 text-xs mb-4">WEBSITE</h3>
                     <div className="text-sm whitespace-pre-wrap text-gray-300 font-serif">{output.website_formatted}</div>
                 </div>
-                {/* Остальные блоки (Telegram, Socials) ... */}
             </>
         )}
       </div>

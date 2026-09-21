@@ -1,13 +1,15 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
-// Увеличиваем таймаут, так как парсинг может занять время
 export const maxDuration = 30; 
 
 const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
-const genAI = new GoogleGenerativeAI(apiKey);
+const groq = new Groq({ apiKey });
+
+// Используем ту же стабильную рабочую модель, что и для чата
+const MODEL_NAME = 'llama-3.1-8b-instant';
 
 export async function POST(req: Request) {
   try {
@@ -16,13 +18,11 @@ export async function POST(req: Request) {
 
     if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 });
 
-    // 1. THE HARVESTER (Используем Jina Reader как прокси)
-    // Это превращает сложный сайт Christie's в простой Markdown
+    // 1. THE HARVESTER (Jina Reader преобразует сайт в Markdown)
     console.log(`[Parser] Harvesting: ${url}`);
     const jinaResponse = await fetch(`https://r.jina.ai/${url}`, {
       headers: {
         'X-Return-Format': 'markdown',
-        // Иногда полезно притвориться браузером, хотя Jina это делает сама
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 
       }
     });
@@ -33,20 +33,16 @@ export async function POST(req: Request) {
 
     const markdown = await jinaResponse.text();
 
-    // 2. THE BRAIN (Gemini структурирует кашу)
-    const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.5-flash',
-        generationConfig: { responseMimeType: "application/json" } 
-    });
-
+    // 2. THE BRAIN (Groq структурирует данные и находит картинку)
     const prompt = `
       TASK: You are an Art Data Specialist.
       Extract structured data from the scraped auction page content below.
+      Look for the main artwork image URL if present in the text/links.
 
       SOURCE CONTENT (Markdown):
-      ${markdown.substring(0, 20000)} // Ограничиваем длину, чтобы не пробить лимиты
+      ${markdown.substring(0, 20000)}
 
-      OUTPUT FORMAT (JSON):
+      Return ONLY a valid JSON object in this exact format (no markdown code blocks around it if possible, or standard JSON):
       {
         "artist": "Name (Year-Year)",
         "title": "Title of work",
@@ -55,6 +51,7 @@ export async function POST(req: Request) {
         "date": "Year of execution",
         "estimate": "GBP X - GBP Y",
         "provenance": "List of previous owners (summary)",
+        "image_url": "Direct URL of the artwork image if found in text/markdown, otherwise empty string",
         "raw_description": "The main essay/description text about the lot"
       }
 
@@ -62,15 +59,25 @@ export async function POST(req: Request) {
       Clean up the text (remove "Lot details", "Bid now" etc).
     `;
 
-    const result = await model.generateContent(prompt);
-    const jsonResponse = JSON.parse(result.response.text());
+    const completion = await groq.chat.completions.create({
+      model: MODEL_NAME,
+      messages: [
+        { role: 'system', content: 'You extract structured JSON data from auction text. Output strict JSON only.' },
+        { role: 'user', content: prompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+    });
+
+    const contentText = completion.choices[0]?.message?.content || '{}';
+    const jsonResponse = JSON.parse(contentText);
 
     return NextResponse.json(jsonResponse);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[Parser Error]:', error);
     return NextResponse.json(
-      { error: 'Parsing failed. The site might be protected.', details: String(error) }, 
+      { error: 'Parsing failed. The site might be protected.', details: error?.message || String(error) }, 
       { status: 500 }
     );
   }
