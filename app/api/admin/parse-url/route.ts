@@ -22,26 +22,32 @@ export async function POST(req: Request) {
 
     console.log(`[Curator Engine] Scraping via ScrapingAnt: ${url}`);
 
-    // Формируем запрос через ScrapingAnt с включенным обходом Cloudflare
     const scrapingAntUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(url)}&x-api-key=${scrapingAntKey}&render_js=true&bypass_cloudflare=true`;
 
-    const scraperRes = await fetch(scrapingAntUrl);
-    
-    if (!scraperRes.ok) {
-      const errText = await scraperRes.text();
-      throw new Error(`ScrapingAnt failed (${scraperRes.status}): ${errText}`);
+    const response = await fetch(scrapingAntUrl);
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      console.error('[ScrapingAnt Error Response]:', responseText);
+      throw new Error(`ScrapingAnt failed with status ${response.status}`);
     }
 
-    const scraperData = await scraperRes.json();
+    let scraperData;
+    try {
+      scraperData = JSON.parse(responseText);
+    } catch (e) {
+      console.error('[ScrapingAnt Non-JSON Output]:', responseText.substring(0, 300));
+      throw new Error('ScrapingAnt returned HTML/Non-JSON data instead of API response.');
+    }
+
     const htmlContent = scraperData.content || '';
 
     if (!htmlContent || htmlContent.length < 200) {
-      throw new Error('Retrieved content is empty or blocked.');
+      throw new Error('Retrieved page content is empty or blocked.');
     }
 
     console.log(`[Curator Engine] Page fetched successfully. Length: ${htmlContent.length}. Parsing with Groq...`);
 
-    // ИИ структурирует полученный HTML/текст в чистый JSON
     const prompt = `
       TASK: You are an elite Art Data Specialist. 
       Extract structured data and the primary artwork image URL from the raw page content below.
