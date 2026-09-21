@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// Используем проверенную рабочую модель от Groq
-const MODEL_NAME = 'llama-3.1-70b-versatile';
+// Актуальная модель Groq на текущий момент
+const MODEL_NAME = 'llama-3.3-70b-versatile';
 
 const PIERROT_PROMPT = `
 IDENTITY:
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
     messages.push({ role: 'user', content: message });
 
-    console.log('[Pierrot Web] Sending request to Groq API...');
+    console.log('[Pierrot Web] Sending request to Groq API using model:', MODEL_NAME);
     const completion = await groq.chat.completions.create({
       model: MODEL_NAME,
       messages: messages,
