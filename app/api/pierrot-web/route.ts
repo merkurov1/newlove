@@ -6,8 +6,8 @@ export const runtime = 'nodejs';
 const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
 const groq = new Groq({ apiKey });
 
-// Используем молниеносную модель от Groq
-const MODEL_NAME = 'llama-3.3-70b-versatile';
+// Используем проверенную рабочую модель от Groq
+const MODEL_NAME = 'llama-3.1-70b-versatile';
 
 const PIERROT_PROMPT = `
 IDENTITY:
@@ -27,7 +27,6 @@ IMPORTANT:
 export async function POST(req: Request) {
   try {
     if (!apiKey) {
-      console.error('[Pierrot Web Groq] API Key missing in environment.');
       return NextResponse.json({ error: 'API Key missing.' }, { status: 500 });
     }
 
@@ -38,7 +37,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Silence is golden, but I need text.' }, { status: 400 });
     }
 
-    // Формируем историю для Groq (OpenAI-compatible format)
     const messages: any[] = [
       { role: 'system', content: PIERROT_PROMPT }
     ];
@@ -60,11 +58,8 @@ export async function POST(req: Request) {
     });
 
     const reply = completion.choices[0]?.message?.content || '...';
-    
-    // Логируем успешный ответ для проверки в Vercel
     console.log('[Pierrot Web Groq Success] Model:', MODEL_NAME, 'Reply length:', reply.length);
 
-    // Добавлена пометка [groq: active] для проверки того, что отрабатывает именно этот файл
     return NextResponse.json({ reply: `${reply} [groq: active]` });
 
   } catch (error: any) {
