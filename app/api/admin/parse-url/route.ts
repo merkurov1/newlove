@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
-export const maxDuration = 30; 
+export const maxDuration = 60; 
 
 const groq = new Groq({ apiKey: (process.env.GOOGLE_API_KEY || "").trim() });
-const MODEL_NAME = 'llama-3.1-8b-instant';
+const MODEL_NAME = 'llama-3.3-70b-versatile'; // Актуальная и стабильная модель на Groq
 
 export async function POST(req: Request) {
   try {
@@ -17,7 +17,6 @@ export async function POST(req: Request) {
 
     console.log(`[Curator Engine] Fetching via Social Bot emulation: ${url}`);
 
-    // Притворяемся сканером соцсетей (Facebook / Twitter), чтобы обойти жесткий Cloudflare-экран для браузеров
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
@@ -37,7 +36,7 @@ export async function POST(req: Request) {
 
     const prompt = `
       TASK: You are an elite Art Data Specialist. 
-      Extract structured data and the primary artwork image URL from the raw HTML page content or Open Graph meta tags below.
+      Extract structured data and the primary artwork image URL from the raw HTML page content below. Include the full description/essay text, provenance, and all details.
 
       RAW CONTENT:
       ${htmlContent.substring(0, 40000)}
@@ -51,8 +50,8 @@ export async function POST(req: Request) {
         "date": "Year",
         "estimate": "Estimate price",
         "provenance": "Provenance summary",
-        "image_url": "Direct image URL from og:image meta tag or content if found, otherwise empty string",
-        "raw_description": "Main essay/description text or og:description content about the lot"
+        "image_url": "Direct image URL of the artwork if found, otherwise empty string",
+        "raw_description": "Main essay/description text about the lot"
       }
     `;
 
