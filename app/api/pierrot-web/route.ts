@@ -3,9 +3,6 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// Точная модель, которую подтвердил ваш ключ Groq
-const MODEL_NAME = 'groq/compound';
-
 const PIERROT_PROMPT = `
 IDENTITY:
 You are Pierrot, the digital shadow of Anton Merkurov.
@@ -30,6 +27,17 @@ export async function POST(req: Request) {
 
     const groq = new Groq({ apiKey });
 
+    // Динамически получаем список и выбираем подходящую текстовую модель
+    const modelsResponse = await groq.models.list();
+    const ids = modelsResponse.data?.map(m => m.id) || [];
+    
+    // Ищем модель для чата (исключаем аудио/служебные вроде whisper или compound)
+    const validModel = ids.find(id => 
+      !id.includes('whisper') && 
+      !id.includes('compound') && 
+      (id.includes('llama') || id.includes('gemma') || id.includes('mixtral') || id.includes('gpt'))
+    ) || ids[0] || 'llama-3.3-70b-versatile';
+
     const body = await req.json();
     const { message, history } = body;
 
@@ -52,7 +60,7 @@ export async function POST(req: Request) {
     messages.push({ role: 'user', content: message });
 
     const completion = await groq.chat.completions.create({
-      model: MODEL_NAME,
+      model: validModel,
       messages: messages,
       temperature: 0.7,
     });
