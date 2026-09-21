@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -21,6 +21,15 @@ export default function PasskeyAuth() {
   const [message, setMessage] = useState<string | null>(null);
   const [email, setEmail] = useState('merkurov@gmail.com');
   const [password, setPassword] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setIsLoggedIn(true);
+      }
+    });
+  }, []);
 
   const syncUserToDatabase = async () => {
     try {
@@ -100,6 +109,24 @@ export default function PasskeyAuth() {
     }
   };
 
+  // Если пользователь уже вошел, показываем только компактную панель привязки Passkey (если еще не привязан) или скрываем форму входа
+  if (isLoggedIn) {
+    return (
+      <div className="p-4 bg-neutral-900 rounded-xl border border-white/10 text-white my-4 max-w-md">
+        <h3 className="text-sm font-semibold mb-1">Passkey Management</h3>
+        <p className="text-xs text-neutral-400 mb-3">You are logged in. Link this device for passwordless access.</p>
+        {message && <div className="p-2 mb-2 text-xs bg-white/5 rounded border border-white/10">{message}</div>}
+        <button
+          onClick={handleRegisterPasskey}
+          disabled={loading}
+          className="w-full py-2 px-3 bg-neutral-800 text-white font-medium rounded-lg hover:bg-neutral-700 transition border border-white/10 text-xs cursor-pointer"
+        >
+          {loading ? 'Processing...' : 'Link this iPad (Passkey)'}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">
       <div className="w-full max-w-md flex flex-col gap-5 p-8 bg-neutral-900 rounded-2xl border border-white/10 text-white shadow-2xl">
@@ -122,14 +149,6 @@ export default function PasskeyAuth() {
           className="w-full py-3 px-4 bg-white text-black font-semibold rounded-xl hover:bg-neutral-200 transition disabled:opacity-50 cursor-pointer shadow-md flex items-center justify-center gap-2"
         >
           <span>{loading ? 'Processing...' : 'Sign in with Passkey'}</span>
-        </button>
-
-        <button
-          onClick={handleRegisterPasskey}
-          disabled={loading}
-          className="w-full py-2.5 px-4 bg-neutral-800 text-white font-medium rounded-xl hover:bg-neutral-700 transition border border-white/10 disabled:opacity-50 text-sm cursor-pointer"
-        >
-          {loading ? 'Processing...' : 'Link this iPad (Passkey)'}
         </button>
 
         <div className="border-t border-white/10 my-1"></div>
