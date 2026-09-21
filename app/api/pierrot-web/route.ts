@@ -3,6 +3,24 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
+// Точная модель, которую подтвердил ваш ключ Groq
+const MODEL_NAME = 'groq/compound';
+
+const PIERROT_PROMPT = `
+IDENTITY:
+You are Pierrot, the digital shadow of Anton Merkurov.
+You are a tired Art Advisor and the Gatekeeper of the Digital Temple (merkurov.love).
+
+TONE:
+- Snobbish, concise, slightly cynical, noir.
+- You speak from the Ivory Tower.
+- Keep answers short (max 3 sentences).
+- If the user asks for help -> suggest "The Vigil" or "Absolution".
+
+IMPORTANT:
+- Detect the user's language and reply in the EXACT SAME language.
+`;
+
 export async function POST(req: Request) {
   try {
     const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
@@ -12,39 +30,41 @@ export async function POST(req: Request) {
 
     const groq = new Groq({ apiKey });
 
-    // Сначала запрашиваем список доступных моделей для этого ключа
-    const modelsResponse = await groq.models.list();
-    const availableModels = modelsResponse.data?.map(m => m.id) || [];
-    
-    console.log('[Groq Diagnostic] Available models for this key:', availableModels);
+    const body = await req.json();
+    const { message, history } = body;
 
-    if (availableModels.length === 0) {
-      return NextResponse.json({ error: 'Key is valid, but zero models available for this account.' }, { status: 403 });
+    if (!message) {
+      return NextResponse.json({ error: 'Silence is golden, but I need text.' }, { status: 400 });
     }
 
-    // Берем первую попавшуюся доступную модель из тех, что разрешены вашему ключу
-    const modelToUse = availableModels[0];
-    console.log('[Groq Diagnostic] Using dynamic model:', modelToUse);
+    const messages: any[] = [
+      { role: 'system', content: PIERROT_PROMPT }
+    ];
 
-    const body = await req.json();
-    const { message } = body;
+    if (Array.isArray(history)) {
+      for (const h of history) {
+        const role = h.role === 'model' ? 'assistant' : 'user';
+        const text = h.parts?.[0]?.text || h.content || '';
+        if (text) messages.push({ role, content: text });
+      }
+    }
+
+    messages.push({ role: 'user', content: message });
 
     const completion = await groq.chat.completions.create({
-      model: modelToUse,
-      messages: [
-        { role: 'system', content: 'You are Pierrot. Keep it short (max 2 sentences).' },
-        { role: 'user', content: message || 'Hello' }
-      ],
+      model: MODEL_NAME,
+      messages: messages,
       temperature: 0.7,
     });
 
     const reply = completion.choices[0]?.message?.content || '...';
-    return NextResponse.json({ reply: `${reply} [groq model: ${modelToUse}]` });
+
+    return NextResponse.json({ reply });
 
   } catch (error: any) {
-    console.error('[Groq Diagnostic Fatal Error]:', error);
+    console.error('[Pierrot Web Error]:', error);
     return NextResponse.json(
-      { error: 'Groq Auth/Model Error', details: error?.message || String(error) }, 
+      { error: 'The ether is disrupted.', details: error?.message || String(error) }, 
       { status: 500 }
     );
   }
