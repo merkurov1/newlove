@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; 
+export const maxDuration = 30; 
 
 const groq = new Groq({ apiKey: (process.env.GOOGLE_API_KEY || "").trim() });
 const MODEL_NAME = 'llama-3.1-8b-instant';
@@ -15,35 +15,32 @@ export async function POST(req: Request) {
 
     if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 });
 
-    const scrapingAntKey = process.env.SCRAPINGANT_API_KEY;
-    if (!scrapingAntKey) {
-      return NextResponse.json({ error: 'SCRAPINGANT_API_KEY is missing in environment variables.' }, { status: 500 });
-    }
+    console.log(`[Curator Engine] Fetching via Social Bot emulation: ${url}`);
 
-    console.log(`[Curator Engine] Scraping via ScrapingAnt: ${url}`);
+    // Притворяемся сканером соцсетей (Facebook / Twitter), чтобы обойти жесткий Cloudflare-экран для браузеров
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+      redirect: 'follow',
+    });
 
-    const scrapingAntUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(url)}&x-api-key=${scrapingAntKey}&render_js=true&bypass_cloudflare=true`;
-
-    const response = await fetch(scrapingAntUrl);
     const htmlContent = await response.text();
 
-    if (!response.ok) {
-      console.error('[ScrapingAnt Error Response]:', htmlContent);
-      throw new Error(`ScrapingAnt failed with status ${response.status}`);
+    if (!response.ok || htmlContent.length < 500) {
+      throw new Error(`Target auction house blocked the request (Status: ${response.status})`);
     }
 
-    if (!htmlContent || htmlContent.length < 200) {
-      throw new Error('Retrieved page content is empty or blocked.');
-    }
-
-    console.log(`[Curator Engine] Page fetched successfully. Length: ${htmlContent.length}. Parsing with Groq...`);
+    console.log(`[Curator Engine] Page fetched successfully. HTML length: ${htmlContent.length}. Parsing with Groq...`);
 
     const prompt = `
       TASK: You are an elite Art Data Specialist. 
-      Extract structured data and the primary artwork image URL from the raw HTML page content below.
+      Extract structured data and the primary artwork image URL from the raw HTML page content or Open Graph meta tags below.
 
       RAW CONTENT:
-      ${htmlContent.substring(0, 35000)}
+      ${htmlContent.substring(0, 40000)}
 
       Return ONLY a strict JSON object in this exact format:
       {
@@ -54,15 +51,15 @@ export async function POST(req: Request) {
         "date": "Year",
         "estimate": "Estimate price",
         "provenance": "Provenance summary",
-        "image_url": "Direct image URL of the artwork if found, otherwise empty string",
-        "raw_description": "Main essay/description text about the lot"
+        "image_url": "Direct image URL from og:image meta tag or content if found, otherwise empty string",
+        "raw_description": "Main essay/description text or og:description content about the lot"
       }
     `;
 
     const completion = await groq.chat.completions.create({
       model: MODEL_NAME,
       messages: [
-        { role: 'system', content: 'You extract structured JSON data from HTML content. Output strict JSON only.' },
+        { role: 'system', content: 'You extract structured JSON data from HTML and Meta tags. Output strict JSON only.' },
         { role: 'user', content: prompt }
       ],
       response_format: { type: "json_object" },
