@@ -25,22 +25,12 @@ export async function POST(req: Request) {
     const scrapingAntUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(url)}&x-api-key=${scrapingAntKey}&render_js=true&bypass_cloudflare=true`;
 
     const response = await fetch(scrapingAntUrl);
-    const responseText = await response.text();
+    const htmlContent = await response.text();
 
     if (!response.ok) {
-      console.error('[ScrapingAnt Error Response]:', responseText);
+      console.error('[ScrapingAnt Error Response]:', htmlContent);
       throw new Error(`ScrapingAnt failed with status ${response.status}`);
     }
-
-    let scraperData;
-    try {
-      scraperData = JSON.parse(responseText);
-    } catch (e) {
-      console.error('[ScrapingAnt Non-JSON Output]:', responseText.substring(0, 300));
-      throw new Error('ScrapingAnt returned HTML/Non-JSON data instead of API response.');
-    }
-
-    const htmlContent = scraperData.content || '';
 
     if (!htmlContent || htmlContent.length < 200) {
       throw new Error('Retrieved page content is empty or blocked.');
@@ -50,7 +40,7 @@ export async function POST(req: Request) {
 
     const prompt = `
       TASK: You are an elite Art Data Specialist. 
-      Extract structured data and the primary artwork image URL from the raw page content below.
+      Extract structured data and the primary artwork image URL from the raw HTML page content below.
 
       RAW CONTENT:
       ${htmlContent.substring(0, 35000)}
