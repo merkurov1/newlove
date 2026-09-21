@@ -20,6 +20,8 @@ export default function PasskeyAuth() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [email, setEmail] = useState('');
+  const [token, setToken] = useState('');
+  const [step, setStep] = useState<'request' | 'verify'>('request');
 
   const syncUserToDatabase = async () => {
     try {
@@ -61,25 +63,47 @@ export default function PasskeyAuth() {
     }
   };
 
-  const handleMagicLinkLogin = async (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
-      setMessage('Введите email для отправки ссылки');
+      setMessage('Введите email');
       return;
     }
     setLoading(true);
     setMessage(null);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      if (error) throw error;
+      setStep('verify');
+      setMessage('Код подтверждения отправлен на почту. Проверьте входящие.');
+    } catch (err: any) {
+      setMessage(`Ошибка отправки кода: ${err.message || err}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) {
+      setMessage('Введите 6-значный код');
+      return;
+    }
+    setLoading(true);
+    setMessage(null);
+    try {
+      const { error } = await supabase.auth.verifyOtp({
         email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/admin`,
-        },
+        token,
+        type: 'email',
       });
       if (error) throw error;
-      setMessage('Ссылка для входа отправлена на почту! Проверьте входящие.');
+
+      await syncUserToDatabase();
+      setMessage('Сессия успешно создана! Перенаправление в админку...');
+      window.location.href = '/admin';
     } catch (err: any) {
-      setMessage(`Ошибка отправки ссылки: ${err.message || err}`);
+      setMessage(`Ошибка проверки кода: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -89,7 +113,7 @@ export default function PasskeyAuth() {
     <div className="flex flex-col gap-4 p-6 max-w-md mx-auto bg-neutral-900 rounded-xl border border-white/10 text-white shadow-xl">
       <h2 className="text-xl font-bold">Авторизация и Passkey</h2>
       <p className="text-sm text-neutral-400">
-        Войдите по биометрии или запросите ссылку на почту, чтобы создать сессию и привязать Passkey.
+        Используйте вход по коду для создания сессии, чтобы затем привязать Passkey.
       </p>
 
       {message && (
@@ -116,23 +140,50 @@ export default function PasskeyAuth() {
 
       <div className="border-t border-white/10 my-2"></div>
 
-      <form onSubmit={handleMagicLinkLogin} className="flex flex-col gap-2">
-        <label className="text-xs text-neutral-400">Или войти по Magic Link (создать сессию):</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="merkurov@gmail.com"
-          className="p-2.5 bg-neutral-800 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 transition disabled:opacity-50 text-sm cursor-pointer"
-        >
-          {loading ? 'Отправка...' : 'Отправить Magic Link'}
-        </button>
-      </form>
+      {step === 'request' ? (
+        <form onSubmit={handleSendOtp} className="flex flex-col gap-2">
+          <label className="text-xs text-neutral-400">Вход по одноразовому коду (OTP):</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="merkurov@gmail.com"
+            className="p-2.5 bg-neutral-800 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 transition disabled:opacity-50 text-sm cursor-pointer"
+          >
+            {loading ? 'Отправка...' : 'Получить код на почту'}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleVerifyOtp} className="flex flex-col gap-2">
+          <label className="text-xs text-neutral-400">Введите 6-значный код из письма:</label>
+          <input
+            type="text"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="123456"
+            className="p-2.5 bg-neutral-800 border border-white/10 rounded-lg text-white text-sm tracking-widest text-center focus:outline-none focus:border-blue-500"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2 px-4 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-500 transition disabled:opacity-50 text-sm cursor-pointer"
+          >
+            {loading ? 'Проверка...' : 'Подтвердить код и войти'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setStep('request')}
+            className="text-xs text-neutral-400 underline mt-1 text-center"
+          >
+            Ввести другой email / запросить заново
+          </button>
+        </form>
+      )}
     </div>
   );
 }
