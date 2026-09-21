@@ -19,9 +19,8 @@ const supabase = createClient(
 export default function PasskeyAuth() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [email, setEmail] = useState('');
-  const [token, setToken] = useState('');
-  const [step, setStep] = useState<'request' | 'verify'>('request');
+  const [email, setEmail] = useState('merkurov@gmail.com');
+  const [password, setPassword] = useState('');
 
   const syncUserToDatabase = async () => {
     try {
@@ -39,10 +38,10 @@ export default function PasskeyAuth() {
       if (error) throw error;
 
       await syncUserToDatabase();
-      setMessage('Успешный вход! Перенаправление...');
+      setMessage('Успешный вход по Passkey! Перенаправление...');
       window.location.href = '/admin';
     } catch (err: any) {
-      setMessage(`Ошибка входа: ${err.message || err}`);
+      setMessage(`Ошибка входа по Passkey: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -55,55 +54,36 @@ export default function PasskeyAuth() {
       const { error } = await supabase.auth.registerPasskey();
       if (error) throw error;
 
-      setMessage('Пароль-ключ (Passkey) успешно привязан!');
+      setMessage('Пароль-ключ (Passkey) успешно привязан к iPad!');
     } catch (err: any) {
-      setMessage(`Ошибка регистрации: ${err.message || err}`);
+      setMessage(`Ошибка регистрации Passkey: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleEmailPasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
-      setMessage('Введите email');
+    if (!email || !password) {
+      setMessage('Введите email и пароль');
       return;
     }
     setLoading(true);
     setMessage(null);
     try {
-      const { error } = await supabase.auth.signInWithOtp({ email });
-      if (error) throw error;
-      setStep('verify');
-      setMessage('Код подтверждения отправлен на почту. Проверьте входящие.');
-    } catch (err: any) {
-      setMessage(`Ошибка отправки кода: ${err.message || err}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token) {
-      setMessage('Введите 6-значный код');
-      return;
-    }
-    setLoading(true);
-    setMessage(null);
-    try {
-      const { error } = await supabase.auth.verifyOtp({
-        email,
-        token,
-        type: 'email',
-      });
-      if (error) throw error;
+      // Пробуем войти, если аккаунт есть
+      let { error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      // Если аккаунт не создан с паролем, пробуем зарегистрировать его для сессии
+      if (error) {
+        const { error: signUpError } = await supabase.auth.signUp({ email, password });
+        if (signUpError) throw signUpError;
+      }
 
       await syncUserToDatabase();
-      setMessage('Сессия успешно создана! Перенаправление в админку...');
-      window.location.href = '/admin';
+      setMessage('Сессия создана! Теперь нажмите «Привязать Passkey».');
     } catch (err: any) {
-      setMessage(`Ошибка проверки кода: ${err.message || err}`);
+      setMessage(`Ошибка: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -111,9 +91,9 @@ export default function PasskeyAuth() {
 
   return (
     <div className="flex flex-col gap-4 p-6 max-w-md mx-auto bg-neutral-900 rounded-xl border border-white/10 text-white shadow-xl">
-      <h2 className="text-xl font-bold">Авторизация и Passkey</h2>
+      <h2 className="text-xl font-bold">Авторизация по Passkey</h2>
       <p className="text-sm text-neutral-400">
-        Используйте вход по коду для создания сессии, чтобы затем привязать Passkey.
+        Создайте сессию через пароль один раз, затем привяжите биометрию для беспарольного входа.
       </p>
 
       {message && (
@@ -122,10 +102,11 @@ export default function PasskeyAuth() {
         </div>
       )}
 
+      {/* Основная кнопка биометрии */}
       <button
         onClick={handlePasskeyLogin}
         disabled={loading}
-        className="w-full py-2.5 px-4 bg-white text-black font-medium rounded-lg hover:bg-neutral-200 transition disabled:opacity-50 cursor-pointer"
+        className="w-full py-3 px-4 bg-white text-black font-semibold rounded-lg hover:bg-neutral-200 transition disabled:opacity-50 cursor-pointer shadow"
       >
         {loading ? 'Загрузка...' : 'Войти по Passkey'}
       </button>
@@ -135,55 +116,36 @@ export default function PasskeyAuth() {
         disabled={loading}
         className="w-full py-2.5 px-4 bg-neutral-800 text-white font-medium rounded-lg hover:bg-neutral-700 transition border border-white/10 disabled:opacity-50 text-sm cursor-pointer"
       >
-        {loading ? 'Загрузка...' : 'Привязать Passkey (требуется сессия)'}
+        {loading ? 'Загрузка...' : 'Привязать этот iPad (Passkey)'}
       </button>
 
-      <div className="border-t border-white/10 my-2"></div>
+      <div className="border-t border-white/10 my-1"></div>
 
-      {step === 'request' ? (
-        <form onSubmit={handleSendOtp} className="flex flex-col gap-2">
-          <label className="text-xs text-neutral-400">Вход по одноразовому коду (OTP):</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="merkurov@gmail.com"
-            className="p-2.5 bg-neutral-800 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 transition disabled:opacity-50 text-sm cursor-pointer"
-          >
-            {loading ? 'Отправка...' : 'Получить код на почту'}
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={handleVerifyOtp} className="flex flex-col gap-2">
-          <label className="text-xs text-neutral-400">Введите 6-значный код из письма:</label>
-          <input
-            type="text"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="123456"
-            className="p-2.5 bg-neutral-800 border border-white/10 rounded-lg text-white text-sm tracking-widest text-center focus:outline-none focus:border-blue-500"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 px-4 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-500 transition disabled:opacity-50 text-sm cursor-pointer"
-          >
-            {loading ? 'Проверка...' : 'Подтвердить код и войти'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setStep('request')}
-            className="text-xs text-neutral-400 underline mt-1 text-center"
-          >
-            Ввести другой email / запросить заново
-          </button>
-        </form>
-      )}
+      {/* Быстрый бутстрап сессии через пароль */}
+      <form onSubmit={handleEmailPasswordLogin} className="flex flex-col gap-2">
+        <label className="text-xs text-neutral-400">Разовый вход для создания сессии:</label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+          className="p-2.5 bg-neutral-800 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Придумайте или введите пароль"
+          className="p-2.5 bg-neutral-800 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 transition disabled:opacity-50 text-sm cursor-pointer"
+        >
+          {loading ? 'Создание...' : 'Создать сессию (Войти по паролю)'}
+        </button>
+      </form>
     </div>
   );
 }
