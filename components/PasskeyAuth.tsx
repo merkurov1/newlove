@@ -27,6 +27,10 @@ export default function PasskeyAuth() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
+      // Устанавливаем куку вручную для надежности сервера, чтобы /api/routes её видели
+      document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=3600; SameSite=Lax`;
+      document.cookie = `sb-refresh-token=${session.refresh_token}; path=/; max-age=604800; SameSite=Lax`;
+
       await fetch('/api/auth/upsert', {
         method: 'POST',
         headers: {
