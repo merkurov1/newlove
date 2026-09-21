@@ -24,9 +24,18 @@ export default function PasskeyAuth() {
 
   const syncUserToDatabase = async () => {
     try {
-      await fetch('/api/auth/upsert', { method: 'POST' });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      await fetch('/api/auth/upsert', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
     } catch (e) {
-      console.error('Sync error:', e);
+      console.error('Sync error (non-critical):', e);
     }
   };
 
@@ -38,10 +47,10 @@ export default function PasskeyAuth() {
       if (error) throw error;
 
       await syncUserToDatabase();
-      setMessage('Успешный вход по Passkey! Перенаправление...');
+      setMessage('Успешный вход! Перенаправление...');
       window.location.href = '/admin';
     } catch (err: any) {
-      setMessage(`Ошибка входа по Passkey: ${err.message || err}`);
+      setMessage(`Ошибка входа: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -56,7 +65,7 @@ export default function PasskeyAuth() {
 
       setMessage('Пароль-ключ (Passkey) успешно привязан к iPad!');
     } catch (err: any) {
-      setMessage(`Ошибка регистрации Passkey: ${err.message || err}`);
+      setMessage(`Ошибка регистрации: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -71,17 +80,16 @@ export default function PasskeyAuth() {
     setLoading(true);
     setMessage(null);
     try {
-      // Пробуем войти, если аккаунт есть
       let { error } = await supabase.auth.signInWithPassword({ email, password });
       
-      // Если аккаунт не создан с паролем, пробуем зарегистрировать его для сессии
       if (error) {
         const { error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) throw signUpError;
       }
 
       await syncUserToDatabase();
-      setMessage('Сессия создана! Теперь нажмите «Привязать Passkey».');
+      setMessage('Сессия создана! Перенаправление в админку...');
+      window.location.href = '/admin';
     } catch (err: any) {
       setMessage(`Ошибка: ${err.message || err}`);
     } finally {
@@ -93,7 +101,7 @@ export default function PasskeyAuth() {
     <div className="flex flex-col gap-4 p-6 max-w-md mx-auto bg-neutral-900 rounded-xl border border-white/10 text-white shadow-xl">
       <h2 className="text-xl font-bold">Авторизация по Passkey</h2>
       <p className="text-sm text-neutral-400">
-        Создайте сессию через пароль один раз, затем привяжите биометрию для беспарольного входа.
+        Используйте биометрию для мгновенного доступа.
       </p>
 
       {message && (
@@ -102,7 +110,6 @@ export default function PasskeyAuth() {
         </div>
       )}
 
-      {/* Основная кнопка биометрии */}
       <button
         onClick={handlePasskeyLogin}
         disabled={loading}
@@ -121,9 +128,8 @@ export default function PasskeyAuth() {
 
       <div className="border-t border-white/10 my-1"></div>
 
-      {/* Быстрый бутстрап сессии через пароль */}
       <form onSubmit={handleEmailPasswordLogin} className="flex flex-col gap-2">
-        <label className="text-xs text-neutral-400">Разовый вход для создания сессии:</label>
+        <label className="text-xs text-neutral-400">Первичный вход для создания сессии:</label>
         <input
           type="email"
           value={email}
@@ -135,7 +141,7 @@ export default function PasskeyAuth() {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="Придумайте или введите пароль"
+          placeholder="Пароль"
           className="p-2.5 bg-neutral-800 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
         />
         <button
@@ -143,7 +149,7 @@ export default function PasskeyAuth() {
           disabled={loading}
           className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 transition disabled:opacity-50 text-sm cursor-pointer"
         >
-          {loading ? 'Создание...' : 'Создать сессию (Войти по паролю)'}
+          {loading ? 'Создание...' : 'Создать сессию и войти'}
         </button>
       </form>
     </div>
