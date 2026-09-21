@@ -27,7 +27,6 @@ export default function PasskeyAuth() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      // Устанавливаем куку вручную для надежности сервера, чтобы /api/routes её видели
       document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=3600; SameSite=Lax`;
       document.cookie = `sb-refresh-token=${session.refresh_token}; path=/; max-age=604800; SameSite=Lax`;
 
@@ -51,10 +50,10 @@ export default function PasskeyAuth() {
       if (error) throw error;
 
       await syncUserToDatabase();
-      setMessage('Успешный вход! Перенаправление...');
+      setMessage('Success! Redirecting...');
       window.location.href = '/admin';
     } catch (err: any) {
-      setMessage(`Ошибка входа: ${err.message || err}`);
+      setMessage(`Passkey sign-in error: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -67,9 +66,9 @@ export default function PasskeyAuth() {
       const { error } = await supabase.auth.registerPasskey();
       if (error) throw error;
 
-      setMessage('Пароль-ключ (Passkey) успешно привязан к iPad!');
+      setMessage('Passkey successfully linked to this iPad!');
     } catch (err: any) {
-      setMessage(`Ошибка регистрации: ${err.message || err}`);
+      setMessage(`Registration error: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -78,7 +77,7 @@ export default function PasskeyAuth() {
   const handleEmailPasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setMessage('Введите email и пароль');
+      setMessage('Please enter email and password');
       return;
     }
     setLoading(true);
@@ -92,70 +91,74 @@ export default function PasskeyAuth() {
       }
 
       await syncUserToDatabase();
-      setMessage('Сессия создана! Перенаправление в админку...');
+      setMessage('Session created! Redirecting to admin...');
       window.location.href = '/admin';
     } catch (err: any) {
-      setMessage(`Ошибка: ${err.message || err}`);
+      setMessage(`Error: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col gap-4 p-6 max-w-md mx-auto bg-neutral-900 rounded-xl border border-white/10 text-white shadow-xl">
-      <h2 className="text-xl font-bold">Авторизация по Passkey</h2>
-      <p className="text-sm text-neutral-400">
-        Используйте биометрию для мгновенного доступа.
-      </p>
-
-      {message && (
-        <div className="p-3 text-sm bg-white/5 rounded border border-white/10 text-neutral-200">
-          {message}
+    <div className="min-h-[80vh] flex items-center justify-center p-4">
+      <div className="w-full max-w-md flex flex-col gap-5 p-8 bg-neutral-900 rounded-2xl border border-white/10 text-white shadow-2xl">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-bold tracking-tight">Admin Authentication</h2>
+          <p className="text-sm text-neutral-400">
+            Use biometrics for instant access or bootstrap your session below.
+          </p>
         </div>
-      )}
 
-      <button
-        onClick={handlePasskeyLogin}
-        disabled={loading}
-        className="w-full py-3 px-4 bg-white text-black font-semibold rounded-lg hover:bg-neutral-200 transition disabled:opacity-50 cursor-pointer shadow"
-      >
-        {loading ? 'Загрузка...' : 'Войти по Passkey'}
-      </button>
+        {message && (
+          <div className="p-3 text-sm bg-white/5 rounded-xl border border-white/10 text-neutral-200">
+            {message}
+          </div>
+        )}
 
-      <button
-        onClick={handleRegisterPasskey}
-        disabled={loading}
-        className="w-full py-2.5 px-4 bg-neutral-800 text-white font-medium rounded-lg hover:bg-neutral-700 transition border border-white/10 disabled:opacity-50 text-sm cursor-pointer"
-      >
-        {loading ? 'Загрузка...' : 'Привязать этот iPad (Passkey)'}
-      </button>
-
-      <div className="border-t border-white/10 my-1"></div>
-
-      <form onSubmit={handleEmailPasswordLogin} className="flex flex-col gap-2">
-        <label className="text-xs text-neutral-400">Первичный вход для создания сессии:</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          className="p-2.5 bg-neutral-800 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Пароль"
-          className="p-2.5 bg-neutral-800 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-        />
         <button
-          type="submit"
+          onClick={handlePasskeyLogin}
           disabled={loading}
-          className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 transition disabled:opacity-50 text-sm cursor-pointer"
+          className="w-full py-3 px-4 bg-white text-black font-semibold rounded-xl hover:bg-neutral-200 transition disabled:opacity-50 cursor-pointer shadow-md flex items-center justify-center gap-2"
         >
-          {loading ? 'Создание...' : 'Создать сессию и войти'}
+          <span>{loading ? 'Processing...' : 'Sign in with Passkey'}</span>
         </button>
-      </form>
+
+        <button
+          onClick={handleRegisterPasskey}
+          disabled={loading}
+          className="w-full py-2.5 px-4 bg-neutral-800 text-white font-medium rounded-xl hover:bg-neutral-700 transition border border-white/10 disabled:opacity-50 text-sm cursor-pointer"
+        >
+          {loading ? 'Processing...' : 'Link this iPad (Passkey)'}
+        </button>
+
+        <div className="border-t border-white/10 my-1"></div>
+
+        <form onSubmit={handleEmailPasswordLogin} className="flex flex-col gap-3">
+          <label className="text-xs text-neutral-400 font-medium uppercase tracking-wider">Session Bootstrap</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email address"
+            className="p-3 bg-neutral-800/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500 transition"
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="p-3 bg-neutral-800/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500 transition"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2.5 px-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-500 transition disabled:opacity-50 text-sm cursor-pointer shadow-md"
+          >
+            {loading ? 'Working...' : 'Create Session & Sign In'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
