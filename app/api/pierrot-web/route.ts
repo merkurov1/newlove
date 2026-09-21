@@ -1,13 +1,13 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
 const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
-const genAI = new GoogleGenerativeAI(apiKey);
+const groq = new Groq({ apiKey });
 
-// Используем актуальную модель
-const MODEL_NAME = 'gemini-2.5-flash';
+// Используем молниеносную и умную модель от Groq
+const MODEL_NAME = 'llama-3.3-70b-versatile';
 
 const PIERROT_PROMPT = `
 IDENTITY:
@@ -27,8 +27,7 @@ IMPORTANT:
 export async function POST(req: Request) {
   try {
     if (!apiKey) {
-      console.error('[Pierrot Web] GOOGLE_API_KEY is missing or empty.');
-      return NextResponse.json({ error: 'API Key missing in environment variables.' }, { status: 500 });
+      return NextResponse.json({ error: 'API Key missing.' }, { status: 500 });
     }
 
     const body = await req.json();
@@ -38,26 +37,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Silence is golden, but I need text.' }, { status: 400 });
     }
 
-    const model = genAI.getGenerativeModel({ 
+    // Формируем историю для Groq (OpenAI-compatible format)
+    const messages: any[] = [
+      { role: 'system', content: PIERROT_PROMPT }
+    ];
+
+    if (Array.isArray(history)) {
+      for (const h of history) {
+        // Конвертируем формат Google/старый в role/content
+        const role = h.role === 'model' ? 'assistant' : 'user';
+        const text = h.parts?.[0]?.text || h.content || '';
+        if (text) messages.push({ role, content: text });
+      }
+    }
+
+    messages.push({ role: 'user', content: message });
+
+    const completion = await groq.chat.completions.create({
       model: MODEL_NAME,
-      systemInstruction: PIERROT_PROMPT
+      messages: messages,
+      temperature: 0.7,
     });
 
-    // Если передан массив истории, передаем его в чат для сохранения контекста диалога
-    const chatHistory = Array.isArray(history) ? history : [];
-    
-    const chat = model.startChat({
-      history: chatHistory,
-    });
+    const reply = completion.choices[0]?.message?.content || '...';
 
-    const result = await chat.sendMessage(message);
-    const response = await result.response;
-    const text = response.text();
-
-    return NextResponse.json({ reply: text });
+    return NextResponse.json({ reply });
 
   } catch (error: any) {
-    console.error('[Pierrot Web] Error:', error);
+    console.error('[Pierrot Web Groq] Error:', error);
     return NextResponse.json(
       { error: 'The ether is disrupted.', details: error?.message || String(error) }, 
       { status: 500 }

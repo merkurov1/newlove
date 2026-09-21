@@ -27,57 +27,29 @@ export default function PasskeyAuth() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setIsLoggedIn(true);
+        syncTokensToCookies(session);
       }
     });
   }, []);
 
-  const syncUserToDatabase = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=3600; SameSite=Lax`;
-      document.cookie = `sb-refresh-token=${session.refresh_token}; path=/; max-age=604800; SameSite=Lax`;
-
-      await fetch('/api/auth/upsert', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-    } catch (e) {
-      console.error('Sync error (non-critical):', e);
-    }
+  const syncTokensToCookies = (session: any) => {
+    if (!session) return;
+    document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=3600; SameSite=Lax`;
+    document.cookie = `sb-refresh-token=${session.refresh_token}; path=/; max-age=604800; SameSite=Lax`;
   };
 
   const handlePasskeyLogin = async () => {
     setLoading(true);
     setMessage(null);
     try {
-      const { error } = await supabase.auth.signInWithPasskey();
+      const { data, error } = await supabase.auth.signInWithPasskey();
       if (error) throw error;
+      if (data?.session) syncTokensToCookies(data.session);
 
-      await syncUserToDatabase();
       setMessage('Success! Redirecting...');
       window.location.href = '/admin';
     } catch (err: any) {
-      setMessage(`Passkey sign-in error: ${err.message || err}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRegisterPasskey = async () => {
-    setLoading(true);
-    setMessage(null);
-    try {
-      const { error } = await supabase.auth.registerPasskey();
-      if (error) throw error;
-
-      setMessage('Passkey successfully linked to this iPad!');
-    } catch (err: any) {
-      setMessage(`Registration error: ${err.message || err}`);
+      setMessage(`Passkey error: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -85,22 +57,14 @@ export default function PasskeyAuth() {
 
   const handleEmailPasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      setMessage('Please enter email and password');
-      return;
-    }
     setLoading(true);
     setMessage(null);
     try {
-      let { error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (error) {
-        const { error: signUpError } = await supabase.auth.signUp({ email, password });
-        if (signUpError) throw signUpError;
-      }
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (data?.session) syncTokensToCookies(data.session);
 
-      await syncUserToDatabase();
-      setMessage('Session created! Redirecting to admin...');
+      setMessage('Session created! Redirecting...');
       window.location.href = '/admin';
     } catch (err: any) {
       setMessage(`Error: ${err.message || err}`);
@@ -109,75 +73,61 @@ export default function PasskeyAuth() {
     }
   };
 
-  // Если пользователь уже вошел, показываем только компактную панель привязки Passkey (если еще не привязан) или скрываем форму входа
   if (isLoggedIn) {
     return (
-      <div className="p-4 bg-neutral-900 rounded-xl border border-white/10 text-white my-4 max-w-md">
-        <h3 className="text-sm font-semibold mb-1">Passkey Management</h3>
-        <p className="text-xs text-neutral-400 mb-3">You are logged in. Link this device for passwordless access.</p>
-        {message && <div className="p-2 mb-2 text-xs bg-white/5 rounded border border-white/10">{message}</div>}
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-emerald-400 font-mono">● Admin Session Active</span>
         <button
-          onClick={handleRegisterPasskey}
-          disabled={loading}
-          className="w-full py-2 px-3 bg-neutral-800 text-white font-medium rounded-lg hover:bg-neutral-700 transition border border-white/10 text-xs cursor-pointer"
+          onClick={async () => {
+            await supabase.auth.signOut();
+            document.cookie = 'sb-access-token=; path=/; max-age=0';
+            document.cookie = 'sb-refresh-token=; path=/; max-age=0';
+            window.location.reload();
+          }}
+          className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 rounded-lg transition border border-white/10"
         >
-          {loading ? 'Processing...' : 'Link this iPad (Passkey)'}
+          Sign Out
         </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center p-4">
-      <div className="w-full max-w-md flex flex-col gap-5 p-8 bg-neutral-900 rounded-2xl border border-white/10 text-white shadow-2xl">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-bold tracking-tight">Admin Authentication</h2>
-          <p className="text-sm text-neutral-400">
-            Use biometrics for instant access or bootstrap your session below.
-          </p>
-        </div>
+    <div className="p-6 bg-neutral-900 rounded-2xl border border-white/10 text-white max-w-sm mx-auto my-8">
+      <h3 className="text-lg font-bold mb-2">Admin Sign In</h3>
+      {message && <div className="p-2 mb-3 text-xs bg-white/5 rounded border border-white/10 text-neutral-300">{message}</div>}
+      
+      <button
+        onClick={handlePasskeyLogin}
+        disabled={loading}
+        className="w-full py-2.5 px-4 bg-white text-black font-semibold rounded-xl hover:bg-neutral-200 transition text-sm mb-4 cursor-pointer"
+      >
+        {loading ? 'Processing...' : 'Sign in with Passkey'}
+      </button>
 
-        {message && (
-          <div className="p-3 text-sm bg-white/5 rounded-xl border border-white/10 text-neutral-200">
-            {message}
-          </div>
-        )}
-
+      <form onSubmit={handleEmailPasswordLogin} className="flex flex-col gap-2.5">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+          className="p-2.5 bg-neutral-800 border border-white/10 rounded-xl text-sm text-white"
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          className="p-2.5 bg-neutral-800 border border-white/10 rounded-xl text-sm text-white"
+        />
         <button
-          onClick={handlePasskeyLogin}
+          type="submit"
           disabled={loading}
-          className="w-full py-3 px-4 bg-white text-black font-semibold rounded-xl hover:bg-neutral-200 transition disabled:opacity-50 cursor-pointer shadow-md flex items-center justify-center gap-2"
+          className="w-full py-2.5 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-500 transition text-sm cursor-pointer mt-1"
         >
-          <span>{loading ? 'Processing...' : 'Sign in with Passkey'}</span>
+          {loading ? 'Working...' : 'Bootstrap Session'}
         </button>
-
-        <div className="border-t border-white/10 my-1"></div>
-
-        <form onSubmit={handleEmailPasswordLogin} className="flex flex-col gap-3">
-          <label className="text-xs text-neutral-400 font-medium uppercase tracking-wider">Session Bootstrap</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email address"
-            className="p-3 bg-neutral-800/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500 transition"
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            className="p-3 bg-neutral-800/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500 transition"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 px-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-500 transition disabled:opacity-50 text-sm cursor-pointer shadow-md"
-          >
-            {loading ? 'Working...' : 'Create Session & Sign In'}
-          </button>
-        </form>
-      </div>
+      </form>
     </div>
   );
 }
