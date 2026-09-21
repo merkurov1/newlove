@@ -1,15 +1,11 @@
-// lib/supabase-browser.ts
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js';
 
-// Singleton browser client so all components share auth state/subscriptions.
-export const supabase = createBrowserClient(
+export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  { auth: { persistSession: true } }
+  {
+    auth: {
+      experimental: { passkey: true },
+    },
+  }
 );
-
-export function createClient() {
-  return supabase;
-}
-
-export default supabase;

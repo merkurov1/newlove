@@ -1,10 +1,12 @@
 import Link from 'next/link';
+import PasskeyAuth from '@/components/PasskeyAuth';
+
 export const dynamic = 'force-dynamic';
 
 import { revalidateLetters } from './actions';
 
 export default async function AdminDashboard({ searchParams }: { searchParams?: any }) {
-  // Authorization is enforced by app/admin/layout.tsx.  Keep dashboard data
+  // Authorization is enforced by app/admin/layout.tsx. Keep dashboard data
   // failures isolated so a missing service-role key does not make /admin a 500.
   let stats = { articles: 0, projects: 0, letters: 0, postcards: 0 };
   let recentArticles: any[] = [];
@@ -45,13 +47,22 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
   const revalidated = searchParams?.revalidated === '1';
 
   return (
-    <div className="p-6 space-y-8">
-      <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
+    <div className="p-6 space-y-8 max-w-7xl mx-auto">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        
+        {/* Виджет быстрого управления Passkey прямо в админке */}
+        <div className="w-full md:w-auto">
+          <PasskeyAuth />
+        </div>
+      </div>
+
       {dataUnavailable && (
         <div className="mb-4 p-3 rounded bg-yellow-50 border border-yellow-200 text-yellow-700">
           ⚠️ Данные панели временно недоступны. Проверьте настройки серверного Supabase-ключа.
         </div>
       )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <Link
           href="/admin/selection"
@@ -82,6 +93,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
           <div className="text-gray-700 mt-1">Открытки</div>
         </Link>
       </div>
+
       <div className="mt-8 space-y-2">
         <h2 className="text-lg font-semibold">Быстрые ссылки</h2>
         <div className="flex flex-wrap gap-3">
@@ -111,7 +123,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
           </Link>
         </div>
       </div>
-      {/* Environment diagnostics - show presence of critical keys (masked) */}
+
       {revalidated && (
         <div className="mb-4 p-3 rounded bg-green-50 border border-green-200 text-green-700">
           ✅ Переиндексация /letters запрошена. Обновите страницу архива через пару секунд.
@@ -137,13 +149,14 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
           >
             <button
               type="submit"
-              className="px-4 py-2 bg-yellow-600 text-white rounded font-semibold hover:bg-yellow-700"
+              className="px-4 py-2 bg-yellow-600 text-white rounded font-semibold hover:bg-yellow-700 cursor-pointer"
             >
               Revalidate /letters
             </button>
           </form>
         </div>
       </div>
+
       <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
           <h3 className="text-lg font-bold mb-2">Последние статьи</h3>
