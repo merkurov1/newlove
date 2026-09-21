@@ -1,12 +1,8 @@
-import Groq from 'groq-sdk';
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; 
-
-const groq = new Groq({ apiKey: (process.env.GOOGLE_API_KEY || "").trim() });
-const MODEL_NAME = 'llama-3.3-70b-versatile'; // Актуальная и стабильная модель на Groq
+export const maxDuration = 30; 
 
 export async function POST(req: Request) {
   try {
@@ -32,41 +28,45 @@ export async function POST(req: Request) {
       throw new Error(`Target auction house blocked the request (Status: ${response.status})`);
     }
 
-    console.log(`[Curator Engine] Page fetched successfully. HTML length: ${htmlContent.length}. Parsing with Groq...`);
+    console.log(`[Curator Engine] Page fetched successfully. HTML length: ${htmlContent.length}. Extracting data...`);
 
-    const prompt = `
-      TASK: You are an elite Art Data Specialist. 
-      Extract structured data and the primary artwork image URL from the raw HTML page content below. Include the full description/essay text, provenance, and all details.
+    // 1. Извлекаем Open Graph метатеги (надежный источник для превью и основных данных)
+    const getMetaContent = (property: string): string => {
+      const match = htmlContent.match(new RegExp(`<meta[^>]*property=["']${property}["'][^>]*content=["']([^"']*)["']`, 'i')) ||
+                    htmlContent.match(new RegExp(`<meta[^>]*content=["']([^"']*)["'][^>]*property=["']${property}["']`, 'i'));
+      return match ? decodeEntities(match[1]) : '';
+    };
 
-      RAW CONTENT:
-      ${htmlContent.substring(0, 40000)}
+    const ogTitle = getMetaContent('og:title');
+    const ogDescription = getMetaContent('og:description');
+    const ogImage = getMetaContent('og:image');
 
-      Return ONLY a strict JSON object in this exact format:
-      {
-        "artist": "Name (Year-Year)",
-        "title": "Title of work",
-        "medium": "Medium description",
-        "dimensions": "Dimensions",
-        "date": "Year",
-        "estimate": "Estimate price",
-        "provenance": "Provenance summary",
-        "image_url": "Direct image URL of the artwork if found, otherwise empty string",
-        "raw_description": "Main essay/description text about the lot"
+    // 2. Пытаемся достать глубокий JSON Next.js (__NEXT_DATA__), если он есть на странице
+    let nextData: any = {};
+    const nextDataMatch = htmlContent.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+    if (nextDataMatch) {
+      try {
+        nextData = JSON.parse(nextDataMatch[1]);
+      } catch (e) {
+        console.warn('[Curator Engine] Failed to parse __NEXT_DATA__ JSON');
       }
-    `;
+    }
 
-    const completion = await groq.chat.completions.create({
-      model: MODEL_NAME,
-      messages: [
-        { role: 'system', content: 'You extract structured JSON data from HTML and Meta tags. Output strict JSON only.' },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.1,
-    });
+    // Собираем базовую структуру данных
+    const parsedData = {
+      artist: extractArtist(ogTitle),
+      title: extractTitle(ogTitle),
+      medium: '',
+      dimensions: '',
+      date: '',
+      estimate: '',
+      provenance: '',
+      image_url: ogImage || '',
+      raw_description: ogDescription || ''
+    };
 
-    const jsonResponse = JSON.parse(completion.choices[0]?.message?.content || '{}');
-    return NextResponse.json(jsonResponse);
+    console.log('[Curator Engine] Extraction complete:', parsedData);
+    return NextResponse.json(parsedData);
 
   } catch (error: any) {
     console.error('[Parser Error]:', error);
@@ -75,4 +75,27 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+}
+
+// Вспомогательные функции для очистки HTML-сущностей и парсинга заголовков
+function decodeEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function extractArtist(ogTitle: string): string {
+  // Обычно формат заголовка: "Artist Name (Year-Year) | Title | Auction"
+  if (!ogTitle) return '';
+  const parts = ogTitle.split('|');
+  return parts[0]?.trim() || '';
+}
+
+function extractTitle(ogTitle: string): string {
+  if (!ogTitle) return '';
+  const parts = ogTitle.split('|');
+  return parts[1]?.trim() || '';
 }
