@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// Используем самую стабильную и доступную модель Groq на бесплатном тарифе
-const MODEL_NAME = 'llama-3.1-8b-instant';
+// Актуальный идентификатор модели для Groq API
+const MODEL_NAME = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 const PIERROT_PROMPT = `
 IDENTITY:
@@ -59,7 +59,6 @@ export async function POST(req: Request) {
 
     const reply = completion.choices[0]?.message?.content || '...';
 
-    // Возвращаем ответ с маркером успешной работы через Groq
     return NextResponse.json({ reply: `${reply} [groq: active]` });
 
   } catch (error: any) {
