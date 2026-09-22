@@ -13,6 +13,19 @@ export default function HeartPhysics({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [permissionGranted, setPermissionGranted] = useState(false);
+  const [bgColor, setBgColor] = useState('#e8b4b8');
+
+  // Определение фонового цвета по времени суток
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 18) {
+      setBgColor('#e8b4b8'); // День (Оригинальный)
+    } else if (hour >= 18 && hour < 22) {
+      setBgColor('#e0a1a6'); // Закат
+    } else {
+      setBgColor('#2b1d24'); // Ночь
+    }
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -41,13 +54,11 @@ export default function HeartPhysics({
     const daemonWidth = 240;
     const daemonHeight = 360;
 
-    // Скорректированные координаты кисти руки (сдвиг вправо)
-    let handX = width / 2 + daemonWidth * 0.35; 
-    let handY = height - daemonHeight * 0.48; 
+    let handX = width / 2 + daemonWidth * 0.35;
+    let handY = height - daemonHeight * 0.48;
 
-    // Физика шарика
     let balloonX = handX;
-    let balloonY = handY - 300; // Увеличенное начальное расстояние
+    let balloonY = handY - 300;
     let vx = 0;
     let vy = 0;
     let angle = 0;
@@ -55,12 +66,12 @@ export default function HeartPhysics({
     let windX = 0;
     let windY = 0;
 
-    // Увеличенная длина веревочки
     const restLength = 280;
 
-    // Пульсация сердца
+    // Пульсация и вибрация нити
     let currentHeartScale = 1;
     let targetHeartScale = 1;
+    let stringVibration = 0;
 
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (e.gamma !== null && e.beta !== null) {
@@ -82,11 +93,15 @@ export default function HeartPhysics({
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
       const dist = Math.hypot(clientX - balloonX, clientY - balloonY);
-      // Пульсация при тапе по сердцу
       if (dist < 120) {
         vx += (Math.random() - 0.5) * 24;
         vy -= 18;
-        targetHeartScale = 1.3; // Увеличиваем масштаб при тапе
+        targetHeartScale = 1.25;
+        stringVibration = 15; // Запуск эффекта гитарной струны
+
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate(15);
+        }
       }
     };
 
@@ -101,7 +116,6 @@ export default function HeartPhysics({
       handX = width / 2 + daemonWidth * 0.35;
       handY = height - daemonHeight * 0.48;
 
-      // --- Физика маятника ---
       const dx = balloonX - handX;
       const dy = balloonY - handY;
       const currentLength = Math.hypot(dx, dy);
@@ -125,35 +139,33 @@ export default function HeartPhysics({
       balloonY += vy;
       angle = vx * 0.03;
 
-      // Пульсация (плавное возвращение масштаба)
       currentHeartScale += (targetHeartScale - currentHeartScale) * 0.1;
-      targetHeartScale += (1 - targetHeartScale) * 0.1; // Возвращение к 1
+      targetHeartScale += (1 - targetHeartScale) * 0.1;
+      stringVibration *= 0.88;
+
+      const daemonX = width / 2 - daemonWidth / 2;
+      const daemonY = height - daemonHeight;
 
       // 1. Чёртик
-      ctx.drawImage(
-        daemonImg,
-        width / 2 - daemonWidth / 2,
-        height - daemonHeight,
-        daemonWidth,
-        daemonHeight
-      );
+      ctx.drawImage(daemonImg, daemonX, daemonY, daemonWidth, daemonHeight);
 
-      // 2. Точка узелка шарика
-      const heartSize = 140 * currentHeartScale; // Масштабируем размер сердца
+      // 2. Динамическая точка узла
+      const heartSize = 140 * currentHeartScale;
       const knotRelativeX = 0;
       const knotRelativeY = heartSize / 2;
 
       const cosA = Math.cos(angle);
       const sinA = Math.sin(angle);
-      
+
       const knotX = balloonX + (knotRelativeX * cosA - knotRelativeY * sinA);
       const knotY = balloonY + (knotRelativeX * sinA + knotRelativeY * cosA);
 
-      // 3. Динамическая нить
+      // 3. Вибрирующая нить
       ctx.beginPath();
       ctx.moveTo(handX, handY);
 
-      const controlX = (handX + knotX) / 2 - vx * 4;
+      const vibX = Math.sin(Date.now() * 0.05) * stringVibration;
+      const controlX = (handX + knotX) / 2 - vx * 4 + vibX;
       const controlY = (handY + knotY) / 2 + 15;
 
       ctx.quadraticCurveTo(controlX, controlY, knotX, knotY);
@@ -161,7 +173,7 @@ export default function HeartPhysics({
       ctx.lineWidth = 1.8;
       ctx.stroke();
 
-      // 4. Сердце (Масштабированное и вращающееся)
+      // 4. Сердце
       ctx.save();
       ctx.translate(balloonX, balloonY);
       ctx.rotate(angle);
@@ -210,7 +222,7 @@ export default function HeartPhysics({
   };
 
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh', background: '#e8b4b8', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', width: '100vw', height: '100vh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden' }}>
       <canvas ref={canvasRef} style={{ display: 'block' }} />
       {!permissionGranted && (
         <button
