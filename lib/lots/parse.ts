@@ -1,17 +1,7 @@
 // app/api/curator/parse-lot/route.ts
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-
-// Временная заглушка вместо импорта из @/lib/lots/parse,
-// чтобы TypeScript/GitHub не ругался на отсутствие экспорта.
-const parseLotHtml = (
-  _html: string,
-  _url: string,
-  _house: string,
-  _options?: { debug?: boolean }
-): Record<string, any> => {
-  return {};
-};
+import { parseLotHtml } from '@/lib/lots/parse';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;

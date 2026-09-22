@@ -1,0 +1,229 @@
+'use client';
+
+import React, { useEffect, useRef, useState } from 'react';
+
+interface Props {
+  daemonUrl?: string;
+  heartUrl?: string;
+}
+
+export default function HeartPhysics({
+  daemonUrl = '/Daemon.png',
+  heartUrl = '/Heart1.png',
+}: Props) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [permissionGranted, setPermissionGranted] = useState(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Загрузка PNG слоев из Procreate
+    const daemonImg = new Image();
+    daemonImg.src = daemonUrl;
+
+    const heartImg = new Image();
+    heartImg.src = heartUrl;
+
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+
+    const handleResize = () => {
+      if (!canvas) return;
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Габариты Чёртика на экране
+    const daemonWidth = 240;
+    const daemonHeight = 360;
+
+    // Точка привязки: Рука справа по центру изображения Чёртика
+    let handX = width / 2 + daemonWidth * 0.15; 
+    let handY = height - daemonHeight * 0.52; 
+
+    // Начальные координаты сердца
+    let balloonX = handX;
+    let balloonY = handY - 260; 
+    let vx = 0;
+    let vy = 0;
+
+    // Ветер и наклоны
+    let windX = 0;
+    let windY = 0;
+
+    // Гироскоп мобильного
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      if (e.gamma !== null && e.beta !== null) {
+        windX = e.gamma * 0.3;
+        windY = (e.beta - 45) * 0.2;
+      }
+    };
+
+    // Фоллбэк: Движение мыши на десктопе
+    const handleMouseMove = (e: MouseEvent) => {
+      const offsetX = (e.clientX - width / 2) / (width / 2);
+      windX = offsetX * 12;
+    };
+
+    window.addEventListener('deviceorientation', handleOrientation);
+    window.addEventListener('mousemove', handleMouseMove);
+
+    // Тап/Клик по сердцу — толчок
+    const handleTouch = (e: TouchEvent | MouseEvent) => {
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+      const dist = Math.hypot(clientX - balloonX, clientY - balloonY);
+      if (dist < 120) {
+        vx += (Math.random() - 0.5) * 24;
+        vy -= 18;
+      }
+    };
+
+    window.addEventListener('touchstart', handleTouch);
+    window.addEventListener('mousedown', handleTouch);
+
+    let animationFrameId: number;
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      // Корректируем точку руки при ресайзе
+      handX = width / 2 + daemonWidth * 0.15;
+      handY = height - daemonHeight * 0.52;
+
+      // --- Физика маятника/пружины ---
+      const restLength = 240; // Длина нити
+      const dx = balloonX - handX;
+      const dy = balloonY - handY;
+      const currentLength = Math.hypot(dx, dy);
+
+      // Подъемная сила шарика
+      vy -= 0.5;
+
+      // Силы ветра
+      vx += windX * 0.06;
+      vy += windY * 0.06;
+
+      // Натяжение нити
+      if (currentLength > restLength) {
+        const tension = (currentLength - restLength) * 0.09;
+        const angle = Math.atan2(dy, dx);
+        vx -= Math.cos(angle) * tension;
+        vy -= Math.sin(angle) * tension;
+      }
+
+      // Сопротивление среды
+      vx *= 0.93;
+      vy *= 0.93;
+
+      balloonX += vx;
+      balloonY += vy;
+
+      // 1. Отрисовка Чёртика внизу
+      ctx.drawImage(
+        daemonImg,
+        width / 2 - daemonWidth / 2,
+        height - daemonHeight,
+        daemonWidth,
+        daemonHeight
+      );
+
+      // 2. Ниточка (Кривая Безье)
+      // Конец нити идет ровно в нижний центр сердца
+      const heartBottomY = balloonY + 70; 
+
+      ctx.beginPath();
+      ctx.moveTo(handX, handY);
+
+      // Изгиб нити от скорости
+      const controlX = (handX + balloonX) / 2 - vx * 4;
+      const controlY = (handY + heartBottomY) / 2 + 15;
+
+      ctx.quadraticCurveTo(controlX, controlY, balloonX, heartBottomY);
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 3. Отрисовка Сердца
+      const heartSize = 140;
+      ctx.save();
+      ctx.translate(balloonX, balloonY);
+      // Небольшое покачивание при полете
+      ctx.rotate(vx * 0.03);
+      ctx.drawImage(
+        heartImg,
+        -heartSize / 2,
+        -heartSize / 2,
+        heartSize,
+        heartSize
+      );
+      ctx.restore();
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('deviceorientation', handleOrientation);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('touchstart', handleTouch);
+      window.removeEventListener('mousedown', handleTouch);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [daemonUrl, heartUrl, permissionGranted]);
+
+  const requestGyroPermission = async () => {
+    if (
+      typeof DeviceOrientationEvent !== 'undefined' &&
+      // @ts-ignore
+      typeof DeviceOrientationEvent.requestPermission === 'function'
+    ) {
+      try {
+        // @ts-ignore
+        const response = await DeviceOrientationEvent.requestPermission();
+        if (response === 'granted') {
+          setPermissionGranted(true);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      setPermissionGranted(true);
+    }
+  };
+
+  return (
+    <div style={{ position: 'relative', width: '100vw', height: '100vh', background: '#e8b4b8', overflow: 'hidden' }}>
+      <canvas ref={canvasRef} style={{ display: 'block' }} />
+      {!permissionGranted && (
+        <button
+          onClick={requestGyroPermission}
+          style={{
+            position: 'absolute',
+            bottom: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '12px 24px',
+            borderRadius: '24px',
+            border: '1px solid #1a1a1a',
+            background: '#ffffff',
+            color: '#1a1a1a',
+            fontFamily: 'sans-serif',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          }}
+        >
+          Включить гироскоп 📱
+        </button>
+      )}
+    </div>
+  );
+}
