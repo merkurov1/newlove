@@ -8,8 +8,8 @@ interface Props {
 }
 
 export default function HeartPhysics({
-  daemonUrl = '/Daemon.png',
-  heartUrl = '/Heart1.png',
+  daemonUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Daemon.png',
+  heartUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png',
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [permissionGranted, setPermissionGranted] = useState(false);
@@ -20,11 +20,12 @@ export default function HeartPhysics({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Загрузка PNG слоев из Procreate
     const daemonImg = new Image();
+    daemonImg.crossOrigin = 'anonymous';
     daemonImg.src = daemonUrl;
 
     const heartImg = new Image();
+    heartImg.crossOrigin = 'anonymous';
     heartImg.src = heartUrl;
 
     let width = (canvas.width = window.innerWidth);
@@ -37,25 +38,21 @@ export default function HeartPhysics({
     };
     window.addEventListener('resize', handleResize);
 
-    // Габариты Чёртика на экране
+    // Габариты и точная привязка к пальцам вытянутой ладони
     const daemonWidth = 240;
     const daemonHeight = 360;
 
-    // Точка привязки: Рука справа по центру изображения Чёртика
-    let handX = width / 2 + daemonWidth * 0.15; 
-    let handY = height - daemonHeight * 0.52; 
+    let handX = width / 2 + daemonWidth * 0.38; 
+    let handY = height - daemonHeight * 0.58; 
 
-    // Начальные координаты сердца
     let balloonX = handX;
-    let balloonY = handY - 260; 
+    let balloonY = handY - 260;
     let vx = 0;
     let vy = 0;
 
-    // Ветер и наклоны
     let windX = 0;
     let windY = 0;
 
-    // Гироскоп мобильного
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (e.gamma !== null && e.beta !== null) {
         windX = e.gamma * 0.3;
@@ -63,7 +60,6 @@ export default function HeartPhysics({
       }
     };
 
-    // Фоллбэк: Движение мыши на десктопе
     const handleMouseMove = (e: MouseEvent) => {
       const offsetX = (e.clientX - width / 2) / (width / 2);
       windX = offsetX * 12;
@@ -72,7 +68,6 @@ export default function HeartPhysics({
     window.addEventListener('deviceorientation', handleOrientation);
     window.addEventListener('mousemove', handleMouseMove);
 
-    // Тап/Клик по сердцу — толчок
     const handleTouch = (e: TouchEvent | MouseEvent) => {
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
@@ -92,24 +87,20 @@ export default function HeartPhysics({
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // Корректируем точку руки при ресайзе
-      handX = width / 2 + daemonWidth * 0.15;
-      handY = height - daemonHeight * 0.52;
+      // Корректные координаты кисти руки
+      handX = width / 2 + daemonWidth * 0.38;
+      handY = height - daemonHeight * 0.58;
 
-      // --- Физика маятника/пружины ---
-      const restLength = 240; // Длина нити
+      const restLength = 240;
       const dx = balloonX - handX;
       const dy = balloonY - handY;
       const currentLength = Math.hypot(dx, dy);
 
-      // Подъемная сила шарика
       vy -= 0.5;
 
-      // Силы ветра
       vx += windX * 0.06;
       vy += windY * 0.06;
 
-      // Натяжение нити
       if (currentLength > restLength) {
         const tension = (currentLength - restLength) * 0.09;
         const angle = Math.atan2(dy, dx);
@@ -117,14 +108,13 @@ export default function HeartPhysics({
         vy -= Math.sin(angle) * tension;
       }
 
-      // Сопротивление среды
       vx *= 0.93;
       vy *= 0.93;
 
       balloonX += vx;
       balloonY += vy;
 
-      // 1. Отрисовка Чёртика внизу
+      // 1. Чёртик
       ctx.drawImage(
         daemonImg,
         width / 2 - daemonWidth / 2,
@@ -133,27 +123,25 @@ export default function HeartPhysics({
         daemonHeight
       );
 
-      // 2. Ниточка (Кривая Безье)
-      // Конец нити идет ровно в нижний центр сердца
-      const heartBottomY = balloonY + 70; 
+      // 2. Точка крепления ровно у узелка внизу сердца
+      const heartSize = 140;
+      const heartBottomY = balloonY + heartSize / 2;
 
+      // 3. Динамическая нить
       ctx.beginPath();
       ctx.moveTo(handX, handY);
 
-      // Изгиб нити от скорости
       const controlX = (handX + balloonX) / 2 - vx * 4;
       const controlY = (handY + heartBottomY) / 2 + 15;
 
       ctx.quadraticCurveTo(controlX, controlY, balloonX, heartBottomY);
       ctx.strokeStyle = '#1a1a1a';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.8;
       ctx.stroke();
 
-      // 3. Отрисовка Сердца
-      const heartSize = 140;
+      // 4. Сердце
       ctx.save();
       ctx.translate(balloonX, balloonY);
-      // Небольшое покачивание при полете
       ctx.rotate(vx * 0.03);
       ctx.drawImage(
         heartImg,
