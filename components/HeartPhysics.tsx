@@ -38,12 +38,12 @@ export default function HeartPhysics({
     };
     window.addEventListener('resize', handleResize);
 
-    // Габариты и точная привязка к пальцам вытянутой ладони
     const daemonWidth = 240;
     const daemonHeight = 360;
 
-    let handX = width / 2 + daemonWidth * 0.38; 
-    let handY = height - daemonHeight * 0.58; 
+    // Точные координаты ладони
+    let handX = width / 2 + daemonWidth * 0.31;
+    let handY = height - daemonHeight * 0.46;
 
     let balloonX = handX;
     let balloonY = handY - 260;
@@ -87,9 +87,8 @@ export default function HeartPhysics({
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // Корректные координаты кисти руки
-      handX = width / 2 + daemonWidth * 0.38;
-      handY = height - daemonHeight * 0.58;
+      handX = width / 2 + daemonWidth * 0.31;
+      handY = height - daemonHeight * 0.46;
 
       const restLength = 240;
       const dx = balloonX - handX;
@@ -123,9 +122,9 @@ export default function HeartPhysics({
         daemonHeight
       );
 
-      // 2. Точка крепления ровно у узелка внизу сердца
+      // 2. Точка узелка шарика (поднята выше к самому узлу)
       const heartSize = 140;
-      const heartBottomY = balloonY + heartSize / 2;
+      const heartBottomY = balloonY + heartSize * 0.35;
 
       // 3. Динамическая нить
       ctx.beginPath();
