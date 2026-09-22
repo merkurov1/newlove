@@ -38,22 +38,29 @@ export default function HeartPhysics({
     };
     window.addEventListener('resize', handleResize);
 
-    // Габариты и точная привязка к пальцам вытянутой ладони
     const daemonWidth = 240;
     const daemonHeight = 360;
 
-    // Скорректированные координаты кисти руки
-    let handX = width / 2 + daemonWidth * 0.33; 
+    // Скорректированные координаты кисти руки (сдвиг вправо)
+    let handX = width / 2 + daemonWidth * 0.35; 
     let handY = height - daemonHeight * 0.48; 
 
+    // Физика шарика
     let balloonX = handX;
-    let balloonY = handY - 260;
+    let balloonY = handY - 300; // Увеличенное начальное расстояние
     let vx = 0;
     let vy = 0;
-    let angle = 0; // Угол поворота шарика
+    let angle = 0;
 
     let windX = 0;
     let windY = 0;
+
+    // Увеличенная длина веревочки
+    const restLength = 280;
+
+    // Пульсация сердца
+    let currentHeartScale = 1;
+    let targetHeartScale = 1;
 
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (e.gamma !== null && e.beta !== null) {
@@ -75,9 +82,11 @@ export default function HeartPhysics({
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
       const dist = Math.hypot(clientX - balloonX, clientY - balloonY);
+      // Пульсация при тапе по сердцу
       if (dist < 120) {
         vx += (Math.random() - 0.5) * 24;
         vy -= 18;
+        targetHeartScale = 1.3; // Увеличиваем масштаб при тапе
       }
     };
 
@@ -89,16 +98,15 @@ export default function HeartPhysics({
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // Корректные координаты кисти руки
-      handX = width / 2 + daemonWidth * 0.33;
+      handX = width / 2 + daemonWidth * 0.35;
       handY = height - daemonHeight * 0.48;
 
-      const restLength = 240;
+      // --- Физика маятника ---
       const dx = balloonX - handX;
       const dy = balloonY - handY;
       const currentLength = Math.hypot(dx, dy);
 
-      vy -= 0.5; // Подъемная сила
+      vy -= 0.5;
 
       vx += windX * 0.06;
       vy += windY * 0.06;
@@ -110,14 +118,18 @@ export default function HeartPhysics({
         vy -= Math.sin(angleSpring) * tension;
       }
 
-      vx *= 0.93; // Сопротивление воздуха
+      vx *= 0.93;
       vy *= 0.93;
 
       balloonX += vx;
       balloonY += vy;
-      angle = vx * 0.03; // Угол зависит от горизонтальной скорости
+      angle = vx * 0.03;
 
-      // 1. Отрисовка Чёртика
+      // Пульсация (плавное возвращение масштаба)
+      currentHeartScale += (targetHeartScale - currentHeartScale) * 0.1;
+      targetHeartScale += (1 - targetHeartScale) * 0.1; // Возвращение к 1
+
+      // 1. Чёртик
       ctx.drawImage(
         daemonImg,
         width / 2 - daemonWidth / 2,
@@ -126,25 +138,21 @@ export default function HeartPhysics({
         daemonHeight
       );
 
-      // 2. Расчет динамической точки крепления нити к узлу сердца
-      const heartSize = 140;
-      // Узел находится внизу спрайта (в вертикальном положении: x=0, y=heartSize/2)
+      // 2. Точка узелка шарика
+      const heartSize = 140 * currentHeartScale; // Масштабируем размер сердца
       const knotRelativeX = 0;
       const knotRelativeY = heartSize / 2;
 
-      // Применяем вращение к относительным координатам узла
       const cosA = Math.cos(angle);
       const sinA = Math.sin(angle);
       
-      // Точка крепления нити с учетом поворота сердца
       const knotX = balloonX + (knotRelativeX * cosA - knotRelativeY * sinA);
       const knotY = balloonY + (knotRelativeX * sinA + knotRelativeY * cosA);
 
-      // 3. Динамическая нить (Кривая Безье)
+      // 3. Динамическая нить
       ctx.beginPath();
       ctx.moveTo(handX, handY);
 
-      // Точка изгиба нити реагирует на скорость движения
       const controlX = (handX + knotX) / 2 - vx * 4;
       const controlY = (handY + knotY) / 2 + 15;
 
@@ -153,7 +161,7 @@ export default function HeartPhysics({
       ctx.lineWidth = 1.8;
       ctx.stroke();
 
-      // 4. Отрисовка Сердца (Вращается вокруг своего центра)
+      // 4. Сердце (Масштабированное и вращающееся)
       ctx.save();
       ctx.translate(balloonX, balloonY);
       ctx.rotate(angle);
