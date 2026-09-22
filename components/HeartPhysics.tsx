@@ -38,17 +38,19 @@ export default function HeartPhysics({
     };
     window.addEventListener('resize', handleResize);
 
+    // Габариты и точная привязка к пальцам вытянутой ладони
     const daemonWidth = 240;
     const daemonHeight = 360;
 
-    // Точные координаты ладони
-    let handX = width / 2 + daemonWidth * 0.31;
-    let handY = height - daemonHeight * 0.46;
+    // Скорректированные координаты кисти руки
+    let handX = width / 2 + daemonWidth * 0.33; 
+    let handY = height - daemonHeight * 0.48; 
 
     let balloonX = handX;
     let balloonY = handY - 260;
     let vx = 0;
     let vy = 0;
+    let angle = 0; // Угол поворота шарика
 
     let windX = 0;
     let windY = 0;
@@ -87,33 +89,35 @@ export default function HeartPhysics({
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
-      handX = width / 2 + daemonWidth * 0.31;
-      handY = height - daemonHeight * 0.46;
+      // Корректные координаты кисти руки
+      handX = width / 2 + daemonWidth * 0.33;
+      handY = height - daemonHeight * 0.48;
 
       const restLength = 240;
       const dx = balloonX - handX;
       const dy = balloonY - handY;
       const currentLength = Math.hypot(dx, dy);
 
-      vy -= 0.5;
+      vy -= 0.5; // Подъемная сила
 
       vx += windX * 0.06;
       vy += windY * 0.06;
 
       if (currentLength > restLength) {
         const tension = (currentLength - restLength) * 0.09;
-        const angle = Math.atan2(dy, dx);
-        vx -= Math.cos(angle) * tension;
-        vy -= Math.sin(angle) * tension;
+        const angleSpring = Math.atan2(dy, dx);
+        vx -= Math.cos(angleSpring) * tension;
+        vy -= Math.sin(angleSpring) * tension;
       }
 
-      vx *= 0.93;
+      vx *= 0.93; // Сопротивление воздуха
       vy *= 0.93;
 
       balloonX += vx;
       balloonY += vy;
+      angle = vx * 0.03; // Угол зависит от горизонтальной скорости
 
-      // 1. Чёртик
+      // 1. Отрисовка Чёртика
       ctx.drawImage(
         daemonImg,
         width / 2 - daemonWidth / 2,
@@ -122,26 +126,37 @@ export default function HeartPhysics({
         daemonHeight
       );
 
-      // 2. Точка узелка шарика (поднята выше к самому узлу)
+      // 2. Расчет динамической точки крепления нити к узлу сердца
       const heartSize = 140;
-      const heartBottomY = balloonY + heartSize * 0.35;
+      // Узел находится внизу спрайта (в вертикальном положении: x=0, y=heartSize/2)
+      const knotRelativeX = 0;
+      const knotRelativeY = heartSize / 2;
 
-      // 3. Динамическая нить
+      // Применяем вращение к относительным координатам узла
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      
+      // Точка крепления нити с учетом поворота сердца
+      const knotX = balloonX + (knotRelativeX * cosA - knotRelativeY * sinA);
+      const knotY = balloonY + (knotRelativeX * sinA + knotRelativeY * cosA);
+
+      // 3. Динамическая нить (Кривая Безье)
       ctx.beginPath();
       ctx.moveTo(handX, handY);
 
-      const controlX = (handX + balloonX) / 2 - vx * 4;
-      const controlY = (handY + heartBottomY) / 2 + 15;
+      // Точка изгиба нити реагирует на скорость движения
+      const controlX = (handX + knotX) / 2 - vx * 4;
+      const controlY = (handY + knotY) / 2 + 15;
 
-      ctx.quadraticCurveTo(controlX, controlY, balloonX, heartBottomY);
+      ctx.quadraticCurveTo(controlX, controlY, knotX, knotY);
       ctx.strokeStyle = '#1a1a1a';
       ctx.lineWidth = 1.8;
       ctx.stroke();
 
-      // 4. Сердце
+      // 4. Отрисовка Сердца (Вращается вокруг своего центра)
       ctx.save();
       ctx.translate(balloonX, balloonY);
-      ctx.rotate(vx * 0.03);
+      ctx.rotate(angle);
       ctx.drawImage(
         heartImg,
         -heartSize / 2,
@@ -208,7 +223,7 @@ export default function HeartPhysics({
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
           }}
         >
-          Включить гироскоп 📱
+          Enable Gyroscope 📱
         </button>
       )}
     </div>
