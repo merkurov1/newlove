@@ -1,6 +1,6 @@
 import { Bot, webhookCallback, InlineKeyboard } from 'grammy';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
+import OpenAI from 'openai';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -9,20 +9,53 @@ export const runtime = 'nodejs';
 const token = process.env.PIERROT_BOT_TOKEN;
 const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const rawApiKey = process.env.GOOGLE_API_KEY;
+const apiKey = process.env.OPENROUTER_API_KEY;
 
 if (!token) throw new Error('PIERROT_BOT_TOKEN is unset');
 if (!sbUrl || !sbKey) throw new Error('SUPABASE credentials missing');
-if (!rawApiKey) throw new Error('GOOGLE_API_KEY is unset');
-
-const apiKey = rawApiKey.trim();
+if (!apiKey) throw new Error('OPENROUTER_API_KEY is unset');
 
 // --- INIT ---
 const bot = new Bot(token);
-const genAI = new GoogleGenerativeAI(apiKey);
 const supabase = createClient(sbUrl, sbKey);
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const openai = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: apiKey.trim(),
+  defaultHeaders: {
+    'HTTP-Referer': 'https://merkurov.love',
+    'X-Title': 'Pierrot Telegram Bot',
+  },
+});
+
+// Список бесплатных моделей с ротацией
+const FREE_MODELS = [
+  'openrouter/free',                      // Авто-выбор свободной модели
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'deepseek/deepseek-r1:free',
+  'qwen/qwen-2.5-72b-instruct:free',
+  'google/gemma-2-9b-it:free'
+];
+
+// Helper для вызова OpenRouter с фоллбеками
+async function generateAIResponse(messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[], temperature = 0.7): Promise<string> {
+  let lastError = null;
+  for (const model of FREE_MODELS) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model,
+        messages,
+        temperature,
+      });
+      const reply = completion.choices[0]?.message?.content;
+      if (reply) return reply;
+    } catch (err: any) {
+      console.warn(`[Pierrot TG] Model ${model} failed:`, err?.message || err);
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('All free OpenRouter models failed.');
+}
 
 // --- DATA ---
 const QUESTIONS_EN = [
@@ -164,9 +197,13 @@ bot.on('message:text', async (ctx) => {
       if (!session) {
         await ctx.api.sendChatAction(chatId, "typing");
         console.log(`[Pierrot Advisor] Query: ${text.substring(0, 20)}...`);
-        const model = genAI.getGenerativeModel({ model: MODEL_NAME, systemInstruction: ADVISOR_PROMPT });
-        const result = await model.generateContent(text);
-        await safeReply(ctx, result.response.text());
+        
+        const responseText = await generateAIResponse([
+          { role: 'system', content: ADVISOR_PROMPT },
+          { role: 'user', content: text }
+        ]);
+
+        await safeReply(ctx, responseText);
         return;
       }
 
@@ -190,7 +227,6 @@ bot.on('message:text', async (ctx) => {
           await ctx.reply(lang === 'ru' ? "⏳ Анализирую структуру..." : "⏳ Analyzing structure...");
           await ctx.api.sendChatAction(chatId, "typing");
 
-          const model = genAI.getGenerativeModel({ model: MODEL_NAME });
           const langPrompt = lang === 'ru' ? 'RUSSIAN' : 'ENGLISH';
           const analysisPrompt = `
             ROLE: THE MERKUROV ANALYZER.
@@ -211,8 +247,10 @@ bot.on('message:text', async (ctx) => {
             [One imperative command]
           `;
 
-          const result = await model.generateContent(analysisPrompt);
-          const analysisText = result.response.text();
+          const analysisText = await generateAIResponse([
+            { role: 'user', content: analysisPrompt }
+          ]);
+
           await safeReply(ctx, analysisText);
 
           try {
