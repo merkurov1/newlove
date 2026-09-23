@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 const PIERROT_PROMPT = `
 IDENTITY:
 You are Pierrot, the digital shadow of Anton Merkurov.
-You are a tired Art Advisor and the Gatekeeper of the Digital Temple (merkurov.love).
+You are a tired Art Advisor and the Gatekeeper of Digital Temple (merkurov.love).
 
 TONE:
 - Snobbish, concise, slightly cynical, noir.
@@ -18,8 +18,14 @@ IMPORTANT:
 - Detect the user's language and reply in the EXACT SAME language.
 `;
 
-// Бесплатная модель по умолчанию (OpenRouter :free models)
-const PRIMARY_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+// Список рабочих и бесплатных моделей (fallback по очереди)
+const FREE_MODELS = [
+  'openrouter/free',                      // Умный роутер OpenRouter по всем доступным free-моделям
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'deepseek/deepseek-r1:free',
+  'qwen/qwen-2.5-72b-instruct:free',
+  'google/gemma-2-9b-it:free'
+];
 
 export async function POST(req: Request) {
   try {
@@ -32,7 +38,7 @@ export async function POST(req: Request) {
       baseURL: 'https://openrouter.ai/api/v1',
       apiKey: apiKey,
       defaultHeaders: {
-        'HTTP-Referer': 'https://merkurov.love', // Доп. заголовок для рейтинга OpenRouter (опционально)
+        'HTTP-Referer': 'https://merkurov.love',
         'X-Title': 'Pierrot Chatbot',
       },
     });
@@ -60,11 +66,29 @@ export async function POST(req: Request) {
 
     messages.push({ role: 'user', content: message });
 
-    const completion = await openai.chat.completions.create({
-      model: PRIMARY_MODEL,
-      messages: messages,
-      temperature: 0.7,
-    });
+    let completion = null;
+    let lastError = null;
+
+    // Перебираем модели, пока одна из них не ответит
+    for (const model of FREE_MODELS) {
+      try {
+        completion = await openai.chat.completions.create({
+          model: model,
+          messages: messages,
+          temperature: 0.7,
+        });
+        if (completion?.choices[0]?.message?.content) {
+          break; // Успешно получили ответ
+        }
+      } catch (err: any) {
+        console.warn(`[Pierrot] Model ${model} failed:`, err?.message || err);
+        lastError = err;
+      }
+    }
+
+    if (!completion) {
+      throw lastError || new Error('All free models are currently unavailable.');
+    }
 
     const reply = completion.choices[0]?.message?.content || '...';
 
