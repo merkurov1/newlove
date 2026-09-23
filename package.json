@@ -93,6 +93,7 @@
     "markdown-to-jsx": "^7.5.0",
     "next": "14.2.5",
     "node-fetch": "^2.7.0",
+    "openai": "^7.22.0",
     "pg": "^8.11.0",
     "pino": "^10.1.0",
     "pino-pretty": "^9.2.0",

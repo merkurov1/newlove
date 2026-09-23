@@ -1,4 +1,4 @@
-import Groq from 'groq-sdk';
+import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -18,25 +18,24 @@ IMPORTANT:
 - Detect the user's language and reply in the EXACT SAME language.
 `;
 
+// Бесплатная модель по умолчанию (OpenRouter :free models)
+const PRIMARY_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+
 export async function POST(req: Request) {
   try {
-    const apiKey = (process.env.GOOGLE_API_KEY || "").trim();
+    const apiKey = (process.env.OPENROUTER_API_KEY || "").trim();
     if (!apiKey) {
       return NextResponse.json({ error: 'API Key missing.' }, { status: 500 });
     }
 
-    const groq = new Groq({ apiKey });
-
-    // Динамически получаем список и выбираем подходящую текстовую модель
-    const modelsResponse = await groq.models.list();
-    const ids = modelsResponse.data?.map(m => m.id) || [];
-    
-    // Ищем модель для чата (исключаем аудио/служебные вроде whisper или compound)
-    const validModel = ids.find(id => 
-      !id.includes('whisper') && 
-      !id.includes('compound') && 
-      (id.includes('llama') || id.includes('gemma') || id.includes('mixtral') || id.includes('gpt'))
-    ) || ids[0] || 'llama-3.3-70b-versatile';
+    const openai = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: apiKey,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://merkurov.love', // Доп. заголовок для рейтинга OpenRouter (опционально)
+        'X-Title': 'Pierrot Chatbot',
+      },
+    });
 
     const body = await req.json();
     const { message, history } = body;
@@ -45,22 +44,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Silence is golden, but I need text.' }, { status: 400 });
     }
 
-    const messages: any[] = [
+    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: PIERROT_PROMPT }
     ];
 
     if (Array.isArray(history)) {
       for (const h of history) {
-        const role = h.role === 'model' ? 'assistant' : 'user';
+        const role = (h.role === 'model' || h.role === 'assistant') ? 'assistant' : 'user';
         const text = h.parts?.[0]?.text || h.content || '';
-        if (text) messages.push({ role, content: text });
+        if (text) {
+          messages.push({ role, content: text });
+        }
       }
     }
 
     messages.push({ role: 'user', content: message });
 
-    const completion = await groq.chat.completions.create({
-      model: validModel,
+    const completion = await openai.chat.completions.create({
+      model: PRIMARY_MODEL,
       messages: messages,
       temperature: 0.7,
     });
