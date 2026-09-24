@@ -423,11 +423,6 @@ export default function ArtEngineDashboard() {
 
   return (
     <>
-      <head>
-        <title>Curators Engine — Institutional Art Intelligence</title>
-        <meta name="description" content="Professional art market intelligence platform for investment memorandums, asset valuation, and family office curation." />
-      </head>
-
       <div className="min-h-screen bg-[#FDFDFC] text-neutral-900 font-sans selection:bg-neutral-900 selection:text-white">
         
         {/* AUTHENTICATION / REQUEST ACCESS MODAL */}
