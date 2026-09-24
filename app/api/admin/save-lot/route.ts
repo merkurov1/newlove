@@ -19,9 +19,13 @@ export async function POST(req: Request) {
   try {
     const { artist, title, link, image_url, ai_content, specs } = await req.json();
 
+    if (!link) {
+      return NextResponse.json({ error: 'Source link is required' }, { status: 400 });
+    }
+
     let storedImagePath = image_url;
 
-    // Download & Upload image to Supabase Storage if present
+    // Upload image to Supabase Storage if present
     if (image_url && image_url.startsWith('http')) {
       try {
         const imgRes = await fetch(image_url);
@@ -48,21 +52,24 @@ export async function POST(req: Request) {
 
     const resolvedAuctionHouse = getAuctionHouseName(link, specs?.auction_house);
 
-    // Save lot to database
+    // UPSERT: Если source_url уже существует, обновить лот вместо ошибки UNIQUE constraint
     const { data: lot, error } = await supabase
       .from('lots')
-      .insert({
-        artist: artist || ai_content?.artist || 'Unknown Artist',
-        title: title || ai_content?.title || 'Untitled',
-        year: ai_content?.year || specs?.year || null,
-        medium: ai_content?.medium || specs?.medium || null,
-        dimensions: ai_content?.dimensions || specs?.dimensions || null,
-        estimate: ai_content?.estimate_raw || specs?.estimate || null,
-        source_url: link,
-        auction_house: resolvedAuctionHouse,
-        image_path: storedImagePath,
-        ai_content: ai_content,
-      })
+      .upsert(
+        {
+          artist: artist || ai_content?.artist || 'Unknown Artist',
+          title: title || ai_content?.title || 'Untitled',
+          year: ai_content?.year || specs?.year || null,
+          medium: ai_content?.medium || specs?.medium || null,
+          dimensions: ai_content?.dimensions || specs?.dimensions || null,
+          estimate: ai_content?.estimate_raw || specs?.estimate || null,
+          source_url: link,
+          auction_house: resolvedAuctionHouse,
+          image_path: storedImagePath,
+          ai_content: ai_content,
+        },
+        { onConflict: 'source_url' }
+      )
       .select('id')
       .single();
 

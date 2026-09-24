@@ -13,9 +13,13 @@ export default function ArtEngineDashboard() {
   const [session, setSession] = useState<Session | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  
+  // Auth Form State
   const [authEmail, setAuthEmail] = useState('');
-  const [authSent, setAuthSent] = useState(false);
-  const [authSending, setAuthSending] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
 
   // Ingestion State
   const [input, setInput] = useState({ 
@@ -31,6 +35,7 @@ export default function ArtEngineDashboard() {
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   const [autoProcessing, setAutoProcessing] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
@@ -91,10 +96,11 @@ export default function ArtEngineDashboard() {
     });
     setOutput(null);
     setImgError(false);
+    setIsSaved(false);
     setStatusText('Ready for accession');
   };
 
-  // Helper for Paste from Clipboard
+  // Paste from Clipboard
   const handlePasteClipboard = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -118,25 +124,90 @@ export default function ArtEngineDashboard() {
     return fetch(url, { ...options, headers });
   };
 
-  // AUTH HANDLERS
-  const handleMagicLinkLogin = async (e: React.FormEvent) => {
+  // AUTH 1: Send OTP Code to Email
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authEmail) return;
-    setAuthSending(true);
+    setAuthLoading(true);
+    setAuthError('');
 
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: authEmail,
-        options: { emailRedirectTo: `${window.location.origin}/art-engine` },
+        options: {
+          shouldCreateUser: true,
+        },
       });
 
       if (error) throw error;
-      setAuthSent(true);
+      setOtpSent(true);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Authentication error';
-      alert(errorMessage);
+      const errorMessage = err instanceof Error ? err.message : 'Error sending OTP';
+      setAuthError(errorMessage);
     } finally {
-      setAuthSending(false);
+      setAuthLoading(false);
+    }
+  };
+
+  // AUTH 2: Verify OTP Code
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authEmail || !otpCode) return;
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: authEmail,
+        token: otpCode,
+        type: 'email',
+      });
+
+      if (error) throw error;
+
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.user);
+        setShowAuthModal(false);
+        setOtpSent(false);
+        setOtpCode('');
+        setAuthEmail('');
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Invalid code';
+      setAuthError(errorMessage);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // AUTH 3: Passkey / WebAuthn Login
+  const handlePasskeySignIn = async () => {
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      // Direct WebAuthn / Passkey Authentication call
+      const { data, error } = await supabase.auth.mfa.authenticate({
+        factorId: 'webauthn',
+      });
+
+      if (error) {
+        // Fallback or explicit check if webauthn isn't bound on device
+        throw new Error('Passkey login not recognized or not configured for this device.');
+      }
+
+      if (data) {
+        const { data: { session: newSession } } = await supabase.auth.getSession();
+        setSession(newSession);
+        setUser(newSession?.user || null);
+        setShowAuthModal(false);
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Passkey error';
+      setAuthError(errorMessage);
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -151,6 +222,7 @@ export default function ArtEngineDashboard() {
     if (!input.link) return;
     setParsing(true);
     setImgError(false);
+    setIsSaved(false);
     setStatusText('Extracting metadata...');
 
     try {
@@ -248,7 +320,7 @@ export default function ArtEngineDashboard() {
   // PIPELINE 3: SAVE TO VAULT
   const saveToVault = async (customOutput?: any, customImage?: string) => {
     const lotToSave = customOutput || output;
-    if (!lotToSave) return;
+    if (!lotToSave || isSaved) return;
     setSaving(true);
     setStatusText('Persisting record to Vault...');
 
@@ -269,6 +341,7 @@ export default function ArtEngineDashboard() {
 
       const data = await res.json();
       if (data.success || data.lot_id || data.id) {
+        setIsSaved(true);
         setStatusText('Cataloged in Vault');
         fetchLots();
       } else {
@@ -287,6 +360,7 @@ export default function ArtEngineDashboard() {
   const handleOneClickPipeline = async () => {
     if (!input.link) return alert('Provide an auction link');
     setAutoProcessing(true);
+    setIsSaved(false);
     
     const parseResult = await handleAutoParse();
     if (!parseResult) return setAutoProcessing(false);
@@ -321,7 +395,7 @@ export default function ArtEngineDashboard() {
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans pt-24 pb-32 px-6 sm:px-12 selection:bg-neutral-900 selection:text-white">
       
-      {/* AUTHENTICATION MODAL */}
+      {/* AUTHENTICATION MODAL (OTP CODE + PASSKEY) */}
       {showAuthModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-white border border-neutral-200 rounded-none max-w-md w-full p-8 shadow-xl space-y-6">
@@ -331,46 +405,92 @@ export default function ArtEngineDashboard() {
                 <h3 className="text-xl font-serif text-neutral-900">Curator Sign-In</h3>
               </div>
               <button 
-                onClick={() => { setShowAuthModal(false); setAuthSent(false); }}
+                onClick={() => { setShowAuthModal(false); setOtpSent(false); setAuthError(''); }}
                 className="text-neutral-400 hover:text-neutral-900 text-sm font-mono"
               >
                 ✕
               </button>
             </div>
 
-            {authSent ? (
-              <div className="space-y-4 py-4 text-center">
-                <div className="text-2xl font-serif text-neutral-900">Link Dispatched</div>
-                <p className="text-xs font-mono text-neutral-500 leading-relaxed">
-                  We sent an authorization link to <strong className="text-neutral-900">{authEmail}</strong>. Check your inbox to proceed.
-                </p>
-                <button
-                  onClick={() => setAuthSent(false)}
-                  className="text-xs font-mono text-neutral-400 hover:text-neutral-900 underline pt-2"
-                >
-                  Use a different email
-                </button>
+            {authError && (
+              <div className="bg-neutral-100 border-l-2 border-neutral-900 p-3 text-xs font-mono text-neutral-800">
+                {authError}
+              </div>
+            )}
+
+            {!otpSent ? (
+              <div className="space-y-6">
+                <form onSubmit={handleSendOtp} className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-2">
+                      Enter Email for 6-Digit Verification Code
+                    </label>
+                    <input 
+                      type="email"
+                      required
+                      placeholder="curator@merkurov.love"
+                      value={authEmail}
+                      onChange={e => setAuthEmail(e.target.value)}
+                      className="w-full bg-neutral-50 border border-neutral-200 rounded-none px-4 py-3 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50"
+                  >
+                    {authLoading ? 'Sending Code...' : 'Send 6-Digit Code'}
+                  </button>
+                </form>
+
+                <div className="relative border-t border-neutral-200 pt-6 text-center">
+                  <span className="bg-white px-3 text-[10px] font-mono text-neutral-400 uppercase tracking-widest absolute -top-2.5 left-1/2 -translate-x-1/2">
+                    OR
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handlePasskeySignIn}
+                    disabled={authLoading}
+                    className="w-full bg-neutral-100 hover:bg-neutral-200 text-neutral-900 border border-neutral-200 font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    🔑 Sign In with Passkey / WebAuthn
+                  </button>
+                </div>
               </div>
             ) : (
-              <form onSubmit={handleMagicLinkLogin} className="space-y-5">
+              <form onSubmit={handleVerifyOtp} className="space-y-5">
                 <div>
-                  <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-2">EMAIL ADDRESS</label>
+                  <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
+                    Enter Code Sent To:
+                  </label>
+                  <p className="text-xs font-mono font-bold text-neutral-900 mb-3">{authEmail}</p>
+                  
                   <input 
-                    type="email"
+                    type="text"
                     required
-                    placeholder="curator@merkurov.love"
-                    value={authEmail}
-                    onChange={e => setAuthEmail(e.target.value)}
-                    className="w-full bg-neutral-50 border border-neutral-200 rounded-none px-4 py-3 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition"
+                    maxLength={6}
+                    placeholder="123456"
+                    value={otpCode}
+                    onChange={e => setOtpCode(e.target.value.trim())}
+                    className="w-full bg-neutral-50 border border-neutral-200 rounded-none px-4 py-3 text-center text-lg tracking-[0.5em] text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  disabled={authSending}
+                  disabled={authLoading}
                   className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50"
                 >
-                  {authSending ? 'DISPATCHING...' : 'SEND ACCESS LINK'}
+                  {authLoading ? 'Verifying...' : 'Verify Code & Sign In'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setOtpSent(false)}
+                  className="w-full text-center text-xs font-mono text-neutral-400 hover:text-neutral-900 underline pt-2 block"
+                >
+                  ← Back to Email input
                 </button>
               </form>
             )}
@@ -561,12 +681,12 @@ export default function ArtEngineDashboard() {
                       Curatorial Dossier
                     </span>
                     
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 items-center">
                       <button 
                         onClick={handleCopyDossier} 
                         className="text-xs font-mono text-neutral-600 hover:text-neutral-900 underline transition"
                       >
-                        {copyStatus ? 'Copied' : 'Copy Text'}
+                        {copyStatus ? 'Copied ✓' : 'Copy Text'}
                       </button>
 
                       <button 
@@ -578,10 +698,14 @@ export default function ArtEngineDashboard() {
 
                       <button 
                         onClick={() => saveToVault()} 
-                        disabled={saving || autoProcessing}
-                        className="bg-neutral-900 hover:bg-black text-white px-4 py-1.5 text-xs font-mono uppercase tracking-wider transition disabled:opacity-50"
+                        disabled={saving || autoProcessing || isSaved}
+                        className={`px-4 py-1.5 text-xs font-mono uppercase tracking-wider transition ${
+                          isSaved 
+                            ? 'bg-neutral-200 text-neutral-600 cursor-default' 
+                            : 'bg-neutral-900 hover:bg-black text-white disabled:opacity-50'
+                        }`}
                       >
-                        {saving ? 'Saving...' : 'Save to Vault'}
+                        {saving ? 'Saving...' : isSaved ? 'Saved in Vault ✓' : 'Save to Vault'}
                       </button>
                     </div>
                   </div>
