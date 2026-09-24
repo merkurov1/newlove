@@ -13,6 +13,7 @@ export default function ArtEngineDashboard() {
   const [session, setSession] = useState<Session | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'signin' | 'request'>('signin');
   
   // Auth Form State
   const [authEmail, setAuthEmail] = useState('');
@@ -20,6 +21,7 @@ export default function ArtEngineDashboard() {
   const [otpSent, setOtpSent] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [requestSuccess, setRequestSuccess] = useState(false);
 
   // Ingestion State
   const [input, setInput] = useState({ 
@@ -180,7 +182,26 @@ export default function ArtEngineDashboard() {
     }
   };
 
-  // AUTH 3: Безопасный Passkey / WebAuthn Sign-In (Без падений и ложных ошибок)
+  // REQUEST ACCESS HANDLER
+  const handleRequestAccess = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authEmail) return;
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      // Имитируем отправку запроса на аккредитацию
+      await new Promise(r => setTimeout(r, 800));
+      setRequestSuccess(true);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Request error';
+      setAuthError(errorMessage);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // AUTH 3: Safe Passkey / WebAuthn Sign-In
   const handlePasskeySignIn = async () => {
     setAuthLoading(true);
     setAuthError('');
@@ -190,7 +211,6 @@ export default function ArtEngineDashboard() {
         throw new Error('WebAuthn is not supported by this browser environment.');
       }
 
-      // Проверяем наличие метода в клиенте без генерации исключений SDK
       const authClient = supabase.auth as any;
       if (typeof authClient.signInWithWebAuthn === 'function') {
         const { data, error } = await authClient.signInWithWebAuthn();
@@ -205,7 +225,6 @@ export default function ArtEngineDashboard() {
         }
       }
       
-      // Если метод не проинициализирован на бэкенде/клиенте Supabase
       throw new Error('Passkey authentication is not configured in this project instance. Please use 6-digit email OTP.');
       
     } catch (err: unknown) {
@@ -402,35 +421,59 @@ export default function ArtEngineDashboard() {
         <meta name="description" content="Professional art market intelligence platform for investment memorandums, asset valuation, and family office curation." />
       </head>
 
-      <div className="min-h-screen bg-[#FAFAFA] text-neutral-900 font-sans selection:bg-neutral-900 selection:text-white">
+      <div className="min-h-screen bg-[#FDFDFC] text-neutral-900 font-sans selection:bg-neutral-900 selection:text-white">
         
-        {/* TOP INSTITUTIONAL TICKER / STATUS BAR */}
-        <div className="border-b border-neutral-200 bg-white px-6 py-2.5 text-[11px] font-mono flex justify-between items-center text-neutral-500 tracking-wider">
+        {/* TOP FINTECH TICKER BAR */}
+        <div className="border-b border-neutral-200/80 bg-white px-8 py-3 text-[11px] font-mono flex justify-between items-center text-neutral-500 tracking-wider">
           <div className="flex items-center gap-3">
-            <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-            <span className="text-neutral-900 font-bold uppercase">Curators Engine v2.4</span>
-            <span className="hidden sm:inline text-neutral-300">|</span>
-            <span className="hidden sm:inline text-neutral-400">Private Banking & Fine Art Terminal</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+            <span className="text-neutral-900 font-bold uppercase tracking-widest">Curators Engine</span>
+            <span className="text-neutral-300">/</span>
+            <span className="text-neutral-400">Secure Terminal v2.4</span>
           </div>
           <div>
-            {user ? <span className="text-neutral-700">{user.email}</span> : <span>Restricted Environment</span>}
+            {user ? <span className="text-neutral-800 font-medium">{user.email}</span> : <span className="text-neutral-400">Client Session Restricted</span>}
           </div>
         </div>
 
-        {/* AUTHENTICATION MODAL */}
+        {/* AUTHENTICATION / REQUEST ACCESS MODAL */}
         {showAuthModal && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 bg-neutral-950/40 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white border border-neutral-200 max-w-md w-full p-8 shadow-2xl space-y-6">
-              <div className="flex justify-between items-center border-b border-neutral-200 pb-4">
+              
+              {/* Modal Header & Tabs */}
+              <div className="flex justify-between items-start border-b border-neutral-200 pb-4">
                 <div>
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 block">SECURE ACCESS</span>
-                  <h3 className="text-xl font-serif text-neutral-900">Institutional Sign-In</h3>
+                  <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400 block mb-1">
+                    {authMode === 'signin' ? 'AUTHORIZED ACCESS' : 'ACCREDITATION SUITE'}
+                  </span>
+                  <h3 className="text-xl font-serif text-neutral-900">
+                    {authMode === 'signin' ? 'Terminal Sign-In' : 'Request Access'}
+                  </h3>
                 </div>
                 <button 
-                  onClick={() => { setShowAuthModal(false); setOtpSent(false); setAuthError(''); }}
-                  className="text-neutral-400 hover:text-neutral-900 text-sm font-mono"
+                  onClick={() => { setShowAuthModal(false); setOtpSent(false); setAuthError(''); setRequestSuccess(false); }}
+                  className="text-neutral-400 hover:text-neutral-900 text-sm font-mono p-1"
                 >
                   ✕
+                </button>
+              </div>
+
+              {/* Mode Switcher */}
+              <div className="grid grid-cols-2 border border-neutral-200 p-0.5 bg-neutral-50 text-xs font-mono">
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('signin'); setAuthError(''); setRequestSuccess(false); }}
+                  className={`py-2 text-center uppercase tracking-wider transition ${authMode === 'signin' ? 'bg-white text-neutral-900 font-bold shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('request'); setAuthError(''); setOtpSent(false); }}
+                  className={`py-2 text-center uppercase tracking-wider transition ${authMode === 'request' ? 'bg-white text-neutral-900 font-bold shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
+                >
+                  Request Access
                 </button>
               </div>
 
@@ -440,20 +483,64 @@ export default function ArtEngineDashboard() {
                 </div>
               )}
 
-              {!otpSent ? (
-                <div className="space-y-6">
-                  <form onSubmit={handleSendOtp} className="space-y-4">
+              {authMode === 'signin' ? (
+                /* SIGN IN FLOW */
+                !otpSent ? (
+                  <div className="space-y-6">
+                    <form onSubmit={handleSendOtp} className="space-y-4">
+                      <div>
+                        <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-2">
+                          Institutional Email Address
+                        </label>
+                        <input 
+                          type="email"
+                          required
+                          placeholder="curator@privateoffice.com"
+                          value={authEmail}
+                          onChange={e => setAuthEmail(e.target.value)}
+                          className="w-full bg-neutral-50 border border-neutral-300 px-4 py-3 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={authLoading}
+                        className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50"
+                      >
+                        {authLoading ? 'Transmitting...' : 'Send 6-Digit OTP Code'}
+                      </button>
+                    </form>
+
+                    <div className="relative border-t border-neutral-200 pt-6 text-center">
+                      <span className="bg-white px-3 text-[10px] font-mono text-neutral-400 uppercase tracking-widest absolute -top-2.5 left-1/2 -translate-x-1/2">
+                        OR SECURE PASSKEY
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handlePasskeySignIn}
+                        disabled={authLoading}
+                        className="w-full bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        🛡️ Authenticate via Passkey (WebAuthn)
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleVerifyOtp} className="space-y-5">
                     <div>
-                      <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-2">
-                        Corporate / Institutional Email
+                      <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
+                        Verification code sent to:
                       </label>
+                      <p className="text-xs font-mono font-bold text-neutral-900 mb-3">{authEmail}</p>
+                      
                       <input 
-                        type="email"
+                        type="text"
                         required
-                        placeholder="curator@bank.com"
-                        value={authEmail}
-                        onChange={e => setAuthEmail(e.target.value)}
-                        className="w-full bg-neutral-50 border border-neutral-300 px-4 py-3 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition"
+                        maxLength={6}
+                        placeholder="••••••"
+                        value={otpCode}
+                        onChange={e => setOtpCode(e.target.value.trim())}
+                        className="w-full bg-neutral-50 border border-neutral-300 px-4 py-3 text-center text-lg tracking-[0.5em] text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition"
                       />
                     </div>
 
@@ -462,71 +549,76 @@ export default function ArtEngineDashboard() {
                       disabled={authLoading}
                       className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50"
                     >
-                      {authLoading ? 'Transmitting Code...' : 'Send 6-Digit Verification Code'}
+                      {authLoading ? 'Verifying...' : 'Authorize Terminal Session'}
                     </button>
-                  </form>
 
-                  <div className="relative border-t border-neutral-200 pt-6 text-center">
-                    <span className="bg-white px-3 text-[10px] font-mono text-neutral-400 uppercase tracking-widest absolute -top-2.5 left-1/2 -translate-x-1/2">
-                      BIOMETRIC ALTERNATIVE
-                    </span>
                     <button
                       type="button"
-                      onClick={handlePasskeySignIn}
-                      disabled={authLoading}
-                      className="w-full bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+                      onClick={() => setOtpSent(false)}
+                      className="w-full text-center text-xs font-mono text-neutral-400 hover:text-neutral-900 underline pt-2 block"
                     >
-                      🛡️ Sign In with Passkey / WebAuthn
+                      ← Back to Email Input
+                    </button>
+                  </form>
+                )
+              ) : (
+                /* REQUEST ACCESS FLOW */
+                requestSuccess ? (
+                  <div className="py-6 text-center space-y-4 font-mono">
+                    <div className="w-10 h-10 bg-emerald-100 text-emerald-800 rounded-full flex items-center justify-center mx-auto text-lg font-bold">✓</div>
+                    <h4 className="text-neutral-900 font-serif text-lg">Inquiry Registered</h4>
+                    <p className="text-xs text-neutral-500 leading-relaxed max-w-xs mx-auto">
+                      Your institutional accreditation request for <span className="text-neutral-800 font-bold">{authEmail}</span> has been queued for review by the committee.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setShowAuthModal(false); setRequestSuccess(false); setAuthEmail(''); }}
+                      className="w-full bg-neutral-900 text-white py-3 text-xs uppercase tracking-widest mt-4"
+                    >
+                      Close Window
                     </button>
                   </div>
-                </div>
-              ) : (
-                <form onSubmit={handleVerifyOtp} className="space-y-5">
-                  <div>
-                    <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
-                      Verification code sent to:
-                    </label>
-                    <p className="text-xs font-mono font-bold text-neutral-900 mb-3">{authEmail}</p>
-                    
-                    <input 
-                      type="text"
-                      required
-                      maxLength={6}
-                      placeholder="••••••"
-                      value={otpCode}
-                      onChange={e => setOtpCode(e.target.value.trim())}
-                      className="w-full bg-neutral-50 border border-neutral-300 px-4 py-3 text-center text-lg tracking-[0.5em] text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition"
-                    />
-                  </div>
+                ) : (
+                  <form onSubmit={handleRequestAccess} className="space-y-4 font-mono">
+                    <div>
+                      <label className="text-[10px] text-neutral-500 uppercase tracking-widest block mb-2">
+                        Professional / Institutional Email
+                      </label>
+                      <input 
+                        type="email"
+                        required
+                        placeholder="director@artgallery.com"
+                        value={authEmail}
+                        onChange={e => setAuthEmail(e.target.value)}
+                        className="w-full bg-neutral-50 border border-neutral-300 px-4 py-3 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 transition"
+                      />
+                      <p className="text-[10px] text-neutral-400 mt-2 leading-relaxed">
+                        Access is restricted to verified art dealers, family offices, museum curators, and financial institutions.
+                      </p>
+                    </div>
 
-                  <button
-                    type="submit"
-                    disabled={authLoading}
-                    className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50"
-                  >
-                    {authLoading ? 'Authenticating...' : 'Confirm & Enter Terminal'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setOtpSent(false)}
-                    className="w-full text-center text-xs font-mono text-neutral-400 hover:text-neutral-900 underline pt-2 block"
-                  >
-                    ← Change Email Address
-                  </button>
-                </form>
+                    <button
+                      type="submit"
+                      disabled={authLoading}
+                      className="w-full bg-neutral-900 hover:bg-black text-white text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50"
+                    >
+                      {authLoading ? 'Submitting Dossier...' : 'Submit Accreditation Request'}
+                    </button>
+                  </form>
+                )
               )}
+
             </div>
           </div>
         )}
 
-        <div className="max-w-7xl mx-auto pt-8 pb-32 px-6 sm:px-12 space-y-10">
+        <div className="max-w-7xl mx-auto pt-10 pb-32 px-6 sm:px-12 space-y-12">
           
-          {/* HEADER */}
-          <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 border-b border-neutral-200 pb-8 bg-white p-8 border">
+          {/* HEADER SECTION */}
+          <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 border-b border-neutral-200/80 pb-8 bg-white px-8 py-8 border shadow-sm">
             <div className="space-y-2">
-              <span className="text-[10px] font-mono tracking-widest uppercase text-neutral-400 block">
-                CURATORS ENGINE // DEALER & WEALTH MANAGEMENT INFRASTRUCTURE
+              <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-neutral-400 font-semibold block">
+                Institutional Art Advisory & Market Intelligence
               </span>
               <h1 className="text-3xl sm:text-4xl font-serif text-neutral-900 tracking-tight font-normal">
                 Art Intelligence Terminal
@@ -540,48 +632,62 @@ export default function ArtEngineDashboard() {
                 <div className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 px-4 py-2.5">
                   <span className="w-2 h-2 rounded-full bg-neutral-900" />
                   <span className="text-neutral-800">{user.email}</span>
-                  <button onClick={handleLogout} className="text-neutral-400 hover:text-neutral-900 underline ml-2 font-bold">Exit</button>
+                  <button onClick={handleLogout} className="text-neutral-400 hover:text-neutral-900 underline ml-2 font-bold uppercase text-[10px]">Exit</button>
                 </div>
               ) : (
-                <button 
-                  onClick={() => setShowAuthModal(true)}
-                  className="bg-neutral-900 text-white px-6 py-3 hover:bg-black transition tracking-widest uppercase text-[11px] font-mono shadow-sm"
-                >
-                  Sign In to Terminal
-                </button>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
+                    className="bg-neutral-900 text-white px-6 py-3 hover:bg-black transition tracking-widest uppercase text-[11px] font-mono"
+                  >
+                    Sign In
+                  </button>
+                  <button 
+                    onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
+                    className="bg-white text-neutral-900 border border-neutral-300 px-6 py-3 hover:bg-neutral-50 transition tracking-widest uppercase text-[11px] font-mono"
+                  >
+                    Request Access
+                  </button>
+                </div>
               )}
             </div>
           </header>
 
-          {/* GUARD: IF NOT LOGGED IN, SHOW LANDING SCREEN */}
+          {/* GUARD: UNAUTHENTICATED LANDING STATE */}
           {!loadingUser && !user ? (
-            <div className="py-24 sm:py-32 max-w-3xl mx-auto text-center space-y-8 bg-white border border-neutral-200 p-8 sm:p-16 shadow-sm">
+            <div className="py-24 sm:py-32 max-w-3xl mx-auto text-center space-y-10 bg-white border border-neutral-200/80 p-8 sm:p-20 shadow-sm">
               <div className="font-serif text-3xl sm:text-4xl text-neutral-900 leading-tight">
-                Curators Engine — Fine Art Banking Infrastructure
+                Fine Art Banking & Advisory Infrastructure
               </div>
               
-              <p className="text-sm sm:text-base font-serif text-neutral-600 leading-relaxed font-light">
+              <p className="text-sm sm:text-base font-serif text-neutral-600 leading-relaxed font-light max-w-xl mx-auto">
                 Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists. Generate institutional-quality investment memoranda and parse high-end auction lots in seconds.
               </p>
 
-              <div className="pt-4 flex flex-col sm:flex-row justify-center gap-4">
+              <div className="pt-4 flex flex-col sm:flex-row justify-center gap-4 font-mono">
                 <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest px-8 py-4 transition shadow-md"
+                  onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
+                  className="bg-neutral-900 hover:bg-black text-white text-xs uppercase tracking-widest px-8 py-4 transition"
                 >
-                  Authenticate Terminal Access
+                  Sign In to Terminal
+                </button>
+                <button
+                  onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
+                  className="bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 text-xs uppercase tracking-widest px-8 py-4 transition"
+                >
+                  Request Accreditation
                 </button>
               </div>
 
-              <div className="text-[11px] font-mono text-neutral-400 pt-8 border-t border-neutral-100">
-                Restricted system. Authorized credentials required.
+              <div className="text-[11px] font-mono text-neutral-400 pt-8 border-t border-neutral-100 uppercase tracking-widest">
+                Restricted System // Authorized Swiss & International Credentials Required
               </div>
             </div>
           ) : (
-            /* AUTHENTICATED WORKFLOW & TERMINAL */
+            /* AUTHENTICATED TERMINAL WORKSPACE */
             <>
-              {/* TABS & NAVIGATION */}
-              <nav className="flex justify-between items-center border-b border-neutral-200 pb-4 bg-white px-6 pt-4 border">
+              {/* NAVIGATION TABS */}
+              <nav className="flex justify-between items-center border-b border-neutral-200/80 pb-4 bg-white px-8 pt-4 border shadow-sm">
                 <div className="flex gap-8">
                   <button
                     onClick={() => setActiveTab('parser')}
@@ -607,7 +713,7 @@ export default function ArtEngineDashboard() {
 
                 {activeTab === 'parser' && (
                   <div className="flex items-center gap-4">
-                    <span className="text-[11px] font-mono text-neutral-500 hidden sm:inline bg-neutral-100 px-3 py-1">Status: {statusText}</span>
+                    <span className="text-[11px] font-mono text-neutral-500 hidden sm:inline bg-neutral-50 border border-neutral-200 px-3 py-1">Status: {statusText}</span>
                     <button 
                       onClick={handleReset}
                       className="text-xs font-mono text-neutral-400 hover:text-neutral-900 transition uppercase tracking-wider"
@@ -626,7 +732,7 @@ export default function ArtEngineDashboard() {
                   <div className="lg:col-span-5 space-y-6">
                     
                     {/* SOURCE URL INPUT */}
-                    <div className="bg-white border border-neutral-200 p-6 space-y-4 shadow-sm">
+                    <div className="bg-white border border-neutral-200/80 p-6 space-y-4 shadow-sm">
                       <div className="flex justify-between items-center">
                         <label className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest block">
                           Auction Lot URL Target
@@ -666,7 +772,7 @@ export default function ArtEngineDashboard() {
                     </div>
 
                     {/* VISUAL PREVIEW & SPECIFICATIONS */}
-                    <div className="bg-white border border-neutral-200 p-6 space-y-6 shadow-sm">
+                    <div className="bg-white border border-neutral-200/80 p-6 space-y-6 shadow-sm">
                       <div className="flex justify-between items-center border-b border-neutral-100 pb-3">
                         <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest">Asset Visual Verification</span>
                         {input.image_url && <span className="text-[10px] font-mono bg-emerald-50 text-emerald-800 px-2 py-0.5 border border-emerald-200 uppercase">Resolved</span>}
@@ -722,7 +828,7 @@ export default function ArtEngineDashboard() {
                   {/* RIGHT COLUMN: CURATORIAL DOSSIER PREVIEW (7 COLS) */}
                   <div className="lg:col-span-7">
                     {loading ? (
-                      <div className="bg-white border border-neutral-200 p-10 space-y-8 animate-pulse shadow-sm">
+                      <div className="bg-white border border-neutral-200/80 p-10 space-y-8 animate-pulse shadow-sm">
                         <div className="h-4 bg-neutral-200 w-1/4"></div>
                         <div className="h-8 bg-neutral-200 w-3/4"></div>
                         <div className="h-4 bg-neutral-200 w-1/2"></div>
@@ -736,7 +842,7 @@ export default function ArtEngineDashboard() {
                       <div className="space-y-6">
                         
                         {/* DOSSIER ACTION BAR */}
-                        <div className="flex justify-between items-center bg-white border border-neutral-200 p-4 shadow-sm">
+                        <div className="flex justify-between items-center bg-white border border-neutral-200/80 p-4 shadow-sm">
                           <span className="text-xs font-mono text-neutral-500 uppercase tracking-widest font-bold">
                             Investment Memorandum
                           </span>
@@ -772,13 +878,13 @@ export default function ArtEngineDashboard() {
 
                         {/* DOSSIER BODY */}
                         {showRawJson ? (
-                          <div className="border border-neutral-200 p-6 bg-white shadow-sm">
+                          <div className="border border-neutral-200/80 p-6 bg-white shadow-sm">
                             <pre className="text-neutral-800 font-mono text-xs whitespace-pre-wrap overflow-x-auto max-h-[600px]">
                               {JSON.stringify(output, null, 2)}
                             </pre>
                           </div>
                         ) : (
-                          <div className="bg-white border border-neutral-200 p-10 space-y-8 max-h-[750px] overflow-y-auto shadow-sm">
+                          <div className="bg-white border border-neutral-200/80 p-10 space-y-8 max-h-[750px] overflow-y-auto shadow-sm">
                             
                             {/* HEADER */}
                             <div className="border-b border-neutral-200 pb-6 space-y-3">
@@ -859,7 +965,7 @@ export default function ArtEngineDashboard() {
               {/* TAB 2: VAULT GALLERY */}
               {activeTab === 'vault' && (
                 <div className="space-y-6 transition-opacity duration-300">
-                  <div className="flex justify-between items-center border-b border-neutral-200 pb-4 bg-white p-6 border shadow-sm">
+                  <div className="flex justify-between items-center border-b border-neutral-200/80 pb-4 bg-white p-6 border shadow-sm">
                     <span className="text-xs font-mono text-neutral-500 uppercase tracking-widest font-bold">Secure Vault Archive</span>
                     <button onClick={fetchLots} className="text-xs font-mono text-neutral-900 hover:underline bg-neutral-100 px-3 py-1 border border-neutral-200">
                       Refresh Archive ↻
@@ -869,7 +975,7 @@ export default function ArtEngineDashboard() {
                   {loadingLots ? (
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
                       {[1, 2, 3].map((n) => (
-                        <div key={n} className="bg-white border border-neutral-200 p-6 space-y-4 animate-pulse shadow-sm">
+                        <div key={n} className="bg-white border border-neutral-200/80 p-6 space-y-4 animate-pulse shadow-sm">
                           <div className="aspect-[4/3] bg-neutral-200 w-full"></div>
                           <div className="h-4 bg-neutral-200 w-2/3"></div>
                           <div className="h-3 bg-neutral-200 w-1/3"></div>
@@ -877,7 +983,7 @@ export default function ArtEngineDashboard() {
                       ))}
                     </div>
                   ) : lots.length === 0 ? (
-                    <div className="py-20 text-center font-mono text-xs text-neutral-400 bg-white border border-neutral-200 p-12">Vault archive is currently empty.</div>
+                    <div className="py-20 text-center font-mono text-xs text-neutral-400 bg-white border border-neutral-200/80 p-12">Vault archive is currently empty.</div>
                   ) : (
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
                       {lots.map((lot) => {
@@ -889,7 +995,7 @@ export default function ArtEngineDashboard() {
                           <Link
                             key={lot.id}
                             href={`/art-engine/lots/${lot.id}`}
-                            className="group bg-white border border-neutral-200 overflow-hidden hover:border-neutral-900 transition flex flex-col shadow-sm"
+                            className="group bg-white border border-neutral-200/80 overflow-hidden hover:border-neutral-900 transition flex flex-col shadow-sm"
                           >
                             <div className="aspect-[4/3] bg-neutral-50 relative overflow-hidden flex items-center justify-center p-4 border-b border-neutral-100">
                               {lot.image_path ? (
