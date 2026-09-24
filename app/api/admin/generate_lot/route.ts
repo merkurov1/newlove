@@ -1,14 +1,9 @@
 import { NextResponse } from 'next/server';
+import OpenAI from 'openai';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-
-const MODELS = [
-  'anthropic/claude-3.5-sonnet',
-  'meta-llama/llama-3.3-70b-instruct',
-  'openai/gpt-4o-mini',
-];
 
 const SYSTEM_PROMPT = `
 You are an elite international art curator, auction house expert, and archivist.
@@ -39,71 +34,72 @@ REQUIRED OUTPUT FORMAT (JSON ONLY):
 Return ONLY valid raw JSON without markdown codeblocks or quotes.
 `;
 
+const MODELS = [
+  'anthropic/claude-3.5-sonnet',
+  'meta-llama/llama-3.3-70b-instruct',
+  'openai/gpt-4o-mini',
+  'openrouter/free',
+];
+
 export async function POST(req: Request) {
   try {
     await requireAdminFromRequest(req);
 
-    // Берем напрямую GOOGLE_API_KEY
-    const apiKey = (process.env.GOOGLE_API_KEY || '').trim();
+    const apiKey = (process.env.OPENROUTER_API_KEY || '').trim();
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'GOOGLE_API_KEY is missing in environment variables.' },
+        { error: 'OPENROUTER_API_KEY is missing in environment variables.' },
         { status: 500 }
       );
     }
 
+    const openai = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: apiKey,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://merkurov.love',
+        'X-Title': 'Curator Engine',
+      },
+    });
+
     const { rawData, artist, title, link, specs } = await req.json();
     const userContent = JSON.stringify({ artist, title, link, specs, rawData }, null, 2);
 
-    let resultJsonText: string | null = null;
-    let lastError: string | null = null;
+    let completion = null;
+    let lastError = null;
 
     for (const model of MODELS) {
       try {
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'authorization': `Bearer ${apiKey}`,
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              { role: 'system', content: SYSTEM_PROMPT },
-              { role: 'user', content: `Extract and structure full curatorial details for this lot:\n\n${userContent}` },
-            ],
-            temperature: 0.2,
-          }),
+        completion = await openai.chat.completions.create({
+          model: model,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: `Extract and structure full curatorial details for this lot:\n\n${userContent}` },
+          ],
+          temperature: 0.2,
         });
 
-        if (!response.ok) {
-          const errText = await response.text();
-          lastError = `Status ${response.status}: ${errText}`;
-          continue;
-        }
-
-        const data = await response.json();
-        const content = data?.choices?.[0]?.message?.content;
-
-        if (content) {
-          resultJsonText = content;
+        if (completion?.choices[0]?.message?.content) {
           break;
         }
       } catch (err: any) {
-        lastError = err?.message || String(err);
+        console.warn(`[generate_lot] Model ${model} failed:`, err?.message || err);
+        lastError = err;
       }
     }
 
-    if (!resultJsonText) {
-      throw new Error(lastError || 'All models failed to respond.');
+    if (!completion) {
+      throw lastError || new Error('All AI models failed to respond.');
     }
 
-    const cleaned = resultJsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const rawResponse = completion.choices[0]?.message?.content || '{}';
+    const cleaned = rawResponse.replace(/```json/g, '').replace(/```/g, '').trim();
     const structuredLot = JSON.parse(cleaned);
 
     return NextResponse.json({ lot: structuredLot });
   } catch (error: any) {
+    console.error('[generate_lot Error]:', error);
     return NextResponse.json(
       { error: 'Generation failed', details: error?.message || String(error) },
       { status: 500 }
