@@ -29,6 +29,8 @@ async function fetchViaScrapingAnt(targetUrl: string): Promise<string> {
   endpoint.searchParams.append('browser', 'true');
   endpoint.searchParams.append('proxy_country', 'US');
 
+  console.log(`[ScrapingAnt] Fetching: ${targetUrl}`);
+
   const res = await fetch(endpoint.toString(), {
     method: 'GET',
     signal: AbortSignal.timeout(45_000),
@@ -55,16 +57,16 @@ export async function POST(req: Request) {
     }
 
     const house = houseFor(target.hostname) || 'Auction House';
-
     let html: string;
 
     if (typeof pastedHtml === 'string' && pastedHtml.length > 500) {
+      console.log('[Parse] Using pasted HTML content');
       html = pastedHtml;
     } else {
       try {
         html = await fetchViaScrapingAnt(target.href);
       } catch (err: any) {
-        console.error('[ScrapingAnt Fetch Error]:', err.message);
+        console.error('[ScrapingAnt Error]:', err.message);
         return NextResponse.json(
           { error: 'scrapingant_failed', details: err.message },
           { status: 502 }
@@ -72,12 +74,26 @@ export async function POST(req: Request) {
       }
     }
 
-    // Отдаем полученный HTML сразу в parseLotHtml без жестких проверок на "blocked"
-    const lot = parseLotHtml(html, target.href, house, { debug: !!debug });
+    console.log(`[Parse] Processing HTML length: ${html.length} chars`);
+    const lot: any = parseLotHtml(html, target.href, house, { debug: !!debug });
 
-    return NextResponse.json({ lot, rawLength: html.length });
+    // Выпрямляем ответ для фронтенда
+    return NextResponse.json({
+      success: true,
+      artist: lot?.artist || '',
+      title: lot?.title || '',
+      image_url: lot?.imageUrl || lot?.image_url || lot?.image || '',
+      medium: lot?.medium || '',
+      dimensions: lot?.dimensions || '',
+      estimate: lot?.estimate || '',
+      date: lot?.date || lot?.year || '',
+      provenance: lot?.provenance || '',
+      raw_description: lot?.description || lot?.raw_description || '',
+      rawLength: html.length,
+      lot, // Сохраняем и исходный объект на всякий случай
+    });
   } catch (e: any) {
-    console.error('[parse-lot Error]:', e);
+    console.error('[parse-url Error]:', e);
     return NextResponse.json({ error: 'parse_failed', details: e?.message ?? String(e) }, { status: 500 });
   }
 }
