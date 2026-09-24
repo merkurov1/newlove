@@ -25,22 +25,21 @@ export async function POST(request: Request) {
       auth: { persistSession: false }
     });
 
-    // 1. Пробуем сделать Insert вместо upsert, чтобы точно поймать ошибку структуры
-    const { data, error: dbError } = await supabase
+    // 1. Сохранение в базу access_requests
+    const { error: dbError } = await supabase
       .from('access_requests')
-      .insert([{ email, status: 'pending' }])
-      .select();
+      .insert([{ email, status: 'pending' }]);
 
     if (dbError) {
       console.error('CRITICAL DB ERROR:', dbError);
-      // Если email уже есть, upsert/insert выдает ошибку дубликата (обычно код 23505), 
-      // но если таблица пустая — тут видна реальная проблема (например, не найдена таблица)
-      if (dbError.code !== '23505') {
-        return NextResponse.json({ ok: false, error: `DB Error: ${dbError.message} (Code: ${dbError.code})` }, { status: 500 });
+      // Если email уже запрошен (дубликат), не падаем с 500 ошибкой, а говорим пользователю
+      if (dbError.code === '23505') {
+        return NextResponse.json({ ok: false, error: 'This email has already requested access.' }, { status: 400 });
       }
+      return NextResponse.json({ ok: false, error: `DB Error: ${dbError.message} (Code: ${dbError.code})` }, { status: 500 });
     }
 
-    // 2. Отправка в Telegram с логированием ответа
+    // 2. Отправка уведомления в Telegram
     const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
     const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
@@ -56,7 +55,6 @@ export async function POST(request: Request) {
       const tgData = await tgRes.json();
       if (!tgRes.ok) {
         console.error('TELEGRAM API ERROR:', tgData);
-        return NextResponse.json({ ok: false, error: `Telegram Error: ${tgData.description || 'Unknown'}` }, { status: 500 });
       }
     } else {
       console.warn('Telegram tokens are not defined in environment variables');
