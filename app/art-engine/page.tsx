@@ -200,7 +200,7 @@ export default function ArtEngineDashboard() {
     }
   };
 
-  // AUTH 3: Safe Passkey / WebAuthn Sign-In
+  // AUTH 3: Safe Passkey / WebAuthn Sign-In (with automatic cookie/session fallback check)
   const handlePasskeySignIn = async () => {
     setAuthLoading(true);
     setAuthError('');
@@ -212,23 +212,31 @@ export default function ArtEngineDashboard() {
 
       const authClient = supabase.auth as any;
       if (typeof authClient.signInWithWebAuthn === 'function') {
-        const { data, error } = await authClient.signInWithWebAuthn();
-        if (error) throw error;
-        
-        const { data: { session: newSession } } = await supabase.auth.getSession();
-        if (newSession) {
-          setSession(newSession);
-          setUser(newSession?.user || null);
-          setShowAuthModal(false);
-          return;
-        }
+        await authClient.signInWithWebAuthn();
+      }
+
+      // Always check session regardless of whether signInWithWebAuthn threw or completed, to catch existing cookies
+      const { data: { session: newSession } } = await supabase.auth.getSession();
+      if (newSession) {
+        setSession(newSession);
+        setUser(newSession?.user || null);
+        setShowAuthModal(false);
+        return;
       }
       
-      throw new Error('Passkey authentication is not configured in this project instance. Please use 6-digit email OTP.');
+      throw new Error('Passkey authentication session not established. Please use 6-digit email OTP.');
       
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Passkey error';
-      setAuthError(errorMessage);
+      // Final check on session in case cookie was successfully attached despite error throw
+      const { data: { session: fallbackSession } } = await supabase.auth.getSession();
+      if (fallbackSession) {
+        setSession(fallbackSession);
+        setUser(fallbackSession?.user || null);
+        setShowAuthModal(false);
+      } else {
+        const errorMessage = err instanceof Error ? err.message : 'Passkey error';
+        setAuthError(errorMessage);
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -598,7 +606,8 @@ export default function ArtEngineDashboard() {
           </div>
         )}
 
-        <div className="max-w-7xl mx-auto pt-10 pb-32 px-6 sm:px-12 space-y-12">
+        {/* Увеличенный верхний отступ (pt-28 sm:pt-32) чтобы избежать перекрытия шапкой сайта */}
+        <div className="max-w-7xl mx-auto pt-28 sm:pt-32 pb-32 px-6 sm:px-12 space-y-12">
           
           {/* HEADER SECTION (CLEAN & CENTERED) */}
           <header className="flex flex-col items-center justify-center text-center border-b border-neutral-200/80 pb-10 bg-white px-8 py-12 border shadow-sm">
