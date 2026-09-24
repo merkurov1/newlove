@@ -190,7 +190,6 @@ export default function ArtEngineDashboard() {
     setAuthError('');
 
     try {
-      // Имитируем отправку запроса на аккредитацию
       await new Promise(r => setTimeout(r, 800));
       setRequestSuccess(true);
     } catch (err: unknown) {
@@ -423,19 +422,6 @@ export default function ArtEngineDashboard() {
 
       <div className="min-h-screen bg-[#FDFDFC] text-neutral-900 font-sans selection:bg-neutral-900 selection:text-white">
         
-        {/* TOP FINTECH TICKER BAR */}
-        <div className="border-b border-neutral-200/80 bg-white px-8 py-3 text-[11px] font-mono flex justify-between items-center text-neutral-500 tracking-wider">
-          <div className="flex items-center gap-3">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-            <span className="text-neutral-900 font-bold uppercase tracking-widest">Curators Engine</span>
-            <span className="text-neutral-300">/</span>
-            <span className="text-neutral-400">Secure Terminal v2.4</span>
-          </div>
-          <div>
-            {user ? <span className="text-neutral-800 font-medium">{user.email}</span> : <span className="text-neutral-400">Client Session Restricted</span>}
-          </div>
-        </div>
-
         {/* AUTHENTICATION / REQUEST ACCESS MODAL */}
         {showAuthModal && (
           <div className="fixed inset-0 z-50 bg-neutral-950/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -448,7 +434,7 @@ export default function ArtEngineDashboard() {
                     {authMode === 'signin' ? 'AUTHORIZED ACCESS' : 'ACCREDITATION SUITE'}
                   </span>
                   <h3 className="text-xl font-serif text-neutral-900">
-                    {authMode === 'signin' ? 'Terminal Sign-In' : 'Request Access'}
+                    {authMode === 'signin' ? 'Sign In' : 'Request Access'}
                   </h3>
                 </div>
                 <button 
@@ -602,7 +588,7 @@ export default function ArtEngineDashboard() {
                       disabled={authLoading}
                       className="w-full bg-neutral-900 hover:bg-black text-white text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50"
                     >
-                      {authLoading ? 'Submitting Dossier...' : 'Submit Accreditation Request'}
+                      {authLoading ? 'Submitting Dossier...' : 'Submit Request'}
                     </button>
                   </form>
                 )
@@ -614,73 +600,52 @@ export default function ArtEngineDashboard() {
 
         <div className="max-w-7xl mx-auto pt-10 pb-32 px-6 sm:px-12 space-y-12">
           
-          {/* HEADER SECTION */}
-          <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 border-b border-neutral-200/80 pb-8 bg-white px-8 py-8 border shadow-sm">
-            <div className="space-y-2">
-              <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-neutral-400 font-semibold block">
+          {/* HEADER SECTION (CLEAN & CENTERED) */}
+          <header className="flex flex-col items-center justify-center text-center border-b border-neutral-200/80 pb-10 bg-white px-8 py-12 border shadow-sm">
+            <div className="space-y-3 max-w-2xl">
+              <span className="text-xs font-mono tracking-[0.3em] uppercase text-neutral-400 font-semibold block">
                 Institutional Art Advisory & Market Intelligence
               </span>
-              <h1 className="text-3xl sm:text-4xl font-serif text-neutral-900 tracking-tight font-normal">
+              <h1 className="text-4xl sm:text-5xl font-serif text-neutral-900 tracking-tight font-normal">
                 Art Intelligence Terminal
               </h1>
             </div>
 
-            <div className="flex items-center gap-4 text-xs font-mono">
-              {loadingUser ? (
-                <span className="text-neutral-400">Verifying session...</span>
-              ) : user ? (
-                <div className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 px-4 py-2.5">
-                  <span className="w-2 h-2 rounded-full bg-neutral-900" />
-                  <span className="text-neutral-800">{user.email}</span>
-                  <button onClick={handleLogout} className="text-neutral-400 hover:text-neutral-900 underline ml-2 font-bold uppercase text-[10px]">Exit</button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
-                    className="bg-neutral-900 text-white px-6 py-3 hover:bg-black transition tracking-widest uppercase text-[11px] font-mono"
-                  >
-                    Sign In
-                  </button>
-                  <button 
-                    onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
-                    className="bg-white text-neutral-900 border border-neutral-300 px-6 py-3 hover:bg-neutral-50 transition tracking-widest uppercase text-[11px] font-mono"
-                  >
-                    Request Access
-                  </button>
-                </div>
-              )}
-            </div>
+            {user && (
+              <div className="mt-6 flex items-center gap-3 bg-neutral-50 border border-neutral-200 px-4 py-2 text-xs font-mono">
+                <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                <span className="text-neutral-800">{user.email}</span>
+                <button onClick={handleLogout} className="text-neutral-400 hover:text-neutral-900 underline ml-2 font-bold uppercase text-[10px]">Exit</button>
+              </div>
+            )}
           </header>
 
           {/* GUARD: UNAUTHENTICATED LANDING STATE */}
           {!loadingUser && !user ? (
-            <div className="py-24 sm:py-32 max-w-3xl mx-auto text-center space-y-10 bg-white border border-neutral-200/80 p-8 sm:p-20 shadow-sm">
-              <div className="font-serif text-3xl sm:text-4xl text-neutral-900 leading-tight">
-                Fine Art Banking & Advisory Infrastructure
+            <div className="py-28 sm:py-36 max-w-4xl mx-auto text-center space-y-12 bg-white border border-neutral-200/80 p-10 sm:p-24 shadow-sm">
+              <div className="space-y-4">
+                <h2 className="text-3xl sm:text-4xl font-serif text-neutral-900 leading-tight">
+                  Fine Art Banking & Advisory Infrastructure
+                </h2>
+                
+                <p className="text-base sm:text-lg font-serif text-neutral-600 leading-relaxed font-light max-w-2xl mx-auto pt-2">
+                  Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists. Generate institutional-quality investment memoranda and parse high-end auction lots in seconds.
+                </p>
               </div>
-              
-              <p className="text-sm sm:text-base font-serif text-neutral-600 leading-relaxed font-light max-w-xl mx-auto">
-                Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists. Generate institutional-quality investment memoranda and parse high-end auction lots in seconds.
-              </p>
 
-              <div className="pt-4 flex flex-col sm:flex-row justify-center gap-4 font-mono">
+              <div className="pt-2 flex flex-col sm:flex-row justify-center gap-5 font-mono">
                 <button
                   onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
-                  className="bg-neutral-900 hover:bg-black text-white text-xs uppercase tracking-widest px-8 py-4 transition"
+                  className="bg-neutral-900 hover:bg-black text-white text-xs uppercase tracking-widest px-10 py-4 transition shadow-sm font-bold"
                 >
-                  Sign In to Terminal
+                  Sign In
                 </button>
                 <button
                   onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
-                  className="bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 text-xs uppercase tracking-widest px-8 py-4 transition"
+                  className="bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 text-xs uppercase tracking-widest px-10 py-4 transition font-bold"
                 >
-                  Request Accreditation
+                  Request Access
                 </button>
-              </div>
-
-              <div className="text-[11px] font-mono text-neutral-400 pt-8 border-t border-neutral-100 uppercase tracking-widest">
-                Restricted System // Authorized Swiss & International Credentials Required
               </div>
             </div>
           ) : (
