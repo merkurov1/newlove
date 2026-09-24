@@ -5,50 +5,54 @@ import { requireAdminFromRequest } from '@/lib/serverAuth';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-// Список моделей OpenRouter (fallback по очереди при сбоях)
 const MODELS = [
+  'anthropic/claude-3.5-sonnet',
   'meta-llama/llama-3.3-70b-instruct',
-  'deepseek/deepseek-r1',
-  'qwen/qwen-2.5-72b-instruct',
-  'openrouter/free',
+  'openai/gpt-4o-mini',
 ];
 
 const SYSTEM_PROMPT = `
-You are an expert art curator and archivist.
-Analyze the provided raw lot data and generate a structured JSON object for an art catalog.
+You are an elite international art curator, auction house expert, and archivist.
+Analyze the provided raw lot data and generate an extensive, highly detailed JSON object for an art catalog & vault.
 
 REQUIRED OUTPUT FORMAT (JSON ONLY):
 {
-  "title": "Title of the artwork",
-  "artist": "Artist name",
-  "year": "Year or period of creation",
-  "medium": "Technique and materials (e.g. Oil on canvas)",
-  "dimensions": "Dimensions",
-  "estimate": "Price range or estimate",
-  "description": "Comprehensive curatorial description, provenance, and historical significance",
-  "tags": ["tag1", "tag2"]
+  "title": "Exact title of artwork",
+  "artist": "Artist full name",
+  "artist_dates": "Artist birth-death years (e.g. 1960-1988)",
+  "year": "Exact year or creation period",
+  "medium": "Detailed technique and materials",
+  "dimensions": "Dimensions in cm and inches if available",
+  "auction_house": "Christie's / Sotheby's / Phillips / etc.",
+  "lot_number": "Lot number or ID",
+  "estimate_low": 100000,
+  "estimate_high": 200000,
+  "estimate_raw": "HKD 56,000,000 – HKD 76,000,000",
+  "currency": "USD/HKD/GBP/EUR",
+  "provenance": ["Full provenance history line 1", "Line 2"],
+  "exhibited": ["Exhibition history item 1", "Item 2"],
+  "literature": ["Literature/publication item 1"],
+  "curatorial_essay": "Comprehensive multi-paragraph deep-dive essay discussing the artwork's historical context, technical mastery, symbolic meaning, relevance in the artist's career, and market significance.",
+  "condition_report": "Summary of condition if mentioned",
+  "tags": ["Artist", "Period", "Movement", "Medium", "Theme"]
 }
 
-Return ONLY valid JSON without markdown formatting.
+Return ONLY valid raw JSON without markdown codeblocks or quotes.
 `;
 
 export async function POST(req: Request) {
   try {
     await requireAdminFromRequest(req);
 
-    // Подтягиваем OpenRouter ключ из OPENROUTER_API_KEY или GOOGLE_API_KEY
-    const apiKey = (process.env.OPENROUTER_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+    const apiKey = (process.env.google_API_key || process.env.GOOGLE_API_KEY || process.env.OPENROUTER_API_KEY || '').trim();
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'OPENROUTER_API_KEY (or GOOGLE_API_KEY) missing in environment variables.' },
+        { error: 'API Key missing in environment variables.' },
         { status: 500 }
       );
     }
 
-    const { rawData, lot } = await req.json();
-    if (!rawData && !lot) {
-      return NextResponse.json({ error: 'No lot data provided' }, { status: 400 });
-    }
+    const { rawData, artist, title, link, specs } = await req.json();
 
     const openai = new OpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
@@ -59,7 +63,13 @@ export async function POST(req: Request) {
       },
     });
 
-    const userContent = typeof rawData === 'string' ? rawData : JSON.stringify(lot || rawData, null, 2);
+    const userContent = JSON.stringify({
+      artist,
+      title,
+      link,
+      specs,
+      rawData
+    }, null, 2);
 
     let completion = null;
     let lastError = null;
@@ -70,7 +80,7 @@ export async function POST(req: Request) {
           model: model,
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: `Extract and structure details for this lot:\n\n${userContent}` },
+            { role: 'user', content: `Extract and structure full curatorial details for this lot:\n\n${userContent}` },
           ],
           temperature: 0.2,
         });
@@ -85,7 +95,7 @@ export async function POST(req: Request) {
     }
 
     if (!completion) {
-      throw lastError || new Error('All OpenRouter models failed to respond.');
+      throw lastError || new Error('All AI models failed to respond.');
     }
 
     const rawResponse = completion.choices[0]?.message?.content || '{}';

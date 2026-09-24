@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-import * as cheerio from 'cheerio';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -9,15 +8,15 @@ async function fetchViaScrapingAnt(targetUrl: string): Promise<string> {
   const apiKey = (process.env.SCRAPINGANT_API_KEY || '').trim();
   if (!apiKey) throw new Error('SCRAPINGANT_API_KEY is missing');
 
-  // Тот самый js_snippet, который дал кучу инфы:
-  // Ждем 4 секунды гидратацию React и забираем глобальное состояние + DOM
   const jsSnippet = Buffer.from(`
     await new Promise(r => setTimeout(r, 4000));
     return JSON.stringify({
       title: document.title,
       h1: document.querySelector('h1')?.innerText || '',
-      chrComponents: window.chrComponents || null,
       nextData: window.__NEXT_DATA__ || null,
+      jsonLd: Array.from(document.querySelectorAll('script[type="application/ld+json"]')).map(s => {
+        try { return JSON.parse(s.innerHTML); } catch(e) { return null; }
+      }).filter(Boolean),
       ogImage: document.querySelector('meta[property="og:image"]')?.getAttribute('content') || '',
       allImages: Array.from(document.querySelectorAll('img')).map(i => i.src),
       bodyText: document.body.innerText
@@ -51,17 +50,9 @@ export async function POST(req: Request) {
     try {
       antData = JSON.parse(rawResponse);
     } catch {
-      const $ = cheerio.load(rawResponse);
-      antData = {
-        title: $('title').text(),
-        h1: $('h1').text(),
-        ogImage: $('meta[property="og:image"]').attr('content') || '',
-        bodyText: $('body').text()
-      };
+      antData = { title: '', bodyText: rawResponse };
     }
 
-    // 1. Разбор заголовка страницы (у нас он работал отлично!)
-    // "JEAN-MICHEL BASQUIAT (1960-1988), Ancient Scientist | Christie's"
     const pageTitle = antData.title || '';
     let artist = '';
     let title = '';
@@ -78,35 +69,23 @@ export async function POST(req: Request) {
       title = parts[1] || '';
     }
 
-    // 2. Ищем лучшую картинку из найденных изображений
     let bestImage = antData.ogImage || '';
     if (antData.allImages && antData.allImages.length > 0) {
-      // Ищем картинку самого лота (обычно содержит 'lot' или 'image' или 'dfp' в URL)
       const lotImg = antData.allImages.find((img: string) => 
-        (img.includes('lot') || img.includes('images') || img.includes('christies')) && 
+        (img.includes('lot') || img.includes('images') || img.includes('christies') || img.includes('sothebys')) && 
         !img.includes('logo') && !img.includes('icon')
       );
       if (lotImg) bestImage = lotImg;
     }
 
-    // 3. Очищаем bodyText от служебного мусора браузера/JS
-    let cleanText = antData.bodyText || '';
-    // Отрезаем служебные плагины browser-update и скрипты header/navigation, если они попали в текст
-    if (cleanText.includes('window.chrComponents')) {
-      cleanText = cleanText.split('window.chrComponents')[0];
-    }
-
+    // Сохраняем полный распарсенный дамп без обрезки
     return NextResponse.json({
       success: true,
-      artist,
-      title: title || antData.h1,
+      artist: artist || antData.h1,
+      title: title || antData.title,
       date,
       image_url: bestImage,
-      medium: '',
-      dimensions: '',
-      estimate: '',
-      provenance: '',
-      raw_description: cleanText.trim().slice(0, 8000),
+      raw_description: (antData.bodyText || '').slice(0, 15000),
       rawLength: JSON.stringify(antData).length,
       extracted: antData
     });

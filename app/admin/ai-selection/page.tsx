@@ -29,7 +29,7 @@ export default function CuratorTool() {
     setLogs(prev => [`[${time}] ${msg}`, ...prev])
   }
 
-  // 1. ПАРСИНГ И РАЗБОР HTML / JSON-LD
+  // 1. ПАРСИНГ И РАЗБОР СТРАНИЦЫ
   const handleAutoParse = async () => {
     if (!input.link) return alert('Paste auction link first')
     setParsing(true)
@@ -44,44 +44,26 @@ export default function CuratorTool() {
       })
 
       const data = await res.json()
-      addLog(`Server response code: ${res.status}`)
-
-      if (!res.ok) {
-        throw new Error(data.details || data.error || 'Parse failed on server')
-      }
+      if (!res.ok) throw new Error(data.details || data.error || 'Parse failed on server')
 
       addLog(`HTML received (${data.rawLength || 0} chars). Processing structured data...`)
 
-      if (data.extracted) {
-        setOutput(data.extracted)
-      }
-
-      const bestImage = data.image_url || data.extracted?.ogData?.image || ''
-      const bestTitle = data.title || data.extracted?.ogData?.title || data.extracted?.h1 || ''
+      const bestImage = data.image_url || ''
+      const bestTitle = data.title || ''
       const bestArtist = data.artist || ''
-
-      const parsedSpecs = {
-        medium: data.medium || data.extracted?.medium || '',
-        dimensions: data.dimensions || data.extracted?.dimensions || '',
-        estimate: data.estimate || data.extracted?.estimate || '',
-        date: data.date || data.extracted?.date || '',
-        provenance: data.provenance || data.extracted?.provenance || ''
-      }
 
       setInput(prev => ({
         ...prev,
         artist: bestArtist || prev.artist,
         title: bestTitle || prev.title,
         image_url: bestImage || prev.image_url,
-        specs: parsedSpecs,
         raw: JSON.stringify(data.extracted || data, null, 2)
       }))
 
       addLog(`Parse complete. Extracted image: ${bestImage ? 'YES' : 'NO'}`)
-      return { bestArtist, bestTitle, bestImage, parsedSpecs, rawData: JSON.stringify(data.extracted || data) }
+      return { bestArtist, bestTitle, bestImage, rawData: data.extracted || data }
 
     } catch (e: any) { 
-      console.error(e)
       addLog(`PARSE ERROR: ${e.message}`)
       alert(`Parse failed: ${e.message}`) 
       return null
@@ -90,9 +72,8 @@ export default function CuratorTool() {
     }
   }
 
-  // 2. ГЕНЕРАЦИЯ ОПИСАНИЯ ЧЕРЕЗ OPENROUTER AI
-  const generate = async (customInput?: typeof input) => {
-    const currentInput = customInput || input
+  // 2. ГЕНЕРАЦИЯ ОПИСАНИЯ ЧЕРЕЗ AI
+  const generate = async (customRaw?: any) => {
     setLoading(true)
     addLog('Synthesizing lot assets via OpenRouter AI...')
     try {
@@ -100,20 +81,20 @@ export default function CuratorTool() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          artist: currentInput.artist,
-          title: currentInput.title,
-          link: currentInput.link,
-          rawData: currentInput.raw,
-          specs: currentInput.specs
+          artist: input.artist,
+          title: input.title,
+          link: input.link,
+          specs: input.specs,
+          rawData: customRaw || input.raw
         })
       })
 
       const data = await res.json()
       if (!res.ok) throw new Error(data.details || data.error || 'Generation failed')
 
-      setOutput(data)
+      setOutput(data.lot || data)
       addLog('AI Synthesis completed successfully.')
-      return data
+      return data.lot || data
     } catch (e: any) { 
       addLog(`GEN ERROR: ${e.message}`)
       alert(`Generation failed: ${e.message}`) 
@@ -123,10 +104,10 @@ export default function CuratorTool() {
     }
   }
 
-  // 3. СОХРАНЕНИЕ В БАЗУ ДАННЫХ (VAULT / SUPABASE)
-  const saveToVault = async (aiContentData?: any) => {
-    const contentToSave = aiContentData || output
-    if (!contentToSave) return alert('Generate or parse content first')
+  // 3. СОХРАНЕНИЕ В VAULT (SUPABASE)
+  const saveToVault = async (customOutput?: any) => {
+    const lotToSave = customOutput || output
+    if (!lotToSave) return alert('Generate or parse content first')
     setSaving(true)
     addLog('Saving lot to vault (Supabase)...')
     try {
@@ -134,20 +115,19 @@ export default function CuratorTool() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          artist: input.artist,
-          title: input.title,
+          artist: input.artist || lotToSave.artist,
+          title: input.title || lotToSave.title,
           link: input.link,
           image_url: input.image_url,
-          raw: input.raw,
-          ...input.specs,
-          ai_content: contentToSave
+          specs: input.specs,
+          ai_content: lotToSave
         })
       })
 
       const data = await res.json()
       if (data.success || data.id) {
-        addLog(`Vault saved successfully. Lot ID: ${data.id || data.data?.id}`)
-        alert(`Lot Saved! ID: ${data.id || data.data?.id}`)
+        addLog(`Vault saved successfully. Lot ID: ${data.id}`)
+        alert(`Lot Saved! ID: ${data.id}`)
       } else {
         throw new Error(data.error || 'API Error during save')
       }
@@ -159,27 +139,18 @@ export default function CuratorTool() {
     }
   }
 
-  // 4. ОБЪЕДИНЕННАЯ КОМАНДА: ПАРСИНГ -> AI -> СОХРАНЕНИЕ В 1 КЛИК
+  // 4. ОДНОКЛИКОВЫЙ ПАЙПЛАЙН
   const handleOneClickPipeline = async () => {
     if (!input.link) return alert('Paste auction link first')
     setAutoProcessing(true)
     addLog('--- STARTING AUTOMATED ONE-CLICK PIPELINE ---')
     
-    // Step 1: Parse
     const parseResult = await handleAutoParse()
-    if (!parseResult) {
-      setAutoProcessing(false)
-      return
-    }
+    if (!parseResult) return setAutoProcessing(false)
 
-    // Step 2: AI Synthesis
-    const aiResult = await generate()
-    if (!aiResult) {
-      setAutoProcessing(false)
-      return
-    }
+    const aiResult = await generate(parseResult.rawData)
+    if (!aiResult) return setAutoProcessing(false)
 
-    // Step 3: Save to Vault
     await saveToVault(aiResult)
     addLog('--- AUTOMATED PIPELINE FINISHED ---')
     setAutoProcessing(false)
@@ -187,14 +158,13 @@ export default function CuratorTool() {
 
   return (
     <div className="min-h-screen bg-black text-white font-mono p-8 grid md:grid-cols-2 gap-8">
-      {/* ЛЕВАЯ КОЛОНКА: ВВОД ДАННЫХ И УПРАВЛЕНИЕ */}
+      {/* ЛЕВАЯ КОЛОНКА */}
       <div className="space-y-6 border-r border-gray-800 pr-8">
         <div className="flex justify-between items-center">
           <h1 className="text-xl tracking-widest text-gray-500">THE CURATOR ENGINE</h1>
-          <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-1 rounded">NEXT.JS + SUPABASE</span>
+          <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-1 rounded">CURATOR VAULT</span>
         </div>
         
-        {/* URL Input & Quick Actions */}
         <div className="space-y-2">
           <div className="flex gap-2">
             <input 
@@ -212,7 +182,6 @@ export default function CuratorTool() {
             </button>
           </div>
 
-          {/* Кнопка Полного Автомата */}
           <button
             onClick={handleOneClickPipeline}
             disabled={parsing || loading || saving || autoProcessing}
@@ -222,42 +191,24 @@ export default function CuratorTool() {
           </button>
         </div>
 
-        {/* ПРЕДПРОСМОТР КАРТИНКИ */}
         {input.image_url && !imgError && (
           <div className="relative h-56 w-full bg-zinc-900 border border-gray-800 overflow-hidden flex items-center justify-center">
             <img 
               src={input.image_url} 
               className="object-contain max-h-full max-w-full opacity-90" 
               alt="Lot Preview" 
-              onError={() => {
-                setImgError(true)
-                addLog('Image load failed due to CORS or direct hotlink restriction')
-              }}
+              onError={() => setImgError(true)}
             />
-            <div className="absolute bottom-0 right-0 bg-black/80 text-xs px-2 py-1 text-green-500 border-t border-l border-gray-800">
-              IMAGE LOADED
-            </div>
           </div>
         )}
 
-        {imgError && (
-          <div className="h-20 w-full bg-zinc-900 border border-red-900/50 flex items-center justify-center text-red-400 text-xs p-4 text-center">
-            ⚠️ IMAGE FAILED TO LOAD IN BROWSER (CORS / BROKEN URL)
-          </div>
-        )}
-
-        {/* ИЗОБРАЖЕНИЕ URL (ручное редактирование если понадобится) */}
         <input 
           placeholder="Image URL" 
           className="w-full bg-zinc-900 p-2 border border-gray-800 text-xs text-zinc-400 focus:text-white" 
           value={input.image_url} 
-          onChange={e => {
-            setImgError(false)
-            setInput({...input, image_url: e.target.value})
-          }} 
+          onChange={e => setInput({...input, image_url: e.target.value})} 
         />
 
-        {/* ОСНОВНЫЕ ПОЛЯ */}
         <div className="grid grid-cols-2 gap-4">
           <input 
             placeholder="Artist" 
@@ -273,35 +224,6 @@ export default function CuratorTool() {
           />
         </div>
 
-        {/* СПЕЦИФИКАЦИИ ЛОТА */}
-        <div className="grid grid-cols-3 gap-2">
-          <input 
-            placeholder="Medium" 
-            className="bg-zinc-900 p-2 border border-gray-800 text-xs" 
-            value={input.specs.medium} 
-            onChange={e => setInput({...input, specs: {...input.specs, medium: e.target.value}})} 
-          />
-          <input 
-            placeholder="Dimensions" 
-            className="bg-zinc-900 p-2 border border-gray-800 text-xs" 
-            value={input.specs.dimensions} 
-            onChange={e => setInput({...input, specs: {...input.specs, dimensions: e.target.value}})} 
-          />
-          <input 
-            placeholder="Estimate" 
-            className="bg-zinc-900 p-2 border border-gray-800 text-xs" 
-            value={input.specs.estimate} 
-            onChange={e => setInput({...input, specs: {...input.specs, estimate: e.target.value}})} 
-          />
-        </div>
-        
-        <textarea 
-          placeholder="Raw HTML / Extracted JSON Dump..." 
-          className="w-full h-32 bg-zinc-900 p-3 border border-gray-700 text-xs font-mono" 
-          value={input.raw} 
-          onChange={e => setInput({...input, raw: e.target.value})} 
-        />
-        
         <button 
           onClick={() => generate()} 
           disabled={loading || autoProcessing} 
@@ -310,20 +232,15 @@ export default function CuratorTool() {
           {loading ? 'SYNTHESIZING WITH AI...' : 'GENERATE ASSETS (AI)'}
         </button>
 
-        {/* ТЕРМИНАЛЬНЫЕ ЛОГИ */}
         <div className="bg-zinc-950 border border-zinc-800 p-3 text-[10px] space-y-1 h-36 overflow-y-auto">
           <div className="text-zinc-500 font-bold mb-1 border-b border-zinc-900 pb-1">CONSOLE LOGS:</div>
-          {logs.length === 0 ? (
-            <div className="text-zinc-700">Ready to parse lot...</div>
-          ) : (
-            logs.map((l, i) => (
-              <div key={i} className="text-zinc-400 font-mono leading-tight">{l}</div>
-            ))
-          )}
+          {logs.map((l, i) => (
+            <div key={i} className="text-zinc-400 font-mono leading-tight">{l}</div>
+          ))}
         </div>
       </div>
 
-      {/* ПРАВАЯ КОЛОНКА: ИНСПЕКЦИЯ ДАННЫХ И AI РЕЗУЛЬТАТ */}
+      {/* ПРАВАЯ КОЛОНКА */}
       <div className="space-y-6 overflow-y-auto h-screen pb-20 pr-4">
         {output ? (
           <>
@@ -337,9 +254,9 @@ export default function CuratorTool() {
               </button>
             </div>
 
-            <div className="border border-gray-800 p-6 bg-zinc-900/30 space-y-4">
-              <h3 className="text-green-500 text-xs font-bold tracking-wider">STRUCTURED DATA / AI OUTPUT</h3>
-              <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap border border-zinc-800 p-4 bg-black overflow-x-auto max-h-[600px]">
+            <div className="border border-gray-800 p-6 bg-zinc-900/30 space-y-4 text-xs">
+              <h3 className="text-green-500 font-bold tracking-wider">EXPANDED AI ESSAY & METADATA</h3>
+              <pre className="text-gray-300 font-mono whitespace-pre-wrap border border-zinc-800 p-4 bg-black max-h-[600px] overflow-y-auto">
                 {JSON.stringify(output, null, 2)}
               </pre>
             </div>
