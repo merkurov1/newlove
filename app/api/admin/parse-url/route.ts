@@ -3,7 +3,7 @@ import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { parseLotHtml } from '@/lib/lots/parse';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // Даем больше времени, так как браузерный рендеринг ScrapingAnt может занимать 10-20 секунд
+export const maxDuration = 60;
 
 const HOUSES: Record<string, string> = {
   'christies.com': "Christie's",
@@ -20,7 +20,7 @@ const houseFor = (host: string) => {
 const BLOCK_MARKERS = /access denied|captcha|cf-chl|are you a robot|pardon our interruption|unusual traffic/i;
 
 async function fetchViaScrapingAnt(targetUrl: string): Promise<string> {
-  const apiKey = process.env.SCRAPINGANT_API_KEY;
+  const apiKey = (process.env.SCRAPINGANT_API_KEY || '').trim();
   if (!apiKey) {
     throw new Error('SCRAPINGANT_API_KEY is not defined in environment variables');
   }
@@ -28,8 +28,8 @@ async function fetchViaScrapingAnt(targetUrl: string): Promise<string> {
   const endpoint = new URL('https://api.scrapingant.com/v2/general');
   endpoint.searchParams.append('url', targetUrl);
   endpoint.searchParams.append('x-api-key', apiKey);
-  endpoint.searchParams.append('browser', 'true'); // Включаем headless browser для обхода JS-челленджей
-  endpoint.searchParams.append('proxy_country', 'US'); // Эмулируем заход из США (лучше проходимость)
+  endpoint.searchParams.append('browser', 'true');
+  endpoint.searchParams.append('proxy_country', 'US');
 
   const res = await fetch(endpoint.toString(), {
     method: 'GET',
@@ -56,51 +56,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'bad_url' }, { status: 400 });
     }
 
-    const house = houseFor(target.hostname);
-    if (target.protocol !== 'https:' || !house) {
-      return NextResponse.json({ error: 'host_not_allowed' }, { status: 400 });
-    }
+    const house = houseFor(target.hostname) || 'Auction House';
 
     let html: string;
 
     if (typeof pastedHtml === 'string' && pastedHtml.length > 500) {
-      // Использование напрямую переданного HTML
       html = pastedHtml;
     } else {
-      // Использование ScrapingAnt
       try {
         html = await fetchViaScrapingAnt(target.href);
       } catch (err: any) {
-        console.error('[ScrapingAnt Fetch Error]:', err.message);
+        console.error('[ScrapingAnt Error]:', err.message);
         return NextResponse.json(
-          {
-            error: 'scrapingant_failed',
-            details: err.message,
-            hint: 'ScrapingAnt could not bypass protection. Try pasting HTML manually.',
-          },
+          { error: 'scrapingant_failed', details: err.message },
           { status: 502 }
         );
       }
 
-      // Проверка на жесткую блокировку
       const blocked = BLOCK_MARKERS.test(html) && !/application\/ld\+json/.test(html);
       if (blocked) {
         return NextResponse.json(
-          {
-            error: 'blocked',
-            hint: 'Site refused access even through ScrapingAnt.',
-          },
+          { error: 'blocked', hint: 'Site refused access even through ScrapingAnt.' },
           { status: 422 }
         );
       }
     }
 
-    // Извлечение данных из HTML
     const lot = parseLotHtml(html, target.href, house, { debug: !!debug });
-
-    return NextResponse.json({ lot, rawLength: html.length });
+    return NextResponse.json({ lot, rawLength: html.length, rawHtml: html });
   } catch (e: any) {
-    console.error('[parse-lot]', e);
+    console.error('[parse-lot Error]:', e);
     return NextResponse.json({ error: 'parse_failed', details: e?.message ?? String(e) }, { status: 500 });
   }
 }
+
+export const dynamic = 'force-dynamic';

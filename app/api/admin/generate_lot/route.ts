@@ -5,12 +5,12 @@ import { requireAdminFromRequest } from '@/lib/serverAuth';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-// Используем список моделей OpenRouter (fallback по очереди)
+// Список моделей OpenRouter (fallback по очереди при сбоях)
 const MODELS = [
   'meta-llama/llama-3.3-70b-instruct',
   'deepseek/deepseek-r1',
   'qwen/qwen-2.5-72b-instruct',
-  'openrouter/free'
+  'openrouter/free',
 ];
 
 const SYSTEM_PROMPT = `
@@ -36,10 +36,11 @@ export async function POST(req: Request) {
   try {
     await requireAdminFromRequest(req);
 
-    const apiKey = (process.env.OPENROUTER_API_KEY || "").trim();
+    // Подтягиваем OpenRouter ключ из OPENROUTER_API_KEY или GOOGLE_API_KEY
+    const apiKey = (process.env.OPENROUTER_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'OPENROUTER_API_KEY missing in environment variables.' },
+        { error: 'OPENROUTER_API_KEY (or GOOGLE_API_KEY) missing in environment variables.' },
         { status: 500 }
       );
     }
