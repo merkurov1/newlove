@@ -21,12 +21,20 @@ export async function POST(req: Request) {
     // Скачивание и сохранение картинки в Supabase Storage
     if (image_url) {
       try {
-        const imageRes = await fetch(image_url)
+        const imageRes = await fetch(image_url, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+        })
+
         if (imageRes.ok) {
           const arrayBuffer = await imageRes.arrayBuffer()
           const buffer = Buffer.from(arrayBuffer)
           const fileExt = image_url.split('.').pop()?.split('?')[0] || 'jpg'
-          const safeName = `${artist || lotAI.artist || 'unknown'}-${title || lotAI.title || 'untitled'}`.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+          const safeName = `${artist || lotAI.artist || 'unknown'}-${title || lotAI.title || 'untitled'}`
+            .replace(/[^a-z0-9]/gi, '_')
+            .toLowerCase()
           const fileName = `${safeName}_${Date.now()}.${fileExt}`
           const contentType = imageRes.headers.get('content-type') || 'image/jpeg'
 
@@ -37,6 +45,8 @@ export async function POST(req: Request) {
 
           if (!uploadError && uploadData?.path) {
             storedImagePath = uploadData.path
+          } else if (uploadError) {
+            console.warn('[Saver Storage Error]:', uploadError.message)
           }
         }
       } catch (e) {
@@ -44,25 +54,27 @@ export async function POST(req: Request) {
       }
     }
 
-    // Вставляем все структурированные метаданные в таблицу `lots`
+    // Сохраняем в таблицу `lots` с использованием UPSERT по полю source_url
+    const record = {
+      artist: artist || lotAI.artist || 'Unknown Artist',
+      title: title || lotAI.title || 'Untitled',
+      source_url: link,
+      image_path: storedImagePath || image_url || '',
+      
+      medium: lotAI.medium || specs?.medium || null,
+      dimensions: lotAI.dimensions || specs?.dimensions || null,
+      estimate: lotAI.estimate_raw || specs?.estimate || null,
+      year: lotAI.year || specs?.date || null,
+      provenance: typeof lotAI.provenance === 'string' ? lotAI.provenance : JSON.stringify(lotAI.provenance || specs?.provenance || []),
+      
+      ai_content: lotAI,
+      status: 'published',
+      updated_at: new Date().toISOString()
+    }
+
     const { data, error } = await supabase
       .from('lots')
-      .insert({
-        artist: artist || lotAI.artist,
-        title: title || lotAI.title,
-        source_url: link,
-        image_path: storedImagePath || image_url,
-        
-        medium: lotAI.medium || specs?.medium,
-        dimensions: lotAI.dimensions || specs?.dimensions,
-        estimate: lotAI.estimate_raw || specs?.estimate,
-        year: lotAI.year || specs?.date,
-        provenance: JSON.stringify(lotAI.provenance || specs?.provenance || []),
-        
-        // Полноценный AI-контент
-        ai_content: lotAI,
-        status: 'published'
-      })
+      .upsert(record, { onConflict: 'source_url' })
       .select()
       .single()
 
@@ -72,6 +84,6 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error('[Saver Error]:', error)
-    return NextResponse.json({ error: 'Save failed', details: error?.message }, { status: 500 })
+    return NextResponse.json({ error: 'Save failed', details: error?.message || String(error) }, { status: 500 })
   }
 }

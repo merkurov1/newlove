@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { parseLotHtml } from '@/lib/lots/parse';
 
 export const runtime = 'nodejs';
 
@@ -25,39 +26,32 @@ export async function POST(req: Request) {
     }
 
     const html = await res.text();
-    const $ = cheerio.load(html);
 
-    // Удаляем ненужный тяжелый мусор
-    $('script, style, svg, noscript, iframe, footer, nav, header').remove();
+    // Определяем аукционный дом
+    let auctionHouse = "Christie's";
+    if (url.includes('sothebys.com')) auctionHouse = "Sotheby's";
+    if (url.includes('phillips.com')) auctionHouse = "Phillips";
 
-    // Извлекаем изображение
-    let imageUrl =
-      $('meta[property="og:image"]').attr('content') ||
-      $('meta[name="twitter:image"]').attr('content') ||
-      $('link[rel="image_src"]').attr('href') ||
-      '';
+    // 1. Извлекаем структурированные данные (JSON-LD) до удаления скриптов
+    const structured = parseLotHtml(html, url, auctionHouse, { debug: true });
 
-    if (!imageUrl) {
-      const firstImg = $('img').first().attr('src');
-      if (firstImg) {
-        imageUrl = firstImg.startsWith('http')
-          ? firstImg
-          : new URL(firstImg, url).toString();
-      }
+    // 2. Очищаем HTML от скриптов/стилей и готовим rawData для AI
+    const $= cheerio.load(html);$('script, style, svg, noscript, iframe, footer, nav, header').remove();
+    const cleanText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 30000);
+
+    // Подтягиваем качество картинки Christie's
+    let bestImage = structured.imageUrl || '';
+    if (bestImage && bestImage.includes('christies.com')) {
+      bestImage = bestImage.replace(/width=\d+/, 'width=2000').replace(/maxwidth=\d+/, 'maxwidth=2000');
     }
 
-    // Чистим текст и ограничиваем длину (максимум ~40 000 символов, чтобы не выходить за лимиты токенов)
-    const cleanText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 40000);
-
-    const title =
-      $('meta[property="og:title"]').attr('content') ||
-      $('title').text().trim() ||
-      '';
-
     return NextResponse.json({
-      title,
-      image: imageUrl,
+      title: structured.title || '',
+      artist: structured.artist || '',
+      image_url: bestImage,
+      extracted: structured,
       rawData: cleanText,
+      rawLength: cleanText.length,
       url,
     });
   } catch (error: any) {

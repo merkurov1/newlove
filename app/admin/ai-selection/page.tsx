@@ -48,20 +48,30 @@ export default function CuratorTool() {
 
       addLog(`HTML received (${data.rawLength || 0} chars). Processing structured data...`)
 
-      const bestImage = data.image_url || ''
-      const bestTitle = data.title || ''
-      const bestArtist = data.artist || ''
+      const bestImage = data.image_url || data.extracted?.imageUrl || ''
+      const bestTitle = data.title || data.extracted?.title || ''
+      const bestArtist = data.artist || data.extracted?.artist || ''
+      const extractedSpecs = data.extracted?.specs || data.specs || {}
 
       setInput(prev => ({
         ...prev,
         artist: bestArtist || prev.artist,
         title: bestTitle || prev.title,
         image_url: bestImage || prev.image_url,
+        specs: { ...prev.specs, ...extractedSpecs },
         raw: JSON.stringify(data.extracted || data, null, 2)
       }))
 
       addLog(`Parse complete. Extracted image: ${bestImage ? 'YES' : 'NO'}`)
-      return { bestArtist, bestTitle, bestImage, rawData: data.extracted || data }
+      
+      // Возвращаем прямое состояние, чтобы не зависеть от асинхронного setState React
+      return { 
+        bestArtist, 
+        bestTitle, 
+        bestImage, 
+        specs: extractedSpecs,
+        rawData: data.extracted || data 
+      }
 
     } catch (e: any) { 
       addLog(`PARSE ERROR: ${e.message}`)
@@ -73,28 +83,35 @@ export default function CuratorTool() {
   }
 
   // 2. ГЕНЕРАЦИЯ ОПИСАНИЯ ЧЕРЕЗ AI
-  const generate = async (customRaw?: any) => {
+  const generate = async (customContext?: { artist?: string; title?: string; specs?: any; rawData?: any }) => {
     setLoading(true)
     addLog('Synthesizing lot assets via OpenRouter AI...')
+
+    const targetArtist = customContext?.artist || input.artist
+    const targetTitle = customContext?.title || input.title
+    const targetSpecs = customContext?.specs || input.specs
+    const targetRaw = customContext?.rawData || input.raw
+
     try {
       const res = await fetch('/api/admin/generate_lot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          artist: input.artist,
-          title: input.title,
+          artist: targetArtist,
+          title: targetTitle,
           link: input.link,
-          specs: input.specs,
-          rawData: customRaw || input.raw
+          specs: targetSpecs,
+          rawData: targetRaw
         })
       })
 
       const data = await res.json()
       if (!res.ok) throw new Error(data.details || data.error || 'Generation failed')
 
-      setOutput(data.lot || data)
+      const resultLot = data.lot || data
+      setOutput(resultLot)
       addLog('AI Synthesis completed successfully.')
-      return data.lot || data
+      return resultLot
     } catch (e: any) { 
       addLog(`GEN ERROR: ${e.message}`)
       alert(`Generation failed: ${e.message}`) 
@@ -105,11 +122,14 @@ export default function CuratorTool() {
   }
 
   // 3. СОХРАНЕНИЕ В VAULT (SUPABASE)
-  const saveToVault = async (customOutput?: any) => {
+  const saveToVault = async (customOutput?: any, customImage?: string) => {
     const lotToSave = customOutput || output
     if (!lotToSave) return alert('Generate or parse content first')
     setSaving(true)
     addLog('Saving lot to vault (Supabase)...')
+
+    const imageUrlToSend = customImage || input.image_url || lotToSave.image_url || lotToSave.imageUrl || ''
+
     try {
       const res = await fetch('/api/admin/save-lot', {
         method: 'POST',
@@ -118,7 +138,7 @@ export default function CuratorTool() {
           artist: input.artist || lotToSave.artist,
           title: input.title || lotToSave.title,
           link: input.link,
-          image_url: input.image_url,
+          image_url: imageUrlToSend,
           specs: input.specs,
           ai_content: lotToSave
         })
@@ -145,13 +165,21 @@ export default function CuratorTool() {
     setAutoProcessing(true)
     addLog('--- STARTING AUTOMATED ONE-CLICK PIPELINE ---')
     
+    // 1. Выполняем парсинг
     const parseResult = await handleAutoParse()
     if (!parseResult) return setAutoProcessing(false)
 
-    const aiResult = await generate(parseResult.rawData)
+    // 2. Передаем свежеизвлеченные данные напрямую в генерацию
+    const aiResult = await generate({
+      artist: parseResult.bestArtist,
+      title: parseResult.bestTitle,
+      specs: parseResult.specs,
+      rawData: parseResult.rawData
+    })
     if (!aiResult) return setAutoProcessing(false)
 
-    await saveToVault(aiResult)
+    // 3. Передаем прямой результат и извлеченную картинку напрямую в сохранение
+    await saveToVault(aiResult, parseResult.bestImage)
     addLog('--- AUTOMATED PIPELINE FINISHED ---')
     setAutoProcessing(false)
   }
