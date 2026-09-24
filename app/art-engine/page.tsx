@@ -86,6 +86,9 @@ export default function ArtEngineDashboard() {
   }, [fetchLots]);
 
   const handleReset = () => {
+    if (output && !isSaved) {
+      if (!confirm('Discard unsaved curatorial dossier?')) return;
+    }
     setInput({
       artist: '',
       title: '',
@@ -106,7 +109,7 @@ export default function ArtEngineDashboard() {
       const text = await navigator.clipboard.readText();
       if (text) setInput(prev => ({ ...prev, link: text }));
     } catch {
-      // Fallback ignore if clipboard permission denied
+      // Ignore if permission is denied
     }
   };
 
@@ -124,7 +127,7 @@ export default function ArtEngineDashboard() {
     return fetch(url, { ...options, headers });
   };
 
-  // AUTH 1: Send OTP Code to Email
+  // AUTH 1: Send OTP Code
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authEmail) return;
@@ -134,15 +137,13 @@ export default function ArtEngineDashboard() {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: authEmail,
-        options: {
-          shouldCreateUser: true,
-        },
+        options: { shouldCreateUser: true }
       });
 
       if (error) throw error;
       setOtpSent(true);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Error sending OTP';
+      const errorMessage = err instanceof Error ? err.message : 'Error sending code';
       setAuthError(errorMessage);
     } finally {
       setAuthLoading(false);
@@ -181,20 +182,18 @@ export default function ArtEngineDashboard() {
     }
   };
 
-  // AUTH 3: Passkey / WebAuthn Login
+  // AUTH 3: Passkey Sign-In
   const handlePasskeySignIn = async () => {
     setAuthLoading(true);
     setAuthError('');
 
     try {
-      // Direct WebAuthn / Passkey Authentication call
       const { data, error } = await supabase.auth.mfa.authenticate({
         factorId: 'webauthn',
       });
 
       if (error) {
-        // Fallback or explicit check if webauthn isn't bound on device
-        throw new Error('Passkey login not recognized or not configured for this device.');
+        throw new Error('Passkey login not recognized on this device.');
       }
 
       if (data) {
@@ -386,7 +385,6 @@ export default function ArtEngineDashboard() {
     setTimeout(() => setCopyStatus(false), 2000);
   };
 
-  // Helper Initials
   const getInitials = (name?: string) => {
     if (!name) return 'A';
     return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
@@ -395,7 +393,7 @@ export default function ArtEngineDashboard() {
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans pt-24 pb-32 px-6 sm:px-12 selection:bg-neutral-900 selection:text-white">
       
-      {/* AUTHENTICATION MODAL (OTP CODE + PASSKEY) */}
+      {/* AUTHENTICATION MODAL */}
       {showAuthModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-white border border-neutral-200 rounded-none max-w-md w-full p-8 shadow-xl space-y-6">
@@ -423,7 +421,7 @@ export default function ArtEngineDashboard() {
                 <form onSubmit={handleSendOtp} className="space-y-4">
                   <div>
                     <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-2">
-                      Enter Email for 6-Digit Verification Code
+                      Enter Email for Verification Code
                     </label>
                     <input 
                       type="email"
@@ -462,7 +460,7 @@ export default function ArtEngineDashboard() {
               <form onSubmit={handleVerifyOtp} className="space-y-5">
                 <div>
                   <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
-                    Enter Code Sent To:
+                    Code Sent To:
                   </label>
                   <p className="text-xs font-mono font-bold text-neutral-900 mb-3">{authEmail}</p>
                   
@@ -482,7 +480,7 @@ export default function ArtEngineDashboard() {
                   disabled={authLoading}
                   className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50"
                 >
-                  {authLoading ? 'Verifying...' : 'Verify Code & Sign In'}
+                  {authLoading ? 'Verifying...' : 'Verify & Sign In'}
                 </button>
 
                 <button
@@ -490,7 +488,7 @@ export default function ArtEngineDashboard() {
                   onClick={() => setOtpSent(false)}
                   className="w-full text-center text-xs font-mono text-neutral-400 hover:text-neutral-900 underline pt-2 block"
                 >
-                  ← Back to Email input
+                  ← Back to Email
                 </button>
               </form>
             )}
@@ -571,7 +569,7 @@ export default function ArtEngineDashboard() {
 
         {/* TAB 1: PARSER TERMINAL */}
         {activeTab === 'parser' && (
-          <main className="grid lg:grid-cols-12 gap-12 items-start">
+          <main className="grid lg:grid-cols-12 gap-12 items-start transition-opacity duration-300 ease-in-out">
             
             {/* LEFT COLUMN: CONTROL (5 COLS) */}
             <div className="lg:col-span-5 space-y-8">
@@ -600,8 +598,8 @@ export default function ArtEngineDashboard() {
                   />
                   <button 
                     onClick={handleAutoParse} 
-                    disabled={parsing || autoProcessing} 
-                    className="bg-neutral-100 hover:bg-neutral-200 text-neutral-900 px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition disabled:opacity-50 border border-neutral-200 shrink-0"
+                    disabled={parsing || autoProcessing || !input.link} 
+                    className="bg-neutral-100 hover:bg-neutral-200 text-neutral-900 px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition disabled:opacity-40 border border-neutral-200 shrink-0"
                   >
                     {parsing ? 'Parsing...' : 'Parse'}
                   </button>
@@ -609,8 +607,8 @@ export default function ArtEngineDashboard() {
 
                 <button
                   onClick={handleOneClickPipeline}
-                  disabled={parsing || loading || saving || autoProcessing}
-                  className="w-full bg-neutral-900 hover:bg-black text-white py-3.5 text-xs font-mono uppercase tracking-widest transition disabled:opacity-50"
+                  disabled={parsing || loading || saving || autoProcessing || !input.link}
+                  className="w-full bg-neutral-900 hover:bg-black text-white py-3.5 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40"
                 >
                   {autoProcessing ? 'Processing Pipeline...' : 'Process Lot to Vault'}
                 </button>
@@ -662,7 +660,7 @@ export default function ArtEngineDashboard() {
                 <button 
                   onClick={() => generate()} 
                   disabled={loading || autoProcessing} 
-                  className="w-full bg-neutral-100 hover:bg-neutral-200 text-neutral-900 border border-neutral-200 py-3 text-xs font-mono uppercase tracking-widest transition disabled:opacity-50"
+                  className="w-full bg-neutral-100 hover:bg-neutral-200 text-neutral-900 border border-neutral-200 py-3 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40"
                 >
                   {loading ? 'Synthesizing Essay...' : 'Synthesize Dossier'}
                 </button>
@@ -672,7 +670,19 @@ export default function ArtEngineDashboard() {
 
             {/* RIGHT COLUMN: CURATORIAL DOSSIER PREVIEW (7 COLS) */}
             <div className="lg:col-span-7">
-              {output ? (
+              {loading ? (
+                /* SKELETON LOADER */
+                <div className="bg-white border border-neutral-200 p-10 space-y-8 animate-pulse">
+                  <div className="h-4 bg-neutral-200 w-1/4"></div>
+                  <div className="h-8 bg-neutral-200 w-3/4"></div>
+                  <div className="h-4 bg-neutral-200 w-1/2"></div>
+                  <div className="space-y-3 pt-6">
+                    <div className="h-3 bg-neutral-200 w-full"></div>
+                    <div className="h-3 bg-neutral-200 w-5/6"></div>
+                    <div className="h-3 bg-neutral-200 w-4/6"></div>
+                  </div>
+                </div>
+              ) : output ? (
                 <div className="space-y-6">
                   
                   {/* DOSSIER ACTION BAR */}
@@ -749,13 +759,13 @@ export default function ArtEngineDashboard() {
                         </div>
                       </div>
 
-                      {/* ESSAY */}
+                      {/* ESSAY WITH DROP CAP */}
                       {output.curatorial_essay && (
                         <div className="space-y-3">
                           <h4 className="text-xs font-mono text-neutral-400 uppercase tracking-widest border-b border-neutral-100 pb-2">
                             Curatorial Analysis
                           </h4>
-                          <div className="text-neutral-800 text-sm font-serif leading-relaxed whitespace-pre-line">
+                          <div className="text-neutral-800 text-sm font-serif leading-relaxed whitespace-pre-line first-letter:float-left first-letter:text-3xl first-letter:font-serif first-letter:mr-2 first-letter:font-bold">
                             {output.curatorial_essay}
                           </div>
                         </div>
@@ -798,7 +808,7 @@ export default function ArtEngineDashboard() {
 
         {/* TAB 2: VAULT GALLERY */}
         {activeTab === 'vault' && (
-          <div className="space-y-6">
+          <div className="space-y-6 transition-opacity duration-300 ease-in-out">
             <div className="flex justify-between items-center border-b border-neutral-200 pb-4">
               <span className="text-xs font-mono text-neutral-400 uppercase tracking-widest">Vault Catalog</span>
               <button onClick={fetchLots} className="text-xs font-mono text-neutral-900 hover:underline">
@@ -807,7 +817,15 @@ export default function ArtEngineDashboard() {
             </div>
 
             {loadingLots ? (
-              <div className="py-20 text-center font-mono text-xs text-neutral-400">Loading catalog...</div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="bg-white border border-neutral-200 p-6 space-y-4 animate-pulse">
+                    <div className="aspect-[4/3] bg-neutral-200 w-full"></div>
+                    <div className="h-4 bg-neutral-200 w-2/3"></div>
+                    <div className="h-3 bg-neutral-200 w-1/3"></div>
+                  </div>
+                ))}
+              </div>
             ) : lots.length === 0 ? (
               <div className="py-20 text-center font-mono text-xs text-neutral-400">Vault archive is currently empty.</div>
             ) : (

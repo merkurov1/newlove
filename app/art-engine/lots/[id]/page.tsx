@@ -1,13 +1,9 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
-
-export const revalidate = 0;
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 function getAuctionHouseName(lot: any): string {
   const url = (lot.source_url || '').toLowerCase();
@@ -18,29 +14,46 @@ function getAuctionHouseName(lot: any): string {
   return lot.auction_house || "Auction House";
 }
 
-export async function generateMetadata({ params }: { params: { id: string } }) {
-  const { data: lot } = await supabase
-    .from('lots')
-    .select('artist, title')
-    .eq('id', params.id)
-    .maybeSingle();
+export default function LotDetailPage({ params }: { params: { id: string } }) {
+  const supabase = createClientComponentClient();
+  const [lot, setLot] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [copiedLink, setCopiedLink] = useState(false);
 
-  if (!lot) return { title: 'Lot Not Found' };
+  useEffect(() => {
+    async function fetchLot() {
+      const { data, error } = await supabase
+        .from('lots')
+        .select('*')
+        .eq('id', params.id)
+        .maybeSingle();
 
-  const displayTitle = [lot.artist, lot.title].filter(Boolean).join(' — ');
-  return {
-    title: `${displayTitle} | Vault Catalog`,
+      if (error || !data) {
+        setLoading(false);
+        return;
+      }
+
+      setLot(data);
+      setLoading(false);
+    }
+    fetchLot();
+  }, [params.id, supabase]);
+
+  const handleCopyPermalink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
   };
-}
 
-export default async function LotDetailPage({ params }: { params: { id: string } }) {
-  const { data: lot, error } = await supabase
-    .from('lots')
-    .select('*')
-    .eq('id', params.id)
-    .maybeSingle();
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-neutral-50 text-neutral-900 font-mono text-xs pt-32 text-center">
+        Loading curatorial dossier...
+      </div>
+    );
+  }
 
-  if (error || !lot) notFound();
+  if (!lot) return notFound();
 
   const ai = lot.ai_content || {};
   const auctionHouse = getAuctionHouseName(lot);
@@ -52,19 +65,27 @@ export default async function LotDetailPage({ params }: { params: { id: string }
     <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans pt-24 sm:pt-32 pb-32 px-6 sm:px-12">
       <div className="max-w-6xl mx-auto space-y-12">
         
-        {/* NAV & LINK */}
+        {/* NAV BAR */}
         <div className="flex justify-between items-center border-b border-neutral-200 pb-6 font-mono text-xs text-neutral-500">
           <Link href="/art-engine" className="hover:text-neutral-900 transition flex items-center gap-2">
-            ← ART ENGINE TERMINAL
+            ← TERMINAL
           </Link>
-          <a 
-            href={lot.source_url} 
-            target="_blank" 
-            rel="noreferrer" 
-            className="text-neutral-900 hover:underline uppercase tracking-widest font-mono text-xs"
-          >
-            ORIGINAL CATALOG AT {auctionHouse} ↗
-          </a>
+          <div className="flex gap-4 items-center">
+            <button 
+              onClick={handleCopyPermalink} 
+              className="text-neutral-600 hover:text-neutral-900 underline transition"
+            >
+              {copiedLink ? 'Link Copied ✓' : 'Share Link'}
+            </button>
+            <a 
+              href={lot.source_url} 
+              target="_blank" 
+              rel="noreferrer" 
+              className="text-neutral-900 hover:underline uppercase tracking-widest font-mono text-xs"
+            >
+              ORIGINAL CATALOG AT {auctionHouse} ↗
+            </a>
+          </div>
         </div>
 
         {/* MAIN DOSSIER GRID */}
@@ -140,13 +161,6 @@ export default async function LotDetailPage({ params }: { params: { id: string }
                 <div className="font-serif text-base text-neutral-800 leading-relaxed whitespace-pre-line space-y-4">
                   {ai.curatorial_essay}
                 </div>
-              </div>
-            )}
-
-            {ai.market_analysis && (
-              <div className="space-y-2 bg-neutral-50 p-6 border border-neutral-100">
-                <h3 className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest">Market Context</h3>
-                <p className="text-xs text-neutral-700 leading-relaxed">{ai.market_analysis}</p>
               </div>
             )}
 
