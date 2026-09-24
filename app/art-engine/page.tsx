@@ -180,22 +180,20 @@ export default function ArtEngineDashboard() {
     }
   };
 
-  // AUTH 3: Исправленный Passkey / WebAuthn Sign-In с проверкой подсистем
+  // AUTH 3: Безопасный Passkey / WebAuthn Sign-In (Без падений и ложных ошибок)
   const handlePasskeySignIn = async () => {
     setAuthLoading(true);
     setAuthError('');
 
     try {
-      // Проверка на поддержку WebAuthn в браузере и наличие метода в supabase.auth
       if (typeof window === 'undefined' || !window.PublicKeyCredential) {
         throw new Error('WebAuthn is not supported by this browser environment.');
       }
 
-      if (supabase.auth && typeof (supabase.auth as any).signInWithWebAuthn === 'function') {
-        const { data, error } = await (supabase.auth as any).signInWithWebAuthn({
-          // Корректная конфигурация для промпта аутентификации Passkey
-          options: {} 
-        });
+      // Проверяем наличие метода в клиенте без генерации исключений SDK
+      const authClient = supabase.auth as any;
+      if (typeof authClient.signInWithWebAuthn === 'function') {
+        const { data, error } = await authClient.signInWithWebAuthn();
         if (error) throw error;
         
         const { data: { session: newSession } } = await supabase.auth.getSession();
@@ -203,15 +201,15 @@ export default function ArtEngineDashboard() {
           setSession(newSession);
           setUser(newSession?.user || null);
           setShowAuthModal(false);
-        } else {
-          throw new Error('Passkey session could not be established.');
+          return;
         }
-      } else {
-        // Fallback-симуляция или подсказка, если метод не подключен в конфиге Supabase проекта
-        throw new Error('Passkey provider is not initialized in Supabase client. Please use 6-digit email OTP.');
       }
+      
+      // Если метод не проинициализирован на бэкенде/клиенте Supabase
+      throw new Error('Passkey authentication is not configured in this project instance. Please use 6-digit email OTP.');
+      
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Passkey authentication failed';
+      const errorMessage = err instanceof Error ? err.message : 'Passkey error';
       setAuthError(errorMessage);
     } finally {
       setAuthLoading(false);
