@@ -5,6 +5,15 @@ import { parseLotHtml } from '@/lib/lots/parse';
 
 export const runtime = 'nodejs';
 
+function detectAuctionHouse(url: string): string {
+  const lUrl = url.toLowerCase();
+  if (lUrl.includes('sothebys.com')) return "Sotheby's";
+  if (lUrl.includes('christies.com')) return "Christie's";
+  if (lUrl.includes('phillips.com')) return "Phillips";
+  if (lUrl.includes('bonhams.com')) return "Bonhams";
+  return "Auction House";
+}
+
 export async function POST(req: Request) {
   try {
     await requireAdminFromRequest(req);
@@ -26,20 +35,13 @@ export async function POST(req: Request) {
     }
 
     const html = await res.text();
+    const auctionHouse = detectAuctionHouse(url);
 
-    // Определяем аукционный дом
-    let auctionHouse = "Christie's";
-    if (url.includes('sothebys.com')) auctionHouse = "Sotheby's";
-    if (url.includes('phillips.com')) auctionHouse = "Phillips";
-
-    // 1. Извлекаем структурированные данные (JSON-LD) до удаления скриптов
     const structured = parseLotHtml(html, url, auctionHouse, { debug: true });
 
-    // 2. Очищаем HTML от скриптов/стилей и готовим rawData для AI
     const $= cheerio.load(html);$('script, style, svg, noscript, iframe, footer, nav, header').remove();
     const cleanText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 30000);
 
-    // Подтягиваем качество картинки Christie's
     let bestImage = structured.imageUrl || '';
     if (bestImage && bestImage.includes('christies.com')) {
       bestImage = bestImage.replace(/width=\d+/, 'width=2000').replace(/maxwidth=\d+/, 'maxwidth=2000');
@@ -49,7 +51,11 @@ export async function POST(req: Request) {
       title: structured.title || '',
       artist: structured.artist || '',
       image_url: bestImage,
-      extracted: structured,
+      auction_house: auctionHouse,
+      extracted: {
+        ...structured,
+        auctionHouse,
+      },
       rawData: cleanText,
       rawLength: cleanText.length,
       url,

@@ -24,12 +24,26 @@ export default function CuratorTool() {
     setLogs(prev => [{ time, msg, type }, ...prev])
   }
 
+  const handleReset = () => {
+    setInput({
+      artist: '',
+      title: '',
+      link: '',
+      raw: '',
+      image_url: '',
+      specs: { medium: '', dimensions: '', estimate: '', date: '', provenance: '' }
+    })
+    setOutput(null)
+    setImgError(false)
+    addLog('Reset form for new lot', 'info')
+  }
+
   // 1. ПАРСИНГ И РАЗБОР СТРАНИЦЫ
   const handleAutoParse = async () => {
     if (!input.link) return alert('Paste auction link first')
     setParsing(true)
     setImgError(false)
-    addLog(`Extracting metadata from: ${new URL(input.link).hostname}`, 'info')
+    addLog(`Extracting metadata from link...`, 'info')
 
     try {
       const res = await fetch('/api/admin/parse-url', {
@@ -42,9 +56,18 @@ export default function CuratorTool() {
       if (!res.ok) throw new Error(data.details || data.error || 'Parse failed on server')
 
       const bestImage = data.image_url || data.extracted?.imageUrl || ''
-      const bestTitle = data.title || data.extracted?.title || ''
-      const bestArtist = data.artist || data.extracted?.artist || ''
+      let bestTitle = data.title || data.extracted?.title || ''
+      let bestArtist = data.artist || data.extracted?.artist || ''
       const extractedSpecs = data.extracted?.specs || data.specs || {}
+
+      // Фолбэк если имя художника попало в title
+      if (!bestArtist && bestTitle) {
+        const knownArtists = ['Banksy', 'Andy Warhol', 'KAWS', 'Damien Hirst', 'Pablo Picasso', 'Jean-Michel Basquiat']
+        const matched = knownArtists.find(a => bestTitle.toLowerCase().includes(a.toLowerCase()))
+        if (matched) {
+          bestArtist = matched
+        }
+      }
 
       setInput(prev => ({
         ...prev,
@@ -77,7 +100,7 @@ export default function CuratorTool() {
   // 2. ГЕНЕРАЦИЯ ОПИСАНИЯ ЧЕРЕЗ AI
   const generate = async (customContext?: { artist?: string; title?: string; specs?: any; rawData?: any }) => {
     setLoading(true)
-    addLog('Synthesizing curatorial analysis via OpenRouter AI...', 'info')
+    addLog('Synthesizing curatorial analysis via AI...', 'info')
 
     const targetArtist = customContext?.artist || input.artist
     const targetTitle = customContext?.title || input.title
@@ -102,6 +125,11 @@ export default function CuratorTool() {
 
       const resultLot = data.lot || data
       setOutput(resultLot)
+      
+      // Синхронизируем инпуты если AI нашел более точные имя/название
+      if (resultLot.artist) setInput(prev => ({ ...prev, artist: resultLot.artist }))
+      if (resultLot.title) setInput(prev => ({ ...prev, title: resultLot.title }))
+
       addLog('Curatorial essay & structured tags generated.', 'success')
       return resultLot
     } catch (e: any) { 
@@ -145,8 +173,8 @@ export default function CuratorTool() {
     } catch (e: any) {
       addLog(`SAVE ERROR: ${e.message}`, 'error')
       alert(`Save Failed: ${e.message}`)
-    } finally {
-      setSaving(false)
+    } finally { 
+      setSaving(false) 
     }
   }
 
@@ -173,29 +201,38 @@ export default function CuratorTool() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans antialiased selection:bg-zinc-800 selection:text-white">
-      {/* HEADER BAR */}
-      <header className="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur sticky top-0 z-50 px-8 py-4 flex justify-between items-center">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans antialiased selection:bg-zinc-800 selection:text-white pt-12 pb-16 px-6">
+      
+      {/* SUB-HEADER STATUS BAR */}
+      <div className="max-w-7xl mx-auto mb-6 flex justify-between items-center border-b border-zinc-800/80 pb-4">
         <div className="flex items-center gap-3">
           <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-          <h1 className="text-sm tracking-widest uppercase font-mono font-semibold text-zinc-300">
+          <h1 className="text-xs font-mono tracking-widest uppercase font-semibold text-zinc-300">
             CURATOR ENGINE <span className="text-zinc-600">/ VAULT PIPELINE</span>
           </h1>
         </div>
-        <div className="flex items-center gap-4 text-xs font-mono text-zinc-500">
-          <span>CHRISTIE'S • SOTHEBY'S • PHILLIPS</span>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleReset}
+            className="text-[11px] font-mono text-zinc-400 hover:text-white px-3 py-1 rounded bg-zinc-900 border border-zinc-800 transition"
+          >
+            Clear / New Lot
+          </button>
+          <span className="text-[10px] font-mono text-zinc-600 uppercase hidden sm:inline">
+            Christie's • Sotheby's • Phillips
+          </span>
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-7xl mx-auto p-8 grid lg:grid-cols-12 gap-8">
+      <main className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-8">
         
         {/* LEFT COLUMN: CONTROL & INGESTION (5 COLS) */}
-        <div className="lg:col-span-5 space-y-6">
+        <div className="lg:col-span-5 space-y-5">
           
           {/* LINK INGESTION PANEL */}
           <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-5 space-y-4 shadow-xl">
-            <label className="text-xs font-mono text-zinc-400 uppercase tracking-wider block">
-              Auction Lot Source
+            <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block">
+              Auction Lot Source URL
             </label>
             
             <div className="flex gap-2">
@@ -211,7 +248,7 @@ export default function CuratorTool() {
                 disabled={parsing || autoProcessing} 
                 className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2.5 rounded-lg text-xs font-mono font-medium transition disabled:opacity-50 shrink-0 border border-zinc-700"
               >
-                {parsing ? 'EXTRACTING...' : 'PARSE'}
+                {parsing ? '...' : 'PARSE'}
               </button>
             </div>
 
@@ -234,8 +271,8 @@ export default function CuratorTool() {
           {/* LOT IMAGE & BASIC DETAILS METADATA */}
           <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-5 space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-mono text-zinc-400 uppercase tracking-wider">Lot Visual & Info</span>
-              {input.image_url && <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded">IMAGE OK</span>}
+              <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider">Visual Preview</span>
+              {input.image_url && <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded">IMAGE RESOLVED</span>}
             </div>
 
             <div className="relative aspect-[4/3] w-full bg-zinc-950 border border-zinc-800/80 rounded-lg overflow-hidden flex items-center justify-center group">
@@ -289,7 +326,7 @@ export default function CuratorTool() {
               <span>Execution Logs</span>
               <span className="text-zinc-700">{logs.length} events</span>
             </div>
-            <div className="h-32 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-zinc-800">
+            <div className="h-28 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-zinc-800">
               {logs.length === 0 && <span className="text-zinc-700 italic">Ready to ingest lot data...</span>}
               {logs.map((l, i) => (
                 <div key={i} className="flex gap-2 leading-tight">
@@ -313,7 +350,7 @@ export default function CuratorTool() {
               <div className="flex justify-between items-center bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono text-zinc-400">STATUS:</span>
-                  <span className="text-xs font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded">READY</span>
+                  <span className="text-xs font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded">SYNTHESIZED</span>
                 </div>
                 
                 <div className="flex gap-2">
@@ -342,15 +379,15 @@ export default function CuratorTool() {
                   </pre>
                 </div>
               ) : (
-                <div className="bg-zinc-900/30 border border-zinc-800/80 rounded-xl p-8 space-y-8">
+                <div className="bg-zinc-900/30 border border-zinc-800/80 rounded-xl p-8 space-y-8 max-h-[780px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
                   
                   {/* HEADER & METADATA */}
                   <div className="border-b border-zinc-800/80 pb-6 space-y-3">
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest">{output.auction_house || "AUCTION HOUSE"} • LOT {output.lot_number || '—'}</span>
-                        <h2 className="text-2xl font-serif font-light text-white mt-1">{output.artist || input.artist}</h2>
-                        <p className="text-zinc-400 italic text-sm">{output.artist_dates}</p>
+                        <h2 className="text-2xl font-serif font-light text-white mt-1">{output.artist || input.artist || "Unknown Artist"}</h2>
+                        {output.artist_dates && <p className="text-zinc-400 italic text-sm">{output.artist_dates}</p>}
                       </div>
                       {output.estimate_raw && (
                         <div className="text-right">
@@ -361,19 +398,21 @@ export default function CuratorTool() {
                     </div>
 
                     <div className="pt-2">
-                      <h3 className="text-lg font-serif italic text-zinc-200">{output.title || input.title} <span className="not-italic text-zinc-500 text-sm">({output.year})</span></h3>
-                      <p className="text-xs text-zinc-400 mt-1">{output.medium}</p>
-                      <p className="text-xs font-mono text-zinc-500 mt-0.5">{output.dimensions}</p>
+                      <h3 className="text-lg font-serif italic text-zinc-200">{output.title || input.title} {output.year && <span className="not-italic text-zinc-500 text-sm">({output.year})</span>}</h3>
+                      {output.medium && <p className="text-xs text-zinc-400 mt-1">{output.medium}</p>}
+                      {output.dimensions && <p className="text-xs font-mono text-zinc-500 mt-0.5">{output.dimensions}</p>}
                     </div>
                   </div>
 
                   {/* CURATORIAL ESSAY */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-mono text-zinc-400 uppercase tracking-widest border-b border-zinc-800/40 pb-2">Curatorial Analysis</h4>
-                    <div className="text-zinc-300 text-sm font-serif leading-relaxed whitespace-pre-line">
-                      {output.curatorial_essay}
+                  {output.curatorial_essay && (
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-mono text-zinc-400 uppercase tracking-widest border-b border-zinc-800/40 pb-2">Curatorial Analysis</h4>
+                      <div className="text-zinc-300 text-sm font-serif leading-relaxed whitespace-pre-line">
+                        {output.curatorial_essay}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* PROVENANCE */}
                   {output.provenance && output.provenance.length > 0 && (

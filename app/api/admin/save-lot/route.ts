@@ -9,6 +9,16 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+function detectAuctionHouse(url: string): string {
+  if (!url) return 'Auction House';
+  const lUrl = url.toLowerCase();
+  if (lUrl.includes('sothebys.com')) return "Sotheby's";
+  if (lUrl.includes('christies.com')) return "Christie's";
+  if (lUrl.includes('phillips.com')) return "Phillips";
+  if (lUrl.includes('bonhams.com')) return "Bonhams";
+  return 'Auction House';
+}
+
 export async function POST(req: Request) {
   try {
     await requireAdminFromRequest(req);
@@ -18,11 +28,10 @@ export async function POST(req: Request) {
     const lotAI = ai_content?.lot || ai_content || {};
     let storedImagePath = null;
 
-    // Скачивание и сохранение картинки в Supabase Storage
     if (image_url) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 секунд таймаут
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         const imageRes = await fetch(image_url, {
           headers: {
@@ -50,31 +59,38 @@ export async function POST(req: Request) {
 
           if (!uploadError && uploadData?.path) {
             storedImagePath = uploadData.path;
-          } else if (uploadError) {
-            console.warn('[Saver Storage Warning]:', uploadError.message);
           }
         }
       } catch (e: any) {
-        console.warn('[Saver] Image upload skipped, using direct URL:', e?.message || e);
+        console.warn('[Saver] Image upload skipped:', e?.message || e);
       }
     }
 
-    // Сохраняем метаданные в таблицу `lots` через UPSERT
+    const computedAuctionHouse = detectAuctionHouse(link) || lotAI.auction_house;
+
     const record = {
       artist: artist || lotAI.artist || 'Unknown Artist',
       title: title || lotAI.title || 'Untitled',
       source_url: link,
       image_path: storedImagePath || image_url || '',
+      auction_house: computedAuctionHouse,
       
       medium: lotAI.medium || specs?.medium || null,
       dimensions: lotAI.dimensions || specs?.dimensions || null,
       estimate: lotAI.estimate_raw || specs?.estimate || null,
+      estimate_low: lotAI.estimate_low ?? null,
+      estimate_high: lotAI.estimate_high ?? null,
+      currency: lotAI.currency || 'USD',
+      
       year: lotAI.year || specs?.date || null,
       provenance: typeof lotAI.provenance === 'string' 
         ? lotAI.provenance 
         : JSON.stringify(lotAI.provenance || specs?.provenance || []),
       
-      ai_content: lotAI,
+      ai_content: {
+        ...lotAI,
+        auction_house: computedAuctionHouse,
+      },
       status: 'published'
     };
 
