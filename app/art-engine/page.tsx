@@ -14,9 +14,10 @@ export default function ArtEngineDashboard() {
   const [loadingUser, setLoadingUser] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
+  const [authSent, setAuthSent] = useState(false);
   const [authSending, setAuthSending] = useState(false);
 
-  // Ingestion & Pipeline State
+  // Ingestion State
   const [input, setInput] = useState({ 
     artist: '', 
     title: '', 
@@ -33,14 +34,15 @@ export default function ArtEngineDashboard() {
   const [autoProcessing, setAutoProcessing] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
-  const [logs, setLogs] = useState<Array<{ time: string; msg: string; type?: 'info' | 'error' | 'success' }>>([]);
+  const [copyStatus, setCopyStatus] = useState(false);
+  const [statusText, setStatusText] = useState<string>('Ready for accession');
 
   // Vault Gallery State
   const [lots, setLots] = useState<any[]>([]);
   const [loadingLots, setLoadingLots] = useState(true);
   const [activeTab, setActiveTab] = useState<'parser' | 'vault'>('parser');
 
-  // Initialize Session & Auth Listener (Strict Types Fix)
+  // Auth Initialization
   useEffect(() => {
     async function initAuth() {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -78,12 +80,6 @@ export default function ArtEngineDashboard() {
     fetchLots();
   }, [fetchLots]);
 
-  // Log Helper
-  const addLog = (msg: string, type: 'info' | 'error' | 'success' = 'info') => {
-    const time = new Date().toLocaleTimeString();
-    setLogs(prev => [{ time, msg, type }, ...prev]);
-  };
-
   const handleReset = () => {
     setInput({
       artist: '',
@@ -95,7 +91,17 @@ export default function ArtEngineDashboard() {
     });
     setOutput(null);
     setImgError(false);
-    addLog('Reset ingestion pipeline for new lot.', 'info');
+    setStatusText('Ready for accession');
+  };
+
+  // Helper for Paste from Clipboard
+  const handlePasteClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) setInput(prev => ({ ...prev, link: text }));
+    } catch {
+      // Fallback ignore if clipboard permission denied
+    }
   };
 
   // Helper for Authenticated Fetching
@@ -125,9 +131,7 @@ export default function ArtEngineDashboard() {
       });
 
       if (error) throw error;
-      alert('🔒 Magic link sent to your email. Check your inbox to sign in.');
-      setShowAuthModal(false);
-      setAuthEmail('');
+      setAuthSent(true);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Authentication error';
       alert(errorMessage);
@@ -140,15 +144,14 @@ export default function ArtEngineDashboard() {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
-    addLog('User signed out.', 'info');
   };
 
   // PIPELINE 1: PARSE URL
   const handleAutoParse = async () => {
-    if (!input.link) return alert('Enter an auction URL first');
+    if (!input.link) return;
     setParsing(true);
     setImgError(false);
-    addLog(`Ingesting metadata from source...`, 'info');
+    setStatusText('Extracting metadata...');
 
     try {
       const res = await authFetch('/api/admin/parse-url', {
@@ -179,7 +182,7 @@ export default function ArtEngineDashboard() {
         raw: JSON.stringify(data.extracted || data, null, 2)
       }));
 
-      addLog(`Extracted lot: "${bestArtist || 'Unknown'}" — ${bestImage ? 'Visual Attached' : 'No Visual'}`, 'success');
+      setStatusText(`Extracted: ${bestArtist || 'Unknown Work'}`);
 
       return { 
         bestArtist, 
@@ -191,7 +194,7 @@ export default function ArtEngineDashboard() {
 
     } catch (e: unknown) { 
       const msg = e instanceof Error ? e.message : 'Parse error';
-      addLog(`PARSE ERROR: ${msg}`, 'error');
+      setStatusText(`Error: ${msg}`);
       alert(`Parse failed: ${msg}`); 
       return null;
     } finally { 
@@ -202,7 +205,7 @@ export default function ArtEngineDashboard() {
   // PIPELINE 2: GENERATE ESSAY
   const generate = async (customContext?: { artist?: string; title?: string; specs?: any; rawData?: any }) => {
     setLoading(true);
-    addLog('Synthesizing curatorial dossier with AI Engine...', 'info');
+    setStatusText('Synthesizing curatorial dossier...');
 
     const targetArtist = customContext?.artist || input.artist;
     const targetTitle = customContext?.title || input.title;
@@ -230,11 +233,11 @@ export default function ArtEngineDashboard() {
       if (resultLot.artist) setInput(prev => ({ ...prev, artist: resultLot.artist }));
       if (resultLot.title) setInput(prev => ({ ...prev, title: resultLot.title }));
 
-      addLog('Curatorial analysis, provenance, and structured tags synthesized.', 'success');
+      setStatusText('Dossier synthesized');
       return resultLot;
     } catch (e: unknown) { 
       const msg = e instanceof Error ? e.message : 'Generation error';
-      addLog(`GEN ERROR: ${msg}`, 'error');
+      setStatusText(`Error: ${msg}`);
       alert(`Generation failed: ${msg}`); 
       return null;
     } finally { 
@@ -245,9 +248,9 @@ export default function ArtEngineDashboard() {
   // PIPELINE 3: SAVE TO VAULT
   const saveToVault = async (customOutput?: any, customImage?: string) => {
     const lotToSave = customOutput || output;
-    if (!lotToSave) return alert('Generate or parse content before saving');
+    if (!lotToSave) return;
     setSaving(true);
-    addLog('Persisting lot dossier to Supabase Vault...', 'info');
+    setStatusText('Persisting record to Vault...');
 
     const imageUrlToSend = customImage || input.image_url || lotToSave.image_url || lotToSave.imageUrl || '';
 
@@ -266,14 +269,14 @@ export default function ArtEngineDashboard() {
 
       const data = await res.json();
       if (data.success || data.lot_id || data.id) {
-        addLog(`Lot vaulted successfully [ID: ${data.lot_id || data.id}]`, 'success');
+        setStatusText('Cataloged in Vault');
         fetchLots();
       } else {
         throw new Error(data.error || 'API Error during save');
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Save error';
-      addLog(`SAVE ERROR: ${msg}`, 'error');
+      setStatusText(`Save error: ${msg}`);
       alert(`Save Failed: ${msg}`);
     } finally { 
       setSaving(false); 
@@ -282,10 +285,9 @@ export default function ArtEngineDashboard() {
 
   // PIPELINE 4: ONE-CLICK AUTOMATION
   const handleOneClickPipeline = async () => {
-    if (!input.link) return alert('Enter an auction URL first');
+    if (!input.link) return alert('Provide an auction link');
     setAutoProcessing(true);
-    addLog('Executing end-to-end autonomous ingestion pipeline...', 'info');
-
+    
     const parseResult = await handleAutoParse();
     if (!parseResult) return setAutoProcessing(false);
 
@@ -298,226 +300,239 @@ export default function ArtEngineDashboard() {
     if (!aiResult) return setAutoProcessing(false);
 
     await saveToVault(aiResult, parseResult.bestImage);
-    addLog('Pipeline completed successfully.', 'success');
     setAutoProcessing(false);
   };
 
+  // Copy Dossier Markdown
+  const handleCopyDossier = () => {
+    if (!output) return;
+    const text = `# ${output.artist || input.artist}\n*${output.title || input.title}* (${output.year || ''})\n\n${output.curatorial_essay || ''}\n\nProvenance:\n${(output.provenance || []).map((p: string) => `- ${p}`).join('\n')}`;
+    navigator.clipboard.writeText(text);
+    setCopyStatus(true);
+    setTimeout(() => setCopyStatus(false), 2000);
+  };
+
+  // Helper Initials
+  const getInitials = (name?: string) => {
+    if (!name) return 'A';
+    return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  };
+
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans antialiased pt-20 pb-24 px-4 sm:px-8 selection:bg-zinc-800 selection:text-zinc-100">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans pt-24 pb-32 px-6 sm:px-12 selection:bg-neutral-900 selection:text-white">
       
-      {/* AUTH MODAL */}
+      {/* AUTHENTICATION MODAL */}
       {showAuthModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-6">
-            <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-white border border-neutral-200 rounded-none max-w-md w-full p-8 shadow-xl space-y-6">
+            <div className="flex justify-between items-center border-b border-neutral-200 pb-4">
               <div>
-                <span className="text-[10px] font-mono uppercase text-emerald-400 tracking-widest block">AUTHENTICATION</span>
-                <h3 className="text-lg font-serif text-white">Art Engine Terminal Access</h3>
+                <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 block">ACCESS CONTROL</span>
+                <h3 className="text-xl font-serif text-neutral-900">Curator Sign-In</h3>
               </div>
               <button 
-                onClick={() => setShowAuthModal(false)}
-                className="text-zinc-500 hover:text-white font-mono text-sm"
+                onClick={() => { setShowAuthModal(false); setAuthSent(false); }}
+                className="text-neutral-400 hover:text-neutral-900 text-sm font-mono"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleMagicLinkLogin} className="space-y-4">
-              <div>
-                <label className="text-xs font-mono text-zinc-400 block mb-2">EMAIL ADDRESS</label>
-                <input 
-                  type="email"
-                  required
-                  placeholder="curator@merkurov.love"
-                  value={authEmail}
-                  onChange={e => setAuthEmail(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500 font-mono"
-                />
+            {authSent ? (
+              <div className="space-y-4 py-4 text-center">
+                <div className="text-2xl font-serif text-neutral-900">Link Dispatched</div>
+                <p className="text-xs font-mono text-neutral-500 leading-relaxed">
+                  We sent an authorization link to <strong className="text-neutral-900">{authEmail}</strong>. Check your inbox to proceed.
+                </p>
+                <button
+                  onClick={() => setAuthSent(false)}
+                  className="text-xs font-mono text-neutral-400 hover:text-neutral-900 underline pt-2"
+                >
+                  Use a different email
+                </button>
               </div>
+            ) : (
+              <form onSubmit={handleMagicLinkLogin} className="space-y-5">
+                <div>
+                  <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-2">EMAIL ADDRESS</label>
+                  <input 
+                    type="email"
+                    required
+                    placeholder="curator@merkurov.love"
+                    value={authEmail}
+                    onChange={e => setAuthEmail(e.target.value)}
+                    className="w-full bg-neutral-50 border border-neutral-200 rounded-none px-4 py-3 text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition"
+                  />
+                </div>
 
-              <button
-                type="submit"
-                disabled={authSending}
-                className="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-medium py-3 rounded-xl text-xs font-mono tracking-wider transition disabled:opacity-50"
-              >
-                {authSending ? 'SENDING MAGIC LINK...' : 'SEND MAGIC LINK / PASSKEY'}
-              </button>
-            </form>
-
-            <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-              Sign-in provides write and edit privileges to the Supabase Art Vault.
-            </p>
+                <button
+                  type="submit"
+                  disabled={authSending}
+                  className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50"
+                >
+                  {authSending ? 'DISPATCHING...' : 'SEND ACCESS LINK'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-12">
         
-        {/* HEADER / EXECUTIVE DASHBOARD */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-800/80 pb-6">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              <span className="text-[11px] font-mono text-emerald-400 tracking-widest uppercase font-semibold">
-                CURATORIAL AI ENGINE v2.4
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-serif text-white tracking-tight">
-              Art Intelligence & Cataloging System
+        {/* HEADER */}
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 border-b border-neutral-200 pb-8">
+          <div className="space-y-2">
+            <span className="text-[10px] font-mono tracking-widest uppercase text-neutral-400 block">
+              CURATOR ENGINE / WHITE CUBE EDITION
+            </span>
+            <h1 className="text-3xl sm:text-4xl font-serif text-neutral-900 tracking-tight font-normal">
+              Art Intelligence Terminal
             </h1>
           </div>
 
-          {/* AUTHENTICATION BAR */}
-          <div className="flex items-center gap-3 bg-zinc-900/60 border border-zinc-800/80 px-4 py-2 rounded-xl text-xs font-mono">
+          <div className="flex items-center gap-4 text-xs font-mono text-neutral-500">
             {loadingUser ? (
-              <span className="text-zinc-500">Checking credentials...</span>
+              <span>Authenticating...</span>
             ) : user ? (
-              <div className="flex items-center gap-3">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="text-zinc-300">Authorized: <strong className="text-white">{user.email || 'Curator'}</strong></span>
-                <button 
-                  onClick={handleLogout} 
-                  className="text-zinc-500 hover:text-zinc-300 transition underline ml-2"
-                >
-                  Exit
-                </button>
+              <div className="flex items-center gap-3 bg-neutral-100 border border-neutral-200 px-4 py-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-neutral-900" />
+                <span className="text-neutral-700">{user.email}</span>
+                <button onClick={handleLogout} className="text-neutral-400 hover:text-neutral-900 underline ml-2">Exit</button>
               </div>
             ) : (
-              <div className="flex items-center gap-3">
-                <span className="text-zinc-500">Read-Only Session</span>
-                <button 
-                  onClick={() => setShowAuthModal(true)} 
-                  className="bg-zinc-100 hover:bg-white text-zinc-950 px-3.5 py-1.5 rounded-lg font-medium transition"
-                >
-                  Authenticate
-                </button>
-              </div>
+              <button 
+                onClick={() => setShowAuthModal(true)}
+                className="bg-neutral-900 text-white px-5 py-2 hover:bg-black transition tracking-widest uppercase text-[11px]"
+              >
+                Sign In
+              </button>
             )}
           </div>
-        </div>
+        </header>
 
-        {/* TABS & PIPELINE CONTROLS */}
-        <div className="flex justify-between items-center border-b border-zinc-800/80 pb-3">
-          <div className="flex gap-2">
+        {/* TABS & NAVIGATION */}
+        <nav className="flex justify-between items-center border-b border-neutral-200 pb-4">
+          <div className="flex gap-8">
             <button
               onClick={() => setActiveTab('parser')}
-              className={`px-4 py-2 rounded-lg font-mono text-xs uppercase tracking-wider transition ${
+              className={`font-mono text-xs uppercase tracking-widest transition pb-2 relative ${
                 activeTab === 'parser' 
-                  ? 'bg-zinc-800/90 text-white border border-zinc-700/80 shadow-inner' 
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                  ? 'text-neutral-900 font-bold after:absolute after:bottom-[-17px] after:left-0 after:right-0 after:h-[2px] after:bg-neutral-900' 
+                  : 'text-neutral-400 hover:text-neutral-900'
               }`}
             >
-              01. Ingestion Pipeline
+              01. Ingestion
             </button>
             <button
               onClick={() => setActiveTab('vault')}
-              className={`px-4 py-2 rounded-lg font-mono text-xs uppercase tracking-wider transition ${
+              className={`font-mono text-xs uppercase tracking-widest transition pb-2 relative ${
                 activeTab === 'vault' 
-                  ? 'bg-zinc-800/90 text-white border border-zinc-700/80 shadow-inner' 
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                  ? 'text-neutral-900 font-bold after:absolute after:bottom-[-17px] after:left-0 after:right-0 after:h-[2px] after:bg-neutral-900' 
+                  : 'text-neutral-400 hover:text-neutral-900'
               }`}
             >
-              02. Vault Catalog ({lots.length})
+              02. Vault Archive ({lots.length})
             </button>
           </div>
 
           {activeTab === 'parser' && (
-            <button 
-              onClick={handleReset}
-              className="text-xs font-mono text-zinc-400 hover:text-white px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 transition"
-            >
-              Clear Form
-            </button>
+            <div className="flex items-center gap-4">
+              <span className="text-[11px] font-mono text-neutral-400 hidden sm:inline">Status: {statusText}</span>
+              <button 
+                onClick={handleReset}
+                className="text-xs font-mono text-neutral-400 hover:text-neutral-900 transition uppercase tracking-wider"
+              >
+                Clear
+              </button>
+            </div>
           )}
-        </div>
+        </nav>
 
         {/* TAB 1: PARSER TERMINAL */}
         {activeTab === 'parser' && (
-          <main className="grid lg:grid-cols-12 gap-8 items-start">
+          <main className="grid lg:grid-cols-12 gap-12 items-start">
             
-            {/* LEFT COLUMN: CONTROL & INGESTION (5 COLS) */}
-            <div className="lg:col-span-5 space-y-5">
+            {/* LEFT COLUMN: CONTROL (5 COLS) */}
+            <div className="lg:col-span-5 space-y-8">
               
-              {/* SOURCE URL PANEL */}
-              <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 space-y-4 backdrop-blur-sm">
-                <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest block">
-                  Auction Source Link
-                </label>
+              {/* SOURCE URL INPUT */}
+              <div className="bg-white border border-neutral-200 p-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest block">
+                    Auction Lot Link
+                  </label>
+                  <button 
+                    onClick={handlePasteClipboard}
+                    className="text-[10px] font-mono text-neutral-400 hover:text-neutral-900 transition underline"
+                  >
+                    Paste Link
+                  </button>
+                </div>
                 
                 <div className="flex gap-2">
                   <input 
                     type="url"
-                    placeholder="https://www.sothebys.com/en/buy/auction/..." 
-                    className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 focus:outline-none focus:border-zinc-600 transition font-mono placeholder:text-zinc-600"
+                    placeholder="https://www.sothebys.com/en/buy/..." 
+                    className="flex-1 bg-neutral-50 border border-neutral-200 px-3.5 py-2.5 text-xs text-neutral-900 focus:outline-none focus:border-neutral-900 transition font-mono placeholder:text-neutral-300"
                     value={input.link}
                     onChange={e => setInput({...input, link: e.target.value})}
                   />
                   <button 
                     onClick={handleAutoParse} 
                     disabled={parsing || autoProcessing} 
-                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2.5 rounded-xl text-xs font-mono font-medium transition disabled:opacity-50 border border-zinc-700/60 shrink-0"
+                    className="bg-neutral-100 hover:bg-neutral-200 text-neutral-900 px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition disabled:opacity-50 border border-neutral-200 shrink-0"
                   >
-                    {parsing ? '...' : 'PARSE'}
+                    {parsing ? 'Parsing...' : 'Parse'}
                   </button>
                 </div>
 
                 <button
                   onClick={handleOneClickPipeline}
                   disabled={parsing || loading || saving || autoProcessing}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 px-4 rounded-xl text-xs font-mono tracking-wider transition shadow-lg shadow-emerald-950/30 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full bg-neutral-900 hover:bg-black text-white py-3.5 text-xs font-mono uppercase tracking-widest transition disabled:opacity-50"
                 >
-                  {autoProcessing ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                      <span>EXECUTING PIPELINE...</span>
-                    </>
-                  ) : (
-                    <span>⚡ PROCESS LOT TO VAULT</span>
-                  )}
+                  {autoProcessing ? 'Processing Pipeline...' : 'Process Lot to Vault'}
                 </button>
               </div>
 
-              {/* METADATA PREVIEW & OVERRIDES */}
-              <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 space-y-4 backdrop-blur-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">Artwork Preview</span>
-                  {input.image_url && (
-                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-full">
-                      IMAGE ATTACHED
-                    </span>
-                  )}
+              {/* VISUAL PREVIEW & SPECIFICATIONS */}
+              <div className="bg-white border border-neutral-200 p-6 space-y-6">
+                <div className="flex justify-between items-center border-b border-neutral-100 pb-3">
+                  <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest">Visual Work</span>
+                  {input.image_url && <span className="text-[10px] font-mono text-neutral-900 uppercase">Resolved</span>}
                 </div>
 
-                <div className="relative aspect-[4/3] w-full bg-zinc-950 border border-zinc-800/80 rounded-xl overflow-hidden flex items-center justify-center group">
+                <div className="aspect-[4/3] w-full bg-neutral-50 border border-neutral-200 flex items-center justify-center relative overflow-hidden">
                   {input.image_url && !imgError ? (
                     <img 
                       src={input.image_url} 
-                      className="object-contain max-h-full max-w-full p-2 transition duration-500 group-hover:scale-105" 
-                      alt="Lot Visual" 
+                      className="object-contain max-h-full max-w-full p-4" 
+                      alt="Artwork Preview" 
                       onError={() => setImgError(true)}
                     />
                   ) : (
-                    <div className="text-center text-zinc-600 text-xs font-mono">
-                      No artwork visual loaded
+                    <div className="text-center font-mono text-xs text-neutral-300">
+                      {input.artist ? getInitials(input.artist) : 'NO VISUAL'}
                     </div>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] font-mono text-zinc-500 block mb-1">ARTIST</label>
+                    <label className="text-[10px] font-mono text-neutral-400 block mb-1 uppercase tracking-wider">Artist</label>
                     <input 
                       placeholder="Artist Name" 
-                      className="w-full bg-zinc-950 border border-zinc-800/80 rounded-xl p-2.5 text-xs text-zinc-200 focus:outline-none focus:border-zinc-600 font-mono" 
+                      className="w-full bg-neutral-50 border border-neutral-200 p-2.5 text-xs text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono" 
                       value={input.artist} 
                       onChange={e => setInput({...input, artist: e.target.value})} 
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-mono text-zinc-500 block mb-1">TITLE</label>
+                    <label className="text-[10px] font-mono text-neutral-400 block mb-1 uppercase tracking-wider">Title</label>
                     <input 
                       placeholder="Artwork Title" 
-                      className="w-full bg-zinc-950 border border-zinc-800/80 rounded-xl p-2.5 text-xs text-zinc-200 focus:outline-none focus:border-zinc-600 font-mono" 
+                      className="w-full bg-neutral-50 border border-neutral-200 p-2.5 text-xs text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono" 
                       value={input.title} 
                       onChange={e => setInput({...input, title: e.target.value})} 
                     />
@@ -527,111 +542,96 @@ export default function ArtEngineDashboard() {
                 <button 
                   onClick={() => generate()} 
                   disabled={loading || autoProcessing} 
-                  className="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-medium py-2.5 rounded-xl text-xs font-mono transition disabled:opacity-50"
+                  className="w-full bg-neutral-100 hover:bg-neutral-200 text-neutral-900 border border-neutral-200 py-3 text-xs font-mono uppercase tracking-widest transition disabled:opacity-50"
                 >
-                  {loading ? 'SYNTHESIZING WITH AI...' : 'GENERATE AI ESSAY'}
+                  {loading ? 'Synthesizing Essay...' : 'Synthesize Dossier'}
                 </button>
-              </div>
-
-              {/* TERMINAL LOG CONSOLE */}
-              <div className="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-4 font-mono text-[11px] space-y-2">
-                <div className="text-zinc-500 font-semibold uppercase text-[10px] tracking-wider pb-2 border-b border-zinc-900 flex justify-between">
-                  <span>Pipeline Execution Logs</span>
-                  <span className="text-zinc-600">{logs.length} events</span>
-                </div>
-                <div className="h-32 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-zinc-800 pr-1">
-                  {logs.length === 0 && <span className="text-zinc-700 italic">Waiting for input...</span>}
-                  {logs.map((l, i) => (
-                    <div key={i} className="flex gap-2 leading-tight">
-                      <span className="text-zinc-600 shrink-0">[{l.time}]</span>
-                      <span className={l.type === 'error' ? 'text-red-400' : l.type === 'success' ? 'text-emerald-400' : 'text-zinc-400'}>
-                        {l.msg}
-                      </span>
-                    </div>
-                  ))}
-                </div>
               </div>
 
             </div>
 
-            {/* RIGHT COLUMN: CURATORIAL CARD PREVIEW (7 COLS) */}
+            {/* RIGHT COLUMN: CURATORIAL DOSSIER PREVIEW (7 COLS) */}
             <div className="lg:col-span-7">
               {output ? (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   
-                  {/* CARD ACTION BAR */}
-                  <div className="flex justify-between items-center bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 backdrop-blur-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-zinc-400">DOSSIER STATUS:</span>
-                      <span className="text-xs font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-0.5 rounded-full">
-                        SYNTHESIZED
-                      </span>
-                    </div>
+                  {/* DOSSIER ACTION BAR */}
+                  <div className="flex justify-between items-center bg-white border border-neutral-200 p-4">
+                    <span className="text-xs font-mono text-neutral-400 uppercase tracking-widest">
+                      Curatorial Dossier
+                    </span>
                     
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={handleCopyDossier} 
+                        className="text-xs font-mono text-neutral-600 hover:text-neutral-900 underline transition"
+                      >
+                        {copyStatus ? 'Copied' : 'Copy Text'}
+                      </button>
+
                       <button 
                         onClick={() => setShowRawJson(!showRawJson)} 
-                        className="text-xs font-mono text-zinc-400 hover:text-white px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-950 transition"
+                        className="text-xs font-mono text-neutral-600 hover:text-neutral-900 transition"
                       >
-                        {showRawJson ? 'VIEW CARD' : 'RAW JSON'}
+                        {showRawJson ? 'View Card' : 'JSON'}
                       </button>
 
                       <button 
                         onClick={() => saveToVault()} 
                         disabled={saving || autoProcessing}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-xl text-xs font-mono font-medium transition disabled:opacity-50"
+                        className="bg-neutral-900 hover:bg-black text-white px-4 py-1.5 text-xs font-mono uppercase tracking-wider transition disabled:opacity-50"
                       >
-                        {saving ? 'SAVING...' : '💾 SAVE TO VAULT'}
+                        {saving ? 'Saving...' : 'Save to Vault'}
                       </button>
                     </div>
                   </div>
 
                   {/* DOSSIER BODY */}
                   {showRawJson ? (
-                    <div className="border border-zinc-800/80 rounded-2xl p-6 bg-zinc-950/60">
-                      <pre className="text-zinc-300 font-mono text-xs whitespace-pre-wrap overflow-x-auto max-h-[700px]">
+                    <div className="border border-neutral-200 p-6 bg-white">
+                      <pre className="text-neutral-800 font-mono text-xs whitespace-pre-wrap overflow-x-auto max-h-[600px]">
                         {JSON.stringify(output, null, 2)}
                       </pre>
                     </div>
                   ) : (
-                    <div className="bg-zinc-900/20 border border-zinc-800/80 rounded-2xl p-8 space-y-8 max-h-[780px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
+                    <div className="bg-white border border-neutral-200 p-10 space-y-8 max-h-[750px] overflow-y-auto">
                       
-                      {/* DOSSIER HEADER */}
-                      <div className="border-b border-zinc-800/80 pb-6 space-y-3">
+                      {/* HEADER */}
+                      <div className="border-b border-neutral-200 pb-6 space-y-3">
                         <div className="flex justify-between items-start">
                           <div>
-                            <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest">
-                              {output.auction_house || "AUCTION HOUSE"} • LOT {output.lot_number || '—'}
+                            <span className="text-xs font-mono text-neutral-400 uppercase tracking-widest">
+                              {output.auction_house || "AUCTION"} • LOT {output.lot_number || '—'}
                             </span>
-                            <h2 className="text-2xl font-serif text-white mt-1">
+                            <h2 className="text-3xl font-serif text-neutral-900 mt-2 font-normal">
                               {output.artist || input.artist || "Unknown Artist"}
                             </h2>
-                            {output.artist_dates && <p className="text-zinc-400 italic text-sm">{output.artist_dates}</p>}
+                            {output.artist_dates && <p className="text-neutral-500 italic text-sm mt-0.5">{output.artist_dates}</p>}
                           </div>
                           {output.estimate_raw && (
                             <div className="text-right">
-                              <span className="text-[10px] font-mono text-zinc-500 uppercase block">Estimate</span>
-                              <span className="text-sm font-mono text-zinc-200 font-medium">{output.estimate_raw}</span>
+                              <span className="text-[10px] font-mono text-neutral-400 uppercase block">Estimate</span>
+                              <span className="text-sm font-mono text-neutral-900">{output.estimate_raw}</span>
                             </div>
                           )}
                         </div>
 
-                        <div className="pt-2">
-                          <h3 className="text-lg font-serif italic text-zinc-200">
-                            {output.title || input.title} {output.year && <span className="not-italic text-zinc-500 text-sm">({output.year})</span>}
+                        <div className="pt-4">
+                          <h3 className="text-xl font-serif italic text-neutral-800">
+                            {output.title || input.title} {output.year && <span className="not-italic text-neutral-400 text-sm">({output.year})</span>}
                           </h3>
-                          {output.medium && <p className="text-xs text-zinc-400 mt-1">{output.medium}</p>}
-                          {output.dimensions && <p className="text-xs font-mono text-zinc-500 mt-0.5">{output.dimensions}</p>}
+                          {output.medium && <p className="text-xs text-neutral-500 mt-2">{output.medium}</p>}
+                          {output.dimensions && <p className="text-xs font-mono text-neutral-400 mt-1">{output.dimensions}</p>}
                         </div>
                       </div>
 
-                      {/* CURATORIAL ESSAY */}
+                      {/* ESSAY */}
                       {output.curatorial_essay && (
                         <div className="space-y-3">
-                          <h4 className="text-xs font-mono text-zinc-400 uppercase tracking-widest border-b border-zinc-800/40 pb-2">
-                            Curatorial Essay & Analysis
+                          <h4 className="text-xs font-mono text-neutral-400 uppercase tracking-widest border-b border-neutral-100 pb-2">
+                            Curatorial Analysis
                           </h4>
-                          <div className="text-zinc-300 text-sm font-serif leading-relaxed whitespace-pre-line">
+                          <div className="text-neutral-800 text-sm font-serif leading-relaxed whitespace-pre-line">
                             {output.curatorial_essay}
                           </div>
                         </div>
@@ -639,14 +639,14 @@ export default function ArtEngineDashboard() {
 
                       {/* PROVENANCE */}
                       {output.provenance && output.provenance.length > 0 && (
-                        <div className="space-y-3">
-                          <h4 className="text-xs font-mono text-zinc-400 uppercase tracking-widest border-b border-zinc-800/40 pb-2">
+                        <div className="space-y-3 pt-4">
+                          <h4 className="text-xs font-mono text-neutral-400 uppercase tracking-widest border-b border-neutral-100 pb-2">
                             Provenance
                           </h4>
-                          <ul className="space-y-1.5 text-xs text-zinc-400 font-mono">
+                          <ul className="space-y-2 text-xs text-neutral-600 font-mono">
                             {output.provenance.map((item: string, idx: number) => (
                               <li key={idx} className="flex gap-2">
-                                <span className="text-zinc-600">•</span>
+                                <span className="text-neutral-300">•</span>
                                 <span>{item}</span>
                               </li>
                             ))}
@@ -659,13 +659,11 @@ export default function ArtEngineDashboard() {
 
                 </div>
               ) : (
-                <div className="h-full min-h-[520px] flex flex-col items-center justify-center border border-dashed border-zinc-800/80 rounded-2xl text-center p-8 bg-zinc-950/30">
-                  <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4 text-zinc-500 text-lg">
-                    ✦
-                  </div>
-                  <h3 className="text-zinc-300 font-serif text-base mb-1">No Lot Loaded</h3>
-                  <p className="text-zinc-500 text-xs max-w-sm font-mono leading-relaxed">
-                    Paste an auction URL and click Process to parse details and generate a curatorial dossier.
+                <div className="h-full min-h-[500px] flex flex-col items-center justify-center border border-dashed border-neutral-200 bg-white p-8 text-center">
+                  <div className="text-3xl font-serif text-neutral-300 mb-2">†</div>
+                  <h3 className="text-neutral-900 font-serif text-lg mb-1">Awaiting Ingestion</h3>
+                  <p className="text-neutral-400 text-xs font-mono max-w-sm leading-relaxed">
+                    Paste an auction lot URL to extract specs and generate a curatorial essay.
                   </p>
                 </div>
               )}
@@ -677,19 +675,19 @@ export default function ArtEngineDashboard() {
         {/* TAB 2: VAULT GALLERY */}
         {activeTab === 'vault' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
-              <span className="text-xs font-mono text-zinc-400 uppercase tracking-widest">SAVED VAULT ARTIFACTS</span>
-              <button onClick={fetchLots} className="text-xs font-mono text-emerald-400 hover:underline">
-                REFRESH CATALOG ↻
+            <div className="flex justify-between items-center border-b border-neutral-200 pb-4">
+              <span className="text-xs font-mono text-neutral-400 uppercase tracking-widest">Vault Catalog</span>
+              <button onClick={fetchLots} className="text-xs font-mono text-neutral-900 hover:underline">
+                Refresh ↻
               </button>
             </div>
 
             {loadingLots ? (
-              <div className="py-16 text-center font-mono text-xs text-zinc-500">Loading cataloged artifacts...</div>
+              <div className="py-20 text-center font-mono text-xs text-neutral-400">Loading catalog...</div>
             ) : lots.length === 0 ? (
-              <div className="py-16 text-center font-mono text-xs text-zinc-500">No lots in vault yet. Use the pipeline to process works.</div>
+              <div className="py-20 text-center font-mono text-xs text-neutral-400">Vault archive is currently empty.</div>
             ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
                 {lots.map((lot) => {
                   const publicImg = lot.image_path?.startsWith('http')
                     ? lot.image_path
@@ -699,9 +697,9 @@ export default function ArtEngineDashboard() {
                     <Link
                       key={lot.id}
                       href={`/art-engine/lots/${lot.id}`}
-                      className="group bg-zinc-900/30 border border-zinc-800/80 rounded-2xl overflow-hidden hover:border-zinc-600 transition flex flex-col backdrop-blur-sm"
+                      className="group bg-white border border-neutral-200 overflow-hidden hover:border-neutral-900 transition flex flex-col"
                     >
-                      <div className="aspect-[4/3] bg-zinc-950 relative overflow-hidden flex items-center justify-center p-4 border-b border-zinc-800/60">
+                      <div className="aspect-[4/3] bg-neutral-50 relative overflow-hidden flex items-center justify-center p-4 border-b border-neutral-100">
                         {lot.image_path ? (
                           <img
                             src={publicImg}
@@ -709,23 +707,23 @@ export default function ArtEngineDashboard() {
                             className="object-contain max-h-full max-w-full group-hover:scale-105 transition duration-500"
                           />
                         ) : (
-                          <div className="text-xs font-mono text-zinc-700">NO VISUAL</div>
+                          <div className="font-serif text-2xl text-neutral-300">{getInitials(lot.artist)}</div>
                         )}
                       </div>
 
-                      <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
+                      <div className="p-6 flex-1 flex flex-col justify-between space-y-4">
                         <div>
-                          <div className="flex justify-between items-start">
-                            <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-wider">{lot.auction_house || 'AUCTION'}</span>
-                            {lot.estimate && <span className="text-[11px] font-mono text-zinc-400">{lot.estimate}</span>}
+                          <div className="flex justify-between items-start text-neutral-400 font-mono text-[10px] uppercase tracking-wider mb-1">
+                            <span>{lot.auction_house || 'AUCTION'}</span>
+                            <span>{lot.estimate}</span>
                           </div>
-                          <h2 className="text-base font-serif text-white group-hover:text-emerald-400 transition mt-1">{lot.artist}</h2>
-                          <p className="text-xs text-zinc-400 italic">{lot.title} {lot.year && `(${lot.year})`}</p>
+                          <h2 className="text-lg font-serif text-neutral-900 group-hover:underline">{lot.artist}</h2>
+                          <p className="text-xs text-neutral-500 italic mt-0.5">{lot.title} {lot.year && `(${lot.year})`}</p>
                         </div>
 
-                        <div className="text-[10px] font-mono text-zinc-500 border-t border-zinc-800/60 pt-3 flex justify-between items-center">
+                        <div className="text-[10px] font-mono text-neutral-400 border-t border-neutral-100 pt-3 flex justify-between items-center">
                           <span className="truncate max-w-[180px]">{lot.medium || 'Mixed Media'}</span>
-                          <span>DOSSIER →</span>
+                          <span className="text-neutral-900">Dossier →</span>
                         </div>
                       </div>
                     </Link>

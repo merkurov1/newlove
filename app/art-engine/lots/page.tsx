@@ -8,6 +8,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+function getInitials(name?: string) {
+  if (!name) return 'A';
+  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+}
+
 export default async function LotsPage() {
   const { data: lots, error } = await supabase
     .from('lots')
@@ -16,27 +21,27 @@ export default async function LotsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-black text-white p-8 pt-32 font-mono text-sm">
-        Error loading lots from database.
+      <div className="min-h-screen bg-neutral-50 text-neutral-900 p-8 pt-32 font-mono text-sm">
+        Unable to load catalog from database.
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans pt-24 sm:pt-32 pb-24 px-4 sm:px-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans pt-24 sm:pt-32 pb-32 px-6 sm:px-12">
+      <div className="max-w-7xl mx-auto space-y-12">
         
-        <div className="flex justify-between items-center border-b border-zinc-800 pb-6">
-          <div>
-            <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest block">VAULT ARCHIVE</span>
-            <h1 className="text-3xl font-serif text-white mt-1">Curated Auction Catalog</h1>
+        <div className="flex justify-between items-end border-b border-neutral-200 pb-8">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest block">VAULT ARCHIVE</span>
+            <h1 className="text-3xl sm:text-4xl font-serif text-neutral-900 font-normal">Cataloged Artifacts</h1>
           </div>
-          <Link href="/art-engine" className="text-xs font-mono text-zinc-400 hover:text-white transition">
-            ← ART ENGINE TERMINAL
+          <Link href="/art-engine" className="text-xs font-mono text-neutral-500 hover:text-neutral-900 transition">
+            ← TERMINAL
           </Link>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {lots?.map((lot) => {
             const publicImg = lot.image_path?.startsWith('http')
               ? lot.image_path
@@ -46,9 +51,9 @@ export default async function LotsPage() {
               <Link
                 key={lot.id}
                 href={`/art-engine/lots/${lot.id}`}
-                className="group bg-zinc-900/40 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-600 transition flex flex-col"
+                className="group bg-white border border-neutral-200 overflow-hidden hover:border-neutral-900 transition flex flex-col"
               >
-                <div className="aspect-[4/3] bg-zinc-950 relative overflow-hidden flex items-center justify-center p-4 border-b border-zinc-800/60">
+                <div className="aspect-[4/3] bg-neutral-50 relative overflow-hidden flex items-center justify-center p-4 border-b border-neutral-100">
                   {lot.image_path ? (
                     <img
                       src={publicImg}
@@ -56,23 +61,23 @@ export default async function LotsPage() {
                       className="object-contain max-h-full max-w-full group-hover:scale-105 transition duration-500"
                     />
                   ) : (
-                    <div className="text-xs font-mono text-zinc-600">NO IMAGE</div>
+                    <div className="font-serif text-2xl text-neutral-300">{getInitials(lot.artist)}</div>
                   )}
                 </div>
 
-                <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
+                <div className="p-6 flex-1 flex flex-col justify-between space-y-4">
                   <div>
-                    <div className="flex justify-between items-start">
-                      <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-wider">{lot.auction_house || 'AUCTION'}</span>
-                      {lot.estimate && <span className="text-[11px] font-mono text-zinc-400">{lot.estimate}</span>}
+                    <div className="flex justify-between items-start text-neutral-400 font-mono text-[10px] uppercase tracking-wider mb-1">
+                      <span>{lot.auction_house || 'AUCTION'}</span>
+                      <span>{lot.estimate}</span>
                     </div>
-                    <h2 className="text-base font-serif text-white group-hover:text-emerald-400 transition mt-1">{lot.artist}</h2>
-                    <p className="text-xs text-zinc-400 italic">{lot.title} {lot.year && `(${lot.year})`}</p>
+                    <h2 className="text-lg font-serif text-neutral-900 group-hover:underline">{lot.artist}</h2>
+                    <p className="text-xs text-neutral-500 italic mt-0.5">{lot.title} {lot.year && `(${lot.year})`}</p>
                   </div>
 
-                  <div className="text-[10px] font-mono text-zinc-500 border-t border-zinc-800/60 pt-3 flex justify-between items-center">
+                  <div className="text-[10px] font-mono text-neutral-400 border-t border-neutral-100 pt-3 flex justify-between items-center">
                     <span className="truncate max-w-[180px]">{lot.medium || 'Mixed Media'}</span>
-                    <span>DOSSIER →</span>
+                    <span className="text-neutral-900">Dossier →</span>
                   </div>
                 </div>
               </Link>
