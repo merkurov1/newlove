@@ -74,6 +74,7 @@
     "@web3-onboard/core": "^2.24.1",
     "@web3-onboard/injected-wallets": "^2.11.3",
     "@web3-onboard/walletconnect": "^2.6.3",
+    "cheerio": "^1.2.0",
     "clsx": "latest",
     "date-fns": "latest",
     "dompurify": "^3.2.7",
