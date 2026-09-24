@@ -43,18 +43,12 @@ export async function POST(req: Request) {
   try {
     await requireAdminFromRequest(req);
 
-    // Достаем ключ прямо из google_API_key (или любых вариантов написания)
-    const apiKey = (
-      process.env.google_API_key ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.OPENROUTER_API_KEY ||
-      ''
-    ).trim();
+    // Берем напрямую GOOGLE_API_KEY
+    const apiKey = (process.env.GOOGLE_API_KEY || '').trim();
 
     if (!apiKey) {
-      console.error('[generate_lot] ERROR: google_API_key is empty or missing in process.env');
       return NextResponse.json(
-        { error: 'API Key (google_API_key) missing in environment variables on server.' },
+        { error: 'GOOGLE_API_KEY is missing in environment variables.' },
         { status: 500 }
       );
     }
@@ -65,18 +59,13 @@ export async function POST(req: Request) {
     let resultJsonText: string | null = null;
     let lastError: string | null = null;
 
-    // Перебираем модели через прямой fetch к OpenRouter
     for (const model of MODELS) {
       try {
-        console.log(`[generate_lot] Requesting OpenRouter model: ${model}...`);
-
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://merkurov.love',
-            'X-Title': 'Curator Engine',
+            'authorization': `Bearer ${apiKey}`,
+            'content-type': 'application/json',
           },
           body: JSON.stringify({
             model: model,
@@ -90,7 +79,6 @@ export async function POST(req: Request) {
 
         if (!response.ok) {
           const errText = await response.text();
-          console.warn(`[generate_lot] Model ${model} returned status ${response.status}:`, errText);
           lastError = `Status ${response.status}: ${errText}`;
           continue;
         }
@@ -100,17 +88,15 @@ export async function POST(req: Request) {
 
         if (content) {
           resultJsonText = content;
-          console.log(`[generate_lot] Successfully generated with model: ${model}`);
           break;
         }
       } catch (err: any) {
-        console.warn(`[generate_lot] Network error with model ${model}:`, err?.message || err);
         lastError = err?.message || String(err);
       }
     }
 
     if (!resultJsonText) {
-      throw new Error(lastError || 'All models failed to produce a response.');
+      throw new Error(lastError || 'All models failed to respond.');
     }
 
     const cleaned = resultJsonText.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -118,7 +104,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ lot: structuredLot });
   } catch (error: any) {
-    console.error('[generate_lot Error]:', error);
     return NextResponse.json(
       { error: 'Generation failed', details: error?.message || String(error) },
       { status: 500 }
