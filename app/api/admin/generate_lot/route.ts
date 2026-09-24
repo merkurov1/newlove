@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
@@ -44,62 +43,77 @@ export async function POST(req: Request) {
   try {
     await requireAdminFromRequest(req);
 
-    const apiKey = (process.env.google_API_key || process.env.GOOGLE_API_KEY || process.env.OPENROUTER_API_KEY || '').trim();
+    // Достаем ключ прямо из google_API_key (или любых вариантов написания)
+    const apiKey = (
+      process.env.google_API_key ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.OPENROUTER_API_KEY ||
+      ''
+    ).trim();
+
     if (!apiKey) {
+      console.error('[generate_lot] ERROR: google_API_key is empty or missing in process.env');
       return NextResponse.json(
-        { error: 'API Key missing in environment variables.' },
+        { error: 'API Key (google_API_key) missing in environment variables on server.' },
         { status: 500 }
       );
     }
 
     const { rawData, artist, title, link, specs } = await req.json();
+    const userContent = JSON.stringify({ artist, title, link, specs, rawData }, null, 2);
 
-    const openai = new OpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: apiKey,
-      defaultHeaders: {
-        'HTTP-Referer': 'https://merkurov.love',
-        'X-Title': 'Curator Engine',
-      },
-    });
+    let resultJsonText: string | null = null;
+    let lastError: string | null = null;
 
-    const userContent = JSON.stringify({
-      artist,
-      title,
-      link,
-      specs,
-      rawData
-    }, null, 2);
-
-    let completion = null;
-    let lastError = null;
-
+    // Перебираем модели через прямой fetch к OpenRouter
     for (const model of MODELS) {
       try {
-        completion = await openai.chat.completions.create({
-          model: model,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: `Extract and structure full curatorial details for this lot:\n\n${userContent}` },
-          ],
-          temperature: 0.2,
+        console.log(`[generate_lot] Requesting OpenRouter model: ${model}...`);
+
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://merkurov.love',
+            'X-Title': 'Curator Engine',
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: `Extract and structure full curatorial details for this lot:\n\n${userContent}` },
+            ],
+            temperature: 0.2,
+          }),
         });
 
-        if (completion?.choices[0]?.message?.content) {
+        if (!response.ok) {
+          const errText = await response.text();
+          console.warn(`[generate_lot] Model ${model} returned status ${response.status}:`, errText);
+          lastError = `Status ${response.status}: ${errText}`;
+          continue;
+        }
+
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+
+        if (content) {
+          resultJsonText = content;
+          console.log(`[generate_lot] Successfully generated with model: ${model}`);
           break;
         }
       } catch (err: any) {
-        console.warn(`[generate_lot] Model ${model} failed:`, err?.message || err);
-        lastError = err;
+        console.warn(`[generate_lot] Network error with model ${model}:`, err?.message || err);
+        lastError = err?.message || String(err);
       }
     }
 
-    if (!completion) {
-      throw lastError || new Error('All AI models failed to respond.');
+    if (!resultJsonText) {
+      throw new Error(lastError || 'All models failed to produce a response.');
     }
 
-    const rawResponse = completion.choices[0]?.message?.content || '{}';
-    const cleaned = rawResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+    const cleaned = resultJsonText.replace(/```json/g, '').replace(/```/g, '').trim();
     const structuredLot = JSON.parse(cleaned);
 
     return NextResponse.json({ lot: structuredLot });
