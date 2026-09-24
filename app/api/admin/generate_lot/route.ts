@@ -34,10 +34,9 @@ REQUIRED OUTPUT FORMAT (JSON ONLY):
 Return ONLY valid raw JSON without markdown codeblocks or quotes.
 `;
 
-// Актуальные модели на OpenRouter с большими лимитами
 const MODELS = [
-  'google/gemini-flash-1.5',
   'openai/gpt-4o-mini',
+  'google/gemini-2.0-flash-001',
   'meta-llama/llama-3.3-70b-instruct',
   'anthropic/claude-3.5-sonnet',
 ];
@@ -66,7 +65,6 @@ export async function POST(req: Request) {
 
     const { rawData, artist, title, link, specs } = await req.json();
 
-    // Обрезаем rawData до 30,000 символов (~7k токенов), чтобы гарантия пройти в любые лимиты
     const truncatedRawData = typeof rawData === 'string' ? rawData.slice(0, 30000) : rawData;
 
     const userContent = JSON.stringify(

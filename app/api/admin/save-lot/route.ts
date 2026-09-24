@@ -1,60 +1,65 @@
-import { createClient } from '@supabase/supabase-js'
-import { NextResponse } from 'next/server'
-import { requireAdminFromRequest } from '@/lib/serverAuth'
+import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
-export const runtime = 'nodejs'
+export const runtime = 'nodejs';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! 
-)
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(req: Request) {
   try {
-    await requireAdminFromRequest(req)
-    const body = await req.json()
-    const { artist, title, link, image_url, ai_content, specs } = body
+    await requireAdminFromRequest(req);
+    const body = await req.json();
+    const { artist, title, link, image_url, ai_content, specs } = body;
 
-    const lotAI = ai_content?.lot || ai_content || {}
-    let storedImagePath = null
+    const lotAI = ai_content?.lot || ai_content || {};
+    let storedImagePath = null;
 
     // Скачивание и сохранение картинки в Supabase Storage
     if (image_url) {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 секунд таймаут
+
         const imageRes = await fetch(image_url, {
           headers: {
             'User-Agent':
               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           },
-        })
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
 
         if (imageRes.ok) {
-          const arrayBuffer = await imageRes.arrayBuffer()
-          const buffer = Buffer.from(arrayBuffer)
-          const fileExt = image_url.split('.').pop()?.split('?')[0] || 'jpg'
+          const arrayBuffer = await imageRes.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const fileExt = image_url.split('.').pop()?.split('?')[0] || 'jpg';
           const safeName = `${artist || lotAI.artist || 'unknown'}-${title || lotAI.title || 'untitled'}`
             .replace(/[^a-z0-9]/gi, '_')
-            .toLowerCase()
-          const fileName = `${safeName}_${Date.now()}.${fileExt}`
-          const contentType = imageRes.headers.get('content-type') || 'image/jpeg'
+            .toLowerCase();
+          const fileName = `${safeName}_${Date.now()}.${fileExt}`;
+          const contentType = imageRes.headers.get('content-type') || 'image/jpeg';
 
           const { data: uploadData, error: uploadError } = await supabase
             .storage
             .from('artifacts')
-            .upload(fileName, buffer, { contentType, upsert: true })
+            .upload(fileName, buffer, { contentType, upsert: true });
 
           if (!uploadError && uploadData?.path) {
-            storedImagePath = uploadData.path
+            storedImagePath = uploadData.path;
           } else if (uploadError) {
-            console.warn('[Saver Storage Error]:', uploadError.message)
+            console.warn('[Saver Storage Warning]:', uploadError.message);
           }
         }
-      } catch (e) {
-        console.warn('[Saver] Image download/upload skipped:', e)
+      } catch (e: any) {
+        console.warn('[Saver] Image upload skipped, using direct URL:', e?.message || e);
       }
     }
 
-    // Сохраняем в таблицу `lots` с использованием UPSERT по полю source_url
+    // Сохраняем метаданные в таблицу `lots` через UPSERT
     const record = {
       artist: artist || lotAI.artist || 'Unknown Artist',
       title: title || lotAI.title || 'Untitled',
@@ -65,25 +70,31 @@ export async function POST(req: Request) {
       dimensions: lotAI.dimensions || specs?.dimensions || null,
       estimate: lotAI.estimate_raw || specs?.estimate || null,
       year: lotAI.year || specs?.date || null,
-      provenance: typeof lotAI.provenance === 'string' ? lotAI.provenance : JSON.stringify(lotAI.provenance || specs?.provenance || []),
+      provenance: typeof lotAI.provenance === 'string' 
+        ? lotAI.provenance 
+        : JSON.stringify(lotAI.provenance || specs?.provenance || []),
       
       ai_content: lotAI,
-      status: 'published',
-      updated_at: new Date().toISOString()
-    }
+      status: 'published'
+    };
 
     const { data, error } = await supabase
       .from('lots')
       .upsert(record, { onConflict: 'source_url' })
       .select()
-      .single()
+      .single();
 
-    if (error) throw error
+    if (error) throw error;
 
-    return NextResponse.json({ success: true, id: data.id, lot: data })
+    return NextResponse.json({ success: true, id: data.id, lot: data });
 
   } catch (error: any) {
-    console.error('[Saver Error]:', error)
-    return NextResponse.json({ error: 'Save failed', details: error?.message || String(error) }, { status: 500 })
+    console.error('[Saver Error]:', error);
+    return NextResponse.json(
+      { error: 'Save failed', details: error?.message || String(error) }, 
+      { status: 500 }
+    );
   }
 }
+
+export const dynamic = 'force-dynamic';
