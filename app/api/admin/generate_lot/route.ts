@@ -34,11 +34,12 @@ REQUIRED OUTPUT FORMAT (JSON ONLY):
 Return ONLY valid raw JSON without markdown codeblocks or quotes.
 `;
 
+// Актуальные модели на OpenRouter с большими лимитами
 const MODELS = [
-  'anthropic/claude-3.5-sonnet',
-  'meta-llama/llama-3.3-70b-instruct',
+  'google/gemini-flash-1.5',
   'openai/gpt-4o-mini',
-  'openrouter/free',
+  'meta-llama/llama-3.3-70b-instruct',
+  'anthropic/claude-3.5-sonnet',
 ];
 
 export async function POST(req: Request) {
@@ -64,13 +65,22 @@ export async function POST(req: Request) {
     });
 
     const { rawData, artist, title, link, specs } = await req.json();
-    const userContent = JSON.stringify({ artist, title, link, specs, rawData }, null, 2);
+
+    // Обрезаем rawData до 30,000 символов (~7k токенов), чтобы гарантия пройти в любые лимиты
+    const truncatedRawData = typeof rawData === 'string' ? rawData.slice(0, 30000) : rawData;
+
+    const userContent = JSON.stringify(
+      { artist, title, link, specs, rawData: truncatedRawData },
+      null,
+      2
+    );
 
     let completion = null;
     let lastError = null;
 
     for (const model of MODELS) {
       try {
+        console.log(`[generate_lot] Trying model: ${model}`);
         completion = await openai.chat.completions.create({
           model: model,
           messages: [
@@ -81,6 +91,7 @@ export async function POST(req: Request) {
         });
 
         if (completion?.choices[0]?.message?.content) {
+          console.log(`[generate_lot] Success with model: ${model}`);
           break;
         }
       } catch (err: any) {
