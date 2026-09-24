@@ -14,31 +14,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: 'email-required' }, { status: 400 });
     }
 
-    // Проверяем переменные Supabase Service Role для обхода RLS у неавторизованных пользователей
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Missing Supabase Service Role configuration');
-      return NextResponse.json({ ok: false, error: 'server-config-error' }, { status: 500 });
+      return NextResponse.json({ ok: false, error: 'Missing Server Environment Variables' }, { status: 500 });
     }
 
-    // Создаем клиент с правами администратора (Service Role)
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false }
     });
 
-    // Сохраняем запрос в базу
-    const { error: dbError } = await supabase
+    // 1. Пробуем сделать Insert вместо upsert, чтобы точно поймать ошибку структуры
+    const { data, error: dbError } = await supabase
       .from('access_requests')
-      .upsert({ email, status: 'pending' }, { onConflict: 'email' });
+      .insert([{ email, status: 'pending' }])
+      .select();
 
     if (dbError) {
-      console.error('Database error saving access request:', dbError);
-      return NextResponse.json({ ok: false, error: 'database-error', details: dbError.message }, { status: 500 });
+      console.error('CRITICAL DB ERROR:', dbError);
+      // Если email уже есть, upsert/insert выдает ошибку дубликата (обычно код 23505), 
+      // но если таблица пустая — тут видна реальная проблема (например, не найдена таблица)
+      if (dbError.code !== '23505') {
+        return NextResponse.json({ ok: false, error: `DB Error: ${dbError.message} (Code: ${dbError.code})` }, { status: 500 });
+      }
     }
 
-    // Отправка уведомления в Telegram
+    // 2. Отправка в Telegram с логированием ответа
     const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
     const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
@@ -51,18 +53,19 @@ export async function POST(request: Request) {
         body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, parse_mode: 'HTML' }),
       });
 
+      const tgData = await tgRes.json();
       if (!tgRes.ok) {
-        const tgError = await tgRes.json();
-        console.error('Telegram notification failed:', tgError);
+        console.error('TELEGRAM API ERROR:', tgData);
+        return NextResponse.json({ ok: false, error: `Telegram Error: ${tgData.description || 'Unknown'}` }, { status: 500 });
       }
     } else {
-      console.warn('Telegram credentials (BOT_TOKEN or CHAT_ID) are missing');
+      console.warn('Telegram tokens are not defined in environment variables');
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error('Request access error:', err);
-    return NextResponse.json({ ok: false, error: 'server-error' }, { status: 500 });
+  } catch (err: any) {
+    console.error('Unhandled request-access error:', err);
+    return NextResponse.json({ ok: false, error: err?.message || 'server-error' }, { status: 500 });
   }
 }
 
