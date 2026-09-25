@@ -142,9 +142,9 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
           </div>
 
           <div className="flex flex-wrap gap-4 items-center">
-            {/* Кнопка генерации ассетов/рилса */}
+            {/* Исправленная ссылка с учетом префикса /art-engine */}
             <Link 
-              href={`/lots/${lot.id}/assets`}
+              href={`/art-engine/lots/${lot.id}/assets`}
               className="bg-neutral-800 text-white px-3 py-1.5 hover:bg-neutral-700 transition uppercase tracking-widest font-mono text-[10px] flex items-center gap-1.5"
             >
               ⚡ Generate Assets
