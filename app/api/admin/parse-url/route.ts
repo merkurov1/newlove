@@ -2,9 +2,69 @@ import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { parseLotHtml } from '@/lib/lots/parse';
+import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// Инициализируем сервисный клиент Supabase для сохранения картинок в storage
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+/**
+ * Скачивает найденную картинку через прокси и сохраняет в Supabase Storage,
+ * возвращая постоянную публичную ссылку.
+ */
+async function downloadAndStoreImage(externalUrl: string): Promise<string> {
+  if (!externalUrl) return '';
+  if (externalUrl.includes('/storage/v1/object/public/')) {
+    return externalUrl; // Уже в Supabase
+  }
+
+  try {
+    // Используем wsrv.nl для гарантированного обхода Cloudflare / ETIMEDOUT при парсинге
+    const fetchUrl = `https://wsrv.nl/?url=${encodeURIComponent(externalUrl)}`;
+    
+    const res = await fetch(fetchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+
+    if (!res.ok) {
+      console.error(`[Parser] Failed to fetch image via proxy: ${res.statusText}`);
+      return externalUrl; // Fallback
+    }
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const fileName = `parsed/lot-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('artifacts')
+      .upload(fileName, buffer, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('[Parser] Supabase storage upload error:', uploadError);
+      return externalUrl;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('artifacts')
+      .getPublicUrl(fileName);
+
+    console.log(`[Parser] Image successfully mirrored to Supabase: ${publicUrlData.publicUrl}`);
+    return publicUrlData.publicUrl;
+
+  } catch (err) {
+    console.error('[Parser] Image download/upload error:', err);
+    return externalUrl;
+  }
+}
 
 function detectAuctionHouse(url: string): string {
   const lUrl = url.toLowerCase();
@@ -70,13 +130,11 @@ function extractGenericImages(
     }
   };
 
-  // Мета-теги имеют наивысший приоритет, так как это официальное превью страницы лота
   add($('meta[property="og:image"]').attr('content'), 'og:image');
   add($('meta[property="og:image:url"]').attr('content'), 'og:image');
   add($('meta[name="twitter:image"]').attr('content'), 'twitter:image');
   add($('meta[name="twitter:image:src"]').attr('content'), 'twitter:image');
 
-  // JSON-LD структурированные данные
   $('script[type="application/ld+json"]').each((_index: number, element: any) => {
     const text = $(element).html();
     if (!text) return;
@@ -131,12 +189,10 @@ function extractGenericImages(
     }
   });
 
-  // Основные теги изображения товара (часто имеют специфичные классы или атрибуты)
   $('img').each((_index: number, element: any) => {
     const img = $(element);
     const className = (img.attr('class') || '').toLowerCase();
     const idName = (img.attr('id') || '').toLowerCase();
-    const altText = (img.attr('alt') || '').toLowerCase();
     
     const isMainCandidate = 
       className.includes('hero') || 
@@ -189,51 +245,29 @@ function scoreImageUrl(url: string, source: string, auctionHouse: string): numbe
   const lower = url.toLowerCase();
   let score = 0;
 
-  // Наивысший приоритет официальным превью OpenGraph и JSON-LD
-  if (source === 'og:image' || source === 'twitter:image') {
-    score += 500;
-  }
-  if (source === 'json-ld') {
-    score += 300;
-  }
-  if (source === 'dom-main-img') {
-    score += 200;
-  }
+  if (source === 'og:image' || source === 'twitter:image') score += 500;
+  if (source === 'json-ld') score += 300;
+  if (source === 'dom-main-img') score += 200;
 
-  if (auctionHouse === "Christie's" && lower.includes('/img/lotimages/')) {
-    score += 150;
-  }
-  if (auctionHouse === "Sotheby's" && (lower.includes('lot') || lower.includes('artwork'))) {
-    score += 120;
-  }
-  if (auctionHouse === 'Phillips' && (lower.includes('lot') || lower.includes('artwork'))) {
-    score += 120;
-  }
+  if (auctionHouse === "Christie's" && lower.includes('/img/lotimages/')) score += 150;
+  if (auctionHouse === "Sotheby's" && (lower.includes('lot') || lower.includes('artwork'))) score += 120;
+  if (auctionHouse === 'Phillips' && (lower.includes('lot') || lower.includes('artwork'))) score += 120;
 
-  // Штрафы за нежелательные картинки
   if (
-    lower.includes('logo') ||
-    lower.includes('favicon') ||
-    lower.includes('icon') ||
-    lower.includes('avatar') ||
-    lower.includes('placeholder')
+    lower.includes('logo') || lower.includes('favicon') || 
+    lower.includes('icon') || lower.includes('avatar') || lower.includes('placeholder')
   ) {
     score -= 1000;
   }
 
   if (
-    lower.includes('thumbnail') ||
-    lower.includes('/thumb/') ||
-    lower.includes('thumb_') ||
-    lower.includes('carousel') ||
-    lower.includes('slider')
+    lower.includes('thumbnail') || lower.includes('/thumb/') || 
+    lower.includes('thumb_') || lower.includes('carousel') || lower.includes('slider')
   ) {
     score -= 200;
   }
 
-  if (lower.includes('small') || lower.includes('tiny') || lower.includes('pixel')) {
-    score -= 300;
-  }
+  if (lower.includes('small') || lower.includes('tiny') || lower.includes('pixel')) score -= 300;
 
   return score;
 }
@@ -249,9 +283,7 @@ function extractBestImage(
 
   if (existingImage) {
     const cleaned = cleanImageUrl(existingImage, baseUrl);
-    if (cleaned) {
-      candidates.push({ url: cleaned, source: 'parser-existing' });
-    }
+    if (cleaned) candidates.push({ url: cleaned, source: 'parser-existing' });
   }
 
   if (auctionHouse === "Christie's") {
@@ -260,12 +292,9 @@ function extractBestImage(
     candidates.push(...extractGenericImages(html, $, baseUrl));
   }
 
-  // Убираем дубликаты по URL
   const uniqueMap = new Map<string, string>();
   candidates.forEach(c => {
-    if (c.url && !uniqueMap.has(c.url)) {
-      uniqueMap.set(c.url, c.source);
-    }
+    if (c.url && !uniqueMap.has(c.url)) uniqueMap.set(c.url, c.source);
   });
 
   const scored = Array.from(uniqueMap.entries())
@@ -296,7 +325,7 @@ export async function POST(req: Request) {
     const auctionHouse = detectAuctionHouse(url);
     let html = '';
 
-    // 1. ПЕРВАЯ ПОПЫТКА: Jina Reader прокси
+    // 1. Jina Reader
     try {
       const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
         headers: {
@@ -306,23 +335,18 @@ export async function POST(req: Request) {
       });
       if (jinaRes.ok) {
         const jinaText = await jinaRes.text();
-        if (jinaText && jinaText.length > 200) {
-          html = jinaText;
-        }
+        if (jinaText && jinaText.length > 200) html = jinaText;
       }
     } catch (err) {
       console.error('[Jina Reader] Error:', err);
     }
 
-    // 2. ВТОРАЯ ПОПЫТКА: ScrapingAnt API
+    // 2. ScrapingAnt API
     const apiKey = process.env.SCRAPINGANT_API_KEY;
     if (!html && apiKey) {
       try {
         const scrapingAntUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(url)}&browser=true`;
-        const saRes = await fetch(scrapingAntUrl, {
-          headers: { 'x-api-key': apiKey },
-        });
-
+        const saRes = await fetch(scrapingAntUrl, { headers: { 'x-api-key': apiKey } });
         const responseText = await saRes.text();
         if (responseText.trim().startsWith('<')) {
           if (!responseText.includes('Access Denied') && !responseText.includes('Cloudflare')) {
@@ -341,21 +365,17 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. ТРЕТЬЯ ПОПЫТКА: Прямой Fetch
+    // 3. Direct Fetch
     if (!html) {
       try {
         const res = await fetch(url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
-            'Cache-Control': 'no-cache',
           },
         });
-
-        if (res.ok) {
-          html = await res.text();
-        }
+        if (res.ok) html = await res.text();
       } catch (err) {
         console.error('[Direct fetch] Error:', err);
       }
@@ -367,9 +387,7 @@ export async function POST(req: Request) {
 
     const $ = cheerio.load(html);
 
-    const structured = parseLotHtml(html, url, auctionHouse, {
-      debug: true,
-    });
+    const structured = parseLotHtml(html, url, auctionHouse, { debug: true });
 
     const imageResult = extractBestImage(
       html,
@@ -380,25 +398,27 @@ export async function POST(req: Request) {
     );
 
     const foundImage = imageResult.best;
-    structured.imageUrl = foundImage;
+
+    // Зеркалируем найденную картинку в Supabase Storage
+    const permanentImageUrl = await downloadAndStoreImage(foundImage);
+    structured.imageUrl = permanentImageUrl;
 
     return NextResponse.json({
       title: structured.title || $('title').text() || '',
       artist: structured.artist || '',
-      image_url: foundImage,
+      image_url: permanentImageUrl,
       auction_house: auctionHouse,
       extracted: {
         ...structured,
         auctionHouse,
+        imageUrl: permanentImageUrl,
       },
       image_candidates: imageResult.candidates.slice(0, 20),
       url,
     });
   } catch (error: unknown) {
     console.error('[parse-url Error]:', error);
-
     const message = error instanceof Error ? error.message : String(error);
-
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

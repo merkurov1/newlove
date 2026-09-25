@@ -24,17 +24,12 @@ export async function generateAndUploadReel(lotId: string, data: {
   const outputVideoPath = path.join(tmpDir, `output_${lotId}_${Date.now()}.mp4`);
 
   try {
-    console.log(`[ReelGen] Downloading image from: ${data.imageUrl}`);
+    console.log(`[ReelGen] Downloading stored image from: ${data.imageUrl}`);
 
-    // Скачиваем картинку с User-Agent, чтобы внешние сайты не отклоняли запрос
-    const imgRes = await fetch(data.imageUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
-    });
-
+    // Картинка уже находится в Supabase Storage, скачиваем напрямую и без задержек
+    const imgRes = await fetch(data.imageUrl);
     if (!imgRes.ok) {
-      throw new Error(`Не удалось скачать изображение (статус: ${imgRes.status} ${imgRes.statusText}) для URL: ${data.imageUrl}`);
+      throw new Error(`Не удалось скачать изображение из хранилища (статус: ${imgRes.status})`);
     }
 
     const arrayBuffer = await imgRes.arrayBuffer();
