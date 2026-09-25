@@ -8,6 +8,56 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+/**
+ * Безопасно получает картинку: если это внешний URL (например, Christie's), 
+ * скачивает её через wsrv.nl прокси, чтобы избежать ETIMEDOUT и блокировок.
+ */
+async function getSafeImageUrl(imagePathOrUrl: string): Promise<string> {
+  if (!imagePathOrUrl) return '';
+
+  // Если это уже наша ссылка из Supabase Storage — оставляем как есть
+  if (imagePathOrUrl.includes('/storage/v1/object/public/')) {
+    return imagePathOrUrl;
+  }
+
+  // Если это полный внешний URL (начинается с http)
+  let targetUrl = imagePathOrUrl;
+  if (!imagePathOrUrl.startsWith('http')) {
+    targetUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/artifacts/${imagePathOrUrl}`;
+  }
+
+  // Если ссылка все еще ведет на сторонний домен (например, christies.com), прогоняем через прокси для стабильности
+  if (targetUrl.includes('christies.com') || targetUrl.includes('sothebys.com')) {
+    try {
+      const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(targetUrl)}`;
+      const res = await fetch(proxyUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      if (res.ok) {
+        const buffer = Buffer.from(await res.arrayBuffer());
+        const fileName = `reels-cache/lot-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
+        
+        await supabase.storage.from('artifacts').upload(fileName, buffer, {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
+
+        const { data } = supabase.storage.from('artifacts').getPublicUrl(fileName);
+        if (data?.publicUrl) {
+          console.log(`[ReelGen] Successfully cached external image to Supabase: ${data.publicUrl}`);
+          return data.publicUrl;
+        }
+      }
+    } catch (e) {
+      console.warn('[ReelGen] Failed to proxy image via wsrv.nl, falling back to direct URL:', e);
+    }
+  }
+
+  return targetUrl;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
@@ -26,10 +76,9 @@ export async function POST(
       return NextResponse.json({ error: 'Лот не найден' }, { status: 404 });
     }
 
-    // 2. Формируем картинку (если путь относительный, дополняем до полного URL)
-    const imageUrl = lot.image_path?.startsWith('http')
-      ? lot.image_path
-      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/artifacts/${lot.image_path}`;
+    // 2. Безопасно формируем/зеркалируем картинку для рилса
+    const rawImage = lot.image_path || lot.image_url || '';
+    const imageUrl = await getSafeImageUrl(rawImage);
 
     // Определяем аукционный дом (или берем из полей)
     const sourceUrl = (lot.source_url || '').toLowerCase();
