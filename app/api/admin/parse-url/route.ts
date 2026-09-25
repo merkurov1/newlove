@@ -32,101 +32,64 @@ export async function POST(req: Request) {
         const saRes = await fetch(scrapingAntUrl, {
           headers: { 'x-api-key': apiKey },
         });
-        if (saRes.ok) {
-          const data = await saRes.json();
+
+        const responseText = await saRes.text();
+
+        // Проверяем, пришел ли JSON или сразу HTML
+        if (responseText.trim().startsWith('<')) {
+          // Если это HTML, проверяем, не страница ли это ошибки
+          if (responseText.includes('Access Denied') || responseText.includes('Cloudflare')) {
+            console.error('[ScrapingAnt] Blocked or returned error page');
+          } else {
+            html = responseText; // Если это внезапно и есть чистый HTML страницы
+          }
+        } else {
+          // Пробуем распарсить как JSON от ScrapingAnt
+          const data = JSON.parse(responseText);
           html = data.content || '';
         }
       } catch (err) {
-        console.error('ScrapingAnt request failed:', err);
+        console.error('ScrapingAnt fetch error:', err);
       }
     }
 
+    // Если через ScrapingAnt не вышло, пробуем прямой fetch как фоллбек
     if (!html) {
       const res = await fetch(url, {
         headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
         },
       });
-      if (!res.ok) throw new Error(`Failed to fetch page, status: ${res.status}`);
-      html = await res.text();
+      if (res.ok) html = await res.text();
+    }
+
+    if (!html) {
+      throw new Error('Failed to obtain HTML from target URL or scraper.');
     }
 
     const auctionHouse = detectAuctionHouse(url);
     const $ = cheerio.load(html);
     const structured = parseLotHtml(html, url, auctionHouse, { debug: true });
 
-    let foundImage = structured.imageUrl || '';
-
-    if (!foundImage) {
-      const ogImage = $('meta[property="og:image"]').attr('content');
-      const twImage = $('meta[name="twitter:image"]').attr('content');
-      if (ogImage) foundImage = ogImage;
-      else if (twImage) foundImage = twImage;
-    }
-
-    if (!foundImage) {
-      const zoomSrc = $('[data-zoom-src]').attr('data-zoom-src');
-      const lazySrc = $('[data-lazy-src]').attr('data-lazy-src');
-      const srcset = $('.primary-image img, .lot-image img, img[srcset], picture source').first().attr('srcset');
-      const heroSrc = $('.hero-image img, [data-testid="lot-image"] img').first().attr('src');
-
-      const candidate = zoomSrc || lazySrc || srcset || heroSrc || '';
-      if (candidate) {
-        foundImage = candidate.split(',')[0].trim().split(' ')[0];
-      }
-    }
-
-    if (!foundImage) {
-      try {
-        const nextDataScript = $('#__NEXT_DATA__').html();
-        if (nextDataScript) {
-          const nextJson = JSON.parse(nextDataScript);
-          const jsonString = JSON.stringify(nextJson);
-          const imgMatches = jsonString.match(/https?:\/\/[^"'\s]+\.(?:jpg|jpeg|webp|png)(?:\?[^"'\s]*)?/gi);
-          if (imgMatches && imgMatches.length > 0) {
-            const validImg = imgMatches.find((img: string) => 
-              img.includes('lot') || img.includes('item') || img.includes('targus') || img.includes('christies')
-            );
-            if (validImg) {
-              foundImage = validImg;
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Failed to parse __NEXT_DATA__ for image:', e);
-      }
-    }
+    // Универсальный поиск картинки
+    let foundImage = structured.imageUrl || 
+      $('meta[property="og:image"]').attr('content') || 
+      $('meta[name="twitter:image"]').attr('content') || 
+      $('img').first().attr('src') || '';
 
     structured.imageUrl = foundImage;
 
-    $('script, style, svg, noscript, iframe, footer, nav, header').remove();
-    const cleanText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 30000);
-
-    let bestImage = structured.imageUrl || '';
-    if (bestImage && bestImage.includes('christies.com')) {
-      bestImage = bestImage.replace(/width=\d+/, 'width=2000').replace(/maxwidth=\d+/, 'maxwidth=2000');
-    }
-
     return NextResponse.json({
-      title: structured.title || '',
+      title: structured.title || $('title').text() || '',
       artist: structured.artist || '',
-      image_url: bestImage,
+      image_url: foundImage,
       auction_house: auctionHouse,
-      extracted: {
-        ...structured,
-        auctionHouse,
-      },
-      rawData: cleanText,
-      rawLength: cleanText.length,
+      extracted: { ...structured, auctionHouse },
       url,
     });
   } catch (error: any) {
     console.error('[parse-url Error]:', error);
-    return NextResponse.json(
-      { error: 'Failed to parse URL', details: error?.message || String(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error?.message || String(error) }, { status: 500 });
   }
 }
 
