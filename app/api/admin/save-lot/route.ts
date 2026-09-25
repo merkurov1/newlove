@@ -25,10 +25,22 @@ export async function POST(req: Request) {
 
     let storedImagePath = image_url;
 
-    // Если пришел новый URL картинки (не локальный путь в бакете), пробуем закачать его в Supabase Storage
+    // Безопасная загрузка картинки в бакет с тайм-аутом в 5 секунд, чтобы сервер не зависал
     if (image_url && image_url.startsWith('http')) {
       try {
-        const imgRes = await fetch(image_url);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 сек таймаут
+
+        const imgRes = await fetch(image_url, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+            'Accept': 'image/*'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+
         if (imgRes.ok) {
           const buffer = await imgRes.arrayBuffer();
           const ext = image_url.split('.').pop()?.split('?')[0].split('#')[0] || 'jpg';
@@ -46,13 +58,13 @@ export async function POST(req: Request) {
           }
         }
       } catch (e) {
-        console.error('Failed to upload image to bucket, falling back to original URL:', e);
+        console.warn('Image bucket download timed out or failed, falling back to direct URL:', e);
+        // Оставляем исходный внешний image_url, сохранение в базу не прерывается
       }
     }
 
     const resolvedAuctionHouse = getAuctionHouseName(link, specs?.auction_house);
 
-    // Сборка объекта для апсерта
     const lotPayload: any = {
       artist: artist || ai_content?.artist || 'Unknown Artist',
       title: title || ai_content?.title || 'Untitled',
@@ -65,13 +77,11 @@ export async function POST(req: Request) {
       ai_content: ai_content,
     };
 
-    // Обновляем картинку в базе только если загрузилась новая, 
-    // либо оставляем старую, если image_url не передался заново
     if (storedImagePath) {
       lotPayload.image_path = storedImagePath;
     }
 
-    // UPSERT: Если source_url уже существует, обновляем запись в таблице lots
+    // UPSERT в таблицу lots
     const { data: lot, error } = await supabase
       .from('lots')
       .upsert(lotPayload, { onConflict: 'source_url' })
