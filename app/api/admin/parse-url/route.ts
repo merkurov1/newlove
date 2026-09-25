@@ -39,7 +39,23 @@ export async function POST(req: Request) {
 
     const structured = parseLotHtml(html, url, auctionHouse, { debug: true });
 
-    const $= cheerio.load(html);$('script, style, svg, noscript, iframe, footer, nav, header').remove();
+    const $ = cheerio.load(html);
+    
+    // --- СТРАХОВКА ДЛЯ КАРТИНОК (Fallback) ---
+    // Если общий парсер не нашел картинку, ищем в OpenGraph тегах или специфичных img для лотов
+    let fallbackImage = 
+      $('meta[property="og:image"]').attr('content') ||
+      $('meta[name="twitter:image"]').attr('content') ||
+      $('.lot-image img, img.primary-image, [data-testid="lot-image"] img').first().attr('src') ||
+      '';
+
+    // Если уstructured.imageUrl пусто, подставляем найденный fallback
+    if (!structured.imageUrl && fallbackImage) {
+      structured.imageUrl = fallbackImage;
+    }
+    // ------------------------------------------
+
+    $('script, style, svg, noscript, iframe, footer, nav, header').remove();
     const cleanText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 30000);
 
     let bestImage = structured.imageUrl || '';

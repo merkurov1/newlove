@@ -25,13 +25,13 @@ export async function POST(req: Request) {
 
     let storedImagePath = image_url;
 
-    // Upload image to Supabase Storage if present
+    // Если пришел новый URL картинки (не локальный путь в бакете), пробуем закачать его в Supabase Storage
     if (image_url && image_url.startsWith('http')) {
       try {
         const imgRes = await fetch(image_url);
         if (imgRes.ok) {
           const buffer = await imgRes.arrayBuffer();
-          const ext = image_url.split('.').pop()?.split('?')[0] || 'jpg';
+          const ext = image_url.split('.').pop()?.split('?')[0].split('#')[0] || 'jpg';
           const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
 
           const { data: uploadData, error: uploadError } = await supabase.storage
@@ -52,24 +52,29 @@ export async function POST(req: Request) {
 
     const resolvedAuctionHouse = getAuctionHouseName(link, specs?.auction_house);
 
-    // UPSERT: Если source_url уже существует, обновить лот вместо ошибки UNIQUE constraint
+    // Сборка объекта для апсерта
+    const lotPayload: any = {
+      artist: artist || ai_content?.artist || 'Unknown Artist',
+      title: title || ai_content?.title || 'Untitled',
+      year: ai_content?.year || specs?.year || null,
+      medium: ai_content?.medium || specs?.medium || null,
+      dimensions: ai_content?.dimensions || specs?.dimensions || null,
+      estimate: ai_content?.estimate_raw || specs?.estimate || null,
+      source_url: link,
+      auction_house: resolvedAuctionHouse,
+      ai_content: ai_content,
+    };
+
+    // Обновляем картинку в базе только если загрузилась новая, 
+    // либо оставляем старую, если image_url не передался заново
+    if (storedImagePath) {
+      lotPayload.image_path = storedImagePath;
+    }
+
+    // UPSERT: Если source_url уже существует, обновляем запись в таблице lots
     const { data: lot, error } = await supabase
       .from('lots')
-      .upsert(
-        {
-          artist: artist || ai_content?.artist || 'Unknown Artist',
-          title: title || ai_content?.title || 'Untitled',
-          year: ai_content?.year || specs?.year || null,
-          medium: ai_content?.medium || specs?.medium || null,
-          dimensions: ai_content?.dimensions || specs?.dimensions || null,
-          estimate: ai_content?.estimate_raw || specs?.estimate || null,
-          source_url: link,
-          auction_house: resolvedAuctionHouse,
-          image_path: storedImagePath,
-          ai_content: ai_content,
-        },
-        { onConflict: 'source_url' }
-      )
+      .upsert(lotPayload, { onConflict: 'source_url' })
       .select('id')
       .single();
 
