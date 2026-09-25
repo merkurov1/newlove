@@ -1,12 +1,13 @@
 import { execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { createClient } from '@supabase/supabase-js';
 
-// Инициализируем серверный клиент Supabase (используем сервисную или обычную ключевую пару для бэкенда)
+// Инициализируем серверный клиент Supabase
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // Лучше использовать service_role для записи в защищенные бакеты
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 export async function generateAndUploadReel(lotId: string, data: {
@@ -17,7 +18,8 @@ export async function generateAndUploadReel(lotId: string, data: {
   location: string;
   price: string;
 }) {
-  const tmpDir = path.join(process.cwd(), 'tmp');
+  // Используем системную временную пакю (/tmp), которая доступна на запись везде
+  const tmpDir = path.join(os.tmpdir(), 'art-engine-reels');
   if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
 
   const inputImagePath = path.join(tmpDir, `input_${lotId}_${Date.now()}.jpg`);
@@ -47,7 +49,7 @@ export async function generateAndUploadReel(lotId: string, data: {
     const videoBuffer = fs.readFileSync(outputVideoPath);
     const fileName = `reels/lot-${lotId}-${Date.now()}.mp4`;
 
-    // 5. Загружаем в бакет (например, 'artifacts' или создайте отдельный 'reels')
+    // 5. Загружаем в бакет 'artifacts'
     const { error: uploadError } = await supabase.storage
       .from('artifacts') 
       .upload(fileName, videoBuffer, {
@@ -68,7 +70,7 @@ export async function generateAndUploadReel(lotId: string, data: {
     console.error('Reel generation/upload error:', error);
     throw error;
   } finally {
-    // Очищаем временные файлы с диска Codespace
+    // Очищаем временные файлы
     if (fs.existsSync(inputImagePath)) fs.unlinkSync(inputImagePath);
     if (fs.existsSync(outputVideoPath)) fs.unlinkSync(outputVideoPath);
   }
