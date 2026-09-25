@@ -21,6 +21,12 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
   const [copiedLink, setCopiedLink] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
 
+  // Состояния для внешних открытых данных
+  const [wikidataInfo, setWikidataInfo] = useState<any>(null);
+  const [metMuseumArtworks, setMetMuseumArtworks] = useState<any[]>([]);
+  const [books, setBooks] = useState<any[]>([]);
+  const [externalLoading, setExternalLoading] = useState(false);
+
   useEffect(() => {
     async function fetchLot() {
       const { data, error } = await supabase
@@ -36,9 +42,65 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
 
       setLot(data);
       setLoading(false);
+
+      // После загрузки лота подтягиваем внешние данные по имени художника
+      if (data.artist) {
+        fetchExternalData(data.artist);
+      }
     }
     fetchLot();
   }, [params.id, supabase]);
+
+  // Функция параллельного запроса ко всем открытым источникам
+  async function fetchExternalData(artistName: string) {
+    setExternalLoading(true);
+    try {
+      // 1. Wikidata & Wikipedia API
+      const wikiQuery = encodeURIComponent(artistName);
+      const wikiRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${wikiQuery}&format=json&origin=*`);
+      const wikiData = await wikiRes.json();
+      if (wikiData.query?.search?.[0]) {
+        const pageTitle = wikiData.query.search[0].title;
+        const summaryRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(pageTitle)}`);
+        const summaryData = await summaryRes.json();
+        setWikidataInfo({
+          title: summaryData.title,
+          extract: summaryData.extract,
+          url: summaryData.content_urls?.desktop?.page
+        });
+      }
+
+      // 2. The Met Museum Open Access API
+      const metRes = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?q=${encodeURIComponent(artistName)}`);
+      const metData = await metRes.json();
+      if (metData.objectIDs && metData.objectIDs.length > 0) {
+        // Берем первые 3 объекта для примера
+        const topIds = metData.objectIDs.slice(0, 3);
+        const objectPromises = topIds.map(async (id: number) => {
+          const objRes = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`);
+          return objRes.json();
+        });
+        const objects = await Promise.all(objectPromises);
+        setMetMuseumArtworks(objects.filter(obj => obj.primaryImageSmall));
+      }
+
+      // 3. Open Library API (Каталоги / Книги)
+      const bookRes = await fetch(`https://openlibrary.org/search.json?author=${encodeURIComponent(artistName)}&limit=3`);
+      const bookData = await bookRes.json();
+      if (bookData.docs) {
+        setBooks(bookData.docs.map((doc: any) => ({
+          title: doc.title,
+          year: doc.first_publish_year,
+          key: doc.key
+        })));
+      }
+
+    } catch (e) {
+      console.error('Error fetching external enrichment data:', e);
+    } finally {
+      setExternalLoading(false);
+    }
+  }
 
   // Закрытие модалки по клавише Escape
   useEffect(() => {
@@ -236,6 +298,68 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* --- OPEN DATA ENRICHMENT BLOCKS --- */}
+            
+            {/* WIKIPEDIA / WIKIDATA BLOCK */}
+            {wikidataInfo && (
+              <div className="space-y-2 pt-6 border-t border-neutral-200 bg-neutral-50 p-5">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">
+                    External Academic Index (Wikipedia)
+                  </h3>
+                  <a href={wikidataInfo.url} target="_blank" rel="noreferrer" className="text-[10px] font-mono text-neutral-900 underline">
+                    Read Full Entry ↗
+                  </a>
+                </div>
+                <p className="text-xs text-neutral-700 leading-relaxed font-serif">
+                  {wikidataInfo.extract}
+                </p>
+              </div>
+            )}
+
+            {/* THE MET MUSEUM OPEN ACCESS COLLECTION */}
+            {metMuseumArtworks.length > 0 && (
+              <div className="space-y-3 pt-6 border-t border-neutral-200">
+                <h3 className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">
+                  Museum Collections (The Metropolitan Museum of Art)
+                </h3>
+                <div className="grid grid-cols-3 gap-3">
+                  {metMuseumArtworks.map((art: any, i: number) => (
+                    <a key={i} href={art.objectURL} target="_blank" rel="noreferrer" className="group block bg-neutral-50 border border-neutral-200 p-2">
+                      <div className="h-24 w-full bg-neutral-100 mb-2 overflow-hidden flex items-center justify-center">
+                        <img src={art.primaryImageSmall} alt={art.title} className="object-cover h-full w-full group-hover:scale-105 transition duration-300" />
+                      </div>
+                      <div className="font-mono text-[9px] text-neutral-800 truncate">{art.title}</div>
+                      <div className="font-mono text-[8px] text-neutral-400">{art.objectDate}</div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* OPEN LIBRARY BIBLIOGRAPHY */}
+            {books.length > 0 && (
+              <div className="space-y-2 pt-6 border-t border-neutral-200">
+                <h3 className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">
+                  Associated Literature & Catalogues (Open Library)
+                </h3>
+                <div className="space-y-1.5">
+                  {books.map((b: any, i: number) => (
+                    <div key={i} className="flex justify-between items-center text-xs font-mono bg-neutral-50 px-3 py-2 border border-neutral-100">
+                      <span className="text-neutral-800 truncate max-w-[80%]">{b.title}</span>
+                      <span className="text-neutral-400">{b.year || 'N/A'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {externalLoading && (
+              <div className="text-[10px] font-mono text-neutral-400 text-center pt-4">
+                Synchronizing external open data feeds...
               </div>
             )}
 
