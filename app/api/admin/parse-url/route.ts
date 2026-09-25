@@ -59,22 +59,24 @@ function extractGenericImages(
   html: string,
   $: cheerio.CheerioAPI,
   baseUrl: string
-): string[] {
-  const candidates: string[] = [];
+): Array<{ url: string; source: string }> {
+  const candidates: Array<{ url: string; source: string }> = [];
 
-  const add = (value?: string | null): void => {
+  const add = (value?: string | null, source: string = 'img'): void => {
     if (!value) return;
     const url = cleanImageUrl(value, baseUrl);
     if (url) {
-      candidates.push(url);
+      candidates.push({ url, source });
     }
   };
 
-  add($('meta[property="og:image"]').attr('content'));
-  add($('meta[property="og:image:url"]').attr('content'));
-  add($('meta[name="twitter:image"]').attr('content'));
-  add($('meta[name="twitter:image:src"]').attr('content'));
+  // Мета-теги имеют наивысший приоритет, так как это официальное превью страницы лота
+  add($('meta[property="og:image"]').attr('content'), 'og:image');
+  add($('meta[property="og:image:url"]').attr('content'), 'og:image');
+  add($('meta[name="twitter:image"]').attr('content'), 'twitter:image');
+  add($('meta[name="twitter:image:src"]').attr('content'), 'twitter:image');
 
+  // JSON-LD структурированные данные
   $('script[type="application/ld+json"]').each((_index: number, element: any) => {
     const text = $(element).html();
     if (!text) return;
@@ -95,17 +97,17 @@ function extractGenericImages(
         const obj = value as Record<string, unknown>;
 
         if (typeof obj.image === 'string') {
-          add(obj.image);
+          add(obj.image, 'json-ld');
         }
 
         if (Array.isArray(obj.image)) {
           obj.image.forEach((image: unknown) => {
             if (typeof image === 'string') {
-              add(image);
+              add(image, 'json-ld');
             } else if (typeof image === 'object' && image !== null) {
               const imageObj = image as Record<string, unknown>;
               if (typeof imageObj.url === 'string') {
-                add(imageObj.url);
+                add(imageObj.url, 'json-ld');
               }
             }
           });
@@ -114,7 +116,7 @@ function extractGenericImages(
         if (typeof obj.image === 'object' && obj.image !== null && !Array.isArray(obj.image)) {
           const imageObj = obj.image as Record<string, unknown>;
           if (typeof imageObj.url === 'string') {
-            add(imageObj.url);
+            add(imageObj.url, 'json-ld');
           }
         }
 
@@ -129,54 +131,50 @@ function extractGenericImages(
     }
   });
 
+  // Основные теги изображения товара (часто имеют специфичные классы или атрибуты)
   $('img').each((_index: number, element: any) => {
     const img = $(element);
+    const className = (img.attr('class') || '').toLowerCase();
+    const idName = (img.attr('id') || '').toLowerCase();
+    const altText = (img.attr('alt') || '').toLowerCase();
+    
+    const isMainCandidate = 
+      className.includes('hero') || 
+      className.includes('main') || 
+      className.includes('primary') || 
+      className.includes('zoom') ||
+      idName.includes('hero') ||
+      idName.includes('main');
 
-    add(img.attr('src'));
-    add(img.attr('data-src'));
-    add(img.attr('data-original'));
-    add(img.attr('data-lazy-src'));
-    add(img.attr('data-image'));
-    add(img.attr('data-image-url'));
-    add(img.attr('data-img'));
-    add(img.attr('data-fallback-src'));
+    const source = isMainCandidate ? 'dom-main-img' : 'dom-img';
+
+    add(img.attr('src'), source);
+    add(img.attr('data-src'), source);
+    add(img.attr('data-original'), source);
+    add(img.attr('data-lazy-src'), source);
+    add(img.attr('data-image'), source);
+    add(img.attr('data-image-url'), source);
 
     const srcset = img.attr('srcset') || img.attr('data-srcset');
     extractSrcset(srcset, baseUrl).forEach((imageUrl: string) => {
-      candidates.push(imageUrl);
+      candidates.push({ url: imageUrl, source: 'srcset' });
     });
   });
 
-  $('[style*="background-image"]').each((_index: number, element: any) => {
-    const style = $(element).attr('style') || '';
-    const regex = /url\(\s*["']?([^"')]+)["']?\s*\)/gi;
-    let match: RegExpExecArray | null;
-
-    while ((match = regex.exec(style)) !== null) {
-      add(match[1]);
-    }
-  });
-
-  const rawImageRegex = /https?:\/\/[^"'\\\s<>]+?\.(?:jpg|jpeg|png|webp|avif)(?:\?[^"'\\\s<>]*)?/gi;
-  const rawMatches = html.match(rawImageRegex) || [];
-  rawMatches.forEach((imageUrl: string) => add(imageUrl));
-
-  return [...new Set(candidates)];
+  return candidates;
 }
 
 function extractChristiesImages(
   html: string,
   $: cheerio.CheerioAPI,
   baseUrl: string
-): string[] {
-  const candidates: string[] = [];
-  const add = (value?: string | null) => {
+): Array<{ url: string; source: string }> {
+  const candidates = extractGenericImages(html, $, baseUrl);
+  const add = (value?: string | null, source: string = 'christies-regex') => {
     if (!value) return;
     const url = cleanImageUrl(value, baseUrl);
-    if (url) candidates.push(url);
+    if (url) candidates.push({ url, source });
   };
-
-  extractGenericImages(html, $, baseUrl).forEach((url) => candidates.push(url));
 
   const christiesRegex = /https?:\/\/(?:www\.)?christies\.com\/img\/LotImages\/[^"'\\\s<>]+/gi;
   (html.match(christiesRegex) || []).forEach((url) => add(url));
@@ -184,51 +182,57 @@ function extractChristiesImages(
   const escapedRegex = /https?:\\\/\\\/(?:www\.)?christies\.com\\\/img\\\/LotImages\\\/[^"'\\\s<>]+/gi;
   (html.match(escapedRegex) || []).forEach((url) => add(url.replace(/\\\//g, '/')));
 
-  const relativeRegex = /["'](\/img\/LotImages\/[^"']+)["']/gi;
-  let match: RegExpExecArray | null;
-  while ((match = relativeRegex.exec(html)) !== null) {
-    add(match[1]);
-  }
-
-  return [...new Set(candidates)];
+  return candidates;
 }
 
-function scoreImageUrl(url: string, auctionHouse: string): number {
+function scoreImageUrl(url: string, source: string, auctionHouse: string): number {
   const lower = url.toLowerCase();
   let score = 0;
 
+  // Наивысший приоритет официальным превью OpenGraph и JSON-LD
+  if (source === 'og:image' || source === 'twitter:image') {
+    score += 500;
+  }
+  if (source === 'json-ld') {
+    score += 300;
+  }
+  if (source === 'dom-main-img') {
+    score += 200;
+  }
+
   if (auctionHouse === "Christie's" && lower.includes('/img/lotimages/')) {
-    score += 100;
+    score += 150;
   }
   if (auctionHouse === "Sotheby's" && (lower.includes('lot') || lower.includes('artwork'))) {
-    score += 70;
+    score += 120;
   }
   if (auctionHouse === 'Phillips' && (lower.includes('lot') || lower.includes('artwork'))) {
-    score += 70;
+    score += 120;
   }
-  if (auctionHouse === 'Bonhams' && (lower.includes('lot') || lower.includes('image'))) {
-    score += 60;
+
+  // Штрафы за нежелательные картинки
+  if (
+    lower.includes('logo') ||
+    lower.includes('favicon') ||
+    lower.includes('icon') ||
+    lower.includes('avatar') ||
+    lower.includes('placeholder')
+  ) {
+    score -= 1000;
   }
-  if (lower.includes('/image/') || lower.includes('/images/') || lower.includes('/img/')) {
-    score += 20;
+
+  if (
+    lower.includes('thumbnail') ||
+    lower.includes('/thumb/') ||
+    lower.includes('thumb_') ||
+    lower.includes('carousel') ||
+    lower.includes('slider')
+  ) {
+    score -= 200;
   }
-  if (lower.includes('artwork') || lower.includes('/lot/') || lower.includes('lotimage')) {
-    score += 30;
-  }
-  if (/\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(lower)) {
-    score += 10;
-  }
-  if (lower.includes('logo') || lower.includes('favicon') || lower.includes('icon') || lower.includes('avatar')) {
-    score -= 100;
-  }
-  if (lower.includes('thumbnail') || lower.includes('/thumb/') || lower.includes('thumb_')) {
-    score -= 40;
-  }
-  if (lower.includes('small') || lower.includes('tiny')) {
-    score -= 20;
-  }
-  if (lower.includes('pixel') || lower.includes('tracking')) {
-    score -= 100;
+
+  if (lower.includes('small') || lower.includes('tiny') || lower.includes('pixel')) {
+    score -= 300;
   }
 
   return score;
@@ -241,11 +245,13 @@ function extractBestImage(
   auctionHouse: string,
   existingImage?: string
 ) {
-  let candidates: string[] = [];
+  let candidates: Array<{ url: string; source: string }> = [];
 
   if (existingImage) {
     const cleaned = cleanImageUrl(existingImage, baseUrl);
-    if (cleaned) candidates.push(cleaned);
+    if (cleaned) {
+      candidates.push({ url: cleaned, source: 'parser-existing' });
+    }
   }
 
   if (auctionHouse === "Christie's") {
@@ -254,10 +260,20 @@ function extractBestImage(
     candidates.push(...extractGenericImages(html, $, baseUrl));
   }
 
-  candidates = [...new Set(candidates.filter(Boolean))];
+  // Убираем дубликаты по URL
+  const uniqueMap = new Map<string, string>();
+  candidates.forEach(c => {
+    if (c.url && !uniqueMap.has(c.url)) {
+      uniqueMap.set(c.url, c.source);
+    }
+  });
 
-  const scored = candidates
-    .map((url) => ({ url, score: scoreImageUrl(url, auctionHouse) }))
+  const scored = Array.from(uniqueMap.entries())
+    .map(([url, source]) => ({
+      url,
+      source,
+      score: scoreImageUrl(url, source, auctionHouse),
+    }))
     .sort((a, b) => b.score - a.score);
 
   return {
@@ -280,9 +296,8 @@ export async function POST(req: Request) {
     const auctionHouse = detectAuctionHouse(url);
     let html = '';
 
-    // 1. ПЕРВАЯ ПОПЫТКА: Использование Jina Reader (отлично собирает контент и картинки с защищенных сайтов)
+    // 1. ПЕРВАЯ ПОПЫТКА: Jina Reader прокси
     try {
-      console.log(`[Parser] Fetching via Jina Reader proxy: ${url}`);
       const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
         headers: {
           'X-Return-Format': 'markdown',
@@ -326,7 +341,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. ТРЕТЬЯ ПОПЫТКА: Прямой Fetch с расширенными заголовками браузера
+    // 3. ТРЕТЬЯ ПОПЫТКА: Прямой Fetch
     if (!html) {
       try {
         const res = await fetch(url, {
