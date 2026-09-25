@@ -43,7 +43,6 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
       setLot(data);
       setLoading(false);
 
-      // После загрузки лота подтягиваем внешние данные по имени художника
       if (data.artist) {
         fetchExternalData(data.artist);
       }
@@ -51,11 +50,9 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
     fetchLot();
   }, [params.id, supabase]);
 
-  // Функция параллельного запроса ко всем открытым источникам
   async function fetchExternalData(artistName: string) {
     setExternalLoading(true);
     try {
-      // 1. Wikidata & Wikipedia API
       const wikiQuery = encodeURIComponent(artistName);
       const wikiRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${wikiQuery}&format=json&origin=*`);
       const wikiData = await wikiRes.json();
@@ -70,11 +67,9 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
         });
       }
 
-      // 2. The Met Museum Open Access API
       const metRes = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?q=${encodeURIComponent(artistName)}`);
       const metData = await metRes.json();
       if (metData.objectIDs && metData.objectIDs.length > 0) {
-        // Берем первые 3 объекта для примера
         const topIds = metData.objectIDs.slice(0, 3);
         const objectPromises = topIds.map(async (id: number) => {
           const objRes = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`);
@@ -84,7 +79,6 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
         setMetMuseumArtworks(objects.filter(obj => obj.primaryImageSmall));
       }
 
-      // 3. Open Library API (Каталоги / Книги)
       const bookRes = await fetch(`https://openlibrary.org/search.json?author=${encodeURIComponent(artistName)}&limit=3`);
       const bookData = await bookRes.json();
       if (bookData.docs) {
@@ -102,7 +96,6 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
     }
   }
 
-  // Закрытие модалки по клавише Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setIsZoomed(false);
@@ -149,6 +142,14 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
           </div>
 
           <div className="flex flex-wrap gap-4 items-center">
+            {/* Кнопка генерации ассетов/рилса */}
+            <Link 
+              href={`/lots/${lot.id}/assets`}
+              className="bg-neutral-800 text-white px-3 py-1.5 hover:bg-neutral-700 transition uppercase tracking-widest font-mono text-[10px] flex items-center gap-1.5"
+            >
+              ⚡ Generate Assets
+            </Link>
+            <span className="text-neutral-300">•</span>
             <button 
               onClick={handleCopyPermalink} 
               className="text-neutral-600 hover:text-neutral-900 transition underline underline-offset-4 cursor-pointer"

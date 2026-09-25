@@ -431,19 +431,17 @@ export default function ArtEngineDashboard() {
 
   return (
     <>
-      {/* Next.js Meta and Open Graph Tags for Social Media & Messengers */}
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>Art Intelligence Terminal | Institutional Art Advisory</title>
         <meta name="description" content="Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists." />
         
-        {/* Open Graph / Facebook / LinkedIn / Telegram / WhatsApp */}
         <meta property="og:type" content="website" />
         <meta property="og:title" content="Art Intelligence Terminal | Curator Engine" />
         <meta property="og:description" content="Institutional art advisory, automated lot parsing, and high-end investment memoranda synthesis." />
         <meta property="og:url" content="https://merkurov.love" />
         <meta property="og:image" content="https://merkurov.love/og-image.jpg" />
 
-        {/* Twitter Card */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Art Intelligence Terminal | Curator Engine" />
         <meta name="twitter:description" content="Institutional art advisory and market intelligence terminal." />
@@ -452,7 +450,7 @@ export default function ArtEngineDashboard() {
 
       <div className="min-h-screen bg-[#FDFDFC] text-neutral-900 font-sans selection:bg-neutral-900 selection:text-white break-words">
         
-        {/* AUTHENTICATION / REQUEST ACCESS MODAL (Mobile-Optimized) */}
+        {/* AUTHENTICATION / REQUEST ACCESS MODAL */}
         {showAuthModal && (
           <div className="fixed inset-0 z-50 bg-neutral-950/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
             <div className="bg-white border border-neutral-200 max-w-md w-full p-5 sm:p-8 shadow-2xl space-y-5 my-auto max-h-[90vh] overflow-y-auto">
@@ -624,8 +622,8 @@ export default function ArtEngineDashboard() {
           </div>
         )}
 
-        {/* Main Layout Container */}
-        <div className="max-w-7xl mx-auto pt-6 sm:pt-16 pb-24 px-3 sm:px-6 lg:px-12 space-y-6 sm:space-y-10 overflow-x-hidden">
+        {/* Main Layout Container with Safe Area Top Padding */}
+        <div className="max-w-7xl mx-auto pt-[calc(1rem+env(safe-area-inset-top))] sm:pt-16 pb-24 px-3 sm:px-6 lg:px-12 space-y-6 sm:space-y-10 overflow-x-hidden">
           
           <header className="flex flex-col items-center justify-center text-center border-b border-neutral-200/80 pb-8 bg-white px-4 sm:px-8 py-8 sm:py-12 border shadow-sm">
             <div className="space-y-2 max-w-2xl">
@@ -675,7 +673,7 @@ export default function ArtEngineDashboard() {
             </div>
           ) : (
             <>
-              {/* Navigation Tabs (Mobile Compact Scrollable) */}
+              {/* Navigation Tabs */}
               <nav className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center border-b border-neutral-200/80 bg-white px-4 sm:px-8 py-3 sm:py-4 gap-3 border shadow-sm">
                 <div className="flex gap-4 sm:gap-8 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
                   <button
