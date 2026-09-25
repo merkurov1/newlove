@@ -26,7 +26,6 @@ export async function POST(req: Request) {
     const apiKey = process.env.SCRAPINGANT_API_KEY;
     let html = '';
 
-    // 1. Пробуем получить HTML через ScrapingAnt API (обход защиты и рендеринг JS)
     if (apiKey) {
       try {
         const scrapingAntUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(url)}&browser=true`;
@@ -38,11 +37,10 @@ export async function POST(req: Request) {
           html = data.content || '';
         }
       } catch (err) {
-        console.error('ScrapingAnt request failed, falling back to direct fetch:', err);
+        console.error('ScrapingAnt request failed:', err);
       }
     }
 
-    // 2. Fallback на прямой fetch, если ключ не задан или API ответил с ошибкой
     if (!html) {
       const res = await fetch(url, {
         headers: {
@@ -50,30 +48,57 @@ export async function POST(req: Request) {
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
       });
-
-      if (!res.ok) {
-        throw new Error(`Failed to fetch page, status: ${res.status}`);
-      }
-
+      if (!res.ok) throw new Error(`Failed to fetch page, status: ${res.status}`);
       html = await res.text();
     }
 
     const auctionHouse = detectAuctionHouse(url);
+    const $ = cheerio.load(html);
     const structured = parseLotHtml(html, url, auctionHouse, { debug: true });
 
-    const $ = cheerio.load(html);
-    
-    // --- СТРАХОВКА ДЛЯ КАРТИНОК (Fallback) ---
-    let fallbackImage = 
-      $('meta[property="og:image"]').attr('content') ||
-      $('meta[name="twitter:image"]').attr('content') ||
-      $('.lot-image img, img.primary-image, [data-testid="lot-image"] img').first().attr('src') ||
-      '';
+    let foundImage = structured.imageUrl || '';
 
-    if (!structured.imageUrl && fallbackImage) {
-      structured.imageUrl = fallbackImage;
+    if (!foundImage) {
+      const ogImage = $('meta[property="og:image"]').attr('content');
+      const twImage = $('meta[name="twitter:image"]').attr('content');
+      if (ogImage) foundImage = ogImage;
+      else if (twImage) foundImage = twImage;
     }
-    // ------------------------------------------
+
+    if (!foundImage) {
+      const zoomSrc = $('[data-zoom-src]').attr('data-zoom-src');
+      const lazySrc = $('[data-lazy-src]').attr('data-lazy-src');
+      const srcset = $('.primary-image img, .lot-image img, img[srcset], picture source').first().attr('srcset');
+      const heroSrc = $('.hero-image img, [data-testid="lot-image"] img').first().attr('src');
+
+      const candidate = zoomSrc || lazySrc || srcset || heroSrc || '';
+      if (candidate) {
+        foundImage = candidate.split(',')[0].trim().split(' ')[0];
+      }
+    }
+
+    if (!foundImage) {
+      try {
+        const nextDataScript = $('#__NEXT_DATA__').html();
+        if (nextDataScript) {
+          const nextJson = JSON.parse(nextDataScript);
+          const jsonString = JSON.stringify(nextJson);
+          const imgMatches = jsonString.match(/https?:\/\/[^"'\s]+\.(?:jpg|jpeg|webp|png)(?:\?[^"'\s]*)?/gi);
+          if (imgMatches && imgMatches.length > 0) {
+            const validImg = imgMatches.find((img: string) => 
+              img.includes('lot') || img.includes('item') || img.includes('targus') || img.includes('christies')
+            );
+            if (validImg) {
+              foundImage = validImg;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse __NEXT_DATA__ for image:', e);
+      }
+    }
+
+    structured.imageUrl = foundImage;
 
     $('script, style, svg, noscript, iframe, footer, nav, header').remove();
     const cleanText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 30000);
