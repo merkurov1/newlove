@@ -23,33 +23,53 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
+    const apiKey = process.env.SCRAPINGANT_API_KEY;
+    let html = '';
 
-    if (!res.ok) {
-      throw new Error(`Failed to fetch page, status: ${res.status}`);
+    // 1. Пробуем получить HTML через ScrapingAnt API (обход защиты и рендеринг JS)
+    if (apiKey) {
+      try {
+        const scrapingAntUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(url)}&browser=true`;
+        const saRes = await fetch(scrapingAntUrl, {
+          headers: { 'x-api-key': apiKey },
+        });
+        if (saRes.ok) {
+          const data = await saRes.json();
+          html = data.content || '';
+        }
+      } catch (err) {
+        console.error('ScrapingAnt request failed, falling back to direct fetch:', err);
+      }
     }
 
-    const html = await res.text();
-    const auctionHouse = detectAuctionHouse(url);
+    // 2. Fallback на прямой fetch, если ключ не задан или API ответил с ошибкой
+    if (!html) {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      });
 
+      if (!res.ok) {
+        throw new Error(`Failed to fetch page, status: ${res.status}`);
+      }
+
+      html = await res.text();
+    }
+
+    const auctionHouse = detectAuctionHouse(url);
     const structured = parseLotHtml(html, url, auctionHouse, { debug: true });
 
     const $ = cheerio.load(html);
     
     // --- СТРАХОВКА ДЛЯ КАРТИНОК (Fallback) ---
-    // Если общий парсер не нашел картинку, ищем в OpenGraph тегах или специфичных img для лотов
     let fallbackImage = 
       $('meta[property="og:image"]').attr('content') ||
       $('meta[name="twitter:image"]').attr('content') ||
       $('.lot-image img, img.primary-image, [data-testid="lot-image"] img').first().attr('src') ||
       '';
 
-    // Если уstructured.imageUrl пусто, подставляем найденный fallback
     if (!structured.imageUrl && fallbackImage) {
       structured.imageUrl = fallbackImage;
     }
