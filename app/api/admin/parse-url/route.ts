@@ -34,8 +34,7 @@ async function downloadAndStoreImage(externalUrl: string): Promise<string> {
     });
 
     if (!res.ok) {
-      console.error(`[Parser] Failed to fetch image via proxy: ${res.statusText}`);
-      return externalUrl; // Fallback
+      throw new Error(`Proxy fetch failed with status ${res.status}: ${res.statusText}`);
     }
 
     const buffer = Buffer.from(await res.arrayBuffer());
@@ -49,20 +48,23 @@ async function downloadAndStoreImage(externalUrl: string): Promise<string> {
       });
 
     if (uploadError) {
-      console.error('[Parser] Supabase storage upload error:', uploadError);
-      return externalUrl;
+      throw new Error(`Supabase Storage upload error: ${JSON.stringify(uploadError)}`);
     }
 
     const { data: publicUrlData } = supabase.storage
       .from('artifacts')
       .getPublicUrl(fileName);
 
+    if (!publicUrlData?.publicUrl) {
+      throw new Error('Failed to get public URL from Supabase Storage');
+    }
+
     console.log(`[Parser] Image successfully mirrored to Supabase: ${publicUrlData.publicUrl}`);
     return publicUrlData.publicUrl;
 
   } catch (err) {
-    console.error('[Parser] Image download/upload error:', err);
-    return externalUrl;
+    console.error('[Parser] CRITICAL Image mirror error:', err);
+    throw err; // Бросаем ошибку, чтобы сразу видеть в логах, почему не удалось сохранить в бакет
   }
 }
 
