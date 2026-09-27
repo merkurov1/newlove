@@ -15,9 +15,9 @@ export default function LobbyClient() {
         }}
       />
 
-      {/* --- SECTION 1: HERO --- */}
-      <section className="min-h-screen flex flex-col justify-center px-8 md:px-16 pt-40 md:pt-48 pb-16 border-b border-zinc-200/60">
-
+      {/* --- SECTION 1: HERO & PROOF BAR --- */}
+      <section className="min-h-screen flex flex-col justify-between px-8 md:px-16 pt-36 md:pt-44 pb-12 border-b border-zinc-200/60">
+        
         <div className="max-w-5xl mx-auto w-full text-center my-auto">
           <h1 className="text-6xl md:text-8xl lg:text-9xl font-serif font-normal tracking-tight leading-[0.92] mb-10 text-[#111111]">
             I architect <br/>
@@ -28,9 +28,9 @@ export default function LobbyClient() {
 
           <div className="mx-auto max-w-2xl">
             <p className="text-xl md:text-2xl text-zinc-700 leading-relaxed font-serif mb-12 font-normal">
-              The world is drowning in noise. Algorithms dictate attention. Politics dictate geography.
+              Two decades at the intersection of fine art, information shifts, and digital legacy.
               <br/><br/>
-              Here, there are no algorithms. Only structure and signal.
+              Here, there are no algorithms. Only structure, signal, and verified provenance.
             </p>
 
             <div>
@@ -44,10 +44,31 @@ export default function LobbyClient() {
             </div>
           </div>
         </div>
+
+        {/* Institutional Proof Bar */}
+        <div className="w-full max-w-6xl mx-auto pt-12 border-t border-zinc-300/60 grid grid-cols-2 md:grid-cols-4 gap-6 text-center font-mono text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+          <div>
+            <span className="block text-[#111111] font-semibold mb-1">20+ Years</span>
+            Media &amp; Communications
+          </div>
+          <div>
+            <span className="block text-[#111111] font-semibold mb-1">Heritage</span>
+            S. Merkurov Legacy &amp; Art
+          </div>
+          <div>
+            <span className="block text-[#111111] font-semibold mb-1">Publicist</span>
+            Novaya Gazeta &amp; Forbes
+          </div>
+          <div>
+            <span className="block text-[#111111] font-semibold mb-1">Advising</span>
+            Private Office &amp; Archives
+          </div>
+        </div>
+
       </section>
 
 
-      {/* --- SECTION 2: FORESIGHT --- */}
+      {/* --- SECTION 2: FORESIGHT & INSTITUTIONAL RECORD --- */}
       <section className="py-28 md:py-36 px-8 md:px-16 border-b border-zinc-200/60">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32">
           
@@ -59,9 +80,14 @@ export default function LobbyClient() {
             <h2 className="text-4xl md:text-6xl font-serif font-normal leading-[1.1] mb-8 text-[#111111]">
               Structural shifts before they manifest.
             </h2>
-            <p className="text-lg md:text-xl text-zinc-600 leading-relaxed max-w-md font-serif">
-              Media analysis, cultural archives, and digital sovereignty. Being right is quiet, but essential.
+            <p className="text-lg md:text-xl text-zinc-600 leading-relaxed max-w-md font-serif mb-10">
+              Media analysis, cultural archives, and digital sovereignty. Independent advisory for institutional and private clients.
             </p>
+
+            <div className="pt-8 border-t border-zinc-200/80 font-mono text-xs text-zinc-500 space-y-3 leading-relaxed">
+              <div><strong className="text-zinc-800 uppercase tracking-wider">Lectures &amp; Talks:</strong> Moscow State University, OSCE, Goethe Institute, Polytech.</div>
+              <div><strong className="text-zinc-800 uppercase tracking-wider">Expert Status:</strong> State Duma Information Committee, Federation Council Commission.</div>
+            </div>
           </div>
 
           {/* Right Column: Timeline */}
@@ -69,20 +95,29 @@ export default function LobbyClient() {
             
             <div className="relative group cursor-default">
               <span className="absolute -left-[37px] md:-left-[53px] top-2.5 w-2.5 h-2.5 bg-zinc-400 rounded-full group-hover:bg-[#111111] transition-all duration-500"></span>
-              <div className="font-mono text-zinc-500 text-xs mb-2 uppercase tracking-[0.25em] font-medium">2012 — The Splinternet</div>
-              <h3 className="text-2xl font-serif font-normal text-[#111111]">The Fragmentation Prediction</h3>
+              <div className="font-mono text-zinc-500 text-xs mb-2 uppercase tracking-[0.25em] font-medium">2006 — 2018 / Public &amp; Media Media</div>
+              <h3 className="text-2xl font-serif font-normal text-[#111111] mb-2">Social Network Integration &amp; Splinternet Forecasts</h3>
+              <p className="text-sm text-zinc-600 font-serif leading-relaxed">
+                RBC media integration, Vice-President of Online Publishers Association, advising on decentralised messaging protocols (Open Garden / FireChat).
+              </p>
             </div>
 
             <div className="relative group cursor-default">
               <span className="absolute -left-[37px] md:-left-[53px] top-2.5 w-2.5 h-2.5 bg-zinc-400 rounded-full group-hover:bg-[#111111] transition-all duration-500"></span>
-              <div className="font-mono text-zinc-500 text-xs mb-2 uppercase tracking-[0.25em] font-medium">2018 — The Resistance</div>
-              <h3 className="text-2xl font-serif font-normal text-[#111111]">The Telegram War &amp; Digital Emigration</h3>
+              <div className="font-mono text-zinc-500 text-xs mb-2 uppercase tracking-[0.25em] font-medium">2018 — 2022 / Protocols &amp; Cinema</div>
+              <h3 className="text-2xl font-serif font-normal text-[#111111] mb-2">Digital Emigration &amp; Cultural Production</h3>
+              <p className="text-sm text-zinc-600 font-serif leading-relaxed">
+                Media producer for Pelevin’s <em>Empire V</em>, Communications lead for Clostra / NewNode p2p protocol, tokenization of Lenin’s death mask archive.
+              </p>
             </div>
 
             <div className="relative group cursor-default">
               <span className="absolute -left-[37px] md:-left-[53px] top-2.5 w-2.5 h-2.5 bg-[#111111] rounded-full"></span>
-              <div className="font-mono text-[#111111] text-xs mb-2 uppercase tracking-[0.25em] font-semibold">2026 — Digital Heritage</div>
-              <h3 className="text-2xl font-serif font-normal text-[#111111]">Cultural Infrastructure &amp; Post-Digital Assets</h3>
+              <div className="font-mono text-[#111111] text-xs mb-2 uppercase tracking-[0.25em] font-semibold">2026 / Present</div>
+              <h3 className="text-2xl font-serif font-normal text-[#111111] mb-2">Cultural Infrastructure &amp; Private Advisory</h3>
+              <p className="text-sm text-zinc-600 font-serif leading-relaxed">
+                Management of Sergey Merkurov House-Museum archive, private art deals, regular dispatches for Novaya Gazeta, and publishing <em>UNFRAMED</em>.
+              </p>
             </div>
 
           </div>
@@ -90,50 +125,66 @@ export default function LobbyClient() {
       </section>
 
 
-      {/* --- SECTION 3: MEDIA TICKER --- */}
-      <section className="py-10 border-b border-zinc-200/60 overflow-hidden whitespace-nowrap bg-[#F4F1EA]/80">
-        <div className="animate-marquee inline-block font-mono text-xs uppercase tracking-[0.2em] text-zinc-700 hover:[animation-play-state:paused]">
-          <span className="mx-12">
-            <strong className="text-[#111111] font-semibold">LE MONDE (2026):</strong> "The legal framework is ready... But they won’t succeed. Because, in reality, it’s impossible."
+      {/* --- SECTION 3: EDITORIAL PRESS CLIPPINGS (Replaces Marquee) --- */}
+      <section className="py-24 px-8 md:px-16 bg-[#F4F1EA]/80 border-b border-zinc-200/60">
+        <div className="max-w-7xl mx-auto">
+          <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-12">
+            International Press &amp; Commentary
           </span>
-          <span className="mx-12 text-zinc-400">—</span>
-          <span className="mx-12">
-            <strong className="text-[#111111] font-semibold">CHRISTIAN SCIENCE MONITOR (2026):</strong> "There is a bureaucratic battle over this. Many state agencies, and lots of officials, use Telegram in their work."
-          </span>
-          <span className="mx-12 text-zinc-400">—</span>
-          <span className="mx-12">
-            <strong className="text-[#111111] font-semibold">THE WASHINGTON POST (2018):</strong> "The result will be millions of digital emigres turning their backs on the state."
-          </span>
-          <span className="mx-12 text-zinc-400">—</span>
-          <span className="mx-12">
-            <strong className="text-[#111111] font-semibold">EURACTIV (2020):</strong> "The main danger is physical access to the device. Biology is the weak link."
-          </span>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 font-serif">
+            
+            <div className="border-t border-zinc-300 pt-6">
+              <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.2em] mb-4">The Washington Post</div>
+              <p className="text-lg text-zinc-800 italic leading-relaxed mb-6">
+                &ldquo;The result will be millions of digital emigres, people who will simply turn their backs on the state... acutely aware that it is willing to ignore their interests.&rdquo;
+              </p>
+              <div className="font-mono text-[11px] text-zinc-400 uppercase tracking-widest">— Anton Merkurov on Information Networks</div>
+            </div>
+
+            <div className="border-t border-zinc-300 pt-6">
+              <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.2em] mb-4">Le Monde (2026)</div>
+              <p className="text-lg text-zinc-800 italic leading-relaxed mb-6">
+                &ldquo;The legal framework is ready... But they won’t succeed. Because, in reality, it’s impossible to enforce absolute sovereign isolation.&rdquo;
+              </p>
+              <div className="font-mono text-[11px] text-zinc-400 uppercase tracking-widest">— Commentary on Network Resilience</div>
+            </div>
+
+            <div className="border-t border-zinc-300 pt-6">
+              <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.2em] mb-4">The Art Newspaper</div>
+              <p className="text-lg text-zinc-800 italic leading-relaxed mb-6">
+                &ldquo;Protecting and transmitting monumental family legacy into new technological mediums without losing provenance or historical weight.&rdquo;
+              </p>
+              <div className="font-mono text-[11px] text-zinc-400 uppercase tracking-widest">— On S. Merkurov Legacy &amp; Archives</div>
+            </div>
+
+          </div>
         </div>
       </section>
 
 
-      {/* --- SECTION 4: PHILOSOPHY --- */}
+      {/* --- SECTION 4: DUALITY PHILOSOPHY --- */}
       <section className="py-28 md:py-36 px-8 md:px-16">
         <div className="max-w-7xl mx-auto">
             <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-16 text-center">
-              02 / Philosophy
+              02 / Dual Roots
             </span>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-20">
                 {/* GRANITE */}
                 <div className="p-10 md:p-14 border border-zinc-300 bg-white/50">
-                    <span className="block font-mono text-zinc-500 text-xs uppercase tracking-[0.3em] mb-6 font-medium">Heritage (Granite)</span>
+                    <span className="block font-mono text-zinc-500 text-xs uppercase tracking-[0.3em] mb-6 font-medium">Granite (Heritage &amp; Physical)</span>
                     <p className="text-2xl md:text-3xl leading-relaxed font-serif text-zinc-900 font-normal">
-                        My great-grandfather carved the Empire in stone. Heavy. Immovable. Eternal.
+                        My great-grandfather carved the Soviet monumental era in granite. Heavy. Immovable. Permanent.
                     </p>
-                    <div className="mt-10 font-mono text-xs text-zinc-500 uppercase tracking-[0.25em]">Sergey Merkurov</div>
+                    <div className="mt-10 font-mono text-xs text-zinc-500 uppercase tracking-[0.25em]">Sergey Merkurov (1881–1952)</div>
                 </div>
 
                 {/* ETHER */}
                 <div className="p-10 md:p-14 border border-zinc-900/30 bg-white/90 shadow-sm">
-                    <span className="block font-mono text-zinc-700 text-xs uppercase tracking-[0.3em] mb-6 font-medium">Future (Ether)</span>
+                    <span className="block font-mono text-zinc-700 text-xs uppercase tracking-[0.3em] mb-6 font-medium">Ether (Signal &amp; Media)</span>
                     <p className="text-2xl md:text-3xl leading-relaxed font-serif text-[#111111] font-normal">
-                        I operate in the Ether. Transmuting heavy history into light, liquid digital assets.
+                        I operate across decentralized protocols, public commentary, and liquid cultural assets.
                     </p>
                     <div className="mt-10 font-mono text-xs text-zinc-500 uppercase tracking-[0.25em]">Anton Merkurov</div>
                 </div>
@@ -146,7 +197,7 @@ export default function LobbyClient() {
       <section className="py-28 md:py-36 px-8 md:px-16 bg-[#F4F1EA]/60 border-t border-zinc-200/60">
         <div className="max-w-7xl mx-auto">
             <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-16">
-              03 / Index
+              03 / Index &amp; Operations
             </span>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-zinc-300 border border-zinc-300">
@@ -155,42 +206,42 @@ export default function LobbyClient() {
                 { 
                   id: '01', 
                   title: 'RESEARCH', 
-                  desc: 'Geopolitical fracture and media transformation. Independent commentary on system shifts and open networks.', 
+                  desc: 'Geopolitical analysis, media transformations, and independent commentary on network shifts.', 
                   link: '/research', 
                   label: 'Analysis' 
                 },
                 { 
                   id: '02', 
                   title: 'ADVISING', 
-                  desc: 'Private art advisory, provenance verification, and digital legacy structures for long-term cultural capital.', 
+                  desc: 'Private art advisory, provenance verification, and archival legacy management for family offices.', 
                   link: '/advising', 
                   label: 'Office' 
                 },
                 { 
                   id: '03', 
                   title: 'CURATOR ENGINE', 
-                  desc: 'Art-market intelligence and noise reduction. Real-time data enrichment for physical and digital assets.', 
+                  desc: 'Art-market intelligence and noise reduction. Real-time data curation for physical collections.', 
                   link: '/art-engine', 
                   label: 'Engine' 
                 },
                 { 
                   id: '04', 
                   title: 'ARTWORK', 
-                  desc: 'The physical and digital archive. Unique artifacts and recurring symbolic motifs created as aesthetic anchors.', 
+                  desc: 'The Heart & Angel series. Physical ink, acrylic, and canvas works expressing universal human connection.', 
                   link: '/heartandangel', 
                   label: 'Works' 
                 },
                 { 
                   id: '05', 
                   title: 'SELECTION', 
-                  desc: 'Curated cultural inventory and private collection access with verifiable provenance.', 
+                  desc: 'Curated inventory of fine art, rare sculpture archives, and verified private provenance items.', 
                   link: '/selection', 
                   label: 'Inventory' 
                 },
                 { 
                   id: '06', 
                   title: 'JOURNAL', 
-                  desc: 'Regular dispatches, essays, and public commentary on technology, culture, and society.', 
+                  desc: 'Regular dispatches, column archives from Novaya Gazeta, and long-form essays on society.', 
                   link: '/journal', 
                   label: 'Dispatches' 
                 }
@@ -224,7 +275,7 @@ export default function LobbyClient() {
       {/* --- SECTION 6: FOOTER --- */}
       <section className="py-28 px-8 bg-[#FAF8F5] text-center border-t border-zinc-200/60">
         <h2 className="text-3xl md:text-5xl font-serif font-normal text-[#111111] mb-8">
-            Read the Journal.
+            Read the Journal &amp; Dispatches.
         </h2>
         
         <div className="inline-flex flex-col items-center gap-4">
@@ -235,7 +286,7 @@ export default function LobbyClient() {
               Access Dispatches
             </Link>
             <span className="font-serif italic text-zinc-500 text-base mt-2">
-                Ignore the noise.
+                Structure and signal in an era of noise.
             </span>
         </div>
 
