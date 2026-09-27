@@ -3,13 +3,14 @@ import Link from 'next/link'
 import HeroMotion from '@/components/advising/HeroMotion'
 import CenteredHeader from '@/components/CenteredHeader'
 import CaseStudyCard from '@/components/advising/CaseStudyCard'
+import { ArrowUpRight } from 'lucide-react'
 
 export const metadata: Metadata = {
-  title: 'The Private Office // Anton Merkurov',
-  description: 'Heritage Architecture for the Post-Digital Age. Art Advisory, Legacy Structures, and Digital Sovereignty.',
+  title: 'Advising // Anton Merkurov',
+  description: 'Heritage Architecture for the Post-Digital Age. Private art advisory and digital legacy management.',
   openGraph: {
-    title: 'The Private Office // Anton Merkurov',
-    description: 'I offer silence in a noisy world. Exclusive art advisory and digital legacy management.',
+    title: 'Advising // Anton Merkurov',
+    description: 'Exclusive art advisory, legacy structures, and digital archives.',
     url: 'https://merkurov.love/advising',
     siteName: 'Merkurov.Love',
     locale: 'en_US',
@@ -19,121 +20,129 @@ export const metadata: Metadata = {
 
 export default function AdvisingPage() {
   return (
-    <main className="min-h-screen bg-[#FDFBF7] text-[#111] font-sans selection:bg-black selection:text-white">
+    <main className="min-h-screen bg-[#FDFBF7] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-hidden">
       
-      {/* DECORATIVE BORDER TOP */}
-      <div className="h-1 w-full bg-black fixed top-0 z-50"></div>
+      {/* Paper Grain Overlay */}
+      <div 
+        className="fixed inset-0 pointer-events-none z-40 opacity-[0.025] mix-blend-overlay"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        }}
+      />
 
-      <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
+      {/* Top Border */}
+      <div className="h-1 w-full bg-black fixed top-0 z-50" />
+
+      <div className="max-w-3xl mx-auto px-6 py-20 md:py-32 relative z-10">
         
-        {/* 1. HEADER: STATUS & IDENTITY */}
+        {/* HEADER */}
         <CenteredHeader>
           <HeroMotion
             brand={<>Advising</>}
             title={(<><span>The Private</span><br />Office.</>)}
             subtitle={<>Heritage Architecture for the Post-Digital Age.</>}
-            status="System Online"
           />
         </CenteredHeader>
 
-        {/* 2. MANIFESTO */}
-        <section className="mb-20 prose prose-lg prose-stone">
-          <p className="text-lg leading-relaxed mb-6">
-            The art world is full of noise. Galleries sell inventory. Algorithms manipulate taste. Auctions are theatre.
-          </p>
-          <p className="text-2xl font-serif italic border-l-2 border-black pl-6 my-8">
-            I offer silence.
-          </p>
-          <p className="text-lg leading-relaxed mb-8">
-            I do not just "buy art" for you. I build <strong>Legacy Structures</strong> for individuals who plan in decades, not quarters.
-            My approach fuses two worlds: the <strong>Granite</strong> of the 20th century (Classical Heritage) and the <strong>Ether</strong> of the 21st (Digital Assets & Archives).
-          </p>
+        {/* MANIFESTO */}
+        <section className="mb-20">
+          <div className="space-y-6 text-lg md:text-xl text-gray-800 leading-relaxed font-serif">
+            <p>
+              The art market is saturated with noise. Galleries push inventory, algorithms manipulate taste, and auction houses focus on theatre.
+            </p>
+            <div className="py-6 px-8 border-l border-black bg-white/40 my-8">
+              <p className="text-2xl md:text-3xl font-serif italic text-black m-0">
+                I offer silence and structural clarity.
+              </p>
+            </div>
+            <p>
+              I build legacy structures for individuals who calculate in decades. My practice bridges two worlds: the <strong>Granite</strong> of classical fine art heritage and the <strong>Ether</strong> of sovereign digital archives and post-digital assets.
+            </p>
+          </div>
         </section>
 
-        {/* 3. THE EVIDENCE (LINK TO FONTANA) - NEW BLOCK */}
-        <section className="mb-20">
-            <h3 className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-6">
-                Capability Demonstration
-            </h3>
+        {/* PRACTICE / SERVICES */}
+        <section className="mb-24">
+          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-gray-400 mb-10 pb-3 border-b border-gray-200">
+            Practice
+          </h2>
+          
+          <div className="space-y-12">
             
-            <CaseStudyCard
-              href="/case-study/fontana"
-              badge="Declassified Sample"
-              title={<>Case Study: The White Absolute</>}
-              subtitle={<>Asset: Lucio Fontana (1968) // Valuation & Arbitrage</>}
-              layoutId="case-fontana"
-            />
+            <div className="group">
+                <span className="font-mono text-xs text-gray-400 block mb-2">01</span>
+                <h3 className="text-2xl font-serif font-medium text-black mb-3">
+                    Signal & Context
+                </h3>
+                <p className="text-base text-gray-600 leading-relaxed font-serif">
+                    Independent analysis free from gallery bias. Filtering out market noise to establish a clear strategy before acquiring or structuring any asset.
+                </p>
+            </div>
             
-            {/* Garcia Case Study (added) */}
-            <div className="mt-6">
+            <div className="group">
+                <span className="font-mono text-xs text-gray-400 block mb-2">02</span>
+                <h3 className="text-2xl font-serif font-medium text-black mb-3">
+                    Selection & Sourcing
+                </h3>
+                <p className="text-base text-gray-600 leading-relaxed font-serif">
+                    Direct access to museum-grade post-war modernism and high-signal contemporary work. Strategic private sourcing with verifiable provenance.
+                </p>
+            </div>
+
+            <div className="group">
+                <span className="font-mono text-xs text-gray-400 block mb-2">03</span>
+                <h3 className="text-2xl font-serif font-medium text-black mb-3">
+                    Heritage & Digital Preservation
+                </h3>
+                <p className="text-base text-gray-600 leading-relaxed font-serif">
+                    Building sovereign digital archives and cataloging systems for physical collections, personal histories, and long-term intent.
+                </p>
+            </div>
+
+          </div>
+        </section>
+
+        {/* CASE STUDIES */}
+        <section className="mb-24">
+            <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-gray-400 mb-8 pb-3 border-b border-gray-200">
+              Selected Work
+            </h2>
+            
+            <div className="space-y-6">
+              <CaseStudyCard
+                href="/case-study/fontana"
+                badge="Arbitrage"
+                title={<>The White Absolute</>}
+                subtitle={<>Lucio Fontana (1968) // Valuation Discrepancy & Analysis</>}
+                layoutId="case-fontana"
+              />
+              
               <CaseStudyCard
                 href="/case-study/garcia"
-                badge="Case Study"
-                title={<>Case Study: The Anatomy of Quietude</>}
-                subtitle={<>Asset: Aimée García (1995) // Provenance & Acquisition</>}
+                badge="Provenance"
+                title={<>The Anatomy of Quietude</>}
+                subtitle={<>Aimée García (1995) // Strategic Private Acquisition</>}
                 layoutId="case-garcia"
               />
             </div>
         </section>
 
-        {/* 4. SERVICES */}
-        <section className="mb-20">
-          <h2 className="text-3xl font-serif font-light mb-12 border-b border-gray-200 pb-4">
-            The Protocol
-          </h2>
-          
-          <div className="space-y-12">
-            <div className="group">
-                <h3 className="text-lg font-bold uppercase tracking-wide mb-2 group-hover:text-gray-600 transition-colors">
-                    01. The Audit (Digital Hygiene)
-                </h3>
-                <p className="text-gray-600 leading-relaxed">
-                    You are vulnerable. I clean your digital footprint, remove the noise, and secure your perimeter. 
-                    Before we build, we must clear the ground.
-                </p>
-            </div>
-            
-            <div className="group">
-                <h3 className="text-lg font-bold uppercase tracking-wide mb-2 group-hover:text-gray-600 transition-colors">
-                    02. The Acquisition (Selection)
-                </h3>
-                <p className="text-gray-600 leading-relaxed">
-                    Curating assets that survive entropy. From post-war modernism to the algorithmic avant-garde. 
-                    No fillers. Only signals.
-                </p>
-            </div>
-
-            <div className="group">
-                <h3 className="text-lg font-bold uppercase tracking-wide mb-2 group-hover:text-gray-600 transition-colors">
-                    03. The Archive (Immortality)
-                </h3>
-                <p className="text-gray-600 leading-relaxed">
-                    Building your personal Digital Vatican. A system to preserve your collection, your name, 
-                    and your intent forever. Data is the new marble.
-                </p>
-            </div>
-          </div>
-        </section>
-
-        {/* 5. THE RULES */}
-        <section className="mb-24 border-t border-gray-200 pt-12">
-          <h2 className="font-mono text-xs font-bold uppercase tracking-widest mb-6">The Rules</h2>
-          <p className="font-serif italic text-lg text-gray-700">
-            — No public portfolio. — No social media hype. — Only direct access.
+        {/* DISCRETION STATEMENT */}
+        <section className="mb-20 p-8 border border-gray-200/80 bg-white/50">
+          <p className="font-serif italic text-base md:text-lg text-gray-700 m-0">
+            No public client rosters. No social media intermediaries. Direct, private consultation only.
           </p>
         </section>
 
-        {/* 6. CTA */}
-        <div className="text-center">
+        {/* CTA */}
+        <div className="text-center py-8">
           <a
             href="mailto:merkurov@gmail.com"
-            className="inline-block border-b-2 border-black pb-1 text-2xl md:text-3xl font-serif italic hover:text-red-600 hover:border-red-600 transition-all duration-300"
+            className="group inline-flex items-center gap-3 border-b border-black pb-1 text-2xl md:text-3xl font-serif italic hover:text-gray-600 hover:border-gray-600 transition-all duration-300"
           >
-            Start a conversation →
+            <span>Start a conversation</span>
+            <ArrowUpRight size={22} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform duration-300 text-black group-hover:text-gray-600" />
           </a>
-          <p className="mt-6 font-mono text-[10px] text-gray-400 uppercase tracking-widest">
-            Response time: Within 24 hours
-          </p>
         </div>
 
       </div>
