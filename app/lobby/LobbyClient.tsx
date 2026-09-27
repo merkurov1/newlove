@@ -16,19 +16,9 @@ export default function LobbyClient() {
       />
 
       {/* --- SECTION 1: HERO --- */}
-      <section className="min-h-screen flex flex-col justify-center px-8 md:px-16 relative border-b border-zinc-200/50">
-        
-        {/* Top Header Navigation */}
-        <header className="absolute top-10 left-8 md:left-16 right-8 md:right-16 flex justify-between items-center z-10">
-           <Link href="/" className="font-mono text-[10px] uppercase tracking-[0.3em] text-zinc-400 hover:text-black transition-colors">
-             Merkurov Office
-           </Link>
-           <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-zinc-400/80">
-             Unframed
-           </span>
-        </header>
+      <section className="min-h-screen flex flex-col justify-center px-8 md:px-16 pt-32 md:pt-40 pb-16 relative border-b border-zinc-200/50">
 
-        <div className="max-w-5xl mx-auto w-full pt-20 text-center">
+        <div className="max-w-5xl mx-auto w-full text-center my-auto">
           <h1 className="text-6xl md:text-8xl lg:text-9xl font-serif font-normal tracking-tight leading-[0.92] mb-10 text-[#111111]">
             I architect <br/>
             <span className="text-zinc-400 italic hover:text-[#111111] transition-colors duration-700 cursor-default">
@@ -86,13 +76,13 @@ export default function LobbyClient() {
             <div className="relative group cursor-default">
               <span className="absolute -left-[37px] md:-left-[53px] top-2.5 w-2 h-2 bg-zinc-300 rounded-full group-hover:bg-[#111111] transition-all duration-500"></span>
               <div className="font-mono text-zinc-400 text-[10px] mb-2 uppercase tracking-[0.25em]">2018 — The Resistance</div>
-              <h3 className="text-xl md:text-2xl font-serif font-normal text-[#111111]">The Telegram War & Digital Emigration</h3>
+              <h3 className="text-xl md:text-2xl font-serif font-normal text-[#111111]">The Telegram War &amp; Digital Emigration</h3>
             </div>
 
             <div className="relative group cursor-default">
               <span className="absolute -left-[37px] md:-left-[53px] top-2.5 w-2 h-2 bg-[#111111] rounded-full"></span>
-              <div className="font-mono text-[#111111] text-[10px] mb-2 uppercase tracking-[0.25em]">2026 — The Unframed</div>
-              <h3 className="text-xl md:text-2xl font-serif font-normal text-[#111111]">Cultural Infrastructure & Post-Digital Assets</h3>
+              <div className="font-mono text-[#111111] text-[10px] mb-2 uppercase tracking-[0.25em]">2026 — Digital Heritage</div>
+              <h3 className="text-xl md:text-2xl font-serif font-normal text-[#111111]">Cultural Infrastructure &amp; Post-Digital Assets</h3>
             </div>
 
           </div>
@@ -192,10 +182,10 @@ export default function LobbyClient() {
                 },
                 { 
                   id: '05', 
-                  title: 'UNFRAMED', 
-                  desc: 'Essays on exile, independence, and personal sovereignty in a fragmented world.', 
-                  link: '/unframed', 
-                  label: 'Monograph' 
+                  title: 'SELECTION', 
+                  desc: 'Curated cultural inventory and private collection access with verifiable provenance.', 
+                  link: '/selection', 
+                  label: 'Inventory' 
                 },
                 { 
                   id: '06', 
@@ -250,7 +240,7 @@ export default function LobbyClient() {
         </div>
 
         <footer className="mt-24 text-[9px] font-mono text-zinc-400 uppercase tracking-[0.3em]">
-          Merkurov Private Office
+          Anton Merkurov Private Office
         </footer>
       </section>
 
