@@ -5,18 +5,18 @@ import { ArrowRight, ArrowUpRight } from "lucide-react";
 
 export default function LobbyClient() {
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] relative overflow-x-hidden antialiased">
+    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] antialiased">
       
-      {/* Subtle Paper Grain Texture (z-10, чтобы z-50 Header был всегда выше) */}
+      {/* Subtle Paper Grain Texture */}
       <div 
-        className="fixed inset-0 pointer-events-none z-10 opacity-[0.025] mix-blend-overlay"
+        className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
         }}
       />
 
       {/* --- SECTION 1: HERO --- */}
-      <section className="min-h-screen flex flex-col justify-center px-8 md:px-16 pt-40 md:pt-48 pb-16 relative border-b border-zinc-200/60 z-20">
+      <section className="min-h-screen flex flex-col justify-center px-8 md:px-16 pt-40 md:pt-48 pb-16 border-b border-zinc-200/60">
 
         <div className="max-w-5xl mx-auto w-full text-center my-auto">
           <h1 className="text-6xl md:text-8xl lg:text-9xl font-serif font-normal tracking-tight leading-[0.92] mb-10 text-[#111111]">
@@ -48,7 +48,7 @@ export default function LobbyClient() {
 
 
       {/* --- SECTION 2: FORESIGHT --- */}
-      <section className="py-28 md:py-36 px-8 md:px-16 border-b border-zinc-200/60 z-20 relative">
+      <section className="py-28 md:py-36 px-8 md:px-16 border-b border-zinc-200/60">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32">
           
           {/* Left Column */}
@@ -91,7 +91,7 @@ export default function LobbyClient() {
 
 
       {/* --- SECTION 3: MEDIA TICKER --- */}
-      <section className="py-10 border-b border-zinc-200/60 overflow-hidden whitespace-nowrap bg-[#F4F1EA]/80 z-20 relative">
+      <section className="py-10 border-b border-zinc-200/60 overflow-hidden whitespace-nowrap bg-[#F4F1EA]/80">
         <div className="animate-marquee inline-block font-mono text-xs uppercase tracking-[0.2em] text-zinc-700 hover:[animation-play-state:paused]">
           <span className="mx-12">
             <strong className="text-[#111111] font-semibold">LE MONDE (2026):</strong> "The legal framework is ready... But they won’t succeed. Because, in reality, it’s impossible."
@@ -113,7 +113,7 @@ export default function LobbyClient() {
 
 
       {/* --- SECTION 4: PHILOSOPHY --- */}
-      <section className="py-28 md:py-36 px-8 md:px-16 z-20 relative">
+      <section className="py-28 md:py-36 px-8 md:px-16">
         <div className="max-w-7xl mx-auto">
             <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-16 text-center">
               02 / Philosophy
@@ -143,7 +143,7 @@ export default function LobbyClient() {
 
 
       {/* --- SECTION 5: INDEX GRID --- */}
-      <section className="py-28 md:py-36 px-8 md:px-16 bg-[#F4F1EA]/60 border-t border-zinc-200/60 z-20 relative">
+      <section className="py-28 md:py-36 px-8 md:px-16 bg-[#F4F1EA]/60 border-t border-zinc-200/60">
         <div className="max-w-7xl mx-auto">
             <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-16">
               03 / Index
@@ -222,7 +222,7 @@ export default function LobbyClient() {
 
 
       {/* --- SECTION 6: FOOTER --- */}
-      <section className="py-28 px-8 bg-[#FAF8F5] text-center border-t border-zinc-200/60 z-20 relative">
+      <section className="py-28 px-8 bg-[#FAF8F5] text-center border-t border-zinc-200/60">
         <h2 className="text-3xl md:text-5xl font-serif font-normal text-[#111111] mb-8">
             Read the Journal.
         </h2>

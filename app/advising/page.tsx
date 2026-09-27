@@ -18,17 +18,17 @@ export const metadata: Metadata = {
 
 export default function AdvisingPage() {
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] relative overflow-x-hidden antialiased">
+    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] antialiased">
       
-      {/* Paper Grain Overlay (z-10 для предотвращения перекрытия Header z-50) */}
+      {/* Paper Grain Overlay */}
       <div 
-        className="fixed inset-0 pointer-events-none z-10 opacity-[0.025] mix-blend-overlay"
+        className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
         }}
       />
 
-      <div className="max-w-3xl mx-auto px-6 pt-40 md:pt-48 pb-20 relative z-20">
+      <div className="max-w-3xl mx-auto px-6 pt-40 md:pt-48 pb-20">
         
         {/* TITLE BLOCK */}
         <div className="mb-16 text-center">
