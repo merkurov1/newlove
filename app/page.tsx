@@ -8,18 +8,18 @@ export const metadata = {
 
 export default function Home() {
   return (
-    <main className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] relative overflow-x-hidden flex flex-col justify-between px-6 sm:px-12 pt-32 md:pt-40 pb-12 antialiased">
+    <main className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-6 sm:px-12 pt-32 md:pt-40 pb-12 antialiased">
       
       {/* Subtle Paper Grain Overlay */}
       <div
-        className="fixed inset-0 pointer-events-none z-0 opacity-[0.025] mix-blend-overlay"
+        className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
         }}
       />
 
       {/* --- CENTER HERO BLOCK --- */}
-      <div className="w-full max-w-5xl mx-auto flex flex-col items-center justify-center my-auto text-center relative z-10">
+      <div className="w-full max-w-5xl mx-auto flex flex-col items-center justify-center my-auto text-center">
         
         {/* Epigraph */}
         <p className="font-serif italic text-zinc-600 text-base sm:text-lg md:text-xl mb-8 sm:mb-10 tracking-wide font-normal max-w-lg">
@@ -72,7 +72,7 @@ export default function Home() {
       </div>
 
       {/* --- FOOTER DIRECTORY --- */}
-      <footer className="w-full max-w-6xl mx-auto flex justify-between items-center pt-6 border-t border-zinc-300/80 shrink-0 font-mono text-xs text-zinc-500 uppercase tracking-[0.25em] mt-16 relative z-10">
+      <footer className="w-full max-w-6xl mx-auto flex justify-between items-center pt-6 border-t border-zinc-300/80 shrink-0 font-mono text-xs text-zinc-500 uppercase tracking-[0.25em] mt-16">
         <span>Merkurov Private Office</span>
         <span>Digital Heritage Architecture</span>
       </footer>
