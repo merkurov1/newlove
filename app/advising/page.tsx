@@ -30,10 +30,7 @@ export default function AdvisingPage() {
         }}
       />
 
-      {/* Top Border */}
-      <div className="h-1 w-full bg-black fixed top-0 z-50" />
-
-      <div className="max-w-3xl mx-auto px-6 py-20 md:py-32 relative z-10">
+      <div className="max-w-3xl mx-auto px-6 pt-28 md:pt-36 pb-20 relative z-10">
         
         {/* HEADER */}
         <CenteredHeader>
