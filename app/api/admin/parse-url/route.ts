@@ -243,21 +243,54 @@ function extractChristiesImages(
   return candidates;
 }
 
+function extractBonhamsImages(
+  html: string,
+  $: cheerio.CheerioAPI,
+  baseUrl: string
+): Array<{ url: string; source: string }> {
+  const candidates = extractGenericImages(html, $, baseUrl);
+  const add = (value?: string | null, source: string = 'bonhams-regex') => {
+    if (!value) return;
+    const url = cleanImageUrl(value, baseUrl);
+    if (url) candidates.push({ url, source });
+  };
+
+  // 1. Поиск прямого CDN и путей картинок Bonhams
+  const bonhamsRegex = /https?:\/\/(?:images\d?\.bonhams\.com|www\.bonhams\.com\/[^\s"']*?\.(?:jpg|jpeg|png|webp))/gi;
+  (html.match(bonhamsRegex) || []).forEach((url) => add(url, 'bonhams-regex'));
+
+  // 2. Поиск скрытых ключей в гидратации React/NextJS state (__NEXT_DATA__)
+  const jsonImageRegex = /"image":\s*"([^"]+)"|"imageUrl":\s*"([^"]+)"|"highRes":\s*"([^"]+)"/gi;
+  let match;
+  while ((match = jsonImageRegex.exec(html)) !== null) {
+    const rawUrl = match[1] || match[2] || match[3];
+    if (rawUrl) add(rawUrl, 'bonhams-json-state');
+  }
+
+  return candidates;
+}
+
 function scoreImageUrl(url: string, source: string, auctionHouse: string): number {
   const lower = url.toLowerCase();
   let score = 0;
 
   if (source === 'og:image' || source === 'twitter:image') score += 500;
-  if (source === 'json-ld') score += 300;
+  if (source === 'json-ld' || source === 'bonhams-json-state') score += 300;
   if (source === 'dom-main-img') score += 200;
 
   if (auctionHouse === "Christie's" && lower.includes('/img/lotimages/')) score += 150;
   if (auctionHouse === "Sotheby's" && (lower.includes('lot') || lower.includes('artwork'))) score += 120;
   if (auctionHouse === 'Phillips' && (lower.includes('lot') || lower.includes('artwork'))) score += 120;
 
+  if (auctionHouse === 'Bonhams') {
+    if (lower.includes('images.bonhams.com')) score += 200;
+    if (source === 'bonhams-regex') score += 150;
+  }
+
   if (
     lower.includes('logo') || lower.includes('favicon') || 
-    lower.includes('icon') || lower.includes('avatar') || lower.includes('placeholder')
+    lower.includes('icon') || lower.includes('avatar') || lower.includes('placeholder') ||
+    lower.includes('banner') || lower.includes('header')
   ) {
     score -= 1000;
   }
@@ -290,6 +323,8 @@ function extractBestImage(
 
   if (auctionHouse === "Christie's") {
     candidates.push(...extractChristiesImages(html, $, baseUrl));
+  } else if (auctionHouse === 'Bonhams') {
+    candidates.push(...extractBonhamsImages(html, $, baseUrl));
   } else {
     candidates.push(...extractGenericImages(html, $, baseUrl));
   }
@@ -327,11 +362,11 @@ export async function POST(req: Request) {
     const auctionHouse = detectAuctionHouse(url);
     let html = '';
 
-    // 1. Jina Reader
+    // 1. Jina Reader (запрашиваем HTML для корректного разбора DOM через Cheerio)
     try {
       const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
         headers: {
-          'X-Return-Format': 'markdown',
+          'X-Return-Format': 'html',
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         }
       });
