@@ -14,8 +14,8 @@ const supabase = createClient(
 );
 
 /**
- * Скачивает найденную картинку через прокси и сохраняет в Supabase Storage,
- * возвращая постоянную публичную ссылку.
+ * Скачивает найденную картинку с фоллбеком (сначала через wsrv.nl, при ошибке — напрямую)
+ * и сохраняет в Supabase Storage, возвращая постоянную публичную ссылку.
  */
 async function downloadAndStoreImage(externalUrl: string): Promise<string> {
   if (!externalUrl) return '';
@@ -23,18 +23,35 @@ async function downloadAndStoreImage(externalUrl: string): Promise<string> {
     return externalUrl; // Уже в Supabase
   }
 
-  try {
-    // Используем wsrv.nl для гарантированного обхода Cloudflare / ETIMEDOUT при парсинге
-    const fetchUrl = `https://wsrv.nl/?url=${encodeURIComponent(externalUrl)}`;
-    
-    const res = await fetch(fetchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
-    });
+  const browserHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Referer': 'https://www.bonhams.com/',
+  };
 
-    if (!res.ok) {
-      throw new Error(`Proxy fetch failed with status ${res.status}: ${res.statusText}`);
+  try {
+    let res: Response | null = null;
+
+    // 1. Пробуем через wsrv.nl
+    try {
+      const fetchUrl = `https://wsrv.nl/?url=${encodeURIComponent(externalUrl)}`;
+      const proxyRes = await fetch(fetchUrl, { headers: browserHeaders });
+      if (proxyRes.ok) {
+        res = proxyRes;
+      }
+    } catch {
+      console.warn('[Parser] wsrv.nl proxy failed, falling back to direct fetch...');
+    }
+
+    // 2. Если wsrv.nl заблокирован (403) или упал — делаем прямой fetch
+    if (!res) {
+      console.log(`[Parser] Direct fetching image: ${externalUrl}`);
+      const directRes = await fetch(externalUrl, { headers: browserHeaders });
+      if (!directRes.ok) {
+        throw new Error(`Direct fetch failed with status ${directRes.status}: ${directRes.statusText}`);
+      }
+      res = directRes;
     }
 
     const buffer = Buffer.from(await res.arrayBuffer());
@@ -64,7 +81,7 @@ async function downloadAndStoreImage(externalUrl: string): Promise<string> {
 
   } catch (err) {
     console.error('[Parser] CRITICAL Image mirror error:', err);
-    throw err; // Бросаем ошибку, чтобы сразу видеть в логах, почему не удалось сохранить в бакет
+    throw err;
   }
 }
 
@@ -81,6 +98,9 @@ function detectAuctionHouse(url: string): string {
 
 function absoluteUrl(value: string, baseUrl: string): string {
   try {
+    if (value.startsWith('//')) {
+      return `https:${value}`;
+    }
     return new URL(value, baseUrl).href;
   } catch {
     return '';
@@ -255,17 +275,38 @@ function extractBonhamsImages(
     if (url) candidates.push({ url, source });
   };
 
-  // 1. Поиск прямого CDN и путей картинок Bonhams
-  const bonhamsRegex = /https?:\/\/(?:images\d?\.bonhams\.com|www\.bonhams\.com\/[^\s"']*?\.(?:jpg|jpeg|png|webp))/gi;
+  // 1. Поиск прямого CDN и стандартных паттернов Bonhams
+  const bonhamsRegex = /(?:https?:)?\/\/(?:images\d?\.bonhams\.com|www\.bonhams\.com)[^\s"']*?\.(?:jpg|jpeg|png|webp)/gi;
   (html.match(bonhamsRegex) || []).forEach((url) => add(url, 'bonhams-regex'));
 
-  // 2. Поиск скрытых ключей в гидратации React/NextJS state (__NEXT_DATA__)
-  const jsonImageRegex = /"image":\s*"([^"]+)"|"imageUrl":\s*"([^"]+)"|"highRes":\s*"([^"]+)"/gi;
-  let match;
-  while ((match = jsonImageRegex.exec(html)) !== null) {
-    const rawUrl = match[1] || match[2] || match[3];
-    if (rawUrl) add(rawUrl, 'bonhams-json-state');
+  // 2. Разбор NextJS state (__NEXT_DATA__)
+  const nextDataScript = $('#__NEXT_DATA__').html();
+  if (nextDataScript) {
+    try {
+      const parsed = JSON.parse(nextDataScript);
+      const searchObj = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return;
+
+        for (const key in obj) {
+          const val = obj[key];
+          if (typeof val === 'string' && (key.toLowerCase().includes('image') || key.toLowerCase().includes('src') || key.toLowerCase().includes('url'))) {
+            if (val.match(/\.(jpg|jpeg|png|webp)/i) || val.includes('/Image/')) {
+              add(val, 'bonhams-next-data');
+            }
+          } else if (typeof val === 'object') {
+            searchObj(val);
+          }
+        }
+      };
+      searchObj(parsed);
+    } catch {
+      // Игнорируем ошибку JSON
+    }
   }
+
+  // 3. Дополнительные RegEx по всему документу для сырых данных
+  const rawPathRegex = /\/Image\/Live\/[^\s"'\\]+\.(?:jpg|jpeg|png|webp)/gi;
+  (html.match(rawPathRegex) || []).forEach((path) => add(path, 'bonhams-raw-path'));
 
   return candidates;
 }
@@ -275,7 +316,7 @@ function scoreImageUrl(url: string, source: string, auctionHouse: string): numbe
   let score = 0;
 
   if (source === 'og:image' || source === 'twitter:image') score += 500;
-  if (source === 'json-ld' || source === 'bonhams-json-state') score += 300;
+  if (source === 'json-ld' || source === 'bonhams-next-data') score += 300;
   if (source === 'dom-main-img') score += 200;
 
   if (auctionHouse === "Christie's" && lower.includes('/img/lotimages/')) score += 150;
@@ -283,14 +324,14 @@ function scoreImageUrl(url: string, source: string, auctionHouse: string): numbe
   if (auctionHouse === 'Phillips' && (lower.includes('lot') || lower.includes('artwork'))) score += 120;
 
   if (auctionHouse === 'Bonhams') {
-    if (lower.includes('images.bonhams.com')) score += 200;
-    if (source === 'bonhams-regex') score += 150;
+    if (lower.includes('images.bonhams.com') || lower.includes('/image/live/')) score += 300;
+    if (source === 'bonhams-regex' || source === 'bonhams-raw-path') score += 200;
   }
 
   if (
     lower.includes('logo') || lower.includes('favicon') || 
     lower.includes('icon') || lower.includes('avatar') || lower.includes('placeholder') ||
-    lower.includes('banner') || lower.includes('header')
+    lower.includes('banner') || lower.includes('header') || lower.includes('footer')
   ) {
     score -= 1000;
   }
@@ -362,7 +403,7 @@ export async function POST(req: Request) {
     const auctionHouse = detectAuctionHouse(url);
     let html = '';
 
-    // 1. Jina Reader (запрашиваем HTML для корректного разбора DOM через Cheerio)
+    // 1. Jina Reader
     try {
       const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
         headers: {
@@ -436,7 +477,7 @@ export async function POST(req: Request) {
 
     const foundImage = imageResult.best;
 
-    // Зеркалируем найденную картинку в Supabase Storage
+    // Зеркалируем найденную картинку в Supabase Storage (с фоллбеком при блоке wsrv)
     const permanentImageUrl = await downloadAndStoreImage(foundImage);
     structured.imageUrl = permanentImageUrl;
 
