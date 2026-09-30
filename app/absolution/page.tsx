@@ -4,15 +4,18 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import { templeTrack } from '@/components/templeTrack';
 import html2canvas from 'html2canvas';
 import TempleWrapper from '@/components/TempleWrapper';
+import Header from '@/components/Header';
+import { Sparkles, Stamp, RotateCcw, Download } from 'lucide-react';
 
 // --- CONFIG ---
-const STAMP_DELAY = 1500;
+const STAMP_DELAY = 1200;
 
-// --- TRANSLATIONS (Keep them, they are good assets) ---
+// --- TRANSLATIONS ---
 const TRANSLATIONS = {
   en: {
     title: "CONFESS YOUR SINS",
-    placeholder: "Identity (Name)",
+    subtitle: "Submit your digital burden to the Sanctuary chaplain.",
+    placeholder: "Identity / Name",
     sins: {
       doomscroll: "Doomscrolling past 3 AM",
       envy: "Envy: Stalking others' success",
@@ -25,11 +28,13 @@ const TRANSLATIONS = {
     receipt: { header: "DEPT. OF KARMA", footer: "Silence is the only currency.", signature: "Pierrot, AI Chaplain" },
     btn: "SEEK ABSOLUTION",
     save: "SAVE RECEIPT",
-    share: "SHARE"
+    share: "SHARE",
+    newConfession: "NEW CONFESSION"
   },
   ru: {
     title: "ИСПОВЕДАЙ ГРЕХИ",
-    placeholder: "Имя (Личность)",
+    subtitle: "Передайте цифровое бремя капеллану Санктуария.",
+    placeholder: "Имя / Личность",
     sins: {
       doomscroll: "Думскроллинг после 3:00",
       envy: "Зависть к чужой 'успешной' жизни",
@@ -42,7 +47,8 @@ const TRANSLATIONS = {
     receipt: { header: "ДЕПАРТАМЕНТ КАРМЫ", footer: "Тишина — единственная валюта.", signature: "Пьеро, AI Капеллан" },
     btn: "ПОЛУЧИТЬ ОТПУЩЕНИЕ",
     save: "СОХРАНИТЬ ЧЕК",
-    share: "ПОДЕЛИТЬСЯ"
+    share: "ПОДЕЛИТЬСЯ",
+    newConfession: "НОВАЯ ИСПОВЕДЬ"
   }
 };
 
@@ -63,10 +69,8 @@ export default function AbsolutionPage() {
   const sinText = t.sins[sinKey as keyof typeof t.sins];
 
   useEffect(() => {
-    // Generate ID once
     setTicketId(`#${Math.random().toString(36).substr(2, 9).toUpperCase()}`);
     
-    // Check Telegram Environment
     if ((window as any).Telegram?.WebApp) {
         setIsTelegram(true);
         (window as any).Telegram.WebApp.expand();
@@ -89,20 +93,17 @@ export default function AbsolutionPage() {
     triggerHaptic('heavy');
     setStep('processing');
     
-    // Analytics
     templeTrack('confess', `Sin: ${sinKey}`);
 
-    // Simulation of bureaucratic delay
     setTimeout(() => {
         setStep('receipt');
         triggerHaptic('medium');
         
-        // Stamp animation delay
         setTimeout(() => {
             setShowStamp(true);
             triggerHaptic('heavy');
         }, STAMP_DELAY);
-    }, 2500);
+    }, 2000);
   };
 
   const handleSave = async () => {
@@ -119,9 +120,6 @@ export default function AbsolutionPage() {
 
       const image = canvas.toDataURL('image/png');
 
-      // TELEGRAM STRATEGY:
-      // iOS WebApp doesn't support 'download' attribute well.
-      // We show the image in a modal and ask user to long-press.
       const tg = (window as any).Telegram?.WebApp;
       if (tg && tg.showPopup) {
          tg.showPopup({
@@ -130,7 +128,6 @@ export default function AbsolutionPage() {
             buttons: [{type: 'ok'}]
          });
       } else {
-        // Desktop / Standard Web
         const link = document.createElement('a');
         link.download = `Merkurov_Absolution_${ticketId}.png`;
         link.href = image;
@@ -144,147 +141,166 @@ export default function AbsolutionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-100 text-black font-mono flex flex-col items-center justify-center p-4 relative overflow-hidden transition-colors duration-700">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans flex flex-col justify-between selection:bg-black selection:text-white relative overflow-x-hidden">
+      
+      {/* Background grain overlay */}
+      <div
+        className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        }}
+      />
+
+      <Header />
       <Suspense fallback={null}><TempleWrapper /></Suspense>
 
-      {/* LANGUAGE TOGGLE */}
-      <div className="absolute top-6 right-6 z-20 flex gap-2 text-[10px] tracking-widest font-bold">
-         <button onClick={() => setLang('en')} className={`${lang === 'en' ? 'text-black underline' : 'text-zinc-400'}`}>EN</button>
-         <button onClick={() => setLang('ru')} className={`${lang === 'ru' ? 'text-black underline' : 'text-zinc-400'}`}>RU</button>
-      </div>
-
-      {/* STAGE 1: CONFESSIONAL */}
-      {step === 'confess' && (
-        <div className="w-full max-w-md animate-in fade-in zoom-in duration-500">
-            <h1 className="text-3xl md:text-4xl font-black mb-8 text-center tracking-tighter uppercase leading-none">
-                {t.title}
-            </h1>
-
-            <div className="space-y-6">
-                {/* SIN SELECTOR */}
-                <div className="relative">
-                    <label className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1 block">Your Burden</label>
-                    <select 
-                        value={sinKey}
-                        onChange={(e) => setSinKey(e.target.value)}
-                        className="w-full bg-white border-2 border-black p-4 text-sm font-bold uppercase appearance-none rounded-none focus:outline-none focus:ring-4 focus:ring-zinc-200 transition-all"
-                        style={{ backgroundImage: 'none' }}
-                    >
-                        {Object.entries(t.sins).map(([k, v]) => (
-                            <option key={k} value={k}>{v}</option>
-                        ))}
-                    </select>
-                    <div className="absolute right-4 bottom-4 pointer-events-none">▼</div>
-                </div>
-
-                {/* NAME INPUT */}
-                <div>
-                    <label className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1 block">Sinner Identity</label>
-                    <input 
-                        type="text" 
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder={t.placeholder}
-                        className="w-full bg-transparent border-b-2 border-black py-2 text-xl font-bold placeholder-zinc-300 focus:outline-none focus:border-red-600 transition-colors uppercase rounded-none"
-                    />
-                </div>
-
-                <button 
-                    onClick={handleConfess}
-                    className="w-full bg-black text-white py-6 mt-8 font-bold tracking-[0.2em] hover:bg-zinc-800 transition-transform active:scale-95 text-xs uppercase"
-                >
-                    {t.btn}
-                </button>
-            </div>
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col items-center justify-center px-6 pt-32 pb-24 relative z-20">
+        
+        {/* LANGUAGE TOGGLE */}
+        <div className="absolute top-28 right-6 lg:right-12 flex gap-3 font-mono text-xs tracking-widest bg-white/80 backdrop-blur-md px-4 py-2 rounded-full border border-zinc-200 shadow-sm">
+           <button onClick={() => setLang('en')} className={`${lang === 'en' ? 'text-black font-bold underline' : 'text-zinc-400'}`}>EN</button>
+           <span className="text-zinc-300">/</span>
+           <button onClick={() => setLang('ru')} className={`${lang === 'ru' ? 'text-black font-bold underline' : 'text-zinc-400'}`}>RU</button>
         </div>
-      )}
 
-      {/* STAGE 2: PROCESSING (The Waiting Room) */}
-      {step === 'processing' && (
-        <div className="text-center">
-            <div className="animate-spin text-4xl mb-4">⏳</div>
-            <div className="text-xs tracking-[0.3em] animate-pulse">NEGOTIATING WITH ETERNITY...</div>
-        </div>
-      )}
+        {/* STAGE 1: CONFESSIONAL */}
+        {step === 'confess' && (
+          <div className="w-full max-w-md p-8 sm:p-10 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.04)] animate-in fade-in zoom-in duration-500 space-y-8">
+              <div className="text-center space-y-2">
+                  <div className="w-10 h-10 mx-auto rounded-full bg-zinc-900 text-white flex items-center justify-center shadow-md">
+                      <Sparkles size={18} />
+                  </div>
+                  <h1 className="text-2xl sm:text-3xl font-serif font-light tracking-tight text-zinc-900 uppercase">
+                      {t.title}
+                  </h1>
+                  <p className="text-xs text-zinc-500 font-serif italic">
+                      {t.subtitle}
+                  </p>
+              </div>
 
-      {/* STAGE 3: THE RECEIPT */}
-      {step === 'receipt' && (
-        <div className="flex flex-col items-center gap-8 animate-in slide-in-from-bottom-10 duration-700">
-            
-            {/* PAPER RECEIPT */}
-            <div 
-                ref={receiptRef}
-                className="bg-white p-8 w-[340px] shadow-2xl relative rotate-1"
-                style={{ 
-                    filter: 'contrast(1.2) brightness(1.05)',
-                    boxShadow: '0 10px 30px -10px rgba(0,0,0,0.3)'
-                }}
-            >
-                {/* TEXTURE OVERLAY FOR THERMAL LOOK */}
-                <div className="absolute inset-0 opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/noise-lines.png')]"></div>
+              <div className="space-y-6">
+                  {/* SIN SELECTOR */}
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">Your Burden</label>
+                      <select 
+                          value={sinKey}
+                          onChange={(e) => setSinKey(e.target.value)}
+                          className="w-full bg-white/90 border border-zinc-300 p-4 text-xs font-mono uppercase rounded-2xl focus:outline-none focus:border-black transition-all shadow-sm"
+                      >
+                          {Object.entries(t.sins).map(([k, v]) => (
+                              <option key={k} value={k}>{v}</option>
+                          ))}
+                      </select>
+                  </div>
 
-                <div className="text-center border-b-2 border-black border-dashed pb-4 mb-4">
-                    <h2 className="text-xl font-black tracking-widest">{t.receipt.header}</h2>
-                    <p className="text-[10px] uppercase mt-1 text-zinc-600">{new Date().toLocaleString()}</p>
-                    <p className="text-[10px] uppercase text-zinc-600">ID: {ticketId}</p>
-                </div>
+                  {/* NAME INPUT */}
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">Sinner Identity</label>
+                      <input 
+                          type="text" 
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          placeholder={t.placeholder}
+                          className="w-full bg-white/90 border border-zinc-300 py-3.5 px-4 text-sm font-mono placeholder-zinc-400 focus:outline-none focus:border-black transition-colors uppercase rounded-2xl shadow-sm"
+                      />
+                  </div>
 
-                <div className="space-y-4 mb-8 font-mono text-sm">
-                    <div className="flex justify-between">
-                        <span className="text-zinc-500">SINNER:</span>
-                        <span className="font-bold uppercase">{name}</span>
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-zinc-500 mb-1">CONFESSION:</span>
-                        <span className="font-bold uppercase leading-tight">{sinText}</span>
-                    </div>
-                    <div className="flex justify-between items-center pt-2">
-                        <span className="text-zinc-500">COST:</span>
-                        <span className="font-bold text-xl">0.00</span>
-                    </div>
-                </div>
+                  <button 
+                      onClick={handleConfess}
+                      className="w-full bg-zinc-900 text-white py-4 rounded-full font-mono text-xs uppercase tracking-[0.2em] shadow-lg shadow-zinc-900/10 hover:bg-zinc-800 active:scale-95 transition-all"
+                  >
+                      {t.btn}
+                  </button>
+              </div>
+          </div>
+        )}
 
-                <div className="text-center border-t-2 border-black border-dashed pt-4">
-                    <p className="text-[9px] italic mb-4">"{t.receipt.footer}"</p>
-                    <p className="font-dancing-script text-lg transform -rotate-3 text-zinc-600">{t.receipt.signature}</p>
-                </div>
+        {/* STAGE 2: PROCESSING */}
+        {step === 'processing' && (
+          <div className="text-center p-12 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200 shadow-xl space-y-4">
+              <div className="animate-spin text-3xl">⏳</div>
+              <div className="font-mono text-xs uppercase tracking-[0.3em] text-zinc-600 animate-pulse">
+                  NEGOTIATING WITH ETERNITY...
+              </div>
+          </div>
+        )}
 
-                {/* THE STAMP */}
-                <div 
-                    className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 border-4 border-red-600 text-red-600 p-2 text-4xl font-black uppercase tracking-widest rotate-[-15deg] opacity-0 transition-all duration-300 pointer-events-none mix-blend-multiply ${showStamp ? 'opacity-80 scale-100' : 'scale-150'}`}
-                    style={{ 
-                        maskImage: 'url("https://s3-us-west-2.amazonaws.com/s.cdpn.io/8399/grunge.png")',
-                        WebkitMaskImage: 'url("https://s3-us-west-2.amazonaws.com/s.cdpn.io/8399/grunge.png")',
-                        maskSize: 'contain'
-                    }}
-                >
-                    ABSOLVED
-                </div>
-            </div>
+        {/* STAGE 3: THE RECEIPT */}
+        {step === 'receipt' && (
+          <div className="flex flex-col items-center gap-8 animate-in slide-in-from-bottom-6 duration-700">
+              
+              {/* PAPER RECEIPT */}
+              <div 
+                  ref={receiptRef}
+                  className="bg-white p-8 w-[340px] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.08)] border border-zinc-200 relative rotate-1 font-mono"
+                  style={{ filter: 'contrast(1.05)' }}
+              >
+                  <div className="text-center border-b border-black border-dashed pb-4 mb-4">
+                      <h2 className="text-lg font-black tracking-widest text-zinc-900">{t.receipt.header}</h2>
+                      <p className="text-[9px] uppercase mt-1 text-zinc-500">{new Date().toLocaleString()}</p>
+                      <p className="text-[9px] uppercase text-zinc-500">ID: {ticketId}</p>
+                  </div>
 
-            {/* ACTIONS */}
-            <div className="flex gap-4 opacity-0 animate-in fade-in delay-1000 fill-mode-forwards">
-                <button 
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="bg-black text-white px-6 py-3 text-xs font-bold tracking-widest uppercase hover:bg-zinc-800"
-                >
-                    {isSaving ? 'SAVING...' : t.save}
-                </button>
-                <button 
-                    onClick={() => setStep('confess')}
-                    className="border border-black px-6 py-3 text-xs font-bold tracking-widest uppercase hover:bg-zinc-200"
-                >
-                    NEW
-                </button>
-            </div>
-        </div>
-      )}
-      
-      <style jsx global>{`
-         @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
-         body { font-family: 'Space Mono', monospace; }
-      `}</style>
+                  <div className="space-y-4 mb-8 text-xs">
+                      <div className="flex justify-between border-b border-zinc-100 pb-2">
+                          <span className="text-zinc-400">SINNER:</span>
+                          <span className="font-bold uppercase text-zinc-900">{name}</span>
+                      </div>
+                      <div className="flex flex-col border-b border-zinc-100 pb-2">
+                          <span className="text-zinc-400 mb-1">CONFESSION:</span>
+                          <span className="font-bold uppercase leading-tight text-zinc-900">{sinText}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                          <span className="text-zinc-400">KARMA DEBIT:</span>
+                          <span className="font-bold text-sm text-zinc-900">0.00</span>
+                      </div>
+                  </div>
+
+                  <div className="text-center border-t border-black border-dashed pt-4">
+                      <p className="text-[9px] italic text-zinc-600 mb-3">"{t.receipt.footer}"</p>
+                      <p className="font-serif italic text-sm text-zinc-700">{t.receipt.signature}</p>
+                  </div>
+
+                  {/* STABLE THEMED ABSOLVED STAMP */}
+                  <div 
+                      className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-[3px] border-rose-600/90 text-rose-600/90 py-3 px-6 text-2xl font-black uppercase tracking-[0.25em] rotate-[-12deg] transition-all duration-500 pointer-events-none select-none bg-white/95 shadow-sm ${
+                          showStamp ? 'opacity-100 scale-100' : 'opacity-0 scale-150'
+                      }`}
+                      style={{
+                          boxShadow: '0 0 0 4px rgba(225, 29, 72, 0.1)',
+                      }}
+                  >
+                      ABSOLVED
+                  </div>
+              </div>
+
+              {/* ACTIONS */}
+              <div className="flex gap-4 opacity-0 animate-in fade-in delay-700 fill-mode-forwards">
+                  <button 
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="bg-zinc-900 text-white px-6 py-3.5 rounded-full font-mono text-xs font-bold tracking-widest uppercase hover:bg-zinc-800 transition-all flex items-center gap-2 shadow-md"
+                  >
+                      <Download size={14} />
+                      <span>{isSaving ? 'SAVING...' : t.save}</span>
+                  </button>
+                  <button 
+                      onClick={() => { setStep('confess'); setShowStamp(false); }}
+                      className="bg-white text-zinc-800 border border-zinc-300 px-6 py-3.5 rounded-full font-mono text-xs font-bold tracking-widest uppercase hover:bg-zinc-50 transition-all flex items-center gap-2 shadow-sm"
+                  >
+                      <RotateCcw size={14} />
+                      <span>{t.newConfession}</span>
+                  </button>
+              </div>
+          </div>
+        )}
+      </main>
+
+      {/* Footer */}
+      <footer className="max-w-4xl mx-auto w-full text-center font-mono text-[10px] text-zinc-400 uppercase tracking-[0.3em] py-8 z-20">
+        Merkurov Private Office &copy; {new Date().getFullYear()}
+      </footer>
     </div>
   );
 }
