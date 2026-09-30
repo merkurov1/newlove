@@ -74,7 +74,6 @@ export default function Header() {
       label: 'Heart & Angel', 
       mainHref: '/heartandangel',
       links: [
-        { name: 'Gallery', href: '/heartandangel' },
         { name: 'Let It Go', href: '/heartandangel/letitgo' },
         { name: 'Keep Calm', href: '/heartandangel/calm' }
       ]

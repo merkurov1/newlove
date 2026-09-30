@@ -3,113 +3,107 @@
 import React from 'react';
 import Header from '@/components/Header';
 import { motion } from 'framer-motion';
-import { Terminal, ArrowRight, ShieldCheck, Cpu, Globe, MessageSquare } from 'lucide-react';
-import Link from 'next/link';
+import { ArrowUpRight } from 'lucide-react';
 
 export default function AdvisingPage() {
-  const services = [
+  const tracks = [
     {
-      icon: Cpu,
-      title: 'Digital Infrastructure & AI Strategy',
-      description: 'Consulting on systemic integration of AI tools, workflow automation, decentralized systems, and resilience against digital regulatory friction.'
+      index: '01',
+      title: 'Media Architecture & Public Strategy',
+      description: 'Positioning publicists, creators, and modern ventures across independent publishing, international media outlets, and high-stakes information spaces.'
     },
     {
-      icon: Globe,
-      title: 'Media Architecture & Public Communications',
-      description: 'Strategic positioning for publicists, creators, and tech ventures navigating contemporary information spaces, publications, and reputation management.'
+      index: '02',
+      title: 'Digital Infrastructure & AI Integration',
+      description: 'Systemic architecture for AI tools, workflow automation, decentralized systems, and resilience against regulatory friction.'
     },
     {
-      icon: ShieldCheck,
-      title: 'Web3 & Smart Contract Advisory',
-      description: 'Guidance on tokenomics, NFT utility architecture, Polygon deployment strategies, and bridging classical art assets into digital smart contracts.'
+      index: '03',
+      title: 'Web3 & Art Market Mechanics',
+      description: 'Advisory on digital art valuation, smart contract logic, Polygon protocols, and bridging classical heritage with modern decentralized registries.'
     }
   ];
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden antialiased">
+    <div className="min-h-screen bg-white text-black font-sans selection:bg-black selection:text-white relative overflow-x-hidden antialiased">
       
-      {/* Background grain texture */}
-      <div 
-        className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-        }}
-      />
-
       <Header />
 
-      <main className="max-w-4xl mx-auto px-6 pt-36 pb-24 relative z-20 space-y-12">
+      <main className="max-w-4xl mx-auto px-6 pt-36 pb-24 space-y-20">
         
         {/* Title Section */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-4 text-center sm:text-left max-w-2xl"
+          className="space-y-4 max-w-2xl border-b border-zinc-200 pb-12"
         >
-          <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.25em] text-zinc-500">
-            <Terminal size={14} /> Professional Practice
+          <div className="font-mono text-xs uppercase tracking-[0.25em] text-zinc-400">
+            Professional Practice
           </div>
-          <h1 className="text-4xl sm:text-5xl font-serif font-light tracking-tight uppercase text-zinc-900">
-            Advising &amp; Strategy
+          <h1 className="text-4xl sm:text-6xl font-serif font-light tracking-tight uppercase text-black">
+            Advising
           </h1>
-          <p className="font-serif text-base sm:text-lg text-zinc-600 leading-relaxed italic">
-            Direct, high-level strategic consulting for projects operating at the intersection of modern media, technology, and art.
+          <p className="font-serif text-lg text-zinc-600 leading-relaxed italic">
+            Targeted strategic advisory and high-level consulting at the intersection of media, technology, and modern art markets.
           </p>
         </motion.div>
 
-        {/* Services Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {services.map((item, index) => {
-            const IconComponent = item.icon;
-            return (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="p-8 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.04)] space-y-4 flex flex-col justify-between"
-              >
-                <div className="space-y-4">
-                  <div className="w-10 h-10 rounded-2xl bg-zinc-900 text-white flex items-center justify-center shadow-md">
-                    <IconComponent size={18} />
-                  </div>
-                  <h3 className="font-sans font-bold text-base uppercase tracking-tight text-zinc-900">
-                    {item.title}
-                  </h3>
-                  <p className="font-serif text-sm text-zinc-600 leading-relaxed">
-                    {item.description}
-                  </p>
+        {/* Tracks List (White Cube Editorial) */}
+        <div className="space-y-8">
+          {tracks.map((track, index) => (
+            <motion.div
+              key={track.index}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="p-8 sm:p-12 border border-zinc-200 flex flex-col md:flex-row md:items-center justify-between gap-6 group hover:border-black transition-all duration-300 bg-white"
+            >
+              <div className="space-y-3 max-w-xl">
+                <span className="font-mono text-xs uppercase tracking-widest text-zinc-400">
+                  {track.index}
+                </span>
+                <h3 className="font-sans font-bold text-xl uppercase tracking-tight text-black">
+                  {track.title}
+                </h3>
+                <p className="font-serif text-sm sm:text-base text-zinc-600 leading-relaxed">
+                  {track.description}
+                </p>
+              </div>
+
+              <div className="shrink-0">
+                <div className="w-12 h-12 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-400 group-hover:bg-black group-hover:text-white group-hover:border-black transition-all">
+                  <ArrowUpRight size={18} />
                 </div>
-              </motion.div>
-            );
-          })}
+              </div>
+            </motion.div>
+          ))}
         </div>
 
-        {/* Contact / Booking CTA Card (Liquid Glass) */}
+        {/* Direct Engagement Block */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="p-8 sm:p-10 rounded-3xl bg-white/90 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.04)] flex flex-col sm:flex-row items-center justify-between gap-6"
+          transition={{ delay: 0.4 }}
+          className="p-8 sm:p-12 border border-black bg-black text-white flex flex-col sm:flex-row items-center justify-between gap-8"
         >
           <div className="space-y-2 text-center sm:text-left">
-            <span className="font-mono text-xs uppercase tracking-widest text-zinc-400 block">Engagement</span>
-            <h3 className="font-serif text-2xl text-zinc-900">Ready to discuss your project?</h3>
-            <p className="font-serif text-sm text-zinc-500">Advisory slots are limited and structured by direct inquiry.</p>
+            <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-400">Availability</span>
+            <h3 className="font-serif text-2xl tracking-tight">Direct Consultation</h3>
+            <p className="font-serif text-sm text-zinc-400">Sessions are structured by prior inquiry and availability.</p>
           </div>
 
           <a
             href="mailto:contact@merkurov.love"
-            className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-zinc-900 text-white font-mono text-xs uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all shadow-lg shrink-0"
+            className="inline-flex items-center gap-3 px-8 py-4 bg-white text-black font-mono text-xs uppercase tracking-[0.2em] hover:bg-zinc-200 transition-all shrink-0 font-bold"
           >
-            <MessageSquare size={14} />
-            <span>Inquire Directly</span>
+            <span>Inquire via Email</span>
+            <ArrowUpRight size={14} />
           </a>
         </motion.div>
 
       </main>
 
-      <footer className="max-w-4xl mx-auto w-full text-center font-mono text-[10px] text-zinc-400 uppercase tracking-[0.3em] py-8 z-20">
+      <footer className="max-w-4xl mx-auto w-full text-center font-mono text-[10px] text-zinc-400 uppercase tracking-[0.3em] py-8 border-t border-zinc-100">
         Merkurov Private Office &copy; {new Date().getFullYear()}
       </footer>
     </div>
