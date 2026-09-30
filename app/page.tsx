@@ -9,7 +9,7 @@ export default function Home() {
     <>
       <Header />
 
-      <main className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-6 sm:px-12 pt-32 md:pt-40 pb-12 antialiased relative">
+      <main className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-6 sm:px-12 pt-36 md:pt-44 pb-12 antialiased relative overflow-x-hidden">
         
         {/* Subtle Paper Grain Overlay */}
         <div
@@ -20,18 +20,18 @@ export default function Home() {
         />
 
         {/* MERKUROV ARCHIVE & PILLARS */}
-        <div className="w-full max-w-5xl mx-auto flex flex-col items-center justify-center my-auto text-center z-20 space-y-12">
-          <div>
-            <p className="font-serif italic text-zinc-600 text-base sm:text-lg md:text-xl mb-8 sm:mb-10 tracking-wide font-normal max-w-lg mx-auto">
+        <div className="w-full max-w-5xl mx-auto flex flex-col items-center justify-center my-auto text-center z-20 space-y-12 py-10">
+          <div className="w-full">
+            <p className="font-serif italic text-zinc-600 text-base sm:text-lg md:text-xl mb-8 sm:mb-10 tracking-wide font-normal max-w-lg mx-auto px-4">
               “Structure is the antidote to chaos.”
             </p>
 
-            <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-serif font-normal tracking-tight leading-[0.95] text-[#111111] mb-12 sm:mb-16">
-              Context Architecture <br />
+            <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-serif font-normal tracking-tight leading-[1.05] sm:leading-[0.98] text-[#111111] mb-12 sm:mb-16 px-2 break-words">
+              Context Architecture <br className="hidden sm:inline" />
               <span className="text-zinc-500 italic font-serif">&amp; Cultural Capital</span>
             </h1>
 
-            <nav className="flex flex-wrap justify-center gap-6 sm:gap-10 md:gap-14 items-center font-mono text-sm sm:text-base uppercase tracking-[0.2em] mb-12">
+            <nav className="flex flex-wrap justify-center gap-4 sm:gap-8 md:gap-12 items-center font-mono text-xs sm:text-sm md:text-base uppercase tracking-[0.2em] mb-12 px-4">
               {[
                 { label: 'Art', href: '/heartandangel' },
                 { label: 'Selection', href: '/selection' },
@@ -40,7 +40,7 @@ export default function Home() {
                 <Link
                   key={item.label}
                   href={item.href}
-                  className="group inline-flex items-center gap-2 px-3 py-2 text-[#111111] hover:text-zinc-600 transition-colors"
+                  className="group inline-flex items-center gap-2 py-2 text-[#111111] hover:text-zinc-600 transition-colors"
                 >
                   <span className="text-zinc-400 group-hover:text-zinc-700 transition-colors">[</span>
                   <span className="font-medium tracking-[0.2em] underline underline-offset-8 decoration-zinc-300 group-hover:decoration-black transition-colors">
@@ -70,7 +70,7 @@ export default function Home() {
         </div>
 
         {/* --- FOOTER DIRECTORY --- */}
-        <footer className="w-full max-w-6xl mx-auto flex justify-between items-center pt-6 border-t border-zinc-300/80 shrink-0 font-mono text-xs text-zinc-500 uppercase tracking-[0.25em] mt-16 z-20">
+        <footer className="w-full max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-zinc-300/80 shrink-0 font-mono text-[11px] sm:text-xs text-zinc-500 uppercase tracking-[0.25em] mt-16 z-20 text-center sm:text-left">
           <span>Merkurov Private Office</span>
           <span>Digital Heritage Architecture</span>
         </footer>
