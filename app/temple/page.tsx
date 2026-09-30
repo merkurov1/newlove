@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Header from '@/components/Header';
 import { useAuth } from '@/components/AuthContext';
 import { motion } from 'framer-motion';
-import { Sparkles, Send, Mic, Square, Trash2, Flame, Radio, ExternalLink, Volume2, Shield } from 'lucide-react';
+import { Sparkles, Send, Mic, Square, Trash2, Flame, Radio, ExternalLink, Volume2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function TemplePage() {
@@ -201,7 +201,7 @@ export default function TemplePage() {
           </div>
         </div>
 
-        {/* INPUT BOX (Moved to top) */}
+        {/* INPUT BOX (Starts near the top) */}
         {!isLoading && !user ? (
           <div className="p-8 rounded-2xl bg-white/70 backdrop-blur-xl border border-zinc-200/80 shadow-sm text-center space-y-4">
             <p className="font-serif text-zinc-700 text-sm">
@@ -265,7 +265,7 @@ export default function TemplePage() {
           </div>
         )}
 
-        {/* FEED / STREAM */}
+        {/* FEED / STREAM WITH SEPARATE DESIGNS */}
         <div className="space-y-3 pt-2">
           {posts.length === 0 ? (
             <div className="p-10 text-center rounded-2xl bg-white/40 border border-zinc-200/60 text-zinc-500 font-mono text-xs uppercase tracking-wider">
@@ -281,13 +281,13 @@ export default function TemplePage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   key={post.id}
-                  className={`p-5 rounded-2xl backdrop-blur-md transition-all duration-300 ${
+                  className={`backdrop-blur-md transition-all duration-300 ${
                     isLogEvent 
-                      ? 'bg-white/40 border border-zinc-300/70 shadow-none' 
-                      : 'bg-white/80 border border-zinc-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
+                      ? 'p-4 rounded-xl bg-white/30 border border-zinc-300/50 shadow-none' 
+                      : 'p-5 rounded-2xl bg-white/80 border border-zinc-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
                   }`}
                 >
-                  {/* DESIGN A: User Post (Whisper / Audio) */}
+                  {/* DESIGN A: User Post / Whisper */}
                   {!isLogEvent ? (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between text-xs">
@@ -310,17 +310,17 @@ export default function TemplePage() {
                       )}
                     </div>
                   ) : (
-                    /* DESIGN B: System Log Event (Vigil, Ash, Radio, etc.) */
-                    <div className="flex items-start gap-3.5">
-                      <div className="p-2 rounded-xl bg-zinc-200/50 text-zinc-700 mt-0.5 shrink-0">
-                        <PostIcon size={14} className={post.color} />
+                    /* DESIGN B: System Log Event (Vigil, Ash, etc.) */
+                    <div className="flex items-start gap-3">
+                      <div className="p-1.5 rounded-lg bg-zinc-200/40 text-zinc-700 mt-0.5 shrink-0">
+                        <PostIcon size={13} className={post.color} />
                       </div>
-                      <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex-1 min-w-0 space-y-0.5">
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-500 font-medium">
                             {post.type} // {post.author}
                           </span>
-                          <span className="text-zinc-400 font-mono text-[11px]">{post.time}</span>
+                          <span className="text-zinc-400 font-mono text-[10px]">{post.time}</span>
                         </div>
                         <div className="text-sm text-zinc-700 font-serif leading-relaxed break-words">
                           {renderContentWithLinks(post.content)}
