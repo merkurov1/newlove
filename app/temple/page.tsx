@@ -281,7 +281,6 @@ export default function DigitalTemple() {
               )}
             </AnimatePresence>
 
-            {/* Merkurov Brand / Title */}
             <Link href="/temple" className="hidden sm:block font-serif text-lg tracking-wider text-zinc-900 uppercase">
               Merkurov
             </Link>
@@ -321,7 +320,7 @@ export default function DigitalTemple() {
         </div>
       </header>
 
-      {/* --- MAIN CONTENT CONTAINER (без боковой панели) --- */}
+      {/* --- MAIN CONTENT CONTAINER --- */}
       <main className="max-w-3xl mx-auto px-6 py-10 relative z-10">
         
         <AnimatePresence mode="wait">
@@ -336,7 +335,7 @@ export default function DigitalTemple() {
               transition={{ duration: 0.2 }}
               className="space-y-6"
             >
-              {/* COMPACT & ELEGANT INPUT CONTAINER С МИКРОФОНОМ */}
+              {/* COMPACT & ELEGANT INPUT CONTAINER */}
               <div className="p-5 sm:p-6 rounded-3xl bg-white/70 backdrop-blur-2xl border border-white/90 shadow-[0_10px_30px_rgba(0,0,0,0.02)] space-y-3">
                 <textarea
                   value={postText}
