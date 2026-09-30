@@ -5,24 +5,18 @@ import dynamic from 'next/dynamic';
 import Paywall from '@/app/unframed/book/Paywall';
 import Link from 'next/link';
 
-// Стили подсветки синтаксиса
 import 'highlight.js/styles/github-dark.css';
 
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { 
-  Maximize, 
-  Minimize, 
   Settings, 
   ChevronLeft, 
   Menu, 
   X, 
-  Bookmark, 
   Moon, 
   Sun,
-  BookOpen,
-  Terminal,
-  Columns as ColumnsIcon
+  Terminal
 } from 'lucide-react';
 
 const Markdown = dynamic(() => import('react-markdown'), {
@@ -34,6 +28,8 @@ export default function BookReaderPage() {
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  
+  // Доступ к книге (по умолчанию false, открывается по токену, админке или localStorage)
   const [unlocked, setUnlocked] = useState<boolean>(false);
 
   // Настройки чтения
@@ -44,12 +40,11 @@ export default function BookReaderPage() {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   const readerRef = useRef<HTMLDivElement | null>(null);
-  const [fullscreen, setFullscreen] = useState<boolean>(false);
   const [tocOpen, setTocOpen] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
   const [showSettings, setShowSettings] = useState<boolean>(false);
 
-  // Загрузка настроек и проверка авторизации / админского доступа
+  // Проверка прав доступа (URL, админские параметры, localStorage)
   useEffect(() => {
     try {
       const prefs = localStorage.getItem('unframed_prefs');
@@ -65,13 +60,21 @@ export default function BookReaderPage() {
 
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('paid') === '1' || params.get('admin') === '1' || localStorage.getItem('unframed_unlocked') === '1') {
+      const isPaid = params.get('paid') === '1';
+      const isAdmin = params.get('admin') === '1';
+      const localUnlocked = localStorage.getItem('unframed_unlocked') === '1';
+      const localAdmin = localStorage.getItem('unframed_admin') === '1';
+
+      if (isAdmin || isPaid || localUnlocked || localAdmin) {
         setUnlocked(true);
+        if (isAdmin || localAdmin) {
+          localStorage.setItem('unframed_admin', '1');
+        }
       }
     } catch (e) {}
   }, []);
 
-  // Загрузка текста книги
+  // Загрузка текста рукописи
   useEffect(() => {
     if (!unlocked) return;
     let mounted = true;
@@ -100,7 +103,6 @@ export default function BookReaderPage() {
     };
   }, [unlocked]);
 
-  // Нормализация заголовков для Markdown
   const normalizeHeadings = (text: string | null): string => {
     if (!text) return '';
     let t = text;
@@ -117,7 +119,7 @@ export default function BookReaderPage() {
   };
 
   const slugify = (s: string) => {
-    const str = s
+    return s
       .toString()
       .normalize('NFKD')
       .replace(/\p{Diacritic}/gu, '')
@@ -126,10 +128,8 @@ export default function BookReaderPage() {
       .toLowerCase()
       .replace(/\s+/g, '-')
       .replace(/-+/g, '-');
-    return str;
   };
 
-  // Построение оглавления (TOC)
   const toc = useMemo(() => {
     if (!fileContent) return [] as Array<{ level: number; text: string; id: string }>;
     const t = normalizeHeadings(fileContent || '');
@@ -167,7 +167,6 @@ export default function BookReaderPage() {
     return React.createElement(Tag as any, { id, className: 'scroll-mt-24 font-bold tracking-tight text-white mb-4' }, children);
   };
 
-  // Отслеживание прогресса чтения
   useEffect(() => {
     const el = readerRef.current;
     if (!el) return;
@@ -193,6 +192,7 @@ export default function BookReaderPage() {
   const unlockHandler = () => {
     try {
       localStorage.setItem('unframed_unlocked', '1');
+      localStorage.setItem('unframed_admin', '1');
     } catch (e) {}
     setUnlocked(true);
   };
@@ -220,13 +220,12 @@ export default function BookReaderPage() {
 
   return (
     <div className={`${theme === 'dark' ? 'bg-[#050505] text-zinc-200' : 'bg-zinc-100 text-zinc-900'} min-h-screen flex flex-col selection:bg-red-600 selection:text-white font-sans transition-colors duration-300`}>
-      {/* GLOBAL GRAIN */}
       <div
         className="fixed inset-0 pointer-events-none z-50 opacity-[0.03] mix-blend-overlay"
         style={{ backgroundImage: `url("https://grainy-gradients.vercel.app/noise.svg")` }}
       />
 
-      {/* TOP HEADER / NAVBAR */}
+      {/* TOP HEADER */}
       <header className={`sticky top-0 z-40 border-b ${theme === 'dark' ? 'bg-[#050505]/90 border-zinc-900' : 'bg-white/90 border-zinc-200'} backdrop-blur px-6 py-4 flex items-center justify-between`}>
         <div className="flex items-center gap-4">
           <Link
@@ -242,7 +241,6 @@ export default function BookReaderPage() {
           </div>
         </div>
 
-        {/* CONTROLS RIGHT */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setTocOpen(!tocOpen)}
@@ -271,7 +269,7 @@ export default function BookReaderPage() {
         <div className="bg-red-600 h-full transition-all duration-150 shadow-[0_0_10px_red]" style={{ width: `${progress}%` }} />
       </div>
 
-      {/* SETTINGS DROPDOWN MODAL */}
+      {/* SETTINGS MODAL */}
       {showSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className={`max-w-md w-full border ${theme === 'dark' ? 'border-zinc-800 bg-black text-white' : 'border-zinc-300 bg-white text-black'} p-8 shadow-2xl`}>
@@ -374,9 +372,8 @@ export default function BookReaderPage() {
         </div>
       )}
 
-      {/* MAIN LAYOUT */}
+      {/* MAIN CONTAINER */}
       <div className="flex-1 flex relative overflow-hidden">
-        {/* TOC SIDEBAR */}
         {tocOpen && (
           <aside className={`w-80 border-r ${theme === 'dark' ? 'border-zinc-900 bg-[#070707]' : 'border-zinc-200 bg-white'} overflow-y-auto p-6 z-30 transition-all`}>
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800">
@@ -400,7 +397,6 @@ export default function BookReaderPage() {
           </aside>
         )}
 
-        {/* READER CONTENT CONTAINER */}
         <main
           ref={readerRef}
           className="flex-1 h-[calc(100vh-4rem)] overflow-y-auto px-6 py-16 flex justify-center"
@@ -440,7 +436,6 @@ export default function BookReaderPage() {
         </main>
       </div>
 
-      {/* FOOTER STATS */}
       <footer className={`py-4 px-6 border-t ${theme === 'dark' ? 'border-zinc-900 bg-black text-zinc-600' : 'border-zinc-200 bg-white text-zinc-500'} font-mono text-[10px] uppercase tracking-widest flex items-center justify-between`}>
         <span>Anton Merkurov / Unframed</span>
         <span>Progress: {progress}%</span>

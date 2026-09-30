@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Lock, Terminal, ArrowRight, ShieldCheck, Key } from 'lucide-react';
+import { Lock, ArrowRight, ShieldCheck, CreditCard } from 'lucide-react';
 import Link from 'next/link';
 
 interface PaywallProps {
@@ -10,16 +10,37 @@ interface PaywallProps {
 }
 
 export default function Paywall({ onUnlock }: PaywallProps) {
-  const [accessCode, setAccessCode] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
-  const handleUnlockAttempt = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (accessCode.trim() === 'MERKUROV2025' || accessCode.trim() === 'ADMIN') {
-      if (onUnlock) onUnlock();
-    } else {
+  const handleStripeCheckout = async () => {
+    setLoading(true);
+    try {
+      const successUrl = window.location.origin + '/unframed/book?paid=1';
+      const cancelUrl = window.location.origin + '/unframed/book';
+
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          amount: 1500, // сумма в центах/пенсах (например, $15.00)
+          currency: 'usd', 
+          successUrl, 
+          cancelUrl,
+          product: 'UNFRAMED Manuscript Access'
+        }),
+      });
+
+      const data = await res.json();
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        setError(true);
+        setLoading(false);
+      }
+    } catch (e) {
       setError(true);
-      setTimeout(() => setError(false), 2000);
+      setLoading(false);
     }
   };
 
@@ -29,7 +50,6 @@ export default function Paywall({ onUnlock }: PaywallProps) {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center px-6 relative selection:bg-red-600 selection:text-white font-sans">
-      {/* GLOBAL GRAIN */}
       <div
         className="fixed inset-0 pointer-events-none z-50 opacity-[0.03] mix-blend-overlay"
         style={{ backgroundImage: `url("https://grainy-gradients.vercel.app/noise.svg")` }}
@@ -42,48 +62,32 @@ export default function Paywall({ onUnlock }: PaywallProps) {
       >
         <div className="flex items-center justify-between mb-8 text-red-500 font-mono text-[10px] uppercase tracking-widest border-b border-zinc-900 pb-4">
           <span className="flex items-center gap-2"><Lock size={12} /> Restricted Access</span>
-          <span>Secured Sector</span>
+          <span>Stripe Secured</span>
         </div>
 
         <h1 className="text-3xl font-black uppercase mb-3 tracking-tighter text-white font-sans">
           UNFRAMED / Manuscript
         </h1>
         <p className="font-serif text-zinc-400 text-sm mb-8 leading-relaxed">
-          Full digital access to the memoir is restricted to authorized agents, subscribers, or the author.
+          Full digital access to the memoir requires a secure purchase via Stripe or verified administrative clearance.
         </p>
 
-        <form onSubmit={handleUnlockAttempt} className="space-y-6">
-          <div className="group">
-            <label className="block text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">
-              Access Code / Token
-            </label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-600">
-                <Key size={14} />
-              </span>
-              <input
-                type="password"
-                value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value)}
-                placeholder="ENTER CODE"
-                className="w-full bg-[#0a0a0a] border border-zinc-800 py-3 pl-10 pr-4 text-white font-mono text-sm focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-700 rounded-none"
-              />
-            </div>
-            {error && (
-              <p className="text-red-500 font-mono text-[10px] mt-2 uppercase tracking-wider">
-                &gt; Invalid access token. Access denied.
-              </p>
-            )}
-          </div>
-
+        <div className="space-y-4">
           <button
-            type="submit"
-            className="w-full bg-white text-black font-bold uppercase tracking-[0.2em] py-4 hover:bg-red-600 hover:text-white transition-all font-mono text-[10px] flex items-center justify-center gap-2"
+            onClick={handleStripeCheckout}
+            disabled={loading}
+            className="w-full bg-white text-black font-bold uppercase tracking-[0.2em] py-4 hover:bg-red-600 hover:text-white transition-all font-mono text-[10px] flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            <span>Decrypt &amp; Read</span>
-            <ArrowRight size={14} />
+            <CreditCard size={14} />
+            <span>{loading ? 'Connecting to Stripe...' : 'Unlock via Stripe ($15)'}</span>
           </button>
-        </form>
+
+          {error && (
+            <p className="text-red-500 font-mono text-[10px] uppercase tracking-wider text-center">
+              &gt; Payment session error. Try again.
+            </p>
+          )}
+        </div>
 
         <div className="mt-8 pt-6 border-t border-zinc-900 flex flex-col gap-3">
           <button
