@@ -51,10 +51,10 @@ export default function Header({
   ];
 
   const templeNavItems = [
-    { id: 'CAST', label: 'Cast', icon: ScanFace, color: 'text-indigo-600' },
-    { id: 'ASH', label: 'Ash', icon: Trash2, color: 'text-rose-600' },
-    { id: 'VIGIL', label: 'Vigil', icon: Flame, color: 'text-amber-600' },
-    { id: 'DEBT', label: 'Debt', icon: ReceiptText, color: 'text-emerald-600' },
+    { id: 'CAST', label: 'Cast', icon: ScanFace, color: 'text-indigo-600', isLink: true, href: '/cast' },
+    { id: 'ASH', label: 'Ash', icon: Trash2, color: 'text-rose-600', isLink: false },
+    { id: 'VIGIL', label: 'Vigil', icon: Flame, color: 'text-amber-600', isLink: false },
+    { id: 'DEBT', label: 'Debt', icon: ReceiptText, color: 'text-emerald-600', isLink: false },
   ];
 
   const handleModeSwitch = () => {
@@ -204,6 +204,20 @@ export default function Header({
               {templeNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTempleView === item.id;
+
+                if (item.isLink) {
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href!}
+                      className="flex items-center gap-2 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all border bg-white/60 text-zinc-700 border-zinc-200 hover:bg-white"
+                    >
+                      <Icon size={15} className={item.color} />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                }
+
                 return (
                   <button
                     key={item.id}

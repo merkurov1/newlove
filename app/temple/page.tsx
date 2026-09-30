@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { 
   ScanFace, 
   Flame, 
@@ -17,9 +18,10 @@ import {
 import { useAuth } from '@/components/AuthContext';
 import Header from '@/components/Header';
 
-type ServiceType = 'WALL' | 'CAST' | 'ASH' | 'VIGIL' | 'DEBT';
+type ServiceType = 'WALL' | 'ASH' | 'VIGIL' | 'DEBT';
 
 export default function DigitalTemple() {
+  const router = useRouter();
   const { profile } = useAuth();
   const [activeView, setActiveView] = useState<ServiceType>('WALL');
   const [postText, setPostText] = useState('');
@@ -161,7 +163,6 @@ export default function DigitalTemple() {
       {/* Background Soft Glows */}
       <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-amber-200/30 via-indigo-200/20 to-purple-200/30 blur-[140px] pointer-events-none rounded-full" />
 
-      {/* Используем общий Header в режиме temple */}
       <Header activeTempleView={activeView} onTempleViewChange={setActiveView} />
 
       {/* --- MAIN CONTENT CONTAINER --- */}
@@ -240,47 +241,7 @@ export default function DigitalTemple() {
             </motion.div>
           )}
 
-          {/* 2. CAST SERVICE */}
-          {activeView === 'CAST' && (
-            <motion.div
-              key="cast"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.2 }}
-              className="p-8 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-xl space-y-6"
-            >
-              <button
-                onClick={() => setActiveView('WALL')}
-                className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
-              >
-                <ArrowLeft size={14} />
-                <span>Return to Wall</span>
-              </button>
-
-              <div className="space-y-1">
-                <h2 className="text-2xl font-serif font-light text-zinc-900">Psychometric Cast</h2>
-                <p className="text-xs text-zinc-500 leading-relaxed">A rapid diagnostic mirror of attention.</p>
-              </div>
-
-              <div className="p-6 rounded-2xl bg-white/60 border border-white/90 space-y-4">
-                <div className="text-sm font-medium text-zinc-800">What currently occupies your mental bandwidth?</div>
-                <div className="space-y-2.5">
-                  {['Information Overload', 'Unresolved Decisions', 'External Expectations'].map((opt, i) => (
-                    <button
-                      key={i}
-                      onClick={() => publishRitualResult('CAST', `Status assigned: ${opt}`, 'CAST', ScanFace, 'text-indigo-500')}
-                      className="w-full p-3.5 rounded-xl bg-white/90 hover:bg-white text-left text-xs sm:text-sm font-medium text-zinc-800 transition-all border border-zinc-100 shadow-sm"
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* 3. ASH SERVICE */}
+          {/* 2. ASH SERVICE */}
           {activeView === 'ASH' && (
             <motion.div
               key="ash"
@@ -326,7 +287,7 @@ export default function DigitalTemple() {
             </motion.div>
           )}
 
-          {/* 4. VIGIL SERVICE */}
+          {/* 3. VIGIL SERVICE */}
           {activeView === 'VIGIL' && (
             <motion.div
               key="vigil"
@@ -363,7 +324,7 @@ export default function DigitalTemple() {
             </motion.div>
           )}
 
-          {/* 5. DEBT SERVICE */}
+          {/* 4. DEBT SERVICE */}
           {activeView === 'DEBT' && (
             <motion.div
               key="debt"
