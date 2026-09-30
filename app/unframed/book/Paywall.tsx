@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import Paywall from './Paywall'; // Исправлен путь на текущую папку
+import Paywall from './Paywall';
 import Link from 'next/link';
 
 // Стили подсветки синтаксиса
