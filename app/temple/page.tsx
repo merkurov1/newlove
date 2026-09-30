@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ScanFace, 
-  Trash2, 
   Flame, 
+  Trash2, 
   ReceiptText, 
   Mic, 
   Send, 
@@ -13,10 +13,8 @@ import {
   Settings, 
   LogOut, 
   Sparkles, 
-  ChevronDown,
   ArrowLeft,
-  CheckCircle2,
-  Volume2
+  CheckCircle2
 } from 'lucide-react';
 
 type ServiceType = 'WALL' | 'CAST' | 'ASH' | 'VIGIL' | 'DEBT';
@@ -25,40 +23,39 @@ const INITIAL_POSTS = [
   {
     id: 1,
     type: 'VIGIL',
-    author: 'Anonymous #089',
-    time: '2 мин назад',
+    author: 'Anonymous',
+    time: '2m',
     content: 'Добавил искру в общий огонь. Пламя продлено еще на 24 часа.',
-    badgeBg: 'bg-amber-100 text-amber-900 border-amber-300',
-    icon: Flame
+    icon: Flame,
+    color: 'text-amber-500'
   },
   {
     id: 2,
-    type: 'WHISPER',
+    type: 'ASH',
     author: 'Anton M.',
-    time: '14 мин назад',
-    content: 'Алгоритмы шумят слишком громко. Сжигаю лишние мысли и оставляю холст чистым.',
-    badgeBg: 'bg-rose-100 text-rose-900 border-rose-300',
-    icon: Trash2
+    time: '14m',
+    content: 'Сожжен информационный шум. Холст очищен.',
+    icon: Trash2,
+    color: 'text-rose-500'
   },
   {
     id: 3,
     type: 'CAST',
-    author: 'Visitor #402',
-    time: '1 час назад',
-    content: 'Пройдена диагностика восприятия. Присвоен архетип: UNFRAMED.',
-    badgeBg: 'bg-indigo-100 text-indigo-900 border-indigo-300',
-    icon: ScanFace
+    author: 'Visitor',
+    time: '1h',
+    content: 'Архетип проявлен: UNFRAMED.',
+    icon: ScanFace,
+    color: 'text-indigo-500'
   }
 ];
 
-export default function DigitalTempleWall() {
+export default function DigitalTemple() {
   const [activeView, setActiveView] = useState<ServiceType>('WALL');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState(INITIAL_POSTS);
 
-  // Для демонстрации ритуалов внутри стены
+  // Ash ritual state
   const [ashInput, setAshInput] = useState('');
   const [isAshBurnt, setIsAshBurnt] = useState(false);
 
@@ -67,515 +64,370 @@ export default function DigitalTempleWall() {
     const newEntry = {
       id: Date.now(),
       type: 'WHISPER',
-      author: 'You (Anon)',
-      time: 'Только что',
+      author: 'You',
+      time: 'just now',
       content: postText,
-      badgeBg: 'bg-zinc-200 text-zinc-900 border-zinc-400',
-      icon: Sparkles
+      icon: Sparkles,
+      color: 'text-zinc-400'
     };
     setPosts([newEntry, ...posts]);
     setPostText('');
   };
 
-  const publishRitualResult = (title: string, text: string, type: string, badgeBg: string, icon: any) => {
+  const publishRitualResult = (title: string, text: string, type: string, icon: any, color: string) => {
     const newEntry = {
       id: Date.now(),
       type,
-      author: 'You (Anon)',
-      time: 'Только что',
+      author: 'You',
+      time: 'just now',
       content: `${title}: ${text}`,
-      badgeBg,
-      icon
+      icon,
+      color
     };
     setPosts([newEntry, ...posts]);
     setActiveView('WALL');
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F5F0] text-[#111111] font-sans selection:bg-[#111111] selection:text-white relative">
+    <div className="min-h-screen bg-gradient-to-b from-[#EFEFEF] via-[#EAEAEA] to-[#E5E5E5] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white relative overflow-x-hidden antialiased">
       
+      {/* Background Soft Glows (Spatial Effect) */}
+      <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-tr from-indigo-200/40 via-purple-100/30 to-amber-100/40 blur-[120px] pointer-events-none rounded-full" />
+
       {/* --- HEADER --- */}
-      <header className="sticky top-0 z-40 bg-[#F7F5F0]/90 backdrop-blur-md border-b-2 border-[#111111] px-8 py-5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-serif font-black tracking-tight text-[#111111] uppercase">
-                Digital Temple
-              </h1>
-              <span className="flex items-center gap-2 text-xs font-mono font-bold tracking-widest px-3 py-1 rounded-full bg-[#111111] text-white">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                SYSTEM_LIVE
-              </span>
-            </div>
-            <p className="text-sm font-medium text-zinc-600">
-              A sanctuary for attention hygiene, ritualistic reset & collective presence.
-            </p>
-          </div>
-        </div>
-      </header>
-
-      {/* --- MAIN CONTENT (2 COLUMNS LAYOUT) --- */}
-      <main className="max-w-7xl mx-auto px-8 pt-8 pb-24 grid grid-cols-1 lg:grid-cols-12 gap-10">
-
-        {/* ================= LEFT SIDEBAR (NAVIGATION & USER) ================= */}
-        <aside className="lg:col-span-4 space-y-8">
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/40 border-b border-white/60 shadow-[0_4px_30px_rgba(0,0,0,0.02)] px-8 py-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between relative">
           
-          {/* USER AVATAR & DROPDOWN */}
+          {/* Left: Minimal Circular Avatar */}
           <div className="relative">
             <button
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="w-full flex items-center justify-between p-5 rounded-2xl bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] hover:shadow-[6px_6px_0px_#111111] transition-all group"
+              className="w-10 h-10 rounded-full bg-gradient-to-tr from-zinc-800 to-zinc-600 text-white font-medium text-sm flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.15)] ring-2 ring-white/80 hover:scale-105 active:scale-95 transition-all duration-300"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-xl bg-[#111111] text-white font-mono font-bold text-2xl flex items-center justify-center shadow-md">
-                  A
-                </div>
-                <div className="text-left">
-                  <div className="text-lg font-bold text-[#111111] group-hover:text-indigo-600 transition-colors">
-                    Anton Merkurov
-                  </div>
-                  <div className="text-xs font-mono font-bold text-zinc-500">
-                    ID: #008492 // ACTIVE
-                  </div>
-                </div>
-              </div>
-              <ChevronDown size={22} className={`text-[#111111] transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
+              A
             </button>
 
-            {/* DROPDOWN MENU */}
+            {/* Glass Profile Popover */}
             <AnimatePresence>
               {isProfileOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  className="absolute top-full left-0 right-0 mt-3 p-3 rounded-2xl bg-white border-2 border-[#111111] shadow-[8px_8px_0px_#111111] z-50 space-y-1"
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute left-0 mt-3 w-64 p-4 rounded-3xl bg-white/70 backdrop-blur-3xl border border-white/80 shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-50 space-y-3"
                 >
-                  <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-[#111111] hover:bg-zinc-100 transition-all">
-                    <User size={18} className="text-indigo-600" />
-                    <span>Профиль / Архетип</span>
-                  </button>
-                  <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-[#111111] hover:bg-zinc-100 transition-all">
-                    <Settings size={18} className="text-zinc-600" />
-                    <span>Настройки профиля</span>
-                  </button>
-                  <div className="h-0.5 bg-zinc-200 my-1" />
-                  <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 transition-all">
-                    <LogOut size={18} />
-                    <span>Выйти</span>
-                  </button>
+                  <div className="flex items-center gap-3 pb-3 border-b border-zinc-200/50">
+                    <div className="w-10 h-10 rounded-full bg-zinc-900 text-white font-medium flex items-center justify-center text-sm shadow-inner">
+                      AM
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-zinc-900">Anton Merkurov</div>
+                      <div className="text-xs text-zinc-500 font-mono">ID: #008492</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-white/80 transition-all">
+                      <User size={15} className="text-zinc-500" />
+                      Профиль & Архетип
+                    </button>
+                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-white/80 transition-all">
+                      <Settings size={15} className="text-zinc-500" />
+                      Настройки
+                    </button>
+                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-rose-600 hover:bg-rose-50/60 transition-all">
+                      <LogOut size={15} />
+                      Выйти
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* SERVICES MENU */}
-          <div className="p-6 rounded-2xl bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] space-y-4">
-            <div className="flex items-center justify-between border-b-2 border-zinc-100 pb-3">
-              <span className="text-xs font-mono font-bold tracking-widest text-zinc-500 uppercase">
-                // SERVICES & RITUALS
-              </span>
-              {activeView !== 'WALL' && (
-                <button
-                  onClick={() => setActiveView('WALL')}
-                  className="text-xs font-mono font-bold text-indigo-600 hover:underline"
-                >
-                  К СТЕНЕ →
-                </button>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              
-              {/* CAST */}
-              <button
-                onClick={() => setActiveView('CAST')}
-                className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all group ${
-                  activeView === 'CAST'
-                    ? 'bg-indigo-50 border-indigo-600 shadow-[3px_3px_0px_#4F46E5]'
-                    : 'bg-white border-[#111111] hover:bg-zinc-50'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-2.5 rounded-lg bg-indigo-100 border border-indigo-300 text-indigo-700">
-                    <ScanFace size={22} />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-base font-bold text-[#111111]">CAST</div>
-                    <div className="text-xs font-medium text-zinc-500">Psychometric Mirror</div>
-                  </div>
-                </div>
-                <span className="font-mono text-xs font-bold text-indigo-600">RUN →</span>
-              </button>
-
-              {/* ASH */}
-              <button
-                onClick={() => setActiveView('ASH')}
-                className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all group ${
-                  activeView === 'ASH'
-                    ? 'bg-rose-50 border-rose-600 shadow-[3px_3px_0px_#E11D48]'
-                    : 'bg-white border-[#111111] hover:bg-zinc-50'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-2.5 rounded-lg bg-rose-100 border border-rose-300 text-rose-700">
-                    <Trash2 size={22} />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-base font-bold text-[#111111]">ASH</div>
-                    <div className="text-xs font-medium text-zinc-500">Data Incinerator</div>
-                  </div>
-                </div>
-                <span className="font-mono text-xs font-bold text-rose-600">PURGE →</span>
-              </button>
-
-              {/* VIGIL */}
-              <button
-                onClick={() => setActiveView('VIGIL')}
-                className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all group ${
-                  activeView === 'VIGIL'
-                    ? 'bg-amber-50 border-amber-600 shadow-[3px_3px_0px_#D97706]'
-                    : 'bg-white border-[#111111] hover:bg-zinc-50'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-2.5 rounded-lg bg-amber-100 border border-amber-300 text-amber-700">
-                    <Flame size={22} />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-base font-bold text-[#111111]">VIGIL</div>
-                    <div className="text-xs font-medium text-zinc-500">Collective Flame</div>
-                  </div>
-                </div>
-                <span className="font-mono text-xs font-bold text-amber-700">IGNITE →</span>
-              </button>
-
-              {/* DEBT */}
-              <button
-                onClick={() => setActiveView('DEBT')}
-                className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all group ${
-                  activeView === 'DEBT'
-                    ? 'bg-emerald-50 border-emerald-600 shadow-[3px_3px_0px_#059669]'
-                    : 'bg-white border-[#111111] hover:bg-zinc-50'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-2.5 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-700">
-                    <ReceiptText size={22} />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-base font-bold text-[#111111]">DEBT</div>
-                    <div className="text-xs font-medium text-zinc-500">Zero Balance Receipt</div>
-                  </div>
-                </div>
-                <span className="font-mono text-xs font-bold text-emerald-700">CLEAR →</span>
-              </button>
-
-            </div>
+          {/* Center: DIGITAL TEMPLE Header */}
+          <div className="absolute left-1/2 -translate-x-1/2 text-center">
+            <h1 className="text-xl font-serif tracking-[0.2em] font-semibold text-zinc-900 uppercase">
+              Digital Temple
+            </h1>
           </div>
 
-        </aside>
+          {/* Right: Live Status Indicator */}
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_#10B981]" />
+            <span className="text-[11px] font-mono tracking-wider text-zinc-500 uppercase font-medium">
+              Active
+            </span>
+          </div>
 
-        {/* ================= CENTER COLUMN (DYNAMIC ATRIUM: WALL OR SERVICE) ================= */}
-        <section className="lg:col-span-8">
-          
-          <AnimatePresence mode="wait">
-            
-            {/* ---------------- 1. MAIN WALL VIEW ---------------- */}
-            {activeView === 'WALL' && (
-              <motion.div
-                key="wall"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-8"
+        </div>
+      </header>
+
+      {/* --- MAIN CONTAINER --- */}
+      <main className="max-w-3xl mx-auto px-6 py-10 space-y-10 relative z-10">
+
+        {/* --- RITUAL TILES (LARGE ICON NAVIGATION) --- */}
+        <section className="grid grid-cols-4 gap-4">
+          {[
+            { id: 'CAST', label: 'Cast', icon: ScanFace, color: 'text-indigo-600', activeBg: 'bg-indigo-500/10' },
+            { id: 'ASH', label: 'Ash', icon: Trash2, color: 'text-rose-600', activeBg: 'bg-rose-500/10' },
+            { id: 'VIGIL', label: 'Vigil', icon: Flame, color: 'text-amber-600', activeBg: 'bg-amber-500/10' },
+            { id: 'DEBT', label: 'Debt', icon: ReceiptText, color: 'text-emerald-600', activeBg: 'bg-emerald-500/10' },
+          ].map((item) => {
+            const Icon = item.icon;
+            const isActive = activeView === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveView(isActive ? 'WALL' : (item.id as ServiceType))}
+                className={`group flex flex-col items-center justify-center p-6 rounded-3xl transition-all duration-300 relative ${
+                  isActive
+                    ? 'bg-white/80 border-2 border-white shadow-[0_12px_30px_rgba(0,0,0,0.06)] scale-105'
+                    : 'bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_8px_20px_rgba(0,0,0,0.02)] hover:bg-white/70 hover:scale-[1.02]'
+                }`}
               >
-                {/* INPUT BOX */}
-                <div className="p-6 rounded-2xl bg-white border-2 border-[#111111] shadow-[6px_6px_0px_#111111] space-y-4">
-                  <div className="flex items-center justify-between border-b-2 border-zinc-100 pb-3">
-                    <span className="text-xs font-mono font-bold text-indigo-600 tracking-widest uppercase flex items-center gap-2">
-                      <Sparkles size={16} />
-                      // TRANSMIT TO THE WALL
-                    </span>
-                    <span className="text-xs font-mono font-bold text-zinc-400">EPHEMERAL PROTOCOL</span>
-                  </div>
-
-                  <textarea
-                    value={postText}
-                    onChange={(e) => setPostText(e.target.value)}
-                    placeholder="Поделитесь мыслью, шепотом или результатом ритуала..."
-                    className="w-full bg-transparent text-lg text-[#111111] placeholder-zinc-400 resize-none focus:outline-none min-h-[110px] font-sans leading-relaxed"
+                <div className={`p-3 rounded-2xl mb-2 transition-transform duration-300 group-hover:scale-110 ${item.color}`}>
+                  <Icon size={28} strokeWidth={1.75} />
+                </div>
+                <span className="text-xs font-medium tracking-wide text-zinc-700">
+                  {item.label}
+                </span>
+                {isActive && (
+                  <motion.div
+                    layoutId="activeGlow"
+                    className="absolute inset-0 rounded-3xl ring-2 ring-zinc-900/10 pointer-events-none"
                   />
-
-                  <div className="flex items-center justify-between pt-4 border-t-2 border-zinc-100">
-                    <button
-                      onClick={() => setIsRecording(!isRecording)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 font-mono text-xs font-bold transition-all ${
-                        isRecording 
-                          ? 'bg-rose-500 text-white border-[#111111] animate-pulse' 
-                          : 'bg-zinc-100 text-[#111111] border-[#111111] hover:bg-zinc-200'
-                      }`}
-                    >
-                      <Mic size={16} />
-                      <span>{isRecording ? 'Идет запись...' : 'Голосовая запись'}</span>
-                    </button>
-
-                    <button
-                      onClick={handleSendPost}
-                      className="flex items-center gap-2 px-7 py-3 rounded-xl bg-[#111111] text-white font-mono font-bold text-sm shadow-[3px_3px_0px_#4F46E5] hover:translate-x-[-1px] hover:translate-y-[-1px] active:translate-x-[0px] active:translate-y-[0px] transition-all"
-                    >
-                      <span>Опубликовать</span>
-                      <Send size={15} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* FEED TABS */}
-                <div className="flex items-center justify-between border-b-2 border-[#111111] pb-3">
-                  <div className="flex items-center gap-3 font-mono text-xs font-bold">
-                    {['ALL', 'WHISPERS', 'EVENTS'].map((tab) => (
-                      <button
-                        key={tab}
-                        className="px-4 py-2 rounded-xl bg-white border-2 border-[#111111] shadow-[2px_2px_0px_#111111] hover:bg-zinc-100 transition-all"
-                      >
-                        {tab}
-                      </button>
-                    ))}
-                  </div>
-                  <span className="text-xs font-mono font-bold text-zinc-500">LIVE FEED</span>
-                </div>
-
-                {/* STREAM POSTS */}
-                <div className="space-y-5">
-                  {posts.map((post) => {
-                    const IconComponent = post.icon;
-                    return (
-                      <div
-                        key={post.id}
-                        className="p-6 rounded-2xl bg-white border-2 border-[#111111] shadow-[4px_4px_0px_#111111] space-y-4"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className={`px-3 py-1 rounded-full text-xs font-mono font-bold border-2 flex items-center gap-1.5 ${post.badgeBg}`}>
-                              <IconComponent size={14} />
-                              {post.type}
-                            </span>
-                            <span className="text-sm font-bold text-[#111111]">{post.author}</span>
-                          </div>
-                          <span className="text-xs font-mono font-bold text-zinc-400">{post.time}</span>
-                        </div>
-
-                        <p className="text-lg text-[#111111] leading-relaxed font-sans font-medium">
-                          {post.content}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-
-            {/* ---------------- 2. CAST RITUAL SERVICE ---------------- */}
-            {activeView === 'CAST' && (
-              <motion.div
-                key="cast"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                className="p-8 rounded-2xl bg-white border-2 border-[#111111] shadow-[8px_8px_0px_#6366F1] space-y-8"
-              >
-                <div className="flex items-center justify-between border-b-2 border-zinc-100 pb-4">
-                  <button
-                    onClick={() => setActiveView('WALL')}
-                    className="flex items-center gap-2 font-mono text-xs font-bold text-[#111111] hover:text-indigo-600 transition-colors"
-                  >
-                    <ArrowLeft size={16} />
-                    <span>ВЕРНУТЬСЯ К СТЕНЕ</span>
-                  </button>
-                  <span className="font-mono text-xs font-bold text-indigo-600">RITUAL // CAST</span>
-                </div>
-
-                <div className="space-y-4">
-                  <h2 className="text-4xl font-serif font-black text-[#111111] uppercase">
-                    FACE THE MIRROR
-                  </h2>
-                  <p className="text-lg text-zinc-700 leading-relaxed">
-                    Быстрый психометрический срез. Ответьте на 3 реакции, чтобы проявить ваш текущий цифровой архетип.
-                  </p>
-                </div>
-
-                <div className="p-8 rounded-xl bg-indigo-50 border-2 border-indigo-200 space-y-6">
-                  <div className="text-sm font-mono font-bold text-indigo-900 uppercase">
-                    Вопрос 1 из 3: Какой ваш главный источник шума?
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 font-medium">
-                    {['Бесконечные уведомления', 'Чужие ожидания', 'Внутренний монолог'].map((opt, i) => (
-                      <button
-                        key={i}
-                        onClick={() => publishRitualResult('CAST ARCHETYPE', 'Получен статус UNFRAMED. Чистое восприятие.', 'CAST', 'bg-indigo-100 text-indigo-900 border-indigo-300', ScanFace)}
-                        className="p-4 rounded-xl bg-white border-2 border-indigo-300 text-left hover:border-indigo-600 hover:bg-indigo-100/50 transition-all text-base font-bold text-[#111111]"
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* ---------------- 3. ASH RITUAL SERVICE ---------------- */}
-            {activeView === 'ASH' && (
-              <motion.div
-                key="ash"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                className="p-8 rounded-2xl bg-white border-2 border-[#111111] shadow-[8px_8px_0px_#E11D48] space-y-8"
-              >
-                <div className="flex items-center justify-between border-b-2 border-zinc-100 pb-4">
-                  <button
-                    onClick={() => setActiveView('WALL')}
-                    className="flex items-center gap-2 font-mono text-xs font-bold text-[#111111] hover:text-rose-600 transition-colors"
-                  >
-                    <ArrowLeft size={16} />
-                    <span>ВЕРНУТЬСЯ К СТЕНЕ</span>
-                  </button>
-                  <span className="font-mono text-xs font-bold text-rose-600">RITUAL // ASH</span>
-                </div>
-
-                <div className="space-y-4">
-                  <h2 className="text-4xl font-serif font-black text-[#111111] uppercase">
-                    INCINERATE DATA
-                  </h2>
-                  <p className="text-lg text-zinc-700 leading-relaxed">
-                    Напишите то, что тяготит или отвлекает. Нажмите кнопку — текст сгорит прямо на экране в нулевые байты. Ничего не сохранится в БД.
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <textarea
-                    value={ashInput}
-                    onChange={(e) => setAshInput(e.target.value)}
-                    placeholder="Напишите мысль для сожжения..."
-                    className="w-full p-5 rounded-xl bg-rose-50/50 border-2 border-rose-200 text-lg text-[#111111] placeholder-zinc-400 focus:outline-none min-h-[160px]"
-                  />
-
-                  <button
-                    onClick={() => {
-                      setIsAshBurnt(true);
-                      setTimeout(() => {
-                        setAshInput('');
-                        setIsAshBurnt(false);
-                        publishRitualResult('ASH PURGE', 'Сожжено 240 символов шума. Данные уничтожены.', 'ASH', 'bg-rose-100 text-rose-900 border-rose-300', Trash2);
-                      }, 1200);
-                    }}
-                    className="w-full py-4 rounded-xl bg-rose-600 text-white font-mono font-bold text-base shadow-[4px_4px_0px_#111111] hover:bg-rose-700 transition-all flex items-center justify-center gap-3"
-                  >
-                    <Trash2 size={20} />
-                    <span>{isAshBurnt ? 'УНИЧТОЖЕНИЕ ДАННЫХ...' : 'СОЖЕЧЬ БЕЗВОЗВРАТНО'}</span>
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
-            {/* ---------------- 4. VIGIL RITUAL SERVICE ---------------- */}
-            {activeView === 'VIGIL' && (
-              <motion.div
-                key="vigil"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                className="p-8 rounded-2xl bg-white border-2 border-[#111111] shadow-[8px_8px_0px_#D97706] space-y-8"
-              >
-                <div className="flex items-center justify-between border-b-2 border-zinc-100 pb-4">
-                  <button
-                    onClick={() => setActiveView('WALL')}
-                    className="flex items-center gap-2 font-mono text-xs font-bold text-[#111111] hover:text-amber-600 transition-colors"
-                  >
-                    <ArrowLeft size={16} />
-                    <span>ВЕРНУТЬСЯ К СТЕНЕ</span>
-                  </button>
-                  <span className="font-mono text-xs font-bold text-amber-600">RITUAL // VIGIL</span>
-                </div>
-
-                <div className="space-y-4">
-                  <h2 className="text-4xl font-serif font-black text-[#111111] uppercase">
-                    KEEP THE BEACON
-                  </h2>
-                  <p className="text-lg text-zinc-700 leading-relaxed">
-                    Общий 24-часовой огонь коллективного присутствия. Зажгите спичку, чтобы подкинуть искру и продлить горение для всех.
-                  </p>
-                </div>
-
-                <div className="p-8 rounded-xl bg-amber-50 border-2 border-amber-200 text-center space-y-6">
-                  <div className="w-20 h-20 mx-auto rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg animate-pulse">
-                    <Flame size={40} />
-                  </div>
-                  <div>
-                    <div className="text-3xl font-mono font-black text-[#111111]">23:41:09</div>
-                    <div className="text-xs font-mono text-amber-800 font-bold uppercase mt-1">Осталось времени горения</div>
-                  </div>
-
-                  <button
-                    onClick={() => publishRitualResult('VIGIL FLAME', 'Добавлена искра в общий маяк присутствия.', 'VIGIL', 'bg-amber-100 text-amber-900 border-amber-300', Flame)}
-                    className="px-8 py-4 rounded-xl bg-amber-600 text-white font-mono font-bold text-base shadow-[4px_4px_0px_#111111] hover:bg-amber-700 transition-all inline-flex items-center gap-3"
-                  >
-                    <Flame size={20} />
-                    <span>ЗАЖЕЧЬ СПИЧКУ</span>
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
-            {/* ---------------- 5. DEBT RITUAL SERVICE ---------------- */}
-            {activeView === 'DEBT' && (
-              <motion.div
-                key="debt"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                className="p-8 rounded-2xl bg-white border-2 border-[#111111] shadow-[8px_8px_0px_#059669] space-y-8"
-              >
-                <div className="flex items-center justify-between border-b-2 border-zinc-100 pb-4">
-                  <button
-                    onClick={() => setActiveView('WALL')}
-                    className="flex items-center gap-2 font-mono text-xs font-bold text-[#111111] hover:text-emerald-600 transition-colors"
-                  >
-                    <ArrowLeft size={16} />
-                    <span>ВЕРНУТЬСЯ К СТЕНЕ</span>
-                  </button>
-                  <span className="font-mono text-xs font-bold text-emerald-600">RITUAL // DEBT</span>
-                </div>
-
-                <div className="space-y-4">
-                  <h2 className="text-4xl font-serif font-black text-[#111111] uppercase">
-                    ABSOLUTION RECEIPT
-                  </h2>
-                  <p className="text-lg text-zinc-700 leading-relaxed">
-                    Закройте фантомные долги и обязательства перед собой или другими. Сгенерируйте официально заверенную квитанцию обнуления.
-                  </p>
-                </div>
-
-                <div className="p-8 rounded-xl bg-emerald-50 border-2 border-emerald-200 text-center space-y-6">
-                  <ReceiptText size={48} className="mx-auto text-emerald-700" />
-                  <div className="text-xl font-mono font-bold text-emerald-900">
-                    ТЕКУЩИЙ БАЛАНС: 0.00 ZERO
-                  </div>
-
-                  <button
-                    onClick={() => publishRitualResult('DEBT ABSOLUTION', 'Выдана квитанция полного обнуления обязательств.', 'DEBT', 'bg-emerald-100 text-emerald-900 border-emerald-300', ReceiptText)}
-                    className="px-8 py-4 rounded-xl bg-emerald-700 text-white font-mono font-bold text-base shadow-[4px_4px_0px_#111111] hover:bg-emerald-800 transition-all inline-flex items-center gap-3"
-                  >
-                    <CheckCircle2 size={20} />
-                    <span>СГЕНЕРИРОВАТЬ КВИТАНЦИЮ</span>
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
-          </AnimatePresence>
-
+                )}
+              </button>
+            );
+          })}
         </section>
+
+        {/* --- DYNAMIC ATRIUM (WALL OR FULL REPLACEMENT SERVICE) --- */}
+        <AnimatePresence mode="wait">
+          
+          {/* ================= 1. WALL VIEW ================= */}
+          {activeView === 'WALL' && (
+            <motion.div
+              key="wall"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-6"
+            >
+              {/* INPUT CONTAINER */}
+              <div className="p-6 rounded-3xl bg-white/60 backdrop-blur-2xl border border-white/80 shadow-[0_10px_40px_rgba(0,0,0,0.03)] space-y-4">
+                <textarea
+                  value={postText}
+                  onChange={(e) => setPostText(e.target.value)}
+                  placeholder="Оставьте мысль или шепот..."
+                  className="w-full bg-transparent text-base text-zinc-800 placeholder-zinc-400 resize-none focus:outline-none min-h-[90px] font-normal leading-relaxed"
+                />
+
+                <div className="flex items-center justify-between pt-2">
+                  <button className="p-2.5 rounded-full bg-white/60 text-zinc-600 hover:bg-white transition-all shadow-sm">
+                    <Mic size={18} />
+                  </button>
+
+                  <button
+                    onClick={handleSendPost}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-zinc-900 text-white font-medium text-xs shadow-lg shadow-zinc-900/10 hover:bg-zinc-800 active:scale-95 transition-all"
+                  >
+                    <span>Передать</span>
+                    <Send size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* STREAM FEED */}
+              <div className="space-y-3">
+                {posts.map((post) => {
+                  const PostIcon = post.icon;
+                  return (
+                    <div
+                      key={post.id}
+                      className="p-5 rounded-3xl bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.015)] space-y-2 hover:bg-white/60 transition-all duration-300"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <PostIcon size={15} className={post.color} />
+                          <span className="font-semibold text-zinc-800">{post.author}</span>
+                        </div>
+                        <span className="text-zinc-400 font-mono text-[11px]">{post.time}</span>
+                      </div>
+                      <p className="text-sm text-zinc-700 leading-relaxed font-normal">
+                        {post.content}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ================= 2. CAST SERVICE ================= */}
+          {activeView === 'CAST' && (
+            <motion.div
+              key="cast"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.25 }}
+              className="p-8 rounded-3xl bg-white/70 backdrop-blur-3xl border border-white/80 shadow-[0_20px_60px_rgba(0,0,0,0.05)] space-y-6"
+            >
+              <button
+                onClick={() => setActiveView('WALL')}
+                className="inline-flex items-center gap-2 text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors"
+              >
+                <ArrowLeft size={14} />
+                <span>Вернуться к Стене</span>
+              </button>
+
+              <div className="space-y-2">
+                <h2 className="text-2xl font-serif font-medium text-zinc-900">Psychometric Cast</h2>
+                <p className="text-xs text-zinc-500 leading-relaxed">Быстрая диагностика внимания.</p>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-white/50 border border-white/80 space-y-4">
+                <div className="text-xs font-medium text-zinc-700">Что сейчас занимает больше всего памяти?</div>
+                <div className="space-y-2">
+                  {['Информационный шум', 'Непринятые решения', 'Внешние ожидания'].map((opt, i) => (
+                    <button
+                      key={i}
+                      onClick={() => publishRitualResult('CAST', 'Присвоен статус UNFRAMED', 'CAST', ScanFace, 'text-indigo-500')}
+                      className="w-full p-3.5 rounded-xl bg-white/80 hover:bg-white text-left text-xs font-medium text-zinc-800 transition-all border border-zinc-100 shadow-sm"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ================= 3. ASH SERVICE ================= */}
+          {activeView === 'ASH' && (
+            <motion.div
+              key="ash"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.25 }}
+              className="p-8 rounded-3xl bg-white/70 backdrop-blur-3xl border border-white/80 shadow-[0_20px_60px_rgba(0,0,0,0.05)] space-y-6"
+            >
+              <button
+                onClick={() => setActiveView('WALL')}
+                className="inline-flex items-center gap-2 text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors"
+              >
+                <ArrowLeft size={14} />
+                <span>Вернуться к Стене</span>
+              </button>
+
+              <div className="space-y-2">
+                <h2 className="text-2xl font-serif font-medium text-zinc-900">Data Incinerator</h2>
+                <p className="text-xs text-zinc-500 leading-relaxed">Напишите то, что необходимо стереть. Данные сгорают без следа.</p>
+              </div>
+
+              <textarea
+                value={ashInput}
+                onChange={(e) => setAshInput(e.target.value)}
+                placeholder="Запишите шум..."
+                className="w-full p-4 rounded-2xl bg-white/50 border border-white/80 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none min-h-[140px]"
+              />
+
+              <button
+                onClick={() => {
+                  setIsAshBurnt(true);
+                  setTimeout(() => {
+                    setAshInput('');
+                    setIsAshBurnt(false);
+                    publishRitualResult('ASH', 'Сожжен информационный шум', 'ASH', Trash2, 'text-rose-500');
+                  }, 800);
+                }}
+                className="w-full py-3.5 rounded-full bg-rose-600 text-white font-medium text-xs shadow-lg shadow-rose-600/20 hover:bg-rose-700 active:scale-98 transition-all"
+              >
+                {isAshBurnt ? 'Уничтожение...' : 'Сожечь'}
+              </button>
+            </motion.div>
+          )}
+
+          {/* ================= 4. VIGIL SERVICE ================= */}
+          {activeView === 'VIGIL' && (
+            <motion.div
+              key="vigil"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.25 }}
+              className="p-8 rounded-3xl bg-white/70 backdrop-blur-3xl border border-white/80 shadow-[0_20px_60px_rgba(0,0,0,0.05)] space-y-6 text-center"
+            >
+              <div className="text-left">
+                <button
+                  onClick={() => setActiveView('WALL')}
+                  className="inline-flex items-center gap-2 text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors"
+                >
+                  <ArrowLeft size={14} />
+                  <span>Вернуться к Стене</span>
+                </button>
+              </div>
+
+              <div className="py-6 space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                  <Flame size={32} />
+                </div>
+                <div className="text-3xl font-mono font-light text-zinc-900">23:41:09</div>
+                <p className="text-xs text-zinc-500 max-w-xs mx-auto">Поддержите коллективный огонь присутствия.</p>
+
+                <button
+                  onClick={() => publishRitualResult('VIGIL', 'Пламя продлено', 'VIGIL', Flame, 'text-amber-500')}
+                  className="px-8 py-3 rounded-full bg-amber-600 text-white font-medium text-xs shadow-lg shadow-amber-600/20 hover:bg-amber-700 active:scale-95 transition-all"
+                >
+                  Подкинуть искру
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ================= 5. DEBT SERVICE ================= */}
+          {activeView === 'DEBT' && (
+            <motion.div
+              key="debt"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.25 }}
+              className="p-8 rounded-3xl bg-white/70 backdrop-blur-3xl border border-white/80 shadow-[0_20px_60px_rgba(0,0,0,0.05)] space-y-6 text-center"
+            >
+              <div className="text-left">
+                <button
+                  onClick={() => setActiveView('WALL')}
+                  className="inline-flex items-center gap-2 text-xs font-medium text-zinc-500 hover:text-zinc-900 transition-colors"
+                >
+                  <ArrowLeft size={14} />
+                  <span>Вернуться к Стене</span>
+                </button>
+              </div>
+
+              <div className="py-6 space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                  <ReceiptText size={32} />
+                </div>
+                <div className="text-sm font-mono text-emerald-800">BAL // 0.00 ZERO</div>
+                <p className="text-xs text-zinc-500 max-w-xs mx-auto">Обнуление фантомных обязательств.</p>
+
+                <button
+                  onClick={() => publishRitualResult('DEBT', 'Выдана квитанция обнуления', 'DEBT', CheckCircle2, 'text-emerald-500')}
+                  className="px-8 py-3 rounded-full bg-emerald-700 text-white font-medium text-xs shadow-lg shadow-emerald-700/20 hover:bg-emerald-800 active:scale-95 transition-all"
+                >
+                  Сгенерировать квитанцию
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+        </AnimatePresence>
 
       </main>
     </div>
