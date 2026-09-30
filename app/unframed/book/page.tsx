@@ -2,10 +2,10 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import Paywall from '../Paywall';
+import Paywall from '@/app/unframed/book/Paywall';
 import Link from 'next/link';
 
-// Стилли подсветки синтаксиса
+// Стили подсветки синтаксиса
 import 'highlight.js/styles/github-dark.css';
 
 import remarkGfm from 'remark-gfm';
@@ -41,7 +41,7 @@ export default function BookReaderPage() {
   const [fontFamily, setFontFamily] = useState<'serif' | 'sans' | 'mono'>('serif');
   const [lineHeight, setLineHeight] = useState<'normal' | 'relaxed' | 'loose'>('relaxed');
   const [columns, setColumns] = useState<number>(1);
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark'); // По умолчанию темный нуар
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   const readerRef = useRef<HTMLDivElement | null>(null);
   const [fullscreen, setFullscreen] = useState<boolean>(false);
