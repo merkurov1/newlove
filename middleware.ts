@@ -1,44 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse, type NextRequest } from 'next/server';
 import { addSecurityHeaders, addDevSecurityHeaders } from '@/lib/middleware/securityHeaders';
 
-// Middleware to protect /admin routes server-side and add security headers.
-// NOTE: running full server-side helpers from Edge middleware can be brittle
-// (different runtimes, missing Node APIs). Instead, call the internal
-// API `/api/user/role` which already performs a robust, service-role-backed
-// check. We forward the request cookies so the API can resolve the session.
 export async function middleware(request: NextRequest) {
-  const url = request.nextUrl.clone();
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
 
-  // Only run for admin paths
-  if (url.pathname.startsWith('/admin')) {
-    // Temporarily bypass middleware-level admin role check so the admin
-    // UI can render. Authentication/authorization remains enforced
-    // inside server actions and API routes. This lets the UI load while
-    // we troubleshoot session/RPC issues.
-    // Diagnostics: log cookie names (NOT values) to help determine whether
-    // the browser sends Supabase session cookies to the server.
-    try {
-      const cookieHeader = request.headers.get('cookie') || '';
-      const cookieNames = cookieHeader
-        ? cookieHeader
-            .split(';')
-            .map((c) => c.split('=')[0].trim())
-            .filter(Boolean)
-        : [];
-      // eslint-disable-next-line no-console
-      console.info('[middleware] /admin request cookieNames=', JSON.stringify(cookieNames));
-    } catch (e) {
-      // ignore diagnostics failures
-    }
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-    const response = NextResponse.next();
-    return process.env.NODE_ENV === 'production'
-      ? addSecurityHeaders(response)
-      : addDevSecurityHeaders(response);
+  if (supabaseUrl && supabaseKey) {
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value;
+        },
+        set(name: string, value: string, options) {
+          request.cookies.set({ name, value, ...options });
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
+          response.cookies.set({ name, value, ...options });
+        },
+        remove(name: string, options) {
+          request.cookies.set({ name, value, ...options });
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
+          response.cookies.delete({ name, ...options });
+        },
+      },
+    });
+
+    // Важно: обновление сессии
+    await supabase.auth.getUser();
   }
 
-  // Add security headers to all responses
-  const response = NextResponse.next();
   return process.env.NODE_ENV === 'production'
     ? addSecurityHeaders(response)
     : addDevSecurityHeaders(response);
@@ -46,8 +50,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match all paths except static files AND exclude /api routes (for Bots/Webhooks)
-    // Добавлено '|api' в исключения
     '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

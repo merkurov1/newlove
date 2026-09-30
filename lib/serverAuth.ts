@@ -1,277 +1,41 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+// lib/supabase/server.ts
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
-type ServerAuthOptions = {
-  useServiceRole?: boolean; // explicit opt-in to service role key
-};
+export async function createClient() {
+  const cookieStore = await cookies();
 
-/**
- * Create a Supabase client intended for server-only use.
- * By default this prefers NON-service keys (SUPABASE_KEY) unless explicitly
- * requested via options.useServiceRole. This avoids accidentally using
- * the service_role key in runtime paths that shouldn't have elevated privileges.
- */
-export function getServerSupabaseClient(options: ServerAuthOptions = {}): SupabaseClient {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const preferServiceRole = !!options.useServiceRole;
-  // When requesting a service-role client, require the SUPABASE_SERVICE_ROLE_KEY explicitly.
-  // This prevents accidentally falling back to an anon key which leads to silent permission failures (42501).
-  let supabaseKey: string | undefined;
-  if (preferServiceRole) {
-    supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  } else {
-    supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
-  }
-
-  if (!supabaseUrl || !supabaseKey) {
-    // If a service-role client was explicitly requested but the service role
-    // key is not present, allow a non-production fallback so local builds
-    // and CI environments without secrets do not hard-fail while developing.
-    // NOTE: This only falls back when NODE_ENV !== 'production'. In prod we
-    // still require the service role key to avoid accidental permission issues.
-    if (preferServiceRole && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error('SUPABASE_SERVICE_ROLE_KEY is required when useServiceRole=true but is not configured in the environment');
-      }
-      // Development/CI: attempt to use anon key as a best-effort fallback
-      supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
-    }
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL|SUPABASE_URL and a Supabase key are required');
-    }
-  }
-  return createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
-}
-
-/**
- * Try to retrieve the server user using the server Supabase client.
- * Returns null on any failure to avoid throwing from common server-side flows.
- */
-export async function getServerUser(): Promise<any | null> {
-  try {
-    const supabase = getServerSupabaseClient();
-    const { data, error } = await supabase.auth.getUser();
-    if (error) {
-      // Treat missing-session as an expected condition during SSR/static builds
-      // (Supabase may return AuthSessionMissingError when no cookie/token is present).
-      const msg = (error && (error.message || error.name || '')).toString();
-      if (msg.includes('Auth session missing') || msg.includes('AuthSessionMissing')) {
-        // Keep this quiet in normal runs. If diagnostics are enabled, emit a debug line.
-        if (process.env.METADATA_DIAG === 'true') {
-          // eslint-disable-next-line no-console
-          console.debug('getServerUser: no auth session present (expected during SSR):', msg);
-        }
-        return null;
-      }
-
-      console.error('getServerUser supabase.auth.getUser error', error);
-      return null;
-    }
-    return (data as any)?.user || null;
-  } catch (e) {
-    console.error('getServerUser failed', e);
-    return null;
-  }
-}
-
-export async function requireUser(): Promise<any> {
-  let user = await getServerUser();
-  if (user) return user;
-
-  // Fallback: try to reconstruct Request from runtime (server actions / SSR)
-  try {
-    const buildReq = async () => {
-      const existing = (globalThis && (globalThis as any).request) || null;
-      try {
-        if (existing && typeof existing.headers?.get === 'function' && existing.headers.get('cookie')) return existing;
-      } catch (e) {}
-      // Try next/headers cookies
-      try {
-        const { cookies } = await import('next/headers');
-        const cookieHeader = cookies()
-          .getAll()
-          .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
-          .join('; ');
-        return new Request('http://localhost', { headers: { cookie: cookieHeader } });
-      } catch (e) {
-        return null;
-      }
-    };
-
-    const req = await buildReq();
-    if (req) {
-      const { getUserAndSupabaseForRequest } = await import('./getUserAndSupabaseForRequest');
-      const res = await getUserAndSupabaseForRequest(req as Request);
-      if (res && res.user) return res.user;
-    }
-  } catch (e) {
-    // ignore and throw below
-  }
-
-  throw new Error('Unauthorized');
-}
-
-export async function requireAdmin(): Promise<any> {
-  // Try server-scoped user first
-  let user = await getServerUser();
-  if (user) {
-    const roleRaw = ((user as any).user_metadata as any)?.role || (user as any)?.role || null;
-    const role = roleRaw ? String(roleRaw).toUpperCase() : null;
-    if (role === 'ADMIN') return user;
-  }
-
-  // Next try request-scoped / cookie-aware path via requireAdminFromRequest
-  try {
-    const buildReq = async () => {
-      const existing = (globalThis && (globalThis as any).request) || null;
-      try {
-        if (existing && typeof existing.headers?.get === 'function' && existing.headers.get('cookie')) return existing;
-      } catch (e) {}
-      try {
-        const { cookies } = await import('next/headers');
-        const cookieHeader = cookies()
-          .getAll()
-          .map((c: any) => `${c.name}=${encodeURIComponent(c.value)}`)
-          .join('; ');
-        return new Request('http://localhost', { headers: { cookie: cookieHeader } });
-      } catch (e) {
-        return null;
-      }
-    };
-    const req = await buildReq();
-    if (req) {
-      const maybe = await requireAdminFromRequest(req as Request);
-      if (maybe && maybe.id) return maybe;
-    }
-  } catch (e) {
-    // ignore and fallthrough to final fallback
-  }
-
-  // Final: original service-role check using any found user id from server user
-  if (user && user.id) {
-    try {
-      const svc = getServerSupabaseClient({ useServiceRole: true });
-      const resp = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', user.id);
-      if (!resp.error && Array.isArray(resp.data)) {
-        const hasAdmin = resp.data.some((r: any) => {
-          const roleList: any = r.roles;
-          if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
-          return String(roleList?.name).toUpperCase() === 'ADMIN';
-        });
-        if (hasAdmin) return user;
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-
-  throw new Error('Unauthorized');
-}
-
-/**
- * Require admin, preferring request-based session validation if a Request
- * object is provided. Falls back to ADMIN_API_SECRET and finally to the
- * server-key-based check.
- */
-export async function requireAdminFromRequest(req?: Request | null): Promise<any> {
-  if (req) {
-    let helperUser: any = null;
-    try {
-      const { getUserAndSupabaseFromRequestInterop } = await import('./supabaseInterop');
-      const maybe = await getUserAndSupabaseFromRequestInterop(req as Request);
-      helperUser = maybe?.user || null;
-      if (helperUser?.id) {
-        const role = (helperUser.user_metadata && helperUser.user_metadata.role) || helperUser.role || null;
-        if (role && String(role).toUpperCase() === 'ADMIN') return helperUser;
-
-        // Try service-role lookup for user_roles
-        try {
-          const svc = getServerSupabaseClient({ useServiceRole: true });
-          const resp = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', helperUser.id);
-          if (!resp.error && Array.isArray(resp.data)) {
-            const hasAdmin = resp.data.some((r: any) => {
-              const roleList: any = r.roles;
-              if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
-              return String(roleList?.name).toUpperCase() === 'ADMIN';
-            });
-            if (hasAdmin) return helperUser;
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // Игнорируем при вызове из Server Components (read-only)
           }
-        } catch (e) {
-          // ignore and continue to other checks
-        }
-
-        throw new Error('Not authorized');
-      }
-    } catch (e) {
-      // Treat helper failures as unauthenticated and continue to other checks
-      console.error('requireAdminFromRequest: getUserAndSupabaseFromRequestInterop failed', e);
+        },
+      },
     }
-
-    // If helper didn't yield a user, attempt cookie reconstruction + service RPC fallback
-    if (!helperUser?.id) {
-      try {
-        if (req && typeof req.headers?.get === 'function') {
-          const cookieHeader = req.headers.get('cookie') || '';
-          const res = (await import('./auth/tokenUtils')).default.extractTokenFromCookieHeader(cookieHeader);
-          let accessToken = res.token || '';
-          if (accessToken) {
-            const normalized = (await import('./auth/tokenUtils')).default.normalizeToken(accessToken);
-            const uid = (await import('./auth/tokenUtils')).default.decodeUidFromJwt(normalized);
-            if (uid) {
-              try {
-                const svc = getServerSupabaseClient({ useServiceRole: true });
-                try {
-                  const rpcAny = await (svc as any).rpc('get_my_user_roles_any', { uid_text: uid });
-                  if (!rpcAny?.error && Array.isArray(rpcAny.data) && rpcAny.data.length) {
-                    const found = rpcAny.data.some((r: any) => {
-                      if (!r) return false;
-                      if (typeof r === 'string') return r.toUpperCase() === 'ADMIN';
-                      const vals = Object.values(r).map((v: any) => String(v).toUpperCase());
-                      return vals.includes('ADMIN');
-                    });
-                    if (found) {
-                      return { id: uid, role: 'ADMIN' } as any;
-                    }
-                  }
-                } catch (e2) {
-                  // rpc missing or failed - fallback to direct select
-                }
-
-                const res2 = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', uid);
-                if (!res2.error && Array.isArray(res2.data)) {
-                  const hasAdmin = res2.data.some((r: any) => {
-                    const roleList: any = r.roles;
-                    if (Array.isArray(roleList)) return roleList.some((roleObj: any) => String(roleObj.name).toUpperCase() === 'ADMIN');
-                    return String(roleList?.name).toUpperCase() === 'ADMIN';
-                  });
-                  if (hasAdmin) return { id: uid, role: 'ADMIN' } as any;
-                }
-              } catch (e3) {
-                // ignore fallback errors
-              }
-            }
-          }
-        }
-      } catch (eFallback) {
-        // ignore overall fallback failures
-      }
-    }
-  }
-
-  // Do not turn the mere presence of ADMIN_API_SECRET into admin access.  The
-  // previous fallback granted every request administrator privileges whenever
-  // that environment variable was configured.  Calling requireAdmin() here
-  // also recursed back into this function for anonymous requests.
-  throw new Error('Unauthorized');
+  );
 }
 
-// Provide a default export object to be resilient to different import styles
-const serverAuthDefault = {
-  getServerSupabaseClient,
-  getServerUser,
-  requireUser,
-  requireAdmin,
-  requireAdminFromRequest,
-};
-
-export default serverAuthDefault;
+// Извлекаем только админский клиент для внутренних сервисных операций
+export function createAdminClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for admin operations');
+  }
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceKey,
+    { cookies: { getAll: () => [], setAll: () => {} } }
+  );
+}

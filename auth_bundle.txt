@@ -1,0 +1,1067 @@
+
+
+==========================================
+=== FILE: ./app/api/auth/set-cookie/route.ts
+==========================================
+
+import { NextResponse } from 'next/server';
+
+// Minimal, secure endpoint to set HttpOnly cookies for Supabase session after OAuth redirect.
+// Accepts { access_token, refresh_token, expires_at } in POST body.
+export async function POST(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const accessToken = body?.access_token || null;
+    const refreshToken = body?.refresh_token || null;
+    const expiresAt = Number(body?.expires_at) || null;
+
+    if (!accessToken)
+      return NextResponse.json({ ok: false, error: 'no access_token' }, { status: 400 });
+
+    // In production require a same-origin Referer/Origin to mitigate abuse.
+    try {
+      if (process.env.NODE_ENV === 'production') {
+        const origin = req.headers.get('origin');
+        const referer = req.headers.get('referer');
+        const expected = process.env.NEXT_PUBLIC_SITE_URL || origin || referer || null;
+        if (expected && origin && !origin.startsWith(expected)) {
+          try {
+            console.warn('set-cookie: origin mismatch', { expected, origin, referer });
+          } catch (e) {}
+          return NextResponse.json({ ok: false, error: 'origin_mismatch' }, { status: 403 });
+        }
+        if (expected && referer && !referer.startsWith(expected)) {
+          try {
+            console.warn('set-cookie: referer mismatch', { expected, origin, referer });
+          } catch (e) {}
+          return NextResponse.json({ ok: false, error: 'referer_mismatch' }, { status: 403 });
+        }
+      }
+    } catch (e) {
+      // ignore header parsing errors and continue
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const maxAge = expiresAt && expiresAt > now ? Math.max(60, expiresAt - now) : 60 * 60 * 24 * 30; // fallback 30 days
+
+    // Build cookies. We set both sb- and supabase- prefixed cookies to be compatible with helpers in codebase.
+    const cookies: string[] = [];
+    // Determine whether to set the Secure flag. Browsers WILL ignore cookies with
+    // Secure flag over plain http (localhost during dev), so only include it when
+    // running in production or when the incoming origin is https.
+    const origin = req.headers.get('origin') || '';
+    const isSecureContext = process.env.NODE_ENV === 'production' || origin.startsWith('https');
+    const secureFlag = isSecureContext ? 'Secure; ' : '';
+    const cookieOpts = `Path=/; HttpOnly; ${secureFlag}SameSite=Lax; Max-Age=${maxAge}`;
+
+    try {
+      console.info('set-cookie: creating cookies', {
+        isSecureContext,
+        origin,
+        cookieCount: refreshToken ? 4 : 2,
+      });
+    } catch (e) {}
+
+    cookies.push(`sb-access-token=${encodeURIComponent(accessToken)}; ${cookieOpts}`);
+    cookies.push(`supabase-access-token=${encodeURIComponent(accessToken)}; ${cookieOpts}`);
+    if (refreshToken) {
+      cookies.push(`sb-refresh-token=${encodeURIComponent(refreshToken)}; ${cookieOpts}`);
+      cookies.push(`supabase-refresh-token=${encodeURIComponent(refreshToken)}; ${cookieOpts}`);
+    }
+
+    // Build response and append multiple Set-Cookie headers
+    const res = new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+    for (const c of cookies) res.headers.append('Set-Cookie', c);
+    return res;
+  } catch (e) {
+    // Log details server-side but do not expose raw error text to the client
+    try {
+      console.error('set-cookie error', e);
+    } catch (err) {}
+    return NextResponse.json({ ok: false, error: 'internal_error' }, { status: 500 });
+  }
+}
+
+export const dynamic = 'force-dynamic';
+
+
+==========================================
+=== FILE: ./app/api/auth/me/route.ts
+==========================================
+
+import { NextResponse } from 'next/server';
+import getUserAndSupabaseForRequest from '@/lib/getUserAndSupabaseForRequest';
+
+export async function GET(req: Request) {
+  try {
+    const { supabase, user } = await getUserAndSupabaseForRequest(req as any);
+    if (!user) return NextResponse.json({ user: null, roles: [] });
+
+    // Try service-role to read roles reliably
+    try {
+      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
+      const svc = getServerSupabaseClient({ useServiceRole: true });
+      const res = await (svc as any).from('user_roles').select('role_id,roles(name)').eq('user_id', user.id);
+      if (!res.error && Array.isArray(res.data)) {
+        const roles = res.data.flatMap((r: any) => {
+          const roleList = r.roles;
+          if (Array.isArray(roleList)) return roleList.map((x: any) => String(x.name).toUpperCase());
+          if (roleList) return [String(roleList.name).toUpperCase()];
+          return [] as string[];
+        });
+        // Derive best-effort display name and avatar from Supabase user object
+        const name = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name || user.user_metadata.display_name || user.user_metadata.preferred_username || user.user_metadata.given_name)) || user.name || null;
+        const image = (user.user_metadata && (user.user_metadata.avatar_url || user.user_metadata.picture || user.user_metadata.image || user.user_metadata.avatar)) || (user as any).picture || (user as any).image || null;
+        return NextResponse.json({ user: { id: user.id, email: user.email, name, image }, roles });
+      }
+    } catch (e) {
+      // fallback
+    }
+
+    // If roles not found, still return user with name/image if available
+    const name = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name || user.user_metadata.display_name || user.user_metadata.preferred_username || user.user_metadata.given_name)) || user.name || null;
+    const image = (user.user_metadata && (user.user_metadata.avatar_url || user.user_metadata.picture || user.user_metadata.image || user.user_metadata.avatar)) || (user as any).picture || (user as any).image || null;
+    return NextResponse.json({ user: { id: user.id, email: user.email, name, image }, roles: [] });
+  } catch (e) {
+    return NextResponse.json({ user: null, roles: [] });
+  }
+}
+
+export const dynamic = 'force-dynamic';
+
+
+==========================================
+=== FILE: ./app/api/auth/upsert/route.ts
+==========================================
+
+import { NextResponse } from 'next/server';
+import getUserAndSupabaseForRequest from '@/lib/getUserAndSupabaseForRequest';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
+
+// Secure upsert: derive authenticated user from the incoming Request (cookies)
+// and upsert an application-level row in public.users using the service role key.
+export async function POST(req: Request) {
+  try {
+    // Derive user from request (reads cookies / Authorization header)
+    const { user } = await getUserAndSupabaseForRequest(req as any);
+    if (!user || !user.id) {
+      return NextResponse.json({ ok: false, error: 'unauthenticated' }, { status: 401 });
+    }
+
+    // The client may optionally send name/email/image (best-effort) but we
+    // prefer authoritative values from the auth.user object returned by
+    // Supabase; fall back to provided fields only if present.
+    const body = await req.json().catch(() => ({}));
+    const email = (user.email) || body?.email || null;
+    const name = (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name)) || user.name || body?.name || null;
+    const image = (user.user_metadata && (user.user_metadata.avatar_url || user.user_metadata.picture || user.user_metadata.image)) || (user as any).picture || (user as any).image || body?.image || null;
+
+    const svc = getServerSupabaseClient({ useServiceRole: true });
+    const payload: any = { id: user.id };
+    if (email !== null) payload.email = email;
+    if (name !== null) payload.name = name;
+    if (image !== null) payload.image = image;
+
+    const { data, error } = await svc.from('users').upsert(payload, { onConflict: 'id' }).select().maybeSingle();
+    if (error) {
+      try { console.error('upsert user error', { userId: user.id, payload, error }); } catch (err) {}
+      return NextResponse.json({ ok: false, error: 'upsert_failed' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, data });
+  } catch (e) {
+    try { console.error('upsert endpoint exception', e); } catch (err) {}
+    return NextResponse.json({ ok: false, error: 'internal_error' }, { status: 500 });
+  }
+}
+
+export const dynamic = 'force-dynamic';
+
+
+==========================================
+=== FILE: ./app/api/temple/auth/route.ts
+==========================================
+
+import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
+import crypto from 'crypto'
+import { signSession } from '@/lib/session'
+
+export const dynamic = 'force-dynamic'
+
+/**
+ * Validates the data received from the Telegram web app, using the
+ * method documented here: 
+ * https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
+ */
+function verifyTelegramInitData(initData: string, botToken: string): boolean {
+  if (!initData || !botToken) return false;
+
+  try {
+    // 1. Parse the query string properly
+    const urlParams = new URLSearchParams(initData);
+    const hash = urlParams.get('hash');
+
+    if (!hash) {
+      console.warn('Telegram Auth: Missing hash');
+      return false;
+    }
+
+    // 2. Remove hash from the params to build the check string
+    urlParams.delete('hash');
+
+    // 3. Sort keys alphabetically and build the data-check-string
+    const dataCheckString = Array.from(urlParams.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n');
+
+    // 4. Create the Secret Key (HMAC-SHA256 of the Bot Token using "WebAppData" as key is WRONG for Node)
+    // CORRECT WAY for Node.js crypto:
+    // The secret key is the HMAC-SHA-256 of the bot token, with the constant string "WebAppData" as the key.
+    const secretKey = crypto
+      .createHmac('sha256', 'WebAppData')
+      .update(botToken)
+      .digest();
+
+    // 5. Calculate the Hash (HMAC-SHA256 of dataCheckString using secretKey)
+    const calculatedHash = crypto
+      .createHmac('sha256', secretKey)
+      .update(dataCheckString)
+      .digest('hex');
+
+    // 6. Compare (Timing Safe)
+    // Note: 'hash' from Telegram is hex string.
+    const isValid = calculatedHash === hash;
+    
+    if (!isValid) {
+        console.warn('Telegram Auth: Hash Mismatch', {
+            received: hash,
+            calculated: calculatedHash,
+            stringToCheck: dataCheckString
+        });
+    }
+
+    return isValid;
+  } catch (e) {
+    console.error('Telegram Auth: Verification Error', e);
+    return false;
+  }
+}
+
+export async function POST(req: Request) {
+  const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const sbServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const botToken = process.env.TEMPLE_BOT_TOKEN
+
+  if (!sbUrl || !sbServiceKey || !botToken) {
+    console.error('API Error: Missing Env Vars')
+    return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
+  }
+
+  const supabaseAdmin = createClient(sbUrl, sbServiceKey, { auth: { persistSession: false } })
+
+  try {
+    const body = await req.json()
+    
+    // --- VERIFICATION STEP ---
+    // Critical: Only verify if initData is present.
+    // If user is just passing { id, username } without initData, it's insecure (spoofable).
+    // Assuming this endpoint is ONLY for Telegram Auth.
+    
+    if (body.initData) {
+        const isValid = verifyTelegramInitData(body.initData, botToken);
+        if (!isValid) {
+            return NextResponse.json({ error: 'Invalid Telegram InitData' }, { status: 401 });
+        }
+    } else {
+        // Fallback for Debug/Dev? Or reject?
+        // For production security, reject requests without valid initData or Session Token.
+        // But for your logic, let's proceed if you handle web-users differently.
+        // If this is strictly for Telegram Mini App auth, reject.
+        console.warn('API: No initData provided. Proceeding insecurely (dev mode?) or relying on existing session.');
+    }
+
+    // --- PARSE USER DATA ---
+    // Telegram sends user data as a JSON string inside 'user' param of initData
+    // We should parse it from there if possible, to be safe.
+    let telegramUser: any = null;
+    
+    if (body.initData) {
+        const params = new URLSearchParams(body.initData);
+        const userStr = params.get('user');
+        if (userStr) {
+            try {
+                telegramUser = JSON.parse(userStr);
+            } catch (e) {
+                console.error('API: Failed to parse user JSON from initData');
+            }
+        }
+    }
+
+    // Fallback to body root params (if client sent them separately)
+    const id = String(telegramUser?.id || body?.id || body?.user?.id || '');
+    const username = telegramUser?.username || body?.username || body?.user?.username || '';
+    const first_name = telegramUser?.first_name || body?.first_name || body?.user?.first_name || '';
+
+    if (!id) {
+      return NextResponse.json({ error: 'No User ID found' }, { status: 400 })
+    }
+
+    // --- DATABASE SYNC ---
+    const { error: upsertError } = await supabaseAdmin
+      .from('temple_users')
+      .upsert({
+        telegram_id: id,
+        username: username,
+        first_name: first_name,
+        last_seen_at: new Date().toISOString()
+      }, { onConflict: 'telegram_id' })
+
+    if (upsertError) {
+      console.error('API: Supabase Error:', upsertError)
+      return NextResponse.json({ error: upsertError.message }, { status: 500 })
+    }
+
+    // --- SESSION GENERATION ---
+    const displayName = username || first_name || `user_${id.slice(-4)}`;
+    
+    // Log entry (optional, don't block response)
+    supabaseAdmin.from('temple_log').insert({ event_type: 'enter', message: `${displayName} entered via Telegram` }).then();
+
+    const token = signSession({ userId: id, displayName })
+    const maxAge = 60 * 60 * 24 * 30 // 30 days
+    const isProd = process.env.NODE_ENV === 'production'
+    
+    // Cookie allows Next.js middleware to see the session
+    const cookie = `temple_session=${token}; Path=/; Max-Age=${maxAge}; SameSite=None; HttpOnly${isProd ? '; Secure' : ''}`
+
+    return NextResponse.json({ 
+      success: true, 
+      userId: id, 
+      displayName, 
+      token 
+    }, { 
+      status: 200, 
+      headers: { 'Set-Cookie': cookie } 
+    })
+
+  } catch (e: any) {
+    console.error('API: Critical Auth Error:', e)
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}
+
+==========================================
+=== FILE: ./app/profile/page.tsx
+==========================================
+
+import { createClient } from '@/lib/supabase/server';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
+import ProfileForm from '@/components/profile/ProfileForm';
+import SubscriptionToggle from '@/components/profile/SubscriptionToggle';
+
+export const dynamic = 'force-dynamic';
+
+export default async function ProfilePage() {
+  // Use cookie-based client for auth check
+  const supabase = createClient();
+  
+  // Get current user from session
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !authUser?.id) {
+    // User not logged in - show guest prompt
+    const { default: ProfileGuest } = await import('@/components/profile/ProfileGuest');
+    return <ProfileGuest />;
+  }
+
+  // Fetch user data from users table
+  let userData = null;
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', authUser.id)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('Supabase fetch user error', error);
+    } else if (!data) {
+      // User doesn't exist in public.users yet - create from auth.users
+      // Use service-role for INSERT (anon doesn't have permission)
+      const supabaseAdmin = getServerSupabaseClient({ useServiceRole: true });
+      const { data: newUser, error: insertError } = await supabaseAdmin
+        .from('users')
+        .insert({
+          id: authUser.id,
+          email: authUser.email,
+          name: authUser.user_metadata?.name || authUser.email?.split('@')[0],
+        })
+        .select()
+        .single();
+      
+      if (insertError) {
+        console.error('Error creating user profile:', insertError);
+        // Fallback to auth data
+        userData = {
+          id: authUser.id,
+          email: authUser.email,
+          name: authUser.user_metadata?.name || '',
+          username: null,
+          bio: null,
+          website: null,
+          is_subscribed: false,
+        };
+      } else {
+        userData = newUser;
+      }
+    } else {
+      userData = data;
+    }
+  } catch (e) {
+    console.error('Error fetching user data:', e);
+    // Fallback to auth data
+    userData = {
+      id: authUser.id,
+      email: authUser.email,
+      name: authUser.user_metadata?.name || '',
+      username: null,
+      bio: null,
+      website: null,
+      is_subscribed: false,
+    };
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-12">
+      <h1 className="text-3xl font-bold text-gray-900 mb-2">Ваш профиль</h1>
+      <p className="text-gray-600 mb-8">Здесь вы можете обновить свою публичную информацию.</p>
+      
+      <div className="space-y-6">
+        {/* Subscription Toggle */}
+        <SubscriptionToggle initialSubscribed={userData?.is_subscribed || false} />
+        
+        {/* Profile Form */}
+        <ProfileForm user={userData} />
+      </div>
+    </div>
+  );
+}
+
+
+==========================================
+=== FILE: ./lib/auth/tokenUtils.ts
+==========================================
+
+// Utilities for reconstructing and normalizing Supabase tokens from cookies/headers
+export type ReconstructResult = {
+  token: string | null;
+  cookieNames: string[];
+  matchedCookieBase?: string;
+  matchedCookieParts?: Array<{ idx: number; len: number }>;
+};
+
+export function parseCookies(cookieHeader: string): Record<string, string> {
+  if (!cookieHeader) return {};
+  return Object.fromEntries(
+    cookieHeader
+      .split(';')
+      .map((s) => {
+        const [k, ...v] = s.split('=');
+        return [k && k.trim(), decodeURIComponent((v || []).join('='))];
+      })
+      .filter(Boolean)
+  );
+}
+
+export function reconstructTokenFromCookies(cookies: Record<string, string>): ReconstructResult {
+  const cookieNames = Object.keys(cookies || {});
+  // Try standard names first
+  let token = cookies['sb-access-token'] || cookies['supabase-access-token'] || null;
+  let matchedCookieBase: string | undefined;
+  let matchedCookieParts: Array<{ idx: number; len: number }> | undefined;
+  if (!token) {
+    // Broaden matching to capture more cookie-name patterns seen in deployments
+    // Examples: '__Host-sb-access-token', 'sb:token', 'sb.token.0', 'supabase-access-token'
+    const candidates: Record<string, string[]> = {};
+    const nameRegex = /(sb[:._-]?.*(?:auth-token|access-token|token)|supabase[:._-]?access[:._-]?token)/i;
+    for (const name of cookieNames) {
+      if (nameRegex.test(name)) {
+        const m = name.match(/^(.*?)(?:\.(\d+))?$/);
+        const base = m ? m[1] : name;
+        const partIndex = m && m[2] ? parseInt(m[2], 10) : -1;
+        if (!candidates[base]) candidates[base] = [];
+        candidates[base].push(typeof partIndex === 'number' && partIndex >= 0 ? `${partIndex}:${cookies[name]}` : `-:${cookies[name]}`);
+      }
+    }
+    for (const base of Object.keys(candidates)) {
+      const parts = candidates[base]
+        .map((s) => {
+          const [idx, ...rest] = s.split(':');
+          return { idx: idx === '-' ? -1 : parseInt(idx, 10), val: rest.join(':') } as any;
+        })
+        .sort((a: any, b: any) => a.idx - b.idx);
+      const joined = parts.map((p: any) => p.val).join('');
+      if (joined && joined.length > 0) {
+        token = joined;
+        matchedCookieBase = base;
+        matchedCookieParts = parts.map((p: any) => ({ idx: p.idx, len: p.val.length }));
+        break;
+      }
+    }
+  }
+
+  return { token, cookieNames, matchedCookieBase, matchedCookieParts };
+}
+
+export function normalizeToken(raw?: string | null): string | null {
+  if (!raw) return null;
+  let normalized: any = raw;
+  try {
+    const maybe = typeof normalized === 'string' ? decodeURIComponent(normalized) : normalized;
+    if (typeof maybe === 'string' && maybe.trim().startsWith('{')) {
+      const parsed = JSON.parse(maybe);
+      if (parsed && (parsed.access_token || parsed.token || parsed.accessToken)) {
+        normalized = parsed.access_token || parsed.token || parsed.accessToken;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  if (typeof normalized === 'string' && normalized.startsWith('base64-')) {
+    try {
+      const b64 = normalized.slice('base64-'.length);
+      const buf = Buffer.from(b64, 'base64');
+      const txt = buf.toString('utf8');
+      try {
+        const parsed = JSON.parse(txt);
+        if (parsed && (parsed.access_token || parsed.token || parsed.accessToken)) {
+          normalized = parsed.access_token || parsed.token || parsed.accessToken;
+        } else {
+          normalized = txt;
+        }
+      } catch (e) {
+        normalized = txt;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  return typeof normalized === 'string' ? normalized : null;
+}
+
+export function decodeUidFromJwt(token?: string | null): string | null {
+  if (!token) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad = payloadB64.length % 4;
+    const padded = payloadB64 + (pad ? '='.repeat(4 - pad) : '');
+    const buf = Buffer.from(padded, 'base64');
+    const payloadJson = buf.toString('utf8');
+    const payload = JSON.parse(payloadJson || '{}');
+    return payload.sub || payload.user_id || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function extractTokenFromCookieHeader(cookieHeader: string): ReconstructResult {
+  const cookies = parseCookies(cookieHeader || '');
+  return reconstructTokenFromCookies(cookies);
+}
+
+const tokenUtils = {
+  parseCookies,
+  reconstructTokenFromCookies,
+  normalizeToken,
+  decodeUidFromJwt,
+  extractTokenFromCookieHeader,
+};
+
+export default tokenUtils;
+
+
+==========================================
+=== FILE: ./lib/supabase/client.ts
+==========================================
+
+// ===== ФАЙЛ: lib/supabase/client.ts =====
+// (НОВЫЙ ЧИСТЫЙ ФАЙЛ)
+
+"use client";
+
+// Reuse the shared browser client singleton so auth state (persistSession)
+// is consistent across components. Some components import this helper and
+// expect getSession() to return the persisted session.
+import { createClient as browserCreateClient } from '@/lib/supabase-browser';
+
+export function createClient() {
+  return browserCreateClient();
+}
+
+
+==========================================
+=== FILE: ./lib/supabase/server.ts
+==========================================
+
+// ===== ФАЙЛ: lib/supabase/server.ts =====
+// (ПОЛНЫЙ ЧИСТЫЙ КОД С ИСПРАВЛЕНИЯМИ ТИПОВ)
+
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { cookies } from "next/headers";
+// Мы убрали 'SupabaseClient', так как он вызывал ошибку GenericSchema
+
+// Мы экспортируем функцию с именем 'createClient'
+// ----- ИСПРАВЛЕНИЕ 2: Убираем ': SupabaseClient' отсюда,
+// чтобы TypeScript сам определил правильный (более сложный) тип
+export function createClient(options: { useServiceRole?: boolean } = {}) {
+  // For service-role usage we don't want to read or persist request cookies
+  // (this ensures we don't accidentally attach a user's anon session to the
+  // service-role client). Provide a no-op cookie store in that case.
+  const cookieStore = options.useServiceRole
+    ? {
+        // match `cookies()` shape: get(name) returns undefined or { value }
+        get(_name: string) {
+          return undefined;
+        },
+        // cookies().set expects a single object parameter { name, value, ...options }
+        set(_cookie: { name: string; value: string } & Partial<CookieOptions>) {
+          /* no-op for service role */
+        },
+        // cookies().delete / cookieStore.delete expects an object parameter
+        delete(_cookie: { name: string } & Partial<CookieOptions>) {
+          /* no-op for service role */
+        },
+      }
+    : cookies();
+
+  // Safely read env vars and return clear errors instead of relying on '!'
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  if (!supabaseUrl) {
+    throw new Error('Missing env var: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL');
+  }
+
+  let supabaseKey: string;
+  if (options.useServiceRole) {
+    supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!supabaseKey) {
+      throw new Error('Missing env var: SUPABASE_SERVICE_ROLE_KEY (required for service role)');
+    }
+  } else {
+    supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+    if (!supabaseKey) {
+      throw new Error('Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY');
+    }
+  }
+
+  return createServerClient(supabaseUrl, supabaseKey, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value;
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        try {
+          cookieStore.set({ name, value, ...options });
+        } catch (error) { }
+      },
+      remove(name: string, options: CookieOptions) {
+        try {
+          cookieStore.delete({ name, ...options });
+        } catch (error) { }
+      },
+    },
+    // Отключаем auth для service role
+    ...(options.useServiceRole && {
+      auth: { persistSession: false }
+    })
+  });
+}
+
+
+==========================================
+=== FILE: ./middleware.ts
+==========================================
+
+import { NextRequest, NextResponse } from 'next/server';
+import { addSecurityHeaders, addDevSecurityHeaders } from '@/lib/middleware/securityHeaders';
+
+// Middleware to protect /admin routes server-side and add security headers.
+// NOTE: running full server-side helpers from Edge middleware can be brittle
+// (different runtimes, missing Node APIs). Instead, call the internal
+// API `/api/user/role` which already performs a robust, service-role-backed
+// check. We forward the request cookies so the API can resolve the session.
+export async function middleware(request: NextRequest) {
+  const url = request.nextUrl.clone();
+
+  // Only run for admin paths
+  if (url.pathname.startsWith('/admin')) {
+    // Temporarily bypass middleware-level admin role check so the admin
+    // UI can render. Authentication/authorization remains enforced
+    // inside server actions and API routes. This lets the UI load while
+    // we troubleshoot session/RPC issues.
+    // Diagnostics: log cookie names (NOT values) to help determine whether
+    // the browser sends Supabase session cookies to the server.
+    try {
+      const cookieHeader = request.headers.get('cookie') || '';
+      const cookieNames = cookieHeader
+        ? cookieHeader
+            .split(';')
+            .map((c) => c.split('=')[0].trim())
+            .filter(Boolean)
+        : [];
+      // eslint-disable-next-line no-console
+      console.info('[middleware] /admin request cookieNames=', JSON.stringify(cookieNames));
+    } catch (e) {
+      // ignore diagnostics failures
+    }
+
+    const response = NextResponse.next();
+    return process.env.NODE_ENV === 'production'
+      ? addSecurityHeaders(response)
+      : addDevSecurityHeaders(response);
+  }
+
+  // Add security headers to all responses
+  const response = NextResponse.next();
+  return process.env.NODE_ENV === 'production'
+    ? addSecurityHeaders(response)
+    : addDevSecurityHeaders(response);
+}
+
+export const config = {
+  matcher: [
+    // Match all paths except static files AND exclude /api routes (for Bots/Webhooks)
+    // Добавлено '|api' в исключения
+    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+};
+
+
+==========================================
+=== FILE: ./components/profile/ConnectWalletButton.tsx
+==========================================
+
+"use client";
+
+import React, { useState } from 'react';
+
+export default function ConnectWalletButton({ onConnected }: { onConnected?: (address: string) => void }) {
+    const [loading, setLoading] = useState(false);
+    const [address, setAddress] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    async function connect() {
+        setError(null);
+        if (!(window as any).ethereum) {
+            setError('Установите и подключите Web3-кошелёк (например MetaMask)');
+            return;
+        }
+        setLoading(true);
+        try {
+            const ethersMod = await import('ethers');
+            const { ethers } = ethersMod as any;
+            // Create provider defensively: BrowserProvider exists in modern ethers/browsers,
+            // but in some bundler/runtime shapes it may be missing. Fallback to JsonRpcProvider.
+            const provider = (typeof (ethers as any).BrowserProvider === 'function')
+                ? new (ethers as any).BrowserProvider((window as any).ethereum)
+                : new (ethers as any).JsonRpcProvider();
+            await provider.send('eth_requestAccounts', []);
+            const signer = await provider.getSigner();
+            const a = await signer.getAddress();
+            if (a) {
+                setAddress(a);
+                // send to server
+                const res = await fetch('/api/user/connect-wallet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wallet_address: a }), credentials: 'same-origin' });
+                if (!res.ok) {
+                    const txt = await res.text();
+                    throw new Error(txt || 'Server error');
+                }
+                if (onConnected) onConnected(a);
+            }
+        } catch (e: any) {
+            console.error(e);
+            setError(e?.message || String(e));
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <div>
+            <button onClick={connect} disabled={loading} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-60">
+                {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : (loading ? 'Подключение...' : 'Подключить кошелёк')}
+            </button>
+            {error && <div className="text-sm text-red-600 mt-2">{error}</div>}
+        </div>
+    );
+}
+
+
+==========================================
+=== FILE: ./components/profile/ProfileEditLink.js
+==========================================
+
+'use client';
+
+import Link from 'next/link';
+import React from 'react';
+
+export default function ProfileEditLink({ className }) {
+  return (
+    <Link href="/profile" className={className}>
+      Редактировать профиль
+    </Link>
+  );
+}
+
+
+==========================================
+=== FILE: ./components/profile/ProfileForm.js
+==========================================
+
+// components/profile/ProfileForm.js
+'use client';
+
+import { useFormState, useFormStatus } from 'react-dom';
+import { updateProfile } from '@/app/admin/actions';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+// Маленький компонент для кнопки, чтобы показывать статус отправки
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button 
+      type="submit" 
+      disabled={pending}
+      className="w-full flex justify-center py-2 px-4 border rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300"
+    >
+      {pending ? 'Сохранение...' : 'Сохранить изменения'}
+    </button>
+  );
+}
+
+export default function ProfileForm({ user }) {
+  user = user || {};
+  const initialState = { message: null, status: null };
+  const [state, dispatch] = useFormState(updateProfile, initialState);
+  const [showMessage, setShowMessage] = useState(false);
+  const router = useRouter();
+
+  // basic client-side username validation
+  function validateUsername(val) {
+    return /^[a-z0-9_.]+$/.test(String(val || '').toLowerCase());
+  }
+
+  // Показываем сообщение об успехе/ошибке на 3 секунды
+  useEffect(() => {
+    if (state.message) {
+      setShowMessage(true);
+      const timer = setTimeout(() => {
+        setShowMessage(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+    // If server action returned success with a username, navigate there
+    try {
+      if (state && state.status === 'success' && state.username) {
+        router.push(`/you/${state.username}`);
+      }
+    } catch (e) {}
+  }, [state, router]);
+
+  return (
+  <form action={dispatch} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md">
+      <div>
+        <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
+        <div className="mt-1 flex rounded-md shadow-sm flex-col sm:flex-row">
+          <span className="inline-flex items-center px-3 py-2 rounded-t-md sm:rounded-l-md sm:rounded-t-none border border-b-0 sm:border-b border-gray-300 bg-gray-50 text-gray-500 text-sm">merkurov.love/you/</span>
+          <input type="text" name="username" id="username" required defaultValue={user.username || ''} className="flex-1 min-w-0 block w-full px-3 py-3 rounded-b-md sm:rounded-r-md sm:rounded-b-none border-gray-300 text-base" />
+        </div>
+        {!validateUsername(user.username) && (
+          <p className="text-xs text-yellow-600 mt-1">Username может содержать только строчные буквы, цифры, _ и .</p>
+        )}
+      </div>
+
+      <div>
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700">Ваше имя</label>
+  <input type="text" name="name" id="name" required defaultValue={user.name || ''} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3" />
+      </div>
+
+      <div>
+        <label htmlFor="bio" className="block text-sm font-medium text-gray-700">О себе</label>
+  <textarea name="bio" id="bio" rows="3" defaultValue={user.bio || ''} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"></textarea>
+      </div>
+
+      <div>
+        <label htmlFor="website" className="block text-sm font-medium text-gray-700">Веб-сайт</label>
+  <input type="url" name="website" id="website" defaultValue={user.website || ''} placeholder="https://example.com" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3" />
+      </div>
+
+      <div className="mt-4">
+        <SubmitButton />
+      </div>
+
+      {/* Сообщение о статусе операции */}
+      {showMessage && state.message && (
+        <p className={`text-base mt-4 ${state.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+          {state.message}
+        </p>
+      )}
+    </form>
+  );
+}
+
+
+==========================================
+=== FILE: ./components/profile/ProfileOwnerControls.tsx
+==========================================
+
+"use client";
+
+import React, { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+const ConnectWalletButton = dynamic(() => import('./ConnectWalletButton'), { ssr: false });
+import ProfileEditLink from '@/components/profile/ProfileEditLink';
+
+export default function ProfileOwnerControls({ wallet, viewerIsOwner }: { wallet?: string | null; viewerIsOwner?: boolean }) {
+  const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('connected_address');
+      if (stored) setConnectedAddress(stored);
+    } catch (e) { }
+  }, []);
+
+  function handleConnected(addr: string) {
+    setConnectedAddress(addr);
+  }
+
+  const isWalletOwner = connectedAddress && wallet && connectedAddress.toLowerCase() === (wallet || '').toLowerCase();
+
+  return (
+    <div className="flex items-center gap-4">
+      <ConnectWalletButton onConnected={handleConnected} />
+      {/* If the server already determined viewerIsOwner, server-side edit link will be present.
+          Otherwise show the edit link client-side when connected wallet matches profile wallet. */}
+      {!viewerIsOwner && isWalletOwner ? (
+        <ProfileEditLink className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" />
+      ) : null}
+    </div>
+  );
+}
+
+
+==========================================
+=== FILE: ./components/profile/SubscriptionToggle.js
+==========================================
+
+// components/profile/SubscriptionToggle.js
+'use client';
+
+import { useFormState, useFormStatus } from 'react-dom';
+import { toggleUserSubscription } from '@/app/admin/actions';
+import { useEffect, useState } from 'react';
+
+function SubmitButton({ isSubscribed }) {
+  const { pending } = useFormStatus();
+  return (
+    <button 
+      type="submit" 
+      disabled={pending}
+      className={`px-4 py-2 rounded-md shadow-sm text-sm font-medium text-white disabled:opacity-50 transition-colors ${
+        isSubscribed 
+          ? 'bg-gray-600 hover:bg-gray-700' 
+          : 'bg-blue-600 hover:bg-blue-700'
+      }`}
+    >
+      {pending ? '...' : (isSubscribed ? 'Отписаться' : 'Подписаться')}
+    </button>
+  );
+}
+
+export default function SubscriptionToggle({ initialSubscribed = false }) {
+  const [isSubscribed, setIsSubscribed] = useState(!!initialSubscribed);
+  const initialState = { message: null, status: null };
+  const [state, dispatch] = useFormState(toggleUserSubscription, initialState);
+  const [showMessage, setShowMessage] = useState(false);
+
+  useEffect(() => {
+    if (state.status === 'success') {
+      // Toggle local state
+      setIsSubscribed(!isSubscribed);
+      setShowMessage(true);
+      const timer = setTimeout(() => setShowMessage(false), 3000);
+      return () => clearTimeout(timer);
+    } else if (state.status === 'error') {
+      setShowMessage(true);
+      const timer = setTimeout(() => setShowMessage(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [state, isSubscribed]);
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      <h2 className="text-xl font-semibold text-gray-900 mb-3">Рассылка</h2>
+      <p className="text-sm text-gray-600 mb-4">
+        {isSubscribed 
+          ? 'Вы подписаны на еженедельную рассылку с новыми статьями и проектами.' 
+          : 'Подпишитесь на рассылку, чтобы получать новые статьи и инсайты медиарынка прямо на почту.'}
+      </p>
+
+      <form action={dispatch} className="flex items-center gap-4">
+        <input type="hidden" name="action" value={isSubscribed ? 'unsubscribe' : 'subscribe'} />
+        
+        <div className="flex items-center gap-2">
+          <div className={`w-3 h-3 rounded-full ${isSubscribed ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+          <span className="text-sm font-medium text-gray-700">
+            {isSubscribed ? 'Активна' : 'Неактивна'}
+          </span>
+        </div>
+
+        <SubmitButton isSubscribed={isSubscribed} />
+      </form>
+
+      {showMessage && state.message && (
+        <div className={`mt-4 p-3 rounded-md text-sm ${
+          state.status === 'success' 
+            ? 'bg-green-50 text-green-800 border border-green-200' 
+            : 'bg-red-50 text-red-800 border border-red-200'
+        }`}>
+          {state.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+==========================================
+=== FILE: ./components/profile/ProfileGuest.tsx
+==========================================
+
+'use client';
+
+import Link from 'next/link';
+import LoginButton from '@/components/LoginButton';
+
+export default function ProfileGuest() {
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-12 text-center">
+      <h2 className="text-2xl font-bold mb-4">Редактирование профиля</h2>
+      <p className="text-gray-600 mb-6">Только зарегистрированные пользователи могут изменять свою публичную информацию. Нажмите кнопку ниже, чтобы открыть страницу редактирования профиля.</p>
+      <div className="flex items-center justify-center gap-4">
+        <Link href="/profile" className="inline-flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold">Редактировать профиль</Link>
+        <LoginButton />
+      </div>
+    </div>
+  );
+}
