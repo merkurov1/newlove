@@ -2,22 +2,20 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase-browser';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Flame, Clock, Sparkles } from 'lucide-react';
+import { Heart, Clock, Sparkles } from 'lucide-react';
 import Header from '@/components/Header';
 
 const ANGEL_GIF = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
 const FLAME_ID = 1;
 
 export default function VigilPage() {
-  const router = useRouter();
   const supabase = createClient();
   const { user, profile, isLoading } = useAuth();
 
   const angelRef = useRef<HTMLDivElement>(null);
-  const fireRef = useRef<HTMLDivElement>(null);
+  const heartRef = useRef<HTMLDivElement>(null);
 
   const [intensity, setIntensity] = useState(1);
   const [lastGuardian, setLastGuardian] = useState('Loading...');
@@ -35,7 +33,7 @@ export default function VigilPage() {
     refreshData();
 
     const channel = supabase
-      .channel('vigil_v5')
+      .channel('vigil_v6')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vigil_hearts' }, (payload: any) => {
         const newRow = payload?.new;
         if (newRow && newRow.id === FLAME_ID) {
@@ -155,13 +153,13 @@ export default function VigilPage() {
       console.error(e);
     }
 
-    if (angelRef.current && fireRef.current) {
+    if (angelRef.current && heartRef.current) {
       const angelRect = angelRef.current.getBoundingClientRect();
-      const fireRect = fireRef.current.getBoundingClientRect();
+      const heartRect = heartRef.current.getBoundingClientRect();
       
       setSpark({
         start: { x: angelRect.left + angelRect.width / 2, y: angelRect.top + angelRect.height / 2 },
-        end: { x: fireRect.left + fireRect.width / 2, y: fireRect.top + fireRect.height / 2 }
+        end: { x: heartRect.left + heartRect.width / 2, y: heartRect.top + heartRect.height / 2 }
       });
     }
 
@@ -193,10 +191,8 @@ export default function VigilPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white font-mono flex flex-col relative selection:bg-orange-500/30 overflow-x-hidden antialiased">
       
-      {/* Глобальный хедер сайта */}
       <Header />
 
-      {/* Фоновое сияние */}
       <div 
         className="absolute inset-0 transition-opacity duration-1000 pointer-events-none mt-20"
         style={{ 
@@ -206,39 +202,33 @@ export default function VigilPage() {
 
       <main className="flex-1 max-w-3xl mx-auto w-full px-6 pt-32 pb-24 flex flex-col items-center justify-between relative z-10">
         
-        {/* Верхняя инфо-панель */}
-        <div className="w-full flex justify-between items-center border-b border-white/10 pb-4">
-          <button 
-            onClick={() => router.push('/temple')} 
-            className="text-xs uppercase tracking-widest text-zinc-400 hover:text-white transition-colors flex items-center gap-2"
-          >
-            ← Back to Sanctuary
-          </button>
-          <div className="text-right flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">
+        {/* Инфо-панель таймера */}
+        <div className="w-full flex justify-end items-center border-b border-white/10 pb-4">
+          <div className="text-right flex items-center gap-2 bg-white/5 border border-white/10 px-3.5 py-1.5 rounded-full">
             <Clock size={12} className="text-orange-500" />
             <span className="text-[10px] uppercase tracking-widest text-zinc-400">Heart Active:</span>
             <span className="text-xs font-bold text-white">{timeLeft || 'Loading...'}</span>
           </div>
         </div>
 
-        {/* Основной визуальный блок: Ангелочек и Сердце/Пламя по центру */}
-        <div className="w-full py-12 flex flex-col md:flex-row items-center justify-center gap-12 relative">
+        {/* Композиция: Ангел слева, Сердце по центру */}
+        <div className="w-full py-12 flex flex-col md:flex-row items-center justify-center gap-16 relative">
           
-          {/* Крупный ангел с динамическим свечением */}
+          {/* Ангел */}
           <div 
             ref={angelRef}
-            className="relative w-40 h-40 md:w-48 md:h-48 flex items-center justify-center shrink-0"
+            className="relative w-44 h-44 md:w-52 md:h-52 flex items-center justify-center shrink-0"
           >
             <div className={`absolute inset-0 bg-orange-500/20 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
             <img 
               src={ANGEL_GIF} 
-              className={`w-full h-full object-contain filter contrast-125 transition-all duration-500 ${isLighting ? 'brightness-150 scale-110 drop-shadow-[0_0_30px_rgba(255,165,0,0.9)]' : 'brightness-90'}`} 
+              className={`w-full h-full object-contain filter contrast-125 transition-all duration-500 ${isLighting ? 'brightness-150 scale-110 drop-shadow-[0_0_35px_rgba(255,165,0,0.9)]' : 'brightness-90'}`} 
               alt="Angel" 
             />
           </div>
 
-          {/* Центральное пламя / Сердце */}
-          <div className="relative flex items-center justify-center" ref={fireRef}>
+          {/* Центральное Сердце */}
+          <div className="relative flex items-center justify-center" ref={heartRef}>
             <div 
               className="relative transition-all duration-[2000ms] ease-in-out"
               style={{ transform: `scale(${Math.max(1, intensity * 0.9)})` }}
@@ -249,11 +239,11 @@ export default function VigilPage() {
                 className="w-44 h-44 bg-gradient-to-t from-orange-600 via-red-600 to-transparent rounded-full blur-[45px] opacity-80 mix-blend-screen"
               />
               <div className="absolute inset-0 flex items-center justify-center">
-                <Flame size={88} className="text-white fill-orange-500/30 drop-shadow-[0_0_35px_rgba(255,140,0,0.8)]" />
+                <Heart size={84} className="text-white fill-orange-500/30 drop-shadow-[0_0_35px_rgba(255,140,0,0.8)] stroke-[1.5]" />
               </div>
             </div>
 
-            {/* Анимация искры, летящей от ангела к сердцу */}
+            {/* Траектория искры от ангела к сердцу */}
             <AnimatePresence>
               {spark && (
                 <motion.div
@@ -261,23 +251,23 @@ export default function VigilPage() {
                     x: spark.start.x - spark.end.x, 
                     y: spark.start.y - spark.end.y, 
                     opacity: 1, 
-                    scale: 1.5 
+                    scale: 1.8 
                   }}
                   animate={{ 
                     x: 0, 
                     y: 0, 
                     opacity: [1, 1, 0], 
-                    scale: [1.5, 1, 0.4] 
+                    scale: [1.8, 1.2, 0.5] 
                   }}
                   transition={{ duration: 0.8, ease: 'easeInOut' }}
-                  className="absolute z-50 w-5 h-5 bg-amber-200 rounded-full shadow-[0_0_30px_#ffaa00]"
+                  className="absolute z-50 w-6 h-6 bg-amber-200 rounded-full shadow-[0_0_35px_#ffaa00] filter blur-[0.5px]"
                 />
               )}
             </AnimatePresence>
           </div>
         </div>
 
-        {/* Блок информации и управления */}
+        {/* Управление и Хранители */}
         <div className="w-full max-w-md space-y-6">
           
           <div className="text-center space-y-1 bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-md">
@@ -287,7 +277,6 @@ export default function VigilPage() {
             </div>
           </div>
 
-          {/* Список недавних хранителей */}
           <div className="space-y-2">
             <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 text-center">Active Guardians (24h)</div>
             <div className="flex flex-wrap gap-2 justify-center">
@@ -303,7 +292,6 @@ export default function VigilPage() {
             </div>
           </div>
 
-          {/* Кнопка отправки искры и статус авторизации через сайт */}
           <div className="space-y-3 pt-2">
             <div className="text-center text-xs text-zinc-400">
               {isLoading ? (
@@ -328,7 +316,7 @@ export default function VigilPage() {
               `}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-xl" />
-              <Flame size={16} className={`text-orange-500 ${isLighting ? 'animate-bounce' : ''}`} />
+              <Heart size={16} className={`text-orange-500 fill-orange-500/20 ${isLighting ? 'animate-bounce' : ''}`} />
               <span className="text-xs font-bold tracking-[0.25em] uppercase text-white">
                 {isLighting ? 'TRANSMITTING SPARK...' : 'SEND SPARK'}
               </span>
