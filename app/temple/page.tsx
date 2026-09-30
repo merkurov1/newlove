@@ -163,7 +163,8 @@ export default function DigitalTemple() {
       {/* Background Soft Glows */}
       <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-amber-200/30 via-indigo-200/20 to-purple-200/30 blur-[140px] pointer-events-none rounded-full" />
 
-      <Header activeTempleView={activeView} onTempleViewChange={setActiveView} />
+      {/* Вызов Header без лишних пропсов */}
+      <Header />
 
       {/* --- MAIN CONTENT CONTAINER --- */}
       <main className="max-w-3xl mx-auto px-6 pt-36 pb-16 relative z-10">
