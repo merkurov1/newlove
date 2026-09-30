@@ -1,12 +1,10 @@
-'use client'
+'use client';
 
-import { useState, useEffect, Suspense, useMemo } from 'react'
-import TempleWrapper from '@/components/TempleWrapper'
-import { templeTrack } from '@/components/templeTrack'
+import { useState, useEffect, Suspense, useMemo } from 'react';
+import Link from 'next/link';
+import { templeTrack } from '@/components/templeTrack';
+import { useAuth } from '@/components/AuthContext';
 
-// --- CONSTANTS & DATA ---
-
-// Utility: Convert **markdown** to <b>HTML</b> for emphasis
 const formatQuestionText = (text: string): string => {
     if (!text) return '';
     return text.replace(/\*\*(.*?)\*\*/g, '<b class="font-bold text-white">$1</b>');
@@ -37,8 +35,6 @@ const QUESTIONS_RU = [
   "Закончите фразу: «Я человек, который...»",
   "Вы готовы узнать свой диагноз?"
 ]
-
-// --- COMPONENTS ---
 
 const Stamp = ({ type }: { type: string }) => {
   const colors: Record<string, string> = {
@@ -90,60 +86,54 @@ const useProcessing = (isLoading: boolean) => {
     return { processingText: text };
 };
 
-// --- MAIN PAGE COMPONENT ---
-
 export default function CastPage() {
-  const [language, setLanguage] = useState<'en' | 'ru' | null>(null)
-  const [currentStep, setCurrentStep] = useState(0)
-  const [answers, setAnswers] = useState<string[]>([])
-  const [currentAnswer, setCurrentAnswer] = useState('')
+  const { user } = useAuth();
+  const [language, setLanguage] = useState<'en' | 'ru' | null>(null);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [currentAnswer, setCurrentAnswer] = useState('');
   
-  // Data State
-  const [fullText, setFullText] = useState('')
-  const [displayedText, setDisplayedText] = useState('')
-  const [archetype, setArchetype] = useState('')
-  const [recordId, setRecordId] = useState<string | null>(null)
+  const [fullText, setFullText] = useState('');
+  const [displayedText, setDisplayedText] = useState('');
+  const [archetype, setArchetype] = useState('');
+  const [recordId, setRecordId] = useState<string | null>(null);
   
-  // UI State
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false);
   const { processingText } = useProcessing(loading); 
-  const [showStamp, setShowStamp] = useState(false)
-  const [email, setEmail] = useState('')
-  const [emailSent, setEmailSent] = useState(false)
+  const [showStamp, setShowStamp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
 
-  const questions = language === 'en' ? QUESTIONS_EN : QUESTIONS_RU
-  const isAnswerValid = currentAnswer.trim().length > 2 
+  const questions = language === 'en' ? QUESTIONS_EN : QUESTIONS_RU;
+  const isAnswerValid = currentAnswer.trim().length > 2;
 
   useEffect(() => {
-      templeTrack('enter', 'User opened Cast page')
-   }, [])
+      templeTrack('enter', 'User opened Cast page');
+   }, []);
 
-  // Typewriter Effect for Result
    useEffect(() => {
       if (currentStep === 11 && fullText) {
-         let index = 0
+         let index = 0;
          const interval = setInterval(() => {
-            setDisplayedText((prev) => prev + fullText.charAt(index))
-            index++
+            setDisplayedText((prev) => prev + fullText.charAt(index));
+            index++;
             if (index >= fullText.length) {
-               clearInterval(interval)
-               setTimeout(() => setShowStamp(true), 500) 
+               clearInterval(interval);
+               setTimeout(() => setShowStamp(true), 500); 
             }
-         }, 10) // Speed of typing
-         return () => clearInterval(interval)
+         }, 10);
+         return () => clearInterval(interval);
       }
-   }, [currentStep, fullText])
+   }, [currentStep, fullText]);
 
   const handleLanguageSelect = (lang: 'en' | 'ru') => {
-    setLanguage(lang)
-    setCurrentStep(1)
+    setLanguage(lang);
+    setCurrentStep(1);
   }
   
   const formatAnalysisText = (analysis: any, archetype: string): string => {
     try {
         const parsed = typeof analysis === 'string' ? JSON.parse(analysis) : analysis;
-        
-        // Fallback for raw text response
         if (!parsed || typeof parsed !== 'object') return String(analysis || 'Analysis structure incomplete.');
 
         const scores = parsed.scores || {};
@@ -151,21 +141,19 @@ export default function CastPage() {
             .sort((a, b) => scores[b] - scores[a]) 
             .map(k => `${k}: ${scores[k]}`).join(' / ');
 
-        const ruHeadings = {
+        const headings = language === 'ru' ? {
             scores: "СЧЕТ",
             executive_summary: "РЕЗЮМЕ (AGENCY INDEX)",
             structural_weaknesses: "СТРУКТУРНЫЕ СЛАБОСТИ",
             core_assets: "КЛЮЧЕВЫЕ АКТИВЫ",
             strategic_directive: "СТРАТЕГИЧЕСКАЯ ДИРЕКТИВА"
-        };
-        const enHeadings = {
+        } : {
             scores: "SCOREBOARD",
             executive_summary: "EXECUTIVE SUMMARY (AGENCY INDEX)",
             structural_weaknesses: "STRUCTURAL WEAKNESSES",
             core_assets: "CORE ASSETS",
             strategic_directive: "STRATEGIC DIRECTIVE"
         };
-        const headings = language === 'ru' ? ruHeadings : enHeadings;
         
         let formatted = `\n[ ${language === 'ru' ? 'АРХЕТИП' : 'ARCHETYPE'} ]\n${archetype}\n\n`;
         formatted += `\n[ ${headings.scores} ]\n${scoresText}\n\n`;
@@ -178,69 +166,70 @@ export default function CastPage() {
     } catch (e) {
         return String(analysis || 'Error formatting analysis.');
     }
-}
+  }
 
   const handleNext = async () => {
-    if (!isAnswerValid && currentStep < 10) return 
+    if (!isAnswerValid && currentStep < 10) return;
 
-    const newAnswers = [...answers, currentAnswer]
-    setAnswers(newAnswers)
-    setCurrentAnswer('')
+    const newAnswers = [...answers, currentAnswer];
+    setAnswers(newAnswers);
+    setCurrentAnswer('');
 
     if (currentStep < 10) {
-      setCurrentStep(currentStep + 1)
+      setCurrentStep(currentStep + 1);
     } else {
-      // FINISH
-      setCurrentStep(11)
-      setLoading(true)
+      setCurrentStep(11);
+      setLoading(true);
       
       try {
+        const session = (window as any)?.__supabase_session;
+        const token = session?.access_token || '';
+
         const res = await fetch('/api/cast', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({ answers: newAnswers, language })
-        })
-        const data = await res.json()
+        });
+        const data = await res.json();
             
         const formatted = formatAnalysisText(data.analysis, data.archetype);
 
-        setFullText(formatted)
-        setArchetype(data.archetype)
-        setRecordId(data.recordId) 
+        setFullText(formatted);
+        setArchetype(data.archetype);
+        setRecordId(data.recordId); 
 
       } catch (error) {
-        setFullText('Error connecting to the Core. Connection severed.')
-        setLoading(false)
+        setFullText('Error connecting to the Core. Connection severed.');
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
   }
 
   const handleEmailSubmit = async () => {
-    if (!email || !recordId) return
+    if (!email || !recordId) return;
     try {
         await fetch('/api/cast/capture', {
             method: 'POST',
             body: JSON.stringify({ recordId, email })
-        })
-        setEmailSent(true)
-    } catch (e) { console.error(e) }
+        });
+        setEmailSent(true);
+    } catch (e) { console.error(e); }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && isAnswerValid) {
-      e.preventDefault()
-      handleNext()
+      e.preventDefault();
+      handleNext();
     }
   }
 
-  // --- VIEW 1: INTRO ---
   if (currentStep === 0) {
      return (
         <div className="min-h-screen bg-black flex items-center justify-center font-mono relative p-6">
-            <Suspense fallback={null}><TempleWrapper /></Suspense>
-            
             <div className="max-w-4xl w-full grid md:grid-cols-2 gap-12 animate-in fade-in duration-700">
                 <div className="space-y-8 flex flex-col justify-center">
                     <p className="text-gray-400 text-sm md:text-base leading-relaxed tracking-wide">
@@ -250,7 +239,7 @@ export default function CastPage() {
                     </p>
                     <button 
                         onClick={() => handleLanguageSelect('en')} 
-                        className="group flex items-center gap-4 text-white text-lg tracking-[0.2em] transition-all hover:opacity-70"
+                        className="group flex items-center gap-4 text-white text-lg tracking-[0.2em] transition-all hover:opacity-70 text-left"
                     >
                         [ START IN ENGLISH ] <span className="group-hover:translate-x-2 transition-transform">→</span>
                     </button>
@@ -263,24 +252,23 @@ export default function CastPage() {
                     </p>
                     <button 
                         onClick={() => handleLanguageSelect('ru')} 
-                        className="group flex items-center gap-4 text-white text-lg tracking-[0.2em] transition-all hover:opacity-70"
+                        className="group flex items-center gap-4 text-white text-lg tracking-[0.2em] transition-all hover:opacity-70 text-left"
                     >
                         [ НАЧАТЬ НА РУССКОМ ] <span className="group-hover:translate-x-2 transition-transform">→</span>
                     </button>
                 </div>
             </div>
+            <div className="absolute bottom-6 left-6">
+               <Link href="/temple" className="text-xs text-zinc-600 hover:text-white uppercase tracking-widest">[ Return to Temple ]</Link>
+            </div>
         </div>
-     )
+     );
   }
 
-  // --- VIEW 2: QUESTIONS ---
   if (currentStep <= 10) {
      return (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center px-6 font-mono animate-in fade-in duration-500 relative">
-           <Suspense fallback={null}><TempleWrapper /></Suspense>
-
            <div className="w-full max-w-2xl flex flex-col min-h-[60vh] justify-center">
-              
               <div className="flex justify-between text-[10px] text-zinc-600 mb-8 uppercase tracking-[0.3em]">
                  <span>Query {currentStep < 10 ? `0${currentStep}` : currentStep} / 10</span>
                  <span>Protocol v.2.5</span>
@@ -308,24 +296,18 @@ export default function CastPage() {
                  >
                     {currentStep === 10 ? (language === 'ru' ? 'АНАЛИЗ' : 'ANALYZE') : (language === 'ru' ? 'ДАЛЕЕ' : 'NEXT')}
                  </button>
-                 
-                 {/* Hint for Enter key */}
                  <span className="text-[10px] text-zinc-700 uppercase tracking-widest">
                     {language === 'ru' ? '[ ENTER ДЛЯ ВВОДА ]' : '[ PRESS ENTER ]'}
                  </span>
               </div>
            </div>
         </div>
-     )
+     );
   }
 
-  // --- VIEW 3: RESULT ---
   return (
     <div className="min-h-screen bg-black text-white font-mono p-4 md:p-12 overflow-y-auto relative">
-       <Suspense fallback={null}><TempleWrapper /></Suspense>
-
        <div className="max-w-3xl mx-auto mt-12 relative pb-20">
-          
           {loading ? (
              <div className="flex flex-col items-center justify-center h-[50vh]">
                 <div className="animate-pulse text-xs md:text-sm tracking-[0.3em] text-zinc-400">
@@ -337,13 +319,10 @@ export default function CastPage() {
              </div>
           ) : (
              <>
-                {/* STAMP */}
                 {showStamp && <Stamp type={archetype} />}
-
-                {/* TERMINAL OUTPUT */}
                 <div className="border border-zinc-800 p-6 md:p-12 bg-black relative shadow-[0_0_100px_rgba(255,255,255,0.03)] min-h-[60vh]">
                    <div className="flex justify-between border-b border-zinc-900 pb-6 mb-8 text-[10px] text-zinc-500 tracking-[0.2em] uppercase">
-                      <span>Subject: Anonymous</span>
+                      <span>Subject: {user?.email || 'Anonymous'}</span>
                       <span>Date: {new Date().toLocaleDateString()}</span>
                    </div>
                    
@@ -353,80 +332,14 @@ export default function CastPage() {
                    </pre>
                 </div>
 
-                {/* LEVEL II (LEAD GEN) */}
-                <div className={`mt-12 transition-all duration-1000 ${showStamp ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-                   <div className="border border-zinc-800 bg-zinc-950 p-8 grid md:grid-cols-2 gap-8 items-center">
-                      <div>
-                         <h3 className="text-red-500 text-xs tracking-[0.2em] mb-4 uppercase font-bold">
-                            {language === 'ru' ? 'НИЗКОЕ РАЗРЕШЕНИЕ' : 'LOW RESOLUTION WARNING'}
-                         </h3>
-                         <p className="text-zinc-500 text-xs leading-relaxed">
-                            {language === 'ru' 
-                              ? 'Этот слепок создан на основе 10 точек данных. Это набросок. Чтобы получить Истину и полную стратегию, требуется доступ к Level II.'
-                              : 'This cast uses 10 data points. It is a sketch. Real deconstruction requires Level II access and deeper architectural analysis.'}
-                         </p>
-                      </div>
-
-                      <div>
-                         {!emailSent ? (
-                            <div className="flex flex-col gap-3">
-                               <p className="text-[10px] text-zinc-400 uppercase tracking-widest">
-                                  {language === 'ru' ? 'ПОЛУЧИТЬ ДОСТУП:' : 'REQUEST ACCESS:'}
-                               </p>
-                               <div className="flex gap-0">
-                                  <input 
-                                    type="email" 
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="email@address.com"
-                                    className="bg-black border border-zinc-700 border-r-0 text-white text-xs p-4 w-full outline-none focus:border-white transition-colors placeholder-zinc-800"
-                                  />
-                                  <button 
-                                    onClick={handleEmailSubmit} 
-                                    className="bg-white border border-white text-black text-xs px-6 uppercase hover:bg-zinc-200 transition-colors font-bold tracking-wider"
-                                  >
-                                     Submit
-                                  </button>
-                               </div>
-                            </div>
-                         ) : (
-                            <div className="text-center py-4 border border-zinc-800 bg-black">
-                               <span className="text-zinc-500 text-xs tracking-widest uppercase">
-                                  {language === 'ru' ? '[ ЗАПРОС ОТПРАВЛЕН ]' : '[ REQUEST SENT ]'}
-                               </span>
-                            </div>
-                         )}
-                      </div>
-                   </div>
-                </div>
-
                 <div className="text-center mt-24">
-                   <a href="/" className="text-[10px] text-zinc-700 hover:text-white transition-colors tracking-[0.3em] uppercase">
-                      [ Exit Protocol ]
-                   </a>
+                   <Link href="/temple" className="text-[10px] text-zinc-700 hover:text-white transition-colors tracking-[0.3em] uppercase">
+                      [ Return to Temple ]
+                   </Link>
                 </div>
              </>
           )}
        </div>
-       
-       <style jsx global>{`
-         @keyframes stamp {
-           0% { opacity: 0; transform: scale(3) rotate(0deg); }
-           50% { opacity: 1; transform: scale(0.9) rotate(12deg); }
-           70% { transform: scale(1.1) rotate(12deg); }
-           100% { opacity: 1; transform: scale(1) rotate(12deg); }
-         }
-         .animate-stamp {
-           animation: stamp 0.4s cubic-bezier(0.5, 0, 0.75, 0) forwards;
-         }
-         @keyframes progress-indeterminate {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-         }
-         .animate-progress-indeterminate {
-            animation: progress-indeterminate 1.5s infinite linear;
-         }
-       `}</style>
     </div>
-  )
+  );
 }

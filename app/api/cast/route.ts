@@ -11,7 +11,6 @@ const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const genAI = new GoogleGenerativeAI(apiKey)
 const supabase = createClient(sbUrl, sbKey)
 
-// ИСПОЛЬЗУЕМ ВАЛИДНУЮ МОДЕЛЬ ИЗ ТВОЕГО СПИСКА
 const MODEL_NAME = 'gemini-2.5-flash'
 
 function buildSystemPrompt(language: 'en' | 'ru') {
@@ -63,7 +62,6 @@ ${langNote}
 }
 
 function extractJSON(text: string) {
-  // Чистим от маркдауна, если модель его добавит
   let clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
   const jsonMatch = clean.match(/\{[\s\S]*\}/m)
   if (jsonMatch) {
@@ -82,15 +80,28 @@ export async function POST(req: Request) {
     const { answers, language } = await req.json()
     const lang: 'en' | 'ru' = language === 'ru' ? 'ru' : 'en'
 
+    if (!answers || !Array.isArray(answers)) {
+      return NextResponse.json({ error: 'Answers required' }, { status: 400 })
+    }
+
+    // Определяем user_id из заголовка авторизации, если пользователь залогинен
+    const authHeader = req.headers.get('authorization')
+    let userId = null
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '')
+      const { data: { user } } = await supabase.auth.getUser(token)
+      if (user) userId = user.id
+    }
+
     const systemPrompt = buildSystemPrompt(lang)
 
     const model = genAI.getGenerativeModel({ 
         model: MODEL_NAME, 
         systemInstruction: systemPrompt,
-        generationConfig: { responseMimeType: "application/json" } // Гарантирует JSON
+        generationConfig: { responseMimeType: "application/json" }
     })
 
-    const userText = `USER ANSWERS:\n${answers.map((a: string, i: number) => `${i + 1}. ${a}`).join('\n')}`
+    const userText = `USER ANSWERS:\n${answers.map((a: string, i: number) => `${i + 1}.${a}`).join('\n')}`
     
     const result = await model.generateContent(userText)
     const rawText = result.response.text()
@@ -98,7 +109,6 @@ export async function POST(req: Request) {
     let parsed = extractJSON(rawText)
     let archetype = 'VOID'
     
-    // Fallback logic
     if (parsed && parsed.archetype) {
       archetype = String(parsed.archetype).toUpperCase()
     } else {
@@ -116,19 +126,28 @@ export async function POST(req: Request) {
       }
     }
 
-    // Сохраняем в Supabase
+    // Сохраняем в таблицу casts с привязкой к пользователю (если авторизован)
     const { data: record, error } = await supabase
       .from('casts')
       .insert({ 
+          user_id: userId,
           answers, 
           language: lang, 
-          analysis: parsed, // Supabase сам стрингифицирует JSONB
-          archetype 
+          analysis: parsed, 
+          archetype,
+          created_at: new Date().toISOString()
       })
       .select()
-      .single()
+      .maybeSingle()
 
     if (error) console.error('Supabase DB Error:', error)
+
+    // Дублируем событие в общую ленту храма
+    await supabase.from('temple_log').insert({
+      event_type: 'CAST',
+      message: `Perceptual archetype manifested: ${archetype}`,
+      created_at: new Date().toISOString()
+    })
 
     return NextResponse.json({ 
         analysis: parsed, 

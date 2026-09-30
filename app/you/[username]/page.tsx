@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Globe, User, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Globe, ShieldCheck, ScanFace } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,7 @@ export default async function UserProfilePage({ params }: PageProps) {
   const { username } = params;
   const supabase = createClient();
 
-  // Запрашиваем профиль пользователя по уникальному username
+  // 1. Запрашиваем профиль пользователя по уникальному username
   const { data: profile, error } = await supabase
     .from('users')
     .select('*')
@@ -24,6 +24,21 @@ export default async function UserProfilePage({ params }: PageProps) {
 
   if (error || !profile) {
     notFound();
+  }
+
+  // 2. Запрашиваем результаты тестов Cast для этого пользователя (если есть user_id)
+  let userCasts: any[] = [];
+  if (profile.id || profile.user_id) {
+    const targetId = profile.id || profile.user_id;
+    const { data: castsData } = await supabase
+      .from('casts')
+      .select('*')
+      .eq('user_id', targetId)
+      .order('created_at', { ascending: false });
+    
+    if (castsData) {
+      userCasts = castsData;
+    }
   }
 
   const userInitials = profile.name ? profile.name.substring(0, 2).toUpperCase() : 'AM';
@@ -42,7 +57,7 @@ export default async function UserProfilePage({ params }: PageProps) {
       />
 
       {/* MAIN CONTAINER */}
-      <main className="max-w-2xl mx-w-2xl mx-auto w-full my-auto space-y-8 relative z-20">
+      <main className="max-w-3xl mx-auto w-full my-auto space-y-10 relative z-20">
         
         {/* Navigation / Back link */}
         <div>
@@ -112,6 +127,45 @@ export default async function UserProfilePage({ params }: PageProps) {
             </div>
           )}
 
+        </div>
+
+        {/* CASTS / ARCHETYPES HISTORY SECTION */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <h3 className="text-xs font-mono uppercase tracking-widest text-zinc-500">
+              Psychometric Casts & Manifestations ({userCasts.length})
+            </h3>
+            <Link href="/cast" className="text-xs font-mono text-zinc-900 hover:underline">
+              + New Cast
+            </Link>
+          </div>
+
+          {userCasts.length === 0 ? (
+            <div className="p-8 rounded-3xl bg-white/40 border border-zinc-200 text-center text-zinc-400 font-mono text-xs uppercase tracking-wider">
+              No archetypes manifested yet.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {userCasts.map((cast) => (
+                <div key={cast.id} className="p-6 rounded-3xl bg-white/70 backdrop-blur-2xl border border-zinc-200/80 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-indigo-600 font-mono text-xs font-bold uppercase tracking-wider">
+                      <ScanFace size={16} />
+                      <span>Archetype: {cast.archetype}</span>
+                    </div>
+                    <span className="text-zinc-400 font-mono text-xs">
+                      {new Date(cast.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {cast.analysis?.executive_summary && (
+                    <p className="text-sm text-zinc-700 leading-relaxed">
+                      {cast.analysis.executive_summary}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
       </main>
