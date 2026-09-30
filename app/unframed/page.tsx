@@ -11,6 +11,8 @@ import {
   FileText,
   Lock,
   ChevronDown,
+  BookOpen,
+  ExternalLink,
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -174,7 +176,6 @@ export default function UnframedPage() {
   const [formData, setFormData] = useState({ name: '', agency: '', email: '' });
 
   // PRO SCROLL ANIMATION (HOOKS RESTORED)
-  // Hero Scroll Animation (local replacement for framer-motion hooks)
   const [scrollY, setScrollY] = useState(0);
   useEffect(() => {
     const onScroll = () => setScrollY(window.scrollY || window.pageYOffset || 0);
@@ -251,7 +252,6 @@ export default function UnframedPage() {
           </p>
           <div className="h-[2px] w-12 bg-red-600 shadow-[0_0_15px_red]" />
         </div>
-        {/* ---------------------------------------------- */}
       </motion.div>
 
       {/* --- MANIFESTO --- */}
@@ -322,80 +322,119 @@ export default function UnframedPage() {
           </div>
         </section>
 
-        {/* METRICS */}
+        {/* METRICS & BOOK ACCESS HUB */}
         <section className="max-w-7xl mx-auto px-6 py-24">
           <div className="w-full h-[1px] bg-zinc-800 mb-6 relative overflow-hidden">
             <motion.div
               initial={{ width: 0 }}
-              whileInView={{ width: '75%' }}
+              whileInView={{ width: '100%' }}
               transition={{ duration: 1.5, ease: 'circOut' }}
               className="absolute top-0 left-0 h-full bg-red-600 shadow-[0_0_20px_red]"
             />
           </div>
           <div className="flex justify-between items-center font-mono text-[10px] text-red-600 uppercase tracking-widest mb-12">
-            <span>Status: Uploading</span>
-            <span className="animate-pulse">75% Complete</span>
+            <span>Status: Manuscript Complete</span>
+            <span className="animate-pulse">Ready for Distribution</span>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 border border-zinc-800 bg-zinc-900/10">
-            {[
-              { icon: Hash, label: 'Length', val: '~60k Words' },
-              { icon: FileText, label: 'Genre', val: 'Memoir / Noir' },
-              { icon: Globe, label: 'Rights', val: 'Available' },
-              { icon: Lock, label: 'Status', val: 'Proposal' },
-            ].map((s, i) => {
-              const isProposal =
-                s.label === 'Status' && String(s.val).toLowerCase().includes('proposal');
-              const base = 'p-8 border-r border-b md:border-b-0 border-zinc-800 last:border-r-0';
+          {/* BASE METRICS GRID */}
+          <div className="grid grid-cols-2 md:grid-cols-4 border border-zinc-800 bg-zinc-900/10 mb-8">
+            <div className="p-8 border-r border-b md:border-b-0 border-zinc-800">
+              <Hash size={16} className="text-zinc-600 mb-4" />
+              <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Length</p>
+              <p className="text-white font-mono text-lg">~60k Words</p>
+            </div>
+            <div className="p-8 border-r border-b md:border-b-0 border-zinc-800">
+              <FileText size={16} className="text-zinc-600 mb-4" />
+              <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Genre</p>
+              <p className="text-white font-mono text-lg">Memoir / Noir</p>
+            </div>
+            <div className="p-8 border-r border-b md:border-b-0 border-zinc-800">
+              <Globe size={16} className="text-zinc-600 mb-4" />
+              <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Rights</p>
+              <p className="text-white font-mono text-lg">Available</p>
+            </div>
+            <div className="p-8">
+              <Lock size={16} className="text-zinc-600 mb-4" />
+              <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Status</p>
+              <p className="text-red-500 font-mono text-lg font-bold">Finished / Proposal</p>
+            </div>
+          </div>
 
-              if (isProposal) {
-                return (
-                  <>
-                    <Link
-                      key={i}
-                      href="/unframed/proposal"
-                      className={`${base} group block bg-gradient-to-br from-red-700 via-red-600 to-red-500 hover:scale-[1.02] transform transition-all duration-200 ring-1 ring-red-600/30 shadow-sm hover:shadow-[0_8px_30px_rgba(220,38,38,0.12)]`}
-                      aria-label="Proposal: view publishing proposal"
-                    >
-                      <s.icon size={16} className="text-red-100 mb-4 group-hover:text-white" />
-                      <p className="text-[9px] text-red-100 uppercase tracking-widest mb-2 group-hover:text-white">
-                        {s.label}
-                      </p>
-                      <p className="text-white font-mono text-lg font-bold tracking-tight">
-                        {s.val}
-                      </p>
-                      <span className="absolute -inset-px rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                    </Link>
-                    {/* BOOK BLOCK */}
-                    <Link
-                      key="book-block"
-                      href="/unframed/book"
-                      className={`${base} group block bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 hover:scale-[1.02] transform transition-all duration-200 ring-1 ring-blue-600/30 shadow-sm hover:shadow-[0_8px_30px_rgba(37,99,235,0.12)] mt-4 md:mt-0`}
-                      aria-label="Book: read Unframed online"
-                    >
-                      <FileText size={16} className="text-blue-100 mb-4 group-hover:text-white" />
-                      <p className="text-[9px] text-blue-100 uppercase tracking-widest mb-2 group-hover:text-white">
-                        Book
-                      </p>
-                      <p className="text-white font-mono text-lg font-bold tracking-tight">
-                        Read Online
-                      </p>
-                      <span className="absolute -inset-px rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                    </Link>
-                  </>
-                );
-              }
-
-              return (
-                <div key={i} className={base}>
-                  <s.icon size={16} className="text-zinc-600 mb-4" />
-                  <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">
-                    {s.label}
-                  </p>
-                  <p className="text-white font-mono text-lg">{s.val}</p>
+          {/* INTERACTIVE ACTION CARDS (PROPOSAL, READ ONLINE, ALL-NIGHT SERVICES) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* 1. PROPOSAL */}
+            <Link
+              href="/unframed/proposal"
+              className="group relative p-8 bg-gradient-to-br from-red-950/40 via-zinc-900 to-black border border-red-900/40 hover:border-red-600 transition-all duration-300 rounded-lg flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <span className="font-mono text-xs uppercase tracking-widest text-red-500">01 / Dossier</span>
+                  <Terminal size={18} className="text-red-500 group-hover:scale-110 transition-transform" />
                 </div>
-              );
-            })}
+                <h4 className="text-2xl font-bold uppercase tracking-tight text-white mb-2 font-sans">
+                  Publisher Proposal
+                </h4>
+                <p className="text-sm font-serif text-zinc-400 leading-relaxed">
+                  Confidential synopsis, target audience breakdown, and marketing vectors for literary agents.
+                </p>
+              </div>
+              <div className="mt-8 flex items-center gap-2 font-mono text-xs text-red-400 uppercase tracking-widest group-hover:text-white transition-colors">
+                <span>View Proposal</span>
+                <span className="group-hover:translate-x-1 transition-transform">→</span>
+              </div>
+            </Link>
+
+            {/* 2. READ ONLINE */}
+            <Link
+              href="/unframed/book"
+              className="group relative p-8 bg-gradient-to-br from-blue-950/40 via-zinc-900 to-black border border-blue-900/40 hover:border-blue-600 transition-all duration-300 rounded-lg flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <span className="font-mono text-xs uppercase tracking-widest text-blue-400">02 / Reader</span>
+                  <BookOpen size={18} className="text-blue-400 group-hover:scale-110 transition-transform" />
+                </div>
+                <h4 className="text-2xl font-bold uppercase tracking-tight text-white mb-2 font-sans">
+                  Read Online
+                </h4>
+                <p className="text-sm font-serif text-zinc-400 leading-relaxed">
+                  Full digital manuscript access in a clean, distraction-free typographic layout.
+                </p>
+              </div>
+              <div className="mt-8 flex items-center gap-2 font-mono text-xs text-blue-300 uppercase tracking-widest group-hover:text-white transition-colors">
+                <span>Open Manuscript</span>
+                <span className="group-hover:translate-x-1 transition-transform">→</span>
+              </div>
+            </Link>
+
+            {/* 3. ALL-NIGHT SERVICES (ВСЕНОЩНЫЕ СЕРВИСЫ) */}
+            <a
+              href="https://www.barnesandnoble.com" 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative p-8 bg-gradient-to-br from-zinc-900 via-zinc-900 to-black border border-zinc-800 hover:border-zinc-500 transition-all duration-300 rounded-lg flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <span className="font-mono text-xs uppercase tracking-widest text-zinc-400">03 / Distribution</span>
+                  <ExternalLink size={18} className="text-zinc-400 group-hover:scale-110 transition-transform" />
+                </div>
+                <h4 className="text-2xl font-bold uppercase tracking-tight text-white mb-2 font-sans">
+                  All-Night Services
+                </h4>
+                <p className="text-sm font-serif text-zinc-400 leading-relaxed">
+                  Available across global digital retail platforms, alternative mirrors, and partner networks.
+                </p>
+              </div>
+              <div className="mt-8 flex items-center gap-2 font-mono text-xs text-zinc-300 uppercase tracking-widest group-hover:text-white transition-colors">
+                <span>External Access</span>
+                <span className="group-hover:translate-x-1 transition-transform">↗</span>
+              </div>
+            </a>
+
           </div>
         </section>
 
