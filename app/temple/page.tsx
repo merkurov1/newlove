@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Link from 'next/link';
 import { 
   ScanFace, 
   Flame, 
@@ -11,22 +10,18 @@ import {
   Mic, 
   Square,
   Send, 
-  User, 
-  Settings, 
-  LogOut, 
   Sparkles, 
   ArrowLeft,
-  CheckCircle2,
-  ShieldCheck
+  CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthContext';
+import Header from '@/components/Header';
 
 type ServiceType = 'WALL' | 'CAST' | 'ASH' | 'VIGIL' | 'DEBT';
 
 export default function DigitalTemple() {
-  const { user, profile, roles, isLoading, signOut } = useAuth();
+  const { profile } = useAuth();
   const [activeView, setActiveView] = useState<ServiceType>('WALL');
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,21 +34,7 @@ export default function DigitalTemple() {
   const [ashInput, setAshInput] = useState('');
   const [isAshBurnt, setIsAshBurnt] = useState(false);
 
-  const username = profile?.username || user?.user_metadata?.username || (user as any)?.username || null;
-  const profileHref = username ? `/you/${username}` : '/profile';
-
-  const userImage =
-    profile?.image ||
-    profile?.avatar_url ||
-    user?.user_metadata?.avatar_url ||
-    user?.user_metadata?.picture ||
-    (user as any)?.image ||
-    null;
-  const userName = profile?.name || user?.user_metadata?.name || user?.email || 'Visitor';
-  const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
-
-  const roleNorm = (Array.isArray(roles) && roles.length) ? roles[0] : ((user as any)?.role ? String((user as any).role).toUpperCase() : 'USER');
-  const isAdmin = roleNorm === 'ADMIN';
+  const userName = profile?.name || 'Visitor';
 
   useEffect(() => {
     async function fetchLogs() {
@@ -174,154 +155,17 @@ export default function DigitalTemple() {
     setActiveView('WALL');
   };
 
-  const ritualNavItems = [
-    { id: 'CAST', label: 'CAST', icon: ScanFace, color: 'text-indigo-600' },
-    { id: 'ASH', label: 'ASH', icon: Trash2, color: 'text-rose-600' },
-    { id: 'VIGIL', label: 'VIGIL', icon: Flame, color: 'text-amber-600' },
-    { id: 'DEBT', label: 'DEBT', icon: ReceiptText, color: 'text-emerald-600' },
-  ];
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F6F4F0] via-[#F0ECE6] to-[#E8E3DA] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white relative overflow-x-hidden antialiased">
       
       {/* Background Soft Glows */}
       <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-amber-200/30 via-indigo-200/20 to-purple-200/30 blur-[140px] pointer-events-none rounded-full" />
 
-      {/* --- HEADER С ИНТЕГРИРОВАННЫМ МЕНЮ РИТУАЛОВ --- */}
-      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/50 border-b border-white/60 shadow-[0_4px_30px_rgba(0,0,0,0.03)] px-6 md:px-8 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
-          
-          {/* Left: User Avatar / Profile */}
-          <div className="relative flex items-center gap-4">
-            {isLoading ? (
-              <div className="w-10 h-10 rounded-full bg-zinc-200 animate-pulse" />
-            ) : user ? (
-              <button
-                onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-tr from-zinc-900 to-zinc-700 text-white font-medium text-sm flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 active:scale-95 transition-all duration-300"
-              >
-                {userImage ? (
-                  <img src={userImage} alt={userName} className="w-full h-full object-cover" />
-                ) : (
-                  <span>{userInitials}</span>
-                )}
-              </button>
-            ) : (
-              <Link
-                href="/"
-                className="px-4 py-2 rounded-full bg-zinc-900 text-white text-xs font-mono tracking-wider uppercase hover:bg-zinc-800 transition-all shadow-sm"
-              >
-                Home
-              </Link>
-            )}
-
-            {/* Profile Popover */}
-            <AnimatePresence>
-              {isProfileOpen && user && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute left-0 top-12 mt-2 w-64 p-4 rounded-3xl bg-white/95 backdrop-blur-3xl border border-white/90 shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-50 space-y-3"
-                >
-                  <div className="flex items-center gap-3 pb-3 border-b border-zinc-200/50">
-                    <div className="w-9 h-9 rounded-full overflow-hidden bg-zinc-900 text-white font-medium flex items-center justify-center text-xs shadow-inner flex-shrink-0">
-                      {userImage ? (
-                        <img src={userImage} alt={userName} className="w-full h-full object-cover" />
-                      ) : (
-                        <span>{userInitials}</span>
-                      )}
-                    </div>
-                    <div className="overflow-hidden">
-                      <div className="text-sm font-semibold text-zinc-900 truncate">{userName}</div>
-                      <div className="text-xs text-zinc-500 font-mono truncate">{user.email}</div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Link
-                      href={profileHref}
-                      onClick={() => setIsProfileOpen(false)}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition-all"
-                    >
-                      <User size={14} className="text-zinc-500" />
-                      Profile & Archetype
-                    </Link>
-                    <Link
-                      href="/profile"
-                      onClick={() => setIsProfileOpen(false)}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition-all"
-                    >
-                      <Settings size={14} className="text-zinc-500" />
-                      Settings
-                    </Link>
-                    {isAdmin && (
-                      <Link
-                        href="/admin"
-                        onClick={() => setIsProfileOpen(false)}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-xs font-medium text-pink-700 bg-pink-50 hover:bg-pink-100 transition-all"
-                      >
-                        <ShieldCheck size={14} className="text-pink-600" />
-                        Admin Panel
-                      </Link>
-                    )}
-                    <button
-                      onClick={() => {
-                        setIsProfileOpen(false);
-                        signOut();
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-xs font-medium text-rose-600 hover:bg-rose-50/60 transition-all"
-                    >
-                      <LogOut size={14} />
-                      Sign Out
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <Link href="/temple" className="hidden sm:block font-serif text-lg tracking-wider text-zinc-900 uppercase">
-              Merkurov
-            </Link>
-          </div>
-
-          {/* Center / Right: Ritual Menu in Header */}
-          <div className="flex items-center gap-3 sm:gap-6">
-            <nav className="flex items-center gap-2 sm:gap-4 font-mono text-xs uppercase tracking-wider">
-              {ritualNavItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeView === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveView(isActive ? 'WALL' : (item.id as ServiceType))}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all border ${
-                      isActive
-                        ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
-                        : 'bg-white/60 text-zinc-600 border-zinc-200/80 hover:bg-white hover:text-zinc-900'
-                    }`}
-                  >
-                    <Icon size={14} className={isActive ? 'text-white' : item.color} />
-                    <span className="hidden md:inline">{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-
-            <Link
-              href="/"
-              className="text-xs font-mono uppercase tracking-wider text-zinc-500 hover:text-zinc-900 transition-colors pl-3 border-l border-zinc-200"
-            >
-              Archive
-            </Link>
-          </div>
-
-        </div>
-      </header>
+      {/* Используем общий Header в режиме temple */}
+      <Header activeTempleView={activeView} onTempleViewChange={setActiveView} />
 
       {/* --- MAIN CONTENT CONTAINER --- */}
-      <main className="max-w-3xl mx-auto px-6 py-10 relative z-10">
+      <main className="max-w-3xl mx-auto px-6 pt-36 pb-16 relative z-10">
         
         <AnimatePresence mode="wait">
           

@@ -1,13 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import Header from '@/components/Header';
 
 export default function Home() {
+  const [mode, setMode] = useState<'merkurov' | 'temple'>('merkurov');
+
   return (
     <>
-      <Header />
+      <Header currentMode={mode} onModeChange={setMode} />
 
       <main className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-6 sm:px-12 pt-32 md:pt-40 pb-12 antialiased relative">
         
@@ -36,7 +39,6 @@ export default function Home() {
                 { label: 'Art', href: '/heartandangel' },
                 { label: 'Selection', href: '/selection' },
                 { label: 'Advising', href: '/advising' },
-                { label: 'Temple', href: '/temple' },
               ].map((item) => (
                 <Link
                   key={item.label}
@@ -54,15 +56,7 @@ export default function Home() {
           </div>
 
           {/* Lobby Portal Anchor */}
-          <div className="flex flex-wrap justify-center gap-4">
-            <Link
-              href="/temple"
-              className="group inline-flex items-center gap-3 border border-zinc-900 bg-zinc-900 text-white px-8 py-4 transition-all duration-300 ease-out shadow-sm rounded-full hover:bg-zinc-800 font-mono text-xs uppercase tracking-wider"
-            >
-              <span>Enter Digital Temple</span>
-              <ArrowUpRight size={16} />
-            </Link>
-
+          <div>
             <Link
               href="/lobby"
               className="group inline-flex items-center gap-3 border border-zinc-900/20 bg-white/80 hover:bg-[#111111] text-[#111111] hover:text-[#FAF8F5] px-8 py-4 transition-all duration-300 ease-out backdrop-blur-sm shadow-sm rounded-full"
