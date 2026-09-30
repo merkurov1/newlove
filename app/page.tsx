@@ -83,7 +83,6 @@ export default function Home() {
 
   return (
     <>
-      {/* Передаем состояние режима в шапку */}
       <Header currentMode={mode} onModeChange={setMode} />
 
       <main className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-6 sm:px-12 pt-32 md:pt-40 pb-12 antialiased relative">
@@ -98,49 +97,52 @@ export default function Home() {
 
         {/* ================= MODE 1: MERKUROV (ARCHIVE & PILLARS) ================= */}
         {mode === 'merkurov' && (
-          <div className="w-full max-w-5xl mx-auto flex flex-col items-center justify-center my-auto text-center z-20">
-            <p className="font-serif italic text-zinc-600 text-base sm:text-lg md:text-xl mb-8 sm:mb-10 tracking-wide font-normal max-w-lg">
-              “Structure is the antidote to chaos.”
-            </p>
-
-            <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-serif font-normal tracking-tight leading-[0.95] text-[#111111] mb-12 sm:mb-16">
-              Context Architecture <br />
-              <span className="text-zinc-500 italic font-serif">&amp; Cultural Capital</span>
-            </h1>
-
-            <nav className="flex flex-wrap justify-center gap-6 sm:gap-10 md:gap-14 items-center font-mono text-sm sm:text-base uppercase tracking-[0.2em] mb-16">
-              {[
-                { label: 'Art', href: '/heartandangel' },
-                { label: 'Selection', href: '/selection' },
-                { label: 'Advising', href: '/advising' },
-              ].map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className="group inline-flex items-center gap-2 px-3 py-2 text-[#111111] hover:text-zinc-600 transition-colors"
-                >
-                  <span className="text-zinc-400 group-hover:text-zinc-700 transition-colors">[</span>
-                  <span className="font-medium tracking-[0.2em] underline underline-offset-8 decoration-zinc-300 group-hover:decoration-black transition-colors">
-                    {item.label}
-                  </span>
-                  <span className="text-zinc-400 group-hover:text-zinc-700 transition-colors">]</span>
-                </Link>
-              ))}
-            </nav>
-
+          <div className="w-full max-w-5xl mx-auto flex flex-col items-center justify-center my-auto text-center z-20 space-y-12">
             <div>
-              <button
-                onClick={() => setMode('temple')}
-                className="group inline-flex items-center gap-3 border border-zinc-900/20 bg-white/80 hover:bg-[#111111] text-[#111111] hover:text-[#FAF8F5] px-8 py-4 transition-all duration-300 ease-out backdrop-blur-sm shadow-sm"
+              <p className="font-serif italic text-zinc-600 text-base sm:text-lg md:text-xl mb-8 sm:mb-10 tracking-wide font-normal max-w-lg mx-auto">
+                “Structure is the antidote to chaos.”
+              </p>
+
+              <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-serif font-normal tracking-tight leading-[0.95] text-[#111111] mb-12 sm:mb-16">
+                Context Architecture <br />
+                <span className="text-zinc-500 italic font-serif">&amp; Cultural Capital</span>
+              </h1>
+
+              <nav className="flex flex-wrap justify-center gap-6 sm:gap-10 md:gap-14 items-center font-mono text-sm sm:text-base uppercase tracking-[0.2em] mb-12">
+                {[
+                  { label: 'Art', href: '/heartandangel' },
+                  { label: 'Selection', href: '/selection' },
+                  { label: 'Advising', href: '/advising' },
+                ].map((item) => (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="group inline-flex items-center gap-2 px-3 py-2 text-[#111111] hover:text-zinc-600 transition-colors"
+                  >
+                    <span className="text-zinc-400 group-hover:text-zinc-700 transition-colors">[</span>
+                    <span className="font-medium tracking-[0.2em] underline underline-offset-8 decoration-zinc-300 group-hover:decoration-black transition-colors">
+                      {item.label}
+                    </span>
+                    <span className="text-zinc-400 group-hover:text-zinc-700 transition-colors">]</span>
+                  </Link>
+                ))}
+              </nav>
+            </div>
+
+            {/* Lobby Portal Anchor Restored */}
+            <div>
+              <Link
+                href="/lobby"
+                className="group inline-flex items-center gap-3 border border-zinc-900/20 bg-white/80 hover:bg-[#111111] text-[#111111] hover:text-[#FAF8F5] px-8 py-4 transition-all duration-300 ease-out backdrop-blur-sm shadow-sm rounded-full"
               >
                 <span className="font-serif text-base sm:text-lg italic font-normal tracking-wide px-1">
-                  Enter Digital Temple
+                  Enter The Lobby
                 </span>
                 <ArrowUpRight
                   size={18}
                   className="text-zinc-600 group-hover:text-[#FAF8F5] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-300"
                 />
-              </button>
+              </Link>
             </div>
           </div>
         )}

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { User, Users, Settings } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 
@@ -10,7 +11,6 @@ export default function UserSidebar() {
   const { user, profile, roles, isLoading } = useAuth();
   const [effectiveRole, setEffectiveRole] = useState<string | null>(null);
 
-  // На монтировании проверяем роль через серверный эндпоинт
   useEffect(() => {
     let mounted = true;
     const checkRole = async () => {
@@ -36,18 +36,15 @@ export default function UserSidebar() {
 
   if (isLoading || !user) return null;
 
-  // Извлекаем username с приоритетом из объекта profile из БД, затем из user_metadata
   const username = profile?.username || user?.user_metadata?.username || (user as any)?.username || null;
   const profileHref = username ? `/you/${username}` : '/profile';
 
-  // Определяем итоговую роль пользователя
   const roleFromClient =
     Array.isArray(roles) && roles.length
       ? roles[0]
       : ((user as any)?.role && String((user as any).role).toUpperCase()) || 'USER';
   const roleNorm = effectiveRole || roleFromClient || 'USER';
 
-  // Получаем аватар и имя пользователя
   const userImage =
     profile?.image ||
     profile?.avatar_url ||
@@ -56,82 +53,58 @@ export default function UserSidebar() {
     (user as any)?.image ||
     null;
   const userName = profile?.name || user?.user_metadata?.name || user?.email || '';
+  const isAdmin = roleNorm === 'ADMIN';
 
-  if (roleNorm === 'ADMIN') {
-    // Админский сайдбар
-    return (
-      <div className="w-full border-t border-pink-300 bg-pink-50 flex flex-row items-center justify-center py-3 gap-3">
-        {userImage && (
+  return (
+    <div className="w-full border-t border-zinc-200/60 bg-white/40 backdrop-blur-xl flex flex-row items-center justify-center py-3 px-6 gap-6 text-zinc-700">
+      {userImage && (
+        <div className="w-9 h-9 rounded-full overflow-hidden border border-zinc-200 shadow-inner flex-shrink-0">
           <Image
             src={userImage}
             alt={userName}
             width={36}
             height={36}
-            className="rounded-full border border-pink-300"
+            className="w-full h-full object-cover"
           />
-        )}
-        <nav className="flex flex-row items-center gap-3">
-          <Link
-            href={profileHref}
-            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-100 text-xl transition font-bold"
-            title="Профиль"
-          >
-            👤
-          </Link>
-          <Link
-            href="/users"
-            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-100 text-xl transition font-bold"
-            title="Пользователи"
-          >
-            👥
-          </Link>
-          <Link
-            href="/admin"
-            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-pink-200 text-xl transition font-bold"
-            title="Админка"
-          >
-            ⚙️
-          </Link>
-        </nav>
-      </div>
-    );
-  }
-
-  // Обычный сайдбар
-  return (
-    <div className="w-full border-t border-gray-200 bg-gray-50 flex flex-row items-center justify-center py-3 gap-3">
-      {userImage && (
-        <Image
-          src={userImage}
-          alt={userName}
-          width={36}
-          height={36}
-          className="rounded-full border border-gray-200"
-        />
+        </div>
       )}
+
       <nav className="flex flex-row items-center gap-3">
         <Link
           href={profileHref}
-          className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition"
-          title="Профиль"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-full hover:bg-white/80 text-xs font-mono uppercase tracking-wider transition-all border border-transparent hover:border-zinc-200 shadow-sm"
+          title="Profile"
         >
-          👤
+          <User size={15} className="text-zinc-500" />
+          <span>Profile</span>
         </Link>
+
         <Link
           href="/users"
-          className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-blue-100 text-xl transition"
-          title="Пользователи"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-full hover:bg-white/80 text-xs font-mono uppercase tracking-wider transition-all border border-transparent hover:border-zinc-200 shadow-sm"
+          title="Community"
         >
-          👥
+          <Users size={15} className="text-zinc-500" />
+          <span>Community</span>
         </Link>
-      </nav>
-      <div className="ml-3 text-xs text-gray-500">
-        {!username && (
-          <div className="mt-1 text-xs text-yellow-600">
-            Заполните username в профиле чтобы получить публичную ссылку
-          </div>
+
+        {isAdmin && (
+          <Link
+            href="/admin"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-full hover:bg-pink-50/80 text-xs font-mono uppercase tracking-wider text-pink-700 transition-all border border-pink-200/60 shadow-sm"
+            title="Admin Panel"
+          >
+            <Settings size={15} className="text-pink-600" />
+            <span>Admin</span>
+          </Link>
         )}
-      </div>
+      </nav>
+
+      {!username && (
+        <div className="hidden md:block text-[11px] font-mono text-amber-700 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+          Set username in profile to enable public link
+        </div>
+      )}
     </div>
   );
 }

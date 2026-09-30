@@ -150,7 +150,7 @@ export default function Header({ currentMode = 'merkurov', onModeChange }: Heade
               </AnimatePresence>
             </div>
 
-            {/* MERKUROV (Home/Archive button) & Digital Temple Switcher */}
+            {/* MERKUROV & Digital Temple Switcher */}
             <div className="flex items-center gap-4 pl-4 border-l border-zinc-200">
               <button
                 onClick={() => handleModeSwitch('merkurov')}

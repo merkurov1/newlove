@@ -6,16 +6,15 @@ import { updateProfile } from '@/app/admin/actions';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-// Маленький компонент для кнопки, чтобы показывать статус отправки
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button 
       type="submit" 
       disabled={pending}
-      className="w-full flex justify-center py-2 px-4 border rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300"
+      className="w-full flex justify-center py-3.5 px-6 rounded-full text-xs font-mono uppercase tracking-widest text-white bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-300 transition-all shadow-lg shadow-zinc-900/10 active:scale-98"
     >
-      {pending ? 'Сохранение...' : 'Сохранить изменения'}
+      {pending ? 'Saving Changes...' : 'Save Changes'}
     </button>
   );
 }
@@ -27,12 +26,10 @@ export default function ProfileForm({ user }) {
   const [showMessage, setShowMessage] = useState(false);
   const router = useRouter();
 
-  // basic client-side username validation
   function validateUsername(val) {
     return /^[a-z0-9_.]+$/.test(String(val || '').toLowerCase());
   }
 
-  // Показываем сообщение об успехе/ошибке на 3 секунды
   useEffect(() => {
     if (state.message) {
       setShowMessage(true);
@@ -41,7 +38,6 @@ export default function ProfileForm({ user }) {
       }, 3000);
       return () => clearTimeout(timer);
     }
-    // If server action returned success with a username, navigate there
     try {
       if (state && state.status === 'success' && state.username) {
         router.push(`/you/${state.username}`);
@@ -50,40 +46,68 @@ export default function ProfileForm({ user }) {
   }, [state, router]);
 
   return (
-  <form action={dispatch} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md">
+    <form action={dispatch} className="space-y-6 bg-white/70 backdrop-blur-2xl p-6 sm:p-10 rounded-3xl border border-zinc-200/80 shadow-[0_12px_40px_rgba(0,0,0,0.03)]">
       <div>
-        <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
-        <div className="mt-1 flex rounded-md shadow-sm flex-col sm:flex-row">
-          <span className="inline-flex items-center px-3 py-2 rounded-t-md sm:rounded-l-md sm:rounded-t-none border border-b-0 sm:border-b border-gray-300 bg-gray-50 text-gray-500 text-sm">merkurov.love/you/</span>
-          <input type="text" name="username" id="username" required defaultValue={user.username || ''} className="flex-1 min-w-0 block w-full px-3 py-3 rounded-b-md sm:rounded-r-md sm:rounded-b-none border-gray-300 text-base" />
+        <label htmlFor="username" className="block text-xs font-mono uppercase tracking-widest text-zinc-500 mb-2">Username</label>
+        <div className="flex rounded-2xl overflow-hidden border border-zinc-200 bg-white/50 focus-within:border-zinc-900 transition-all">
+          <span className="inline-flex items-center px-4 py-3 bg-zinc-50 text-zinc-400 text-xs font-mono border-r border-zinc-200">
+            merkurov.love/you/
+          </span>
+          <input 
+            type="text" 
+            name="username" 
+            id="username" 
+            required 
+            defaultValue={user.username || ''} 
+            className="flex-1 min-w-0 block w-full px-4 py-3 bg-transparent text-zinc-900 text-sm focus:outline-none" 
+          />
         </div>
         {!validateUsername(user.username) && (
-          <p className="text-xs text-yellow-600 mt-1">Username может содержать только строчные буквы, цифры, _ и .</p>
+          <p className="text-xs font-mono text-amber-600 mt-2">Username can only contain lowercase letters, numbers, underscores, and dots.</p>
         )}
       </div>
 
       <div>
-        <label htmlFor="name" className="block text-sm font-medium text-gray-700">Ваше имя</label>
-  <input type="text" name="name" id="name" required defaultValue={user.name || ''} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3" />
+        <label htmlFor="name" className="block text-xs font-mono uppercase tracking-widest text-zinc-500 mb-2">Display Name</label>
+        <input 
+          type="text" 
+          name="name" 
+          id="name" 
+          required 
+          defaultValue={user.name || ''} 
+          className="w-full rounded-2xl border border-zinc-200 bg-white/50 px-4 py-3 text-sm text-zinc-900 focus:outline-none focus:border-zinc-900 transition-all" 
+        />
       </div>
 
       <div>
-        <label htmlFor="bio" className="block text-sm font-medium text-gray-700">О себе</label>
-  <textarea name="bio" id="bio" rows="3" defaultValue={user.bio || ''} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"></textarea>
+        <label htmlFor="bio" className="block text-xs font-mono uppercase tracking-widest text-zinc-500 mb-2">Biography / Bio</label>
+        <textarea 
+          name="bio" 
+          id="bio" 
+          rows="3" 
+          defaultValue={user.bio || ''} 
+          className="w-full rounded-2xl border border-zinc-200 bg-white/50 px-4 py-3 text-sm text-zinc-900 focus:outline-none focus:border-zinc-900 transition-all resize-none"
+        ></textarea>
       </div>
 
       <div>
-        <label htmlFor="website" className="block text-sm font-medium text-gray-700">Веб-сайт</label>
-  <input type="url" name="website" id="website" defaultValue={user.website || ''} placeholder="https://example.com" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3" />
+        <label htmlFor="website" className="block text-xs font-mono uppercase tracking-widest text-zinc-500 mb-2">Website</label>
+        <input 
+          type="url" 
+          name="website" 
+          id="website" 
+          defaultValue={user.website || ''} 
+          placeholder="https://example.com" 
+          className="w-full rounded-2xl border border-zinc-200 bg-white/50 px-4 py-3 text-sm text-zinc-900 focus:outline-none focus:border-zinc-900 transition-all" 
+        />
       </div>
 
-      <div className="mt-4">
+      <div className="pt-2">
         <SubmitButton />
       </div>
 
-      {/* Сообщение о статусе операции */}
       {showMessage && state.message && (
-        <p className={`text-base mt-4 ${state.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+        <p className={`text-xs font-mono mt-4 ${state.status === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
           {state.message}
         </p>
       )}
