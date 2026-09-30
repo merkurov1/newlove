@@ -18,7 +18,7 @@ export default function Header() {
   useEffect(() => {
     setIsProfileOpen(false);
     setIsMobileMenuOpen(false);
-    if (pathname.startsWith('/temple') || pathname.startsWith('/cast') || pathname.startsWith('/vigil') || pathname.startsWith('/absolution') || pathname.startsWith('/letitgo')) {
+    if (pathname.startsWith('/temple') || pathname.startsWith('/cast') || pathname.startsWith('/vigil') || pathname.startsWith('/absolution')) {
       setActiveEcosystem('temple');
     } else if (pathname.startsWith('/art-engine') || pathname.startsWith('/selection')) {
       setActiveEcosystem('curators');
@@ -57,8 +57,7 @@ export default function Header() {
         { name: 'Temple', href: '/temple' },
         { name: 'Cast', href: '/cast' },
         { name: 'Vigil', href: '/vigil' },
-        { name: 'Absolution', href: '/absolution' },
-        { name: 'Let It Go', href: '/letitgo' }
+        { name: 'Absolution', href: '/absolution' }
       ]
     },
     { 
@@ -74,7 +73,11 @@ export default function Header() {
       id: 'heart', 
       label: 'Heart & Angel', 
       mainHref: '/heartandangel',
-      links: [] // Подменю убрано
+      links: [
+        { name: 'Gallery', href: '/heartandangel' },
+        { name: 'Let It Go', href: '/heartandangel/letitgo' },
+        { name: 'Keep Calm', href: '/heartandangel/calm' }
+      ]
     }
   ];
 
@@ -174,7 +177,7 @@ export default function Header() {
             {/* Divider */}
             {currentEco.links.length > 0 && <div className="w-[1px] h-6 bg-zinc-200" />}
 
-            {/* Current Ecosystem Sub-Links (если они есть) */}
+            {/* Current Ecosystem Sub-Links */}
             {currentEco.links.length > 0 && (
               <nav className="flex items-center gap-6">
                 {currentEco.links.map((link) => (
