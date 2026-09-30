@@ -74,9 +74,7 @@ export default function Header() {
       id: 'heart', 
       label: 'Heart & Angel', 
       mainHref: '/heartandangel',
-      links: [
-        { name: 'Gallery', href: '/heartandangel' }
-      ]
+      links: [] // Подменю убрано
     }
   ];
 
@@ -174,20 +172,22 @@ export default function Header() {
             </div>
 
             {/* Divider */}
-            <div className="w-[1px] h-6 bg-zinc-200" />
+            {currentEco.links.length > 0 && <div className="w-[1px] h-6 bg-zinc-200" />}
 
-            {/* Current Ecosystem Sub-Links */}
-            <nav className="flex items-center gap-6">
-              {currentEco.links.map((link) => (
-                <Link
-                  key={link.name}
-                  href={link.href}
-                  className={`text-sm font-mono uppercase tracking-[0.15s] transition-colors ${pathname === link.href ? 'text-zinc-900 font-bold underline underline-offset-4' : 'text-zinc-400 hover:text-zinc-900'}`}
-                >
-                  {link.name}
-                </Link>
-              ))}
-            </nav>
+            {/* Current Ecosystem Sub-Links (если они есть) */}
+            {currentEco.links.length > 0 && (
+              <nav className="flex items-center gap-6">
+                {currentEco.links.map((link) => (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    className={`text-sm font-mono uppercase tracking-[0.15s] transition-colors ${pathname === link.href ? 'text-zinc-900 font-bold underline underline-offset-4' : 'text-zinc-400 hover:text-zinc-900'}`}
+                  >
+                    {link.name}
+                  </Link>
+                ))}
+              </nav>
+            )}
           </div>
 
           {/* MOBILE MENU TOGGLE BUTTON */}
@@ -226,21 +226,23 @@ export default function Header() {
               ))}
             </div>
 
-            <div className="border-t border-zinc-100 pt-5 space-y-2.5">
-              <div className="font-mono text-xs uppercase text-zinc-400 tracking-wider mb-3">
-                Projects in {currentEco.label}:
+            {currentEco.links.length > 0 && (
+              <div className="border-t border-zinc-100 pt-5 space-y-2.5">
+                <div className="font-mono text-xs uppercase text-zinc-400 tracking-wider mb-3">
+                  Projects in {currentEco.label}:
+                </div>
+                {currentEco.links.map((link) => (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`block p-3.5 rounded-2xl text-base font-medium transition-colors ${pathname === link.href ? 'bg-zinc-900 text-white shadow-sm' : 'bg-zinc-50 text-zinc-800 hover:bg-zinc-100'}`}
+                  >
+                    {link.name}
+                  </Link>
+                ))}
               </div>
-              {currentEco.links.map((link) => (
-                <Link
-                  key={link.name}
-                  href={link.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`block p-3.5 rounded-2xl text-base font-medium transition-colors ${pathname === link.href ? 'bg-zinc-900 text-white shadow-sm' : 'bg-zinc-50 text-zinc-800 hover:bg-zinc-100'}`}
-                >
-                  {link.name}
-                </Link>
-              ))}
-            </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
