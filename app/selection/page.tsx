@@ -1,11 +1,9 @@
-import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import Link from 'next/link';
 import Image from 'next/image';
 import './swiper-init';
-import dynamic from 'next/dynamic';
 import CenteredHeader from '@/components/CenteredHeader';
-
-const AuctionSlider = dynamic(() => import('@/components/AuctionSlider'), { ssr: false });
+import Header from '@/components/Header';
 
 // --- БЛОК МЕТАДАННЫХ ---
 export const metadata = sanitizeMetadata({
@@ -25,7 +23,7 @@ export default async function SelectionPage() {
     } catch (e) {
       console.error('Supabase client unavailable', e);
       return (
-        <div className="min-h-screen bg-[#FDFBF7] py-20 px-6">
+        <div className="min-h-screen bg-[#FAF8F5] py-20 px-6">
           <p className="font-mono text-xs text-center uppercase tracking-widest text-gray-500">System Offline</p>
         </div>
       );
@@ -43,7 +41,7 @@ export default async function SelectionPage() {
     console.error('Supabase fetch articles error', error);
   }
 
-  // Нормализуем превью-изображения: если нет поля preview_image — извлекаем первое изображение из контента
+  // Нормализуем превью-изображения
   let normalizedArticles: any[] | null = null;
   try {
     const { getFirstImage } = await import('@/lib/contentUtils');
@@ -57,12 +55,10 @@ export default async function SelectionPage() {
         }
       }
 
-      // Collapse duplicate slashes in URL paths (preserve protocol "https://")
       if (preview && typeof preview === 'string') {
         preview = preview.replace(/([^:]\/)\/+/g, '$1');
       }
 
-      // Если URL относительный — попытаемся его превратить в полный URL, используя переменные окружения Supabase
       if (preview && !/^https?:\/\//i.test(preview)) {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
         if (supabaseUrl) {
@@ -70,7 +66,6 @@ export default async function SelectionPage() {
           if (preview.startsWith('/')) {
             preview = `${base}${preview}`;
           } else if (!preview.startsWith('storage')) {
-            // Если это просто путь внутри bucket, предположим публичный путь
             preview = `${base}/storage/v1/object/public/${preview}`;
           } else {
             preview = `${base}/${preview}`;
@@ -80,11 +75,7 @@ export default async function SelectionPage() {
 
       return { ...a, preview_image: preview };
     }));
-
-    // Сохраняем нормализованный набор в отдельную переменную, не переназначая `articles`
-    // normalizedArticles уже установлен выше
   } catch (e) {
-    // Если что-то пошло не так — оставляем оригинальные данные
     if (process.env.NODE_ENV === 'development') console.error('Error normalizing preview images', e);
   }
 
@@ -112,13 +103,13 @@ export default async function SelectionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] text-[#111] selection:bg-black selection:text-white">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#111] selection:bg-black selection:text-white relative overflow-x-hidden">
       
-      {/* DECORATIVE BORDER TOP */}
-      <div className="h-1 w-full bg-black fixed top-0 z-50"></div>
+      {/* HEADER */}
+      <Header />
 
       {/* HEADER (narrow container like /advising) */}
-      <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
+      <div className="max-w-3xl mx-auto px-6 pt-36 md:pt-44 pb-16">
         <CenteredHeader>
           <div className="mb-6">
             <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-500 block mb-2">Curated Inventory</span>
@@ -130,24 +121,22 @@ export default async function SelectionPage() {
       </div>
 
       {/* Grid: Auction Catalog Style (wider container) */}
-      <div className="max-w-7xl mx-auto px-6 pb-20">
+      <div className="max-w-7xl mx-auto px-6 pb-24">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-16">
           {articlesToRender && articlesToRender.length > 0 ? (
             articlesToRender.map((article: any) => {
               const previewImage = article.preview_image || extractFirstImage(article.content);
-              // Fallback, если артист не указан в базе
               const artistName = article.artist || 'MERKUROV ESTATE'; 
-              const specs = article.specs || null;
 
               return (
                 <Link key={article.id} href={`/${article.slug}`} className="block group">
-                  <div className="border border-gray-100 bg-white p-3 hover:border-black transition-all duration-300 shadow-sm hover:shadow-xl">
+                  <div className="border border-gray-200/80 bg-white/80 backdrop-blur-xl p-3 hover:border-black transition-all duration-300 shadow-sm hover:shadow-xl rounded-2xl">
                     
                     {/* Image Area with Badge */}
-                    <div className="aspect-[3/2] w-full bg-[#f4f4f4] relative overflow-hidden mb-3">
-                      {/* STATUS BADGE (появляется на ховер) */}
+                    <div className="aspect-[3/2] w-full bg-[#f4f4f4] relative overflow-hidden mb-3 rounded-xl">
+                      {/* STATUS BADGE */}
                       <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-1 group-hover:translate-y-0">
-                         <span className="bg-black text-white text-[9px] font-mono uppercase tracking-widest px-2 py-1">
+                         <span className="bg-black text-white text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded-md">
                            Acquirable
                          </span>
                       </div>
@@ -182,14 +171,12 @@ export default async function SelectionPage() {
                       {article.title}
                     </h3>
 
-                    {/* Specs removed intentionally */}
-
                   </div>
                 </Link>
               );
             })
           ) : (
-             <div className="col-span-full py-20 text-center border border-dashed border-gray-300">
+             <div className="col-span-full py-20 text-center border border-dashed border-gray-300 rounded-3xl bg-white/50">
                 <p className="font-serif italic text-gray-400 text-xl">The vault is currently sealed.</p>
              </div>
           )}

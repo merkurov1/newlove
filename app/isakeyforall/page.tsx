@@ -1,8 +1,9 @@
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import Link from 'next/link'
-import HeroMotion from '@/components/advising/HeroMotion'
-import CenteredHeader from '@/components/CenteredHeader'
-import CaseStudyCard from '@/components/advising/CaseStudyCard'
+import Link from 'next/link';
+import HeroMotion from '@/components/advising/HeroMotion';
+import CenteredHeader from '@/components/CenteredHeader';
+import CaseStudyCard from '@/components/advising/CaseStudyCard';
+import Header from '@/components/Header';
 
 export const metadata = sanitizeMetadata({
   title: 'Love is a Key for All | Anton Merkurov',
@@ -11,12 +12,12 @@ export const metadata = sanitizeMetadata({
 
 export default function IsAKeyForAllPage() {
   return (
-    <main className="min-h-screen bg-[#FDFBF7] text-[#111] font-sans selection:bg-black selection:text-white">
+    <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       
-      {/* DECORATIVE BORDER TOP */}
-      <div className="h-1 w-full bg-black fixed top-0 z-50"></div>
+      {/* HEADER */}
+      <Header />
 
-      <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
+      <div className="max-w-3xl mx-auto px-6 pt-36 md:pt-44 pb-24">
         
         {/* Header: The Monument (motion) */}
         <CenteredHeader>
@@ -51,7 +52,7 @@ export default function IsAKeyForAllPage() {
               radical simplicity.
             </p>
 
-            <blockquote className="border-l-2 border-black pl-8 my-12 py-2 bg-white/50 p-6">
+            <blockquote className="border-l-2 border-black pl-8 my-12 py-2 bg-white/50 p-6 rounded-r-2xl">
               <p className="text-2xl sm:text-3xl font-serif italic text-black leading-tight">
                 "Why do you need technology if you don't have love?"
               </p>
@@ -71,7 +72,7 @@ export default function IsAKeyForAllPage() {
           </div>
 
           {/* FEATURED: UNFRAMED (styled like advising use-cases) */}
-          <section className="mb-12">
+          <section className="mb-12 mt-12">
             <h3 className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-6">
               Featured Work
             </h3>
