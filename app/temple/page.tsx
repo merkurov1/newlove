@@ -188,20 +188,7 @@ export default function TemplePage() {
 
       <main className="max-w-2xl mx-auto px-6 pt-32 pb-24 relative z-10 space-y-10">
         
-        {/* TITLE BLOCK: Left-column stream info description */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start border-b border-zinc-300/60 pb-8">
-          <div className="md:col-span-7 space-y-2">
-            <span className="font-mono text-xs uppercase tracking-[0.3em] text-zinc-500">Sanctuary Stream</span>
-            <h1 className="text-4xl font-serif font-light text-zinc-900 tracking-tight">The Temple Logbook</h1>
-          </div>
-          <div className="md:col-span-5 md:text-right">
-            <p className="text-xs font-serif italic text-zinc-600 leading-relaxed">
-              Whispers, voice notes, and verified thoughts in the stream.
-            </p>
-          </div>
-        </div>
-
-        {/* INPUT BOX (Starts near the top) */}
+        {/* INPUT BOX (Starts immediately) */}
         {!isLoading && !user ? (
           <div className="p-8 rounded-2xl bg-white/70 backdrop-blur-xl border border-zinc-200/80 shadow-sm text-center space-y-4">
             <p className="font-serif text-zinc-700 text-sm">
