@@ -2,31 +2,26 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { User, Settings, LogOut, ShieldCheck, ScanFace, Flame, Trash2, ReceiptText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
 
 interface HeaderProps {
-  currentMode?: 'merkurov' | 'temple';
-  onModeChange?: (mode: 'merkurov' | 'temple') => void;
   activeTempleView?: string;
   onTempleViewChange?: (view: any) => void;
 }
 
 export default function Header({ 
-  currentMode = 'merkurov', 
-  onModeChange,
   activeTempleView = 'WALL',
   onTempleViewChange 
 }: HeaderProps) {
   const { user, profile, roles, isLoading, signOut } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const pathname = usePathname() || '';
+  const router = useRouter();
 
-  const isHomePage = pathname === '/';
   const isTemplePage = pathname.startsWith('/temple');
-  const effectiveMode = isTemplePage ? 'temple' : currentMode;
 
   useEffect(() => {
     setIsProfileOpen(false);
@@ -62,13 +57,11 @@ export default function Header({
     { id: 'DEBT', label: 'Debt', icon: ReceiptText, color: 'text-emerald-600' },
   ];
 
-  const handleModeSwitch = (mode: 'merkurov' | 'temple') => {
+  const handleModeSwitch = () => {
     if (isTemplePage) {
-      window.location.href = '/';
-      return;
-    }
-    if (onModeChange) {
-      onModeChange(mode);
+      router.push('/');
+    } else {
+      router.push('/temple');
     }
   };
 
@@ -177,24 +170,22 @@ export default function Header({
               Merkurov
             </Link>
 
-            {(isHomePage || isTemplePage) && (
-              <button
-                onClick={() => handleModeSwitch(effectiveMode === 'merkurov' ? 'temple' : 'merkurov')}
-                className={`text-xs font-mono uppercase tracking-wider px-3.5 py-1.5 rounded-full transition-all border ${
-                  effectiveMode === 'temple'
-                    ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
-                    : 'bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200/70'
-                }`}
-              >
-                {effectiveMode === 'temple' ? 'Archive' : 'Digital Temple'}
-              </button>
-            )}
+            <button
+              onClick={handleModeSwitch}
+              className={`text-xs font-mono uppercase tracking-wider px-3.5 py-1.5 rounded-full transition-all border ${
+                isTemplePage
+                  ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
+                  : 'bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200/70'
+              }`}
+            >
+              {isTemplePage ? 'Archive' : 'Digital Temple'}
+            </button>
           </div>
         </div>
 
         {/* RIGHT: NAV (Merkurov links OR Temple ritual buttons) */}
         <nav role="navigation" className="hidden lg:flex items-center gap-6">
-          {effectiveMode === 'merkurov' ? (
+          {!isTemplePage ? (
             merkurovNavLinks.map((link) => (
               <Link
                 key={link.name}
@@ -217,9 +208,7 @@ export default function Header({
                   <button
                     key={item.id}
                     onClick={() => {
-                      if (!isTemplePage) {
-                        window.location.href = '/temple';
-                      } else if (onTempleViewChange) {
+                      if (onTempleViewChange) {
                         onTempleViewChange(isActive ? 'WALL' : item.id);
                       }
                     }}
