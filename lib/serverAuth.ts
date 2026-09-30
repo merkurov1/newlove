@@ -46,13 +46,14 @@ export interface AuthenticatedUser {
   email?: string;
   role: 'USER' | 'ADMIN';
   profile: any;
+  user?: any;
 }
 
 /**
  * Получает текущего пользователя и его профиль из таблицы public.users
  * с использованием встроенных механизмов @supabase/ssr.
  */
-export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
+export async function getCurrentUser(): Promise<any> {
   try {
     const supabase = await createClient();
     const { data: { user }, error } = await supabase.auth.getUser();
@@ -67,30 +68,32 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
 
     const role = (user.user_metadata?.role || profile?.role) === 'ADMIN' ? 'ADMIN' : 'USER';
 
-    return {
+    const result: AuthenticatedUser = {
       id: user.id,
       email: user.email,
       role,
       profile,
     };
+    // Совместимость для legacy кода, который вызывает (...).user.id
+    result.user = result;
+
+    return result;
   } catch (e) {
     return null;
   }
 }
 
 /**
- * Фолбек-функция для legacy-вызовов
+ * Фолбек-функция для legacy-вызовов getServerUser
  */
-export async function getServerUser(): Promise<any | null> {
-  const user = await getCurrentUser();
-  if (!user) return null;
-  return { id: user.id, email: user.email, role: user.role };
+export async function getServerUser(): Promise<any> {
+  return getCurrentUser();
 }
 
 /**
  * Обязательная проверка авторизации
  */
-export async function requireUser(): Promise<AuthenticatedUser> {
+export async function requireUser(): Promise<any> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Unauthorized');
   return user;
@@ -99,7 +102,7 @@ export async function requireUser(): Promise<AuthenticatedUser> {
 /**
  * Проверка прав администратора
  */
-export async function requireAdmin(): Promise<AuthenticatedUser> {
+export async function requireAdmin(): Promise<any> {
   const user = await getCurrentUser();
   if (!user || user.role !== 'ADMIN') {
     throw new Error('Unauthorized: Admin access required');
@@ -108,9 +111,9 @@ export async function requireAdmin(): Promise<AuthenticatedUser> {
 }
 
 /**
- * Совместимость для вызовов z requireAdminFromRequest
+ * Совместимость для вызовов requireAdminFromRequest
  */
-export async function requireAdminFromRequest(req?: Request | null): Promise<AuthenticatedUser> {
+export async function requireAdminFromRequest(req?: Request | null): Promise<any> {
   return requireAdmin();
 }
 
