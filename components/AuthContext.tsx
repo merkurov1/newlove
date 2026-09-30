@@ -1,28 +1,35 @@
-// context/AuthContext.tsx
-'use client';
+// components/AuthContext.tsx
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+"use client";
+
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { User } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   profile: any | null;
+  session: Session | null;
+  roles: string[];
   isLoading: boolean;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  profile: null,
-  isLoading: true,
-  signOut: async () => {},
-  refreshProfile: async () => {},
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return ctx;
+};
+
+export function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -31,23 +38,45 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    setProfile(data);
-  };
+  const fetchProfile = useCallback(async (userId: string) => {
+    if (!userId) {
+      setProfile(null);
+      return;
+    }
+    try {
+      const { data } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+      setProfile(data);
+    } catch (e) {
+      console.error('Error fetching profile:', e);
+    }
+  }, [supabase]);
 
   useEffect(() => {
+    let mounted = true;
+
     const initAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      if (user) await fetchProfile(user.id);
-      setIsLoading(false);
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (mounted) {
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          if (currentSession?.user) {
+            await fetchProfile(currentSession.user.id);
+          }
+        }
+      } catch (e) {
+        console.error('Error initializing auth session:', e);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
     };
 
     initAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      const currentUser = session?.user ?? null;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, currentSession) => {
+      if (!mounted) return;
+      setSession(currentSession);
+      const currentUser = currentSession?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
         await fetchProfile(currentUser.id);
@@ -57,20 +86,52 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase, fetchProfile]);
 
-  const signOut = async () => {
+  const signInWithGoogle = useCallback(async () => {
+    const desiredRedirect = typeof window !== 'undefined' ? window.location.href : undefined;
+    const canonical = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : undefined);
+    if (typeof window !== 'undefined' && desiredRedirect) {
+      try { localStorage.setItem('supabase_oauth_redirect', desiredRedirect); } catch (e) {}
+    }
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: canonical },
+    });
+  }, [supabase]);
+
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
+    setSession(null);
     setProfile(null);
-  };
+  }, [supabase]);
 
-  return (
-    <AuthContext.Provider value={{ user, profile, isLoading, signOut, refreshProfile: () => fetchProfile(user?.id || '') }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+  const roles: string[] = useMemo(() => {
+    if (!user) return [];
+    const role = (user.user_metadata?.role || profile?.role) ?? 'USER';
+    return [String(role).toUpperCase()];
+  }, [user, profile]);
 
-export const useAuth = () => useContext(AuthContext);
+  const value = useMemo<AuthContextType>(() => ({
+    user,
+    profile,
+    session,
+    roles,
+    isLoading,
+    signInWithGoogle,
+    signOut,
+    refreshProfile: async () => {
+      if (user?.id) await fetchProfile(user.id);
+    },
+  }), [user, profile, session, roles, isLoading, signInWithGoogle, signOut, fetchProfile]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export const AuthProvider = AuthProviderInner;
+export default AuthContext;
