@@ -6,7 +6,7 @@ import { Lock, Terminal, ArrowRight, ShieldCheck, Key } from 'lucide-react';
 import Link from 'next/link';
 
 interface PaywallProps {
-  onUnlock: () => void;
+  onUnlock?: () => void;
 }
 
 export default function Paywall({ onUnlock }: PaywallProps) {
@@ -16,7 +16,7 @@ export default function Paywall({ onUnlock }: PaywallProps) {
   const handleUnlockAttempt = (e: React.FormEvent) => {
     e.preventDefault();
     if (accessCode.trim() === 'MERKUROV2025' || accessCode.trim() === 'ADMIN') {
-      onUnlock();
+      if (onUnlock) onUnlock();
     } else {
       setError(true);
       setTimeout(() => setError(false), 2000);
@@ -24,7 +24,7 @@ export default function Paywall({ onUnlock }: PaywallProps) {
   };
 
   const handleBypassAdmin = () => {
-    onUnlock();
+    if (onUnlock) onUnlock();
   };
 
   return (
