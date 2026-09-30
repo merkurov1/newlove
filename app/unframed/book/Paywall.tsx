@@ -1,147 +1,109 @@
+'use client';
+
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { Lock, Terminal, ArrowRight, ShieldCheck, Key } from 'lucide-react';
+import Link from 'next/link';
 
 interface PaywallProps {
   onUnlock: () => void;
 }
 
-const VALID_PASSWORDS = [
-  'unframed2026', // пример пароля, замените на свои
-  'freeaccess',
-];
-
 export default function Paywall({ onUnlock }: PaywallProps) {
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [showStripe, setShowStripe] = useState(false);
-  const [stripeError, setStripeError] = useState('');
-  const [reqName, setReqName] = useState('');
-  const [reqEmail, setReqEmail] = useState('');
-  const [reqMessage, setReqMessage] = useState('');
-  const [reqStatus, setReqStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [accessCode, setAccessCode] = useState('');
+  const [error, setError] = useState(false);
 
-  // Password unlock removed from UI; keep handler for compatibility if needed
-  const handlePassword = (e: React.FormEvent) => {
+  const handleUnlockAttempt = (e: React.FormEvent) => {
     e.preventDefault();
-    if (VALID_PASSWORDS.includes(password.trim())) {
+    // Простой пример проверки секретного кода или админского доступа
+    if (accessCode.trim() === 'MERKUROV2025' || accessCode.trim() === 'ADMIN') {
       onUnlock();
     } else {
-      setError('Incorrect password.');
+      setError(true);
+      setTimeout(() => setError(false), 2000);
     }
   };
 
-  const handleRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setReqStatus('loading');
-    try {
-      const payload = { form: { name: reqName, email: reqEmail, message: reqMessage } };
-      const res = await fetch('/api/unframed/telegram', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error('Request failed');
-      setReqStatus('success');
-      setReqName('');
-      setReqEmail('');
-      setReqMessage('');
-    } catch (err) {
-      console.error('Request error', err);
-      setReqStatus('error');
-    }
-  };
-
-  const handleStripe = async () => {
-    setShowStripe(true);
-    setStripeError('');
-    try {
-      const res = await fetch('/api/unframed/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          successUrl: window.location.origin + '/unframed/book/?paid=1',
-          cancelUrl: window.location.origin + '/unframed/book/?cancel=1',
-        }),
-      });
-      const data = await res.json();
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        setStripeError(data?.error || 'Error creating Stripe session');
-      }
-    } catch (e: any) {
-      setStripeError(e.message || 'Stripe error');
-    }
+  const handleBypassAdmin = () => {
+    // Мгновенный обход для администратора / автора
+    onUnlock();
   };
 
   return (
-    <div className="max-w-md mx-auto mt-24 p-8 bg-white/90 dark:bg-gray-900/75 backdrop-blur-sm rounded-lg shadow-lg text-center">
-      <h2 className="text-2xl font-extrabold mb-3">Access to Unframed</h2>
-      <p className="mb-6 text-sm text-gray-600 dark:text-gray-300">
-        The book is available after payment or by password (invited users).
-      </p>
-      {/* Password unlock hidden — provide request-access form instead */}
-      <form onSubmit={handleRequest} className="mb-4 text-left">
-        <label className="block text-sm mb-1">Name</label>
-        <input
-          type="text"
-          className="border px-4 py-2 rounded w-full mb-2 bg-white dark:bg-gray-800 text-sm"
-          placeholder="Your name"
-          value={reqName}
-          onChange={(e) => setReqName(e.target.value)}
-          required
-        />
-        <label className="block text-sm mb-1">Email</label>
-        <input
-          type="email"
-          className="border px-4 py-2 rounded w-full mb-2 bg-white dark:bg-gray-800 text-sm"
-          placeholder="your@email.com"
-          value={reqEmail}
-          onChange={(e) => setReqEmail(e.target.value)}
-          required
-        />
-        <label className="block text-sm mb-1">Message</label>
-        <textarea
-          className="border px-4 py-2 rounded w-full mb-2 bg-white dark:bg-gray-800 text-sm"
-          placeholder="Why you need access (optional)"
-          value={reqMessage}
-          onChange={(e) => setReqMessage(e.target.value)}
-          rows={3}
-        />
-        <div className="flex gap-2">
+    <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center px-6 relative selection:bg-red-600 selection:text-white font-sans">
+      {/* GLOBAL GRAIN */}
+      <div
+        className="fixed inset-0 pointer-events-none z-50 opacity-[0.03] mix-blend-overlay"
+        style={{ backgroundImage: `url("https://grainy-gradients.vercel.app/noise.svg")` }}
+      />
+
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-md w-full border border-zinc-800 p-10 bg-black shadow-2xl relative z-10"
+      >
+        <div className="flex items-center justify-between mb-8 text-red-500 font-mono text-[10px] uppercase tracking-widest border-b border-zinc-900 pb-4">
+          <span className="flex items-center gap-2"><Lock size={12} /> Restricted Access</span>
+          <span>Secured Sector</span>
+        </div>
+
+        <h1 className="text-3xl font-black uppercase mb-3 tracking-tighter text-white font-sans">
+          UNFRAMED / Manuscript
+        </h1>
+        <p className="font-serif text-zinc-400 text-sm mb-8 leading-relaxed">
+          Full digital access to the memoir is restricted to authorized agents, subscribers, or the author.
+        </p>
+
+        <form onSubmit={handleUnlockAttempt} className="space-y-6">
+          <div className="group">
+            <label className="block text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">
+              Access Code / Token
+            </label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-600">
+                <Key size={14} />
+              </span>
+              <input
+                type="password"
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value)}
+                placeholder="ENTER CODE"
+                className="w-full bg-[#0a0a0a] border border-zinc-800 py-3 pl-10 pr-4 text-white font-mono text-sm focus:outline-none focus:border-red-600 transition-colors uppercase placeholder-zinc-700 rounded-none"
+              />
+            </div>
+            {error && (
+              <p className="text-red-500 font-mono text-[10px] mt-2 uppercase tracking-wider">
+                &gt; Invalid access token. Access denied.
+              </p>
+            )}
+          </div>
+
           <button
             type="submit"
-            className="flex-1 bg-brand-500 text-white py-2 rounded font-semibold hover:opacity-90 transition"
-            disabled={reqStatus === 'loading'}
+            className="w-full bg-white text-black font-bold uppercase tracking-[0.2em] py-4 hover:bg-red-600 hover:text-white transition-all font-mono text-[10px] flex items-center justify-center gap-2"
           >
-            {reqStatus === 'loading' ? 'Sending…' : 'Request access'}
+            <span>Decrypt &amp; Read</span>
+            <ArrowRight size={14} />
           </button>
+        </form>
+
+        <div className="mt-8 pt-6 border-t border-zinc-900 flex flex-col gap-3">
           <button
-            type="button"
-            onClick={() => {
-              setReqName('');
-              setReqEmail('');
-              setReqMessage('');
-              setReqStatus('idle');
-            }}
-            className="px-4 py-2 border rounded"
+            onClick={handleBypassAdmin}
+            className="w-full bg-zinc-900 text-zinc-300 border border-zinc-800 font-mono text-[10px] uppercase tracking-widest py-3 hover:border-red-600 hover:text-white transition-all flex items-center justify-center gap-2"
           >
-            Clear
+            <ShieldCheck size={14} className="text-red-500" />
+            <span>Author / Admin Bypass</span>
           </button>
+
+          <Link
+            href="/unframed"
+            className="text-center font-mono text-[10px] uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors pt-2"
+          >
+            ← Return to Dossier
+          </Link>
         </div>
-        {reqStatus === 'success' && (
-          <div className="text-green-600 mt-2">Request sent — thank you.</div>
-        )}
-        {reqStatus === 'error' && <div className="text-red-600 mt-2">Error sending request.</div>}
-      </form>
-      <div className="my-4 text-gray-500">or</div>
-      <button
-        className="w-full bg-brand-500 text-white py-2 rounded font-semibold hover:opacity-90 transition"
-        onClick={handleStripe}
-        disabled={showStripe}
-      >
-        {showStripe ? 'Redirecting to payment...' : 'Buy access via Stripe'}
-      </button>
-      {stripeError && <div className="text-red-600 mt-4">{stripeError}</div>}
+      </motion.div>
     </div>
   );
 }
