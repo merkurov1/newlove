@@ -99,7 +99,7 @@ export default function PierrotChat() {
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
               className="relative w-full max-w-2xl h-[75vh] bg-[#FAF8F5]/90 backdrop-blur-2xl border border-zinc-300/80 text-[#111111] shadow-[0_24px_64px_rgba(0,0,0,0.15)] flex flex-col rounded-3xl overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-200 bg-white/50">
