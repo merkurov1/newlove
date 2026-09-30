@@ -4,13 +4,37 @@ import React, { useState, useEffect, useRef } from 'react';
 import Header from '@/components/Header';
 import { useAuth } from '@/components/AuthContext';
 import { motion } from 'framer-motion';
-import { Sparkles, Send, Mic, Square, Trash2, Flame, Radio, ExternalLink, Volume2 } from 'lucide-react';
+import { 
+  Sparkles, 
+  Send, 
+  Mic, 
+  Square, 
+  Trash2, 
+  Flame, 
+  Radio, 
+  ExternalLink, 
+  Volume2, 
+  Compass, 
+  ShieldCheck, 
+  Moon 
+} from 'lucide-react';
 import Link from 'next/link';
+
+interface TemplePost {
+  id: string | number;
+  type: string;
+  author: string;
+  time: string;
+  content: string;
+  audioUrl?: string | null;
+  icon?: any;
+  color?: string;
+}
 
 export default function TemplePage() {
   const { user, profile, isLoading } = useAuth();
   const [postText, setPostText] = useState('');
-  const [posts, setPosts] = useState<any[]>([]);
+  const [posts, setPosts] = useState<TemplePost[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
@@ -21,6 +45,35 @@ export default function TemplePage() {
 
   const userName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Visitor';
 
+  // Очистка URL аудио при размонтировании
+  useEffect(() => {
+    return () => {
+      if (audioBlobUrl) {
+        URL.revokeObjectURL(audioBlobUrl);
+      }
+    };
+  }, [audioBlobUrl]);
+
+  // Функция маппинга событий из разных модулей (/cast, /vigil, /absolution и т.д.)
+  const getEventVisuals = (eventType: string) => {
+    switch (eventType?.toUpperCase()) {
+      case 'VIGIL':
+        return { icon: Flame, color: 'text-amber-600', label: 'Vigil' };
+      case 'ASH':
+        return { icon: Trash2, color: 'text-rose-600', label: 'Let It Go' };
+      case 'CAST':
+        return { icon: Compass, color: 'text-indigo-600', label: 'Cast Archetype' };
+      case 'ABSOLUTION':
+      case 'PIERROT':
+        return { icon: ShieldCheck, color: 'text-emerald-600', label: 'Absolution' };
+      case 'MEDITATION':
+      case 'SILENCE':
+        return { icon: Moon, color: 'text-purple-600', label: 'Silence' };
+      default:
+        return { icon: Radio, color: 'text-zinc-600', label: eventType || 'Log' };
+    }
+  };
+
   useEffect(() => {
     async function fetchLogs() {
       try {
@@ -28,16 +81,20 @@ export default function TemplePage() {
         if (res.ok) {
           const json = await res.json();
           if (json && Array.isArray(json.data) && json.data.length > 0) {
-            const formatted = json.data.map((item: any) => ({
-              id: item.id || Date.now(),
-              type: item.event_type || 'WHISPER',
-              author: item.author || 'Anonymous',
-              time: 'recently',
-              content: item.message,
-              audioUrl: item.audio_url || null,
-              icon: item.event_type === 'VIGIL' ? Flame : item.event_type === 'ASH' ? Trash2 : Radio,
-              color: item.event_type === 'VIGIL' ? 'text-amber-600' : item.event_type === 'ASH' ? 'text-rose-600' : 'text-zinc-600'
-            }));
+            const formatted = json.data.map((item: any) => {
+              const type = item.event_type || 'WHISPER';
+              const visuals = getEventVisuals(type);
+              return {
+                id: item.id || Date.now(),
+                type: type,
+                author: item.author || 'Anonymous',
+                time: 'recently',
+                content: item.message,
+                audioUrl: item.audio_url || null,
+                icon: visuals.icon,
+                color: visuals.color
+              };
+            });
             setPosts(formatted);
           }
         }
@@ -50,12 +107,8 @@ export default function TemplePage() {
 
   const toggleRecording = async () => {
     if (isRecording) {
-      if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stop();
-      }
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
+      if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
+      if (recognitionRef.current) recognitionRef.current.stop();
       setIsRecording(false);
       return;
     }
@@ -66,9 +119,7 @@ export default function TemplePage() {
       const mediaRecorder = new MediaRecorder(stream);
       
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorder.onstop = () => {
@@ -82,7 +133,12 @@ export default function TemplePage() {
       mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
 
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const WinSpeech = window as unknown as { 
+        SpeechRecognition?: new () => any; 
+        webkitSpeechRecognition?: new () => any; 
+      };
+      const SpeechRecognition = WinSpeech.SpeechRecognition || WinSpeech.webkitSpeechRecognition;
+      
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
         recognition.lang = 'en-US';
@@ -125,7 +181,7 @@ export default function TemplePage() {
 
       if (res.ok) {
         const json = await res.json();
-        const newItem = {
+        const newItem: TemplePost = {
           id: json.data?.id || Date.now(),
           type: audioBlobUrl ? 'AUDIO_WHISPER' : 'WHISPER',
           author: userName,
@@ -188,7 +244,7 @@ export default function TemplePage() {
 
       <main className="max-w-2xl mx-auto px-6 pt-32 pb-24 relative z-10 space-y-10">
         
-        {/* INPUT BOX (Starts immediately) */}
+        {/* INPUT BOX */}
         {!isLoading && !user ? (
           <div className="p-8 rounded-2xl bg-white/70 backdrop-blur-xl border border-zinc-200/80 shadow-sm text-center space-y-4">
             <p className="font-serif text-zinc-700 text-sm">
@@ -252,7 +308,7 @@ export default function TemplePage() {
           </div>
         )}
 
-        {/* FEED / STREAM WITH SEPARATE DESIGNS */}
+        {/* FEED / STREAM */}
         <div className="space-y-3 pt-2">
           {posts.length === 0 ? (
             <div className="p-10 text-center rounded-2xl bg-white/40 border border-zinc-200/60 text-zinc-500 font-mono text-xs uppercase tracking-wider">
@@ -274,7 +330,6 @@ export default function TemplePage() {
                       : 'p-5 rounded-2xl bg-white/80 border border-zinc-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
                   }`}
                 >
-                  {/* DESIGN A: User Post / Whisper */}
                   {!isLogEvent ? (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between text-xs">
@@ -297,7 +352,6 @@ export default function TemplePage() {
                       )}
                     </div>
                   ) : (
-                    /* DESIGN B: System Log Event (Vigil, Ash, etc.) */
                     <div className="flex items-start gap-3">
                       <div className="p-1.5 rounded-lg bg-zinc-200/40 text-zinc-700 mt-0.5 shrink-0">
                         <PostIcon size={13} className={post.color} />
