@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 import { 
   ScanFace, 
   Flame, 
@@ -14,8 +15,10 @@ import {
   LogOut, 
   Sparkles, 
   ArrowLeft,
-  CheckCircle2
+  CheckCircle2,
+  ShieldCheck
 } from 'lucide-react';
+import { useAuth } from '@/components/AuthContext';
 
 type ServiceType = 'WALL' | 'CAST' | 'ASH' | 'VIGIL' | 'DEBT';
 
@@ -50,6 +53,7 @@ const INITIAL_POSTS = [
 ];
 
 export default function DigitalTemple() {
+  const { user, profile, roles, isLoading, signOut, signInWithGoogle } = useAuth();
   const [activeView, setActiveView] = useState<ServiceType>('WALL');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [postText, setPostText] = useState('');
@@ -59,12 +63,30 @@ export default function DigitalTemple() {
   const [ashInput, setAshInput] = useState('');
   const [isAshBurnt, setIsAshBurnt] = useState(false);
 
+  // Каноничный username и ссылка на профиль
+  const username = profile?.username || user?.user_metadata?.username || (user as any)?.username || null;
+  const profileHref = username ? `/you/${username}` : '/profile';
+
+  // Аватар и имя пользователя
+  const userImage =
+    profile?.image ||
+    profile?.avatar_url ||
+    user?.user_metadata?.avatar_url ||
+    user?.user_metadata?.picture ||
+    (user as any)?.image ||
+    null;
+  const userName = profile?.name || user?.user_metadata?.name || user?.email || 'Guest';
+  const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
+
+  const roleNorm = (Array.isArray(roles) && roles.length) ? roles[0] : ((user as any)?.role ? String((user as any).role).toUpperCase() : 'USER');
+  const isAdmin = roleNorm === 'ADMIN';
+
   const handleSendPost = () => {
     if (!postText.trim()) return;
     const newEntry = {
       id: Date.now(),
       type: 'WHISPER',
-      author: 'You',
+      author: userName,
       time: 'just now',
       content: postText,
       icon: Sparkles,
@@ -78,7 +100,7 @@ export default function DigitalTemple() {
     const newEntry = {
       id: Date.now(),
       type,
-      author: 'You',
+      author: userName,
       time: 'just now',
       content: `${title}: ${text}`,
       icon,
@@ -95,61 +117,91 @@ export default function DigitalTemple() {
       <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-amber-200/30 via-indigo-200/20 to-purple-200/30 blur-[140px] pointer-events-none rounded-full" />
 
       {/* --- HEADER --- */}
-      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/40 border-b border-white/60 shadow-[0_4px_30px_rgba(0,0,0,0.03)] px-8 py-6">
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/40 border-b border-white/60 shadow-[0_4px_30px_rgba(0,0,0,0.03)] px-6 md:px-8 py-6">
         <div className="max-w-6xl mx-auto flex items-center justify-between relative">
           
-          {/* Left: Spacer to balance header */}
-          <div className="w-10" />
-
-          {/* Center: Grand DIGITAL TEMPLE Header & Subtitle */}
-          <div className="text-center cursor-pointer group" onClick={() => setActiveView('WALL')}>
-            <h1 className="text-3xl md:text-4xl font-serif tracking-[0.25em] font-light text-zinc-900 uppercase transition-all duration-300 group-hover:opacity-80">
-              Digital Temple
-            </h1>
-            <p className="text-[11px] font-mono tracking-[0.2em] text-zinc-500 uppercase mt-1.5 font-medium">
-              A Sanctuary for Attention Hygiene & Ephemeral Presence
-            </p>
-          </div>
-
-          {/* Right: Circular Avatar & Dropdown */}
+          {/* Left: User Avatar & Dropdown */}
           <div className="relative">
-            <button
-              onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="w-11 h-11 rounded-full bg-gradient-to-tr from-zinc-900 to-zinc-700 text-white font-medium text-base flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 active:scale-95 transition-all duration-300"
-            >
-              A
-            </button>
+            {isLoading ? (
+              <div className="w-11 h-11 rounded-full bg-zinc-200 animate-pulse" />
+            ) : user ? (
+              <button
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="w-11 h-11 rounded-full overflow-hidden bg-gradient-to-tr from-zinc-900 to-zinc-700 text-white font-medium text-base flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 active:scale-95 transition-all duration-300"
+              >
+                {userImage ? (
+                  <img src={userImage} alt={userName} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{userInitials}</span>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={() => signInWithGoogle()}
+                className="px-4 py-2 rounded-full bg-zinc-900 text-white text-xs font-medium hover:bg-zinc-800 transition-all shadow-sm"
+              >
+                Sign In
+              </button>
+            )}
 
             {/* Profile Popover */}
             <AnimatePresence>
-              {isProfileOpen && (
+              {isProfileOpen && user && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 10 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute right-0 mt-3 w-64 p-4 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-50 space-y-3"
+                  className="absolute left-0 mt-3 w-64 p-4 rounded-3xl bg-white/90 backdrop-blur-3xl border border-white/90 shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-50 space-y-3"
                 >
                   <div className="flex items-center gap-3 pb-3 border-b border-zinc-200/50">
-                    <div className="w-10 h-10 rounded-full bg-zinc-900 text-white font-medium flex items-center justify-center text-sm shadow-inner">
-                      AM
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-zinc-900 text-white font-medium flex items-center justify-center text-sm shadow-inner flex-shrink-0">
+                      {userImage ? (
+                        <img src={userImage} alt={userName} className="w-full h-full object-cover" />
+                      ) : (
+                        <span>{userInitials}</span>
+                      )}
                     </div>
-                    <div>
-                      <div className="text-sm font-semibold text-zinc-900">Anton Merkurov</div>
-                      <div className="text-xs text-zinc-500 font-mono">ID: #008492</div>
+                    <div className="overflow-hidden">
+                      <div className="text-sm font-semibold text-zinc-900 truncate">{userName}</div>
+                      <div className="text-xs text-zinc-500 font-mono truncate">{user.email}</div>
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-white transition-all">
+                    <Link
+                      href={profileHref}
+                      onClick={() => setIsProfileOpen(false)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-white transition-all"
+                    >
                       <User size={15} className="text-zinc-500" />
                       Profile & Archetype
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-white transition-all">
+                    </Link>
+                    <Link
+                      href="/profile"
+                      onClick={() => setIsProfileOpen(false)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-white transition-all"
+                    >
                       <Settings size={15} className="text-zinc-500" />
                       Settings
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-rose-600 hover:bg-rose-50/60 transition-all">
+                    </Link>
+                    {isAdmin && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setIsProfileOpen(false)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-pink-700 bg-pink-50 hover:bg-pink-100 transition-all"
+                      >
+                        <ShieldCheck size={15} className="text-pink-600" />
+                        Admin Panel
+                      </Link>
+                    )}
+                    <button
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        signOut();
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-rose-600 hover:bg-rose-50/60 transition-all"
+                    >
                       <LogOut size={15} />
                       Sign Out
                     </button>
@@ -159,14 +211,27 @@ export default function DigitalTemple() {
             </AnimatePresence>
           </div>
 
+          {/* Center: Grand DIGITAL TEMPLE Header & Subtitle */}
+          <div className="text-center cursor-pointer group" onClick={() => setActiveView('WALL')}>
+            <h1 className="text-2xl md:text-4xl font-serif tracking-[0.2em] md:tracking-[0.25em] font-light text-zinc-900 uppercase transition-all duration-300 group-hover:opacity-80">
+              Digital Temple
+            </h1>
+            <p className="text-[10px] md:text-[11px] font-mono tracking-[0.15em] md:tracking-[0.2em] text-zinc-500 uppercase mt-1.5 font-medium">
+              A Sanctuary for Attention Hygiene & Ephemeral Presence
+            </p>
+          </div>
+
+          {/* Right Spacer to balance header */}
+          <div className="w-11" />
+
         </div>
       </header>
 
       {/* --- MAIN GRID LAYOUT --- */}
       <main className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-12 gap-10 relative z-10">
 
-        {/* ================= LEFT / MAIN: THE WALL & SERVICES ================= */}
-        <section className="col-span-12 lg:col-span-9 space-y-8">
+        {/* ================= MAIN CONTENT: THE WALL & SERVICES ================= */}
+        <section className="col-span-12 lg:col-span-9 space-y-8 order-2 lg:order-1">
           
           <AnimatePresence mode="wait">
             
@@ -394,8 +459,8 @@ export default function DigitalTemple() {
 
         </section>
 
-        {/* ================= RIGHT SIDEBAR: CIRCULAR RITUAL MENU ================= */}
-        <aside className="col-span-12 lg:col-span-3 flex flex-row lg:flex-col items-center justify-start gap-6 pt-2">
+        {/* ================= RIGHT SIDEBAR: VERTICAL RITUAL MENU ================= */}
+        <aside className="col-span-12 lg:col-span-3 flex flex-row lg:flex-col items-center lg:items-start justify-center lg:justify-start gap-6 pt-2 order-1 lg:order-2 overflow-x-auto pb-4 lg:pb-0">
           {[
             { id: 'CAST', label: 'Cast', icon: ScanFace, color: 'text-indigo-600' },
             { id: 'ASH', label: 'Ash', icon: Trash2, color: 'text-rose-600' },
@@ -405,18 +470,17 @@ export default function DigitalTemple() {
             const Icon = item.icon;
             const isActive = activeView === item.id;
             return (
-              <div key={item.id} className="flex flex-col items-center gap-2 group">
+              <div key={item.id} className="flex flex-col items-center lg:flex-row lg:items-center gap-2 lg:gap-4 group cursor-pointer" onClick={() => setActiveView(isActive ? 'WALL' : (item.id as ServiceType))}>
                 <button
-                  onClick={() => setActiveView(isActive ? 'WALL' : (item.id as ServiceType))}
-                  className={`w-16 h-16 rounded-full flex items-center justify-center backdrop-blur-2xl transition-all duration-300 relative ${
+                  className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center backdrop-blur-2xl transition-all duration-300 relative flex-shrink-0 ${
                     isActive
                       ? 'bg-white border-2 border-white shadow-[0_10px_30px_rgba(0,0,0,0.08)] scale-110 ring-4 ring-zinc-900/10'
                       : 'bg-white/50 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:bg-white/80 hover:scale-105'
                   }`}
                 >
-                  <Icon size={26} className={`${item.color} stroke-[1.75]`} />
+                  <Icon size={24} className={`${item.color} stroke-[1.75]`} />
                 </button>
-                <span className="text-xs font-mono font-medium tracking-wider text-zinc-600 uppercase">
+                <span className="text-[11px] lg:text-xs font-mono font-medium tracking-wider text-zinc-600 uppercase">
                   {item.label}
                 </span>
               </div>
