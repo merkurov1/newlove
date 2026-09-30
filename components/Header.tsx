@@ -25,6 +25,10 @@ export default function Header({
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const pathname = usePathname() || '';
 
+  // Если мы находимся не на главной странице, принудительно показываем архивный режим Merkurov
+  const isHomePage = pathname === '/';
+  const effectiveMode = isHomePage ? currentMode : 'merkurov';
+
   useEffect(() => {
     setIsMenuOpen(false);
     setIsProfileOpen(false);
@@ -164,25 +168,25 @@ export default function Header({
               </AnimatePresence>
             </div>
 
-            {/* MERKUROV & Digital Temple Switcher */}
+            {/* MERKUROV & Digital Temple Switcher (только на главной) */}
             <div className="flex items-center gap-4 pl-4 border-l border-zinc-200">
-              <button
-                onClick={() => handleModeSwitch('merkurov')}
+              <Link
+                href="/"
                 className="font-sans font-bold text-base md:text-lg tracking-[0.2em] uppercase text-zinc-900 hover:opacity-60 transition-opacity text-left"
               >
                 Merkurov
-              </button>
+              </Link>
 
-              {onModeChange && (
+              {isHomePage && onModeChange && (
                 <button
-                  onClick={() => handleModeSwitch(currentMode === 'merkurov' ? 'temple' : 'merkurov')}
+                  onClick={() => handleModeSwitch(effectiveMode === 'merkurov' ? 'temple' : 'merkurov')}
                   className={`text-xs font-mono uppercase tracking-wider px-3.5 py-1.5 rounded-full transition-all border ${
-                    currentMode === 'temple'
+                    effectiveMode === 'temple'
                       ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
                       : 'bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200/70'
                   }`}
                 >
-                  {currentMode === 'temple' ? 'Archive' : 'Digital Temple'}
+                  {effectiveMode === 'temple' ? 'Archive' : 'Digital Temple'}
                 </button>
               )}
             </div>
@@ -190,7 +194,7 @@ export default function Header({
 
           {/* RIGHT: DESKTOP NAV (Merkurov links OR Temple Ritual Icons) */}
           <nav role="navigation" className="hidden lg:flex items-center gap-6">
-            {currentMode === 'merkurov' ? (
+            {effectiveMode === 'merkurov' ? (
               navLinks.map((link) => (
                 <Link
                   key={link.name}
@@ -250,24 +254,24 @@ export default function Header({
         }`}
       >
         <div className="flex flex-col items-center space-y-6 text-center">
-          {onModeChange && (
+          {isHomePage && onModeChange && (
             <div className="flex items-center gap-3 mb-4">
               <button
                 onClick={() => { handleModeSwitch('merkurov'); setIsMenuOpen(false); }}
-                className={`px-5 py-2 rounded-full text-xs font-mono uppercase ${currentMode === 'merkurov' ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-600'}`}
+                className={`px-5 py-2 rounded-full text-xs font-mono uppercase ${effectiveMode === 'merkurov' ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-600'}`}
               >
                 Merkurov
               </button>
               <button
                 onClick={() => { handleModeSwitch('temple'); setIsMenuOpen(false); }}
-                className={`px-5 py-2 rounded-full text-xs font-mono uppercase ${currentMode === 'temple' ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-600'}`}
+                className={`px-5 py-2 rounded-full text-xs font-mono uppercase ${effectiveMode === 'temple' ? 'bg-zinc-900 text-white font-bold' : 'bg-zinc-100 text-zinc-600'}`}
               >
                 Digital Temple
               </button>
             </div>
           )}
 
-          {currentMode === 'merkurov' ? (
+          {effectiveMode === 'merkurov' ? (
             navLinks.map((link) => (
               <Link
                 key={link.name}
