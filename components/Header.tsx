@@ -3,36 +3,32 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { User, Settings, LogOut, ShieldCheck, Menu, X, ScanFace, Flame, Trash2, ReceiptText } from 'lucide-react';
+import { User, Settings, LogOut, ShieldCheck, Menu, X, ScanFace, Flame, Trash2, ReceiptText, Sparkles, Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
 
-interface HeaderProps {
-  activeTempleView?: string;
-  onTempleViewChange?: (view: any) => void;
-}
-
-export default function Header({ 
-  activeTempleView = 'WALL',
-  onTempleViewChange 
-}: HeaderProps) {
+export default function Header() {
   const { user, profile, roles, isLoading, signOut } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeEcosystem, setActiveEcosystem] = useState<'merkurov' | 'temple' | 'art' | 'heart'>('merkurov');
+  const [activeEcosystem, setActiveEcosystem] = useState<'merkurov' | 'temple' | 'curators' | 'heart'>('merkurov');
   
   const pathname = usePathname() || '';
   const router = useRouter();
 
-  const isTemplePage = pathname.startsWith('/temple');
-  const isCastPage = pathname.startsWith('/cast');
-
   useEffect(() => {
     setIsProfileOpen(false);
     setIsMobileMenuOpen(false);
-    if (isTemplePage || isCastPage) setActiveEcosystem('temple');
-    else if (pathname.startsWith('/selection') || pathname.startsWith('/heartandangel')) setActiveEcosystem('art');
-  }, [pathname, isTemplePage, isCastPage]);
+    if (pathname.startsWith('/temple') || pathname.startsWith('/cast') || pathname.startsWith('/vigil') || pathname.startsWith('/absolution') || pathname.startsWith('/letitgo')) {
+      setActiveEcosystem('temple');
+    } else if (pathname.startsWith('/art-engine') || pathname.startsWith('/selection')) {
+      setActiveEcosystem('curators');
+    } else if (pathname.startsWith('/heartandangel')) {
+      setActiveEcosystem('heart');
+    } else {
+      setActiveEcosystem('merkurov');
+    }
+  }, [pathname]);
 
   const username = profile?.username || user?.user_metadata?.username || (user as any)?.username || null;
   const profileHref = username ? `/you/${username}` : '/profile';
@@ -41,46 +37,55 @@ export default function Header({
   const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
   const isAdmin = roles.includes('ADMIN');
 
-  // Экосистемное меню
+  // Четкая структура экосистем и их ссылок согласно вашему заданию
   const ecosystems = [
-    { id: 'merkurov', label: 'Merkurov', links: [
-      { name: 'Lobby', href: '/lobby' },
-      { name: 'About', href: '/isakeyforall' },
-      { name: 'Journal', href: '/journal' }
-    ]},
-    { id: 'temple', label: 'Digital Temple', links: [
-      { name: 'Sanctuary', href: '/temple' },
-      { name: 'Cast Protocol', href: '/cast' },
-      { name: 'Vigil', href: '/temple' },
-      { name: 'Ash', href: '/temple' }
-    ]},
-    { id: 'art', label: 'Art & Selection', links: [
-      { name: 'Selection', href: '/selection' },
-      { name: 'Curators Engine', href: '/selection' },
-      { name: 'Advising', href: '/advising' }
-    ]},
-    { id: 'heart', label: 'Heart & Angel', links: [
-      { name: 'Gallery', href: '/heartandangel' },
-      { name: 'Let It Go', href: '/heartandangel' },
-      { name: 'Calm', href: '/heartandangel' }
-    ]}
+    { 
+      id: 'merkurov', 
+      label: 'Merkurov', 
+      links: [
+        { name: 'Lobby', href: '/lobby' },
+        { name: 'About', href: '/isakeyforall' },
+        { name: 'Advising', href: '/advising' },
+        { name: 'Unframed', href: '/unframed' },
+        { name: 'Journal', href: '/journal' }
+      ]
+    },
+    { 
+      id: 'temple', 
+      label: 'Digital Temple', 
+      links: [
+        { name: 'Temple', href: '/temple' },
+        { name: 'Cast', href: '/cast' },
+        { name: 'Vigil', href: '/vigil' },
+        { name: 'Absolution', href: '/absolution' },
+        { name: 'Let It Go', href: '/letitgo' }
+      ]
+    },
+    { 
+      id: 'curators', 
+      label: 'Curators Engine', 
+      links: [
+        { name: 'Art Engine', href: '/art-engine' },
+        { name: 'Selection', href: '/selection' }
+      ]
+    },
+    { 
+      id: 'heart', 
+      label: 'Heart & Angel', 
+      links: [
+        { name: 'Gallery', href: '/heartandangel' }
+      ]
+    }
   ];
 
   const currentEco = ecosystems.find(e => e.id === activeEcosystem) || ecosystems[0];
-
-  const templeNavItems = [
-    { id: 'CAST', label: 'Cast', icon: ScanFace, color: 'text-indigo-600', isLink: true, href: '/cast' },
-    { id: 'ASH', label: 'Ash', icon: Trash2, color: 'text-rose-600', isLink: false },
-    { id: 'VIGIL', label: 'Vigil', icon: Flame, color: 'text-amber-600', isLink: false },
-    { id: 'DEBT', label: 'Debt', icon: ReceiptText, color: 'text-emerald-600', isLink: false },
-  ];
 
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-2xl border-b border-zinc-200/60 shadow-[0_4px_30px_rgba(0,0,0,0.02)] transition-all">
         <div className="max-w-[1800px] mx-auto px-6 h-20 md:h-24 flex items-center justify-between">
           
-          {/* LEFT: AVATAR & BRAND */}
+          {/* LEFT: AVATAR & UNIQUE BRAND (Без дублирования) */}
           <div className="flex items-center gap-4 sm:gap-6">
             <div className="relative">
               {isLoading ? (
@@ -145,80 +150,36 @@ export default function Header({
               </AnimatePresence>
             </div>
 
-            {/* BRAND */}
             <Link href="/" className="font-sans font-bold text-sm sm:text-base tracking-[0.2em] uppercase text-zinc-900">
               Merkurov
             </Link>
           </div>
 
-          {/* DESKTOP ECOSYSTEM TABS & LINKS OR TEMPLE RITUALS */}
+          {/* DESKTOP ECOSYSTEM TABS & LINKS */}
           <div className="hidden lg:flex items-center gap-8">
-            {!isTemplePage ? (
-              <>
-                <div className="flex items-center bg-zinc-100 p-1 rounded-full border border-zinc-200/60 font-mono text-[11px] uppercase">
-                  {ecosystems.map((eco) => (
-                    <button
-                      key={eco.id}
-                      onClick={() => setActiveEcosystem(eco.id as any)}
-                      className={`px-4 py-1.5 rounded-full transition-all ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900'}`}
-                    >
-                      {eco.label}
-                    </button>
-                  ))}
-                </div>
+            <div className="flex items-center bg-zinc-100 p-1 rounded-full border border-zinc-200/60 font-mono text-[11px] uppercase">
+              {ecosystems.map((eco) => (
+                <button
+                  key={eco.id}
+                  onClick={() => setActiveEcosystem(eco.id as any)}
+                  className={`px-4 py-1.5 rounded-full transition-all ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900'}`}
+                >
+                  {eco.label}
+                </button>
+              ))}
+            </div>
 
-                <nav className="flex items-center gap-5">
-                  {currentEco.links.map((link) => (
-                    <Link
-                      key={link.name}
-                      href={link.href}
-                      className={`text-xs font-mono uppercase tracking-[0.15em] transition-colors ${pathname === link.href ? 'text-zinc-900 font-bold underline underline-offset-4' : 'text-zinc-500 hover:text-zinc-900'}`}
-                    >
-                      {link.name}
-                    </Link>
-                  ))}
-                </nav>
-              </>
-            ) : (
-              <div className="flex items-center gap-3">
-                {templeNavItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeTempleView === item.id;
-
-                  if (item.isLink) {
-                    return (
-                      <Link
-                        key={item.id}
-                        href={item.href!}
-                        className="flex items-center gap-2 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all border bg-white/60 text-zinc-700 border-zinc-200 hover:bg-white"
-                      >
-                        <Icon size={15} className={item.color} />
-                        <span>{item.label}</span>
-                      </Link>
-                    );
-                  }
-
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        if (onTempleViewChange) {
-                          onTempleViewChange(isActive ? 'WALL' : item.id);
-                        }
-                      }}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all border ${
-                        isActive
-                          ? 'bg-zinc-900 text-white border-zinc-900 shadow-md'
-                          : 'bg-white/60 text-zinc-700 border-zinc-200 hover:bg-white'
-                      }`}
-                    >
-                      <Icon size={15} className={isActive ? 'text-white' : item.color} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <nav className="flex items-center gap-5">
+              {currentEco.links.map((link) => (
+                <Link
+                  key={link.name}
+                  href={link.href}
+                  className={`text-xs font-mono uppercase tracking-[0.15em] transition-colors ${pathname === link.href ? 'text-zinc-900 font-bold underline underline-offset-4' : 'text-zinc-500 hover:text-zinc-900'}`}
+                >
+                  {link.name}
+                </Link>
+              ))}
+            </nav>
           </div>
 
           {/* MOBILE MENU TOGGLE BUTTON */}
@@ -243,69 +204,31 @@ export default function Header({
             exit={{ opacity: 0, y: -20 }}
             className="fixed inset-x-0 top-20 bg-white/95 backdrop-blur-3xl border-b border-zinc-200 shadow-2xl z-40 p-6 lg:hidden space-y-6"
           >
-            {!isTemplePage ? (
-              <>
-                <div className="grid grid-cols-2 gap-2 font-mono text-xs uppercase">
-                  {ecosystems.map((eco) => (
-                    <button
-                      key={eco.id}
-                      onClick={() => setActiveEcosystem(eco.id as any)}
-                      className={`p-3 rounded-2xl text-left transition-all border ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm' : 'bg-zinc-50 text-zinc-600 border-zinc-200'}`}
-                    >
-                      {eco.label}
-                    </button>
-                  ))}
-                </div>
+            <div className="grid grid-cols-2 gap-2 font-mono text-xs uppercase">
+              {ecosystems.map((eco) => (
+                <button
+                  key={eco.id}
+                  onClick={() => setActiveEcosystem(eco.id as any)}
+                  className={`p-3 rounded-2xl text-left transition-all border ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm' : 'bg-zinc-50 text-zinc-600 border-zinc-200'}`}
+                >
+                  {eco.label}
+                </button>
+              ))}
+            </div>
 
-                <div className="border-t border-zinc-100 pt-4 space-y-2">
-                  <div className="font-mono text-[10px] uppercase text-zinc-400 tracking-wider mb-2">Projects in {currentEco.label}:</div>
-                  {currentEco.links.map((link) => (
-                    <Link
-                      key={link.name}
-                      href={link.href}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className="block p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-sm font-medium text-zinc-800 transition-colors"
-                    >
-                      {link.name}
-                    </Link>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="space-y-2 font-mono text-xs uppercase">
-                <div className="font-mono text-[10px] uppercase text-zinc-400 tracking-wider mb-2">Temple Rituals:</div>
-                {templeNavItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeTempleView === item.id;
-                  if (item.isLink) {
-                    return (
-                      <Link
-                        key={item.id}
-                        href={item.href!}
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 text-zinc-800 font-medium"
-                      >
-                        <Icon size={16} className={item.color} />
-                        <span>{item.label}</span>
-                      </Link>
-                    );
-                  }
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        if (onTempleViewChange) onTempleViewChange(isActive ? 'WALL' : item.id);
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all ${isActive ? 'bg-zinc-900 text-white' : 'bg-zinc-50 text-zinc-800'}`}
-                    >
-                      <Icon size={16} className={isActive ? 'text-white' : item.color} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div className="border-t border-zinc-100 pt-4 space-y-2">
+              <div className="font-mono text-[10px] uppercase text-zinc-400 tracking-wider mb-2">Projects in {currentEco.label}:</div>
+              {currentEco.links.map((link) => (
+                <Link
+                  key={link.name}
+                  href={link.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-sm font-medium text-zinc-800 transition-colors"
+                >
+                  {link.name}
+                </Link>
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
