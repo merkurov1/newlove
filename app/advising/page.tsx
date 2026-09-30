@@ -1,111 +1,102 @@
 'use client';
 
 import React from 'react';
-import Header from '@/components/Header';
-import { motion } from 'framer-motion';
-import { ArrowUpRight } from 'lucide-react';
+import Link from 'next/link';
 
 export default function AdvisingPage() {
-  const directions = [
-    {
-      index: '01',
-      title: 'Media Architecture & Strategy',
-      description: 'Comprehensive navigation of contemporary information spaces. Strategic positioning for publicists, creators, and independent ventures interacting with international media and digital publishing.'
-    },
-    {
-      index: '02',
-      title: 'AI & Technological Integration',
-      description: 'Systemic implementation of artificial intelligence models and automated workflows. Practical insights on adapting operational infrastructure to rapid technological and regulatory shifts.'
-    },
-    {
-      index: '03',
-      title: 'Art Markets & Digital Assets',
-      description: 'Consulting on contemporary art collection mechanics, provenance tracking, smart contract deployment, and bridging classical artistic heritage with decentralized digital registries.'
-    }
-  ];
-
   return (
-    <div className="min-h-screen bg-white text-black font-sans selection:bg-black selection:text-white relative overflow-x-hidden antialiased">
-      
-      <Header />
-
-      <main className="max-w-4xl mx-auto px-6 pt-36 pb-24 space-y-20">
+    <main className="min-h-screen bg-black text-white px-6 py-20 md:py-32 selection:bg-white selection:text-black">
+      <div className="max-w-2xl mx-auto space-y-16">
         
-        {/* Title Section */}
-        <motion.div 
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-4 max-w-2xl border-b border-zinc-200 pb-12"
-        >
-          <div className="font-mono text-xs uppercase tracking-[0.25em] text-zinc-400">
-            Professional Practice
-          </div>
-          <h1 className="text-4xl sm:text-6xl font-serif font-light tracking-tight uppercase text-black">
-            Advising
-          </h1>
-          <p className="font-serif text-lg text-zinc-600 leading-relaxed italic">
-            Direct consulting and strategic analysis at the intersection of modern media, technology, and art.
+        {/* Header */}
+        <header className="space-y-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-neutral-500 font-mono">
+            The Private Office // Anton Merkurov
           </p>
-        </motion.div>
+          <h1 className="text-3xl md:text-5xl font-light tracking-tight">
+            Heritage Architecture for the Post-Digital Age.
+          </h1>
+          <p className="text-lg text-neutral-400 font-light">
+            Art Advisory, Legacy Structures, and Digital Sovereignty.
+          </p>
+        </header>
 
-        {/* Directions List (White Cube Editorial) */}
-        <div className="space-y-8">
-          {directions.map((item, index) => (
-            <motion.div
-              key={item.index}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="p-8 sm:p-12 border border-zinc-200 flex flex-col md:flex-row md:items-center justify-between gap-6 group hover:border-black transition-all duration-300 bg-white"
-            >
-              <div className="space-y-3 max-w-xl">
-                <span className="font-mono text-xs uppercase tracking-widest text-zinc-400">
-                  {item.index}
-                </span>
-                <h3 className="font-sans font-bold text-xl uppercase tracking-tight text-black">
-                  {item.title}
-                </h3>
-                <p className="font-serif text-sm sm:text-base text-zinc-600 leading-relaxed">
-                  {item.description}
-                </p>
-              </div>
+        {/* Manifesto */}
+        <section className="space-y-6 text-neutral-300 font-light leading-relaxed">
+          <p>
+            The art world is full of noise. Galleries sell inventory. Algorithms manipulate taste. Auctions are theatre.
+          </p>
+          <p className="text-xl text-white font-normal">
+            I offer silence.
+          </p>
+          <p>
+            I do not just &quot;buy art&quot; for you. I build Legacy Structures for individuals who plan in decades, not quarters. 
+            My approach fuses two worlds: the Granite of the 20th century (Classical Heritage) and the Ether of the 21st (Digital Assets & Archives).
+          </p>
+        </section>
 
-              <div className="shrink-0">
-                <div className="w-12 h-12 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-400 group-hover:bg-black group-hover:text-white group-hover:border-black transition-all">
-                  <ArrowUpRight size={18} />
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Direct Engagement Block */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="p-8 sm:p-12 border border-black bg-black text-white flex flex-col sm:flex-row items-center justify-between gap-8"
-        >
-          <div className="space-y-2 text-center sm:text-left">
-            <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-400">Inquiries</span>
-            <h3 className="font-serif text-2xl tracking-tight">Direct Collaboration</h3>
-            <p className="font-serif text-sm text-zinc-400">Advisory engagements are structured individually upon request.</p>
+        {/* Capability Demonstration */}
+        <section className="space-y-4 pt-6 pb-2 border-t border-neutral-900">
+          <h2 className="text-xs uppercase tracking-[0.2em] text-neutral-500 font-mono">
+            Capability Demonstration
+          </h2>
+          <div className="p-6 border border-neutral-800 bg-neutral-950 space-y-3">
+            <p className="text-sm text-neutral-400 font-mono">Case Study: The White Absolute</p>
+            <p className="text-white font-medium">Asset: Lucio Fontana (1968) // Valuation & Arbitrage</p>
+            <p className="text-sm text-neutral-400 font-light">
+              See how the Curator Engine analyzes liquidity, risk, and market arbitrage for institutional-grade assets. This is the level of depth I bring to every acquisition.
+            </p>
           </div>
+        </section>
 
-          <a
+        {/* The Protocol */}
+        <section className="space-y-8 pt-8 border-t border-neutral-900">
+          <h2 className="text-xs uppercase tracking-[0.2em] text-neutral-500 font-mono">
+            The Protocol
+          </h2>
+
+          <div className="space-y-8">
+            <div className="space-y-2">
+              <span className="text-xs font-mono text-neutral-600">01</span>
+              <h3 className="text-xl font-normal text-white">The Audit (Digital Hygiene)</h3>
+              <p className="text-neutral-400 font-light">
+                You are vulnerable. I clean your digital footprint, remove the noise, and secure your perimeter. Before we build, we must clear the ground.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-xs font-mono text-neutral-600">02</span>
+              <h3 className="text-xl font-normal text-white">The Acquisition (Selection)</h3>
+              <p className="text-neutral-400 font-light">
+                Curating assets that survive entropy. From post-war modernism to the algorithmic avant-garde. No fillers. Only signals.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-xs font-mono text-neutral-600">03</span>
+              <h3 className="text-xl font-normal text-white">The Archive (Immortality)</h3>
+              <p className="text-neutral-400 font-light">
+                Building your personal Digital Vatican. A system to preserve your collection, your name, and your intent forever. Data is the new marble.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Call to Action */}
+        <footer className="pt-12 border-t border-neutral-900 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+          <p className="text-sm text-neutral-500 font-light">
+            Response time: Within 24 hours
+          </p>
+          <Link 
             href="mailto:contact@merkurov.love"
-            className="inline-flex items-center gap-3 px-8 py-4 bg-white text-black font-mono text-xs uppercase tracking-[0.2em] hover:bg-zinc-200 transition-all shrink-0 font-bold"
+            className="inline-flex items-center space-x-2 text-sm uppercase tracking-wider text-white border-b border-white pb-1 hover:text-neutral-400 hover:border-neutral-400 transition-colors"
           >
-            <span>Initiate Contact</span>
-            <ArrowUpRight size={14} />
-          </a>
-        </motion.div>
+            <span>Start a conversation</span>
+            <span>→</span>
+          </Link>
+        </footer>
 
-      </main>
-
-      <footer className="max-w-4xl mx-auto w-full text-center font-mono text-[10px] text-zinc-400 uppercase tracking-[0.3em] py-8 border-t border-zinc-100">
-        Merkurov Private Office &copy; {new Date().getFullYear()}
-      </footer>
-    </div>
+      </div>
+    </main>
   );
 }
