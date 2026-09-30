@@ -1,369 +1,254 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
+import { User, Settings, LogOut, ShieldCheck, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
-import { 
-  ScanFace, 
-  Flame, 
-  Trash2, 
-  ReceiptText, 
-  Mic, 
-  Square,
-  Send, 
-  Sparkles, 
-  ArrowLeft,
-  CheckCircle2
-} from 'lucide-react';
 import { useAuth } from '@/components/AuthContext';
-import Header from '@/components/Header';
 
-type ServiceType = 'WALL' | 'ASH' | 'VIGIL' | 'DEBT';
+interface HeaderProps {
+  activeTempleView?: string;
+  onTempleViewChange?: (view: any) => void;
+}
 
-export default function DigitalTemple() {
-  const router = useRouter();
-  const { profile } = useAuth();
-  const [activeView, setActiveView] = useState<ServiceType>('WALL');
-  const [postText, setPostText] = useState('');
-  const [posts, setPosts] = useState<any[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Voice recording state
-  const [isRecording, setIsRecording] = useState(false);
-  const recognitionRef = useRef<any>(null);
-
-  // Ash ritual state
-  const [ashInput, setAshInput] = useState('');
-  const [isAshBurnt, setIsAshBurnt] = useState(false);
-
-  const userName = profile?.name || 'Visitor';
+export default function Header({ activeTempleView, onTempleViewChange }: HeaderProps) {
+  const { user, profile, roles, isLoading, signOut } = useAuth();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeEcosystem, setActiveEcosystem] = useState<'merkurov' | 'temple' | 'curators' | 'heart'>('merkurov');
+  
+  const pathname = usePathname() || '';
 
   useEffect(() => {
-    async function fetchLogs() {
-      try {
-        const res = await fetch('/api/temple_logs');
-        if (res.ok) {
-          const json = await res.json();
-          if (json && Array.isArray(json.data) && json.data.length > 0) {
-            const formatted = json.data.map((item: any) => ({
-              id: item.id || Date.now(),
-              type: item.event_type || 'WHISPER',
-              author: userName,
-              time: 'recently',
-              content: item.message,
-              icon: item.event_type === 'VIGIL' ? Flame : item.event_type === 'ASH' ? Trash2 : item.event_type === 'CAST' ? ScanFace : Sparkles,
-              color: item.event_type === 'VIGIL' ? 'text-amber-500' : item.event_type === 'ASH' ? 'text-rose-500' : 'text-indigo-500'
-            }));
-            setPosts(formatted);
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to fetch temple logs', e);
-      }
+    setIsProfileOpen(false);
+    setIsMobileMenuOpen(false);
+    if (pathname.startsWith('/temple') || pathname.startsWith('/cast') || pathname.startsWith('/vigil') || pathname.startsWith('/absolution') || pathname.startsWith('/letitgo')) {
+      setActiveEcosystem('temple');
+    } else if (pathname.startsWith('/art-engine') || pathname.startsWith('/selection')) {
+      setActiveEcosystem('curators');
+    } else if (pathname.startsWith('/heartandangel')) {
+      setActiveEcosystem('heart');
+    } else {
+      setActiveEcosystem('merkurov');
     }
-    fetchLogs();
-  }, [userName]);
+  }, [pathname]);
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      if (recognitionRef.current) recognitionRef.current.stop();
-      setIsRecording(false);
-      return;
+  const username = profile?.username || user?.user_metadata?.username || (user as any)?.username || null;
+  const profileHref = username ? `/you/${username}` : '/profile';
+  const userImage = profile?.image || profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
+  const userName = profile?.name || user?.user_metadata?.name || user?.email || 'Guest';
+  const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
+  const isAdmin = roles.includes('ADMIN');
+
+  const ecosystems = [
+    { 
+      id: 'merkurov', 
+      label: 'Merkurov', 
+      mainHref: '/lobby',
+      links: [
+        { name: 'Lobby', href: '/lobby' },
+        { name: 'About', href: '/isakeyforall' },
+        { name: 'Advising', href: '/advising' },
+        { name: 'Unframed', href: '/unframed' },
+        { name: 'Journal', href: '/journal' }
+      ]
+    },
+    { 
+      id: 'temple', 
+      label: 'Digital Temple', 
+      mainHref: '/temple',
+      links: [
+        { name: 'Temple', href: '/temple' },
+        { name: 'Cast', href: '/cast' },
+        { name: 'Vigil', href: '/vigil' },
+        { name: 'Absolution', href: '/absolution' },
+        { name: 'Let It Go', href: '/letitgo' }
+      ]
+    },
+    { 
+      id: 'curators', 
+      label: 'Curators Engine', 
+      mainHref: '/art-engine',
+      links: [
+        { name: 'Art Engine', href: '/art-engine' },
+        { name: 'Selection', href: '/selection' }
+      ]
+    },
+    { 
+      id: 'heart', 
+      label: 'Heart & Angel', 
+      mainHref: '/heartandangel',
+      links: [
+        { name: 'Gallery', href: '/heartandangel' }
+      ]
     }
+  ];
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Speech recognition is not supported in this browser.');
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'en-US';
-      recognition.continuous = false;
-      recognition.interimResults = true;
-
-      recognition.onstart = () => setIsRecording(true);
-      recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        setPostText((prev) => (prev ? `${prev} ${transcript}` : transcript));
-      };
-      recognition.onerror = () => setIsRecording(false);
-      recognition.onend = () => setIsRecording(false);
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (e) {
-      setIsRecording(false);
-    }
-  };
-
-  const handleSendPost = async () => {
-    if (!postText.trim() || isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      const res = await fetch('/api/temple_logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event_type: 'WHISPER',
-          message: postText
-        })
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const newItem = {
-          id: json.data?.id || Date.now(),
-          type: 'WHISPER',
-          author: userName,
-          time: 'just now',
-          content: postText,
-          icon: Sparkles,
-          color: 'text-zinc-400'
-        };
-        setPosts([newItem, ...posts]);
-        setPostText('');
-      }
-    } catch (e) {
-      console.error('Failed to transmit post', e);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const publishRitualResult = async (title: string, text: string, type: string, icon: any, color: string) => {
-    const message = `${title}: ${text}`;
-    try {
-      await fetch('/api/temple_logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_type: type, message })
-      });
-    } catch (e) {}
-
-    const newEntry = {
-      id: Date.now(),
-      type,
-      author: userName,
-      time: 'just now',
-      content: message,
-      icon,
-      color
-    };
-    setPosts([newEntry, ...posts]);
-    setActiveView('WALL');
-  };
+  const currentEco = ecosystems.find(e => e.id === activeEcosystem) || ecosystems[0];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#F6F4F0] via-[#F0ECE6] to-[#E8E3DA] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white relative overflow-x-hidden antialiased">
-      
-      {/* Background Soft Glows */}
-      <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-amber-200/30 via-indigo-200/20 to-purple-200/30 blur-[140px] pointer-events-none rounded-full" />
-
-      <Header activeTempleView={activeView} onTempleViewChange={setActiveView} />
-
-      {/* --- MAIN CONTENT CONTAINER --- */}
-      <main className="max-w-3xl mx-auto px-6 pt-36 pb-16 relative z-10">
-        
-        <AnimatePresence mode="wait">
+    <>
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-2xl border-b border-zinc-200/60 shadow-[0_4px_30px_rgba(0,0,0,0.02)] transition-all">
+        <div className="max-w-[1800px] mx-auto px-6 lg:px-10 h-24 flex items-center justify-between">
           
-          {/* 1. THE WALL VIEW */}
-          {activeView === 'WALL' && (
-            <motion.div
-              key="wall"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.2 }}
-              className="space-y-6"
-            >
-              {/* COMPACT & ELEGANT INPUT CONTAINER */}
-              <div className="p-5 sm:p-6 rounded-3xl bg-white/70 backdrop-blur-2xl border border-white/90 shadow-[0_10px_30px_rgba(0,0,0,0.02)] space-y-3">
-                <textarea
-                  value={postText}
-                  onChange={(e) => setPostText(e.target.value)}
-                  placeholder="Leave a whisper, reflection, or record..."
-                  rows={2}
-                  className="w-full bg-transparent text-sm sm:text-base text-zinc-800 placeholder-zinc-400 resize-none focus:outline-none font-normal leading-relaxed"
-                />
+          {/* LEFT: AVATAR & BRAND */}
+          <div className="flex items-center gap-5">
+            <div className="relative">
+              {isLoading ? (
+                <div className="w-12 h-12 rounded-full bg-zinc-200 animate-pulse" />
+              ) : user ? (
+                <button
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className="w-12 h-12 rounded-full overflow-hidden bg-zinc-900 text-white font-medium text-sm flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 transition-all"
+                >
+                  {userImage ? (
+                    <img src={userImage} alt={userName} className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{userInitials}</span>
+                  )}
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  className="px-4 py-2 rounded-full bg-zinc-900 text-white text-xs font-mono uppercase tracking-wider hover:bg-zinc-800 transition-all shadow-sm"
+                >
+                  Sign In
+                </Link>
+              )}
 
-                <div className="flex items-center justify-between pt-2 border-t border-zinc-200/40">
-                  <button
-                    type="button"
-                    onClick={toggleRecording}
-                    className={`p-2.5 rounded-full transition-all shadow-sm border ${
-                      isRecording 
-                        ? 'bg-rose-500 text-white border-rose-500 animate-pulse' 
-                        : 'bg-white/80 text-zinc-600 border-white/90 hover:bg-white'
-                    }`}
-                    title={isRecording ? 'Listening... Click to stop' : 'Record voice note'}
+              {/* Profile Popover */}
+              <AnimatePresence>
+                {isProfileOpen && user && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    className="absolute left-0 mt-3 w-72 p-5 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-50 space-y-4"
                   >
-                    {isRecording ? <Square size={16} /> : <Mic size={16} />}
-                  </button>
-
-                  <button
-                    onClick={handleSendPost}
-                    disabled={isSubmitting || !postText.trim()}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-zinc-900 text-white font-medium text-xs sm:text-sm shadow-md hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40"
-                  >
-                    <span>{isSubmitting ? 'Transmitting...' : 'Transmit'}</span>
-                    <Send size={13} />
-                  </button>
-                </div>
-              </div>
-
-              {/* STREAM FEED */}
-              <div className="space-y-3">
-                {posts.map((post) => {
-                  const PostIcon = post.icon || Sparkles;
-                  return (
-                    <div
-                      key={post.id}
-                      className="p-5 rounded-2xl bg-white/50 backdrop-blur-xl border border-white/70 shadow-[0_4px_15px_rgba(0,0,0,0.01)] space-y-2 hover:bg-white/70 transition-all duration-300"
-                    >
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <PostIcon size={15} className={post.color || 'text-zinc-400'} />
-                          <span className="font-semibold text-zinc-900 text-xs sm:text-sm">{post.author}</span>
-                        </div>
-                        <span className="text-zinc-400 font-mono text-[11px]">{post.time}</span>
+                    <div className="flex items-center gap-3.5 pb-3.5 border-b border-zinc-200/50">
+                      <div className="w-11 h-11 rounded-full overflow-hidden bg-zinc-900 text-white font-medium flex items-center justify-center text-sm">
+                        {userImage ? <img src={userImage} alt={userName} className="w-full h-full object-cover" /> : <span>{userInitials}</span>}
                       </div>
-                      <p className="text-sm sm:text-base text-zinc-800 leading-relaxed font-normal">
-                        {post.content}
-                      </p>
+                      <div className="overflow-hidden">
+                        <div className="text-sm font-semibold text-zinc-900 truncate">{userName}</div>
+                        <div className="text-xs text-zinc-500 font-mono truncate">{user.email}</div>
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
 
-          {/* 2. ASH SERVICE */}
-          {activeView === 'ASH' && (
-            <motion.div
-              key="ash"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.2 }}
-              className="p-8 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-xl space-y-6"
+                    <div className="space-y-1.5">
+                      <Link href={profileHref} onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100">
+                        <User size={16} className="text-zinc-500" /> Profile & Archetype
+                      </Link>
+                      <Link href="/profile" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100">
+                        <Settings size={16} className="text-zinc-500" /> Settings
+                      </Link>
+                      {isAdmin && (
+                        <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium text-pink-700 bg-pink-50">
+                          <ShieldCheck size={16} className="text-pink-600" /> Admin Panel
+                        </Link>
+                      )}
+                      <button onClick={() => { setIsProfileOpen(false); signOut(); }} className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium text-rose-600 hover:bg-rose-50">
+                        <LogOut size={16} /> Sign Out
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <Link href="/" className="font-sans font-bold text-lg tracking-[0.2em] uppercase text-zinc-900">
+              Merkurov
+            </Link>
+          </div>
+
+          {/* DESKTOP ECOSYSTEM SWITCHER & SUB-LINKS */}
+          <div className="hidden lg:flex items-center gap-8">
+            
+            {/* Ecosystem Switcher Capsule */}
+            <div className="flex items-center bg-zinc-100 p-1.5 rounded-full border border-zinc-200/60 font-mono text-xs uppercase tracking-wider">
+              {ecosystems.slice(1).map((eco) => (
+                <Link
+                  key={eco.id}
+                  href={eco.mainHref}
+                  className={`px-5 py-2 rounded-full transition-all ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white shadow-sm font-semibold' : 'text-zinc-500 hover:text-zinc-900'}`}
+                >
+                  {eco.label}
+                </Link>
+              ))}
+            </div>
+
+            {/* Divider */}
+            <div className="w-[1px] h-6 bg-zinc-200" />
+
+            {/* Current Ecosystem Sub-Links */}
+            <nav className="flex items-center gap-6">
+              {currentEco.links.map((link) => (
+                <Link
+                  key={link.name}
+                  href={link.href}
+                  className={`text-sm font-mono uppercase tracking-[0.15em] transition-colors ${pathname === link.href ? 'text-zinc-900 font-bold underline underline-offset-4' : 'text-zinc-400 hover:text-zinc-900'}`}
+                >
+                  {link.name}
+                </Link>
+              ))}
+            </nav>
+          </div>
+
+          {/* MOBILE MENU TOGGLE BUTTON */}
+          <div className="lg:hidden flex items-center">
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-3 rounded-full bg-zinc-100 text-zinc-800 hover:bg-zinc-200 transition-colors"
+              aria-label="Toggle Menu"
             >
-              <button
-                onClick={() => setActiveView('WALL')}
-                className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
-              >
-                <ArrowLeft size={14} />
-                <span>Return to Wall</span>
-              </button>
+              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
 
-              <div className="space-y-1">
-                <h2 className="text-2xl font-serif font-light text-zinc-900">Data Incinerator</h2>
-                <p className="text-xs text-zinc-500 leading-relaxed">Write what needs to be purged. Bytes dissolve irrevocably.</p>
-              </div>
+        </div>
+      </header>
 
-              <textarea
-                value={ashInput}
-                onChange={(e) => setAshInput(e.target.value)}
-                placeholder="Record the noise..."
-                className="w-full p-4 rounded-2xl bg-white/60 border border-white/90 text-sm sm:text-base text-zinc-800 placeholder-zinc-400 focus:outline-none min-h-[140px]"
-              />
-
-              <button
-                onClick={() => {
-                  setIsAshBurnt(true);
-                  setTimeout(() => {
-                    setAshInput('');
-                    setIsAshBurnt(false);
-                    publishRitualResult('ASH', 'Information noise incinerated', 'ASH', Trash2, 'text-rose-500');
-                  }, 800);
-                }}
-                className="w-full py-3.5 rounded-full bg-rose-600 text-white font-medium text-sm shadow-xl hover:bg-rose-700 active:scale-98 transition-all"
-              >
-                {isAshBurnt ? 'Incinerating...' : 'Incinerate'}
-              </button>
-            </motion.div>
-          )}
-
-          {/* 3. VIGIL SERVICE */}
-          {activeView === 'VIGIL' && (
-            <motion.div
-              key="vigil"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.2 }}
-              className="p-8 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-xl space-y-6 text-center"
-            >
-              <div className="text-left">
-                <button
-                  onClick={() => setActiveView('WALL')}
-                  className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
+      {/* MOBILE DRAWER */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed inset-x-0 top-24 bg-white/95 backdrop-blur-3xl border-b border-zinc-200 shadow-2xl z-40 p-6 lg:hidden space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto"
+          >
+            <div className="grid grid-cols-1 gap-2.5 font-mono text-sm uppercase tracking-wider">
+              {ecosystems.map((eco) => (
+                <Link
+                  key={eco.id}
+                  href={eco.mainHref}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`p-4 rounded-2xl text-left transition-all border flex items-center justify-between ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm font-bold' : 'bg-zinc-50 text-zinc-700 border-zinc-200'}`}
                 >
-                  <ArrowLeft size={14} />
-                  <span>Return to Wall</span>
-                </button>
+                  <span>{eco.label}</span>
+                </Link>
+              ))}
+            </div>
+
+            <div className="border-t border-zinc-100 pt-5 space-y-2.5">
+              <div className="font-mono text-xs uppercase text-zinc-400 tracking-wider mb-3">
+                Projects in {currentEco.label}:
               </div>
-
-              <div className="py-4 space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
-                  <Flame size={30} />
-                </div>
-                <div className="text-3xl font-mono font-light text-zinc-900">23:41:09</div>
-                <p className="text-xs text-zinc-500 max-w-sm mx-auto">Sustain the collective flame of presence.</p>
-
-                <button
-                  onClick={() => publishRitualResult('VIGIL', 'Flame extended', 'VIGIL', Flame, 'text-amber-500')}
-                  className="px-8 py-3 rounded-full bg-amber-600 text-white font-medium text-xs sm:text-sm shadow-lg hover:bg-amber-700 active:scale-95 transition-all"
+              {currentEco.links.map((link) => (
+                <Link
+                  key={link.name}
+                  href={link.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`block p-3.5 rounded-2xl text-base font-medium transition-colors ${pathname === link.href ? 'bg-zinc-900 text-white shadow-sm' : 'bg-zinc-50 text-zinc-800 hover:bg-zinc-100'}`}
                 >
-                  Add Spark
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* 4. DEBT SERVICE */}
-          {activeView === 'DEBT' && (
-            <motion.div
-              key="debt"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.2 }}
-              className="p-8 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-xl space-y-6 text-center"
-            >
-              <div className="text-left">
-                <button
-                  onClick={() => setActiveView('WALL')}
-                  className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
-                >
-                  <ArrowLeft size={14} />
-                  <span>Return to Wall</span>
-                </button>
-              </div>
-
-              <div className="py-4 space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-                  <ReceiptText size={30} />
-                </div>
-                <div className="text-sm font-mono text-emerald-800">BALANCE // 0.00 ZERO</div>
-                <p className="text-xs text-zinc-500 max-w-sm mx-auto">Zero-balance receipt for phantom obligations.</p>
-
-                <button
-                  onClick={() => publishRitualResult('DEBT', 'Absolution receipt generated', 'DEBT', CheckCircle2, 'text-emerald-500')}
-                  className="px-8 py-3 rounded-full bg-emerald-700 text-white font-medium text-xs sm:text-sm shadow-lg hover:bg-emerald-800 active:scale-95 transition-all"
-                >
-                  Generate Receipt
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-        </AnimatePresence>
-
-      </main>
-    </div>
+                  {link.name}
+                </Link>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
