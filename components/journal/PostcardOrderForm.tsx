@@ -32,9 +32,13 @@ interface FormData {
 }
 
 export default function PostcardOrderForm({ postcard, onBack }: PostcardOrderFormProps) {
-  const { session } = useAuth();
+  const { user, profile } = useAuth();
+
+  // Безопасно извлекаем имя пользователя без обращения к несуществующим свойствам типа User
+  const initialName = profile?.name || user?.user_metadata?.name || user?.email || '';
+
   const [formData, setFormData] = useState<FormData>({
-    recipientName: session?.user?.name || '',
+    recipientName: initialName,
     streetAddress: '',
     addressLine2: '',
     city: '',
@@ -117,14 +121,81 @@ export default function PostcardOrderForm({ postcard, onBack }: PostcardOrderFor
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* ...form fields and UI... */}
-      <button type="button" onClick={onBack} className="mr-4 px-4 py-2 bg-gray-200 rounded">
-        Back
-      </button>
-      <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded">
-        {loading ? 'Ordering...' : 'Order'}
-      </button>
-      {error && <div className="text-red-600 mt-2">{error}</div>}
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Recipient Name</label>
+        <input
+          type="text"
+          name="recipientName"
+          value={formData.recipientName}
+          onChange={handleInputChange}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Street Address</label>
+        <input
+          type="text"
+          name="streetAddress"
+          value={formData.streetAddress}
+          onChange={handleInputChange}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">City</label>
+        <input
+          type="text"
+          name="city"
+          value={formData.city}
+          onChange={handleInputChange}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Postal Code</label>
+        <input
+          type="text"
+          name="postalCode"
+          value={formData.postalCode}
+          onChange={handleInputChange}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Country</label>
+        <input
+          type="text"
+          name="country"
+          value={formData.country}
+          onChange={handleInputChange}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Custom Message</label>
+        <textarea
+          name="customMessage"
+          value={formData.customMessage}
+          onChange={handleInputChange}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+        />
+      </div>
+
+      <div className="flex justify-between items-center pt-4">
+        <button type="button" onClick={onBack} className="px-4 py-2 bg-gray-200 rounded">
+          Back
+        </button>
+        <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded">
+          {loading ? 'Ordering...' : `Order for ${formatPrice(postcard.price)}`}
+        </button>
+      </div>
+
+      {error && <div className="text-red-600 mt-2 text-sm">{error}</div>}
     </form>
   );
 }
