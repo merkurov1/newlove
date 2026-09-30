@@ -6,21 +6,21 @@ import { motion } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 
 export default function AdvisingPage() {
-  const tracks = [
+  const directions = [
     {
       index: '01',
-      title: 'Media Architecture & Public Strategy',
-      description: 'Positioning publicists, creators, and modern ventures across independent publishing, international media outlets, and high-stakes information spaces.'
+      title: 'Media Architecture & Strategy',
+      description: 'Comprehensive navigation of contemporary information spaces. Strategic positioning for publicists, creators, and independent ventures interacting with international media and digital publishing.'
     },
     {
       index: '02',
-      title: 'Digital Infrastructure & AI Integration',
-      description: 'Systemic architecture for AI tools, workflow automation, decentralized systems, and resilience against regulatory friction.'
+      title: 'AI & Technological Integration',
+      description: 'Systemic implementation of artificial intelligence models and automated workflows. Practical insights on adapting operational infrastructure to rapid technological and regulatory shifts.'
     },
     {
       index: '03',
-      title: 'Web3 & Art Market Mechanics',
-      description: 'Advisory on digital art valuation, smart contract logic, Polygon protocols, and bridging classical heritage with modern decentralized registries.'
+      title: 'Art Markets & Digital Assets',
+      description: 'Consulting on contemporary art collection mechanics, provenance tracking, smart contract deployment, and bridging classical artistic heritage with decentralized digital registries.'
     }
   ];
 
@@ -44,15 +44,15 @@ export default function AdvisingPage() {
             Advising
           </h1>
           <p className="font-serif text-lg text-zinc-600 leading-relaxed italic">
-            Targeted strategic advisory and high-level consulting at the intersection of media, technology, and modern art markets.
+            Direct consulting and strategic analysis at the intersection of modern media, technology, and art.
           </p>
         </motion.div>
 
-        {/* Tracks List (White Cube Editorial) */}
+        {/* Directions List (White Cube Editorial) */}
         <div className="space-y-8">
-          {tracks.map((track, index) => (
+          {directions.map((item, index) => (
             <motion.div
-              key={track.index}
+              key={item.index}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
@@ -60,13 +60,13 @@ export default function AdvisingPage() {
             >
               <div className="space-y-3 max-w-xl">
                 <span className="font-mono text-xs uppercase tracking-widest text-zinc-400">
-                  {track.index}
+                  {item.index}
                 </span>
                 <h3 className="font-sans font-bold text-xl uppercase tracking-tight text-black">
-                  {track.title}
+                  {item.title}
                 </h3>
                 <p className="font-serif text-sm sm:text-base text-zinc-600 leading-relaxed">
-                  {track.description}
+                  {item.description}
                 </p>
               </div>
 
@@ -87,16 +87,16 @@ export default function AdvisingPage() {
           className="p-8 sm:p-12 border border-black bg-black text-white flex flex-col sm:flex-row items-center justify-between gap-8"
         >
           <div className="space-y-2 text-center sm:text-left">
-            <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-400">Availability</span>
-            <h3 className="font-serif text-2xl tracking-tight">Direct Consultation</h3>
-            <p className="font-serif text-sm text-zinc-400">Sessions are structured by prior inquiry and availability.</p>
+            <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-400">Inquiries</span>
+            <h3 className="font-serif text-2xl tracking-tight">Direct Collaboration</h3>
+            <p className="font-serif text-sm text-zinc-400">Advisory engagements are structured individually upon request.</p>
           </div>
 
           <a
             href="mailto:contact@merkurov.love"
             className="inline-flex items-center gap-3 px-8 py-4 bg-white text-black font-mono text-xs uppercase tracking-[0.2em] hover:bg-zinc-200 transition-all shrink-0 font-bold"
           >
-            <span>Inquire via Email</span>
+            <span>Initiate Contact</span>
             <ArrowUpRight size={14} />
           </a>
         </motion.div>
