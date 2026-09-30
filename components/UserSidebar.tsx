@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from './AuthContext';
@@ -8,10 +8,10 @@ import { createClient as createBrowserClient } from '@/lib/supabase-browser';
 
 export default function UserSidebar() {
   const { user, profile, roles, isLoading } = useAuth();
-  const [effectiveRole, setEffectiveRole] = React.useState<string | null>(null);
+  const [effectiveRole, setEffectiveRole] = useState<string | null>(null);
 
   // На монтировании проверяем роль через серверный эндпоинт
-  React.useEffect(() => {
+  useEffect(() => {
     let mounted = true;
     const checkRole = async () => {
       try {
