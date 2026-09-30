@@ -8,11 +8,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
 
 interface HeaderProps {
-  currentMode: 'merkurov' | 'temple';
-  onModeChange: (mode: 'merkurov' | 'temple') => void;
+  currentMode?: 'merkurov' | 'temple';
+  onModeChange?: (mode: 'merkurov' | 'temple') => void;
 }
 
-export default function Header({ currentMode, onModeChange }: HeaderProps) {
+export default function Header({ currentMode = 'merkurov', onModeChange }: HeaderProps) {
   const { user, profile, roles, isLoading, signOut, signInWithGoogle } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -46,6 +46,12 @@ export default function Header({ currentMode, onModeChange }: HeaderProps) {
     { name: 'About', href: '/isakeyforall' },
     { name: 'Journal', href: '/journal' },
   ];
+
+  const handleModeSwitch = (mode: 'merkurov' | 'temple') => {
+    if (onModeChange) {
+      onModeChange(mode);
+    }
+  };
 
   return (
     <>
@@ -150,32 +156,34 @@ export default function Header({ currentMode, onModeChange }: HeaderProps) {
                 </span>
               </Link>
 
-              <div className="flex items-center bg-zinc-100/80 p-1 rounded-full border border-zinc-200/60 text-xs font-mono">
-                <button
-                  onClick={() => onModeChange('merkurov')}
-                  className={`px-3 py-1 rounded-full transition-all ${
-                    currentMode === 'merkurov'
-                      ? 'bg-white text-zinc-900 shadow-sm font-semibold'
-                      : 'text-zinc-500 hover:text-zinc-900'
-                  }`}
-                >
-                  Archive
-                </button>
-                <button
-                  onClick={() => onModeChange('temple')}
-                  className={`px-3 py-1 rounded-full transition-all ${
-                    currentMode === 'temple'
-                      ? 'bg-zinc-900 text-white shadow-sm font-semibold'
-                      : 'text-zinc-500 hover:text-zinc-900'
-                  }`}
-                >
-                  Temple
-                </button>
-              </div>
+              {onModeChange && (
+                <div className="flex items-center bg-zinc-100/80 p-1 rounded-full border border-zinc-200/60 text-xs font-mono">
+                  <button
+                    onClick={() => handleModeSwitch('merkurov')}
+                    className={`px-3 py-1 rounded-full transition-all ${
+                      currentMode === 'merkurov'
+                        ? 'bg-white text-zinc-900 shadow-sm font-semibold'
+                        : 'text-zinc-500 hover:text-zinc-900'
+                    }`}
+                  >
+                    Archive
+                  </button>
+                  <button
+                    onClick={() => handleModeSwitch('temple')}
+                    className={`px-3 py-1 rounded-full transition-all ${
+                      currentMode === 'temple'
+                        ? 'bg-zinc-900 text-white shadow-sm font-semibold'
+                        : 'text-zinc-500 hover:text-zinc-900'
+                    }`}
+                  >
+                    Temple
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* DESKTOP NAV (Visible only in Merkurov mode) */}
+          {/* DESKTOP NAV */}
           <nav role="navigation" className="hidden lg:flex items-center gap-8">
             {currentMode === 'merkurov' ? (
               navLinks.map((link) => (
@@ -220,20 +228,22 @@ export default function Header({ currentMode, onModeChange }: HeaderProps) {
         }`}
       >
         <div className="flex flex-col items-center space-y-6 text-center">
-          <div className="flex items-center bg-zinc-100 p-1 rounded-full mb-4">
-            <button
-              onClick={() => { onModeChange('merkurov'); setIsMenuOpen(false); }}
-              className={`px-4 py-2 rounded-full text-xs font-mono uppercase ${currentMode === 'merkurov' ? 'bg-white text-zinc-900 shadow-sm font-bold' : 'text-zinc-500'}`}
-            >
-              Archive
-            </button>
-            <button
-              onClick={() => { onModeChange('temple'); setIsMenuOpen(false); }}
-              className={`px-4 py-2 rounded-full text-xs font-mono uppercase ${currentMode === 'temple' ? 'bg-zinc-900 text-white shadow-sm font-bold' : 'text-zinc-500'}`}
-            >
-              Temple
-            </button>
-          </div>
+          {onModeChange && (
+            <div className="flex items-center bg-zinc-100 p-1 rounded-full mb-4">
+              <button
+                onClick={() => { handleModeSwitch('merkurov'); setIsMenuOpen(false); }}
+                className={`px-4 py-2 rounded-full text-xs font-mono uppercase ${currentMode === 'merkurov' ? 'bg-white text-zinc-900 shadow-sm font-bold' : 'text-zinc-500'}`}
+              >
+                Archive
+              </button>
+              <button
+                onClick={() => { handleModeSwitch('temple'); setIsMenuOpen(false); }}
+                className={`px-4 py-2 rounded-full text-xs font-mono uppercase ${currentMode === 'temple' ? 'bg-zinc-900 text-white shadow-sm font-bold' : 'text-zinc-500'}`}
+              >
+                Temple
+              </button>
+            </div>
+          )}
 
           {currentMode === 'merkurov' && navLinks.map((link) => (
             <Link
