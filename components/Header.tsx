@@ -3,16 +3,23 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { Menu, X, User, Settings, LogOut, ShieldCheck } from 'lucide-react';
+import { Menu, X, User, Settings, LogOut, ShieldCheck, ScanFace, Flame, Trash2, ReceiptText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
 
 interface HeaderProps {
   currentMode?: 'merkurov' | 'temple';
   onModeChange?: (mode: 'merkurov' | 'temple') => void;
+  activeTempleView?: string;
+  onTempleViewChange?: (view: any) => void;
 }
 
-export default function Header({ currentMode = 'merkurov', onModeChange }: HeaderProps) {
+export default function Header({ 
+  currentMode = 'merkurov', 
+  onModeChange,
+  activeTempleView = 'WALL',
+  onTempleViewChange 
+}: HeaderProps) {
   const { user, profile, roles, isLoading, signOut, signInWithGoogle } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -44,6 +51,13 @@ export default function Header({ currentMode = 'merkurov', onModeChange }: Heade
     { name: 'Advising', href: '/advising' },
     { name: 'About', href: '/isakeyforall' },
     { name: 'Journal', href: '/journal' },
+  ];
+
+  const templeNavItems = [
+    { id: 'CAST', label: 'Cast', icon: ScanFace, color: 'text-indigo-600' },
+    { id: 'ASH', label: 'Ash', icon: Trash2, color: 'text-rose-600' },
+    { id: 'VIGIL', label: 'Vigil', icon: Flame, color: 'text-amber-600' },
+    { id: 'DEBT', label: 'Debt', icon: ReceiptText, color: 'text-emerald-600' },
   ];
 
   const handleModeSwitch = (mode: 'merkurov' | 'temple') => {
@@ -174,8 +188,8 @@ export default function Header({ currentMode = 'merkurov', onModeChange }: Heade
             </div>
           </div>
 
-          {/* RIGHT: DESKTOP NAV */}
-          <nav role="navigation" className="hidden lg:flex items-center gap-8">
+          {/* RIGHT: DESKTOP NAV (Merkurov links OR Temple Ritual Icons) */}
+          <nav role="navigation" className="hidden lg:flex items-center gap-6">
             {currentMode === 'merkurov' ? (
               navLinks.map((link) => (
                 <Link
@@ -191,8 +205,25 @@ export default function Header({ currentMode = 'merkurov', onModeChange }: Heade
                 </Link>
               ))
             ) : (
-              <div className="font-mono text-xs text-amber-700 uppercase tracking-[0.2em] bg-amber-500/10 px-4 py-1.5 rounded-full border border-amber-500/20">
-                Sanctuary Active // Attention Hygiene Mode
+              <div className="flex items-center gap-3">
+                {templeNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTempleView === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onTempleViewChange && onTempleViewChange(isActive ? 'WALL' : item.id)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider transition-all border ${
+                        isActive
+                          ? 'bg-zinc-900 text-white border-zinc-900 shadow-md'
+                          : 'bg-white/60 text-zinc-700 border-zinc-200 hover:bg-white'
+                      }`}
+                    >
+                      <Icon size={15} className={isActive ? 'text-white' : item.color} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </nav>
@@ -236,16 +267,31 @@ export default function Header({ currentMode = 'merkurov', onModeChange }: Heade
             </div>
           )}
 
-          {currentMode === 'merkurov' && navLinks.map((link) => (
-            <Link
-              key={link.name}
-              href={link.href}
-              onClick={() => setIsMenuOpen(false)}
-              className="text-2xl font-serif text-zinc-900 hover:text-zinc-600 transition-colors"
-            >
-              {link.name}
-            </Link>
-          ))}
+          {currentMode === 'merkurov' ? (
+            navLinks.map((link) => (
+              <Link
+                key={link.name}
+                href={link.href}
+                onClick={() => setIsMenuOpen(false)}
+                className="text-2xl font-serif text-zinc-900 hover:text-zinc-600 transition-colors"
+              >
+                {link.name}
+              </Link>
+            ))
+          ) : (
+            <div className="flex flex-col gap-3 w-64">
+              {templeNavItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => { onTempleViewChange && onTempleViewChange(item.id); setIsMenuOpen(false); }}
+                  className="py-3 px-4 rounded-2xl bg-zinc-100 text-zinc-900 font-mono text-xs uppercase tracking-wider flex items-center justify-center gap-2"
+                >
+                  <item.icon size={16} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </>

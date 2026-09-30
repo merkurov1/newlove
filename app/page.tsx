@@ -83,7 +83,12 @@ export default function Home() {
 
   return (
     <>
-      <Header currentMode={mode} onModeChange={setMode} />
+      <Header 
+        currentMode={mode} 
+        onModeChange={setMode} 
+        activeTempleView={activeView}
+        onTempleViewChange={setActiveView}
+      />
 
       <main className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-6 sm:px-12 pt-32 md:pt-40 pb-12 antialiased relative">
         
@@ -129,7 +134,7 @@ export default function Home() {
               </nav>
             </div>
 
-            {/* Lobby Portal Anchor Restored */}
+            {/* Lobby Portal Anchor */}
             <div>
               <Link
                 href="/lobby"
@@ -149,43 +154,10 @@ export default function Home() {
 
         {/* ================= MODE 2: DIGITAL TEMPLE (SANCTUARY) ================= */}
         {mode === 'temple' && (
-          <div className="max-w-6xl mx-auto w-full grid grid-cols-12 gap-10 relative z-20 my-auto">
+          <div className="max-w-4xl mx-auto w-full relative z-20 my-auto">
             
-            {/* LEFT SIDEBAR: VERTICAL RITUAL MENU */}
-            <aside className="col-span-12 lg:col-span-3 flex flex-row lg:flex-col items-center lg:items-start justify-center lg:justify-start gap-4 overflow-x-auto pb-4 lg:pb-0">
-              {[
-                { id: 'CAST', label: 'Cast', icon: ScanFace, color: 'text-indigo-600' },
-                { id: 'ASH', label: 'Ash', icon: Trash2, color: 'text-rose-600' },
-                { id: 'VIGIL', label: 'Vigil', icon: Flame, color: 'text-amber-600' },
-                { id: 'DEBT', label: 'Debt', icon: ReceiptText, color: 'text-emerald-600' },
-              ].map((item) => {
-                const Icon = item.icon;
-                const isActive = activeView === item.id;
-                return (
-                  <div 
-                    key={item.id} 
-                    className="flex flex-col items-center lg:flex-row lg:items-center gap-2 lg:gap-4 group cursor-pointer" 
-                    onClick={() => setActiveView(isActive ? 'WALL' : (item.id as ServiceType))}
-                  >
-                    <button
-                      className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center backdrop-blur-2xl transition-all duration-300 relative flex-shrink-0 ${
-                        isActive
-                          ? 'bg-white border-2 border-zinc-900 shadow-[0_10px_30px_rgba(0,0,0,0.08)] scale-110'
-                          : 'bg-white/50 border border-zinc-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:bg-white hover:scale-105'
-                      }`}
-                    >
-                      <Icon size={24} className={`${item.color} stroke-[1.75]`} />
-                    </button>
-                    <span className="text-[11px] lg:text-xs font-mono font-medium tracking-wider text-zinc-600 uppercase">
-                      {item.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </aside>
-
-            {/* MAIN CONTENT AREA: WALL & RITUALS */}
-            <section className="col-span-12 lg:col-span-9 space-y-8">
+            {/* MAIN CONTENT AREA: WALL & RITUALS (Full width now without left sidebar) */}
+            <section className="w-full space-y-8">
               <AnimatePresence mode="wait">
                 
                 {activeView === 'WALL' && (
