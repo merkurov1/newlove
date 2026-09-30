@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { User, Settings, LogOut, ShieldCheck, Menu, X, ScanFace, Flame, Trash2, ReceiptText, Sparkles, Heart } from 'lucide-react';
+import { User, Settings, LogOut, ShieldCheck, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
 
@@ -37,11 +37,12 @@ export default function Header() {
   const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
   const isAdmin = roles.includes('ADMIN');
 
-  // Четкая структура экосистем и их ссылок согласно вашему заданию
+  // Четкие экосистемы со своими главными ссылками и подпроектами
   const ecosystems = [
     { 
       id: 'merkurov', 
       label: 'Merkurov', 
+      mainHref: '/lobby',
       links: [
         { name: 'Lobby', href: '/lobby' },
         { name: 'About', href: '/isakeyforall' },
@@ -53,6 +54,7 @@ export default function Header() {
     { 
       id: 'temple', 
       label: 'Digital Temple', 
+      mainHref: '/temple',
       links: [
         { name: 'Temple', href: '/temple' },
         { name: 'Cast', href: '/cast' },
@@ -64,6 +66,7 @@ export default function Header() {
     { 
       id: 'curators', 
       label: 'Curators Engine', 
+      mainHref: '/art-engine',
       links: [
         { name: 'Art Engine', href: '/art-engine' },
         { name: 'Selection', href: '/selection' }
@@ -72,6 +75,7 @@ export default function Header() {
     { 
       id: 'heart', 
       label: 'Heart & Angel', 
+      mainHref: '/heartandangel',
       links: [
         { name: 'Gallery', href: '/heartandangel' }
       ]
@@ -85,7 +89,7 @@ export default function Header() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-2xl border-b border-zinc-200/60 shadow-[0_4px_30px_rgba(0,0,0,0.02)] transition-all">
         <div className="max-w-[1800px] mx-auto px-6 h-20 md:h-24 flex items-center justify-between">
           
-          {/* LEFT: AVATAR & UNIQUE BRAND (Без дублирования) */}
+          {/* LEFT: AVATAR & BRAND */}
           <div className="flex items-center gap-4 sm:gap-6">
             <div className="relative">
               {isLoading ? (
@@ -155,26 +159,32 @@ export default function Header() {
             </Link>
           </div>
 
-          {/* DESKTOP ECOSYSTEM TABS & LINKS */}
-          <div className="hidden lg:flex items-center gap-8">
+          {/* DESKTOP ECOSYSTEM SWITCHER & SUB-LINKS */}
+          <div className="hidden lg:flex items-center gap-6">
+            
+            {/* Ecosystem Switcher Capsule (Без дублирования Merkurov) */}
             <div className="flex items-center bg-zinc-100 p-1 rounded-full border border-zinc-200/60 font-mono text-[11px] uppercase">
-              {ecosystems.map((eco) => (
-                <button
+              {ecosystems.slice(1).map((eco) => (
+                <Link
                   key={eco.id}
-                  onClick={() => setActiveEcosystem(eco.id as any)}
-                  className={`px-4 py-1.5 rounded-full transition-all ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900'}`}
+                  href={eco.mainHref}
+                  className={`px-4 py-1.5 rounded-full transition-all ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white shadow-sm font-medium' : 'text-zinc-500 hover:text-zinc-900'}`}
                 >
                   {eco.label}
-                </button>
+                </Link>
               ))}
             </div>
 
-            <nav className="flex items-center gap-5">
+            {/* Divider */}
+            <div className="w-[1px] h-5 bg-zinc-200" />
+
+            {/* Current Ecosystem Sub-Links */}
+            <nav className="flex items-center gap-4">
               {currentEco.links.map((link) => (
                 <Link
                   key={link.name}
                   href={link.href}
-                  className={`text-xs font-mono uppercase tracking-[0.15em] transition-colors ${pathname === link.href ? 'text-zinc-900 font-bold underline underline-offset-4' : 'text-zinc-500 hover:text-zinc-900'}`}
+                  className={`text-xs font-mono uppercase tracking-[0.15em] transition-colors ${pathname === link.href ? 'text-zinc-900 font-bold underline underline-offset-4' : 'text-zinc-400 hover:text-zinc-900'}`}
                 >
                   {link.name}
                 </Link>
@@ -204,15 +214,16 @@ export default function Header() {
             exit={{ opacity: 0, y: -20 }}
             className="fixed inset-x-0 top-20 bg-white/95 backdrop-blur-3xl border-b border-zinc-200 shadow-2xl z-40 p-6 lg:hidden space-y-6"
           >
-            <div className="grid grid-cols-2 gap-2 font-mono text-xs uppercase">
+            <div className="grid grid-cols-1 gap-2 font-mono text-xs uppercase">
               {ecosystems.map((eco) => (
-                <button
+                <Link
                   key={eco.id}
-                  onClick={() => setActiveEcosystem(eco.id as any)}
-                  className={`p-3 rounded-2xl text-left transition-all border ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm' : 'bg-zinc-50 text-zinc-600 border-zinc-200'}`}
+                  href={eco.mainHref}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`p-3 rounded-2xl text-left transition-all border flex items-center justify-between ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm' : 'bg-zinc-50 text-zinc-600 border-zinc-200'}`}
                 >
-                  {eco.label}
-                </button>
+                  <span>{eco.label}</span>
+                </Link>
               ))}
             </div>
 
