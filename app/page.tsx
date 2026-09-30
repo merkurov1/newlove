@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, ScanFace, Flame, Trash2, ReceiptText, Mic, Send, Sparkles, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,36 +9,6 @@ import Header from '@/components/Header';
 
 type ServiceType = 'WALL' | 'CAST' | 'ASH' | 'VIGIL' | 'DEBT';
 
-const INITIAL_POSTS = [
-  {
-    id: 1,
-    type: 'VIGIL',
-    author: 'Anonymous',
-    time: '2m ago',
-    content: 'Spark added to the collective beacon. Extended by 24 hours.',
-    icon: Flame,
-    color: 'text-amber-500'
-  },
-  {
-    id: 2,
-    type: 'ASH',
-    author: 'Anton M.',
-    time: '14m ago',
-    content: 'Information noise incinerated. The canvas remains pristine.',
-    icon: Trash2,
-    color: 'text-rose-500'
-  },
-  {
-    id: 3,
-    type: 'CAST',
-    author: 'Visitor',
-    time: '1h ago',
-    content: 'Perceptual archetype manifested: UNFRAMED.',
-    icon: ScanFace,
-    color: 'text-indigo-500'
-  }
-];
-
 export default function Home() {
   const [mode, setMode] = useState<'merkurov' | 'temple'>('merkurov');
   const { user, profile } = useAuth();
@@ -46,34 +16,91 @@ export default function Home() {
   // Temple state
   const [activeView, setActiveView] = useState<ServiceType>('WALL');
   const [postText, setPostText] = useState('');
-  const [posts, setPosts] = useState(INITIAL_POSTS);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [ashInput, setAshInput] = useState('');
   const [isAshBurnt, setIsAshBurnt] = useState(false);
 
   const userName = profile?.name || user?.user_metadata?.name || user?.email || 'Visitor';
 
-  const handleSendPost = () => {
-    if (!postText.trim()) return;
-    const newEntry = {
-      id: Date.now(),
-      type: 'WHISPER',
-      author: userName,
-      time: 'just now',
-      content: postText,
-      icon: Sparkles,
-      color: 'text-zinc-400'
-    };
-    setPosts([newEntry, ...posts]);
-    setPostText('');
+  // Загружаем реальные записи из Supabase через API при монтировании или переходе в temple
+  useEffect(() => {
+    async function fetchLogs() {
+      try {
+        const res = await fetch('/api/temple_logs');
+        if (res.ok) {
+          const json = await res.json();
+          if (json && Array.isArray(json.data) && json.data.length > 0) {
+            const formatted = json.data.map((item: any) => ({
+              id: item.id || Date.now(),
+              type: item.event_type || 'WHISPER',
+              author: userName,
+              time: 'recently',
+              content: item.message,
+              icon: item.event_type === 'VIGIL' ? Flame : item.event_type === 'ASH' ? Trash2 : item.event_type === 'CAST' ? ScanFace : Sparkles,
+              color: item.event_type === 'VIGIL' ? 'text-amber-500' : item.event_type === 'ASH' ? 'text-rose-500' : 'text-indigo-500'
+            }));
+            setPosts(formatted);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to fetch logs', e);
+      }
+    }
+    if (mode === 'temple') {
+      fetchLogs();
+    }
+  }, [mode, userName]);
+
+  const handleSendPost = async () => {
+    if (!postText.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/temple_logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_type: 'WHISPER',
+          message: `${userName}: ${postText}`
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const newEntry = {
+          id: json.data?.id || Date.now(),
+          type: 'WHISPER',
+          author: userName,
+          time: 'just now',
+          content: postText,
+          icon: Sparkles,
+          color: 'text-zinc-400'
+        };
+        setPosts([newEntry, ...posts]);
+        setPostText('');
+      }
+    } catch (e) {
+      console.error('Failed to transmit post', e);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const publishRitualResult = (title: string, text: string, type: string, icon: any, color: string) => {
+  const publishRitualResult = async (title: string, text: string, type: string, icon: any, color: string) => {
+    const message = `${title}: ${text}`;
+    try {
+      await fetch('/api/temple_logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_type: type, message })
+      });
+    } catch (e) {}
+
     const newEntry = {
       id: Date.now(),
       type,
       author: userName,
       time: 'just now',
-      content: `${title}: ${text}`,
+      content: message,
       icon,
       color
     };
@@ -156,7 +183,6 @@ export default function Home() {
         {mode === 'temple' && (
           <div className="max-w-4xl mx-auto w-full relative z-20 my-auto">
             
-            {/* MAIN CONTENT AREA: WALL & RITUALS (Full width now without left sidebar) */}
             <section className="w-full space-y-8">
               <AnimatePresence mode="wait">
                 
@@ -175,9 +201,10 @@ export default function Home() {
                         </button>
                         <button
                           onClick={handleSendPost}
-                          className="flex items-center gap-2.5 px-7 py-3 rounded-full bg-zinc-900 text-white font-medium text-sm shadow-xl hover:bg-zinc-800 active:scale-95 transition-all"
+                          disabled={isSubmitting}
+                          className="flex items-center gap-2.5 px-7 py-3 rounded-full bg-zinc-900 text-white font-medium text-sm shadow-xl hover:bg-zinc-800 active:scale-95 transition-all disabled:bg-zinc-300"
                         >
-                          <span>Transmit</span>
+                          <span>{isSubmitting ? 'Transmitting...' : 'Transmit'}</span>
                           <Send size={14} />
                         </button>
                       </div>
@@ -185,12 +212,12 @@ export default function Home() {
 
                     <div className="space-y-4">
                       {posts.map((post) => {
-                        const PostIcon = post.icon;
+                        const PostIcon = post.icon || Sparkles;
                         return (
                           <div key={post.id} className="p-6 rounded-3xl bg-white/50 backdrop-blur-xl border border-zinc-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.015)] space-y-2.5">
                             <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-2.5">
-                                <PostIcon size={16} className={post.color} />
+                                <PostIcon size={16} className={post.color || 'text-zinc-400'} />
                                 <span className="font-semibold text-zinc-900 text-sm">{post.author}</span>
                               </div>
                               <span className="text-zinc-400 font-mono text-xs">{post.time}</span>
@@ -215,7 +242,7 @@ export default function Home() {
                         {['Information Overload', 'Unresolved Decisions', 'External Expectations'].map((opt, i) => (
                           <button
                             key={i}
-                            onClick={() => publishRitualResult('CAST', 'Status assigned: UNFRAMED', 'CAST', ScanFace, 'text-indigo-500')}
+                            onClick={() => publishRitualResult('CAST', `Status assigned: ${opt}`, 'CAST', ScanFace, 'text-indigo-500')}
                             className="w-full p-4 rounded-xl bg-white hover:bg-zinc-50 text-left text-sm font-medium text-zinc-800 border border-zinc-200 shadow-sm transition-all"
                           >
                             {opt}

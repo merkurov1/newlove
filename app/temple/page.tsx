@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { 
@@ -22,52 +22,21 @@ import { useAuth } from '@/components/AuthContext';
 
 type ServiceType = 'WALL' | 'CAST' | 'ASH' | 'VIGIL' | 'DEBT';
 
-const INITIAL_POSTS = [
-  {
-    id: 1,
-    type: 'VIGIL',
-    author: 'Anonymous',
-    time: '2m ago',
-    content: 'Spark added to the collective beacon. Extended by 24 hours.',
-    icon: Flame,
-    color: 'text-amber-500'
-  },
-  {
-    id: 2,
-    type: 'ASH',
-    author: 'Anton M.',
-    time: '14m ago',
-    content: 'Information noise incinerated. The canvas remains pristine.',
-    icon: Trash2,
-    color: 'text-rose-500'
-  },
-  {
-    id: 3,
-    type: 'CAST',
-    author: 'Visitor',
-    time: '1h ago',
-    content: 'Perceptual archetype manifested: UNFRAMED.',
-    icon: ScanFace,
-    color: 'text-indigo-500'
-  }
-];
-
 export default function DigitalTemple() {
   const { user, profile, roles, isLoading, signOut, signInWithGoogle } = useAuth();
   const [activeView, setActiveView] = useState<ServiceType>('WALL');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [postText, setPostText] = useState('');
-  const [posts, setPosts] = useState(INITIAL_POSTS);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Ash ritual state
   const [ashInput, setAshInput] = useState('');
   const [isAshBurnt, setIsAshBurnt] = useState(false);
 
-  // Каноничный username и ссылка на профиль
   const username = profile?.username || user?.user_metadata?.username || (user as any)?.username || null;
   const profileHref = username ? `/you/${username}` : '/profile';
 
-  // Аватар и имя пользователя
   const userImage =
     profile?.image ||
     profile?.avatar_url ||
@@ -75,34 +44,88 @@ export default function DigitalTemple() {
     user?.user_metadata?.picture ||
     (user as any)?.image ||
     null;
-  const userName = profile?.name || user?.user_metadata?.name || user?.email || 'Guest';
+  const userName = profile?.name || user?.user_metadata?.name || user?.email || 'Visitor';
   const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
 
   const roleNorm = (Array.isArray(roles) && roles.length) ? roles[0] : ((user as any)?.role ? String((user as any).role).toUpperCase() : 'USER');
   const isAdmin = roleNorm === 'ADMIN';
 
-  const handleSendPost = () => {
-    if (!postText.trim()) return;
-    const newEntry = {
-      id: Date.now(),
-      type: 'WHISPER',
-      author: userName,
-      time: 'just now',
-      content: postText,
-      icon: Sparkles,
-      color: 'text-zinc-400'
-    };
-    setPosts([newEntry, ...posts]);
-    setPostText('');
+  // Загрузка записей из /api/temple_logs
+  useEffect(() => {
+    async function fetchLogs() {
+      try {
+        const res = await fetch('/api/temple_logs');
+        if (res.ok) {
+          const json = await res.json();
+          if (json && Array.isArray(json.data) && json.data.length > 0) {
+            const formatted = json.data.map((item: any) => ({
+              id: item.id || Date.now(),
+              type: item.event_type || 'WHISPER',
+              author: userName,
+              time: 'recently',
+              content: item.message,
+              icon: item.event_type === 'VIGIL' ? Flame : item.event_type === 'ASH' ? Trash2 : item.event_type === 'CAST' ? ScanFace : Sparkles,
+              color: item.event_type === 'VIGIL' ? 'text-amber-500' : item.event_type === 'ASH' ? 'text-rose-500' : 'text-indigo-500'
+            }));
+            setPosts(formatted);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to fetch temple logs', e);
+      }
+    }
+    fetchLogs();
+  }, [userName]);
+
+  const handleSendPost = async () => {
+    if (!postText.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/temple_logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_type: 'WHISPER',
+          message: `${userName}: ${postText}`
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const newItem = {
+          id: json.data?.id || Date.now(),
+          type: 'WHISPER',
+          author: userName,
+          time: 'just now',
+          content: postText,
+          icon: Sparkles,
+          color: 'text-zinc-400'
+        };
+        setPosts([newItem, ...posts]);
+        setPostText('');
+      }
+    } catch (e) {
+      console.error('Failed to transmit post', e);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const publishRitualResult = (title: string, text: string, type: string, icon: any, color: string) => {
+  const publishRitualResult = async (title: string, text: string, type: string, icon: any, color: string) => {
+    const message = `${title}: ${text}`;
+    try {
+      await fetch('/api/temple_logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_type: type, message })
+      });
+    } catch (e) {}
+
     const newEntry = {
       id: Date.now(),
       type,
       author: userName,
       time: 'just now',
-      content: `${title}: ${text}`,
+      content: message,
       icon,
       color
     };
@@ -113,7 +136,7 @@ export default function DigitalTemple() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F6F4F0] via-[#F0ECE6] to-[#E8E3DA] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white relative overflow-x-hidden antialiased">
       
-      {/* Background Soft Glows (Ceremonial Atmosphere) */}
+      {/* Background Soft Glows */}
       <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-amber-200/30 via-indigo-200/20 to-purple-200/30 blur-[140px] pointer-events-none rounded-full" />
 
       {/* --- HEADER --- */}
@@ -136,12 +159,12 @@ export default function DigitalTemple() {
                 )}
               </button>
             ) : (
-              <button
-                onClick={() => signInWithGoogle()}
-                className="px-4 py-2 rounded-full bg-zinc-900 text-white text-xs font-medium hover:bg-zinc-800 transition-all shadow-sm"
+              <Link
+                href="/"
+                className="px-4 py-2 rounded-full bg-zinc-900 text-white text-xs font-mono tracking-wider uppercase hover:bg-zinc-800 transition-all shadow-sm"
               >
-                Sign In
-              </button>
+                Home
+              </Link>
             )}
 
             {/* Profile Popover */}
@@ -211,7 +234,7 @@ export default function DigitalTemple() {
             </AnimatePresence>
           </div>
 
-          {/* Center: Grand DIGITAL TEMPLE Header & Subtitle */}
+          {/* Center: Grand DIGITAL TEMPLE Header */}
           <div className="text-center cursor-pointer group" onClick={() => setActiveView('WALL')}>
             <h1 className="text-2xl md:text-4xl font-serif tracking-[0.2em] md:tracking-[0.25em] font-light text-zinc-900 uppercase transition-all duration-300 group-hover:opacity-80">
               Digital Temple
@@ -221,7 +244,7 @@ export default function DigitalTemple() {
             </p>
           </div>
 
-          {/* Right Spacer to balance header */}
+          {/* Right Spacer */}
           <div className="w-11" />
 
         </div>
@@ -261,9 +284,10 @@ export default function DigitalTemple() {
 
                     <button
                       onClick={handleSendPost}
-                      className="flex items-center gap-2.5 px-7 py-3 rounded-full bg-zinc-900 text-white font-medium text-sm shadow-xl shadow-zinc-900/10 hover:bg-zinc-800 active:scale-95 transition-all"
+                      disabled={isSubmitting}
+                      className="flex items-center gap-2.5 px-7 py-3 rounded-full bg-zinc-900 text-white font-medium text-sm shadow-xl shadow-zinc-900/10 hover:bg-zinc-800 active:scale-95 transition-all disabled:bg-zinc-300"
                     >
-                      <span>Transmit</span>
+                      <span>{isSubmitting ? 'Transmitting...' : 'Transmit'}</span>
                       <Send size={14} />
                     </button>
                   </div>
@@ -272,7 +296,7 @@ export default function DigitalTemple() {
                 {/* STREAM FEED */}
                 <div className="space-y-4">
                   {posts.map((post) => {
-                    const PostIcon = post.icon;
+                    const PostIcon = post.icon || Sparkles;
                     return (
                       <div
                         key={post.id}
@@ -280,7 +304,7 @@ export default function DigitalTemple() {
                       >
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2.5">
-                            <PostIcon size={16} className={post.color} />
+                            <PostIcon size={16} className={post.color || 'text-zinc-400'} />
                             <span className="font-semibold text-zinc-900 text-sm">{post.author}</span>
                           </div>
                           <span className="text-zinc-400 font-mono text-xs">{post.time}</span>
@@ -324,7 +348,7 @@ export default function DigitalTemple() {
                     {['Information Overload', 'Unresolved Decisions', 'External Expectations'].map((opt, i) => (
                       <button
                         key={i}
-                        onClick={() => publishRitualResult('CAST', 'Status assigned: UNFRAMED', 'CAST', ScanFace, 'text-indigo-500')}
+                        onClick={() => publishRitualResult('CAST', `Status assigned: ${opt}`, 'CAST', ScanFace, 'text-indigo-500')}
                         className="w-full p-4 rounded-xl bg-white/90 hover:bg-white text-left text-sm font-medium text-zinc-800 transition-all border border-zinc-100 shadow-sm"
                       >
                         {opt}
