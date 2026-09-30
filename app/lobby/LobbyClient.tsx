@@ -2,21 +2,25 @@
 
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
+import Header from "@/components/Header";
 
 export default function LobbyClient() {
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] antialiased">
+    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] antialiased relative overflow-x-hidden">
       
+      {/* Header */}
+      <Header />
+
       {/* Subtle Paper Grain Texture */}
       <div 
-        className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay"
+        className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
         }}
       />
 
       {/* --- SECTION 1: HERO & PROOF BAR --- */}
-      <section className="min-h-screen flex flex-col justify-between px-8 md:px-16 pt-36 md:pt-44 pb-12 border-b border-zinc-200/60">
+      <section className="min-h-screen flex flex-col justify-between px-8 md:px-16 pt-36 md:pt-44 pb-12 border-b border-zinc-200/60 relative z-20">
         
         <div className="max-w-5xl mx-auto w-full text-center my-auto">
           <h1 className="text-6xl md:text-8xl lg:text-9xl font-serif font-normal tracking-tight leading-[0.92] mb-10 text-[#111111]">
@@ -69,7 +73,7 @@ export default function LobbyClient() {
 
 
       {/* --- SECTION 2: FORESIGHT & INSTITUTIONAL RECORD --- */}
-      <section className="py-28 md:py-36 px-8 md:px-16 border-b border-zinc-200/60">
+      <section className="py-28 md:py-36 px-8 md:px-16 border-b border-zinc-200/60 relative z-20">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32">
           
           {/* Left Column */}
@@ -125,8 +129,8 @@ export default function LobbyClient() {
       </section>
 
 
-      {/* --- SECTION 3: EDITORIAL PRESS CLIPPINGS (Replaces Marquee) --- */}
-      <section className="py-24 px-8 md:px-16 bg-[#F4F1EA]/80 border-b border-zinc-200/60">
+      {/* --- SECTION 3: EDITORIAL PRESS CLIPPINGS --- */}
+      <section className="py-24 px-8 md:px-16 bg-[#F4F1EA]/80 border-b border-zinc-200/60 relative z-20">
         <div className="max-w-7xl mx-auto">
           <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-12">
             International Press &amp; Commentary
@@ -164,7 +168,7 @@ export default function LobbyClient() {
 
 
       {/* --- SECTION 4: DUALITY PHILOSOPHY --- */}
-      <section className="py-28 md:py-36 px-8 md:px-16">
+      <section className="py-28 md:py-36 px-8 md:px-16 relative z-20">
         <div className="max-w-7xl mx-auto">
             <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-16 text-center">
               02 / Dual Roots
@@ -172,7 +176,7 @@ export default function LobbyClient() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-20">
                 {/* GRANITE */}
-                <div className="p-10 md:p-14 border border-zinc-300 bg-white/50">
+                <div className="p-10 md:p-14 border border-zinc-300 bg-white/50 rounded-3xl">
                     <span className="block font-mono text-zinc-500 text-xs uppercase tracking-[0.3em] mb-6 font-medium">Granite (Heritage &amp; Physical)</span>
                     <p className="text-2xl md:text-3xl leading-relaxed font-serif text-zinc-900 font-normal">
                         My great-grandfather carved the Soviet monumental era in granite. Heavy. Immovable. Permanent.
@@ -181,7 +185,7 @@ export default function LobbyClient() {
                 </div>
 
                 {/* ETHER */}
-                <div className="p-10 md:p-14 border border-zinc-900/30 bg-white/90 shadow-sm">
+                <div className="p-10 md:p-14 border border-zinc-900/30 bg-white/90 shadow-sm rounded-3xl">
                     <span className="block font-mono text-zinc-700 text-xs uppercase tracking-[0.3em] mb-6 font-medium">Ether (Signal &amp; Media)</span>
                     <p className="text-2xl md:text-3xl leading-relaxed font-serif text-[#111111] font-normal">
                         I operate across decentralized protocols, public commentary, and liquid cultural assets.
@@ -194,7 +198,7 @@ export default function LobbyClient() {
 
 
       {/* --- SECTION 5: INDEX GRID --- */}
-      <section className="py-28 md:py-36 px-8 md:px-16 bg-[#F4F1EA]/60 border-t border-zinc-200/60">
+      <section className="py-28 md:py-36 px-8 md:px-16 bg-[#F4F1EA]/60 border-t border-zinc-200/60 relative z-20">
         <div className="max-w-7xl mx-auto">
             <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-16">
               03 / Index &amp; Operations
@@ -203,48 +207,12 @@ export default function LobbyClient() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-zinc-300 border border-zinc-300">
               
               {[
-                { 
-                  id: '01', 
-                  title: 'RESEARCH', 
-                  desc: 'Geopolitical analysis, media transformations, and independent commentary on network shifts.', 
-                  link: '/research', 
-                  label: 'Analysis' 
-                },
-                { 
-                  id: '02', 
-                  title: 'ADVISING', 
-                  desc: 'Private art advisory, provenance verification, and archival legacy management for family offices.', 
-                  link: '/advising', 
-                  label: 'Office' 
-                },
-                { 
-                  id: '03', 
-                  title: 'CURATOR ENGINE', 
-                  desc: 'Art-market intelligence and noise reduction. Real-time data curation for physical collections.', 
-                  link: '/art-engine', 
-                  label: 'Engine' 
-                },
-                { 
-                  id: '04', 
-                  title: 'ARTWORK', 
-                  desc: 'The Heart & Angel series. Physical ink, acrylic, and canvas works expressing universal human connection.', 
-                  link: '/heartandangel', 
-                  label: 'Works' 
-                },
-                { 
-                  id: '05', 
-                  title: 'SELECTION', 
-                  desc: 'Curated inventory of fine art, rare sculpture archives, and verified private provenance items.', 
-                  link: '/selection', 
-                  label: 'Inventory' 
-                },
-                { 
-                  id: '06', 
-                  title: 'JOURNAL', 
-                  desc: 'Regular dispatches, column archives from Novaya Gazeta, and long-form essays on society.', 
-                  link: '/journal', 
-                  label: 'Dispatches' 
-                }
+                { id: '01', title: 'RESEARCH', desc: 'Geopolitical analysis, media transformations, and independent commentary on network shifts.', link: '/research', label: 'Analysis' },
+                { id: '02', title: 'ADVISING', desc: 'Private art advisory, provenance verification, and archival legacy management for family offices.', link: '/advising', label: 'Office' },
+                { id: '03', title: 'CURATOR ENGINE', desc: 'Art-market intelligence and noise reduction. Real-time data curation for physical collections.', link: '/art-engine', label: 'Engine' },
+                { id: '04', title: 'ARTWORK', desc: 'The Heart & Angel series. Physical ink, acrylic, and canvas works expressing universal human connection.', link: '/heartandangel', label: 'Works' },
+                { id: '05', title: 'SELECTION', desc: 'Curated inventory of fine art, rare sculpture archives, and verified private provenance items.', link: '/selection', label: 'Inventory' },
+                { id: '06', title: 'JOURNAL', desc: 'Regular dispatches, column archives from Novaya Gazeta, and long-form essays on society.', link: '/journal', label: 'Dispatches' }
               ].map((card) => (
                 <Link 
                   key={card.id} 
@@ -269,30 +237,6 @@ export default function LobbyClient() {
 
             </div>
         </div>
-      </section>
-
-
-      {/* --- SECTION 6: FOOTER --- */}
-      <section className="py-28 px-8 bg-[#FAF8F5] text-center border-t border-zinc-200/60">
-        <h2 className="text-3xl md:text-5xl font-serif font-normal text-[#111111] mb-8">
-            Read the Journal &amp; Dispatches.
-        </h2>
-        
-        <div className="inline-flex flex-col items-center gap-4">
-            <Link 
-              href="/journal" 
-              className="px-8 py-4 border border-zinc-900 bg-[#111111] text-[#FAF8F5] hover:bg-transparent hover:text-[#111111] text-xs font-mono uppercase tracking-[0.25em] transition-all duration-500 font-medium"
-            >
-              Access Dispatches
-            </Link>
-            <span className="font-serif italic text-zinc-500 text-base mt-2">
-                Structure and signal in an era of noise.
-            </span>
-        </div>
-
-        <footer className="mt-24 text-xs font-mono text-zinc-500 uppercase tracking-[0.3em]">
-          Anton Merkurov Private Office
-        </footer>
       </section>
 
     </main>
