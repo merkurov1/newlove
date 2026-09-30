@@ -3,21 +3,24 @@
 import PierrotChat from './PierrotChat';
 
 export default function Footer() {
+  const currentYear = new Date().getFullYear();
+
   return (
-    <footer className="border-t border-gray-200 bg-gray-50">
-      <div className="container mx-auto px-3 py-6 sm:py-8">
-        <div className="text-center space-y-4">
-          {/* Pierrot Chat Trigger */}
-          <div>
-            <PierrotChat />
-          </div>
-          
-          {/* Copyright */}
-          <p className="text-sm text-gray-600">
-            &copy; {new Date().getFullYear()} Anton Merkurov. All rights reserved.
-          </p>
-        </div>
+    <>
+      {/* Плавающий ассистент Пьеро в правом нижнем углу */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <PierrotChat />
       </div>
-    </footer>
+
+      {/* Лаконичный футер */}
+      <footer className="w-full bg-[#FAF8F5] border-t border-zinc-200/60 py-8 px-6 text-center font-mono text-[11px] text-zinc-500 uppercase tracking-[0.2em]">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+          <span>&copy; {currentYear} Anton Merkurov</span>
+          <span className="text-zinc-400 lowercase text-[10px] tracking-normal font-sans italic">
+            made with AI. potential hallucinations apply.
+          </span>
+        </div>
+      </footer>
+    </>
   );
 }
