@@ -9,81 +9,11 @@ import {
   ScanFace, 
   ReceiptText, 
   ArrowUpRight,
-  Terminal,
-  Activity,
-  ShieldCheck,
+  Sparkles,
   Info,
-  X
+  X,
+  ShieldCheck
 } from 'lucide-react';
-
-interface Ritual {
-  id: string;
-  num: string;
-  title: string;
-  tagline: string;
-  desc: string;
-  path: string;
-  icon: React.ReactNode;
-  accent: string;
-  borderHover: string;
-  glow: string;
-  status: string;
-}
-
-const RITUALS: Ritual[] = [
-  {
-    id: 'cast',
-    num: '01',
-    title: 'CAST',
-    tagline: 'FACE THE MIRROR',
-    desc: 'Decode your archetype (Stone, Void, Noise, or Unframed) through rapid psychometric reactions.',
-    path: '/cast?mode=temple',
-    icon: <ScanFace className="w-6 h-6 text-purple-400" />,
-    accent: 'text-purple-400',
-    borderHover: 'hover:border-purple-500/60',
-    glow: 'group-hover:shadow-[0_0_30px_rgba(168,85,247,0.15)]',
-    status: 'DIAGNOSTIC'
-  },
-  {
-    id: 'ash',
-    num: '02',
-    title: 'ASH',
-    tagline: 'INCINERATE DATA',
-    desc: 'Write what haunts you. Watch it burn into zero bytes in real time. Nothing hits the database.',
-    path: '/heartandangel/letitgo?mode=temple',
-    icon: <Trash2 className="w-6 h-6 text-red-500" />,
-    accent: 'text-red-500',
-    borderHover: 'hover:border-red-500/60',
-    glow: 'group-hover:shadow-[0_0_30px_rgba(239,68,68,0.15)]',
-    status: 'PURGE'
-  },
-  {
-    id: 'vigil',
-    num: '03',
-    title: 'VIGIL',
-    tagline: 'KEEP THE BEACON',
-    desc: 'A 24-hour collective flame. Strike a match to witness and extend the light for everyone.',
-    path: '/vigil?mode=temple',
-    icon: <Flame className="w-6 h-6 text-amber-400" />,
-    accent: 'text-amber-400',
-    borderHover: 'hover:border-amber-500/60',
-    glow: 'group-hover:shadow-[0_0_30px_rgba(245,158,11,0.15)]',
-    status: 'WITNESS'
-  },
-  {
-    id: 'absolution',
-    num: '04',
-    title: 'DEBT',
-    tagline: 'ABSOLUTION RECEIPT',
-    desc: 'Settle phantom obligations. Generate an official cryptographic receipt of zero balance.',
-    path: '/absolution?mode=temple',
-    icon: <ReceiptText className="w-6 h-6 text-emerald-400" />,
-    accent: 'text-emerald-400',
-    borderHover: 'hover:border-emerald-500/60',
-    glow: 'group-hover:shadow-[0_0_30px_rgba(16,185,129,0.15)]',
-    status: 'LEDGER'
-  }
-];
 
 export default function TemplePage() {
   const router = useRouter();
@@ -96,8 +26,8 @@ export default function TemplePage() {
       tg.ready();
       tg.expand();
       try {
-        tg.setHeaderColor('#000000');
-        tg.setBackgroundColor('#000000');
+        tg.setHeaderColor('#F6F4EE');
+        tg.setBackgroundColor('#F6F4EE');
         if (tg.enableClosingConfirmation) tg.enableClosingConfirmation();
       } catch (e) {}
     }
@@ -110,173 +40,299 @@ export default function TemplePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100 font-mono selection:bg-white selection:text-black relative overflow-x-hidden pb-24">
+    <div className="min-h-screen bg-[#F6F4EE] text-[#111111] font-sans selection:bg-[#111111] selection:text-white pb-24 relative overflow-x-hidden">
       
-      {/* FORCE GLOBAL OVERRIDES */}
+      {/* FORCE LIGHT OVERRIDES */}
       <style jsx global>{`
         header, footer { display: none !important; }
-        body { background-color: #050505; }
+        body { background-color: #F6F4EE; }
       `}</style>
 
-      {/* --- CYBER BACKGROUND GRID & SCANLINE --- */}
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,#121212_1px,transparent_1px),linear-gradient(to_bottom,#121212_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none opacity-40" />
-
-      {/* --- TOP TERMINAL HUD --- */}
-      <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-xl border-b border-zinc-800/80 px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+      {/* --- TOP HUD BAR --- */}
+      <header className="sticky top-0 z-30 bg-[#F6F4EE]/90 backdrop-blur-md border-b-2 border-[#111111] px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
           
           <div className="flex items-center gap-3">
-            <div className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-            </div>
-            <span className="font-bold tracking-[0.25em] text-white text-sm md:text-base">
-              TEMPLE <span className="text-zinc-600 font-normal">// TERMINAL_04</span>
+            <span className="w-3 h-3 rounded-full bg-[#E11D48] animate-pulse" />
+            <h1 className="font-serif font-black text-xl tracking-widest text-[#111111]">
+              TEMPLE
+            </h1>
+            <span className="text-xs font-mono font-bold tracking-widest text-zinc-500 hidden sm:inline">
+              // TERMINAL_04
             </span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2 text-[11px] text-zinc-500 tracking-wider">
-              <Activity size={12} className="text-emerald-500" />
-              <span>SYS_READY</span>
-            </div>
-
-            <button
-              onClick={() => setShowManifest(!showManifest)}
-              className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-zinc-400 hover:text-white transition-colors px-3 py-1.5 rounded border border-zinc-800 hover:border-zinc-600 bg-zinc-900/60"
-            >
-              <Info size={14} />
-              <span>MANIFEST</span>
-            </button>
-          </div>
+          <button
+            onClick={() => setShowManifest(!showManifest)}
+            className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-widest text-[#111111] hover:bg-[#111111] hover:text-white transition-all px-4 py-2 border-2 border-[#111111] shadow-[2px_2px_0px_#111111] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+          >
+            <Info size={14} />
+            <span>MANIFEST</span>
+          </button>
 
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 pt-10 space-y-10 relative z-10">
+      <main className="max-w-6xl mx-auto px-6 pt-8 space-y-10 relative z-10">
 
-        {/* --- HERO / TERMINAL PROTOCOL INTRO --- */}
-        <section className="border border-zinc-800 bg-zinc-950/80 rounded-xl p-6 md:p-10 relative overflow-hidden backdrop-blur-md shadow-2xl">
-          <div className="absolute -top-24 -right-24 w-72 h-72 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-
-          <div className="space-y-4 max-w-3xl">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] uppercase tracking-[0.2em] text-emerald-400">
-              <Terminal size={12} />
-              <span>Protocol Active // No Trackers // Zero Logs</span>
+        {/* --- HERO POSTER BANNER --- */}
+        <section className="border-2 border-[#111111] bg-white p-8 md:p-12 shadow-[6px_6px_0px_#111111] relative overflow-hidden">
+          <div className="space-y-6 max-w-4xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#111111] text-white font-mono text-[11px] font-bold tracking-[0.2em] uppercase">
+              <Sparkles size={13} className="text-[#F59E0B]" />
+              <span>DIGITAL SANCTUARY // ZERO LOGS</span>
             </div>
 
-            <h1 className="text-2xl md:text-4xl font-serif font-bold text-white tracking-wide leading-tight">
-              A digital sanctuary for attention hygiene & ritualistic reset.
-            </h1>
+            <h2 className="text-3xl md:text-5xl font-serif font-black text-[#111111] tracking-tight leading-[1.1] uppercase">
+              Purge the noise. <br className="hidden md:inline"/> Witness the void.
+            </h2>
 
-            <p className="text-sm md:text-base text-zinc-400 font-sans leading-relaxed">
+            <p className="text-base md:text-lg text-zinc-700 font-medium max-w-2xl leading-relaxed">
               The modern web is an algorithm designed for endless extraction. 
-              <span className="text-white font-medium"> Temple</span> provides deterministic utilities to drop the noise: 
+              <strong className="text-[#111111] font-bold"> Temple</strong> provides deterministic utilities for attention hygiene: 
               burn intrusive thoughts, witness collective presence, face your archetype, or wipe phantom debt.
             </p>
           </div>
         </section>
 
-        {/* --- MANIFEST EXPANDABLE / OVERLAY --- */}
+        {/* --- MANIFEST OVERLAY --- */}
         <AnimatePresence>
           {showManifest && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="border border-emerald-500/30 bg-zinc-950 p-6 md:p-8 rounded-xl relative space-y-4 shadow-[0_0_50px_rgba(16,185,129,0.1)]"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
             >
-              <button 
-                onClick={() => setShowManifest(false)}
-                className="absolute top-4 right-4 text-zinc-500 hover:text-white p-2"
-              >
-                <X size={18} />
-              </button>
+              <div className="bg-[#111111] text-white border-2 border-[#111111] p-8 relative space-y-6 shadow-[6px_6px_0px_#E11D48]">
+                <button 
+                  onClick={() => setShowManifest(false)}
+                  className="absolute top-4 right-4 text-zinc-400 hover:text-white p-2"
+                >
+                  <X size={20} />
+                </button>
 
-              <div className="flex items-center gap-2 text-xs text-emerald-400 tracking-widest uppercase font-bold">
-                <ShieldCheck size={16} />
-                <span>ETHICS & SYSTEM ARCHITECTURE</span>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-6 text-sm text-zinc-300 font-sans leading-relaxed pt-2">
-                <div className="space-y-1">
-                  <h4 className="text-white font-mono text-xs uppercase font-bold tracking-wider">1. Anti-Retention Design</h4>
-                  <p className="text-zinc-400 text-xs">No infinite feeds, notifications, or engagement loops. Every action has a clean, immediate end state.</p>
+                <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#F59E0B] tracking-widest uppercase">
+                  <ShieldCheck size={16} />
+                  <span>ARCHITECTURE & SYSTEM ETHICS</span>
                 </div>
-                <div className="space-y-1">
-                  <h4 className="text-white font-mono text-xs uppercase font-bold tracking-wider">2. Cryptographic Privacy</h4>
-                  <p className="text-zinc-400 text-xs">ASH payload vanishes entirely in client memory. VIGIL records timestamps without identity. Zero persistence.</p>
+
+                <div className="grid md:grid-cols-2 gap-8 text-sm font-sans leading-relaxed pt-2">
+                  <div className="space-y-2">
+                    <h4 className="font-mono text-xs text-[#6366F1] font-bold uppercase tracking-wider">01. Anti-Retention Protocol</h4>
+                    <p className="text-zinc-300">No infinite feeds, notifications, or artificial engagement loops. Every interaction has a clean, immediate end state.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="font-mono text-xs text-[#059669] font-bold uppercase tracking-wider">02. Cryptographic Privacy</h4>
+                    <p className="text-zinc-300">ASH payload vanishes in client RAM. VIGIL logs timestamps without user identity. Zero database footprints.</p>
+                  </div>
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* --- RITUALS GRID --- */}
+        {/* --- ASYMMETRIC GALLERY GRID (12 COLUMNS) --- */}
         <section className="space-y-6">
-          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
-            <h2 className="text-xs font-mono uppercase tracking-[0.25em] text-zinc-500">
-              // SELECT_RITUAL
-            </h2>
-            <span className="text-xs font-mono text-zinc-600">
-              4 UTILITIES AVAILABLE
+          <div className="flex items-center justify-between border-b-2 border-[#111111] pb-3">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-[0.25em] text-[#111111]">
+              // RITUAL_UTILITIES
+            </h3>
+            <span className="text-xs font-mono font-bold text-zinc-500">
+              4 EXHIBITS ACTIVE
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {RITUALS.map((ritual) => (
-              <motion.div
-                key={ritual.id}
-                whileHover={{ y: -3 }}
-                transition={{ duration: 0.2 }}
-                onClick={() => handleNavigate(ritual.path)}
-                className={`
-                  group cursor-pointer bg-zinc-950/90 border border-zinc-800/90 rounded-xl p-6 md:p-8
-                  flex flex-col justify-between space-y-6 transition-all duration-300
-                  ${ritual.borderHover} ${ritual.glow} relative overflow-hidden
-                `}
-              >
-                {/* CARD TOP */}
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 group-hover:border-zinc-700 transition-colors">
-                        {ritual.icon}
-                      </div>
-                      <div>
-                        <span className="text-xs text-zinc-600 font-bold tracking-widest block">
-                          [{ritual.num}]
-                        </span>
-                        <h3 className="text-2xl font-serif font-bold text-white tracking-wider">
-                          {ritual.title}
-                        </h3>
-                      </div>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+            
+            {/* --- 01. CAST (WIDE MODULE - 7 COLS) --- */}
+            <motion.div
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => handleNavigate('/cast?mode=temple')}
+              className="md:col-span-7 group cursor-pointer bg-white border-2 border-[#111111] p-8 flex flex-col justify-between shadow-[6px_6px_0px_#111111] hover:shadow-[10px_10px_0px_#6366F1] transition-all relative overflow-hidden"
+            >
+              <div className="space-y-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-[#6366F1]/10 border-2 border-[#6366F1] text-[#6366F1]">
+                      <ScanFace size={28} />
                     </div>
-
-                    <span className="text-[10px] font-mono uppercase tracking-widest px-3 py-1 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 group-hover:text-white transition-colors">
-                      {ritual.status}
-                    </span>
+                    <div>
+                      <span className="text-xs font-mono font-bold text-[#6366F1] tracking-widest block">
+                        EXHIBIT // 01
+                      </span>
+                      <h4 className="text-3xl font-serif font-black tracking-tight text-[#111111] uppercase">
+                        CAST
+                      </h4>
+                    </div>
                   </div>
 
-                  <div className={`text-xs font-bold tracking-[0.2em] uppercase ${ritual.accent}`}>
-                    {ritual.tagline}
-                  </div>
-
-                  <p className="text-sm text-zinc-300 font-sans leading-relaxed">
-                    {ritual.desc}
-                  </p>
+                  <span className="font-mono text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-[#6366F1]/10 text-[#6366F1] border border-[#6366F1]">
+                    DIAGNOSTIC
+                  </span>
                 </div>
 
-                {/* CARD BOTTOM ACTION */}
-                <div className="pt-4 border-t border-zinc-900 flex items-center justify-between text-xs font-bold tracking-widest uppercase text-zinc-400 group-hover:text-white transition-colors">
-                  <span>ENTER RITUAL</span>
-                  <div className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 group-hover:bg-white group-hover:text-black flex items-center justify-center transition-all">
-                    <ArrowUpRight size={16} />
-                  </div>
+                <div className="text-xs font-mono font-bold text-[#6366F1] tracking-[0.2em] uppercase">
+                  FACE THE MIRROR
                 </div>
 
-              </motion.div>
-            ))}
+                <p className="text-base text-zinc-700 font-medium leading-relaxed max-w-xl">
+                  Decode your archetype (<strong className="text-[#111111]">Stone, Void, Noise, or Unframed</strong>) through rapid psychometric reactions. Get a permanent visual card.
+                </p>
+              </div>
+
+              <div className="pt-8 flex items-center justify-between border-t-2 border-zinc-100 mt-6">
+                <span className="font-mono text-xs font-bold tracking-widest text-[#111111] group-hover:text-[#6366F1] transition-colors">
+                  START DIAGNOSTIC
+                </span>
+                <div className="w-10 h-10 border-2 border-[#111111] bg-[#111111] text-white group-hover:bg-[#6366F1] group-hover:border-[#6366F1] flex items-center justify-center transition-all">
+                  <ArrowUpRight size={20} />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* --- 02. ASH (TALL ACCENT MODULE - 5 COLS) --- */}
+            <motion.div
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => handleNavigate('/heartandangel/letitgo?mode=temple')}
+              className="md:col-span-5 group cursor-pointer bg-white border-2 border-[#111111] p-8 flex flex-col justify-between shadow-[6px_6px_0px_#111111] hover:shadow-[10px_10px_0px_#E11D48] transition-all relative overflow-hidden"
+            >
+              <div className="space-y-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-[#E11D48]/10 border-2 border-[#E11D48] text-[#E11D48]">
+                      <Trash2 size={28} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-mono font-bold text-[#E11D48] tracking-widest block">
+                        EXHIBIT // 02
+                      </span>
+                      <h4 className="text-3xl font-serif font-black tracking-tight text-[#111111] uppercase">
+                        ASH
+                      </h4>
+                    </div>
+                  </div>
+
+                  <span className="font-mono text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-[#E11D48]/10 text-[#E11D48] border border-[#E11D48]">
+                    PURGE
+                  </span>
+                </div>
+
+                <div className="text-xs font-mono font-bold text-[#E11D48] tracking-[0.2em] uppercase">
+                  INCINERATE DATA
+                </div>
+
+                <p className="text-sm text-zinc-700 font-medium leading-relaxed">
+                  Write what haunts you. Watch it burn into zero bytes in real time on screen. Nothing hits the database.
+                </p>
+              </div>
+
+              <div className="pt-8 flex items-center justify-between border-t-2 border-zinc-100 mt-6">
+                <span className="font-mono text-xs font-bold tracking-widest text-[#111111] group-hover:text-[#E11D48] transition-colors">
+                  BURN TEXT
+                </span>
+                <div className="w-10 h-10 border-2 border-[#111111] bg-[#111111] text-white group-hover:bg-[#E11D48] group-hover:border-[#E11D48] flex items-center justify-center transition-all">
+                  <ArrowUpRight size={20} />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* --- 03. VIGIL (5 COLS) --- */}
+            <motion.div
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => handleNavigate('/vigil?mode=temple')}
+              className="md:col-span-5 group cursor-pointer bg-white border-2 border-[#111111] p-8 flex flex-col justify-between shadow-[6px_6px_0px_#111111] hover:shadow-[10px_10px_0px_#D97706] transition-all relative overflow-hidden"
+            >
+              <div className="space-y-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-[#D97706]/10 border-2 border-[#D97706] text-[#D97706]">
+                      <Flame size={28} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-mono font-bold text-[#D97706] tracking-widest block">
+                        EXHIBIT // 03
+                      </span>
+                      <h4 className="text-3xl font-serif font-black tracking-tight text-[#111111] uppercase">
+                        VIGIL
+                      </h4>
+                    </div>
+                  </div>
+
+                  <span className="font-mono text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-[#D97706]/10 text-[#D97706] border border-[#D97706]">
+                    WITNESS
+                  </span>
+                </div>
+
+                <div className="text-xs font-mono font-bold text-[#D97706] tracking-[0.2em] uppercase">
+                  KEEP THE BEACON
+                </div>
+
+                <p className="text-sm text-zinc-700 font-medium leading-relaxed">
+                  A 24-hour collective flame. Strike a match to witness and extend the light for everyone visiting.
+                </p>
+              </div>
+
+              <div className="pt-8 flex items-center justify-between border-t-2 border-zinc-100 mt-6">
+                <span className="font-mono text-xs font-bold tracking-widest text-[#111111] group-hover:text-[#D97706] transition-colors">
+                  STRIKE MATCH
+                </span>
+                <div className="w-10 h-10 border-2 border-[#111111] bg-[#111111] text-white group-hover:bg-[#D97706] group-hover:border-[#D97706] flex items-center justify-center transition-all">
+                  <ArrowUpRight size={20} />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* --- 04. DEBT (7 COLS) --- */}
+            <motion.div
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => handleNavigate('/absolution?mode=temple')}
+              className="md:col-span-7 group cursor-pointer bg-white border-2 border-[#111111] p-8 flex flex-col justify-between shadow-[6px_6px_0px_#111111] hover:shadow-[10px_10px_0px_#059669] transition-all relative overflow-hidden"
+            >
+              <div className="space-y-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-[#059669]/10 border-2 border-[#059669] text-[#059669]">
+                      <ReceiptText size={28} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-mono font-bold text-[#059669] tracking-widest block">
+                        EXHIBIT // 04
+                      </span>
+                      <h4 className="text-3xl font-serif font-black tracking-tight text-[#111111] uppercase">
+                        DEBT
+                      </h4>
+                    </div>
+                  </div>
+
+                  <span className="font-mono text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-[#059669]/10 text-[#059669] border border-[#059669]">
+                    LEDGER
+                  </span>
+                </div>
+
+                <div className="text-xs font-mono font-bold text-[#059669] tracking-[0.2em] uppercase">
+                  ABSOLUTION RECEIPT
+                </div>
+
+                <p className="text-base text-zinc-700 font-medium leading-relaxed max-w-xl">
+                  Settle phantom obligations. Generate an official cryptographic receipt proving zero remaining balance.
+                </p>
+              </div>
+
+              <div className="pt-8 flex items-center justify-between border-t-2 border-zinc-100 mt-6">
+                <span className="font-mono text-xs font-bold tracking-widest text-[#111111] group-hover:text-[#059669] transition-colors">
+                  GET RECEIPT
+                </span>
+                <div className="w-10 h-10 border-2 border-[#111111] bg-[#111111] text-white group-hover:bg-[#059669] group-hover:border-[#059669] flex items-center justify-center transition-all">
+                  <ArrowUpRight size={20} />
+                </div>
+              </div>
+            </motion.div>
+
           </div>
         </section>
 
