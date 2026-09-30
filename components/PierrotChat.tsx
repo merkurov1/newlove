@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Send, X, Terminal, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 export default function PierrotChat() {
   const [isOpen, setIsOpen] = useState(false);
@@ -18,6 +18,17 @@ export default function PierrotChat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Закрытие модального окна по клавише Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -39,8 +50,6 @@ export default function PierrotChat() {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API Error:', response.status, errorText);
         throw new Error(`Connection Error: ${response.status}`);
       }
 
@@ -59,7 +68,7 @@ export default function PierrotChat() {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDownInput = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -163,7 +172,7 @@ export default function PierrotChat() {
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
+                    onKeyDown={handleKeyDownInput}
                     placeholder="Type your message..."
                     disabled={isLoading}
                     className="flex-1 bg-transparent border-none outline-none text-[#111111] font-serif text-base placeholder-zinc-400"
