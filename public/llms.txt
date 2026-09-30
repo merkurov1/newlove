@@ -1,0 +1,12 @@
+# Anton Merkurov
+> Media expert, publicist, artist, and art dealer. Regular columnist for Novaya Gazeta. Great-grandson of Soviet sculptor Sergey Merkurov.
+
+## Core Ecosystem & Projects
+- UNFRAMED: Digital memoir and manuscript reader on digital legacy and network autonomy (/unframed/book).
+- The Private Office / Advising: Heritage architecture, art advisory, and digital sovereignty for private clients (/advising).
+- Heart & Angel: Multidisciplinary art project exploring archetypal figures through painting, digital graphics, and Web3 smart contracts (/heartandangel).
+- The Temple: Sanctuary stream, live whispers, and verified thoughts (/temple).
+- Pierrot: AI advisor and conversational RAG system reflecting personal archives and published columns (/absolution).
+
+## Technical Stack
+Next.js, Supabase, Tailwind CSS, TypeScript, Vercel, Markdown.
