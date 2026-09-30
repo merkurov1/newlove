@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { 
@@ -9,6 +9,7 @@ import {
   Trash2, 
   ReceiptText, 
   Mic, 
+  Square,
   Send, 
   User, 
   Settings, 
@@ -23,12 +24,16 @@ import { useAuth } from '@/components/AuthContext';
 type ServiceType = 'WALL' | 'CAST' | 'ASH' | 'VIGIL' | 'DEBT';
 
 export default function DigitalTemple() {
-  const { user, profile, roles, isLoading, signOut, signInWithGoogle } = useAuth();
+  const { user, profile, roles, isLoading, signOut } = useAuth();
   const [activeView, setActiveView] = useState<ServiceType>('WALL');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   // Ash ritual state
   const [ashInput, setAshInput] = useState('');
@@ -50,7 +55,6 @@ export default function DigitalTemple() {
   const roleNorm = (Array.isArray(roles) && roles.length) ? roles[0] : ((user as any)?.role ? String((user as any).role).toUpperCase() : 'USER');
   const isAdmin = roleNorm === 'ADMIN';
 
-  // Загрузка записей из /api/temple_logs
   useEffect(() => {
     async function fetchLogs() {
       try {
@@ -77,6 +81,43 @@ export default function DigitalTemple() {
     fetchLogs();
   }, [userName]);
 
+  const toggleRecording = () => {
+    if (isRecording) {
+      if (recognitionRef.current) recognitionRef.current.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => setIsRecording(true);
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setPostText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+      };
+      recognition.onerror = () => setIsRecording(false);
+      recognition.onend = () => setIsRecording(false);
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (e) {
+      setIsRecording(false);
+    }
+  };
+
   const handleSendPost = async () => {
     if (!postText.trim() || isSubmitting) return;
     setIsSubmitting(true);
@@ -86,7 +127,7 @@ export default function DigitalTemple() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event_type: 'WHISPER',
-          message: `${userName}: ${postText}`
+          message: postText
         })
       });
       if (res.ok) {
@@ -133,24 +174,31 @@ export default function DigitalTemple() {
     setActiveView('WALL');
   };
 
+  const ritualNavItems = [
+    { id: 'CAST', label: 'CAST', icon: ScanFace, color: 'text-indigo-600' },
+    { id: 'ASH', label: 'ASH', icon: Trash2, color: 'text-rose-600' },
+    { id: 'VIGIL', label: 'VIGIL', icon: Flame, color: 'text-amber-600' },
+    { id: 'DEBT', label: 'DEBT', icon: ReceiptText, color: 'text-emerald-600' },
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F6F4F0] via-[#F0ECE6] to-[#E8E3DA] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white relative overflow-x-hidden antialiased">
       
       {/* Background Soft Glows */}
       <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-amber-200/30 via-indigo-200/20 to-purple-200/30 blur-[140px] pointer-events-none rounded-full" />
 
-      {/* --- HEADER --- */}
-      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/40 border-b border-white/60 shadow-[0_4px_30px_rgba(0,0,0,0.03)] px-6 md:px-8 py-6">
-        <div className="max-w-6xl mx-auto flex items-center justify-between relative">
+      {/* --- HEADER С ИНТЕГРИРОВАННЫМ МЕНЮ РИТУАЛОВ --- */}
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/50 border-b border-white/60 shadow-[0_4px_30px_rgba(0,0,0,0.03)] px-6 md:px-8 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           
-          {/* Left: User Avatar & Dropdown */}
-          <div className="relative">
+          {/* Left: User Avatar / Profile */}
+          <div className="relative flex items-center gap-4">
             {isLoading ? (
-              <div className="w-11 h-11 rounded-full bg-zinc-200 animate-pulse" />
+              <div className="w-10 h-10 rounded-full bg-zinc-200 animate-pulse" />
             ) : user ? (
               <button
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="w-11 h-11 rounded-full overflow-hidden bg-gradient-to-tr from-zinc-900 to-zinc-700 text-white font-medium text-base flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 active:scale-95 transition-all duration-300"
+                className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-tr from-zinc-900 to-zinc-700 text-white font-medium text-sm flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 active:scale-95 transition-all duration-300"
               >
                 {userImage ? (
                   <img src={userImage} alt={userName} className="w-full h-full object-cover" />
@@ -175,10 +223,10 @@ export default function DigitalTemple() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 10 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute left-0 mt-3 w-64 p-4 rounded-3xl bg-white/90 backdrop-blur-3xl border border-white/90 shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-50 space-y-3"
+                  className="absolute left-0 top-12 mt-2 w-64 p-4 rounded-3xl bg-white/95 backdrop-blur-3xl border border-white/90 shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-50 space-y-3"
                 >
                   <div className="flex items-center gap-3 pb-3 border-b border-zinc-200/50">
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-zinc-900 text-white font-medium flex items-center justify-center text-sm shadow-inner flex-shrink-0">
+                    <div className="w-9 h-9 rounded-full overflow-hidden bg-zinc-900 text-white font-medium flex items-center justify-center text-xs shadow-inner flex-shrink-0">
                       {userImage ? (
                         <img src={userImage} alt={userName} className="w-full h-full object-cover" />
                       ) : (
@@ -195,26 +243,26 @@ export default function DigitalTemple() {
                     <Link
                       href={profileHref}
                       onClick={() => setIsProfileOpen(false)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-white transition-all"
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition-all"
                     >
-                      <User size={15} className="text-zinc-500" />
+                      <User size={14} className="text-zinc-500" />
                       Profile & Archetype
                     </Link>
                     <Link
                       href="/profile"
                       onClick={() => setIsProfileOpen(false)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-white transition-all"
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition-all"
                     >
-                      <Settings size={15} className="text-zinc-500" />
+                      <Settings size={14} className="text-zinc-500" />
                       Settings
                     </Link>
                     {isAdmin && (
                       <Link
                         href="/admin"
                         onClick={() => setIsProfileOpen(false)}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-pink-700 bg-pink-50 hover:bg-pink-100 transition-all"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-xs font-medium text-pink-700 bg-pink-50 hover:bg-pink-100 transition-all"
                       >
-                        <ShieldCheck size={15} className="text-pink-600" />
+                        <ShieldCheck size={14} className="text-pink-600" />
                         Admin Panel
                       </Link>
                     )}
@@ -223,294 +271,293 @@ export default function DigitalTemple() {
                         setIsProfileOpen(false);
                         signOut();
                       }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-medium text-rose-600 hover:bg-rose-50/60 transition-all"
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-xs font-medium text-rose-600 hover:bg-rose-50/60 transition-all"
                     >
-                      <LogOut size={15} />
+                      <LogOut size={14} />
                       Sign Out
                     </button>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Merkurov Brand / Title */}
+            <Link href="/temple" className="hidden sm:block font-serif text-lg tracking-wider text-zinc-900 uppercase">
+              Merkurov
+            </Link>
           </div>
 
-          {/* Center: Grand DIGITAL TEMPLE Header */}
-          <div className="text-center cursor-pointer group" onClick={() => setActiveView('WALL')}>
-            <h1 className="text-2xl md:text-4xl font-serif tracking-[0.2em] md:tracking-[0.25em] font-light text-zinc-900 uppercase transition-all duration-300 group-hover:opacity-80">
-              Digital Temple
-            </h1>
-            <p className="text-[10px] md:text-[11px] font-mono tracking-[0.15em] md:tracking-[0.2em] text-zinc-500 uppercase mt-1.5 font-medium">
-              A Sanctuary for Attention Hygiene & Ephemeral Presence
-            </p>
-          </div>
+          {/* Center / Right: Ritual Menu in Header */}
+          <div className="flex items-center gap-3 sm:gap-6">
+            <nav className="flex items-center gap-2 sm:gap-4 font-mono text-xs uppercase tracking-wider">
+              {ritualNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeView === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveView(isActive ? 'WALL' : (item.id as ServiceType))}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all border ${
+                      isActive
+                        ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
+                        : 'bg-white/60 text-zinc-600 border-zinc-200/80 hover:bg-white hover:text-zinc-900'
+                    }`}
+                  >
+                    <Icon size={14} className={isActive ? 'text-white' : item.color} />
+                    <span className="hidden md:inline">{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
 
-          {/* Right Spacer */}
-          <div className="w-11" />
+            <Link
+              href="/"
+              className="text-xs font-mono uppercase tracking-wider text-zinc-500 hover:text-zinc-900 transition-colors pl-3 border-l border-zinc-200"
+            >
+              Archive
+            </Link>
+          </div>
 
         </div>
       </header>
 
-      {/* --- MAIN GRID LAYOUT --- */}
-      <main className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-12 gap-10 relative z-10">
-
-        {/* ================= MAIN CONTENT: THE WALL & SERVICES ================= */}
-        <section className="col-span-12 lg:col-span-9 space-y-8 order-2 lg:order-1">
+      {/* --- MAIN CONTENT CONTAINER (без боковой панели) --- */}
+      <main className="max-w-3xl mx-auto px-6 py-10 relative z-10">
+        
+        <AnimatePresence mode="wait">
           
-          <AnimatePresence mode="wait">
-            
-            {/* 1. THE WALL VIEW */}
-            {activeView === 'WALL' && (
-              <motion.div
-                key="wall"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.25 }}
-                className="space-y-8"
-              >
-                {/* INPUT CONTAINER */}
-                <div className="p-7 rounded-3xl bg-white/70 backdrop-blur-2xl border border-white/90 shadow-[0_12px_40px_rgba(0,0,0,0.03)] space-y-4">
-                  <textarea
-                    value={postText}
-                    onChange={(e) => setPostText(e.target.value)}
-                    placeholder="Leave a whisper, reflection, or record..."
-                    className="w-full bg-transparent text-lg text-zinc-800 placeholder-zinc-400 resize-none focus:outline-none min-h-[110px] font-normal leading-relaxed"
-                  />
-
-                  <div className="flex items-center justify-between pt-2">
-                    <button className="p-3 rounded-full bg-white/80 text-zinc-600 hover:bg-white transition-all shadow-sm border border-white/90">
-                      <Mic size={18} />
-                    </button>
-
-                    <button
-                      onClick={handleSendPost}
-                      disabled={isSubmitting}
-                      className="flex items-center gap-2.5 px-7 py-3 rounded-full bg-zinc-900 text-white font-medium text-sm shadow-xl shadow-zinc-900/10 hover:bg-zinc-800 active:scale-95 transition-all disabled:bg-zinc-300"
-                    >
-                      <span>{isSubmitting ? 'Transmitting...' : 'Transmit'}</span>
-                      <Send size={14} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* STREAM FEED */}
-                <div className="space-y-4">
-                  {posts.map((post) => {
-                    const PostIcon = post.icon || Sparkles;
-                    return (
-                      <div
-                        key={post.id}
-                        className="p-6 rounded-3xl bg-white/50 backdrop-blur-xl border border-white/70 shadow-[0_4px_20px_rgba(0,0,0,0.015)] space-y-2.5 hover:bg-white/70 transition-all duration-300"
-                      >
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2.5">
-                            <PostIcon size={16} className={post.color || 'text-zinc-400'} />
-                            <span className="font-semibold text-zinc-900 text-sm">{post.author}</span>
-                          </div>
-                          <span className="text-zinc-400 font-mono text-xs">{post.time}</span>
-                        </div>
-                        <p className="text-base text-zinc-800 leading-relaxed font-normal">
-                          {post.content}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-
-            {/* 2. CAST SERVICE */}
-            {activeView === 'CAST' && (
-              <motion.div
-                key="cast"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.25 }}
-                className="p-10 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-[0_20px_60px_rgba(0,0,0,0.05)] space-y-8"
-              >
-                <button
-                  onClick={() => setActiveView('WALL')}
-                  className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
-                >
-                  <ArrowLeft size={14} />
-                  <span>Return to Wall</span>
-                </button>
-
-                <div className="space-y-2">
-                  <h2 className="text-3xl font-serif font-light text-zinc-900">Psychometric Cast</h2>
-                  <p className="text-sm text-zinc-500 leading-relaxed">A rapid diagnostic mirror of attention.</p>
-                </div>
-
-                <div className="p-8 rounded-2xl bg-white/60 border border-white/90 space-y-5">
-                  <div className="text-sm font-medium text-zinc-800">What currently occupies your mental bandwidth?</div>
-                  <div className="space-y-3">
-                    {['Information Overload', 'Unresolved Decisions', 'External Expectations'].map((opt, i) => (
-                      <button
-                        key={i}
-                        onClick={() => publishRitualResult('CAST', `Status assigned: ${opt}`, 'CAST', ScanFace, 'text-indigo-500')}
-                        className="w-full p-4 rounded-xl bg-white/90 hover:bg-white text-left text-sm font-medium text-zinc-800 transition-all border border-zinc-100 shadow-sm"
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* 3. ASH SERVICE */}
-            {activeView === 'ASH' && (
-              <motion.div
-                key="ash"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.25 }}
-                className="p-10 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-[0_20px_60px_rgba(0,0,0,0.05)] space-y-8"
-              >
-                <button
-                  onClick={() => setActiveView('WALL')}
-                  className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
-                >
-                  <ArrowLeft size={14} />
-                  <span>Return to Wall</span>
-                </button>
-
-                <div className="space-y-2">
-                  <h2 className="text-3xl font-serif font-light text-zinc-900">Data Incinerator</h2>
-                  <p className="text-sm text-zinc-500 leading-relaxed">Write what needs to be purged. Bytes dissolve irrevocably.</p>
-                </div>
-
+          {/* 1. THE WALL VIEW */}
+          {activeView === 'WALL' && (
+            <motion.div
+              key="wall"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-6"
+            >
+              {/* COMPACT & ELEGANT INPUT CONTAINER С МИКРОФОНОМ */}
+              <div className="p-5 sm:p-6 rounded-3xl bg-white/70 backdrop-blur-2xl border border-white/90 shadow-[0_10px_30px_rgba(0,0,0,0.02)] space-y-3">
                 <textarea
-                  value={ashInput}
-                  onChange={(e) => setAshInput(e.target.value)}
-                  placeholder="Record the noise..."
-                  className="w-full p-5 rounded-2xl bg-white/60 border border-white/90 text-base text-zinc-800 placeholder-zinc-400 focus:outline-none min-h-[160px]"
+                  value={postText}
+                  onChange={(e) => setPostText(e.target.value)}
+                  placeholder="Leave a whisper, reflection, or record..."
+                  rows={2}
+                  className="w-full bg-transparent text-sm sm:text-base text-zinc-800 placeholder-zinc-400 resize-none focus:outline-none font-normal leading-relaxed"
                 />
 
-                <button
-                  onClick={() => {
-                    setIsAshBurnt(true);
-                    setTimeout(() => {
-                      setAshInput('');
-                      setIsAshBurnt(false);
-                      publishRitualResult('ASH', 'Information noise incinerated', 'ASH', Trash2, 'text-rose-500');
-                    }, 800);
-                  }}
-                  className="w-full py-4 rounded-full bg-rose-600 text-white font-medium text-sm shadow-xl shadow-rose-600/20 hover:bg-rose-700 active:scale-98 transition-all"
-                >
-                  {isAshBurnt ? 'Incinerating...' : 'Incinerate'}
-                </button>
-              </motion.div>
-            )}
-
-            {/* 4. VIGIL SERVICE */}
-            {activeView === 'VIGIL' && (
-              <motion.div
-                key="vigil"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.25 }}
-                className="p-10 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-[0_20px_60px_rgba(0,0,0,0.05)] space-y-8 text-center"
-              >
-                <div className="text-left">
+                <div className="flex items-center justify-between pt-2 border-t border-zinc-200/40">
                   <button
-                    onClick={() => setActiveView('WALL')}
-                    className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
+                    type="button"
+                    onClick={toggleRecording}
+                    className={`p-2.5 rounded-full transition-all shadow-sm border ${
+                      isRecording 
+                        ? 'bg-rose-500 text-white border-rose-500 animate-pulse' 
+                        : 'bg-white/80 text-zinc-600 border-white/90 hover:bg-white'
+                    }`}
+                    title={isRecording ? 'Listening... Click to stop' : 'Record voice note'}
                   >
-                    <ArrowLeft size={14} />
-                    <span>Return to Wall</span>
+                    {isRecording ? <Square size={16} /> : <Mic size={16} />}
                   </button>
-                </div>
-
-                <div className="py-6 space-y-5">
-                  <div className="w-20 h-20 mx-auto rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
-                    <Flame size={36} />
-                  </div>
-                  <div className="text-4xl font-mono font-light text-zinc-900">23:41:09</div>
-                  <p className="text-sm text-zinc-500 max-w-sm mx-auto">Sustain the collective flame of presence.</p>
 
                   <button
-                    onClick={() => publishRitualResult('VIGIL', 'Flame extended', 'VIGIL', Flame, 'text-amber-500')}
-                    className="px-9 py-3.5 rounded-full bg-amber-600 text-white font-medium text-sm shadow-xl shadow-amber-600/20 hover:bg-amber-700 active:scale-95 transition-all"
+                    onClick={handleSendPost}
+                    disabled={isSubmitting || !postText.trim()}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-zinc-900 text-white font-medium text-xs sm:text-sm shadow-md hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40"
                   >
-                    Add Spark
+                    <span>{isSubmitting ? 'Transmitting...' : 'Transmit'}</span>
+                    <Send size={13} />
                   </button>
                 </div>
-              </motion.div>
-            )}
-
-            {/* 5. DEBT SERVICE */}
-            {activeView === 'DEBT' && (
-              <motion.div
-                key="debt"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.25 }}
-                className="p-10 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-[0_20px_60px_rgba(0,0,0,0.05)] space-y-8 text-center"
-              >
-                <div className="text-left">
-                  <button
-                    onClick={() => setActiveView('WALL')}
-                    className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
-                  >
-                    <ArrowLeft size={14} />
-                    <span>Return to Wall</span>
-                  </button>
-                </div>
-
-                <div className="py-6 space-y-5">
-                  <div className="w-20 h-20 mx-auto rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-                    <ReceiptText size={36} />
-                  </div>
-                  <div className="text-base font-mono text-emerald-800">BALANCE // 0.00 ZERO</div>
-                  <p className="text-sm text-zinc-500 max-w-sm mx-auto">Zero-balance receipt for phantom obligations.</p>
-
-                  <button
-                    onClick={() => publishRitualResult('DEBT', 'Absolution receipt generated', 'DEBT', CheckCircle2, 'text-emerald-500')}
-                    className="px-9 py-3.5 rounded-full bg-emerald-700 text-white font-medium text-sm shadow-xl shadow-emerald-700/20 hover:bg-emerald-800 active:scale-95 transition-all"
-                  >
-                    Generate Receipt
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
-          </AnimatePresence>
-
-        </section>
-
-        {/* ================= RIGHT SIDEBAR: VERTICAL RITUAL MENU ================= */}
-        <aside className="col-span-12 lg:col-span-3 flex flex-row lg:flex-col items-center lg:items-start justify-center lg:justify-start gap-6 pt-2 order-1 lg:order-2 overflow-x-auto pb-4 lg:pb-0">
-          {[
-            { id: 'CAST', label: 'Cast', icon: ScanFace, color: 'text-indigo-600' },
-            { id: 'ASH', label: 'Ash', icon: Trash2, color: 'text-rose-600' },
-            { id: 'VIGIL', label: 'Vigil', icon: Flame, color: 'text-amber-600' },
-            { id: 'DEBT', label: 'Debt', icon: ReceiptText, color: 'text-emerald-600' },
-          ].map((item) => {
-            const Icon = item.icon;
-            const isActive = activeView === item.id;
-            return (
-              <div key={item.id} className="flex flex-col items-center lg:flex-row lg:items-center gap-2 lg:gap-4 group cursor-pointer" onClick={() => setActiveView(isActive ? 'WALL' : (item.id as ServiceType))}>
-                <button
-                  className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center backdrop-blur-2xl transition-all duration-300 relative flex-shrink-0 ${
-                    isActive
-                      ? 'bg-white border-2 border-white shadow-[0_10px_30px_rgba(0,0,0,0.08)] scale-110 ring-4 ring-zinc-900/10'
-                      : 'bg-white/50 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:bg-white/80 hover:scale-105'
-                  }`}
-                >
-                  <Icon size={24} className={`${item.color} stroke-[1.75]`} />
-                </button>
-                <span className="text-[11px] lg:text-xs font-mono font-medium tracking-wider text-zinc-600 uppercase">
-                  {item.label}
-                </span>
               </div>
-            );
-          })}
-        </aside>
+
+              {/* STREAM FEED */}
+              <div className="space-y-3">
+                {posts.map((post) => {
+                  const PostIcon = post.icon || Sparkles;
+                  return (
+                    <div
+                      key={post.id}
+                      className="p-5 rounded-2xl bg-white/50 backdrop-blur-xl border border-white/70 shadow-[0_4px_15px_rgba(0,0,0,0.01)] space-y-2 hover:bg-white/70 transition-all duration-300"
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <PostIcon size={15} className={post.color || 'text-zinc-400'} />
+                          <span className="font-semibold text-zinc-900 text-xs sm:text-sm">{post.author}</span>
+                        </div>
+                        <span className="text-zinc-400 font-mono text-[11px]">{post.time}</span>
+                      </div>
+                      <p className="text-sm sm:text-base text-zinc-800 leading-relaxed font-normal">
+                        {post.content}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 2. CAST SERVICE */}
+          {activeView === 'CAST' && (
+            <motion.div
+              key="cast"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              className="p-8 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-xl space-y-6"
+            >
+              <button
+                onClick={() => setActiveView('WALL')}
+                className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
+              >
+                <ArrowLeft size={14} />
+                <span>Return to Wall</span>
+              </button>
+
+              <div className="space-y-1">
+                <h2 className="text-2xl font-serif font-light text-zinc-900">Psychometric Cast</h2>
+                <p className="text-xs text-zinc-500 leading-relaxed">A rapid diagnostic mirror of attention.</p>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-white/60 border border-white/90 space-y-4">
+                <div className="text-sm font-medium text-zinc-800">What currently occupies your mental bandwidth?</div>
+                <div className="space-y-2.5">
+                  {['Information Overload', 'Unresolved Decisions', 'External Expectations'].map((opt, i) => (
+                    <button
+                      key={i}
+                      onClick={() => publishRitualResult('CAST', `Status assigned: ${opt}`, 'CAST', ScanFace, 'text-indigo-500')}
+                      className="w-full p-3.5 rounded-xl bg-white/90 hover:bg-white text-left text-xs sm:text-sm font-medium text-zinc-800 transition-all border border-zinc-100 shadow-sm"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* 3. ASH SERVICE */}
+          {activeView === 'ASH' && (
+            <motion.div
+              key="ash"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              className="p-8 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-xl space-y-6"
+            >
+              <button
+                onClick={() => setActiveView('WALL')}
+                className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
+              >
+                <ArrowLeft size={14} />
+                <span>Return to Wall</span>
+              </button>
+
+              <div className="space-y-1">
+                <h2 className="text-2xl font-serif font-light text-zinc-900">Data Incinerator</h2>
+                <p className="text-xs text-zinc-500 leading-relaxed">Write what needs to be purged. Bytes dissolve irrevocably.</p>
+              </div>
+
+              <textarea
+                value={ashInput}
+                onChange={(e) => setAshInput(e.target.value)}
+                placeholder="Record the noise..."
+                className="w-full p-4 rounded-2xl bg-white/60 border border-white/90 text-sm sm:text-base text-zinc-800 placeholder-zinc-400 focus:outline-none min-h-[140px]"
+              />
+
+              <button
+                onClick={() => {
+                  setIsAshBurnt(true);
+                  setTimeout(() => {
+                    setAshInput('');
+                    setIsAshBurnt(false);
+                    publishRitualResult('ASH', 'Information noise incinerated', 'ASH', Trash2, 'text-rose-500');
+                  }, 800);
+                }}
+                className="w-full py-3.5 rounded-full bg-rose-600 text-white font-medium text-sm shadow-xl hover:bg-rose-700 active:scale-98 transition-all"
+              >
+                {isAshBurnt ? 'Incinerating...' : 'Incinerate'}
+              </button>
+            </motion.div>
+          )}
+
+          {/* 4. VIGIL SERVICE */}
+          {activeView === 'VIGIL' && (
+            <motion.div
+              key="vigil"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              className="p-8 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-xl space-y-6 text-center"
+            >
+              <div className="text-left">
+                <button
+                  onClick={() => setActiveView('WALL')}
+                  className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
+                >
+                  <ArrowLeft size={14} />
+                  <span>Return to Wall</span>
+                </button>
+              </div>
+
+              <div className="py-4 space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                  <Flame size={30} />
+                </div>
+                <div className="text-3xl font-mono font-light text-zinc-900">23:41:09</div>
+                <p className="text-xs text-zinc-500 max-w-sm mx-auto">Sustain the collective flame of presence.</p>
+
+                <button
+                  onClick={() => publishRitualResult('VIGIL', 'Flame extended', 'VIGIL', Flame, 'text-amber-500')}
+                  className="px-8 py-3 rounded-full bg-amber-600 text-white font-medium text-xs sm:text-sm shadow-lg hover:bg-amber-700 active:scale-95 transition-all"
+                >
+                  Add Spark
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* 5. DEBT SERVICE */}
+          {activeView === 'DEBT' && (
+            <motion.div
+              key="debt"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              className="p-8 rounded-3xl bg-white/80 backdrop-blur-3xl border border-white/90 shadow-xl space-y-6 text-center"
+            >
+              <div className="text-left">
+                <button
+                  onClick={() => setActiveView('WALL')}
+                  className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-wider"
+                >
+                  <ArrowLeft size={14} />
+                  <span>Return to Wall</span>
+                </button>
+              </div>
+
+              <div className="py-4 space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                  <ReceiptText size={30} />
+                </div>
+                <div className="text-sm font-mono text-emerald-800">BALANCE // 0.00 ZERO</div>
+                <p className="text-xs text-zinc-500 max-w-sm mx-auto">Zero-balance receipt for phantom obligations.</p>
+
+                <button
+                  onClick={() => publishRitualResult('DEBT', 'Absolution receipt generated', 'DEBT', CheckCircle2, 'text-emerald-500')}
+                  className="px-8 py-3 rounded-full bg-emerald-700 text-white font-medium text-xs sm:text-sm shadow-lg hover:bg-emerald-800 active:scale-95 transition-all"
+                >
+                  Generate Receipt
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+        </AnimatePresence>
 
       </main>
     </div>
