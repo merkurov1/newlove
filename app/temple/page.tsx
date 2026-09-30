@@ -8,255 +8,284 @@ import {
   Trash2, 
   ScanFace, 
   ReceiptText, 
-  Ear, 
-  Info, 
-  ChevronRight, 
-  ChevronLeft 
+  ArrowUpRight,
+  Sparkles,
+  Info,
+  X
 } from 'lucide-react';
 
-// --- CONFIGURATION ---
-const RITUALS = [
-  {
-    id: 'vigil',
-    title: 'VIGIL',
-    subtitle: 'KEEP THE LIGHT',
-    desc: 'The flame dies in 24 hours unless witnessed. If it is dark, strike a match.',
-    path: '/vigil?mode=temple',
-    icon: <Flame className="w-10 h-10" />,
-    color: 'text-orange-500',
-    borderColor: 'border-orange-500/50',
-    glow: 'shadow-[0_0_60px_rgba(249,115,22,0.3)]',
-    bg: 'bg-orange-500/5'
-  },
-  {
-    id: 'letitgo',
-    title: 'ASH',
-    subtitle: 'INCINERATE NOISE',
-    desc: 'Write it down. Watch it burn. Nothing is saved. The database is fire.',
-    path: '/heartandangel/letitgo?mode=temple',
-    icon: <Trash2 className="w-10 h-10" />,
-    color: 'text-red-500',
-    borderColor: 'border-red-500/50',
-    glow: 'shadow-[0_0_60px_rgba(239,68,68,0.3)]',
-    bg: 'bg-red-900/5'
-  },
+interface Ritual {
+  id: string;
+  num: string;
+  title: string;
+  subtitle: string;
+  path: string;
+  icon: React.ReactNode;
+  concept: string;
+  purpose: string;
+  outcome: string;
+  accentBorder: string;
+  badgeText?: string;
+}
+
+const RITUALS: Ritual[] = [
   {
     id: 'cast',
+    num: '01',
     title: 'CAST',
-    subtitle: 'FACE THE MIRROR',
-    desc: 'You are defined by what you hide. Find your archetype: Stone, Void, Noise, or Unframed.',
+    subtitle: 'ПСИХОМЕТРИЧЕСКИЙ АРХЕТИП',
     path: '/cast?mode=temple',
-    icon: <ScanFace className="w-10 h-10" />,
-    color: 'text-purple-400',
-    borderColor: 'border-purple-500/50',
-    glow: 'shadow-[0_0_60px_rgba(192,132,252,0.3)]',
-    bg: 'bg-purple-900/5'
+    icon: <ScanFace className="w-5 h-5 text-zinc-900" />,
+    concept: 'Короткий алгоритм самоопределения через скрытые реакции.',
+    purpose: 'Определить вектор своего состояния: Stone, Void, Noise или Unframed.',
+    outcome: 'Персональный профиль и визуальная карточка с результатом.',
+    accentBorder: 'group-hover:border-purple-500/40',
+    badgeText: 'Диагностика'
+  },
+  {
+    id: 'ash',
+    num: '02',
+    title: 'ASH',
+    subtitle: 'УНИЧТОЖЕНИЕ ШУМА',
+    path: '/heartandangel/letitgo?mode=temple',
+    icon: <Trash2 className="w-5 h-5 text-zinc-900" />,
+    concept: 'Инструмент моментальной выгрузки навязчивых мыслей и тревоги.',
+    purpose: 'Записать то, что отвлекает прямо сейчас, и сжечь прямо на экране.',
+    outcome: 'Текст уничтожается. В базе данных ничего не сохраняется.',
+    accentBorder: 'group-hover:border-red-500/40',
+    badgeText: 'Очищение'
+  },
+  {
+    id: 'vigil',
+    num: '03',
+    title: 'VIGIL',
+    subtitle: 'ДЕЖУРСТВО И ПРИСУТСТВИЕ',
+    path: '/vigil?mode=temple',
+    icon: <Flame className="w-5 h-5 text-zinc-900" />,
+    concept: 'Коллективный таймер поддержания общего цифрового огня.',
+    purpose: 'Пламя угасает за 24 часа. Каждый клик продлевает жизнь искры для всех.',
+    outcome: 'Синхронизация присутствия и свидетельство живого пространства.',
+    accentBorder: 'group-hover:border-amber-500/40',
+    badgeText: 'Присутствие'
   },
   {
     id: 'absolution',
+    num: '04',
     title: 'DEBT',
-    subtitle: 'GET RECEIPT',
-    desc: 'Sin is just debt. Debt can be paid. Get a document that proves you are clean.',
+    subtitle: 'ЗАКРЫТИЕ ДОЛГА',
     path: '/absolution?mode=temple',
-    icon: <ReceiptText className="w-10 h-10" />,
-    color: 'text-white',
-    borderColor: 'border-white/50',
-    glow: 'shadow-[0_0_60px_rgba(255,255,255,0.2)]',
-    bg: 'bg-zinc-800/20'
+    icon: <ReceiptText className="w-5 h-5 text-zinc-900" />,
+    concept: 'Формализация обнуления моральных и контекстных обязательств.',
+    purpose: 'Зафиксировать закрытие гештальта или мысленного долга.',
+    outcome: 'Официальная цифровая квитанция о полном погашении.',
+    accentBorder: 'group-hover:border-zinc-500/40',
+    badgeText: 'Реестр'
   }
 ];
 
 export default function TemplePage() {
   const router = useRouter();
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [showManifest, setShowManifest] = useState(false); // Changed to false for cleaner start
-  
-  const activeRitual = RITUALS[activeIndex];
+  const [showManifest, setShowManifest] = useState(false);
 
-  // --- TELEGRAM INIT ---
+  // --- TELEGRAM WEBAPP INIT ---
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     if (tg) {
       tg.ready();
       tg.expand();
       try {
-        tg.setHeaderColor('#000000');
-        tg.setBackgroundColor('#000000');
+        tg.setHeaderColor('#FBFBF9');
+        tg.setBackgroundColor('#FBFBF9');
         if (tg.enableClosingConfirmation) tg.enableClosingConfirmation();
       } catch (e) {}
     }
   }, []);
 
-  // --- NAVIGATION ---
-  const changeSlide = (index: number) => {
-    setActiveIndex(index);
+  const handleNavigate = (path: string) => {
     const tg = (window as any).Telegram?.WebApp;
-    if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+    router.push(path);
   };
 
-  const handleNext = () => changeSlide((activeIndex + 1) % RITUALS.length);
-  const handlePrev = () => changeSlide((activeIndex - 1 + RITUALS.length) % RITUALS.length);
-
-  const handleEnter = () => {
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-    router.push(activeRitual.path);
-  };
-
-  // --- RENDER ---
   return (
-    <div className="fixed inset-0 bg-black text-white font-mono flex flex-col overflow-hidden selection:bg-white selection:text-black">
+    <div className="min-h-screen bg-[#FBFBF9] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white pb-20">
       
-      {/* FORCE HIDE GLOBAL UI */}
+      {/* FORCE LIGHT NAVIGATION & OVERRIDES */}
       <style jsx global>{`
         header, footer { display: none !important; }
+        body { background-color: #FBFBF9; }
       `}</style>
 
-      {/* --- AMBIENT BG --- */}
-      <div className={`absolute inset-0 transition-colors duration-1000 ease-in-out ${activeRitual.bg}`} />
-      
-      {/* --- HEADER --- */}
-      <header className="relative z-10 h-16 shrink-0 flex justify-between items-end px-6 pb-2">
-        <button onClick={() => setShowManifest(true)} className="p-2 -ml-2 text-zinc-600 hover:text-white transition-colors">
-          <Info size={20} />
-        </button>
+      {/* --- TOP BAR / HEADER --- */}
+      <header className="sticky top-0 z-30 bg-[#FBFBF9]/90 backdrop-blur-md border-b border-zinc-200/80 px-6 py-4">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <h1 className="font-serif text-lg font-bold tracking-widest text-zinc-900">
+              TEMPLE
+            </h1>
+            <span className="text-[10px] font-mono uppercase text-zinc-400 tracking-wider hidden sm:inline">
+              / digital hygiene
+            </span>
+          </div>
+
+          <button
+            onClick={() => setShowManifest(!showManifest)}
+            className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-zinc-500 hover:text-zinc-900 transition-colors px-3 py-1.5 rounded-full border border-zinc-200 hover:border-zinc-400 bg-white/50"
+          >
+            <Info size={14} />
+            <span>Манифест</span>
+          </button>
+        </div>
       </header>
 
-      {/* --- ALTAR (CENTER) --- */}
-      <main className="flex-1 relative flex flex-col items-center justify-center z-10 w-full px-8 gap-8">
-        
-        {/* TEXT */}
-        <div className="text-center space-y-2">
-           <AnimatePresence mode='wait'>
-            <motion.div
-              key={activeRitual.id + '-text'}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
-            >
-              <h2 className={`text-3xl md:text-4xl font-serif font-bold tracking-[0.15em] ${activeRitual.color} drop-shadow-lg`}>
-                {activeRitual.title}
-              </h2>
-              <div className="text-[9px] uppercase tracking-[0.3em] text-zinc-500 mt-2">
-                {activeRitual.subtitle}
-              </div>
-              <p className="mt-6 text-[11px] text-zinc-400 leading-relaxed font-sans max-w-[280px] mx-auto opacity-80">
-                {activeRitual.desc}
-              </p>
-            </motion.div>
-          </AnimatePresence>
-        </div>
+      <main className="max-w-4xl mx-auto px-6 pt-8 space-y-10">
 
-        {/* VISUAL OBJECT */}
-        <div className="relative w-48 h-48 flex items-center justify-center">
-          <AnimatePresence mode='wait'>
+        {/* --- ONBOARDING / HERO BLOCK --- */}
+        <section className="bg-white border border-zinc-200 rounded-xl p-6 md:p-8 shadow-sm space-y-4 relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+            <Sparkles className="w-32 h-32 text-zinc-900" />
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-400">
+              Пространство присутствия и сброса шума
+            </div>
+            <h2 className="text-xl md:text-2xl font-serif font-medium text-zinc-900 leading-snug">
+              Инструменты гигиены внимания в цифровой среде.
+            </h2>
+          </div>
+
+          <p className="text-xs md:text-sm text-zinc-600 leading-relaxed font-sans max-w-2xl">
+            Современный интернет переполнен бесконечным потоком уведомлений и алгоритмическим шумом. 
+            <strong className="text-zinc-900 font-semibold"> Temple</strong> — это реестр практик для восстановления паузы: 
+            сжечь навязчивую мысль, сфокусировать архетип, поддержать огонь присутствия или зафиксировать обнуление.
+          </p>
+
+          <div className="pt-2 flex flex-wrap gap-4 text-[11px] font-mono text-zinc-500 border-t border-zinc-100">
+            <div><span className="text-zinc-900 font-bold">4</span> Ритуала</div>
+            <div>•</div>
+            <div><span className="text-zinc-900 font-bold">0</span> Трекеров</div>
+            <div>•</div>
+            <div><span className="text-zinc-900 font-bold">100%</span> Без сохранения логов</div>
+          </div>
+        </section>
+
+        {/* --- MANIFEST COLLAPSIBLE MODAL / OVERLAY --- */}
+        <AnimatePresence>
+          {showManifest && (
             <motion.div
-              key={activeRitual.id + '-icon'}
-              initial={{ opacity: 0, scale: 0.8, rotate: -10 }}
-              animate={{ opacity: 1, scale: 1, rotate: 0 }}
-              exit={{ opacity: 0, scale: 1.2, rotate: 10 }}
-              transition={{ type: "spring", stiffness: 200, damping: 20 }}
-              className="relative flex items-center justify-center"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
             >
-              {/* Outer Ring / Glow */}
-              <div className={`
-                absolute w-32 h-32 rounded-full border border-white/5 
-                flex items-center justify-center backdrop-blur-sm
-                ${activeRitual.glow} transition-all duration-700
-              `}>
-                 <div className={`absolute inset-0 rounded-full border ${activeRitual.borderColor} opacity-20`} />
-              </div>
-              
-              {/* The Icon */}
-              <div className={`${activeRitual.color} z-10 drop-shadow-2xl`}>
-                  {activeRitual.icon}
+              <div className="bg-zinc-900 text-zinc-100 rounded-xl p-6 md:p-8 relative space-y-4 shadow-xl">
+                <button 
+                  onClick={() => setShowManifest(false)}
+                  className="absolute top-4 right-4 text-zinc-400 hover:text-white p-2"
+                >
+                  <X size={18} />
+                </button>
+                <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
+                  ПРАВИЛА И ЭТИКА ПРОСТРАНСТВА
+                </div>
+                <h3 className="font-serif text-lg text-white">Зачем создан Temple?</h3>
+                <div className="grid md:grid-cols-2 gap-4 text-xs text-zinc-300 font-sans leading-relaxed">
+                  <div>
+                    <strong className="text-white block mb-1">1. Без алгоритмической затягиваемости</strong>
+                    Здесь нет бесконечных лент, реакций, лайков или попыток удержать ваше внимание лишнюю секунду. Все действия завершены по своей природе.
+                  </div>
+                  <div>
+                    <strong className="text-white block mb-1">2. Абсолютная приватность</strong>
+                    Ввод контента в ASH уничтожается на клиенте. В VIGIL фиксируется только факт активности. Вы ничего не оставляете следящим системам.
+                  </div>
+                </div>
               </div>
             </motion.div>
-          </AnimatePresence>
-        </div>
+          )}
+        </AnimatePresence>
+
+        {/* --- RITUALS REGISTRY GRID --- */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between border-b border-zinc-200 pb-2">
+            <h3 className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-400">
+              Реестр ритуалов
+            </h3>
+            <span className="text-[11px] font-mono text-zinc-400">
+              Выберите практику
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {RITUALS.map((ritual) => (
+              <motion.div
+                key={ritual.id}
+                whileHover={{ y: -2 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => handleNavigate(ritual.path)}
+                className={`
+                  group cursor-pointer bg-white border border-zinc-200 rounded-xl p-6 
+                  flex flex-col justify-between space-y-6 transition-all duration-200
+                  hover:shadow-md hover:border-zinc-300 ${ritual.accentBorder}
+                `}
+              >
+                {/* CARD HEADER */}
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-zinc-50 border border-zinc-200/80 flex items-center justify-center group-hover:bg-zinc-100 transition-colors">
+                        {ritual.icon}
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-mono text-zinc-400 font-bold block">
+                          [{ritual.num}]
+                        </span>
+                        <h4 className="font-serif text-lg font-bold tracking-wider text-zinc-900 group-hover:text-black">
+                          {ritual.title}
+                        </h4>
+                      </div>
+                    </div>
+
+                    <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200/60">
+                      {ritual.badgeText}
+                    </span>
+                  </div>
+
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400">
+                    {ritual.subtitle}
+                  </div>
+                </div>
+
+                {/* BREAKDOWN (WHAT / WHY / RESULT) */}
+                <div className="space-y-2 text-xs border-t border-zinc-100 pt-4 font-sans">
+                  <div className="grid grid-cols-[60px_1fr] gap-2">
+                    <span className="font-mono text-[10px] uppercase text-zinc-400">Суть</span>
+                    <span className="text-zinc-700 leading-snug">{ritual.concept}</span>
+                  </div>
+                  <div className="grid grid-cols-[60px_1fr] gap-2">
+                    <span className="font-mono text-[10px] uppercase text-zinc-400">Зачем</span>
+                    <span className="text-zinc-700 leading-snug">{ritual.purpose}</span>
+                  </div>
+                  <div className="grid grid-cols-[60px_1fr] gap-2">
+                    <span className="font-mono text-[10px] uppercase text-zinc-400">Итог</span>
+                    <span className="text-zinc-900 font-medium leading-snug">{ritual.outcome}</span>
+                  </div>
+                </div>
+
+                {/* CARD ACTION FOOTER */}
+                <div className="pt-2 flex items-center justify-between text-xs font-mono font-semibold text-zinc-900 group-hover:text-black">
+                  <span>ЗАПУСТИТЬ РИТУАЛ</span>
+                  <div className="w-7 h-7 rounded-full bg-zinc-100 group-hover:bg-zinc-900 group-hover:text-white flex items-center justify-center transition-all">
+                    <ArrowUpRight size={14} />
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
 
       </main>
-
-      {/* --- FOOTER CONTROLS --- */}
-      <div className="relative z-20 pb-10 pt-4 bg-gradient-to-t from-black via-black/80 to-transparent flex flex-col gap-6">
-        
-        {/* MAIN ACTION ROW */}
-        <div className="flex items-center justify-center w-full px-6 gap-6">
-          <button onClick={handlePrev} className="p-4 text-zinc-700 hover:text-zinc-300 active:scale-90 transition-all">
-            <ChevronLeft size={24} />
-          </button>
-          
-          <button 
-            onClick={handleEnter}
-            className={`
-              h-14 px-10 rounded-sm border border-white/10 
-              text-[11px] font-bold tracking-[0.2em] uppercase 
-              bg-[#0A0A0A] hover:bg-[#111] hover:border-white/30
-              shadow-[0_0_20px_rgba(0,0,0,0.5)]
-              transition-all active:scale-95 active:border-${activeRitual.color.split('-')[1]}-500
-            `}
-          >
-            ENTER RITUAL
-          </button>
-
-          <button onClick={handleNext} className="p-4 text-zinc-700 hover:text-zinc-300 active:scale-90 transition-all">
-            <ChevronRight size={24} />
-          </button>
-        </div>
-
-        {/* DOTS INDICATORS (FIXED SIZE) */}
-        <div className="flex justify-center gap-4 h-4 items-center">
-          {RITUALS.map((r, i) => (
-            <button
-              key={r.id}
-              onClick={() => changeSlide(i)}
-              className={`
-                rounded-full transition-all duration-500 ease-out
-                ${i === activeIndex 
-                  ? `w-2 h-2 ${activeRitual.color.replace('text-', 'bg-')} shadow-[0_0_10px_currentColor]` 
-                  : 'w-1.5 h-1.5 bg-zinc-800 hover:bg-zinc-700'}
-              `}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* --- PIERROT (WHISPER) --- */}
-      <div className="absolute bottom-8 right-6 z-30">
-        <button 
-          className="w-10 h-10 flex items-center justify-center text-zinc-700 hover:text-white transition-all active:scale-90 active:text-white"
-          onClick={() => alert("Pierrot is listening...")}
-        >
-          <Ear size={20} />
-        </button>
-      </div>
-
-      {/* --- MANIFEST OVERLAY --- */}
-      <AnimatePresence>
-        {showManifest && (
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/98 flex flex-col items-center justify-center p-8 text-center"
-            onClick={() => setShowManifest(false)}
-          >
-            <div className="space-y-6 max-w-xs">
-              <h2 className="text-lg font-serif tracking-widest text-white border-b border-white/10 pb-4 inline-block">
-                BUREAU OF SILENCE
-              </h2>
-              <p className="text-xs text-zinc-400 font-mono leading-relaxed">
-                The world is Noise. Data is Entropy.<br/><br/>
-                This is a utility for the soul.<br/>
-                We trade in peace and receipts.
-              </p>
-              <div className="pt-8 text-[9px] tracking-[0.2em] text-zinc-600 uppercase animate-pulse">
-                Tap to enter
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
     </div>
   );
 }
