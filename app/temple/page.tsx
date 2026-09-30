@@ -161,7 +161,7 @@ export default function TemplePage() {
               href={part}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-100 border border-zinc-200 text-zinc-900 text-sm font-medium hover:bg-zinc-200 transition-colors my-1 break-all"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50/80 border border-indigo-100 text-indigo-700 text-sm font-medium hover:bg-indigo-100 transition-colors my-1 break-all"
             >
               <ExternalLink size={13} className="shrink-0" />
               <span>{hostname}</span>
@@ -169,7 +169,7 @@ export default function TemplePage() {
           );
         } catch {
           return (
-            <a key={index} href={part} target="_blank" rel="noopener noreferrer" className="text-zinc-900 underline underline-offset-4 break-all">
+            <a key={index} href={part} target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline underline-offset-4 break-all">
               {part}
             </a>
           );
@@ -182,151 +182,129 @@ export default function TemplePage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F6F4F0] via-[#F0ECE6] to-[#E8E3DA] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white relative overflow-x-hidden antialiased">
       
-      <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-amber-200/20 via-zinc-200/20 to-stone-300/20 blur-[140px] pointer-events-none rounded-full" />
+      <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-amber-200/30 via-indigo-200/20 to-purple-200/30 blur-[140px] pointer-events-none rounded-full" />
 
       <Header />
 
-      <main className="max-w-4xl mx-auto px-6 pt-36 pb-24 relative z-10">
+      <main className="max-w-2xl mx-auto px-6 pt-36 pb-24 relative z-10 space-y-8">
         
-        {/* TOP LAYOUT: Title & Info Side Panel */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-12 items-end border-b border-zinc-300/60 pb-8">
-          <div className="md:col-span-8 space-y-3">
-            <span className="font-mono text-xs uppercase tracking-[0.3em] text-zinc-500">Sanctuary</span>
-            <h1 className="text-4xl sm:text-5xl font-serif font-light text-zinc-900 tracking-tight">The Temple</h1>
+        {/* TITLE BLOCK (Clean & Right-aligned stream info description) */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-zinc-300/60 pb-6">
+          <div className="space-y-1">
+            <span className="font-mono text-xs uppercase tracking-[0.3em] text-zinc-500">Sanctuary Stream</span>
+            <h1 className="text-4xl font-serif font-light text-zinc-900">The Temple Logbook</h1>
           </div>
-          
-          <div className="md:col-span-4 md:text-right space-y-1">
-            <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-400 block">Stream Info</span>
-            <p className="text-xs font-serif text-zinc-600 italic">
-              Whispers, voice notes, and verified thoughts in the stream.
-            </p>
-          </div>
+          <p className="text-xs font-serif italic text-zinc-500 sm:text-right max-w-[220px]">
+            Whispers, voice notes, and verified thoughts in the stream.
+          </p>
         </div>
 
-        {/* CONTENT LAYOUT: Input & Stream separated */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
-          
-          {/* LEFT / MAIN COLUMN: Stream and Posts */}
-          <div className="md:col-span-7 space-y-6">
-            
-            {/* STREAM FEED */}
-            <div className="space-y-4">
-              {posts.length === 0 ? (
-                <div className="p-12 text-center rounded-3xl bg-white/40 border border-white/60 text-zinc-500 font-mono text-xs uppercase tracking-wider">
-                  No entries in the logbook yet.
-                </div>
-              ) : (
-                posts.map((post) => {
-                  const PostIcon = post.icon || Sparkles;
-                  return (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      key={post.id}
-                      className="p-6 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.02)] space-y-4 hover:bg-white/90 transition-all duration-300"
-                    >
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2.5 rounded-2xl bg-zinc-100 text-zinc-800 shadow-sm">
-                            <PostIcon size={15} className={post.color || 'text-zinc-600'} />
-                          </div>
-                          <div>
-                            <span className="font-semibold text-zinc-900 text-sm block">{post.author}</span>
-                            <span className="text-zinc-400 font-mono text-[10px] uppercase tracking-wider">{post.type}</span>
-                          </div>
-                        </div>
-                        <span className="text-zinc-400 font-mono text-xs">{post.time}</span>
-                      </div>
-
-                      <div className="text-base text-zinc-800 leading-relaxed font-serif pl-1 break-words">
-                        {renderContentWithLinks(post.content)}
-                      </div>
-
-                      {post.audioUrl && (
-                        <div className="pt-2">
-                          <audio controls src={post.audioUrl} className="w-full rounded-xl" />
-                        </div>
-                      )}
-                    </motion.div>
-                  );
-                })
-              )}
+        {/* INPUT BOX */}
+        {!isLoading && !user ? (
+          <div className="p-8 rounded-3xl bg-white/70 backdrop-blur-2xl border border-white/80 shadow-[0_15px_40px_rgba(0,0,0,0.03)] text-center space-y-4">
+            <p className="font-serif text-zinc-700 text-base">
+              Authentication required to broadcast whispers and voice notes into the temple.
+            </p>
+            <div>
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-2 px-8 py-3 rounded-full bg-zinc-900 text-white font-mono text-xs uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all shadow-md"
+              >
+                Sign In to Participate
+              </Link>
             </div>
-
           </div>
+        ) : (
+          <div className="p-6 rounded-3xl bg-white/80 backdrop-blur-2xl border border-white/90 shadow-[0_20px_50px_rgba(0,0,0,0.04)] space-y-4">
+            <textarea
+              value={postText}
+              onChange={(e) => setPostText(e.target.value)}
+              placeholder="Broadcast a whisper, drop a link, or record a voice note..."
+              rows={3}
+              className="w-full bg-transparent text-base text-zinc-900 placeholder-zinc-400 resize-none focus:outline-none font-normal leading-relaxed font-serif"
+            />
 
-          {/* RIGHT COLUMN: Transmission / Input Module */}
-          <div className="md:col-span-5 space-y-6">
-            <div className="sticky top-28">
-              {!isLoading && !user ? (
-                <div className="p-8 rounded-3xl bg-white/70 backdrop-blur-2xl border border-white/80 shadow-[0_15px_40px_rgba(0,0,0,0.03)] text-center space-y-4">
-                  <p className="font-serif text-zinc-700 text-sm">
-                    Authentication required to broadcast whispers and voice notes.
-                  </p>
-                  <div>
-                    <Link
-                      href="/login"
-                      className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-zinc-900 text-white font-mono text-xs uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all shadow-md"
-                    >
-                      Sign In
-                    </Link>
+            {audioBlobUrl && (
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-zinc-100/80 border border-zinc-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center">
+                    <Volume2 size={16} />
                   </div>
+                  <span className="font-mono text-xs uppercase tracking-wider text-zinc-700">Voice Note Recorded</span>
                 </div>
-              ) : (
-                <div className="p-6 rounded-3xl bg-white/80 backdrop-blur-2xl border border-white/90 shadow-[0_20px_50px_rgba(0,0,0,0.04)] space-y-4">
-                  <div className="font-mono text-xs uppercase tracking-wider text-zinc-500 mb-1">
-                    New Transmission
-                  </div>
-                  
-                  <textarea
-                    value={postText}
-                    onChange={(e) => setPostText(e.target.value)}
-                    placeholder="Broadcast a whisper or record a voice note..."
-                    rows={4}
-                    className="w-full bg-transparent text-sm text-zinc-900 placeholder-zinc-400 resize-none focus:outline-none font-normal leading-relaxed font-serif"
-                  />
+                <audio controls src={audioBlobUrl} className="h-8 max-w-[200px]" />
+              </div>
+            )}
 
-                  {audioBlobUrl && (
-                    <div className="flex items-center justify-between p-3 rounded-2xl bg-zinc-100/80 border border-zinc-200">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center">
-                          <Volume2 size={12} />
-                        </div>
-                        <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-700">Voice Ready</span>
+            <div className="flex items-center justify-between pt-3 border-t border-zinc-200/60">
+              <button
+                type="button"
+                onClick={toggleRecording}
+                className={`px-4 py-2.5 rounded-full transition-all shadow-sm border flex items-center gap-2 text-xs font-mono uppercase tracking-wider ${
+                  isRecording 
+                    ? 'bg-rose-500 text-white border-rose-500 animate-pulse' 
+                    : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
+                }`}
+              >
+                {isRecording ? <Square size={14} /> : <Mic size={14} />}
+                <span>{isRecording ? 'Stop Recording' : 'Voice Note'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSendPost}
+                disabled={isSubmitting || (!postText.trim() && !audioBlobUrl)}
+                className="flex items-center gap-2 px-7 py-2.5 rounded-full bg-zinc-900 text-white font-medium text-xs sm:text-sm shadow-md hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40 font-mono uppercase tracking-wider"
+              >
+                <span>{isSubmitting ? 'Transmitting...' : 'Broadcast'}</span>
+                <Send size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* FEED / STREAM */}
+        <div className="space-y-4 pt-2">
+          {posts.length === 0 ? (
+            <div className="p-12 text-center rounded-3xl bg-white/40 border border-white/60 text-zinc-500 font-mono text-xs uppercase tracking-wider">
+              No entries in the temple logbook yet.
+            </div>
+          ) : (
+            posts.map((post) => {
+              const PostIcon = post.icon || Sparkles;
+              return (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  key={post.id}
+                  className="p-6 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.02)] space-y-4 hover:bg-white/90 transition-all duration-300"
+                >
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-2xl bg-zinc-100 text-zinc-800 shadow-sm">
+                        <PostIcon size={15} className={post.color || 'text-zinc-600'} />
                       </div>
-                      <audio controls src={audioBlobUrl} className="h-7 max-w-[150px]" />
+                      <div>
+                        <span className="font-semibold text-zinc-900 text-sm block">{post.author}</span>
+                        <span className="text-zinc-400 font-mono text-[10px] uppercase tracking-wider">{post.type}</span>
+                      </div>
+                    </div>
+                    <span className="text-zinc-400 font-mono text-xs">{post.time}</span>
+                  </div>
+
+                  <div className="text-base text-zinc-800 leading-relaxed font-serif pl-1 break-words">
+                    {renderContentWithLinks(post.content)}
+                  </div>
+
+                  {post.audioUrl && (
+                    <div className="pt-2">
+                      <audio controls src={post.audioUrl} className="w-full rounded-xl" />
                     </div>
                   )}
-
-                  <div className="flex items-center justify-between pt-3 border-t border-zinc-200/60">
-                    <button
-                      type="button"
-                      onClick={toggleRecording}
-                      className={`px-3 py-2 rounded-full transition-all shadow-sm border flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider ${
-                        isRecording 
-                          ? 'bg-rose-500 text-white border-rose-500 animate-pulse' 
-                          : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
-                      }`}
-                    >
-                      {isRecording ? <Square size={12} /> : <Mic size={12} />}
-                      <span>{isRecording ? 'Stop' : 'Voice'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleSendPost}
-                      disabled={isSubmitting || (!postText.trim() && !audioBlobUrl)}
-                      className="flex items-center gap-2 px-6 py-2 rounded-full bg-zinc-900 text-white font-medium text-xs shadow-md hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40 font-mono uppercase tracking-wider"
-                    >
-                      <span>{isSubmitting ? '...' : 'Broadcast'}</span>
-                      <Send size={12} />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
+                </motion.div>
+              );
+            })
+          )}
         </div>
 
       </main>
