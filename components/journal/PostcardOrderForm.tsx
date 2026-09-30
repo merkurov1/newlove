@@ -32,9 +32,10 @@ interface FormData {
 }
 
 export default function PostcardOrderForm({ postcard, onBack }: PostcardOrderFormProps) {
+  // Достаем user и profile, а не только сессию
   const { user, profile } = useAuth();
 
-  // Безопасно извлекаем имя пользователя без обращения к несуществующим свойствам типа User
+  // Безопасно вычисляем начальное имя
   const initialName = profile?.name || user?.user_metadata?.name || user?.email || '';
 
   const [formData, setFormData] = useState<FormData>({
