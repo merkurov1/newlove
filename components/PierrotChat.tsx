@@ -77,13 +77,13 @@ export default function PierrotChat() {
 
   return (
     <>
-      {/* Trigger Link */}
+      {/* Compact Horizontal Terminal Tab */}
       <button
         onClick={() => setIsOpen(true)}
-        className="group inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-zinc-600 hover:text-[#111111] transition-colors"
+        className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/60 hover:bg-white border border-zinc-200 text-xs font-mono tracking-widest text-zinc-700 hover:text-[#111111] shadow-sm backdrop-blur-md transition-all"
       >
-        <span>&gt; Talk to Pierrot</span>
-        <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+        <span className="uppercase">Pierrot</span>
       </button>
 
       {/* Modal Overlay with Liquid Glass */}
