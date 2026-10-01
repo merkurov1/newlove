@@ -111,12 +111,11 @@ export default async function SelectionPage() {
       {/* HEADER (narrow container like /advising) */}
       <div className="max-w-3xl mx-auto px-6 pt-36 md:pt-44 pb-16">
         <CenteredHeader>
-          <div className="mb-6">
-            <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-500 block mb-2">Curated Inventory</span>
-            <div className="text-[10px] font-mono tracking-widest uppercase text-gray-500">Assets: {articlesToRender ? articlesToRender.length : 0}</div>
-          </div>
           <h1 className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-6">Selection.</h1>
-          <p className="text-xl font-serif italic text-gray-600">Chronicles of silence & art.</p>
+          <p className="text-xl font-serif italic text-gray-600 mb-6">Chronicles of silence & art.</p>
+          <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-gray-500">
+            [ Vault / {articlesToRender ? articlesToRender.length : 0} items ]
+          </div>
         </CenteredHeader>
       </div>
 
@@ -132,15 +131,8 @@ export default async function SelectionPage() {
                 <Link key={article.id} href={`/${article.slug}`} className="block group">
                   <div className="border border-gray-200/80 bg-white/80 backdrop-blur-xl p-3 hover:border-black transition-all duration-300 shadow-sm hover:shadow-xl rounded-2xl">
                     
-                    {/* Image Area with Badge */}
+                    {/* Image Area */}
                     <div className="aspect-[3/2] w-full bg-[#f4f4f4] relative overflow-hidden mb-3 rounded-xl">
-                      {/* STATUS BADGE */}
-                      <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-1 group-hover:translate-y-0">
-                         <span className="bg-black text-white text-[9px] font-mono uppercase tracking-widest px-2 py-1 rounded-md">
-                           Acquirable
-                         </span>
-                      </div>
-                      
                       {previewImage ? (
                         <Image
                           src={previewImage}
