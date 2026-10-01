@@ -13,7 +13,7 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import Header from '@/components/Header';
-import Paywall from './Paywall'; // Корректный относительный импорт из той же папки
+import Paywall from './Paywall';
 import {
   ArrowLeft,
   Check,
@@ -64,15 +64,47 @@ const slugify = (value: string): string => {
 };
 
 export default function BookReaderPage() {
-  const [authChecked, setAuthChecked] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
-  const [admin, setAdmin] = useState(false);
+  // Синхронная инициализация прав доступа прямо при первом вызове (предотвращает любые проскоки)
+  const initialAuth = (() => {
+    if (typeof window === 'undefined') return { unlocked: false, admin: false };
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const paid = params.get('paid') === '1';
+      const adminParam = params.get('admin') === '1';
+
+      if (paid) window.localStorage.setItem(UNLOCKED_KEY, 'true');
+      if (adminParam) window.localStorage.setItem(ADMIN_KEY, 'true');
+
+      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
+      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
+
+      return {
+        unlocked: storedUnlocked || paid,
+        admin: storedAdmin || adminParam,
+      };
+    } catch {
+      return { unlocked: false, admin: false };
+    }
+  })();
+
+  const [unlocked, setUnlocked] = useState(initialAuth.unlocked);
+  const [admin, setAdmin] = useState(initialAuth.admin);
 
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [prefs, setPrefs] = useState<ReaderPrefs>(DEFAULT_PREFS);
+  const [prefs, setPrefs] = useState<ReaderPrefs>(() => {
+    if (typeof window === 'undefined') return DEFAULT_PREFS;
+    try {
+      const stored = window.localStorage.getItem(PREFS_KEY);
+      if (stored) {
+        return { ...DEFAULT_PREFS, ...JSON.parse(stored) };
+      }
+    } catch {}
+    return DEFAULT_PREFS;
+  });
+
   const [showToc, setShowToc] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -80,40 +112,25 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
+  // ЖЕСТКИЙ БЛОКАТОР: Если доступ не подтвержден, сразу возвращаем Paywall.
+  // Никакой код читалки и загрузки файлов даже не начнет выполняться.
+  if (!unlocked && !admin) {
+    return (
+      <Paywall
+        onUnlock={() => {
+          try {
+            window.localStorage.setItem(UNLOCKED_KEY, 'true');
+            window.localStorage.setItem(ADMIN_KEY, 'true');
+          } catch {}
+          setUnlocked(true);
+          setAdmin(true);
+        }}
+      />
+    );
+  }
+
+  // Загрузка книги только для авторизованных пользователей
   useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const paid = params.get('paid') === '1';
-      const adminParam = params.get('admin') === '1';
-
-      if (paid) {
-        window.localStorage.setItem(UNLOCKED_KEY, 'true');
-      }
-      if (adminParam) {
-        window.localStorage.setItem(ADMIN_KEY, 'true');
-      }
-
-      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
-      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
-
-      setUnlocked(storedUnlocked || paid);
-      setAdmin(storedAdmin || adminParam);
-
-      const storedPrefs = window.localStorage.getItem(PREFS_KEY);
-      if (storedPrefs) {
-        const parsed = JSON.parse(storedPrefs) as Partial<ReaderPrefs>;
-        setPrefs((prev) => ({ ...prev, ...parsed }));
-      }
-    } catch {
-      // Игнорируем ошибки хранилища
-    } finally {
-      setAuthChecked(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!authChecked || (!unlocked && !admin)) return;
-
     let cancelled = false;
     const loadBook = async () => {
       try {
@@ -134,15 +151,6 @@ export default function BookReaderPage() {
     return () => {
       cancelled = true;
     };
-  }, [authChecked, unlocked, admin]);
-
-  const unlockHandler = useCallback(() => {
-    try {
-      window.localStorage.setItem(UNLOCKED_KEY, 'true');
-      window.localStorage.setItem(ADMIN_KEY, 'true');
-    } catch {}
-    setUnlocked(true);
-    setAdmin(true);
   }, []);
 
   const updatePrefs = useCallback((patch: Partial<ReaderPrefs>) => {
@@ -155,6 +163,7 @@ export default function BookReaderPage() {
     });
   }, []);
 
+  // Расчет прогресса чтения
   useEffect(() => {
     const updateProgress = () => {
       const documentHeight = document.documentElement.scrollHeight - window.innerHeight;
@@ -175,6 +184,7 @@ export default function BookReaderPage() {
     };
   }, [content]);
 
+  // Генерация оглавления (TOC)
   useEffect(() => {
     if (!content) {
       setToc([]);
@@ -283,10 +293,6 @@ export default function BookReaderPage() {
   const borderClass = prefs.theme === 'dark' ? 'border-white/10' : prefs.theme === 'sepia' ? 'border-[#3c2f2f]/15' : 'border-black/10';
   const readerFont = prefs.fontFamily === 'serif' ? 'font-serif' : 'font-sans';
 
-  if (!authChecked || (!unlocked && !admin)) {
-    return <Paywall onUnlock={unlockHandler} />;
-  }
-
   if (loading) {
     return (
       <div className={`min-h-screen ${currentThemeClass} flex flex-col`}>
@@ -327,6 +333,7 @@ export default function BookReaderPage() {
     <div className={`min-h-screen ${currentThemeClass} transition-colors duration-300 relative`}>
       <Header />
 
+      {/* TOP READER BAR */}
       <div className={`sticky top-0 z-40 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/95' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/95' : 'bg-[#faf9f5]/95'} backdrop-blur-md shadow-xs`}>
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
@@ -382,6 +389,7 @@ export default function BookReaderPage() {
         </div>
       </div>
 
+      {/* TOC DRAWER */}
       {showToc && (
         <div className="fixed inset-0 z-50" onClick={() => setShowToc(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />
@@ -419,6 +427,7 @@ export default function BookReaderPage() {
         </div>
       )}
 
+      {/* SETTINGS DRAWER */}
       {showSettings && (
         <div className="fixed inset-0 z-50" onClick={() => setShowSettings(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />
