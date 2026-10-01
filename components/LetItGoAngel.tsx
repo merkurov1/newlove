@@ -8,7 +8,7 @@ const ANGEL_IMAGE =
 const HEART_IMAGE =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png';
 
-export default function LetItGoAngel() {
+export default function LetItGoPage() {
   const [flyingHearts, setFlyingHearts] = useState<{ id: number }[]>([]);
   const [clickCount, setClickCount] = useState(0);
 
@@ -22,7 +22,7 @@ export default function LetItGoAngel() {
       if (count > 0) {
         const payload = {
           event_type: 'ASH',
-          message: `Released ${count} ${count === 1 ? 'burden' : 'burdens'} into the digital sky.`,
+          message: `Released ${count}${count === 1 ? 'burden' : 'burdens'} into the digital sky.`,
           author: 'Visitor'
         };
 
@@ -58,7 +58,7 @@ export default function LetItGoAngel() {
       {/* Зеленая лужайка внизу */}
       <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
 
-      {/* Счётчик отпусканий в правом верхнем углу (надежно инкрементируется) */}
+      {/* Счётчик отпусканий в правом верхнем углу */}
       <div className="absolute top-6 right-6 sm:top-10 sm:right-10 text-stone-700 font-mono text-sm sm:text-base tracking-[0.2em] z-30 bg-white/70 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md">
         ❤️ {clickCount}
       </div>
