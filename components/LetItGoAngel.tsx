@@ -59,12 +59,12 @@ export default function LetItGoAngel() {
   return (
     <main className="letitgo-container select-none">
       
-      {/* Счётчик отпусканий (работает по твоему классу .click-counter) */}
+      {/* Счётчик отпусканий */}
       <div className="click-counter">
         ❤️ {clickCount}
       </div>
 
-      {/* Ангел (полностью подвязан под твои классы .angel-container и .angel-image) */}
+      {/* Ангел с двумя состояниями */}
       <div 
         className="angel-container"
         onClick={handleClick}
@@ -88,7 +88,7 @@ export default function LetItGoAngel() {
         </div>
       </div>
 
-      {/* Улетающие сердечки (фон, размер и анимация берутся прямо из твоего класса .heart) */}
+      {/* Улетающие сердечки (рендежатся по твоему CSS-классу .heart) */}
       {flyingHearts.map((heart) => (
         <div key={heart.id} className="heart" />
       ))}
