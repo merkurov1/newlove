@@ -84,7 +84,7 @@ export default function AbsolutionPage() {
     }
   };
 
-  const handleConfess = () => {
+  const handleConfess = async () => {
     if (!name.trim()) {
         triggerHaptic('error');
         return;
@@ -94,6 +94,21 @@ export default function AbsolutionPage() {
     setStep('processing');
     
     templeTrack('confess', `Sin: ${sinKey}`);
+
+    // Отправляем запись об отпущении грехов в логи Храма
+    try {
+      await fetch('/api/temple_logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_type: 'ABSOLUTION',
+          message: `${name} confessed: "${sinText}" and received absolution.`,
+          author: name
+        })
+      });
+    } catch (e) {
+      console.error('Failed to log absolution to temple:', e);
+    }
 
     setTimeout(() => {
         setStep('receipt');
@@ -158,7 +173,7 @@ export default function AbsolutionPage() {
       <main className="flex-1 flex flex-col items-center justify-center px-6 pt-32 pb-24 relative z-20">
         
         {/* LANGUAGE TOGGLE */}
-        <div className="absolute top-28 right-6 lg:right-12 flex gap-3 font-mono text-xs tracking-widest bg-white/80 backdrop-blur-md px-4 py-2 rounded-full border border-zinc-200 shadow-sm">
+        <div className="absolute top-28 right-6 lg:right-12 flex gap-3 font-mono text-xs tracking-widest bg-white/85 backdrop-blur-md px-4 py-2 rounded-full border border-zinc-200 shadow-sm z-30">
            <button onClick={() => setLang('en')} className={`${lang === 'en' ? 'text-black font-bold underline' : 'text-zinc-400'}`}>EN</button>
            <span className="text-zinc-300">/</span>
            <button onClick={() => setLang('ru')} className={`${lang === 'ru' ? 'text-black font-bold underline' : 'text-zinc-400'}`}>RU</button>
