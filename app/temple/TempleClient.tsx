@@ -35,14 +35,6 @@ interface TemplePost {
   badgeBg?: string;
 }
 
-const RITUALS = [
-  { href: '/cast', label: 'Cast' },
-  { href: '/vigil', label: 'Vigil' },
-  { href: '/absolution', label: 'Absolution' },
-  { href: '/heartandangel/calm', label: 'Calm' },
-  { href: '/heartandangel/letitgo', label: 'Let It Go' }
-];
-
 // Вынесено из компонента: чистая функция, не пересоздаётся на каждый рендер
 function getEventVisuals(eventType: string) {
   switch (eventType?.toUpperCase()) {
@@ -68,7 +60,7 @@ function getEventVisuals(eventType: string) {
   }
 }
 
-// Сегодня — только время, раньше — дата + время (иначе записи разных дней неотличимы)
+// Сегодня — только время, раньше — дата + время
 function formatTime(iso?: string) {
   const d = iso ? new Date(iso) : new Date();
   if (isNaN(d.getTime())) return '';
@@ -101,7 +93,6 @@ export default function TempleClient() {
     };
   }, [audioBlobUrl]);
 
-  // Если ушли со страницы во время записи — глушим микрофон и распознавание
   useEffect(() => {
     return () => {
       const mr = mediaRecorderRef.current;
@@ -125,7 +116,6 @@ export default function TempleClient() {
         if (cancelled || !json || !Array.isArray(json.data)) return;
 
         const formatted: TemplePost[] = json.data
-          // Фильтруем технический мусор
           .filter((item: any) => {
             const type = (item.event_type || '').toLowerCase();
             return type !== 'enter' && type !== 'nav' && type !== 'confess';
@@ -134,11 +124,9 @@ export default function TempleClient() {
             const type = (item.event_type || 'WHISPER').toUpperCase();
             const visuals = getEventVisuals(type);
 
-            // item.message может быть null — раньше это молча роняло всю ленту
             let cleanContent = String(item.message ?? '');
             const cleanAuthor = item.author || 'Anonymous';
 
-            // Очистка текста Абсолюции от дублирования имени ("Anton Merkurov confessed: ...")
             if (type === 'ABSOLUTION' && cleanContent.includes('confessed:')) {
               const splitMsg = cleanContent.split('confessed:');
               if (splitMsg.length > 1) cleanContent = `Confessed:${splitMsg.slice(1).join('confessed:')}`;
@@ -168,7 +156,6 @@ export default function TempleClient() {
 
     fetchLogs();
 
-    // Поллинг для эффекта "живого" храма — только когда вкладка открыта
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') fetchLogs();
     }, 15000);
@@ -230,7 +217,6 @@ export default function TempleClient() {
         recognition.interimResults = true;
 
         recognition.onresult = (event: any) => {
-          // Идём с 0: в continuous-режиме цикл с resultIndex терял всё, что было сказано раньше
           let transcript = '';
           for (let i = 0; i < event.results.length; i++) {
             transcript += event.results[i][0].transcript;
@@ -254,8 +240,6 @@ export default function TempleClient() {
     setIsSubmitting(true);
     setError(null);
     try {
-      // TODO: audioBlobUrl — это blob: URL, он живёт только в этой вкладке.
-      // Чтобы голос слышали другие, аудио нужно загрузить в storage и отправить публичный URL.
       const payload = {
         event_type: audioBlobUrl ? 'AUDIO_WHISPER' : 'WHISPER',
         message: postText || 'Voice transmission',
@@ -305,7 +289,6 @@ export default function TempleClient() {
     const parts = text.split(urlRegex);
 
     return parts.map((part, index) => {
-      // split с capture-группой кладёт ссылки на нечётные индексы
       if (index % 2 === 1) {
         try {
           const hostname = new URL(part).hostname.replace('www.', '');
@@ -335,182 +318,261 @@ export default function TempleClient() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F6F4F0] via-[#F0ECE6] to-[#E8E3DA] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white relative overflow-x-hidden antialiased">
-
       <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-amber-200/20 via-indigo-200/10 to-purple-200/20 blur-[140px] pointer-events-none rounded-full" />
 
       <Header />
 
-      <main className="max-w-2xl mx-auto px-6 pt-36 pb-24 relative z-10 space-y-8">
+      <main className="max-w-7xl mx-auto px-6 pt-36 pb-24 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* LEFT SIDEBAR: MANIFEST & RITUALS */}
+          <aside className="lg:col-span-4 lg:sticky lg:top-32 space-y-6">
+            <div className="p-6 sm:p-8 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/90 shadow-[0_20px_40px_rgba(0,0,0,0.03)] space-y-6">
+              
+              <div className="space-y-3">
+                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md">
+                  Digital Temple
+                </span>
+                <h1 className="font-serif text-2xl font-normal text-zinc-900 tracking-tight">
+                  Digital Temple
+                </h1>
+                <p className="text-sm font-serif text-zinc-700 leading-relaxed">
+                  реальное место в интернете, где работают собственные ритуалы, а каждый посетитель оставляет после себя след.
+                </p>
+              </div>
 
-        {/* RITUALS */}
-        <nav aria-label="Rituals" className="flex flex-wrap items-center justify-center gap-2">
-          {RITUALS.map((r) => (
-            <Link
-              key={r.href}
-              href={r.href}
-              className="px-4 py-2 rounded-full bg-white/70 border border-zinc-200/80 text-zinc-700 font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-white hover:text-zinc-900 transition-colors shadow-sm"
-            >
-              {r.label}
-            </Link>
-          ))}
-        </nav>
+              <div className="space-y-3 pt-2 border-t border-zinc-200/60">
+                <h2 className="font-mono text-xs uppercase tracking-[0.15em] text-zinc-500">
+                  Пять ритуалов храма:
+                </h2>
+                
+                <div className="space-y-3 font-serif text-xs text-zinc-700">
+                  <Link href="/cast" className="block p-3 rounded-2xl bg-zinc-50/80 border border-zinc-200/60 hover:bg-white hover:border-zinc-300 transition-all group">
+                    <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-zinc-900 uppercase tracking-wider mb-1">
+                      <span>CAST</span>
+                      <ExternalLink size={12} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
+                    </div>
+                    <p className="text-zinc-600 leading-normal">
+                      Оценка психики. Несколько вопросов — и ваш Agency Index, архетип и персональный результат.
+                    </p>
+                  </Link>
 
-        {/* INPUT BOX */}
-        {!isLoading && !user ? (
-          <div className="p-8 rounded-3xl bg-white/70 backdrop-blur-xl border border-zinc-200/80 shadow-[0_10px_30px_rgba(0,0,0,0.02)] text-center space-y-4">
-            <p className="font-serif text-zinc-700 text-sm">
-              Authentication required to broadcast whispers and voice notes into the temple.
-            </p>
-            <div>
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-zinc-900 text-white font-mono text-xs uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all shadow-sm"
-              >
-                Sign In to Participate
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="p-6 rounded-3xl bg-white/85 backdrop-blur-2xl border border-zinc-200/90 shadow-[0_20px_40px_rgba(0,0,0,0.03)] space-y-4 transition-all">
-            <textarea
-              value={postText}
-              onChange={(e) => setPostText(e.target.value)}
-              placeholder="Broadcast a whisper, drop a link, or record a voice note..."
-              rows={3}
-              className="w-full bg-transparent text-base text-zinc-900 placeholder-zinc-400 resize-none focus:outline-none font-serif leading-relaxed"
-            />
+                  <Link href="/vigil" className="block p-3 rounded-2xl bg-zinc-50/80 border border-zinc-200/60 hover:bg-white hover:border-zinc-300 transition-all group">
+                    <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-zinc-900 uppercase tracking-wider mb-1">
+                      <span>VIGIL</span>
+                      <ExternalLink size={12} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
+                    </div>
+                    <p className="text-zinc-600 leading-normal">
+                      Бдение. Оставьте свой spark в храме и присоединитесь к тем, кто бодрствует.
+                    </p>
+                  </Link>
 
-            {audioBlobUrl && (
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-100/80 border border-zinc-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-zinc-900 text-white flex items-center justify-center shadow-sm">
-                    <Volume2 size={14} />
-                  </div>
-                  <span className="font-mono text-xs uppercase tracking-wider text-zinc-700">Voice Note Ready</span>
+                  <Link href="/absolution" className="block p-3 rounded-2xl bg-zinc-50/80 border border-zinc-200/60 hover:bg-white hover:border-zinc-300 transition-all group">
+                    <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-zinc-900 uppercase tracking-wider mb-1">
+                      <span>ABSOLUTION</span>
+                      <ExternalLink size={12} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
+                    </div>
+                    <p className="text-zinc-600 leading-normal">
+                      Отпущение грехов. Исповедуйтесь в том, что вас тревожит, и пройдите ритуал освобождения.
+                    </p>
+                  </Link>
+
+                  <Link href="/heartandangel/calm" className="block p-3 rounded-2xl bg-zinc-50/80 border border-zinc-200/60 hover:bg-white hover:border-zinc-300 transition-all group">
+                    <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-zinc-900 uppercase tracking-wider mb-1">
+                      <span>CALM</span>
+                      <ExternalLink size={12} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
+                    </div>
+                    <p className="text-zinc-600 leading-normal">
+                      Поиск спокойствия. Ритуал для того момента, когда вокруг слишком много шума и нужно вернуть внимание к себе.
+                    </p>
+                  </Link>
+
+                  <Link href="/heartandangel/letitgo" className="block p-3 rounded-2xl bg-zinc-50/80 border border-zinc-200/60 hover:bg-white hover:border-zinc-300 transition-all group">
+                    <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-zinc-900 uppercase tracking-wider mb-1">
+                      <span>LET IT GO</span>
+                      <ExternalLink size={12} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
+                    </div>
+                    <p className="text-zinc-600 leading-normal">
+                      Отпускание проблем. Оставьте здесь то, что больше не хотите нести с собой.
+                    </p>
+                  </Link>
                 </div>
-                <audio controls src={audioBlobUrl} className="h-8 max-w-[200px]" />
+              </div>
+
+              <div className="pt-3 border-t border-zinc-200/60 space-y-2 text-xs font-serif text-zinc-600 leading-relaxed">
+                <p>
+                  У храма есть своя память. Она собирается из действий посетителей и постепенно становится частью самого места.
+                </p>
+                <p className="font-mono text-[11px] uppercase tracking-wider text-zinc-900 font-semibold pt-1">
+                  Храм работает.
+                </p>
+              </div>
+
+            </div>
+          </aside>
+
+          {/* RIGHT COLUMN: MAIN INPUT & LIVE FEED */}
+          <div className="lg:col-span-8 space-y-8">
+
+            {/* INPUT BOX */}
+            {!isLoading && !user ? (
+              <div className="p-8 rounded-3xl bg-white/70 backdrop-blur-xl border border-zinc-200/80 shadow-[0_10px_30px_rgba(0,0,0,0.02)] text-center space-y-4">
+                <p className="font-serif text-zinc-700 text-sm">
+                  Authentication required to broadcast whispers and voice notes into the temple.
+                </p>
+                <div>
+                  <Link
+                    href="/login"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-zinc-900 text-white font-mono text-xs uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all shadow-sm"
+                  >
+                    Sign In to Participate
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 rounded-3xl bg-white/85 backdrop-blur-2xl border border-zinc-200/90 shadow-[0_20px_40px_rgba(0,0,0,0.03)] space-y-4 transition-all">
+                <textarea
+                  value={postText}
+                  onChange={(e) => setPostText(e.target.value)}
+                  placeholder="Broadcast a whisper, drop a link, or record a voice note..."
+                  rows={3}
+                  className="w-full bg-transparent text-base text-zinc-900 placeholder-zinc-400 resize-none focus:outline-none font-serif leading-relaxed"
+                />
+
+                {audioBlobUrl && (
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-100/80 border border-zinc-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-zinc-900 text-white flex items-center justify-center shadow-sm">
+                        <Volume2 size={14} />
+                      </div>
+                      <span className="font-mono text-xs uppercase tracking-wider text-zinc-700">Voice Note Ready</span>
+                    </div>
+                    <audio controls src={audioBlobUrl} className="h-8 max-w-[200px]" />
+                  </div>
+                )}
+
+                {error && (
+                  <p role="alert" className="font-mono text-[11px] uppercase tracking-wider text-rose-600">
+                    {error}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between pt-3 border-t border-zinc-200/60">
+                  <button
+                    type="button"
+                    onClick={toggleRecording}
+                    className={`px-4 py-2.5 rounded-full transition-all border flex items-center gap-2 text-xs font-mono uppercase tracking-wider ${
+                      isRecording
+                        ? 'bg-rose-500 text-white border-rose-500 animate-pulse shadow-sm'
+                        : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50 shadow-sm'
+                    }`}
+                  >
+                    {isRecording ? <Square size={13} /> : <Mic size={13} />}
+                    <span>{isRecording ? 'Stop' : 'Voice Note'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSendPost}
+                    disabled={isSubmitting || (!postText.trim() && !audioBlobUrl)}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-zinc-900 text-white font-medium text-xs shadow-sm hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40 font-mono uppercase tracking-wider"
+                  >
+                    <span>{isSubmitting ? 'Transmitting...' : 'Broadcast'}</span>
+                    <Send size={13} />
+                  </button>
+                </div>
               </div>
             )}
 
-            {error && (
-              <p role="alert" className="font-mono text-[11px] uppercase tracking-wider text-rose-600">
-                {error}
-              </p>
-            )}
+            {/* FEED / STREAM */}
+            <div className="space-y-4 pt-2">
+              {!loaded ? (
+                <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-400 font-mono text-xs uppercase tracking-wider animate-pulse">
+                  Listening to the temple...
+                </div>
+              ) : posts.length === 0 ? (
+                <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-500 font-mono text-xs uppercase tracking-wider">
+                  The logbook is empty. Leave the first trace.
+                </div>
+              ) : (
+                posts.map((post) => {
+                  const PostIcon = post.icon || Sparkles;
+                  const isLogEvent = post.type !== 'WHISPER' && post.type !== 'AUDIO_WHISPER';
 
-            <div className="flex items-center justify-between pt-3 border-t border-zinc-200/60">
-              <button
-                type="button"
-                onClick={toggleRecording}
-                className={`px-4 py-2.5 rounded-full transition-all border flex items-center gap-2 text-xs font-mono uppercase tracking-wider ${
-                  isRecording
-                    ? 'bg-rose-500 text-white border-rose-500 animate-pulse shadow-sm'
-                    : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50 shadow-sm'
-                }`}
-              >
-                {isRecording ? <Square size={13} /> : <Mic size={13} />}
-                <span>{isRecording ? 'Stop' : 'Voice Note'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSendPost}
-                disabled={isSubmitting || (!postText.trim() && !audioBlobUrl)}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-zinc-900 text-white font-medium text-xs shadow-sm hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40 font-mono uppercase tracking-wider"
-              >
-                <span>{isSubmitting ? 'Transmitting...' : 'Broadcast'}</span>
-                <Send size={13} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* FEED / STREAM */}
-        <div className="space-y-4 pt-2">
-          {!loaded ? (
-            <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-400 font-mono text-xs uppercase tracking-wider animate-pulse">
-              Listening to the temple...
-            </div>
-          ) : posts.length === 0 ? (
-            <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-500 font-mono text-xs uppercase tracking-wider">
-              The logbook is empty. Leave the first trace.
-            </div>
-          ) : (
-            posts.map((post) => {
-              const PostIcon = post.icon || Sparkles;
-              const isLogEvent = post.type !== 'WHISPER' && post.type !== 'AUDIO_WHISPER';
-
-              return (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  key={post.id}
-                  className={`backdrop-blur-xl transition-all duration-300 ${
-                    isLogEvent
-                      ? 'p-5 rounded-2xl bg-white/50 border border-zinc-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.01)] hover:bg-white/70'
-                      : 'p-6 rounded-3xl bg-white/85 border border-zinc-200/90 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_35px_rgba(0,0,0,0.04)]'
-                  }`}
-                >
-                  {!isLogEvent ? (
-                    <div className="space-y-3.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center font-mono text-[10px]">
-                            {post.author ? post.author.substring(0, 2).toUpperCase() : 'V'}
+                  return (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={post.id}
+                      className={`backdrop-blur-xl transition-all duration-300 ${
+                        isLogEvent
+                          ? 'p-5 rounded-2xl bg-white/50 border border-zinc-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.01)] hover:bg-white/70'
+                          : 'p-6 rounded-3xl bg-white/85 border border-zinc-200/90 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_35px_rgba(0,0,0,0.04)]'
+                      }`}
+                    >
+                      {!isLogEvent ? (
+                        <div className="space-y-3.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center font-mono text-[10px]">
+                                {post.author ? post.author.substring(0, 2).toUpperCase() : 'V'}
+                              </div>
+                              <span className="font-semibold text-zinc-900 text-sm tracking-tight">{post.author}</span>
+                              <span className="text-zinc-300">•</span>
+                              <span className="text-zinc-400 font-mono text-[10px] uppercase tracking-wider bg-zinc-100 px-2 py-0.5 rounded-md">
+                                {post.label}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 text-zinc-400 font-mono text-[11px]">
+                              <Clock size={11} />
+                              <span>{post.time}</span>
+                            </div>
                           </div>
-                          <span className="font-semibold text-zinc-900 text-sm tracking-tight">{post.author}</span>
-                          <span className="text-zinc-300">•</span>
-                          <span className="text-zinc-400 font-mono text-[10px] uppercase tracking-wider bg-zinc-100 px-2 py-0.5 rounded-md">
-                            {post.label}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 text-zinc-400 font-mono text-[11px]">
-                          <Clock size={11} />
-                          <span>{post.time}</span>
-                        </div>
-                      </div>
 
-                      <div className="text-base text-zinc-800 leading-relaxed font-serif break-words pl-8">
-                        {renderContentWithLinks(post.content)}
-                      </div>
+                          <div className="text-base text-zinc-800 leading-relaxed font-serif break-words pl-8">
+                            {renderContentWithLinks(post.content)}
+                          </div>
 
-                      {post.audioUrl && (
-                        <div className="pt-1 pl-8">
-                          <audio controls src={post.audioUrl} className="w-full h-9 rounded-xl" />
+                          {post.audioUrl && (
+                            <div className="pt-1 pl-8">
+                              <audio controls src={post.audioUrl} className="w-full h-9 rounded-xl" />
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-4">
+                          <div className={`p-2 rounded-xl shrink-0 mt-0.5 border ${post.badgeBg || 'bg-zinc-100 border-zinc-200 text-zinc-800'}`}>
+                            <PostIcon size={16} className={post.color} />
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-mono text-[10px] uppercase tracking-[0.15em] px-2.5 py-0.5 rounded-full border font-semibold ${post.badgeBg || 'bg-zinc-100 border-zinc-200 text-zinc-800'}`}>
+                                  {post.label}
+                                </span>
+                                <span className="text-zinc-400">•</span>
+                                <span className="text-zinc-600 font-medium text-xs flex items-center gap-1">
+                                  <UserIcon size={12} className="text-zinc-400" />
+                                  {post.author}
+                                </span>
+                              </div>
+                              <span className="text-zinc-400 font-mono text-[10px]">{post.time}</span>
+                            </div>
+                            <div className="text-sm text-zinc-800 font-serif leading-relaxed break-words pt-1">
+                              {renderContentWithLinks(post.content)}
+                            </div>
+                          </div>
                         </div>
                       )}
-                    </div>
-                  ) : (
-                    <div className="flex items-start gap-4">
-                      <div className={`p-2 rounded-xl shrink-0 mt-0.5 border ${post.badgeBg || 'bg-zinc-100 border-zinc-200 text-zinc-800'}`}>
-                        <PostIcon size={16} className={post.color} />
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className={`font-mono text-[10px] uppercase tracking-[0.15em] px-2.5 py-0.5 rounded-full border font-semibold ${post.badgeBg || 'bg-zinc-100 border-zinc-200 text-zinc-800'}`}>
-                              {post.label}
-                            </span>
-                            <span className="text-zinc-400">•</span>
-                            <span className="text-zinc-600 font-medium text-xs flex items-center gap-1">
-                              <UserIcon size={12} className="text-zinc-400" />
-                              {post.author}
-                            </span>
-                          </div>
-                          <span className="text-zinc-400 font-mono text-[10px]">{post.time}</span>
-                        </div>
-                        <div className="text-sm text-zinc-800 font-serif leading-relaxed break-words pt-1">
-                          {renderContentWithLinks(post.content)}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-              );
-            })
-          )}
-        </div>
+                    </motion.div>
+                  );
+                })
+              )}
+            </div>
 
+          </div>
+
+        </div>
       </main>
     </div>
   );
