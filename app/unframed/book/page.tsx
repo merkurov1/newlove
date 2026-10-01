@@ -13,7 +13,7 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import Header from '@/components/Header';
-import Paywall from './Paywall'; // Исправленный относительный путь к пейволу в той же папке
+import Paywall from './Paywall'; // Корректный относительный импорт из той же папки
 import {
   ArrowLeft,
   Check,
