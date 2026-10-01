@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Clock, Sparkles } from 'lucide-react';
+import { Heart, Clock, Sparkles, Flame } from 'lucide-react';
 import Header from '@/components/Header';
 
 const ANGEL_GIF = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
@@ -33,12 +33,12 @@ export default function VigilPage() {
     refreshData();
 
     const channel = supabase
-      .channel('vigil_v6')
+      .channel('vigil_live_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vigil_hearts' }, (payload: any) => {
         const newRow = payload?.new;
         if (newRow && newRow.id === FLAME_ID) {
           setFlameData(newRow);
-          setLastGuardian(newRow.owner_name || lastGuardian);
+          if (newRow.owner_name) setLastGuardian(newRow.owner_name);
         }
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, () => {
@@ -63,9 +63,10 @@ export default function VigilPage() {
     const { data: flame } = await supabase.from('vigil_hearts').select('*').eq('id', FLAME_ID).maybeSingle();
     if (flame) {
       setFlameData(flame);
-      setLastGuardian(flame.owner_name);
+      if (flame.owner_name) setLastGuardian(flame.owner_name);
     }
-    calculateIntensity();
+    await calculateIntensity();
+    await refreshGuardians();
   };
 
   const calculateIntensity = async () => {
@@ -84,24 +85,26 @@ export default function VigilPage() {
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
         .from('temple_log')
-        .select('message, created_at')
+        .select('author, message, created_at')
         .eq('event_type', 'vigil')
         .gt('created_at', yesterday)
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(100);
 
-      if (error) return 0;
+      if (error || !data) return 0;
 
       const names: string[] = [];
-      (data || []).forEach((row: any) => {
-        const msg: string = row?.message || '';
-        const m = msg.match(/^(.+?)\s+(sent|lit|ignited|added)/i);
-        if (m && m[1]) names.push(m[1].trim());
-        else if (msg) names.push(msg.slice(0, 24));
+      data.forEach((row: any) => {
+        if (row.author) {
+          names.push(row.author.trim());
+        } else if (row.message) {
+          const parts = row.message.split(' ');
+          if (parts[0]) names.push(parts[0].trim());
+        }
       });
 
       const unique = Array.from(new Set(names));
-      setGuardians(unique.slice(0, 6));
+      setGuardians(unique.slice(0, 8));
       return unique.length;
     } catch {
       return 0;
@@ -113,11 +116,12 @@ export default function VigilPage() {
     const diff = Date.now() - new Date(flameData.last_lit_at).getTime();
     const remaining = 24 * 60 * 60 * 1000 - diff;
     
-    if (remaining <= 0) setTimeLeft('EXTINGUISHED');
-    else {
+    if (remaining <= 0) {
+      setTimeLeft('FLAME EXTINGUISHED');
+    } else {
       const h = Math.floor(remaining / 3600000);
       const m = Math.floor((remaining % 3600000) / 60000);
-      setTimeLeft(`${h}h ${m}m`);
+      setTimeLeft(`${h}h ${m}m remaining`);
     }
   };
 
@@ -127,24 +131,25 @@ export default function VigilPage() {
     setRateLimitMsg(null);
 
     try {
-      const check = await supabase
+      // Строгая проверка суточного лимита (24 часа) для текущего пользователя
+      const { data: userLogs } = await supabase
         .from('temple_log')
         .select('created_at')
         .eq('event_type', 'vigil')
-        .ilike('message', `${userName} sent%`)
+        .eq('author', userName)
         .order('created_at', { ascending: false })
         .limit(1);
 
-      const rows = (check.data as any[]) || [];
-      if (rows.length > 0) {
-        const last = new Date(rows[0].created_at).getTime();
-        const diff = Date.now() - last;
-        const limitMs = 3 * 60 * 60 * 1000;
-        if (diff < limitMs) {
-          const remain = limitMs - diff;
+      if (userLogs && userLogs.length > 0) {
+        const lastLitTime = new Date(userLogs[0].created_at).getTime();
+        const diff = Date.now() - lastLitTime;
+        const cooldownMs = 24 * 60 * 60 * 1000; // 24 часа
+
+        if (diff < cooldownMs) {
+          const remain = cooldownMs - diff;
           const h = Math.floor(remain / 3600000);
           const m = Math.floor((remain % 3600000) / 60000);
-          setRateLimitMsg(`You can light again in ${h}h ${m}m`);
+          setRateLimitMsg(`You can light the heart again in ${h}h ${m}m.`);
           setIsLighting(false);
           return;
         }
@@ -171,7 +176,7 @@ export default function VigilPage() {
       }).eq('id', FLAME_ID);
       
       await supabase.from('temple_log').insert({
-        message: `${userName} sent a spark`,
+        message: `${userName} transmitted a spark`,
         event_type: 'vigil',
         author: userName
       });
@@ -193,53 +198,58 @@ export default function VigilPage() {
       
       <Header />
 
+      {/* Динамический радиальный фон в зависимости от интенсивности пламени */}
       <div 
-        className="absolute inset-0 transition-opacity duration-1000 pointer-events-none mt-20"
+        className="absolute inset-0 transition-opacity duration-1000 pointer-events-none mt-24"
         style={{ 
-          background: `radial-gradient(circle at center, rgba(255,100,0,${0.18 * intensity}) 0%, rgba(10,10,10,1) 80%)` 
+          background: `radial-gradient(circle at center, rgba(255,100,0,${0.12 * intensity}) 0%, rgba(10,10,10,1) 75%)` 
         }} 
       />
 
-      <main className="flex-1 max-w-3xl mx-auto w-full px-6 pt-32 pb-24 flex flex-col items-center justify-between relative z-10">
+      <main className="flex-1 max-w-3xl mx-auto w-full px-6 pt-36 pb-20 flex flex-col items-center justify-between relative z-10">
         
-        {/* Инфо-панель таймера */}
-        <div className="w-full flex justify-end items-center border-b border-white/10 pb-4">
-          <div className="text-right flex items-center gap-2 bg-white/5 border border-white/10 px-3.5 py-1.5 rounded-full">
+        {/* Верхняя статусная панель */}
+        <div className="w-full flex justify-between items-center border-b border-zinc-800 pb-4">
+          <div className="flex items-center gap-2 text-xs text-zinc-400">
+            <Flame size={14} className="text-orange-500" />
+            <span className="uppercase tracking-widest">Sanctuary Vigil [Level {intensity}]</span>
+          </div>
+          <div className="flex items-center gap-2 bg-zinc-900/80 border border-zinc-800 px-3.5 py-1.5 rounded-full">
             <Clock size={12} className="text-orange-500" />
-            <span className="text-[10px] uppercase tracking-widest text-zinc-400">Heart Active:</span>
-            <span className="text-xs font-bold text-white">{timeLeft || 'Loading...'}</span>
+            <span className="text-[10px] uppercase tracking-widest text-zinc-400">Status:</span>
+            <span className="text-xs font-bold text-white">{timeLeft || 'Checking...'}</span>
           </div>
         </div>
 
-        {/* Композиция: Ангел слева, Сердце по центру */}
-        <div className="w-full py-12 flex flex-col md:flex-row items-center justify-center gap-16 relative">
+        {/* Основная композиция: Ангел со свечой и Священное Сердце */}
+        <div className="w-full py-16 flex flex-col sm:flex-row items-center justify-center gap-12 sm:gap-20 relative">
           
-          {/* Ангел */}
+          {/* Ангел с гифки */}
           <div 
             ref={angelRef}
-            className="relative w-44 h-44 md:w-52 md:h-52 flex items-center justify-center shrink-0"
+            className="relative w-40 h-40 sm:w-48 sm:h-48 flex items-center justify-center shrink-0"
           >
-            <div className={`absolute inset-0 bg-orange-500/20 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
+            <div className={`absolute inset-0 bg-orange-500/15 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
             <img 
               src={ANGEL_GIF} 
-              className={`w-full h-full object-contain filter contrast-125 transition-all duration-500 ${isLighting ? 'brightness-150 scale-110 drop-shadow-[0_0_35px_rgba(255,165,0,0.9)]' : 'brightness-90'}`} 
-              alt="Angel" 
+              className={`w-full h-full object-contain filter contrast-125 transition-all duration-500 ${isLighting ? 'brightness-150 scale-105 drop-shadow-[0_0_30px_rgba(255,165,0,0.8)]' : 'brightness-90'}`} 
+              alt="Angel with candle" 
             />
           </div>
 
           {/* Центральное Сердце */}
           <div className="relative flex items-center justify-center" ref={heartRef}>
             <div 
-              className="relative transition-all duration-[2000ms] ease-in-out"
-              style={{ transform: `scale(${Math.max(1, intensity * 0.9)})` }}
+              className="relative transition-all duration-700 ease-in-out"
+              style={{ transform: `scale(${Math.max(1, 0.9 + intensity * 0.08)})` }}
             >
               <motion.div 
-                animate={{ scale: [1, 1.1, 1], opacity: [0.7, 1, 0.7] }}
-                transition={{ duration: 2.2, repeat: Infinity }}
-                className="w-44 h-44 bg-gradient-to-t from-orange-600 via-red-600 to-transparent rounded-full blur-[45px] opacity-80 mix-blend-screen"
+                animate={{ scale: [1, 1.12, 1], opacity: [0.6, 0.9, 0.6] }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                className="w-40 h-40 sm:w-48 sm:h-48 bg-gradient-to-t from-orange-600 via-red-600 to-transparent rounded-full blur-[50px] opacity-75 mix-blend-screen"
               />
               <div className="absolute inset-0 flex items-center justify-center">
-                <Heart size={84} className="text-white fill-orange-500/30 drop-shadow-[0_0_35px_rgba(255,140,0,0.8)] stroke-[1.5]" />
+                <Heart size={80} className="text-white fill-orange-500/25 drop-shadow-[0_0_30px_rgba(255,140,0,0.7)] stroke-[1.5]" />
               </div>
             </div>
 
@@ -251,40 +261,40 @@ export default function VigilPage() {
                     x: spark.start.x - spark.end.x, 
                     y: spark.start.y - spark.end.y, 
                     opacity: 1, 
-                    scale: 1.8 
+                    scale: 1.5 
                   }}
                   animate={{ 
                     x: 0, 
                     y: 0, 
                     opacity: [1, 1, 0], 
-                    scale: [1.8, 1.2, 0.5] 
+                    scale: [1.5, 1, 0.3] 
                   }}
                   transition={{ duration: 0.8, ease: 'easeInOut' }}
-                  className="absolute z-50 w-6 h-6 bg-amber-200 rounded-full shadow-[0_0_35px_#ffaa00] filter blur-[0.5px]"
+                  className="absolute z-50 w-5 h-5 bg-amber-200 rounded-full shadow-[0_0_30px_#ffaa00]"
                 />
               )}
             </AnimatePresence>
           </div>
         </div>
 
-        {/* Управление и Хранители */}
+        {/* Блок информации и управления */}
         <div className="w-full max-w-md space-y-6">
           
-          <div className="text-center space-y-1 bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-md">
-            <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Last Guardian</div>
-            <div className="text-lg font-serif font-bold text-white drop-shadow-md">
+          <div className="text-center space-y-1 bg-zinc-900/60 border border-zinc-800/80 p-5 rounded-3xl backdrop-blur-xl">
+            <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-500">Last Guardian</div>
+            <div className="text-base font-serif font-normal text-white">
               {lastGuardian}
             </div>
           </div>
 
           <div className="space-y-2">
-            <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 text-center">Active Guardians (24h)</div>
-            <div className="flex flex-wrap gap-2 justify-center">
+            <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 text-center">Active Guardians (24h)</div>
+            <div className="flex flex-wrap gap-2 justify-center min-h-[32px]">
               {guardians.length === 0 ? (
-                <div className="text-xs text-zinc-500">No recent guardians</div>
+                <div className="text-xs text-zinc-600">No recent sparks recorded</div>
               ) : (
                 guardians.map((g, i) => (
-                  <div key={g + i} className="text-xs px-3 py-1 bg-white/10 border border-white/5 rounded-full text-zinc-200">
+                  <div key={g + i} className="text-xs px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full text-zinc-300 font-sans">
                     {g}
                   </div>
                 ))
@@ -295,13 +305,13 @@ export default function VigilPage() {
           <div className="space-y-3 pt-2">
             <div className="text-center text-xs text-zinc-400">
               {isLoading ? (
-                <span className="text-zinc-500">Checking session...</span>
+                <span className="text-zinc-600">Verifying session...</span>
               ) : userName ? (
-                <div>Authenticated as <span className="font-semibold text-white">{userName}</span></div>
+                <div>Connected as <span className="font-semibold text-white">{userName}</span></div>
               ) : (
                 <div className="text-amber-400/90 flex items-center justify-center gap-1.5">
                   <Sparkles size={14} />
-                  <span>Please <a href="/login" className="underline hover:text-white">sign in</a> to send your spark</span>
+                  <span>Please <a href="/login" className="underline hover:text-white">sign in</a> to participate in the vigil</span>
                 </div>
               )}
             </div>
@@ -310,20 +320,20 @@ export default function VigilPage() {
               onClick={triggerRitual}
               disabled={isLighting || !userName}
               className={`
-                group relative w-full h-14 border border-white/20 bg-white/10 
-                flex items-center justify-center gap-3 rounded-xl
-                transition-all active:scale-95 hover:bg-white/20 disabled:opacity-40
+                group relative w-full h-14 border border-zinc-700 bg-zinc-900/90 
+                flex items-center justify-center gap-3 rounded-2xl
+                transition-all active:scale-95 hover:bg-zinc-800 disabled:opacity-40 cursor-pointer shadow-lg
               `}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-xl" />
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-2xl" />
               <Heart size={16} className={`text-orange-500 fill-orange-500/20 ${isLighting ? 'animate-bounce' : ''}`} />
-              <span className="text-xs font-bold tracking-[0.25em] uppercase text-white">
+              <span className="text-xs font-bold tracking-[0.2em] uppercase text-white">
                 {isLighting ? 'TRANSMITTING SPARK...' : 'SEND SPARK'}
               </span>
             </button>
 
             {rateLimitMsg && (
-              <div className="text-xs text-rose-400 text-center">{rateLimitMsg}</div>
+              <div className="text-xs text-rose-400 text-center font-sans">{rateLimitMsg}</div>
             )}
           </div>
 
