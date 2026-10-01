@@ -2,13 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabase } from '@/lib/supabase-browser';
 import { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import Header from '@/components/Header';
 
 export default function ArtEngineDashboard() {
-  const supabase = createClientComponentClient();
-
   // Auth State
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -18,8 +16,7 @@ export default function ArtEngineDashboard() {
   
   // Auth Form State
   const [authEmail, setAuthEmail] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
+  const [password, setPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [requestSuccess, setRequestSuccess] = useState(false);
@@ -50,14 +47,32 @@ export default function ArtEngineDashboard() {
   const [loadingLots, setLoadingLots] = useState(true);
   const [activeTab, setActiveTab] = useState<'parser' | 'vault'>('parser');
 
+  // Helper check for admin (Anton Merkurov / authorized admin email or roles)
+  const checkIsAdmin = (currentUser: User | null) => {
+    if (!currentUser) return false;
+    const email = currentUser.email?.toLowerCase() || '';
+    // Разрешаем вход только для админа (например, merkurov@gmail.com или если в метаданных/ролях админ)
+    if (email === 'merkurov@gmail.com') return true;
+    return false;
+  };
+
   // Auth Initialization
   useEffect(() => {
     async function initAuth() {
       try {
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         if (error) throw error;
-        setSession(currentSession);
-        setUser(currentSession?.user || null);
+        
+        const currentUser = currentSession?.user || null;
+        if (currentUser && !checkIsAdmin(currentUser)) {
+          // Если юзер не админ — разлогиниваем его на арт-движке
+          await supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+        } else {
+          setSession(currentSession);
+          setUser(currentUser);
+        }
       } catch (err) {
         console.error('Auth initialization error:', err);
       } finally {
@@ -69,8 +84,15 @@ export default function ArtEngineDashboard() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event: AuthChangeEvent, currentSession: Session | null) => {
-        setSession(currentSession);
-        setUser(currentSession?.user || null);
+        const currentUser = currentSession?.user || null;
+        if (currentUser && !checkIsAdmin(currentUser)) {
+          supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+        } else {
+          setSession(currentSession);
+          setUser(currentUser);
+        }
         setLoadingUser(false);
       }
     );
@@ -78,7 +100,7 @@ export default function ArtEngineDashboard() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, []);
 
   // Fetch Lots for Vault
   const fetchLots = useCallback(async () => {
@@ -93,7 +115,7 @@ export default function ArtEngineDashboard() {
       setLots(data);
     }
     setLoadingLots(false);
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     fetchLots();
@@ -139,55 +161,73 @@ export default function ArtEngineDashboard() {
     return fetch(url, { ...options, headers });
   };
 
-  // AUTH 1: Send OTP Code
-  const handleSendOtp = async (e: React.FormEvent) => {
+  // AUTH 1: Email/Password or Passkey Sign-In
+  const handleEmailPasswordSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!authEmail) return;
+    if (!authEmail || !password) return;
     setAuthLoading(true);
     setAuthError('');
 
     try {
-      const { error } = await supabase.auth.signInWithOtp({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: authEmail,
-        options: { shouldCreateUser: true }
+        password: password,
       });
 
       if (error) throw error;
-      setOtpSent(true);
+
+      if (data.user && !checkIsAdmin(data.user)) {
+        await supabase.auth.signOut();
+        throw new Error('Access restricted to authorized administrators only.');
+      }
+
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.user);
+        setShowAuthModal(false);
+        setAuthEmail('');
+        setPassword('');
+      }
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Error sending code';
+      const errorMessage = err instanceof Error ? err.message : 'Authentication error';
       setAuthError(errorMessage);
     } finally {
       setAuthLoading(false);
     }
   };
 
-  // AUTH 2: Verify OTP Code
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!authEmail || !otpCode) return;
+  // AUTH 2: Passkey / WebAuthn Sign-In
+  const handlePasskeySignIn = async () => {
     setAuthLoading(true);
     setAuthError('');
 
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: authEmail,
-        token: otpCode,
-        type: 'email',
-      });
+      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+        throw new Error('WebAuthn is not supported by this browser environment.');
+      }
 
+      const { data, error } = await supabase.auth.signInWithPasskey();
       if (error) throw error;
 
-      if (data.session) {
-        setSession(data.session);
-        setUser(data.user);
-        setShowAuthModal(false);
-        setOtpSent(false);
-        setOtpCode('');
-        setAuthEmail('');
+      const { data: { session: newSession } } = await supabase.auth.getSession();
+      const currentUser = newSession?.user || null;
+
+      if (currentUser && !checkIsAdmin(currentUser)) {
+        await supabase.auth.signOut();
+        throw new Error('Passkey verified, but administrative privileges are missing.');
       }
+
+      if (newSession) {
+        setSession(newSession);
+        setUser(currentUser);
+        setShowAuthModal(false);
+        return;
+      }
+      
+      throw new Error('Passkey authentication session not established.');
+      
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Invalid code';
+      const errorMessage = err instanceof Error ? err.message : 'Passkey error';
       setAuthError(errorMessage);
     } finally {
       setAuthLoading(false);
@@ -217,46 +257,6 @@ export default function ArtEngineDashboard() {
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Request error';
       setAuthError(errorMessage);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  // AUTH 3: Passkey / WebAuthn Sign-In
-  const handlePasskeySignIn = async () => {
-    setAuthLoading(true);
-    setAuthError('');
-
-    try {
-      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
-        throw new Error('WebAuthn is not supported by this browser environment.');
-      }
-
-      const authClient = supabase.auth as any;
-      if (typeof authClient.signInWithWebAuthn === 'function') {
-        await authClient.signInWithWebAuthn();
-      }
-
-      const { data: { session: newSession } } = await supabase.auth.getSession();
-      if (newSession) {
-        setSession(newSession);
-        setUser(newSession?.user || null);
-        setShowAuthModal(false);
-        return;
-      }
-      
-      throw new Error('Passkey authentication session not established. Please use 6-digit email OTP.');
-      
-    } catch (err: unknown) {
-      const { data: { session: fallbackSession } } = await supabase.auth.getSession();
-      if (fallbackSession) {
-        setSession(fallbackSession);
-        setUser(fallbackSession?.user || null);
-        setShowAuthModal(false);
-      } else {
-        const errorMessage = err instanceof Error ? err.message : 'Passkey error';
-        setAuthError(errorMessage);
-      }
     } finally {
       setAuthLoading(false);
     }
@@ -455,14 +455,14 @@ export default function ArtEngineDashboard() {
             <div className="flex justify-between items-start border-b border-neutral-200 pb-3">
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400 block mb-1">
-                  {authMode === 'signin' ? 'AUTHORIZED ACCESS' : 'ACCREDITATION SUITE'}
+                  {authMode === 'signin' ? 'ADMIN ACCESS' : 'ACCREDITATION SUITE'}
                 </span>
                 <h3 className="text-lg sm:text-xl font-serif text-neutral-900">
                   {authMode === 'signin' ? 'Sign In' : 'Request Access'}
                 </h3>
               </div>
               <button 
-                onClick={() => { setShowAuthModal(false); setOtpSent(false); setAuthError(''); setRequestSuccess(false); }}
+                onClick={() => { setShowAuthModal(false); setAuthError(''); setRequestSuccess(false); }}
                 className="text-neutral-400 hover:text-neutral-900 text-sm font-mono p-2"
               >
                 ✕
@@ -479,7 +479,7 @@ export default function ArtEngineDashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => { setAuthMode('request'); setAuthError(''); setOtpSent(false); }}
+                onClick={() => { setAuthMode('request'); setAuthError(''); }}
                 className={`py-2.5 text-center uppercase tracking-wider transition rounded-lg ${authMode === 'request' ? 'bg-white text-neutral-900 font-bold shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
               >
                 Request Access
@@ -493,82 +493,60 @@ export default function ArtEngineDashboard() {
             )}
 
             {authMode === 'signin' ? (
-              !otpSent ? (
-                <div className="space-y-5">
-                  <form onSubmit={handleSendOtp} className="space-y-4">
-                    <div>
-                      <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-1.5">
-                        Institutional Email Address
-                      </label>
-                      <input 
-                        type="email"
-                        required
-                        placeholder="curator@privateoffice.com"
-                        value={authEmail}
-                        onChange={e => setAuthEmail(e.target.value)}
-                        className="w-full bg-neutral-50 border border-neutral-300 px-3.5 py-3 text-xs sm:text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition rounded-xl"
-                      />
-                    </div>
+              <div className="space-y-5">
+                <button
+                  type="button"
+                  onClick={handlePasskeySignIn}
+                  disabled={authLoading}
+                  className="w-full bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 flex items-center justify-center gap-2 font-bold rounded-xl shadow-sm"
+                >
+                  🛡️ Sign in with Passkey
+                </button>
 
-                    <button
-                      type="submit"
-                      disabled={authLoading}
-                      className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 font-bold rounded-xl"
-                    >
-                      {authLoading ? 'Transmitting...' : 'Send 6-Digit OTP Code'}
-                    </button>
-                  </form>
-
-                  <div className="relative border-t border-neutral-200 pt-5 text-center">
-                    <span className="bg-white px-3 text-[10px] font-mono text-neutral-400 uppercase tracking-widest absolute -top-2.5 left-1/2 -translate-x-1/2">
-                      OR SECURE PASSKEY
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handlePasskeySignIn}
-                      disabled={authLoading}
-                      className="w-full bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 flex items-center justify-center gap-2 font-bold rounded-xl"
-                    >
-                      🛡️ Passkey (WebAuthn)
-                    </button>
-                  </div>
+                <div className="relative flex py-1 items-center">
+                  <div className="flex-grow border-t border-neutral-200"></div>
+                  <span className="flex-shrink mx-4 text-[10px] font-mono text-neutral-400 uppercase tracking-widest">or password</span>
+                  <div className="flex-grow border-t border-neutral-200"></div>
                 </div>
-              ) : (
-                <form onSubmit={handleVerifyOtp} className="space-y-4">
+
+                <form onSubmit={handleEmailPasswordSignIn} className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-1">
-                      Verification code sent to:
+                    <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-1.5">
+                      Email Address
                     </label>
-                    <p className="text-xs font-mono font-bold text-neutral-900 mb-3 break-all">{authEmail}</p>
-                    
                     <input 
-                      type="text"
+                      type="email"
                       required
-                      maxLength={6}
-                      placeholder="••••••"
-                      value={otpCode}
-                      onChange={e => setOtpCode(e.target.value.trim())}
-                      className="w-full bg-neutral-50 border border-neutral-300 px-4 py-3 text-center text-lg tracking-[0.5em] text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition rounded-xl"
+                      placeholder="merkurov@gmail.com"
+                      value={authEmail}
+                      onChange={e => setAuthEmail(e.target.value)}
+                      className="w-full bg-neutral-50 border border-neutral-300 px-3.5 py-3 text-xs sm:text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition rounded-xl"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block mb-1.5">
+                      Password
+                    </label>
+                    <input 
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      className="w-full bg-neutral-50 border border-neutral-300 px-3.5 py-3 text-xs sm:text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition rounded-xl"
                     />
                   </div>
 
                   <button
                     type="submit"
                     disabled={authLoading}
-                    className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 font-bold rounded-xl"
+                    className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 font-bold rounded-xl shadow-sm"
                   >
-                    {authLoading ? 'Verifying...' : 'Authorize Terminal Session'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setOtpSent(false)}
-                    className="w-full text-center text-xs font-mono text-neutral-400 hover:text-neutral-900 underline pt-1 block"
-                  >
-                    ← Back to Email Input
+                    {authLoading ? 'Verifying...' : 'Bootstrap Admin Session'}
                   </button>
                 </form>
-              )
+              </div>
             ) : (
               requestSuccess ? (
                 <div className="py-4 text-center space-y-3 font-mono">
@@ -636,7 +614,7 @@ export default function ArtEngineDashboard() {
           {user && (
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:gap-3 bg-neutral-50 border border-neutral-200 px-3 py-1.5 text-[11px] sm:text-xs font-mono rounded-full max-w-full">
               <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
-              <span className="text-neutral-800 break-all">{user.email}</span>
+              <span className="text-neutral-800 break-all">{user.email} (Admin)</span>
               <button onClick={handleLogout} className="text-neutral-400 hover:text-neutral-900 underline ml-1 font-bold uppercase text-[10px]">Exit</button>
             </div>
           )}
