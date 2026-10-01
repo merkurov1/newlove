@@ -131,7 +131,6 @@ export default function VigilPage() {
     setRateLimitMsg(null);
 
     try {
-      // Строгая проверка суточного лимита (24 часа) для текущего пользователя
       const { data: userLogs } = await supabase
         .from('temple_log')
         .select('created_at')
@@ -143,7 +142,7 @@ export default function VigilPage() {
       if (userLogs && userLogs.length > 0) {
         const lastLitTime = new Date(userLogs[0].created_at).getTime();
         const diff = Date.now() - lastLitTime;
-        const cooldownMs = 24 * 60 * 60 * 1000; // 24 часа
+        const cooldownMs = 24 * 60 * 60 * 1000;
 
         if (diff < cooldownMs) {
           const remain = cooldownMs - diff;
@@ -190,7 +189,7 @@ export default function VigilPage() {
     setTimeout(() => {
       setSpark(null);
       setIsLighting(false);
-    }, 900);
+    }, 1000);
   };
 
   return (
@@ -198,7 +197,6 @@ export default function VigilPage() {
       
       <Header />
 
-      {/* Динамический радиальный фон в зависимости от интенсивности пламени */}
       <div 
         className="absolute inset-0 transition-opacity duration-1000 pointer-events-none mt-24"
         style={{ 
@@ -208,7 +206,6 @@ export default function VigilPage() {
 
       <main className="flex-1 max-w-3xl mx-auto w-full px-6 pt-36 pb-20 flex flex-col items-center justify-between relative z-10">
         
-        {/* Верхняя статусная панель */}
         <div className="w-full flex justify-between items-center border-b border-zinc-800 pb-4">
           <div className="flex items-center gap-2 text-xs text-zinc-400">
             <Flame size={14} className="text-orange-500" />
@@ -221,10 +218,8 @@ export default function VigilPage() {
           </div>
         </div>
 
-        {/* Основная композиция: Ангел со свечой и Священное Сердце */}
         <div className="w-full py-16 flex flex-col sm:flex-row items-center justify-center gap-12 sm:gap-20 relative">
           
-          {/* Ангел с гифки */}
           <div 
             ref={angelRef}
             className="relative w-40 h-40 sm:w-48 sm:h-48 flex items-center justify-center shrink-0"
@@ -237,7 +232,6 @@ export default function VigilPage() {
             />
           </div>
 
-          {/* Центральное Сердце */}
           <div className="relative flex items-center justify-center" ref={heartRef}>
             <div 
               className="relative transition-all duration-700 ease-in-out"
@@ -253,31 +247,34 @@ export default function VigilPage() {
               </div>
             </div>
 
-            {/* Траектория искры от ангела к сердцу */}
+            {/* Красивая сияющая искра (световой сгусток с хвостом) */}
             <AnimatePresence>
               {spark && (
                 <motion.div
                   initial={{ 
                     x: spark.start.x - spark.end.x, 
                     y: spark.start.y - spark.end.y, 
-                    opacity: 1, 
-                    scale: 1.5 
+                    opacity: 0, 
+                    scale: 0.5 
                   }}
                   animate={{ 
                     x: 0, 
                     y: 0, 
-                    opacity: [1, 1, 0], 
-                    scale: [1.5, 1, 0.3] 
+                    opacity: [0, 1, 1, 0], 
+                    scale: [0.8, 1.8, 1.2, 0.4] 
                   }}
-                  transition={{ duration: 0.8, ease: 'easeInOut' }}
-                  className="absolute z-50 w-5 h-5 bg-amber-200 rounded-full shadow-[0_0_30px_#ffaa00]"
-                />
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.85, ease: [0.25, 1, 0.5, 1] }}
+                  className="absolute z-50 pointer-events-none flex items-center justify-center"
+                >
+                  <div className="w-8 h-8 bg-amber-300 rounded-full blur-[2px] shadow-[0_0_25px_8px_#ff9900]" />
+                  <div className="absolute w-3 h-3 bg-white rounded-full shadow-[0_0_10px_2px_#ffffff]" />
+                </motion.div>
               )}
             </AnimatePresence>
           </div>
         </div>
 
-        {/* Блок информации и управления */}
         <div className="w-full max-w-md space-y-6">
           
           <div className="text-center space-y-1 bg-zinc-900/60 border border-zinc-800/80 p-5 rounded-3xl backdrop-blur-xl">
