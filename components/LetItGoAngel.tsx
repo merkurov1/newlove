@@ -7,8 +7,6 @@ const ANGEL_WITH_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0918.png';
 const ANGEL_WITHOUT_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png';
-const HEART_IMAGE =
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0920.png';
 
 export default function LetItGoAngel() {
   const [flyingHearts, setFlyingHearts] = useState<{ id: number }[]>([]);
@@ -17,6 +15,7 @@ export default function LetItGoAngel() {
 
   const clickCountRef = useRef(clickCount);
   clickCountRef.current = clickCount;
+  const heartIdCounter = useRef(0);
 
   // Автоматическая отправка накопленного счетчика в базу temple_logs при уходе со страницы
   useEffect(() => {
@@ -45,15 +44,12 @@ export default function LetItGoAngel() {
   }, []);
 
   const handleClick = () => {
-    const newHeartId = Date.now();
+    const newHeartId = ++heartIdCounter.current;
     setFlyingHearts((prev) => [...prev, { id: newHeartId }]);
     setClickCount((prev) => prev + 1);
+    
+    // Переводим ангела в состояние "без сердца" и оставляем его в нем
     setShowWithoutHeart(true);
-
-    // Возвращаем сердце ангелу через 1.5 секунды
-    setTimeout(() => {
-      setShowWithoutHeart(false);
-    }, 1500);
 
     // Удаляем улетевшее сердечко из DOM после завершения анимации (4 секунды)
     setTimeout(() => {
@@ -62,79 +58,45 @@ export default function LetItGoAngel() {
   };
 
   return (
-    <main className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-b from-[#87CEEB] via-[#B0E0E6] to-[#E0F6FF] flex flex-col items-center justify-end select-none">
+    <main className="letitgo-container select-none">
       
-      {/* Зеленая лужайка внизу */}
-      <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
-
-      {/* Счётчик отпусканий (перенесен ниже шапки сайта) */}
-      <div className="absolute top-24 right-8 sm:top-28 sm:right-12 text-stone-700 font-mono text-sm sm:text-base tracking-[0.2em] z-50 bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md">
+      {/* Счётчик отпусканий (использует ваш класс .click-counter) */}
+      <div className="click-counter">
         ❤️ {clickCount}
       </div>
 
-      {/* Единый контейнер для ангела и сердец */}
-      <div className="relative w-full max-w-3xl h-full flex items-end justify-center pb-[10vh] z-20">
-        
-        {/* Ангел (переключается между IMG_0918 и IMG_0919) */}
-        <div 
-          className="relative cursor-pointer transition-transform duration-200 active:scale-95 flex items-center justify-center p-4"
-          onClick={handleClick}
-          title="Click to let go"
-        >
+      {/* Ангел (использует ваш класс .angel-container и плавное переключение состояний) */}
+      <div 
+        className="angel-container"
+        onClick={handleClick}
+        title="Click to let go"
+      >
+        <div className="relative w-full h-full">
           <Image
-            src={showWithoutHeart ? ANGEL_WITHOUT_HEART : ANGEL_WITH_HEART}
-            alt="Angel"
-            width={480}
-            height={480}
-            className="object-contain max-w-[65vw] max-h-[55vh] drop-shadow-[0_15px_25px_rgba(0,0,0,0.15)] pointer-events-none"
+            src={ANGEL_WITH_HEART}
+            alt="Angel with heart"
+            fill
+            className={`angel-image transition-opacity duration-150 ${
+              showWithoutHeart ? 'opacity-0' : 'opacity-100'
+            }`}
+            priority
+          />
+          <Image
+            src={ANGEL_WITHOUT_HEART}
+            alt="Angel without heart"
+            fill
+            className={`angel-image transition-opacity duration-150 ${
+              showWithoutHeart ? 'opacity-100' : 'opacity-0'
+            }`}
             priority
           />
         </div>
-
-        {/* Улетающее отдельно сердечко (IMG_0920.png) */}
-        {flyingHearts.map((heart) => (
-          <div
-            key={heart.id}
-            className="absolute pointer-events-none z-30 animate-fly-away"
-            style={{
-              bottom: '42%',
-              left: '50%',
-              width: 50,
-              height: 50,
-              marginLeft: '-25px',
-            }}
-          >
-            <Image
-              src={HEART_IMAGE}
-              alt="Flying Heart"
-              width={50}
-              height={50}
-              className="object-contain filter drop-shadow-[0_0_20px_rgba(255,100,100,0.8)]"
-            />
-          </div>
-        ))}
       </div>
 
-      {/* Чистая CSS-анимация полета сердечка вверх */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes flyAway {
-          0% {
-            transform: translateY(0) scale(0.6) rotate(0deg);
-            opacity: 1;
-          }
-          20% {
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(-60vh) scale(1.4) translateX(15px) rotate(12deg);
-            opacity: 0;
-          }
-        }
-
-        .animate-fly-away {
-          animation: flyAway 4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-        }
-      ` }} />
+      {/* Улетающие сердечки (анимация и фон автоматически подтягиваются из вашего класса .heart) */}
+      {flyingHearts.map((heart) => (
+        <div key={heart.id} className="heart" />
+      ))}
     </main>
   );
 }
