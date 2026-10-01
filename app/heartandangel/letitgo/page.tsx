@@ -25,7 +25,7 @@ export const metadata = {
 
 export default function LetItGoPage() {
   return (
-    <div className="letitgo-container w-screen h-[100dvh] overflow-hidden relative bg-[#0A0A0A] flex flex-col items-center justify-center select-none">
+    <div className="letitgo-container w-full min-h-screen h-[100dvh] overflow-hidden relative flex flex-col items-center justify-center select-none pt-20">
       <TempleEntry />
       
       {/* Обертка режима Храма */}
