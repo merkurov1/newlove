@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { createClient } from '@/lib/supabase-browser';
 
 interface Props {
   daemonUrl?: string;
@@ -15,7 +14,44 @@ export default function HeartPhysics({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [bgColor, setBgColor] = useState('#e8b4b8');
-  const hasLoggedRef = useRef(false);
+  const [seconds, setSeconds] = useState(0);
+
+  const secondsRef = useRef(seconds);
+  secondsRef.current = seconds;
+
+  // Таймер спокойствия (считает секунды пребывания на странице)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Отправка результатов в базу temple_logs при уходе со страницы
+  useEffect(() => {
+    return () => {
+      const currentSeconds = secondsRef.current;
+      if (currentSeconds > 2) { // Не отправляем случайные микро-заходы
+        const payload = {
+          event_type: 'calm_timer',
+          message: `Spent ${currentSeconds} ${currentSeconds === 1 ? 'second' : 'seconds'} finding calm.`,
+          author: 'Guardian'
+        };
+
+        if (navigator.sendBeacon) {
+          const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+          navigator.sendBeacon('/api/temple_logs', blob);
+        } else {
+          fetch('/api/temple_logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            keepalive: true
+          }).catch(() => {});
+        }
+      }
+    };
+  }, []);
 
   // Определение фонового цвета по времени суток
   useEffect(() => {
@@ -90,21 +126,6 @@ export default function HeartPhysics({
     window.addEventListener('deviceorientation', handleOrientation);
     window.addEventListener('mousemove', handleMouseMove);
 
-    const logInteractionToTemple = async () => {
-      if (hasLoggedRef.current) return;
-      hasLoggedRef.current = true;
-      try {
-        const supabase = createClient();
-        await supabase.from('temple_log').insert({
-          message: 'Found balance in Keep Calm',
-          event_type: 'heartandangel',
-          author: 'Guardian'
-        });
-      } catch (e) {
-        // Ошибку логирования глушим, чтобы не прерывать арт
-      }
-    };
-
     const handleTouch = (e: TouchEvent | MouseEvent) => {
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
@@ -119,8 +140,6 @@ export default function HeartPhysics({
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           navigator.vibrate(15);
         }
-
-        logInteractionToTemple();
       }
     };
 
@@ -243,9 +262,22 @@ export default function HeartPhysics({
     }
   };
 
+  // Красивое форматирование таймера (минуты:секунды)
+  const formatTime = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainSecs = secs % 60;
+    return `${mins}:${remainSecs < 10 ? '0' : ''}${remainSecs}`;
+  };
+
   return (
     <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden', touchAction: 'none' }}>
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
+      
+      {/* Таймер спокойствия (на мобилках сдвинут ниже top-36, чтобы не налезать на хедры) */}
+      <div className="absolute top-36 right-8 sm:top-8 sm:right-12 text-stone-800 font-mono text-sm sm:text-base tracking-[0.2em] z-30 bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md">
+        ⏳ {formatTime(seconds)}
+      </div>
+
       {!permissionGranted && (
         <button
           onClick={requestGyroPermission}
