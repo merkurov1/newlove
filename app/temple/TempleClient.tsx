@@ -328,7 +328,6 @@ export default function TempleClient() {
 
       <Header />
 
-      {/* Увеличенный отступ сверху (pt-32 / pt-40), чтобы контент никогда не залезал под фиксированный хедер */}
       <main className="max-w-7xl mx-auto px-6 pt-36 lg:pt-40 pb-32 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
@@ -337,9 +336,6 @@ export default function TempleClient() {
             <div className="p-6 sm:p-8 rounded-3xl bg-white/85 backdrop-blur-2xl border border-zinc-200/95 shadow-[0_20px_40px_rgba(0,0,0,0.03)] space-y-6">
               
               <div className="space-y-3">
-                <span className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500 bg-zinc-100 px-3 py-1 rounded-md">
-                  Digital Temple
-                </span>
                 <h1 className="font-serif text-2xl sm:text-3xl font-normal text-zinc-900 tracking-tight leading-snug">
                   A real place on the internet where rituals work and every visitor leaves a trace.
                 </h1>
