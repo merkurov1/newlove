@@ -11,7 +11,6 @@ import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
 import Header from '@/components/Header';
 import Paywall from './Paywall';
 import {
@@ -24,8 +23,6 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-
-import 'highlight.js/styles/github.css';
 
 type Theme = 'light' | 'sepia' | 'dark';
 type FontFamily = 'serif' | 'sans';
@@ -54,7 +51,8 @@ const PREFS_KEY = 'unframed_prefs';
 const UNLOCKED_KEY = 'unframed_unlocked';
 const ADMIN_KEY = 'unframed_admin';
 
-const slugify = (value: string): string => {
+const slugify = (value: unknown): string => {
+  if (!value || typeof value !== 'string') return '';
   return value
     .toLowerCase()
     .trim()
@@ -80,7 +78,7 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Безопасная инициализация прав и настроек на клиенте без сбоев гидратации
+  // Безопасная инициализация прав и настроек на клиенте
   useEffect(() => {
     setIsMounted(true);
     try {
@@ -105,12 +103,12 @@ export default function BookReaderPage() {
     } catch {}
   }, []);
 
-  // Пока компонент монтируется на клиенте, отдаем нейтральный фон во избежание мерцания и сбоев
+  // Пока компонент монтируется, отдаем пустой экран нужного цвета во избежание мерцания
   if (!isMounted) {
     return <div className="min-h-screen bg-[#faf9f5]" />;
   }
 
-  // Жёсткий заслон пейвола: если доступ не подтвержден, рендерим Paywall немедленно
+  // Защитный заслон пейвола
   if (!unlocked && !admin) {
     return (
       <Paywall
@@ -139,7 +137,7 @@ export default function BookReaderPage() {
         if (!cancelled) setContent(markdown);
       } catch (err) {
         console.error(err);
-        if (!cancelled) setError('Unable to load the manuscript.');
+        if (!cancelled) setError('Unable to load the manuscript file. Please check if Unframed.markdown exists in public/unframed/.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -181,7 +179,7 @@ export default function BookReaderPage() {
     };
   }, [content]);
 
-  // Генерация оглавления
+  // Безопасная генерация оглавления
   useEffect(() => {
     if (!content) {
       setToc([]);
@@ -213,7 +211,7 @@ export default function BookReaderPage() {
   const markdownComponents: Components = useMemo(
     () => ({
       h1: ({ children }) => {
-        const textContent = React.Children.toArray(children).join('');
+        const textContent = typeof children === 'string' ? children : React.Children.toArray(children).join('');
         const id = slugify(textContent);
         return (
           <h1 id={id} className="scroll-mt-36 mt-28 mb-10 font-serif text-3xl md:text-4xl tracking-tight font-normal border-b border-current/10 pb-4">
@@ -222,7 +220,7 @@ export default function BookReaderPage() {
         );
       },
       h2: ({ children }) => {
-        const textContent = React.Children.toArray(children).join('');
+        const textContent = typeof children === 'string' ? children : React.Children.toArray(children).join('');
         const id = slugify(textContent);
         return (
           <h2 id={id} className="scroll-mt-36 mt-20 mb-6 font-serif text-2xl md:text-3xl tracking-tight font-normal">
@@ -231,7 +229,7 @@ export default function BookReaderPage() {
         );
       },
       h3: ({ children }) => {
-        const textContent = React.Children.toArray(children).join('');
+        const textContent = typeof children === 'string' ? children : React.Children.toArray(children).join('');
         const id = slugify(textContent);
         return (
           <h3 id={id} className="scroll-mt-36 mt-14 mb-4 font-serif text-xl md:text-2xl font-normal">
@@ -268,7 +266,7 @@ export default function BookReaderPage() {
       code: ({ children, className }) => {
         const isBlock = Boolean(className?.includes('language-'));
         if (isBlock) {
-          return <code className={`${className ?? ''} text-[13px] leading-6`}>{children}</code>;
+          return <code className={`${className ?? ''} text-[13px] leading-6 block overflow-x-auto p-4 bg-current/5 rounded`}>{children}</code>;
         }
         return <code className="rounded bg-current/10 px-1.5 py-0.5 font-mono text-[0.85em]">{children}</code>;
       },
@@ -550,7 +548,6 @@ export default function BookReaderPage() {
         >
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
             components={markdownComponents}
           >
             {content}
