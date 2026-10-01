@@ -17,7 +17,8 @@ import {
   Compass,
   ShieldCheck,
   Moon,
-  Fingerprint
+  Fingerprint,
+  Lock
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -75,6 +76,8 @@ function formatTime(iso?: string) {
 
 export default function TempleClient() {
   const { user, profile } = useAuth();
+  const isLoggedIn = !!user;
+  
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<TemplePost[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -120,7 +123,6 @@ export default function TempleClient() {
         const json = await res.json();
         if (cancelled || !json || !Array.isArray(json.data)) return;
 
-        // Dynamic counter based on real data length + base offset for gravitas
         setTraceCount(1240 + json.data.length * 3);
 
         const formatted: TemplePost[] = json.data
@@ -182,6 +184,7 @@ export default function TempleClient() {
   }, []);
 
   const toggleRecording = async () => {
+    if (!isLoggedIn) return;
     if (isRecording) {
       stopRecording();
       return;
@@ -243,7 +246,7 @@ export default function TempleClient() {
   };
 
   const handleSendPost = async () => {
-    if ((!postText.trim() && !audioBlobUrl) || isSubmitting) return;
+    if (!isLoggedIn || ((!postText.trim() && !audioBlobUrl) || isSubmitting)) return;
     setIsSubmitting(true);
     setError(null);
     try {
@@ -333,15 +336,20 @@ export default function TempleClient() {
 
       <main className="max-w-7xl mx-auto px-6 pt-36 lg:pt-40 pb-32 relative z-10 space-y-10">
         
-        {/* TOP LEVEL: COMPACT CENTRAL ALTAR */}
+        {/* TOP LEVEL: COMPACT CENTRAL ALTAR (RESTRICTED TO LOGGED-IN USERS) */}
         <section className="max-w-xl mx-auto">
-          <div className="p-4 sm:p-5 rounded-3xl bg-white/90 backdrop-blur-2xl border border-zinc-200/95 shadow-[0_15px_40px_rgba(0,0,0,0.03)] space-y-3 transition-all hover:border-zinc-300">
+          <div className={`p-4 sm:p-5 rounded-3xl bg-white/90 backdrop-blur-2xl border transition-all shadow-[0_15px_40px_rgba(0,0,0,0.03)] space-y-3 ${
+            isLoggedIn ? 'border-zinc-200/95 hover:border-zinc-300' : 'border-zinc-200/60 opacity-90'
+          }`}>
             <textarea
               value={postText}
               onChange={(e) => setPostText(e.target.value)}
-              placeholder="Broadcast a whisper, drop a link, or record a voice note..."
+              placeholder={isLoggedIn ? "Broadcast a whisper, drop a link, or record a voice note..." : "Sign in to leave a trace in the temple..."}
+              disabled={!isLoggedIn}
               rows={2}
-              className="w-full bg-transparent text-sm sm:text-base text-zinc-900 placeholder-zinc-400 resize-none focus:outline-none font-serif leading-relaxed"
+              className={`w-full bg-transparent text-sm sm:text-base text-zinc-900 placeholder-zinc-400 resize-none focus:outline-none font-serif leading-relaxed ${
+                !isLoggedIn ? 'cursor-not-allowed text-zinc-400' : ''
+              }`}
             />
 
             {audioBlobUrl && (
@@ -366,8 +374,11 @@ export default function TempleClient() {
               <button
                 type="button"
                 onClick={toggleRecording}
+                disabled={!isLoggedIn}
                 className={`px-3 py-1.5 rounded-full transition-all border flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider ${
-                  isRecording
+                  !isLoggedIn
+                    ? 'bg-zinc-100 text-zinc-400 border-zinc-200 cursor-not-allowed opacity-60'
+                    : isRecording
                     ? 'bg-rose-500 text-white border-rose-500 animate-pulse shadow-sm'
                     : 'bg-white text-zinc-700 border-zinc-200/90 hover:bg-zinc-50 shadow-xs'
                 }`}
@@ -376,15 +387,22 @@ export default function TempleClient() {
                 <span>{isRecording ? 'Stop' : 'Voice'}</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleSendPost}
-                disabled={isSubmitting || (!postText.trim() && !audioBlobUrl)}
-                className="flex items-center gap-1.5 px-5 py-1.5 rounded-full bg-zinc-900 text-white font-medium text-[11px] shadow-xs hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40 font-mono uppercase tracking-wider cursor-pointer"
-              >
-                <span>{isSubmitting ? 'Transmitting...' : 'Broadcast'}</span>
-                <Send size={11} />
-              </button>
+              {isLoggedIn ? (
+                <button
+                  type="button"
+                  onClick={handleSendPost}
+                  disabled={isSubmitting || (!postText.trim() && !audioBlobUrl)}
+                  className="flex items-center gap-1.5 px-5 py-1.5 rounded-full bg-zinc-900 text-white font-medium text-[11px] shadow-xs hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40 font-mono uppercase tracking-wider cursor-pointer"
+                >
+                  <span>{isSubmitting ? 'Transmitting...' : 'Broadcast'}</span>
+                  <Send size={11} />
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-zinc-400 px-3 py-1">
+                  <Lock size={11} className="text-zinc-400" />
+                  <span>Sign in required</span>
+                </div>
+              )}
             </div>
           </div>
         </section>
