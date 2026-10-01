@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { createClient } from '@/lib/supabase-browser';
+import { useAuth } from '@/components/AuthContext';
 
 interface Props {
   daemonUrl?: string;
@@ -12,45 +12,22 @@ export default function HeartPhysics({
   daemonUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Daemon.png',
   heartUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png',
 }: Props) {
+  const { user, profile, session } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [bgColor, setBgColor] = useState('#e8b4b8');
   const [seconds, setSeconds] = useState(0);
-  const [authorName, setAuthorName] = useState('Guardian');
+
+  // Вычисляем имя автора
+  const currentAuthorName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Guardian';
 
   const secondsRef = useRef(seconds);
   secondsRef.current = seconds;
-  const authorRef = useRef(authorName);
-  authorRef.current = authorName;
+  const authorRef = useRef(currentAuthorName);
+  authorRef.current = currentAuthorName;
 
-  // Точный аналог получения имени пользователя из базы
-  useEffect(() => {
-    async function resolveAuthor() {
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (user) {
-          const { data: profile } = await supabase
-            .from('users')
-            .select('name')
-            .eq('id', user.id)
-            .maybeSingle();
-
-          if (profile?.name) {
-            setAuthorName(profile.name);
-          } else if (user.user_metadata?.name) {
-            setAuthorName(user.user_metadata.name);
-          } else if (user.email) {
-            setAuthorName(user.email.split('@')[0]);
-          }
-        }
-      } catch (e) {
-        console.error('Failed to resolve author name', e);
-      }
-    }
-    resolveAuthor();
-  }, []);
+  const tokenRef = useRef<string | null>(null);
+  tokenRef.current = session?.access_token || null;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -59,6 +36,7 @@ export default function HeartPhysics({
     return () => clearInterval(timer);
   }, []);
 
+  // Отправка таймера спокойствия с токеном и реальным автором
   useEffect(() => {
     return () => {
       const currentSeconds = secondsRef.current;
@@ -66,7 +44,8 @@ export default function HeartPhysics({
         const payload = {
           event_type: 'calm_timer',
           message: `Spent ${currentSeconds} ${currentSeconds === 1 ? 'second' : 'seconds'} finding calm.`,
-          author: authorRef.current
+          author: authorRef.current,
+          token: tokenRef.current
         };
 
         if (navigator.sendBeacon) {

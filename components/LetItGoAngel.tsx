@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { createClient } from '@/lib/supabase-browser';
+import { useAuth } from '@/components/AuthContext';
 
 const ANGEL_WITH_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png';
@@ -12,48 +12,24 @@ const HEART_IMAGE =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0920.png';
 
 export default function LetItGoAngel() {
+  const { user, profile, session } = useAuth();
   const [flyingHearts, setFlyingHearts] = useState<{ id: number }[]>([]);
   const [clickCount, setClickCount] = useState(0);
   const [showWithoutHeart, setShowWithoutHeart] = useState(false);
   const [skyGradient, setSkyGradient] = useState('bg-gradient-to-b from-[#87CEEB] via-[#B0E0E6] to-[#E0F6FF]');
-  const [authorName, setAuthorName] = useState('Visitor');
+
+  // Вычисляем имя автора ровно так же, как в Header.tsx
+  const currentAuthorName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Visitor';
 
   const clickCountRef = useRef(clickCount);
   clickCountRef.current = clickCount;
-  const authorRef = useRef(authorName);
-  authorRef.current = authorName;
+  const authorRef = useRef(currentAuthorName);
+  authorRef.current = currentAuthorName;
+
+  const tokenRef = useRef<string | null>(null);
+  tokenRef.current = session?.access_token || null;
 
   const heartIdCounter = useRef(0);
-
-  // Точный аналог получения имени пользователя как в рабочих примерах
-  useEffect(() => {
-    async function resolveAuthor() {
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (user) {
-          // Ищем имя в таблице users
-          const { data: profile } = await supabase
-            .from('users')
-            .select('name')
-            .eq('id', user.id)
-            .maybeSingle();
-
-          if (profile?.name) {
-            setAuthorName(profile.name);
-          } else if (user.user_metadata?.name) {
-            setAuthorName(user.user_metadata.name);
-          } else if (user.email) {
-            setAuthorName(user.email.split('@')[0]);
-          }
-        }
-      } catch (e) {
-        console.error('Failed to resolve author name', e);
-      }
-    }
-    resolveAuthor();
-  }, []);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -68,6 +44,7 @@ export default function LetItGoAngel() {
     }
   }, []);
 
+  // Отправка данных при уходе со страницы с токеном и реальным автором
   useEffect(() => {
     return () => {
       const count = clickCountRef.current;
@@ -75,7 +52,8 @@ export default function LetItGoAngel() {
         const payload = {
           event_type: 'ASH',
           message: `Released ${count} ${count === 1 ? 'burden' : 'burdens'} into the digital sky.`,
-          author: authorRef.current
+          author: authorRef.current,
+          token: tokenRef.current
         };
 
         if (navigator.sendBeacon) {
