@@ -13,6 +13,7 @@ const HEART_IMAGE =
 export default function LetItGoAngel() {
   const [flyingHearts, setFlyingHearts] = useState<{ id: number }[]>([]);
   const [clickCount, setClickCount] = useState(0);
+  const [showWithoutHeart, setShowWithoutHeart] = useState(false);
 
   const clickCountRef = useRef(clickCount);
   clickCountRef.current = clickCount;
@@ -45,18 +46,24 @@ export default function LetItGoAngel() {
   }, []);
 
   const handleClick = () => {
+    // Если ангел еще без сердца — игнорируем клик
+    if (showWithoutHeart) return;
+
     const newHeartId = ++heartIdCounter.current;
     setFlyingHearts((prev) => [...prev, { id: newHeartId }]);
     setClickCount((prev) => prev + 1);
 
-    // Удаляем улетевшее сердечко из DOM ровно по завершении анимации полета (6 секунд)
+    // Ангел остается без сердца 1.8 секунды, после чего возвращает его (готов к новому клику)
+    setShowWithoutHeart(true);
+    setTimeout(() => {
+      setShowWithoutHeart(false);
+    }, 1800);
+
+    // Само улетающее сердце продолжает лететь полный цикл анимации (6 секунд)
     setTimeout(() => {
       setFlyingHearts((prev) => prev.filter((h) => h.id !== newHeartId));
     }, 6000);
   };
-
-  // Ангел без сердца пока летит хотя бы одно, как только массив пуст — возвращается сердце
-  const showWithoutHeart = flyingHearts.length > 0;
 
   return (
     <main className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-b from-[#87CEEB] via-[#B0E0E6] to-[#E0F6FF] flex flex-col items-center justify-end select-none">
@@ -72,11 +79,13 @@ export default function LetItGoAngel() {
       {/* Единый контейнер для ангела и сердец */}
       <div className="relative w-full max-w-3xl h-full flex items-end justify-center pb-[10vh] z-20">
         
-        {/* Ангел */}
+        {/* Ангел (при клике меняет курсор/активность, если заблокирован) */}
         <div 
-          className="relative cursor-pointer transition-transform duration-200 active:scale-95 flex items-center justify-center p-4 w-[480px] h-[480px] max-w-[65vw] max-h-[55vh]"
+          className={`relative transition-transform duration-200 flex items-center justify-center p-4 w-[480px] h-[480px] max-w-[65vw] max-h-[55vh] ${
+            showWithoutHeart ? 'cursor-default' : 'cursor-pointer active:scale-95'
+          }`}
           onClick={handleClick}
-          title="Click to let go"
+          title={showWithoutHeart ? "Wait for the angel..." : "Click to let go"}
         >
           {/* Дефолтное состояние: ангел с сердцем (IMG_0919) */}
           <Image
@@ -90,7 +99,7 @@ export default function LetItGoAngel() {
             priority
           />
 
-          {/* Состояние полета: ангел без сердца (IMG_0918) */}
+          {/* Состояние без сердца (IMG_0918) */}
           <Image
             src={ANGEL_WITHOUT_HEART}
             alt="Angel without heart"
@@ -103,7 +112,7 @@ export default function LetItGoAngel() {
           />
         </div>
 
-        {/* Улетающее сердце (очень крупное 450px, старт из нижней точки рук) */}
+        {/* Улетающее сердце (крупное 450px, старт из нижней точки рук) */}
         {flyingHearts.map((heart) => (
           <div
             key={heart.id}
