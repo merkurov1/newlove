@@ -48,8 +48,6 @@ const DEFAULT_PREFS: ReaderPrefs = {
 };
 
 const PREFS_KEY = 'unframed_prefs';
-const UNLOCKED_KEY = 'unframed_unlocked';
-const ADMIN_KEY = 'unframed_admin';
 
 const slugify = (value: unknown): string => {
   if (!value || typeof value !== 'string') return '';
@@ -64,8 +62,6 @@ const slugify = (value: unknown): string => {
 export default function BookReaderPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
-  const [admin, setAdmin] = useState(false);
-
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,74 +74,50 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Инициализация доступа (безопасно на клиенте)
+  // Проверка доступа и верификация Stripe сессии при возврате
   useEffect(() => {
     setIsMounted(true);
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const paid = params.get('paid') === '1';
-      const adminParam = params.get('admin') === '1';
-
-      if (paid) window.localStorage.setItem(UNLOCKED_KEY, 'true');
-      if (adminParam) window.localStorage.setItem(ADMIN_KEY, 'true');
-
-      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
-      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
-
-      setUnlocked(storedUnlocked || paid);
-      setAdmin(storedAdmin || adminParam);
-
-      const storedPrefs = window.localStorage.getItem(PREFS_KEY);
-      if (storedPrefs) {
-        const parsed = JSON.parse(storedPrefs) as Partial<ReaderPrefs>;
-        setPrefs((prev) => ({ ...prev, ...parsed }));
-      }
-    } catch {}
-  }, []);
-
-  // Пока компонент монтируется
-  if (!isMounted) {
-    return <div className="min-h-screen bg-[#faf9f5]" />;
-  }
-
-  // Защитный заслон пейвола
-  if (!unlocked && !admin) {
-    return (
-      <Paywall
-        onUnlock={() => {
-          try {
-            window.localStorage.setItem(UNLOCKED_KEY, 'true');
-            window.localStorage.setItem(ADMIN_KEY, 'true');
-          } catch {}
-          setUnlocked(true);
-          setAdmin(true);
-        }}
-      />
-    );
-  }
-
-  // Загрузка рукописи
-  useEffect(() => {
-    let cancelled = false;
-    const loadBook = async () => {
+    const verifyAndLoad = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        const response = await fetch('/unframed/Unframed.markdown', { cache: 'no-store' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const markdown = await response.text();
-        if (!cancelled) setContent(markdown);
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get('session_id');
+
+        // Если вернулись из Stripe сосессией — верифицируем на сервере
+        if (sessionId) {
+          const verifyRes = await fetch(`/api/unframed/verify?session_id=${sessionId}`);
+          if (verifyRes.ok) {
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+        }
+
+        // Загружаем контент книги через защищенный эндпоинт
+        const res = await fetch('/api/unframed/content');
+        if (res.status === 401) {
+          setUnlocked(false);
+          setLoading(false);
+          return;
+        }
+        if (!res.ok) throw new Error('Failed to load manuscript');
+
+        const data = await res.json();
+        setContent(data.content);
+        setUnlocked(true);
+
+        // Настройки читалки
+        const storedPrefs = window.localStorage.getItem(PREFS_KEY);
+        if (storedPrefs) {
+          const parsed = JSON.parse(storedPrefs) as Partial<ReaderPrefs>;
+          setPrefs((prev) => ({ ...prev, ...parsed }));
+        }
       } catch (err) {
         console.error(err);
-        if (!cancelled) setError('Unable to load the manuscript file. Please check if Unframed.markdown exists in public/unframed/.');
+        setError('Unable to load the manuscript securely.');
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     };
-    loadBook();
-    return () => {
-      cancelled = true;
-    };
+
+    verifyAndLoad();
   }, []);
 
   const updatePrefs = useCallback((patch: Partial<ReaderPrefs>) => {
@@ -181,10 +153,7 @@ export default function BookReaderPage() {
 
   // Генерация оглавления
   useEffect(() => {
-    if (!content) {
-      setToc([]);
-      return;
-    }
+    if (!content) return;
     const lines = content.split(/\r?\n/);
     const items: TocItem[] = [];
     for (const line of lines) {
@@ -288,19 +257,18 @@ export default function BookReaderPage() {
   const borderClass = prefs.theme === 'dark' ? 'border-white/10' : prefs.theme === 'sepia' ? 'border-[#3c2f2f]/15' : 'border-black/10';
   const readerFont = prefs.fontFamily === 'serif' ? 'font-serif' : 'font-sans';
 
-  if (loading) {
+  if (!isMounted || loading) {
     return (
-      <div className={`min-h-screen ${currentThemeClass} flex flex-col`}>
-        <Header />
-        <div className="flex-1 flex items-center justify-center pt-24">
-          <div className="text-center space-y-4">
-            <div className={`font-mono text-[10px] uppercase tracking-[0.25em] ${mutedClass}`}>
-              Opening manuscript...
-            </div>
-          </div>
+      <div className="min-h-screen bg-[#faf9f5] flex items-center justify-center">
+        <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-black/50">
+          Loading manuscript...
         </div>
       </div>
     );
+  }
+
+  if (!unlocked) {
+    return <Paywall onUnlock={() => setUnlocked(true)} />;
   }
 
   if (error) {
@@ -328,7 +296,7 @@ export default function BookReaderPage() {
     <div className={`min-h-screen ${currentThemeClass} transition-colors duration-300 relative`}>
       <Header />
 
-      <div className={`sticky top-0 z-40 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/95' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/95' : 'bg-[#faf9f5]/95'} backdrop-blur-md shadow-xs`}>
+      <div className={`sticky top-0 z-40 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/95' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/95' : 'bg-[#faf9f5]/95'} backdrop-blur-md`}>
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link
@@ -383,6 +351,7 @@ export default function BookReaderPage() {
         </div>
       </div>
 
+      {/* TOC Sidebar */}
       {showToc && (
         <div className="fixed inset-0 z-50" onClick={() => setShowToc(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />
@@ -420,6 +389,7 @@ export default function BookReaderPage() {
         </div>
       )}
 
+      {/* Settings Sidebar */}
       {showSettings && (
         <div className="fixed inset-0 z-50" onClick={() => setShowSettings(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />
@@ -513,16 +483,6 @@ export default function BookReaderPage() {
                 onChange={(e) => updatePrefs({ lineHeight: Number(e.target.value) })}
                 className="w-full accent-current cursor-pointer"
               />
-            </div>
-
-            <div className="pt-4 border-t border-current/10">
-              <button
-                type="button"
-                onClick={() => updatePrefs(DEFAULT_PREFS)}
-                className={`font-mono text-[10px] uppercase tracking-[0.15em] ${mutedClass} hover:opacity-100 cursor-pointer`}
-              >
-                Reset to default
-              </button>
             </div>
           </aside>
         </div>

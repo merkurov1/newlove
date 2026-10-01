@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Image from 'next/image';
 
 const ANGEL_WITH_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0918.png';
@@ -60,40 +59,36 @@ export default function LetItGoAngel() {
   return (
     <main className="letitgo-container select-none">
       
-      {/* Счётчик отпусканий (использует ваш класс .click-counter) */}
+      {/* Счётчик отпусканий (работает по твоему классу .click-counter) */}
       <div className="click-counter">
         ❤️ {clickCount}
       </div>
 
-      {/* Ангел (использует ваш класс .angel-container и плавное переключение состояний) */}
+      {/* Ангел (полностью подвязан под твои классы .angel-container и .angel-image) */}
       <div 
         className="angel-container"
         onClick={handleClick}
         title="Click to let go"
       >
         <div className="relative w-full h-full">
-          <Image
+          <img
             src={ANGEL_WITH_HEART}
             alt="Angel with heart"
-            fill
-            className={`angel-image transition-opacity duration-150 ${
+            className={`angel-image transition-opacity duration-150 absolute inset-0 ${
               showWithoutHeart ? 'opacity-0' : 'opacity-100'
             }`}
-            priority
           />
-          <Image
+          <img
             src={ANGEL_WITHOUT_HEART}
             alt="Angel without heart"
-            fill
-            className={`angel-image transition-opacity duration-150 ${
+            className={`angel-image transition-opacity duration-150 absolute inset-0 ${
               showWithoutHeart ? 'opacity-100' : 'opacity-0'
             }`}
-            priority
           />
         </div>
       </div>
 
-      {/* Улетающие сердечки (анимация и фон автоматически подтягиваются из вашего класса .heart) */}
+      {/* Улетающие сердечки (фон, размер и анимация берутся прямо из твоего класса .heart) */}
       {flyingHearts.map((heart) => (
         <div key={heart.id} className="heart" />
       ))}
