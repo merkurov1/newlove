@@ -93,7 +93,7 @@ export default function Header() {
                 <button
                   type="button"
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className="w-12 h-12 rounded-full overflow-hidden bg-zinc-900 text-white font-medium text-sm flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  className="w-12 h-12 rounded-full overflow-hidden bg-zinc-900 text-white font-medium text-sm flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
                   aria-label="User Menu"
                 >
                   {userImage ? (
@@ -111,7 +111,7 @@ export default function Header() {
                 </Link>
               )}
 
-              {/* Refined Profile Popover (Liquid Glass & Clean Typography) */}
+              {/* Refined Profile Popover (Responsive & Clean) */}
               <AnimatePresence>
                 {isProfileOpen && user && (
                   <motion.div
@@ -119,7 +119,7 @@ export default function Header() {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.96, y: 8 }}
                     transition={{ duration: 0.2, ease: 'easeOut' }}
-                    className="absolute left-0 mt-3 w-80 p-5 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-50 space-y-4"
+                    className="absolute left-0 sm:left-auto sm:right-auto mt-3 w-[calc(100vw-3rem)] max-w-[320px] p-5 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-4"
                   >
                     {/* User Info Header */}
                     <div className="flex items-center gap-3.5 pb-4 border-b border-zinc-100">
