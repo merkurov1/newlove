@@ -13,9 +13,9 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import Header from '@/components/Header';
+import Paywall from './Paywall'; // Исправленный относительный путь к пейволу в той же папке
 import {
   ArrowLeft,
-  BookOpen,
   Check,
   List,
   Menu,
@@ -63,57 +63,7 @@ const slugify = (value: string): string => {
     .replace(/-+/g, '-');
 };
 
-function Paywall({ onUnlock }: { onUnlock: () => void }) {
-  return (
-    <div className="min-h-screen bg-[#0d0d0d] text-white flex flex-col selection:bg-white selection:text-black">
-      <Header />
-      <div className="flex-1 flex items-center justify-center px-6 pt-36 pb-16">
-        <div className="w-full max-w-xl text-center space-y-6">
-          <div className="flex justify-center">
-            <div className="flex h-16 w-16 items-center justify-center border border-white/20 rounded-2xl bg-white/5 backdrop-blur-md">
-              <BookOpen size={24} strokeWidth={1.5} />
-            </div>
-          </div>
-
-          <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-white/40">
-            UNFRAMED / PRIVATE READER
-          </div>
-
-          <h1 className="font-serif text-4xl md:text-5xl tracking-tight">
-            The Manuscript
-          </h1>
-
-          <p className="mx-auto max-w-md text-sm md:text-base leading-relaxed text-white/60 font-serif">
-            A private reading edition of <i>Unframed</i>, a memoir by Anton Merkurov.
-          </p>
-
-          <div className="pt-4">
-            <button
-              type="button"
-              onClick={onUnlock}
-              className="inline-flex items-center gap-3 bg-white text-black px-8 py-4 font-mono text-xs uppercase tracking-[0.2em] transition-all hover:bg-white/90 active:scale-95 shadow-lg cursor-pointer"
-            >
-              <BookOpen size={14} />
-              Enter Reader
-            </button>
-          </div>
-
-          <div className="pt-4">
-            <Link
-              href="/unframed"
-              className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 hover:text-white transition-colors"
-            >
-              ← Back to Unframed overview
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function BookReaderPage() {
-  // Надежная синхронная ленивая инициализация прав с клиента, исключающая проскок
   const [authChecked, setAuthChecked] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [admin, setAdmin] = useState(false);
@@ -130,7 +80,6 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Первичная проверка прав доступа и параметров URL
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -162,7 +111,6 @@ export default function BookReaderPage() {
     }
   }, []);
 
-  // Загрузка файла книги только после подтверждения авторизации
   useEffect(() => {
     if (!authChecked || (!unlocked && !admin)) return;
 
@@ -191,8 +139,10 @@ export default function BookReaderPage() {
   const unlockHandler = useCallback(() => {
     try {
       window.localStorage.setItem(UNLOCKED_KEY, 'true');
+      window.localStorage.setItem(ADMIN_KEY, 'true');
     } catch {}
     setUnlocked(true);
+    setAdmin(true);
   }, []);
 
   const updatePrefs = useCallback((patch: Partial<ReaderPrefs>) => {
@@ -205,7 +155,6 @@ export default function BookReaderPage() {
     });
   }, []);
 
-  // Расчет прогресса чтения
   useEffect(() => {
     const updateProgress = () => {
       const documentHeight = document.documentElement.scrollHeight - window.innerHeight;
@@ -226,7 +175,6 @@ export default function BookReaderPage() {
     };
   }, [content]);
 
-  // Генерация оглавления (TOC)
   useEffect(() => {
     if (!content) {
       setToc([]);
@@ -335,7 +283,6 @@ export default function BookReaderPage() {
   const borderClass = prefs.theme === 'dark' ? 'border-white/10' : prefs.theme === 'sepia' ? 'border-[#3c2f2f]/15' : 'border-black/10';
   const readerFont = prefs.fontFamily === 'serif' ? 'font-serif' : 'font-sans';
 
-  // ЖЕСТКИЙ БЛОКАТОР: Если проверка не завершена ИЛИ нет доступа — сразу рендерим Paywall
   if (!authChecked || (!unlocked && !admin)) {
     return <Paywall onUnlock={unlockHandler} />;
   }
@@ -380,7 +327,6 @@ export default function BookReaderPage() {
     <div className={`min-h-screen ${currentThemeClass} transition-colors duration-300 relative`}>
       <Header />
 
-      {/* TOP READER BAR — зафиксировано корректно ниже хедера с высоким z-index */}
       <div className={`sticky top-0 z-40 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/95' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/95' : 'bg-[#faf9f5]/95'} backdrop-blur-md shadow-xs`}>
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
@@ -428,7 +374,6 @@ export default function BookReaderPage() {
           </div>
         </div>
 
-        {/* PROGRESS LINE */}
         <div className="h-[2px] w-full bg-current/10">
           <div
             className="h-full bg-current transition-[width] duration-150"
@@ -437,7 +382,6 @@ export default function BookReaderPage() {
         </div>
       </div>
 
-      {/* TOC DRAWER */}
       {showToc && (
         <div className="fixed inset-0 z-50" onClick={() => setShowToc(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />
@@ -475,7 +419,6 @@ export default function BookReaderPage() {
         </div>
       )}
 
-      {/* SETTINGS DRAWER */}
       {showSettings && (
         <div className="fixed inset-0 z-50" onClick={() => setShowSettings(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />
@@ -492,7 +435,6 @@ export default function BookReaderPage() {
               </button>
             </div>
 
-            {/* Theme */}
             <div className="space-y-3">
               <label className={`font-mono text-[10px] uppercase tracking-[0.15em] ${mutedClass}`}>Theme</label>
               <div className="grid grid-cols-3 gap-2">
@@ -512,7 +454,6 @@ export default function BookReaderPage() {
               </div>
             </div>
 
-            {/* Font Family */}
             <div className="space-y-3">
               <label className={`font-mono text-[10px] uppercase tracking-[0.15em] ${mutedClass}`}>Typeface</label>
               <div className="grid grid-cols-2 gap-2">
@@ -533,7 +474,6 @@ export default function BookReaderPage() {
               </div>
             </div>
 
-            {/* Font Size */}
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <label className={`font-mono text-[10px] uppercase tracking-[0.15em] ${mutedClass}`}>Font Size</label>
@@ -558,7 +498,6 @@ export default function BookReaderPage() {
               </div>
             </div>
 
-            {/* Line Height */}
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <label className={`font-mono text-[10px] uppercase tracking-[0.15em] ${mutedClass}`}>Line Spacing</label>
@@ -575,7 +514,6 @@ export default function BookReaderPage() {
               />
             </div>
 
-            {/* Reset */}
             <div className="pt-4 border-t border-current/10">
               <button
                 type="button"
@@ -589,7 +527,6 @@ export default function BookReaderPage() {
         </div>
       )}
 
-      {/* ARTICLE / BOOK CONTENT */}
       <article ref={articleRef} className="mx-auto px-6 py-28 max-w-2xl">
         <header className="mb-20 text-center border-b border-current/15 pb-14">
           <div className={`font-mono text-[10px] uppercase tracking-[0.3em] ${mutedClass} mb-4`}>
@@ -631,7 +568,6 @@ export default function BookReaderPage() {
         </div>
       </article>
 
-      {/* MOBILE FLOATING MENU BUTTON */}
       <button
         type="button"
         onClick={() => {

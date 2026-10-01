@@ -8,7 +8,7 @@ const ANGEL_WITH_HEART =
 const ANGEL_WITHOUT_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0918.png';
 
-export default function LetItGoAngel() {
+export default function LetItGoPage() {
   const [isLettingGo, setIsLettingGo] = useState(false);
   const [hearts, setHearts] = useState<{ id: number }[]>([]);
   const [clickCount, setClickCount] = useState(0);
@@ -16,7 +16,7 @@ export default function LetItGoAngel() {
   const clickCountRef = useRef(clickCount);
   clickCountRef.current = clickCount;
 
-  // Отправка накопленного счетчика в базу при выходе со страницы
+  // Автоматическая отправка накопленного счетчика в базу при закрытии или уходе со страницы
   useEffect(() => {
     return () => {
       const count = clickCountRef.current;
@@ -64,15 +64,15 @@ export default function LetItGoAngel() {
   return (
     <main className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-b from-[#87CEEB] via-[#B0E0E6] to-[#E0F6FF] flex flex-col items-center justify-center select-none">
       
-      {/* Зеленая земля / лужайка внизу */}
+      {/* Зеленая лужайка внизу */}
       <div className="absolute bottom-0 left-0 w-full h-[18vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
 
-      {/* Счётчик отпусканий в правом верхнем углу */}
+      {/* Счётчик в правом верхнем углу */}
       <div className="absolute top-6 right-6 sm:top-10 sm:right-10 text-stone-700 font-mono text-sm sm:text-base tracking-[0.2em] z-30 bg-white/70 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md">
         ❤️ {clickCount}
       </div>
 
-      {/* Интерактивный ангел по центру (стоит на земле) */}
+      {/* Интерактивный ангел по центру */}
       <div 
         className="relative cursor-pointer transition-transform duration-500 hover:scale-[1.02] active:scale-95 z-20 flex items-center justify-center p-4 mb-[8vh]"
         onClick={handleClick}
