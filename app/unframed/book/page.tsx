@@ -64,10 +64,31 @@ const slugify = (value: string): string => {
 };
 
 export default function BookReaderPage() {
-  // 1. СИНХРОННАЯ И СТРОГАЯ ПРОВЕРКА ДОСТУПА ПРИ СТАРТЕ
-  const [authChecked, setAuthChecked] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
-  const [admin, setAdmin] = useState(false);
+  // Синхронная проверка прав доступа при первом рендере (предотвращает проскок пейвола)
+  const [authData] = useState(() => {
+    if (typeof window === 'undefined') return { unlocked: false, admin: false };
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const paid = params.get('paid') === '1';
+      const adminParam = params.get('admin') === '1';
+
+      if (paid) window.localStorage.setItem(UNLOCKED_KEY, 'true');
+      if (adminParam) window.localStorage.setItem(ADMIN_KEY, 'true');
+
+      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
+      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
+
+      return {
+        unlocked: storedUnlocked || paid,
+        admin: storedAdmin || adminParam,
+      };
+    } catch {
+      return { unlocked: false, admin: false };
+    }
+  });
+
+  const [unlocked, setUnlocked] = useState(authData.unlocked);
+  const [admin, setAdmin] = useState(authData.admin);
 
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
@@ -81,42 +102,35 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Инициализация прав доступа и параметров Stripe/Admin из URL и localStorage
+  // Загрузка настроек из localStorage
   useEffect(() => {
     try {
-      const params = new URLSearchParams(window.location.search);
-      const paid = params.get('paid') === '1';
-      const adminParam = params.get('admin') === '1';
-
-      if (paid) {
-        window.localStorage.setItem(UNLOCKED_KEY, 'true');
-      }
-      if (adminParam) {
-        window.localStorage.setItem(ADMIN_KEY, 'true');
-      }
-
-      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
-      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
-
-      setUnlocked(storedUnlocked || paid);
-      setAdmin(storedAdmin || adminParam);
-
       const storedPrefs = window.localStorage.getItem(PREFS_KEY);
       if (storedPrefs) {
         const parsed = JSON.parse(storedPrefs) as Partial<ReaderPrefs>;
         setPrefs((prev) => ({ ...prev, ...parsed }));
       }
-    } catch {
-      // Игнорируем ошибки хранилища
-    } finally {
-      setAuthChecked(true);
-    }
+    } catch {}
   }, []);
 
-  // Загрузка рукописи только при подтвержденном доступе
-  useEffect(() => {
-    if (!authChecked || (!unlocked && !admin)) return;
+  // КРИТИЧЕСКИЙ ЗАЩИТНЫЙ БЛОК: Если доступ не подтвержден, рендерим Paywall немедленно
+  if (!unlocked && !admin) {
+    return (
+      <Paywall
+        onUnlock={() => {
+          try {
+            window.localStorage.setItem(UNLOCKED_KEY, 'true');
+            window.localStorage.setItem(ADMIN_KEY, 'true');
+          } catch {}
+          setUnlocked(true);
+          setAdmin(true);
+        }}
+      />
+    );
+  }
 
+  // Загрузка рукописи
+  useEffect(() => {
     let cancelled = false;
     const loadBook = async () => {
       try {
@@ -137,16 +151,6 @@ export default function BookReaderPage() {
     return () => {
       cancelled = true;
     };
-  }, [authChecked, unlocked, admin]);
-
-  // Обработчик разблокировки из Paywall (например, через Admin/Bypass)
-  const unlockHandler = useCallback(() => {
-    try {
-      window.localStorage.setItem(UNLOCKED_KEY, 'true');
-      window.localStorage.setItem(ADMIN_KEY, 'true');
-    } catch {}
-    setUnlocked(true);
-    setAdmin(true);
   }, []);
 
   const updatePrefs = useCallback((patch: Partial<ReaderPrefs>) => {
@@ -180,7 +184,7 @@ export default function BookReaderPage() {
     };
   }, [content]);
 
-  // Генерация оглавления (TOC)
+  // Генерация оглавления
   useEffect(() => {
     if (!content) {
       setToc([]);
@@ -245,7 +249,7 @@ export default function BookReaderPage() {
         </blockquote>
       ),
       ul: ({ children }) => <ul className="mb-6 ml-6 list-disc space-y-2">{children}</ul>,
-      ol: ({ children }) => <ol className="mb-6 ml-6 list-decimal space-y-2">{children}</ol>,
+      ol: ({ children }) => <ol className="mb-6 ml-6 list-decimal space-y-2">{children}</ul>,
       li: ({ children }) => <li className="pl-1">{children}</li>,
       hr: () => (
         <div className="my-16 flex items-center justify-center">
@@ -289,11 +293,6 @@ export default function BookReaderPage() {
   const borderClass = prefs.theme === 'dark' ? 'border-white/10' : prefs.theme === 'sepia' ? 'border-[#3c2f2f]/15' : 'border-black/10';
   const readerFont = prefs.fontFamily === 'serif' ? 'font-serif' : 'font-sans';
 
-  // 2. ЖЕСТКИЙ БЛОКАТОР: Пока права не проверены ИЛИ нет доступа — рендерим Paywall.
-  if (!authChecked || (!unlocked && !admin)) {
-    return <Paywall onUnlock={unlockHandler} />;
-  }
-
   if (loading) {
     return (
       <div className={`min-h-screen ${currentThemeClass} flex flex-col`}>
@@ -334,7 +333,6 @@ export default function BookReaderPage() {
     <div className={`min-h-screen ${currentThemeClass} transition-colors duration-300 relative`}>
       <Header />
 
-      {/* TOP READER BAR */}
       <div className={`sticky top-0 z-40 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/95' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/95' : 'bg-[#faf9f5]/95'} backdrop-blur-md shadow-xs`}>
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
@@ -390,7 +388,6 @@ export default function BookReaderPage() {
         </div>
       </div>
 
-      {/* TOC DRAWER */}
       {showToc && (
         <div className="fixed inset-0 z-50" onClick={() => setShowToc(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />
@@ -428,7 +425,6 @@ export default function BookReaderPage() {
         </div>
       )}
 
-      {/* SETTINGS DRAWER */}
       {showSettings && (
         <div className="fixed inset-0 z-50" onClick={() => setShowSettings(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />
