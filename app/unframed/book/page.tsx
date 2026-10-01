@@ -64,31 +64,9 @@ const slugify = (value: string): string => {
 };
 
 export default function BookReaderPage() {
-  // Синхронная проверка прав доступа при первом рендере (предотвращает проскок пейвола)
-  const [authData] = useState(() => {
-    if (typeof window === 'undefined') return { unlocked: false, admin: false };
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const paid = params.get('paid') === '1';
-      const adminParam = params.get('admin') === '1';
-
-      if (paid) window.localStorage.setItem(UNLOCKED_KEY, 'true');
-      if (adminParam) window.localStorage.setItem(ADMIN_KEY, 'true');
-
-      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
-      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
-
-      return {
-        unlocked: storedUnlocked || paid,
-        admin: storedAdmin || adminParam,
-      };
-    } catch {
-      return { unlocked: false, admin: false };
-    }
-  });
-
-  const [unlocked, setUnlocked] = useState(authData.unlocked);
-  const [admin, setAdmin] = useState(authData.admin);
+  const [isMounted, setIsMounted] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [admin, setAdmin] = useState(false);
 
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
@@ -102,9 +80,23 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Загрузка настроек из localStorage
+  // Безопасная инициализация прав и настроек на клиенте без сбоев гидратации
   useEffect(() => {
+    setIsMounted(true);
     try {
+      const params = new URLSearchParams(window.location.search);
+      const paid = params.get('paid') === '1';
+      const adminParam = params.get('admin') === '1';
+
+      if (paid) window.localStorage.setItem(UNLOCKED_KEY, 'true');
+      if (adminParam) window.localStorage.setItem(ADMIN_KEY, 'true');
+
+      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
+      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
+
+      setUnlocked(storedUnlocked || paid);
+      setAdmin(storedAdmin || adminParam);
+
       const storedPrefs = window.localStorage.getItem(PREFS_KEY);
       if (storedPrefs) {
         const parsed = JSON.parse(storedPrefs) as Partial<ReaderPrefs>;
@@ -113,7 +105,12 @@ export default function BookReaderPage() {
     } catch {}
   }, []);
 
-  // КРИТИЧЕСКИЙ ЗАЩИТНЫЙ БЛОК: Если доступ не подтвержден, рендерим Paywall немедленно
+  // Пока компонент монтируется на клиенте, отдаем нейтральный фон во избежание мерцания и сбоев
+  if (!isMounted) {
+    return <div className="min-h-screen bg-[#faf9f5]" />;
+  }
+
+  // Жёсткий заслон пейвола: если доступ не подтвержден, рендерим Paywall немедленно
   if (!unlocked && !admin) {
     return (
       <Paywall
@@ -249,7 +246,7 @@ export default function BookReaderPage() {
         </blockquote>
       ),
       ul: ({ children }) => <ul className="mb-6 ml-6 list-disc space-y-2">{children}</ul>,
-      ol: ({ children }) => <ol className="mb-6 ml-6 list-decimal space-y-2">{children}</ul>,
+      ol: ({ children }) => <ol className="mb-6 ml-6 list-decimal space-y-2">{children}</ol>,
       li: ({ children }) => <li className="pl-1">{children}</li>,
       hr: () => (
         <div className="my-16 flex items-center justify-center">
