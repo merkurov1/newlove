@@ -129,7 +129,7 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Жесткая синхронная проверка прав доступа при монтировании
+  // Инициализация прав доступа и настроек при монтировании (только на клиенте)
   useEffect(() => {
     try {
       const storedPrefs = window.localStorage.getItem(PREFS_KEY);
@@ -152,8 +152,11 @@ export default function BookReaderPage() {
       const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
       const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
 
-      setUnlocked(storedUnlocked || paid);
-      setAdmin(storedAdmin || adminParam);
+      const isUnlockedFinal = storedUnlocked || paid;
+      const isAdminFinal = storedAdmin || adminParam;
+
+      setUnlocked(isUnlockedFinal);
+      setAdmin(isAdminFinal);
     } catch {
       // Игнорируем ошибки хранилища
     } finally {
@@ -161,7 +164,7 @@ export default function BookReaderPage() {
     }
   }, []);
 
-  // Загрузка книги
+  // Загрузка книги строго после инициализации и подтверждения прав
   useEffect(() => {
     if (!isInitialized) return;
     if (!unlocked && !admin) {
@@ -204,6 +207,7 @@ export default function BookReaderPage() {
     });
   }, []);
 
+  // Расчет прогресса чтения
   useEffect(() => {
     const updateProgress = () => {
       const documentHeight = document.documentElement.scrollHeight - window.innerHeight;
@@ -224,6 +228,7 @@ export default function BookReaderPage() {
     };
   }, [content]);
 
+  // Генерация оглавления (TOC)
   useEffect(() => {
     if (!content) {
       setToc([]);
@@ -332,7 +337,7 @@ export default function BookReaderPage() {
   const borderClass = prefs.theme === 'dark' ? 'border-white/10' : prefs.theme === 'sepia' ? 'border-[#3c2f2f]/15' : 'border-black/10';
   const readerFont = prefs.fontFamily === 'serif' ? 'font-serif' : 'font-sans';
 
-  // ЖЕСТКИЙ БЛОКАТОР: Если не инициализировано ИЛИ не разблокировано — рендерим Paywall немедленно
+  // ЖЕСТКИЙ БЛОКАТОР: пока не прошла инициализация ИЛИ книга не разблокирована — возвращаем Paywall.
   if (!isInitialized || (!unlocked && !admin)) {
     return <Paywall onUnlock={unlockHandler} />;
   }
@@ -377,7 +382,7 @@ export default function BookReaderPage() {
     <div className={`min-h-screen ${currentThemeClass} transition-colors duration-300 relative`}>
       <Header />
 
-      {/* TOP READER BAR — безопасный отступ сверху (top-14 md:top-16), чтобы гарантированно не улетать под хедер */}
+      {/* TOP READER BAR — зафиксировано корректно ниже хедера (top-14 md:top-16) */}
       <div className={`sticky top-14 md:top-16 z-30 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/90' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/90' : 'bg-[#faf9f5]/90'} backdrop-blur-md`}>
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
