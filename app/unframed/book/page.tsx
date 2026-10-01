@@ -91,7 +91,7 @@ function Paywall({ onUnlock }: { onUnlock: () => void }) {
             <button
               type="button"
               onClick={onUnlock}
-              className="inline-flex items-center gap-3 bg-white text-black px-8 py-4 font-mono text-xs uppercase tracking-[0.2em] transition-all hover:bg-white/90 active:scale-95 shadow-lg"
+              className="inline-flex items-center gap-3 bg-white text-black px-8 py-4 font-mono text-xs uppercase tracking-[0.2em] transition-all hover:bg-white/90 active:scale-95 shadow-lg cursor-pointer"
             >
               <BookOpen size={14} />
               Enter Reader
@@ -119,6 +119,7 @@ export default function BookReaderPage() {
 
   const [unlocked, setUnlocked] = useState(false);
   const [admin, setAdmin] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const [prefs, setPrefs] = useState<ReaderPrefs>(DEFAULT_PREFS);
   const [showToc, setShowToc] = useState(false);
@@ -128,6 +129,7 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
+  // Инициализация прав доступа и настроек
   useEffect(() => {
     try {
       const storedPrefs = window.localStorage.getItem(PREFS_KEY);
@@ -155,11 +157,15 @@ export default function BookReaderPage() {
       if (storedUnlocked || paid) setUnlocked(true);
       if (storedAdmin || adminParam) setAdmin(true);
     } catch {
-      // ignore storage errors
+      // Игнорируем ошибки хранилища
+    } finally {
+      setIsInitialized(true);
     }
   }, []);
 
+  // Загрузка книги только при успешной авторизации
   useEffect(() => {
+    if (!isInitialized) return;
     if (!unlocked && !admin) {
       setLoading(false);
       return;
@@ -183,7 +189,7 @@ export default function BookReaderPage() {
     };
     loadBook();
     return () => { cancelled = true; };
-  }, [unlocked, admin]);
+  }, [unlocked, admin, isInitialized]);
 
   const unlockHandler = useCallback(() => {
     window.localStorage.setItem(UNLOCKED_KEY, 'true');
@@ -200,6 +206,7 @@ export default function BookReaderPage() {
     });
   }, []);
 
+  // Расчет прогресса чтения
   useEffect(() => {
     const updateProgress = () => {
       const documentHeight = document.documentElement.scrollHeight - window.innerHeight;
@@ -220,6 +227,7 @@ export default function BookReaderPage() {
     };
   }, [content]);
 
+  // Генерация оглавления (TOC)
   useEffect(() => {
     if (!content) {
       setToc([]);
@@ -328,7 +336,8 @@ export default function BookReaderPage() {
   const borderClass = prefs.theme === 'dark' ? 'border-white/10' : prefs.theme === 'sepia' ? 'border-[#3c2f2f]/15' : 'border-black/10';
   const readerFont = prefs.fontFamily === 'serif' ? 'font-serif' : 'font-sans';
 
-  if (!unlocked && !admin) {
+  // Пока данные инициализируются, показываем пустой экран или лоадер, исключая мгновенный проскок платной книги
+  if (!isInitialized || (!unlocked && !admin)) {
     return <Paywall onUnlock={unlockHandler} />;
   }
 
@@ -372,7 +381,7 @@ export default function BookReaderPage() {
     <div className={`min-h-screen ${currentThemeClass} transition-colors duration-300 relative`}>
       <Header />
 
-      {/* TOP READER BAR — корректный отступ top-16 md:top-20 исключает наложение на шапку */}
+      {/* TOP READER BAR — зафиксировано корректно ниже хедера (top-16 md:top-20) */}
       <div className={`sticky top-16 md:top-20 z-30 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/90' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/90' : 'bg-[#faf9f5]/90'} backdrop-blur-md`}>
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
@@ -400,7 +409,7 @@ export default function BookReaderPage() {
                 setShowToc((v) => !v);
                 setShowSettings(false);
               }}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border ${borderClass} font-mono text-[10px] uppercase tracking-[0.12em] hover:bg-current/5 transition-colors`}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border ${borderClass} font-mono text-[10px] uppercase tracking-[0.12em] hover:bg-current/5 transition-colors cursor-pointer`}
             >
               <List size={13} />
               <span className="hidden md:inline">Contents</span>
@@ -412,7 +421,7 @@ export default function BookReaderPage() {
                 setShowSettings((v) => !v);
                 setShowToc(false);
               }}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border ${borderClass} font-mono text-[10px] uppercase tracking-[0.12em] hover:bg-current/5 transition-colors`}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border ${borderClass} font-mono text-[10px] uppercase tracking-[0.12em] hover:bg-current/5 transition-colors cursor-pointer`}
             >
               <Settings size={13} />
               <span className="hidden md:inline">Settings</span>
@@ -441,7 +450,7 @@ export default function BookReaderPage() {
           >
             <div className="flex items-center justify-between pb-6 border-b border-current/10 mb-6">
               <span className="font-mono text-xs uppercase tracking-[0.2em]">Contents</span>
-              <button type="button" onClick={() => setShowToc(false)} className={mutedClass}>
+              <button type="button" onClick={() => setShowToc(false)} className={`${mutedClass} cursor-pointer`}>
                 <X size={18} />
               </button>
             </div>
@@ -451,7 +460,7 @@ export default function BookReaderPage() {
                   key={item.id}
                   type="button"
                   onClick={() => scrollToSection(item.id)}
-                  className={`block w-full text-left py-2.5 hover:opacity-70 transition-opacity ${
+                  className={`block w-full text-left py-2.5 hover:opacity-70 transition-opacity cursor-pointer ${
                     item.level === 1
                       ? 'font-serif font-medium text-base'
                       : item.level === 2
@@ -479,7 +488,7 @@ export default function BookReaderPage() {
           >
             <div className="flex items-center justify-between pb-6 border-b border-current/10">
               <span className="font-mono text-xs uppercase tracking-[0.2em]">Reader Settings</span>
-              <button type="button" onClick={() => setShowSettings(false)} className={mutedClass}>
+              <button type="button" onClick={() => setShowSettings(false)} className={`${mutedClass} cursor-pointer`}>
                 <X size={18} />
               </button>
             </div>
@@ -493,7 +502,7 @@ export default function BookReaderPage() {
                     key={t}
                     type="button"
                     onClick={() => updatePrefs({ theme: t })}
-                    className={`py-2.5 font-mono text-[9px] uppercase tracking-[0.12em] border rounded-lg flex items-center justify-center gap-1 ${
+                    className={`py-2.5 font-mono text-[9px] uppercase tracking-[0.12em] border rounded-lg flex items-center justify-center gap-1 cursor-pointer ${
                       prefs.theme === t ? 'border-current bg-current text-white dark:text-black font-medium' : borderClass
                     }`}
                   >
@@ -513,7 +522,7 @@ export default function BookReaderPage() {
                     key={f}
                     type="button"
                     onClick={() => updatePrefs({ fontFamily: f })}
-                    className={`py-2.5 text-sm rounded-lg border ${
+                    className={`py-2.5 text-sm rounded-lg border cursor-pointer ${
                       f === 'serif' ? 'font-serif' : 'font-sans'
                     } ${
                       prefs.fontFamily === f ? 'border-current bg-current text-white dark:text-black font-medium' : borderClass
@@ -535,7 +544,7 @@ export default function BookReaderPage() {
                 <button
                   type="button"
                   onClick={() => updatePrefs({ fontSize: Math.max(15, prefs.fontSize - 1) })}
-                  className="flex-1 py-2.5 flex items-center justify-center hover:bg-current/5"
+                  className="flex-1 py-2.5 flex items-center justify-center hover:bg-current/5 cursor-pointer"
                 >
                   <Minus size={14} />
                 </button>
@@ -543,7 +552,7 @@ export default function BookReaderPage() {
                 <button
                   type="button"
                   onClick={() => updatePrefs({ fontSize: Math.min(26, prefs.fontSize + 1) })}
-                  className="flex-1 py-2.5 flex items-center justify-center hover:bg-current/5"
+                  className="flex-1 py-2.5 flex items-center justify-center hover:bg-current/5 cursor-pointer"
                 >
                   <Plus size={14} />
                 </button>
@@ -572,7 +581,7 @@ export default function BookReaderPage() {
               <button
                 type="button"
                 onClick={() => updatePrefs(DEFAULT_PREFS)}
-                className={`font-mono text-[10px] uppercase tracking-[0.15em] ${mutedClass} hover:opacity-100`}
+                className={`font-mono text-[10px] uppercase tracking-[0.15em] ${mutedClass} hover:opacity-100 cursor-pointer`}
               >
                 Reset to default
               </button>
@@ -632,7 +641,7 @@ export default function BookReaderPage() {
         }}
         className={`fixed bottom-6 right-6 z-30 flex h-12 w-12 items-center justify-center rounded-full border ${borderClass} ${
           prefs.theme === 'dark' ? 'bg-[#181818] text-white' : prefs.theme === 'sepia' ? 'bg-[#efe5ce] text-[#3c2f2f]' : 'bg-white text-black'
-        } shadow-xl md:hidden`}
+        } shadow-xl md:hidden cursor-pointer`}
       >
         {showToc ? <X size={18} /> : <Menu size={18} />}
       </button>
