@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Lock, ArrowRight, ShieldCheck, CreditCard } from 'lucide-react';
+import { Lock, ShieldCheck, CreditCard } from 'lucide-react';
 import Link from 'next/link';
 
 interface PaywallProps {
@@ -23,7 +23,7 @@ export default function Paywall({ onUnlock }: PaywallProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          amount: 1500, // сумма в центах/пенсах (например, $15.00)
+          amount: 1500, // $15.00
           currency: 'usd', 
           successUrl, 
           cancelUrl,
@@ -45,7 +45,9 @@ export default function Paywall({ onUnlock }: PaywallProps) {
   };
 
   const handleBypassAdmin = () => {
-    if (onUnlock) onUnlock();
+    if (onUnlock) {
+      onUnlock();
+    }
   };
 
   return (
@@ -74,9 +76,10 @@ export default function Paywall({ onUnlock }: PaywallProps) {
 
         <div className="space-y-4">
           <button
+            type="button"
             onClick={handleStripeCheckout}
             disabled={loading}
-            className="w-full bg-white text-black font-bold uppercase tracking-[0.2em] py-4 hover:bg-red-600 hover:text-white transition-all font-mono text-[10px] flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full bg-white text-black font-bold uppercase tracking-[0.2em] py-4 hover:bg-red-600 hover:text-white transition-all font-mono text-[10px] flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
           >
             <CreditCard size={14} />
             <span>{loading ? 'Connecting to Stripe...' : 'Unlock via Stripe ($15)'}</span>
@@ -91,8 +94,9 @@ export default function Paywall({ onUnlock }: PaywallProps) {
 
         <div className="mt-8 pt-6 border-t border-zinc-900 flex flex-col gap-3">
           <button
+            type="button"
             onClick={handleBypassAdmin}
-            className="w-full bg-zinc-900 text-zinc-300 border border-zinc-800 font-mono text-[10px] uppercase tracking-widest py-3 hover:border-red-600 hover:text-white transition-all flex items-center justify-center gap-2"
+            className="w-full bg-zinc-900 text-zinc-300 border border-zinc-800 font-mono text-[10px] uppercase tracking-widest py-3 hover:border-red-600 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <ShieldCheck size={14} className="text-red-500" />
             <span>Author / Admin Bypass</span>

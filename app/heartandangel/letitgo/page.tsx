@@ -1,5 +1,5 @@
-import LetItGoAngel from './LetItGoAngel';
+import LetItGoAngel from '@/components/LetItGoAngel';
 
-export default function LetItGoPage() {
+export default function Page() {
   return <LetItGoAngel />;
 }

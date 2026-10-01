@@ -64,47 +64,16 @@ const slugify = (value: string): string => {
 };
 
 export default function BookReaderPage() {
-  // Синхронная инициализация прав доступа прямо при первом вызове (предотвращает любые проскоки)
-  const initialAuth = (() => {
-    if (typeof window === 'undefined') return { unlocked: false, admin: false };
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const paid = params.get('paid') === '1';
-      const adminParam = params.get('admin') === '1';
-
-      if (paid) window.localStorage.setItem(UNLOCKED_KEY, 'true');
-      if (adminParam) window.localStorage.setItem(ADMIN_KEY, 'true');
-
-      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
-      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
-
-      return {
-        unlocked: storedUnlocked || paid,
-        admin: storedAdmin || adminParam,
-      };
-    } catch {
-      return { unlocked: false, admin: false };
-    }
-  })();
-
-  const [unlocked, setUnlocked] = useState(initialAuth.unlocked);
-  const [admin, setAdmin] = useState(initialAuth.admin);
+  // 1. СИНХРОННАЯ И СТРОГАЯ ПРОВЕРКА ДОСТУПА ПРИ СТАРТЕ
+  const [authChecked, setAuthChecked] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [admin, setAdmin] = useState(false);
 
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [prefs, setPrefs] = useState<ReaderPrefs>(() => {
-    if (typeof window === 'undefined') return DEFAULT_PREFS;
-    try {
-      const stored = window.localStorage.getItem(PREFS_KEY);
-      if (stored) {
-        return { ...DEFAULT_PREFS, ...JSON.parse(stored) };
-      }
-    } catch {}
-    return DEFAULT_PREFS;
-  });
-
+  const [prefs, setPrefs] = useState<ReaderPrefs>(DEFAULT_PREFS);
   const [showToc, setShowToc] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -112,25 +81,42 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // ЖЕСТКИЙ БЛОКАТОР: Если доступ не подтвержден, сразу возвращаем Paywall.
-  // Никакой код читалки и загрузки файлов даже не начнет выполняться.
-  if (!unlocked && !admin) {
-    return (
-      <Paywall
-        onUnlock={() => {
-          try {
-            window.localStorage.setItem(UNLOCKED_KEY, 'true');
-            window.localStorage.setItem(ADMIN_KEY, 'true');
-          } catch {}
-          setUnlocked(true);
-          setAdmin(true);
-        }}
-      />
-    );
-  }
-
-  // Загрузка книги только для авторизованных пользователей
+  // Инициализация прав доступа и параметров Stripe/Admin из URL и localStorage
   useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const paid = params.get('paid') === '1';
+      const adminParam = params.get('admin') === '1';
+
+      if (paid) {
+        window.localStorage.setItem(UNLOCKED_KEY, 'true');
+      }
+      if (adminParam) {
+        window.localStorage.setItem(ADMIN_KEY, 'true');
+      }
+
+      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
+      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
+
+      setUnlocked(storedUnlocked || paid);
+      setAdmin(storedAdmin || adminParam);
+
+      const storedPrefs = window.localStorage.getItem(PREFS_KEY);
+      if (storedPrefs) {
+        const parsed = JSON.parse(storedPrefs) as Partial<ReaderPrefs>;
+        setPrefs((prev) => ({ ...prev, ...parsed }));
+      }
+    } catch {
+      // Игнорируем ошибки хранилища
+    } finally {
+      setAuthChecked(true);
+    }
+  }, []);
+
+  // Загрузка рукописи только при подтвержденном доступе
+  useEffect(() => {
+    if (!authChecked || (!unlocked && !admin)) return;
+
     let cancelled = false;
     const loadBook = async () => {
       try {
@@ -151,6 +137,16 @@ export default function BookReaderPage() {
     return () => {
       cancelled = true;
     };
+  }, [authChecked, unlocked, admin]);
+
+  // Обработчик разблокировки из Paywall (например, через Admin/Bypass)
+  const unlockHandler = useCallback(() => {
+    try {
+      window.localStorage.setItem(UNLOCKED_KEY, 'true');
+      window.localStorage.setItem(ADMIN_KEY, 'true');
+    } catch {}
+    setUnlocked(true);
+    setAdmin(true);
   }, []);
 
   const updatePrefs = useCallback((patch: Partial<ReaderPrefs>) => {
@@ -292,6 +288,11 @@ export default function BookReaderPage() {
   const mutedClass = prefs.theme === 'dark' ? 'text-white/45' : prefs.theme === 'sepia' ? 'text-[#3c2f2f]/60' : 'text-black/50';
   const borderClass = prefs.theme === 'dark' ? 'border-white/10' : prefs.theme === 'sepia' ? 'border-[#3c2f2f]/15' : 'border-black/10';
   const readerFont = prefs.fontFamily === 'serif' ? 'font-serif' : 'font-sans';
+
+  // 2. ЖЕСТКИЙ БЛОКАТОР: Пока права не проверены ИЛИ нет доступа — рендерим Paywall.
+  if (!authChecked || (!unlocked && !admin)) {
+    return <Paywall onUnlock={unlockHandler} />;
+  }
 
   if (loading) {
     return (
