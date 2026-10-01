@@ -113,13 +113,14 @@ function Paywall({ onUnlock }: { onUnlock: () => void }) {
 }
 
 export default function BookReaderPage() {
+  // Надежная синхронная ленивая инициализация прав с клиента, исключающая проскок
+  const [authChecked, setAuthChecked] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [admin, setAdmin] = useState(false);
+
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [unlocked, setUnlocked] = useState(false);
-  const [admin, setAdmin] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
 
   const [prefs, setPrefs] = useState<ReaderPrefs>(DEFAULT_PREFS);
   const [showToc, setShowToc] = useState(false);
@@ -129,15 +130,9 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Инициализация прав доступа и настроек при монтировании (только на клиенте)
+  // Первичная проверка прав доступа и параметров URL
   useEffect(() => {
     try {
-      const storedPrefs = window.localStorage.getItem(PREFS_KEY);
-      if (storedPrefs) {
-        const parsed = JSON.parse(storedPrefs) as Partial<ReaderPrefs>;
-        setPrefs({ ...DEFAULT_PREFS, ...parsed });
-      }
-
       const params = new URLSearchParams(window.location.search);
       const paid = params.get('paid') === '1';
       const adminParam = params.get('admin') === '1';
@@ -152,25 +147,24 @@ export default function BookReaderPage() {
       const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
       const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
 
-      const isUnlockedFinal = storedUnlocked || paid;
-      const isAdminFinal = storedAdmin || adminParam;
+      setUnlocked(storedUnlocked || paid);
+      setAdmin(storedAdmin || adminParam);
 
-      setUnlocked(isUnlockedFinal);
-      setAdmin(isAdminFinal);
+      const storedPrefs = window.localStorage.getItem(PREFS_KEY);
+      if (storedPrefs) {
+        const parsed = JSON.parse(storedPrefs) as Partial<ReaderPrefs>;
+        setPrefs((prev) => ({ ...prev, ...parsed }));
+      }
     } catch {
       // Игнорируем ошибки хранилища
     } finally {
-      setIsInitialized(true);
+      setAuthChecked(true);
     }
   }, []);
 
-  // Загрузка книги строго после инициализации и подтверждения прав
+  // Загрузка файла книги только после подтверждения авторизации
   useEffect(() => {
-    if (!isInitialized) return;
-    if (!unlocked && !admin) {
-      setLoading(false);
-      return;
-    }
+    if (!authChecked || (!unlocked && !admin)) return;
 
     let cancelled = false;
     const loadBook = async () => {
@@ -189,11 +183,15 @@ export default function BookReaderPage() {
       }
     };
     loadBook();
-    return () => { cancelled = true; };
-  }, [unlocked, admin, isInitialized]);
+    return () => {
+      cancelled = true;
+    };
+  }, [authChecked, unlocked, admin]);
 
   const unlockHandler = useCallback(() => {
-    window.localStorage.setItem(UNLOCKED_KEY, 'true');
+    try {
+      window.localStorage.setItem(UNLOCKED_KEY, 'true');
+    } catch {}
     setUnlocked(true);
   }, []);
 
@@ -337,8 +335,8 @@ export default function BookReaderPage() {
   const borderClass = prefs.theme === 'dark' ? 'border-white/10' : prefs.theme === 'sepia' ? 'border-[#3c2f2f]/15' : 'border-black/10';
   const readerFont = prefs.fontFamily === 'serif' ? 'font-serif' : 'font-sans';
 
-  // ЖЕСТКИЙ БЛОКАТОР: пока не прошла инициализация ИЛИ книга не разблокирована — возвращаем Paywall.
-  if (!isInitialized || (!unlocked && !admin)) {
+  // ЖЕСТКИЙ БЛОКАТОР: Если проверка не завершена ИЛИ нет доступа — сразу рендерим Paywall
+  if (!authChecked || (!unlocked && !admin)) {
     return <Paywall onUnlock={unlockHandler} />;
   }
 
@@ -382,8 +380,8 @@ export default function BookReaderPage() {
     <div className={`min-h-screen ${currentThemeClass} transition-colors duration-300 relative`}>
       <Header />
 
-      {/* TOP READER BAR — зафиксировано корректно ниже хедера (top-14 md:top-16) */}
-      <div className={`sticky top-14 md:top-16 z-30 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/90' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/90' : 'bg-[#faf9f5]/90'} backdrop-blur-md`}>
+      {/* TOP READER BAR — зафиксировано корректно ниже хедера с высоким z-index */}
+      <div className={`sticky top-0 z-40 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/95' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/95' : 'bg-[#faf9f5]/95'} backdrop-blur-md shadow-xs`}>
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link
@@ -441,7 +439,7 @@ export default function BookReaderPage() {
 
       {/* TOC DRAWER */}
       {showToc && (
-        <div className="fixed inset-0 z-40" onClick={() => setShowToc(false)}>
+        <div className="fixed inset-0 z-50" onClick={() => setShowToc(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />
           <aside
             className={`absolute left-0 top-0 bottom-0 w-full max-w-sm overflow-y-auto border-r ${borderClass} ${
@@ -479,7 +477,7 @@ export default function BookReaderPage() {
 
       {/* SETTINGS DRAWER */}
       {showSettings && (
-        <div className="fixed inset-0 z-40" onClick={() => setShowSettings(false)}>
+        <div className="fixed inset-0 z-50" onClick={() => setShowSettings(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />
           <aside
             className={`absolute right-0 top-0 bottom-0 w-full max-w-sm overflow-y-auto border-l ${borderClass} ${
@@ -640,7 +638,7 @@ export default function BookReaderPage() {
           setShowToc((v) => !v);
           setShowSettings(false);
         }}
-        className={`fixed bottom-6 right-6 z-30 flex h-12 w-12 items-center justify-center rounded-full border ${borderClass} ${
+        className={`fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full border ${borderClass} ${
           prefs.theme === 'dark' ? 'bg-[#181818] text-white' : prefs.theme === 'sepia' ? 'bg-[#efe5ce] text-[#3c2f2f]' : 'bg-white text-black'
         } shadow-xl md:hidden cursor-pointer`}
       >
