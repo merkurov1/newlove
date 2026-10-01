@@ -67,7 +67,8 @@ function Paywall({ onUnlock }: { onUnlock: () => void }) {
   return (
     <div className="min-h-screen bg-[#0d0d0d] text-white flex flex-col selection:bg-white selection:text-black">
       <Header />
-      <div className="flex-1 flex items-center justify-center px-6 pt-20">
+      {/* Исправлен отступ сверху, чтобы контент не уезжал под шапку */}
+      <div className="flex-1 flex items-center justify-center px-6 pt-32 pb-16">
         <div className="w-full max-w-xl text-center space-y-6">
           <div className="flex justify-center">
             <div className="flex h-16 w-16 items-center justify-center border border-white/20 rounded-2xl bg-white/5 backdrop-blur-md">
@@ -254,7 +255,7 @@ export default function BookReaderPage() {
         const textContent = React.Children.toArray(children).join('');
         const id = slugify(textContent);
         return (
-          <h1 id={id} className="scroll-mt-32 mt-28 mb-10 font-serif text-3xl md:text-4xl tracking-tight font-normal border-b border-current/10 pb-4">
+          <h1 id={id} className="scroll-mt-36 mt-28 mb-10 font-serif text-3xl md:text-4xl tracking-tight font-normal border-b border-current/10 pb-4">
             {children}
           </h1>
         );
@@ -263,7 +264,7 @@ export default function BookReaderPage() {
         const textContent = React.Children.toArray(children).join('');
         const id = slugify(textContent);
         return (
-          <h2 id={id} className="scroll-mt-32 mt-20 mb-6 font-serif text-2xl md:text-3xl tracking-tight font-normal">
+          <h2 id={id} className="scroll-mt-36 mt-20 mb-6 font-serif text-2xl md:text-3xl tracking-tight font-normal">
             {children}
           </h2>
         );
@@ -272,7 +273,7 @@ export default function BookReaderPage() {
         const textContent = React.Children.toArray(children).join('');
         const id = slugify(textContent);
         return (
-          <h3 id={id} className="scroll-mt-32 mt-14 mb-4 font-serif text-xl md:text-2xl font-normal">
+          <h3 id={id} className="scroll-mt-36 mt-14 mb-4 font-serif text-xl md:text-2xl font-normal">
             {children}
           </h3>
         );
@@ -317,7 +318,6 @@ export default function BookReaderPage() {
     [],
   );
 
-  // Темы оформления читалки
   const themeClasses = {
     light: 'bg-[#faf9f5] text-[#1c1c1c]',
     sepia: 'bg-[#f4ecd8] text-[#3c2f2f]',
@@ -337,7 +337,7 @@ export default function BookReaderPage() {
     return (
       <div className={`min-h-screen ${currentThemeClass} flex flex-col`}>
         <Header />
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center pt-20">
           <div className="text-center space-y-4">
             <div className={`font-mono text-[10px] uppercase tracking-[0.25em] ${mutedClass}`}>
               Opening manuscript...
@@ -352,7 +352,7 @@ export default function BookReaderPage() {
     return (
       <div className={`min-h-screen ${currentThemeClass} flex flex-col`}>
         <Header />
-        <div className="flex-1 flex items-center justify-center px-6">
+        <div className="flex-1 flex items-center justify-center px-6 pt-20">
           <div className="max-w-md text-center space-y-4">
             <div className={`font-mono text-[10px] uppercase tracking-[0.25em] ${mutedClass}`}>Reader error</div>
             <p className="text-sm font-serif">{error}</p>
@@ -373,9 +373,9 @@ export default function BookReaderPage() {
     <div className={`min-h-screen ${currentThemeClass} transition-colors duration-300 relative`}>
       <Header />
 
-      {/* TOP READER BAR */}
-      <div className={`sticky top-16 md:top-20 z-30 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/90' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/90' : 'bg-[#faf9f5]/90'} backdrop-blur-md`}>
-        <div className="mx-auto flex h-12 max-w-[1400px] items-center justify-between px-6">
+      {/* TOP READER BAR — заменено top-20 / top-24 на корректные значения под высоту Header (например, top-16 / top-20), чтобы исключить наложения */}
+      <div className={`sticky top-16 md:top-20 z-35 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/90' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/90' : 'bg-[#faf9f5]/90'} backdrop-blur-md`}>
+        <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link
               href="/unframed"
@@ -401,7 +401,7 @@ export default function BookReaderPage() {
                 setShowToc((v) => !v);
                 setShowSettings(false);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${borderClass} font-mono text-[10px] uppercase tracking-[0.12em] hover:bg-current/5 transition-colors`}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border ${borderClass} font-mono text-[10px] uppercase tracking-[0.12em] hover:bg-current/5 transition-colors`}
             >
               <List size={13} />
               <span className="hidden md:inline">Contents</span>
@@ -413,7 +413,7 @@ export default function BookReaderPage() {
                 setShowSettings((v) => !v);
                 setShowToc(false);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${borderClass} font-mono text-[10px] uppercase tracking-[0.12em] hover:bg-current/5 transition-colors`}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border ${borderClass} font-mono text-[10px] uppercase tracking-[0.12em] hover:bg-current/5 transition-colors`}
             >
               <Settings size={13} />
               <span className="hidden md:inline">Settings</span>
@@ -452,7 +452,7 @@ export default function BookReaderPage() {
                   key={item.id}
                   type="button"
                   onClick={() => scrollToSection(item.id)}
-                  className={`block w-full text-left py-2 hover:opacity-70 transition-opacity ${
+                  className={`block w-full text-left py-2.5 hover:opacity-70 transition-opacity ${
                     item.level === 1
                       ? 'font-serif font-medium text-base'
                       : item.level === 2
@@ -583,7 +583,7 @@ export default function BookReaderPage() {
       )}
 
       {/* ARTICLE / BOOK CONTENT */}
-      <article ref={articleRef} className="mx-auto px-6 py-24 max-w-2xl">
+      <article ref={articleRef} className="mx-auto px-6 py-28 max-w-2xl">
         <header className="mb-20 text-center border-b border-current/15 pb-14">
           <div className={`font-mono text-[10px] uppercase tracking-[0.3em] ${mutedClass} mb-4`}>
             Private Memoir Edition
