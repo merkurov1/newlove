@@ -59,14 +59,15 @@ export default function TempleClient() {
   const getEventVisuals = (eventType: string) => {
     switch (eventType?.toUpperCase()) {
       case 'VIGIL':
+      case 'VIGIL_SPARK':
         return { icon: Flame, color: 'text-amber-600', label: 'Vigil', badgeBg: 'bg-amber-50 border-amber-200/80 text-amber-900' };
       case 'ASH':
         return { icon: Trash2, color: 'text-rose-600', label: 'Let It Go', badgeBg: 'bg-rose-50 border-rose-200/80 text-rose-900' };
       case 'CAST':
-        return { icon: Compass, color: 'text-indigo-600', label: 'Cast Archetype', badgeBg: 'bg-indigo-50 border-indigo-200/80 text-indigo-900' };
+        return { icon: Compass, color: 'text-indigo-600', label: 'Cast', badgeBg: 'bg-indigo-50 border-indigo-200/80 text-indigo-900' };
       case 'ABSOLUTION':
-      case 'PIERROT':
         return { icon: ShieldCheck, color: 'text-emerald-600', label: 'Absolution', badgeBg: 'bg-emerald-50 border-emerald-200/80 text-emerald-900' };
+      case 'HEARTANDANGEL':
       case 'MEDITATION':
       case 'SILENCE':
         return { icon: Moon, color: 'text-purple-600', label: 'Silence', badgeBg: 'bg-purple-50 border-purple-200/80 text-purple-900' };
@@ -82,15 +83,39 @@ export default function TempleClient() {
         if (res.ok) {
           const json = await res.json();
           if (json && Array.isArray(json.data) && json.data.length > 0) {
-            const formatted = json.data.map((item: any) => {
-              const type = item.event_type || 'WHISPER';
+            
+            // Фильтруем технический мусор
+            const filteredData = json.data.filter((item: any) => {
+              const type = (item.event_type || '').toLowerCase();
+              return type !== 'enter' && type !== 'nav' && type !== 'confess';
+            });
+
+            const formatted = filteredData.map((item: any) => {
+              const type = (item.event_type || 'WHISPER').toUpperCase();
               const visuals = getEventVisuals(type);
+              
+              let cleanContent = item.message;
+              let cleanAuthor = item.author || 'Anonymous';
+
+              // Очистка текста Абсолюции от дублирования имени (например: "Anton Merkurov confessed: ...")
+              if (type === 'ABSOLUTION' && cleanContent.includes('confessed:')) {
+                 const splitMsg = cleanContent.split('confessed:');
+                 if (splitMsg.length > 1) {
+                    cleanContent = `Confessed:${splitMsg[1]}`;
+                 }
+              }
+
+              // Нормализация системных типов для красивого отображения
+              let displayType = type;
+              if (type === 'VIGIL_SPARK') displayType = 'VIGIL';
+              if (type === 'HEARTANDANGEL') displayType = 'BALANCE';
+
               return {
                 id: item.id || Date.now(),
-                type: type,
-                author: item.author || 'Anonymous',
-                time: 'recently',
-                content: item.message,
+                type: displayType,
+                author: cleanAuthor,
+                time: new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                content: cleanContent,
                 audioUrl: item.audio_url || null,
                 icon: visuals.icon,
                 color: visuals.color,
@@ -105,6 +130,10 @@ export default function TempleClient() {
       }
     }
     fetchLogs();
+    
+    // Опционально: поллинг каждые 15 секунд для эффекта "живого" храма
+    const interval = setInterval(fetchLogs, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   const toggleRecording = async () => {
@@ -188,7 +217,7 @@ export default function TempleClient() {
           id: json.data?.id || Date.now(),
           type: audioBlobUrl ? 'AUDIO_WHISPER' : 'WHISPER',
           author: userName,
-          time: 'just now',
+          time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
           content: postText || 'Voice transmission',
           audioUrl: audioBlobUrl,
           icon: audioBlobUrl ? Mic : Sparkles,
