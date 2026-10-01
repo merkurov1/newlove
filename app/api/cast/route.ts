@@ -8,7 +8,6 @@ const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(sbUrl, sbKey);
 
-// Список рабочих и бесплатных моделей OpenRouter (fallback по очереди)
 const FREE_MODELS = [
   'openrouter/free',
   'meta-llama/llama-3.3-70b-instruct:free',
@@ -93,13 +92,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Answers required' }, { status: 400 })
     }
 
-    // Определяем user_id из заголовка авторизации, если пользователь залогинен
+    // Извлекаем пользователя из заголовка авторизации Supabase
     const authHeader = req.headers.get('authorization')
-    let userId = null
+    let userId: string | null = null
+    let userEmail: string | null = null
+    let userName = 'Visitor'
+
     if (authHeader) {
       const token = authHeader.replace('Bearer ', '')
       const { data: { user } } = await supabase.auth.getUser(token)
-      if (user) userId = user.id
+      if (user) {
+        userId = user.id
+        userEmail = user.email || null
+        
+        // Достаем актуальный профиль из таблицы users
+        const { data: profile } = await supabase
+          .from('users')
+          .select('name, username')
+          .eq('id', userId)
+          .maybeSingle()
+        
+        if (profile?.name) userName = profile.name
+        else if (user.user_metadata?.name) userName = user.user_metadata.name
+        else if (user.email) userName = user.email.split('@')[0]
+      }
     }
 
     const openai = new OpenAI({
@@ -117,7 +133,6 @@ export async function POST(req: Request) {
     let completion = null;
     let lastError = null;
 
-    // Перебираем модели, пока одна из них не ответит
     for (const model of FREE_MODELS) {
       try {
         completion = await openai.chat.completions.create({
@@ -130,7 +145,7 @@ export async function POST(req: Request) {
           response_format: { type: 'json_object' }
         });
         if (completion?.choices[0]?.message?.content) {
-          break; // Успешно получили ответ
+          break;
         }
       } catch (err: any) {
         console.warn(`[Cast] Model ${model} failed:`, err?.message || err);
@@ -150,7 +165,6 @@ export async function POST(req: Request) {
     if (parsed && parsed.archetype) {
       archetype = String(parsed.archetype).toUpperCase()
     } else {
-      console.warn("Fallback parsing triggered", rawText)
       const match = rawText.match(/\"?ARCHETYPE\"?:?\s*\"?([A-Z]+)\"?/i)
       if (match) archetype = String(match[1] || 'VOID').toUpperCase()
       
@@ -164,11 +178,12 @@ export async function POST(req: Request) {
       }
     }
 
-    // Сохраняем в таблицу casts с привязкой к пользователю (если авторизован)
+    // Сохраняем в таблицу casts
     const { data: record, error } = await supabase
       .from('casts')
       .insert({ 
           user_id: userId,
+          email: userEmail,
           answers, 
           language: lang, 
           analysis: parsed, 
@@ -180,8 +195,10 @@ export async function POST(req: Request) {
 
     if (error) console.error('Supabase DB Error:', error)
 
-    // Дублируем событие в общую ленту храма
+    // Дублируем событие в общую ленту храма с реальным user_id и именем автора
     await supabase.from('temple_log').insert({
+      user_id: userId,
+      author: userName,
       event_type: 'CAST',
       message: `Perceptual archetype manifested: ${archetype}`,
       created_at: new Date().toISOString()

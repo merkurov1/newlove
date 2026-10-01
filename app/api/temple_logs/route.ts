@@ -1,17 +1,19 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 
+const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabase = createClient(sbUrl, sbKey)
+
 export async function GET(req: Request) {
   try {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth')
-    const srv = getServerSupabaseClient({ useServiceRole: true })
-
-    const { data, error } = await srv
+    const { data, error } = await supabase
       .from('temple_log')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(5)
+      .limit(10)
 
     if (error) {
       console.error('API GET /api/temple_logs error', error)
@@ -28,14 +30,42 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    if (!body?.message) return NextResponse.json({ error: 'message required' }, { status: 400 })
+    if (!body?.message && !body?.audio_url) {
+      return NextResponse.json({ error: 'message or audio required' }, { status: 400 })
+    }
 
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth')
-    const srv = getServerSupabaseClient({ useServiceRole: true })
+    // Пытаемся извлечь пользователя из заголовка авторизации
+    const authHeader = req.headers.get('authorization')
+    let userId: string | null = null
+    let authorName = body.author || 'Anonymous'
 
-    const { data, error } = await srv.from('temple_log').insert({
-      event_type: body.event_type || 'nav',
-      message: body.message,
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '')
+      const { data: { user } } = await supabase.auth.getUser(token)
+      if (user) {
+        userId = user.id
+        const { data: profile } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', userId)
+          .maybeSingle()
+
+        if (profile?.name) {
+          authorName = profile.name
+        } else if (user.user_metadata?.name) {
+          authorName = user.user_metadata.name
+        } else if (user.email) {
+          authorName = user.email.split('@')[0]
+        }
+      }
+    }
+
+    const { data, error } = await supabase.from('temple_log').insert({
+      user_id: userId,
+      author: authorName,
+      event_type: body.event_type || 'WHISPER',
+      message: body.message || '',
+      audio_url: body.audio_url || null,
       created_at: new Date().toISOString(),
     }).select().single()
 
