@@ -1,21 +1,21 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from '@/components/Header';
 import { useAuth } from '@/components/AuthContext';
 import { motion } from 'framer-motion';
-import { 
-  Sparkles, 
-  Send, 
-  Mic, 
-  Square, 
-  Trash2, 
-  Flame, 
-  Radio, 
-  ExternalLink, 
-  Volume2, 
-  Compass, 
-  ShieldCheck, 
+import {
+  Sparkles,
+  Send,
+  Mic,
+  Square,
+  Trash2,
+  Flame,
+  Radio,
+  ExternalLink,
+  Volume2,
+  Compass,
+  ShieldCheck,
   Moon,
   Clock,
   User as UserIcon
@@ -25,6 +25,7 @@ import Link from 'next/link';
 interface TemplePost {
   id: string | number;
   type: string;
+  label: string;
   author: string;
   time: string;
   content: string;
@@ -34,161 +35,216 @@ interface TemplePost {
   badgeBg?: string;
 }
 
+const RITUALS = [
+  { href: '/cast', label: 'Cast' },
+  { href: '/vigil', label: 'Vigil' },
+  { href: '/absolution', label: 'Absolution' },
+  { href: '/heartandangel/calm', label: 'Calm' },
+  { href: '/heartandangel/letitgo', label: 'Let It Go' }
+];
+
+// Вынесено из компонента: чистая функция, не пересоздаётся на каждый рендер
+function getEventVisuals(eventType: string) {
+  switch (eventType?.toUpperCase()) {
+    case 'VIGIL':
+    case 'VIGIL_SPARK':
+      return { icon: Flame, color: 'text-amber-600', label: 'Vigil', badgeBg: 'bg-amber-50 border-amber-200/80 text-amber-900' };
+    case 'ASH':
+      return { icon: Trash2, color: 'text-rose-600', label: 'Let It Go', badgeBg: 'bg-rose-50 border-rose-200/80 text-rose-900' };
+    case 'CAST':
+      return { icon: Compass, color: 'text-indigo-600', label: 'Cast', badgeBg: 'bg-indigo-50 border-indigo-200/80 text-indigo-900' };
+    case 'ABSOLUTION':
+      return { icon: ShieldCheck, color: 'text-emerald-600', label: 'Absolution', badgeBg: 'bg-emerald-50 border-emerald-200/80 text-emerald-900' };
+    case 'HEARTANDANGEL':
+    case 'MEDITATION':
+    case 'SILENCE':
+      return { icon: Moon, color: 'text-purple-600', label: 'Calm', badgeBg: 'bg-purple-50 border-purple-200/80 text-purple-900' };
+    case 'WHISPER':
+      return { icon: Sparkles, color: 'text-zinc-900', label: 'Whisper', badgeBg: 'bg-zinc-100 border-zinc-200 text-zinc-800' };
+    case 'AUDIO_WHISPER':
+      return { icon: Mic, color: 'text-zinc-900', label: 'Voice', badgeBg: 'bg-zinc-100 border-zinc-200 text-zinc-800' };
+    default:
+      return { icon: Radio, color: 'text-zinc-600', label: eventType || 'Log', badgeBg: 'bg-zinc-100 border-zinc-200 text-zinc-800' };
+  }
+}
+
+// Сегодня — только время, раньше — дата + время (иначе записи разных дней неотличимы)
+function formatTime(iso?: string) {
+  const d = iso ? new Date(iso) : new Date();
+  if (isNaN(d.getTime())) return '';
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === new Date().toDateString()) return time;
+  return `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${time}`;
+}
+
 export default function TempleClient() {
   const { user, profile, isLoading } = useAuth();
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<TemplePost[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const baseTextRef = useRef('');
 
   const userName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Visitor';
 
   useEffect(() => {
     return () => {
-      if (audioBlobUrl) {
-        URL.revokeObjectURL(audioBlobUrl);
-      }
+      if (audioBlobUrl) URL.revokeObjectURL(audioBlobUrl);
     };
   }, [audioBlobUrl]);
 
-  const getEventVisuals = (eventType: string) => {
-    switch (eventType?.toUpperCase()) {
-      case 'VIGIL':
-      case 'VIGIL_SPARK':
-        return { icon: Flame, color: 'text-amber-600', label: 'Vigil', badgeBg: 'bg-amber-50 border-amber-200/80 text-amber-900' };
-      case 'ASH':
-        return { icon: Trash2, color: 'text-rose-600', label: 'Let It Go', badgeBg: 'bg-rose-50 border-rose-200/80 text-rose-900' };
-      case 'CAST':
-        return { icon: Compass, color: 'text-indigo-600', label: 'Cast', badgeBg: 'bg-indigo-50 border-indigo-200/80 text-indigo-900' };
-      case 'ABSOLUTION':
-        return { icon: ShieldCheck, color: 'text-emerald-600', label: 'Absolution', badgeBg: 'bg-emerald-50 border-emerald-200/80 text-emerald-900' };
-      case 'HEARTANDANGEL':
-      case 'MEDITATION':
-      case 'SILENCE':
-        return { icon: Moon, color: 'text-purple-600', label: 'Silence', badgeBg: 'bg-purple-50 border-purple-200/80 text-purple-900' };
-      default:
-        return { icon: Radio, color: 'text-zinc-600', label: eventType || 'Log', badgeBg: 'bg-zinc-100 border-zinc-200 text-zinc-800' };
-    }
-  };
+  // Если ушли со страницы во время записи — глушим микрофон и распознавание
+  useEffect(() => {
+    return () => {
+      const mr = mediaRecorderRef.current;
+      if (mr) {
+        mr.onstop = null;
+        if (mr.state !== 'inactive') mr.stop();
+      }
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      try { recognitionRef.current?.stop(); } catch {}
+    };
+  }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchLogs() {
       try {
-        const res = await fetch('/api/temple_logs');
-        if (res.ok) {
-          const json = await res.json();
-          if (json && Array.isArray(json.data) && json.data.length > 0) {
-            
-            // Фильтруем технический мусор
-            const filteredData = json.data.filter((item: any) => {
-              const type = (item.event_type || '').toLowerCase();
-              return type !== 'enter' && type !== 'nav' && type !== 'confess';
-            });
+        const res = await fetch('/api/temple_logs', { cache: 'no-store' });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled || !json || !Array.isArray(json.data)) return;
 
-            const formatted = filteredData.map((item: any) => {
-              const type = (item.event_type || 'WHISPER').toUpperCase();
-              const visuals = getEventVisuals(type);
-              
-              let cleanContent = item.message;
-              let cleanAuthor = item.author || 'Anonymous';
+        const formatted: TemplePost[] = json.data
+          // Фильтруем технический мусор
+          .filter((item: any) => {
+            const type = (item.event_type || '').toLowerCase();
+            return type !== 'enter' && type !== 'nav' && type !== 'confess';
+          })
+          .map((item: any, index: number) => {
+            const type = (item.event_type || 'WHISPER').toUpperCase();
+            const visuals = getEventVisuals(type);
 
-              // Очистка текста Абсолюции от дублирования имени (например: "Anton Merkurov confessed: ...")
-              if (type === 'ABSOLUTION' && cleanContent.includes('confessed:')) {
-                 const splitMsg = cleanContent.split('confessed:');
-                 if (splitMsg.length > 1) {
-                    cleanContent = `Confessed:${splitMsg[1]}`;
-                 }
-              }
+            // item.message может быть null — раньше это молча роняло всю ленту
+            let cleanContent = String(item.message ?? '');
+            const cleanAuthor = item.author || 'Anonymous';
 
-              // Нормализация системных типов для красивого отображения
-              let displayType = type;
-              if (type === 'VIGIL_SPARK') displayType = 'VIGIL';
-              if (type === 'HEARTANDANGEL') displayType = 'BALANCE';
+            // Очистка текста Абсолюции от дублирования имени ("Anton Merkurov confessed: ...")
+            if (type === 'ABSOLUTION' && cleanContent.includes('confessed:')) {
+              const splitMsg = cleanContent.split('confessed:');
+              if (splitMsg.length > 1) cleanContent = `Confessed:${splitMsg.slice(1).join('confessed:')}`;
+            }
 
-              return {
-                id: item.id || Date.now(),
-                type: displayType,
-                author: cleanAuthor,
-                time: new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                content: cleanContent,
-                audioUrl: item.audio_url || null,
-                icon: visuals.icon,
-                color: visuals.color,
-                badgeBg: visuals.badgeBg
-              };
-            });
-            setPosts(formatted);
-          }
-        }
+            return {
+              id: item.id ?? `${item.created_at}-${index}`,
+              type,
+              label: visuals.label,
+              author: cleanAuthor,
+              time: formatTime(item.created_at),
+              content: cleanContent,
+              audioUrl: item.audio_url || null,
+              icon: visuals.icon,
+              color: visuals.color,
+              badgeBg: visuals.badgeBg
+            };
+          });
+
+        setPosts(formatted);
       } catch (e) {
         console.warn('Failed to fetch temple logs', e);
+      } finally {
+        if (!cancelled) setLoaded(true);
       }
     }
+
     fetchLogs();
-    
-    // Опционально: поллинг каждые 15 секунд для эффекта "живого" храма
-    const interval = setInterval(fetchLogs, 15000);
-    return () => clearInterval(interval);
+
+    // Поллинг для эффекта "живого" храма — только когда вкладка открыта
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchLogs();
+    }, 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== 'inactive') mr.stop();
+    try { recognitionRef.current?.stop(); } catch {}
+    recognitionRef.current = null;
+    setIsRecording(false);
   }, []);
 
   const toggleRecording = async () => {
     if (isRecording) {
-      if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
-      if (recognitionRef.current) recognitionRef.current.stop();
-      setIsRecording(false);
+      stopRecording();
       return;
     }
 
+    setError(null);
     audioChunksRef.current = [];
+    baseTextRef.current = postText;
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const mediaRecorder = new MediaRecorder(stream);
-      
+
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const url = URL.createObjectURL(audioBlob);
-        setAudioBlobUrl(url);
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+        setAudioBlobUrl(URL.createObjectURL(audioBlob));
         stream.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
       };
 
       mediaRecorder.start();
       mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
 
-      const WinSpeech = window as unknown as { 
-        SpeechRecognition?: new () => any; 
-        webkitSpeechRecognition?: new () => any; 
+      const WinSpeech = window as unknown as {
+        SpeechRecognition?: new () => any;
+        webkitSpeechRecognition?: new () => any;
       };
       const SpeechRecognition = WinSpeech.SpeechRecognition || WinSpeech.webkitSpeechRecognition;
-      
+
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
-        recognition.lang = 'en-US';
+        recognition.lang = navigator.language || 'en-US';
         recognition.continuous = true;
         recognition.interimResults = true;
 
         recognition.onresult = (event: any) => {
+          // Идём с 0: в continuous-режиме цикл с resultIndex терял всё, что было сказано раньше
           let transcript = '';
-          for (let i = event.resultIndex; i < event.results.length; i++) {
+          for (let i = 0; i < event.results.length; i++) {
             transcript += event.results[i][0].transcript;
           }
-          setPostText(transcript);
+          const base = baseTextRef.current;
+          setPostText((base ? base + ' ' : '') + transcript);
         };
+        recognition.onerror = () => {};
         recognition.start();
         recognitionRef.current = recognition;
       }
     } catch (e) {
       console.error('Microphone access error:', e);
-      alert('Could not access microphone.');
+      setError('Could not access microphone.');
       setIsRecording(false);
     }
   };
@@ -196,7 +252,10 @@ export default function TempleClient() {
   const handleSendPost = async () => {
     if ((!postText.trim() && !audioBlobUrl) || isSubmitting) return;
     setIsSubmitting(true);
+    setError(null);
     try {
+      // TODO: audioBlobUrl — это blob: URL, он живёт только в этой вкладке.
+      // Чтобы голос слышали другие, аудио нужно загрузить в storage и отправить публичный URL.
       const payload = {
         event_type: audioBlobUrl ? 'AUDIO_WHISPER' : 'WHISPER',
         message: postText || 'Voice transmission',
@@ -210,26 +269,31 @@ export default function TempleClient() {
         body: JSON.stringify(payload)
       });
 
-      if (res.ok) {
-        const json = await res.json();
-        const visuals = getEventVisuals(audioBlobUrl ? 'AUDIO_WHISPER' : 'WHISPER');
-        const newItem: TemplePost = {
-          id: json.data?.id || Date.now(),
-          type: audioBlobUrl ? 'AUDIO_WHISPER' : 'WHISPER',
-          author: userName,
-          time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          content: postText || 'Voice transmission',
-          audioUrl: audioBlobUrl,
-          icon: audioBlobUrl ? Mic : Sparkles,
-          color: 'text-zinc-900',
-          badgeBg: visuals.badgeBg
-        };
-        setPosts([newItem, ...posts]);
-        setPostText('');
-        setAudioBlobUrl(null);
+      if (!res.ok) {
+        setError('The temple did not accept the transmission. Try again.');
+        return;
       }
+
+      const json = await res.json().catch(() => ({}));
+      const visuals = getEventVisuals(payload.event_type);
+      const newItem: TemplePost = {
+        id: json?.data?.id ?? `local-${Date.now()}`,
+        type: payload.event_type,
+        label: visuals.label,
+        author: userName,
+        time: formatTime(),
+        content: payload.message,
+        audioUrl: audioBlobUrl,
+        icon: visuals.icon,
+        color: visuals.color,
+        badgeBg: visuals.badgeBg
+      };
+      setPosts(prev => [newItem, ...prev]);
+      setPostText('');
+      setAudioBlobUrl(null);
     } catch (e) {
       console.error('Failed to transmit post', e);
+      setError('Connection lost. Try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -241,7 +305,8 @@ export default function TempleClient() {
     const parts = text.split(urlRegex);
 
     return parts.map((part, index) => {
-      if (part.match(urlRegex)) {
+      // split с capture-группой кладёт ссылки на нечётные индексы
+      if (index % 2 === 1) {
         try {
           const hostname = new URL(part).hostname.replace('www.', '');
           return (
@@ -249,7 +314,7 @@ export default function TempleClient() {
               key={index}
               href={part}
               target="_blank"
-              rel="noopener noreferrer"
+              rel="noopener noreferrer nofollow ugc"
               className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-zinc-100 border border-zinc-200 text-zinc-900 text-xs font-mono hover:bg-zinc-200 transition-colors my-1 break-all"
             >
               <ExternalLink size={12} className="shrink-0 text-zinc-500" />
@@ -258,7 +323,7 @@ export default function TempleClient() {
           );
         } catch {
           return (
-            <a key={index} href={part} target="_blank" rel="noopener noreferrer" className="text-zinc-900 underline underline-offset-4 break-all">
+            <a key={index} href={part} target="_blank" rel="noopener noreferrer nofollow ugc" className="text-zinc-900 underline underline-offset-4 break-all">
               {part}
             </a>
           );
@@ -270,13 +335,26 @@ export default function TempleClient() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F6F4F0] via-[#F0ECE6] to-[#E8E3DA] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white relative overflow-x-hidden antialiased">
-      
+
       <div className="fixed top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-amber-200/20 via-indigo-200/10 to-purple-200/20 blur-[140px] pointer-events-none rounded-full" />
 
       <Header />
 
       <main className="max-w-2xl mx-auto px-6 pt-36 pb-24 relative z-10 space-y-8">
-        
+
+        {/* RITUALS */}
+        <nav aria-label="Rituals" className="flex flex-wrap items-center justify-center gap-2">
+          {RITUALS.map((r) => (
+            <Link
+              key={r.href}
+              href={r.href}
+              className="px-4 py-2 rounded-full bg-white/70 border border-zinc-200/80 text-zinc-700 font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-white hover:text-zinc-900 transition-colors shadow-sm"
+            >
+              {r.label}
+            </Link>
+          ))}
+        </nav>
+
         {/* INPUT BOX */}
         {!isLoading && !user ? (
           <div className="p-8 rounded-3xl bg-white/70 backdrop-blur-xl border border-zinc-200/80 shadow-[0_10px_30px_rgba(0,0,0,0.02)] text-center space-y-4">
@@ -314,13 +392,19 @@ export default function TempleClient() {
               </div>
             )}
 
+            {error && (
+              <p role="alert" className="font-mono text-[11px] uppercase tracking-wider text-rose-600">
+                {error}
+              </p>
+            )}
+
             <div className="flex items-center justify-between pt-3 border-t border-zinc-200/60">
               <button
                 type="button"
                 onClick={toggleRecording}
                 className={`px-4 py-2.5 rounded-full transition-all border flex items-center gap-2 text-xs font-mono uppercase tracking-wider ${
-                  isRecording 
-                    ? 'bg-rose-500 text-white border-rose-500 animate-pulse shadow-sm' 
+                  isRecording
+                    ? 'bg-rose-500 text-white border-rose-500 animate-pulse shadow-sm'
                     : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50 shadow-sm'
                 }`}
               >
@@ -343,9 +427,13 @@ export default function TempleClient() {
 
         {/* FEED / STREAM */}
         <div className="space-y-4 pt-2">
-          {posts.length === 0 ? (
+          {!loaded ? (
+            <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-400 font-mono text-xs uppercase tracking-wider animate-pulse">
+              Listening to the temple...
+            </div>
+          ) : posts.length === 0 ? (
             <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-500 font-mono text-xs uppercase tracking-wider">
-              No entries in the temple logbook yet.
+              The logbook is empty. Leave the first trace.
             </div>
           ) : (
             posts.map((post) => {
@@ -358,8 +446,8 @@ export default function TempleClient() {
                   animate={{ opacity: 1, y: 0 }}
                   key={post.id}
                   className={`backdrop-blur-xl transition-all duration-300 ${
-                    isLogEvent 
-                      ? 'p-5 rounded-2xl bg-white/50 border border-zinc-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.01)] hover:bg-white/70' 
+                    isLogEvent
+                      ? 'p-5 rounded-2xl bg-white/50 border border-zinc-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.01)] hover:bg-white/70'
                       : 'p-6 rounded-3xl bg-white/85 border border-zinc-200/90 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_35px_rgba(0,0,0,0.04)]'
                   }`}
                 >
@@ -373,7 +461,7 @@ export default function TempleClient() {
                           <span className="font-semibold text-zinc-900 text-sm tracking-tight">{post.author}</span>
                           <span className="text-zinc-300">•</span>
                           <span className="text-zinc-400 font-mono text-[10px] uppercase tracking-wider bg-zinc-100 px-2 py-0.5 rounded-md">
-                            {post.type.toLowerCase()}
+                            {post.label}
                           </span>
                         </div>
                         <div className="flex items-center gap-1 text-zinc-400 font-mono text-[11px]">
@@ -401,7 +489,7 @@ export default function TempleClient() {
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2">
                             <span className={`font-mono text-[10px] uppercase tracking-[0.15em] px-2.5 py-0.5 rounded-full border font-semibold ${post.badgeBg || 'bg-zinc-100 border-zinc-200 text-zinc-800'}`}>
-                              {post.type}
+                              {post.label}
                             </span>
                             <span className="text-zinc-400">•</span>
                             <span className="text-zinc-600 font-medium text-xs flex items-center gap-1">
