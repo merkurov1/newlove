@@ -55,7 +55,7 @@ export default function LetItGoAngel() {
     }, 6000);
   };
 
-  // Ангел автоматически без сердца, пока летит хотя бы одно сердечко
+  // Ангел без сердца пока летит хотя бы одно, как только массив пуст — возвращается сердце
   const showWithoutHeart = flyingHearts.length > 0;
 
   return (
@@ -78,7 +78,7 @@ export default function LetItGoAngel() {
           onClick={handleClick}
           title="Click to let go"
         >
-          {/* Дефолтное состояние: ангел с сердцем (0919) */}
+          {/* Дефолтное состояние: ангел с сердцем (IMG_0919) */}
           <Image
             src={ANGEL_WITH_HEART}
             alt="Angel with heart"
@@ -90,7 +90,7 @@ export default function LetItGoAngel() {
             priority
           />
 
-          {/* Состояние полета: ангел без сердца (0918) */}
+          {/* Состояние полета: ангел без сердца (IMG_0918) */}
           <Image
             src={ANGEL_WITHOUT_HEART}
             alt="Angel without heart"
@@ -103,25 +103,25 @@ export default function LetItGoAngel() {
           />
         </div>
 
-        {/* Улетающее сердце (увеличенный размер 340px) */}
+        {/* Улетающее сердце (очень крупное 450px, старт из нижней точки рук) */}
         {flyingHearts.map((heart) => (
           <div
             key={heart.id}
             className="absolute pointer-events-none z-30 animate-fly-away"
             style={{
-              bottom: '42%',
+              bottom: '24%',
               left: '50%',
-              width: 340,
-              height: 340,
-              marginLeft: '-170px',
+              width: 450,
+              height: 450,
+              marginLeft: '-225px',
             }}
           >
             <Image
               src={HEART_IMAGE}
               alt="Flying Heart"
-              width={340}
-              height={340}
-              className="object-contain filter drop-shadow-[0_0_20px_rgba(255,100,100,0.8)]"
+              width={450}
+              height={450}
+              className="object-contain filter drop-shadow-[0_0_25px_rgba(255,100,100,0.8)]"
             />
           </div>
         ))}
@@ -131,14 +131,14 @@ export default function LetItGoAngel() {
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes flyAway {
           0% {
-            transform: translateY(0) scale(0.4) rotate(0deg);
+            transform: translateY(0) scale(0.3) rotate(0deg);
             opacity: 1;
           }
           15% {
             opacity: 1;
           }
           100% {
-            transform: translateY(-75vh) scale(1.1) translateX(25px) rotate(15deg);
+            transform: translateY(-80vh) scale(1.15) translateX(25px) rotate(15deg);
             opacity: 0;
           }
         }
