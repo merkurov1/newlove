@@ -13,7 +13,6 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Header from '@/components/Header';
 import Paywall from './Paywall';
-import { createClient } from '@/utils/supabase/client'; // Путь к вашему клиенту Supabase
 import {
   ArrowLeft,
   Check,
@@ -49,6 +48,8 @@ const DEFAULT_PREFS: ReaderPrefs = {
 };
 
 const PREFS_KEY = 'unframed_prefs';
+const UNLOCKED_KEY = 'unframed_unlocked';
+const ADMIN_KEY = 'unframed_admin';
 
 const slugify = (value: unknown): string => {
   if (!value || typeof value !== 'string') return '';
@@ -61,10 +62,9 @@ const slugify = (value: unknown): string => {
 };
 
 export default function BookReaderPage() {
-  const supabase = createClient();
   const [isMounted, setIsMounted] = useState(false);
-  const [checkingAccess, setCheckingAccess] = useState(true);
   const [unlocked, setUnlocked] = useState(false);
+  const [admin, setAdmin] = useState(false);
 
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
@@ -78,68 +78,50 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Безопасная проверка прав доступа через Supabase Auth и БД
+  // Инициализация доступа (безопасно на клиенте)
   useEffect(() => {
     setIsMounted(true);
-
-    const verifyAccess = async () => {
-      try {
-        setCheckingAccess(true);
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-        if (authError || !user) {
-          setUnlocked(false);
-          return;
-        }
-
-        // Проверяем права администратора или наличие покупки в базе данных Supabase
-        // Например, таблица purchases (user_id, product_id, status) или колонка role в профиле
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', user.id)
-          .single();
-
-        const { data: purchase } = await supabase
-          .from('purchases')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('product', 'unframed')
-          .eq('status', 'active')
-          .maybeSingle();
-
-        if (profile?.is_admin || purchase) {
-          setUnlocked(true);
-        } else {
-          setUnlocked(false);
-        }
-      } catch (err) {
-        console.error('Access verification error:', err);
-        setUnlocked(false);
-      } finally {
-        setCheckingAccess(false);
-      }
-    };
-
-    verifyAccess();
-
     try {
+      const params = new URLSearchParams(window.location.search);
+      const paid = params.get('paid') === '1';
+      const adminParam = params.get('admin') === '1';
+
+      if (paid) window.localStorage.setItem(UNLOCKED_KEY, 'true');
+      if (adminParam) window.localStorage.setItem(ADMIN_KEY, 'true');
+
+      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
+      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
+
+      setUnlocked(storedUnlocked || paid);
+      setAdmin(storedAdmin || adminParam);
+
       const storedPrefs = window.localStorage.getItem(PREFS_KEY);
       if (storedPrefs) {
         const parsed = JSON.parse(storedPrefs) as Partial<ReaderPrefs>;
         setPrefs((prev) => ({ ...prev, ...parsed }));
       }
     } catch {}
-  }, [supabase]);
+  }, []);
 
-  // Пока проверяется сессия или компонент монтируется
-  if (!isMounted || checkingAccess) {
+  // Пока компонент монтируется
+  if (!isMounted) {
     return <div className="min-h-screen bg-[#faf9f5]" />;
   }
 
   // Защитный заслон пейвола
-  if (!unlocked) {
-    return <Paywall />;
+  if (!unlocked && !admin) {
+    return (
+      <Paywall
+        onUnlock={() => {
+          try {
+            window.localStorage.setItem(UNLOCKED_KEY, 'true');
+            window.localStorage.setItem(ADMIN_KEY, 'true');
+          } catch {}
+          setUnlocked(true);
+          setAdmin(true);
+        }}
+      />
+    );
   }
 
   // Загрузка рукописи

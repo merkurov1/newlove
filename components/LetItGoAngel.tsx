@@ -3,14 +3,17 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 
-const ANGEL_IMAGE =
+const ANGEL_WITH_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0918.png';
+const ANGEL_WITHOUT_HEART =
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png';
 const HEART_IMAGE =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0920.png';
 
 export default function LetItGoAngel() {
   const [flyingHearts, setFlyingHearts] = useState<{ id: number }[]>([]);
   const [clickCount, setClickCount] = useState(0);
+  const [showWithoutHeart, setShowWithoutHeart] = useState(false);
 
   const clickCountRef = useRef(clickCount);
   clickCountRef.current = clickCount;
@@ -45,6 +48,12 @@ export default function LetItGoAngel() {
     const newHeartId = Date.now();
     setFlyingHearts((prev) => [...prev, { id: newHeartId }]);
     setClickCount((prev) => prev + 1);
+    setShowWithoutHeart(true);
+
+    // Возвращаем сердце ангелу через 1.5 секунды
+    setTimeout(() => {
+      setShowWithoutHeart(false);
+    }, 1500);
 
     // Удаляем улетевшее сердечко из DOM после завершения анимации (4 секунды)
     setTimeout(() => {
@@ -58,22 +67,22 @@ export default function LetItGoAngel() {
       {/* Зеленая лужайка внизу */}
       <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
 
-      {/* Счётчик отпусканий в правом верхнем углу */}
-      <div className="absolute top-6 right-6 sm:top-10 sm:right-10 text-stone-700 font-mono text-sm sm:text-base tracking-[0.2em] z-50 bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md">
+      {/* Счётчик отпусканий (перенесен ниже шапки сайта) */}
+      <div className="absolute top-24 right-8 sm:top-28 sm:right-12 text-stone-700 font-mono text-sm sm:text-base tracking-[0.2em] z-50 bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md">
         ❤️ {clickCount}
       </div>
 
       {/* Единый контейнер для ангела и сердец */}
       <div className="relative w-full max-w-3xl h-full flex items-end justify-center pb-[10vh] z-20">
         
-        {/* Статичный ангел (клик запускает полет отдельного сердца) */}
+        {/* Ангел (переключается между IMG_0918 и IMG_0919) */}
         <div 
           className="relative cursor-pointer transition-transform duration-200 active:scale-95 flex items-center justify-center p-4"
           onClick={handleClick}
           title="Click to let go"
         >
           <Image
-            src={ANGEL_IMAGE}
+            src={showWithoutHeart ? ANGEL_WITHOUT_HEART : ANGEL_WITH_HEART}
             alt="Angel"
             width={480}
             height={480}
