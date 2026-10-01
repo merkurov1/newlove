@@ -53,20 +53,31 @@ export default function ArtEngineDashboard() {
   // Auth Initialization
   useEffect(() => {
     async function initAuth() {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      setSession(currentSession);
-      setUser(currentSession?.user || null);
-      setLoadingUser(false);
+      try {
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        setSession(currentSession);
+        setUser(currentSession?.user || null);
+      } catch (err) {
+        console.error('Auth initialization error:', err);
+      } finally {
+        setLoadingUser(false);
+      }
     }
 
     initAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, currentSession: Session | null) => {
-      setSession(currentSession);
-      setUser(currentSession?.user || null);
-    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event: AuthChangeEvent, currentSession: Session | null) => {
+        setSession(currentSession);
+        setUser(currentSession?.user || null);
+        setLoadingUser(false);
+      }
+    );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [supabase]);
 
   // Fetch Lots for Vault

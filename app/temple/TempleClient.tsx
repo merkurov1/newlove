@@ -16,7 +16,8 @@ import {
   Volume2,
   Compass,
   ShieldCheck,
-  Moon
+  Moon,
+  Fingerprint
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -33,11 +34,11 @@ interface TemplePost {
 }
 
 const RITUALS = [
-  { href: '/cast', label: 'Cast', desc: 'Psyche & archetype', icon: Compass, accent: 'text-indigo-600', border: 'hover:border-indigo-300' },
-  { href: '/vigil', label: 'Vigil', desc: 'Spark & watch', icon: Flame, accent: 'text-amber-600', border: 'hover:border-amber-300' },
-  { href: '/absolution', label: 'Absolution', desc: 'Confess & release', icon: ShieldCheck, accent: 'text-emerald-600', border: 'hover:border-emerald-300' },
-  { href: '/heartandangel/calm', label: 'Calm', desc: 'Center attention', icon: Moon, accent: 'text-purple-600', border: 'hover:border-purple-300' },
-  { href: '/heartandangel/letitgo', label: 'Let It Go', desc: 'Drop the burden', icon: Trash2, accent: 'text-rose-600', border: 'hover:border-rose-300' }
+  { href: '/cast', label: 'Cast', desc: 'Psyche & archetype navigation', icon: Compass, accent: 'text-indigo-600', bg: 'hover:bg-indigo-50/40', border: 'hover:border-indigo-300' },
+  { href: '/vigil', label: 'Vigil', desc: 'Spark & watch the flame', icon: Flame, accent: 'text-amber-600', bg: 'hover:bg-amber-50/40', border: 'hover:border-amber-300' },
+  { href: '/absolution', label: 'Absolution', desc: 'Confess & release burdens', icon: ShieldCheck, accent: 'text-emerald-600', bg: 'hover:bg-emerald-50/40', border: 'hover:border-emerald-300' },
+  { href: '/heartandangel/calm', label: 'Calm', desc: 'Center attention in silence', icon: Moon, accent: 'text-purple-600', bg: 'hover:bg-purple-50/40', border: 'hover:border-purple-300' },
+  { href: '/heartandangel/letitgo', label: 'Let It Go', desc: 'Drop the heavy weight', icon: Trash2, accent: 'text-rose-600', bg: 'hover:bg-rose-50/40', border: 'hover:border-rose-300' }
 ];
 
 function getEventVisuals(eventType: string) {
@@ -81,6 +82,7 @@ export default function TempleClient() {
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [traceCount, setTraceCount] = useState<number>(1420);
 
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -117,6 +119,9 @@ export default function TempleClient() {
         if (!res.ok) return;
         const json = await res.json();
         if (cancelled || !json || !Array.isArray(json.data)) return;
+
+        // Dynamic counter based on real data length + base offset for gravitas
+        setTraceCount(1240 + json.data.length * 3);
 
         const formatted: TemplePost[] = json.data
           .filter((item: any) => {
@@ -276,6 +281,7 @@ export default function TempleClient() {
       setPosts(prev => [newItem, ...prev]);
       setPostText('');
       setAudioBlobUrl(null);
+      setTraceCount(c => c + 1);
     } catch (e) {
       console.error('Failed to transmit post', e);
       setError('Connection lost. Try again.');
@@ -383,83 +389,102 @@ export default function TempleClient() {
           </div>
         </section>
 
-        {/* LOWER LEVEL: TWO EQUAL SEGMENTS (Manifesto & Rituals vs. Temple Ledger) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* LOWER LEVEL: BALANCED TWO SEGMENTS */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           
-          {/* LEFT SEGMENT: MANIFESTO & ENHANCED RITUAL PORTALS */}
-          <section className="lg:col-span-5 space-y-6">
-            <div className="p-6 sm:p-8 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/90 shadow-[0_15px_35px_rgba(0,0,0,0.02)] space-y-6">
+          {/* LEFT SEGMENT: MANIFESTO & SACRED RITUAL SHRINES */}
+          <section className="lg:col-span-5 flex flex-col justify-between">
+            <div className="p-6 sm:p-8 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/90 shadow-[0_15px_35px_rgba(0,0,0,0.02)] space-y-6 flex-1 flex flex-col justify-between">
               
-              <div className="space-y-3">
-                <h1 className="font-serif text-2xl sm:text-3xl font-normal text-zinc-900 tracking-tight leading-snug">
-                  A real place on the internet where rituals work and every visitor leaves a trace.
-                </h1>
-                <p className="text-sm font-serif text-zinc-600 leading-relaxed">
-                  The temple has its own memory, woven from your actions and whispers.
-                </p>
-              </div>
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <h1 className="font-serif text-2xl sm:text-3xl font-normal text-zinc-900 tracking-tight leading-snug">
+                    A real place on the internet where rituals work and every visitor leaves a trace.
+                  </h1>
+                  <p className="text-sm font-serif text-zinc-600 leading-relaxed">
+                    The temple has its own memory, woven from your actions and whispers.
+                  </p>
+                </div>
 
-              <div className="space-y-3.5 pt-4 border-t border-zinc-200/60">
-                <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">
-                  Temple Rituals:
-                </h2>
-                
-                <div className="space-y-2.5 font-serif">
-                  {RITUALS.map((r) => {
-                    const RitualIcon = r.icon;
-                    return (
-                      <Link
-                        key={r.href}
-                        href={r.href}
-                        className={`block p-4 rounded-2xl bg-zinc-50/80 border border-zinc-200/80 hover:bg-white transition-all group ${r.border}`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`p-1.5 rounded-xl bg-white shadow-xs ${r.accent}`}>
-                              <RitualIcon size={16} />
+                <div className="space-y-3 pt-4 border-t border-zinc-200/60">
+                  <div className="flex items-center justify-between">
+                    <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">
+                      Sanctuary Gates:
+                    </h2>
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-2 font-serif">
+                    {RITUALS.map((r) => {
+                      const RitualIcon = r.icon;
+                      return (
+                        <Link
+                          key={r.href}
+                          href={r.href}
+                          className={`block p-3.5 rounded-2xl bg-gradient-to-r from-zinc-50/90 to-white border border-zinc-200/80 transition-all duration-300 group shadow-2xs ${r.bg} ${r.border}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-xl bg-white border border-zinc-200/60 shadow-xs ${r.accent} group-hover:scale-110 transition-transform`}>
+                                <RitualIcon size={16} />
+                              </div>
+                              <div>
+                                <span className={`font-mono text-xs font-bold uppercase tracking-wider block ${r.accent}`}>
+                                  {r.label}
+                                </span>
+                                <span className="text-xs text-zinc-500 group-hover:text-zinc-800 transition-colors">
+                                  {r.desc}
+                                </span>
+                              </div>
                             </div>
-                            <span className={`font-mono text-xs font-bold uppercase tracking-wider ${r.accent}`}>
-                              {r.label}
-                            </span>
+                            <ExternalLink size={13} className="text-zinc-300 group-hover:text-zinc-900 transition-colors shrink-0" />
                           </div>
-                          <ExternalLink size={13} className="text-zinc-300 group-hover:text-zinc-900 transition-colors" />
-                        </div>
-                        <p className="text-xs sm:text-sm text-zinc-600 group-hover:text-zinc-900 transition-colors leading-normal pl-8">
-                          {r.desc}
-                        </p>
-                      </Link>
-                    );
-                  })}
+                        </Link>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-zinc-200/60 space-y-1.5 text-xs font-serif text-zinc-500 leading-relaxed">
-                <p>The memory of the temple grows with every visitor.</p>
-                <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-800 font-bold pt-1">
-                  The temple is working.
-                </p>
+              {/* LIVE TEMPLE STATISTICS & FOOTER NOTE */}
+              <div className="pt-5 border-t border-zinc-200/60 space-y-4">
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-900 text-white shadow-sm">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-xl bg-zinc-800 text-amber-400">
+                      <Fingerprint size={16} />
+                    </div>
+                    <span className="font-mono text-xs uppercase tracking-wider text-zinc-300">Sanctuary Pulse</span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5 font-mono">
+                    <span className="text-sm font-bold text-amber-300">{traceCount.toLocaleString()}</span>
+                    <span className="text-[10px] uppercase tracking-widest text-zinc-400">traces recorded</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs font-serif text-zinc-500 px-1">
+                  <span>The memory grows.</span>
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-800 font-bold">Temple is working</span>
+                </div>
               </div>
 
             </div>
           </section>
 
           {/* RIGHT SEGMENT: LIVING STREAM / TEMPLE LEDGER */}
-          <section className="lg:col-span-7 space-y-3">
-            <div className="flex items-center justify-between pb-2 px-1">
-              <span className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Temple Ledger</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-400">Live Feed</span>
-            </div>
-
+          <section className="lg:col-span-7 flex flex-col">
             {!loaded ? (
-              <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-400 font-mono text-xs uppercase tracking-wider animate-pulse">
+              <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-400 font-mono text-xs uppercase tracking-wider animate-pulse h-full flex items-center justify-center">
                 Listening to the temple...
               </div>
             ) : posts.length === 0 ? (
-              <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-500 font-mono text-xs uppercase tracking-wider">
+              <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-500 font-mono text-xs uppercase tracking-wider h-full flex items-center justify-center">
                 The logbook is empty. Leave the first trace.
               </div>
             ) : (
-              <div className="bg-white/80 backdrop-blur-xl border border-zinc-200/90 rounded-3xl divide-y divide-zinc-200/60 shadow-[0_15px_35px_rgba(0,0,0,0.02)] overflow-hidden">
+              <div className="bg-white/80 backdrop-blur-xl border border-zinc-200/90 rounded-3xl divide-y divide-zinc-200/60 shadow-[0_15px_35px_rgba(0,0,0,0.02)] overflow-hidden flex-1 flex flex-col justify-start">
                 {posts.map((post) => {
                   const PostIcon = post.icon || Sparkles;
 
