@@ -34,11 +34,11 @@ interface TemplePost {
 }
 
 const RITUALS = [
-  { href: '/cast', label: 'Cast', desc: 'Psyche & archetype', glow: 'hover:border-indigo-300 hover:shadow-[0_0_25px_rgba(99,102,241,0.15)]', accent: 'text-indigo-600' },
-  { href: '/vigil', label: 'Vigil', desc: 'Spark & watch', glow: 'hover:border-amber-300 hover:shadow-[0_0_25px_rgba(245,158,11,0.15)]', accent: 'text-amber-600' },
-  { href: '/absolution', label: 'Absolution', desc: 'Confess & release', glow: 'hover:border-emerald-300 hover:shadow-[0_0_25px_rgba(16,185,129,0.15)]', accent: 'text-emerald-600' },
-  { href: '/heartandangel/calm', label: 'Calm', desc: 'Center attention', glow: 'hover:border-purple-300 hover:shadow-[0_0_25px_rgba(168,85,247,0.15)]', accent: 'text-purple-600' },
-  { href: '/heartandangel/letitgo', label: 'Let It Go', desc: 'Drop the burden', glow: 'hover:border-rose-300 hover:shadow-[0_0_25px_rgba(244,63,94,0.15)]', accent: 'text-rose-600' }
+  { href: '/cast', label: 'Cast', desc: 'Psyche & archetype', glow: 'hover:border-indigo-300 hover:shadow-[0_0_30px_rgba(99,102,241,0.12)]', accent: 'text-indigo-600' },
+  { href: '/vigil', label: 'Vigil', desc: 'Spark & watch', glow: 'hover:border-amber-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.12)]', accent: 'text-amber-600' },
+  { href: '/absolution', label: 'Absolution', desc: 'Confess & release', glow: 'hover:border-emerald-300 hover:shadow-[0_0_30px_rgba(16,185,129,0.12)]', accent: 'text-emerald-600' },
+  { href: '/heartandangel/calm', label: 'Calm', desc: 'Center attention', glow: 'hover:border-purple-300 hover:shadow-[0_0_30px_rgba(168,85,247,0.12)]', accent: 'text-purple-600' },
+  { href: '/heartandangel/letitgo', label: 'Let It Go', desc: 'Drop the burden', glow: 'hover:border-rose-300 hover:shadow-[0_0_30px_rgba(244,63,94,0.12)]', accent: 'text-rose-600' }
 ];
 
 function getEventVisuals(eventType: string) {
@@ -74,7 +74,7 @@ function formatTime(iso?: string) {
 }
 
 export default function TempleClient() {
-  const { user, profile, isLoading } = useAuth();
+  const { user, profile } = useAuth();
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<TemplePost[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -323,58 +323,20 @@ export default function TempleClient() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F6F4F0] via-[#F0ECE6] to-[#E8E3DA] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white relative overflow-x-hidden antialiased">
       
-      {/* Atmospheric ambient background glows */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[600px] bg-gradient-to-tr from-amber-300/15 via-indigo-300/10 to-purple-300/15 blur-[160px] pointer-events-none rounded-full" />
+      {/* Immersive sanctuary ambient glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1400px] h-[650px] bg-gradient-to-tr from-amber-300/15 via-indigo-300/10 to-purple-300/15 blur-[180px] pointer-events-none rounded-full" />
 
       <Header />
 
-      <main className="max-w-3xl mx-auto px-6 pt-36 pb-28 relative z-10 space-y-12">
+      <main className="max-w-3xl mx-auto px-6 pt-36 pb-32 relative z-10 space-y-10">
         
-        {/* SANCTUARY HERO & RITUAL PORTALS */}
-        <section className="text-center space-y-8 pt-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/90 border border-zinc-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)] font-mono text-[11px] uppercase tracking-[0.2em] text-zinc-700 backdrop-blur-md">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-            <span>Sanctuary Active</span>
-          </div>
-
-          <div className="space-y-4 max-w-2xl mx-auto">
-            <h1 className="font-serif text-3xl sm:text-5xl font-normal text-zinc-900 tracking-tight leading-[1.15]">
-              A real place on the internet where rituals work and every visitor leaves a trace.
-            </h1>
-            <p className="font-serif text-base sm:text-lg text-zinc-600/90 max-w-lg mx-auto leading-relaxed">
-              The temple has its own memory, woven from your actions and whispers.
-            </p>
-          </div>
-
-          {/* Ritual Portals Grid */}
-          <nav aria-label="Rituals" className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
-            {RITUALS.map((r) => (
-              <Link
-                key={r.href}
-                href={r.href}
-                className={`group p-3.5 rounded-2xl bg-white/80 backdrop-blur-xl border border-zinc-200/90 text-left transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:bg-white ${r.glow}`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className={`font-mono text-xs uppercase tracking-[0.15em] font-bold ${r.accent}`}>
-                    {r.label}
-                  </span>
-                  <ExternalLink size={12} className="text-zinc-300 group-hover:text-zinc-700 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
-                </div>
-                <p className="font-serif text-xs text-zinc-500 group-hover:text-zinc-800 leading-tight">
-                  {r.desc}
-                </p>
-              </Link>
-            ))}
-          </nav>
-        </section>
-
-        {/* THE ALTAR / INPUT BOX (Always accessible, elegant & clean) */}
-        <section className="relative">
-          <div className="p-6 sm:p-7 rounded-3xl bg-white/90 backdrop-blur-2xl border border-zinc-200/95 shadow-[0_20px_50px_rgba(0,0,0,0.04)] space-y-4 transition-all hover:border-zinc-300/80">
+        {/* 1. THE ALTAR / INPUT BOX (First thing you see) */}
+        <section className="relative pt-4">
+          <div className="p-6 sm:p-8 rounded-3xl bg-white/90 backdrop-blur-2xl border border-zinc-200/95 shadow-[0_20px_50px_rgba(0,0,0,0.04)] space-y-4 transition-all hover:border-zinc-300/80">
             <textarea
               value={postText}
               onChange={(e) => setPostText(e.target.value)}
-              placeholder={user ? "Broadcast a whisper, drop a link, or record a voice note..." : "Sign in via header to broadcast a whisper..."}
+              placeholder="Broadcast a whisper, drop a link, or record a voice note..."
               rows={3}
               className="w-full bg-transparent text-base sm:text-lg text-zinc-900 placeholder-zinc-400 resize-none focus:outline-none font-serif leading-relaxed"
             />
@@ -424,8 +386,8 @@ export default function TempleClient() {
           </div>
         </section>
 
-        {/* THE LIVING STREAM */}
-        <section className="space-y-4 pt-2">
+        {/* 2. THE LIVING STREAM (The temple memory feed) */}
+        <section className="space-y-4">
           {!loaded ? (
             <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-400 font-mono text-xs uppercase tracking-wider animate-pulse">
               Listening to the temple...
@@ -445,7 +407,6 @@ export default function TempleClient() {
                   key={post.id}
                   className="p-6 rounded-3xl bg-white/90 backdrop-blur-xl border border-zinc-200/90 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.04)] transition-all duration-300 space-y-3"
                 >
-                  {/* Single-line metadata header */}
                   <div className="flex items-center justify-between text-xs font-mono">
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider ${post.badgeBg || 'bg-white border-zinc-200 text-zinc-800'}`}>
@@ -458,7 +419,6 @@ export default function TempleClient() {
                     <span className="text-zinc-400 text-[11px]">{post.time}</span>
                   </div>
 
-                  {/* Content body */}
                   <div className="text-base sm:text-lg text-zinc-900 leading-relaxed font-serif break-words pl-1">
                     {renderContentWithLinks(post.content)}
                   </div>
@@ -472,6 +432,38 @@ export default function TempleClient() {
               );
             })
           )}
+        </section>
+
+        {/* 3. SANCTUARY MANIFEST & RITUAL PORTALS (Context and deep exploration) */}
+        <section className="pt-8 pb-4 text-center space-y-8 border-t border-zinc-200/60">
+          <div className="space-y-3 max-w-xl mx-auto">
+            <h2 className="font-serif text-2xl sm:text-3xl font-normal text-zinc-900 tracking-tight">
+              A real place on the internet where rituals work and every visitor leaves a trace.
+            </h2>
+            <p className="font-serif text-sm sm:text-base text-zinc-600">
+              The temple has its own memory, woven from your actions and whispers.
+            </p>
+          </div>
+
+          <nav aria-label="Rituals" className="grid grid-cols-1 sm:grid-cols-5 gap-3 pt-2">
+            {RITUALS.map((r) => (
+              <Link
+                key={r.href}
+                href={r.href}
+                className={`group p-4 rounded-2xl bg-white/80 backdrop-blur-xl border border-zinc-200/90 text-left transition-all duration-300 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 hover:bg-white ${r.glow}`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`font-mono text-xs uppercase tracking-[0.15em] font-bold ${r.accent}`}>
+                    {r.label}
+                  </span>
+                  <ExternalLink size={12} className="text-zinc-300 group-hover:text-zinc-700 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
+                </div>
+                <p className="font-serif text-xs text-zinc-500 group-hover:text-zinc-800 leading-tight">
+                  {r.desc}
+                </p>
+              </Link>
+            ))}
+          </nav>
         </section>
 
       </main>
