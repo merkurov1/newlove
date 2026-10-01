@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React from 'react';
 import { motion } from 'framer-motion';
@@ -12,7 +12,6 @@ type Props = {
 
 const container = {
   hidden: { opacity: 0, y: 12 },
-  // small stagger (seconds) so children animate promptly — previous value was accidentally large
   show: { opacity: 1, y: 0, transition: { staggerChildren: 0.08 } },
 };
 
@@ -25,19 +24,23 @@ export default function HeroMotion({ title, subtitle, status, brand }: Props) {
   return (
     <motion.div initial="hidden" animate="show" variants={container}>
       <div className="flex flex-col items-center mb-6 text-center">
-        <motion.span variants={item} className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 mb-3">
-          {brand || 'Merkurov Private Office'}
-        </motion.span>
-
-        <motion.div variants={item} className="font-mono text-[10px] tracking-widest uppercase text-green-600 border border-green-600 px-2 py-1 rounded-full mb-3">
-          <motion.span
-            animate={{ scale: [1, 1.08, 1], boxShadow: ["0 0 0 rgba(0,0,0,0)", "0 0 12px rgba(16,185,129,0.2)", "0 0 0 rgba(0,0,0,0)"] }}
-            transition={{ duration: 1.6, repeat: Infinity }}
-            className="inline-block"
-          >
-            {status || 'System Online'}
+        {brand && (
+          <motion.span variants={item} className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 mb-3">
+            {brand}
           </motion.span>
-        </motion.div>
+        )}
+
+        {status && (
+          <motion.div variants={item} className="font-mono text-[10px] tracking-widest uppercase text-green-600 border border-green-600 px-2 py-1 rounded-full mb-3">
+            <motion.span
+              animate={{ scale: [1, 1.08, 1], boxShadow: ["0 0 0 rgba(0,0,0,0)", "0 0 12px rgba(16,185,129,0.2)", "0 0 0 rgba(0,0,0,0)"] }}
+              transition={{ duration: 1.6, repeat: Infinity }}
+              className="inline-block"
+            >
+              {status}
+            </motion.span>
+          </motion.div>
+        )}
 
         <motion.h1 variants={item} className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-6">
           {title}
