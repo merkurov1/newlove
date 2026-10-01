@@ -16,7 +16,9 @@ import {
   Volume2, 
   Compass, 
   ShieldCheck, 
-  Moon 
+  Moon,
+  Clock,
+  User as UserIcon
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -29,6 +31,7 @@ interface TemplePost {
   audioUrl?: string | null;
   icon?: any;
   color?: string;
+  badgeBg?: string;
 }
 
 export default function TemplePage() {
@@ -54,23 +57,23 @@ export default function TemplePage() {
     };
   }, [audioBlobUrl]);
 
-  // Функция маппинга событий из разных модулей (/cast, /vigil, /absolution и т.д.)
+  // Функция маппинга событий с улучшенными визуальными стилями и плашками
   const getEventVisuals = (eventType: string) => {
     switch (eventType?.toUpperCase()) {
       case 'VIGIL':
-        return { icon: Flame, color: 'text-amber-600', label: 'Vigil' };
+        return { icon: Flame, color: 'text-amber-600', label: 'Vigil', badgeBg: 'bg-amber-50 border-amber-200/80 text-amber-900' };
       case 'ASH':
-        return { icon: Trash2, color: 'text-rose-600', label: 'Let It Go' };
+        return { icon: Trash2, color: 'text-rose-600', label: 'Let It Go', badgeBg: 'bg-rose-50 border-rose-200/80 text-rose-900' };
       case 'CAST':
-        return { icon: Compass, color: 'text-indigo-600', label: 'Cast Archetype' };
+        return { icon: Compass, color: 'text-indigo-600', label: 'Cast Archetype', badgeBg: 'bg-indigo-50 border-indigo-200/80 text-indigo-900' };
       case 'ABSOLUTION':
       case 'PIERROT':
-        return { icon: ShieldCheck, color: 'text-emerald-600', label: 'Absolution' };
+        return { icon: ShieldCheck, color: 'text-emerald-600', label: 'Absolution', badgeBg: 'bg-emerald-50 border-emerald-200/80 text-emerald-900' };
       case 'MEDITATION':
       case 'SILENCE':
-        return { icon: Moon, color: 'text-purple-600', label: 'Silence' };
+        return { icon: Moon, color: 'text-purple-600', label: 'Silence', badgeBg: 'bg-purple-50 border-purple-200/80 text-purple-900' };
       default:
-        return { icon: Radio, color: 'text-zinc-600', label: eventType || 'Log' };
+        return { icon: Radio, color: 'text-zinc-600', label: eventType || 'Log', badgeBg: 'bg-zinc-100 border-zinc-200 text-zinc-800' };
     }
   };
 
@@ -92,7 +95,8 @@ export default function TemplePage() {
                 content: item.message,
                 audioUrl: item.audio_url || null,
                 icon: visuals.icon,
-                color: visuals.color
+                color: visuals.color,
+                badgeBg: visuals.badgeBg
               };
             });
             setPosts(formatted);
@@ -181,6 +185,7 @@ export default function TemplePage() {
 
       if (res.ok) {
         const json = await res.json();
+        const visuals = getEventVisuals(audioBlobUrl ? 'AUDIO_WHISPER' : 'WHISPER');
         const newItem: TemplePost = {
           id: json.data?.id || Date.now(),
           type: audioBlobUrl ? 'AUDIO_WHISPER' : 'WHISPER',
@@ -189,7 +194,8 @@ export default function TemplePage() {
           content: postText || 'Voice transmission',
           audioUrl: audioBlobUrl,
           icon: audioBlobUrl ? Mic : Sparkles,
-          color: 'text-zinc-900'
+          color: 'text-zinc-900',
+          badgeBg: visuals.badgeBg
         };
         setPosts([newItem, ...posts]);
         setPostText('');
@@ -242,25 +248,25 @@ export default function TemplePage() {
 
       <Header />
 
-      <main className="max-w-2xl mx-auto px-6 pt-32 pb-24 relative z-10 space-y-10">
+      <main className="max-w-2xl mx-auto px-6 pt-36 pb-24 relative z-10 space-y-8">
         
         {/* INPUT BOX */}
         {!isLoading && !user ? (
-          <div className="p-8 rounded-2xl bg-white/70 backdrop-blur-xl border border-zinc-200/80 shadow-sm text-center space-y-4">
+          <div className="p-8 rounded-3xl bg-white/70 backdrop-blur-xl border border-zinc-200/80 shadow-[0_10px_30px_rgba(0,0,0,0.02)] text-center space-y-4">
             <p className="font-serif text-zinc-700 text-sm">
               Authentication required to broadcast whispers and voice notes into the temple.
             </p>
             <div>
               <Link
                 href="/login"
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-zinc-900 text-white font-mono text-xs uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all shadow-sm"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-zinc-900 text-white font-mono text-xs uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all shadow-sm"
               >
                 Sign In to Participate
               </Link>
             </div>
           </div>
         ) : (
-          <div className="p-5 rounded-2xl bg-white/85 backdrop-blur-xl border border-zinc-200/80 shadow-[0_10px_30px_rgba(0,0,0,0.02)] space-y-4">
+          <div className="p-6 rounded-3xl bg-white/85 backdrop-blur-2xl border border-zinc-200/90 shadow-[0_20px_40px_rgba(0,0,0,0.03)] space-y-4 transition-all">
             <textarea
               value={postText}
               onChange={(e) => setPostText(e.target.value)}
@@ -270,9 +276,9 @@ export default function TemplePage() {
             />
 
             {audioBlobUrl && (
-              <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-100 border border-zinc-200">
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-100/80 border border-zinc-200">
                 <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-full bg-zinc-900 text-white flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-zinc-900 text-white flex items-center justify-center shadow-sm">
                     <Volume2 size={14} />
                   </div>
                   <span className="font-mono text-xs uppercase tracking-wider text-zinc-700">Voice Note Ready</span>
@@ -285,10 +291,10 @@ export default function TemplePage() {
               <button
                 type="button"
                 onClick={toggleRecording}
-                className={`px-3.5 py-2 rounded-full transition-all border flex items-center gap-2 text-xs font-mono uppercase tracking-wider ${
+                className={`px-4 py-2.5 rounded-full transition-all border flex items-center gap-2 text-xs font-mono uppercase tracking-wider ${
                   isRecording 
-                    ? 'bg-rose-500 text-white border-rose-500 animate-pulse' 
-                    : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
+                    ? 'bg-rose-500 text-white border-rose-500 animate-pulse shadow-sm' 
+                    : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50 shadow-sm'
                 }`}
               >
                 {isRecording ? <Square size={13} /> : <Mic size={13} />}
@@ -299,7 +305,7 @@ export default function TemplePage() {
                 type="button"
                 onClick={handleSendPost}
                 disabled={isSubmitting || (!postText.trim() && !audioBlobUrl)}
-                className="flex items-center gap-2 px-6 py-2 rounded-full bg-zinc-900 text-white font-medium text-xs shadow-sm hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40 font-mono uppercase tracking-wider"
+                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-zinc-900 text-white font-medium text-xs shadow-sm hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40 font-mono uppercase tracking-wider"
               >
                 <span>{isSubmitting ? 'Transmitting...' : 'Broadcast'}</span>
                 <Send size={13} />
@@ -309,9 +315,9 @@ export default function TemplePage() {
         )}
 
         {/* FEED / STREAM */}
-        <div className="space-y-3 pt-2">
+        <div className="space-y-4 pt-2">
           {posts.length === 0 ? (
-            <div className="p-10 text-center rounded-2xl bg-white/40 border border-zinc-200/60 text-zinc-500 font-mono text-xs uppercase tracking-wider">
+            <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-500 font-mono text-xs uppercase tracking-wider">
               No entries in the temple logbook yet.
             </div>
           ) : (
@@ -321,49 +327,64 @@ export default function TemplePage() {
 
               return (
                 <motion.div
-                  initial={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   key={post.id}
-                  className={`backdrop-blur-md transition-all duration-300 ${
+                  className={`backdrop-blur-xl transition-all duration-300 ${
                     isLogEvent 
-                      ? 'p-4 rounded-xl bg-white/30 border border-zinc-300/50 shadow-none' 
-                      : 'p-5 rounded-2xl bg-white/80 border border-zinc-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
+                      ? 'p-5 rounded-2xl bg-white/50 border border-zinc-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.01)] hover:bg-white/70' 
+                      : 'p-6 rounded-3xl bg-white/85 border border-zinc-200/90 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_35px_rgba(0,0,0,0.04)]'
                   }`}
                 >
                   {!isLogEvent ? (
-                    <div className="space-y-3">
+                    <div className="space-y-3.5">
                       <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2.5">
-                          <span className="font-semibold text-zinc-900 text-sm">{post.author}</span>
+                          <div className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center font-mono text-[10px]">
+                            {post.author ? post.author.substring(0, 2).toUpperCase() : 'V'}
+                          </div>
+                          <span className="font-semibold text-zinc-900 text-sm tracking-tight">{post.author}</span>
                           <span className="text-zinc-300">•</span>
-                          <span className="text-zinc-400 font-mono text-[10px] uppercase tracking-wider">{post.type.toLowerCase()}</span>
+                          <span className="text-zinc-400 font-mono text-[10px] uppercase tracking-wider bg-zinc-100 px-2 py-0.5 rounded-md">
+                            {post.type.toLowerCase()}
+                          </span>
                         </div>
-                        <span className="text-zinc-400 font-mono text-[11px]">{post.time}</span>
+                        <div className="flex items-center gap-1 text-zinc-400 font-mono text-[11px]">
+                          <Clock size={11} />
+                          <span>{post.time}</span>
+                        </div>
                       </div>
 
-                      <div className="text-base text-zinc-800 leading-relaxed font-serif break-words">
+                      <div className="text-base text-zinc-800 leading-relaxed font-serif break-words pl-8">
                         {renderContentWithLinks(post.content)}
                       </div>
 
                       {post.audioUrl && (
-                        <div className="pt-1">
+                        <div className="pt-1 pl-8">
                           <audio controls src={post.audioUrl} className="w-full h-9 rounded-xl" />
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="flex items-start gap-3">
-                      <div className="p-1.5 rounded-lg bg-zinc-200/40 text-zinc-700 mt-0.5 shrink-0">
-                        <PostIcon size={13} className={post.color} />
+                    <div className="flex items-start gap-4">
+                      <div className={`p-2 rounded-xl shrink-0 mt-0.5 border ${post.badgeBg || 'bg-zinc-100 border-zinc-200 text-zinc-800'}`}>
+                        <PostIcon size={16} className={post.color} />
                       </div>
-                      <div className="flex-1 min-w-0 space-y-0.5">
+                      <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-500 font-medium">
-                            {post.type} // {post.author}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`font-mono text-[10px] uppercase tracking-[0.15em] px-2.5 py-0.5 rounded-full border font-semibold ${post.badgeBg || 'bg-zinc-100 border-zinc-200 text-zinc-800'}`}>
+                              {post.type}
+                            </span>
+                            <span className="text-zinc-400">•</span>
+                            <span className="text-zinc-600 font-medium text-xs flex items-center gap-1">
+                              <UserIcon size={12} className="text-zinc-400" />
+                              {post.author}
+                            </span>
+                          </div>
                           <span className="text-zinc-400 font-mono text-[10px]">{post.time}</span>
                         </div>
-                        <div className="text-sm text-zinc-700 font-serif leading-relaxed break-words">
+                        <div className="text-sm text-zinc-800 font-serif leading-relaxed break-words pt-1">
                           {renderContentWithLinks(post.content)}
                         </div>
                       </div>
