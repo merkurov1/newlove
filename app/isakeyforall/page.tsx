@@ -1,5 +1,4 @@
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
-import Link from 'next/link';
 import HeroMotion from '@/components/advising/HeroMotion';
 import CenteredHeader from '@/components/CenteredHeader';
 import CaseStudyCard from '@/components/advising/CaseStudyCard';
@@ -22,8 +21,7 @@ export default function IsAKeyForAllPage() {
         {/* Header: The Monument (motion) */}
         <CenteredHeader>
           <HeroMotion
-            brand={<>IDENTITY PROTOCOL</>}
-            title={(<><span>Love is a</span><br/>key for all.</>)}
+            title={<><span>Love is a</span><br/>key for all.</>}
             subtitle={<>Artist. Digital Architect. Humanist.</>}
           />
         </CenteredHeader>
@@ -71,7 +69,7 @@ export default function IsAKeyForAllPage() {
             </p>
           </div>
 
-          {/* FEATURED: UNFRAMED (styled like advising use-cases) */}
+          {/* FEATURED: UNFRAMED */}
           <section className="mb-12 mt-12">
             <h3 className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-6">
               Featured Work
@@ -88,22 +86,12 @@ export default function IsAKeyForAllPage() {
               <CaseStudyCard
                 href="/research"
                 badge="Research"
-                title={(<>The Digital Decay: A Chronicle of Voluntary Submission.</>)}
-                subtitle={(<>Long-form research, essays and archival notes by Anton Merkurov.</>)}
+                title={<>The Digital Decay: A Chronicle of Voluntary Submission.</>}
+                subtitle={<>Long-form research, essays and archival notes by Anton Merkurov.</>}
                 layoutId="case-research"
               />
             </div>
           </section>
-
-          {/* Footer: The Seal */}
-          <div className="mt-16 pt-12 border-t border-gray-200 text-center">
-            <p 
-              className="text-3xl sm:text-4xl font-serif font-bold text-black"
-              style={{ fontFamily: 'Playfair Display, Cormorant Garamond, serif' }}
-            >
-              Love is a key for all.
-            </p>
-          </div>
         </article>
       </div>
     </main>

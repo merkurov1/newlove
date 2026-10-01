@@ -24,9 +24,6 @@ export default function AdvisingClient() {
         
         {/* Header */}
         <header className="space-y-6 border-b border-zinc-300/60 pb-16">
-          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500 font-mono">
-            The Private Office // Anton Merkurov
-          </p>
           <h1 className="text-4xl md:text-6xl font-serif font-normal tracking-tight text-[#111111] leading-[1.1]">
             Heritage Architecture for the Post-Digital Age.
           </h1>
@@ -51,9 +48,6 @@ export default function AdvisingClient() {
 
         {/* Capability Demonstration */}
         <section className="space-y-6 pt-12 border-t border-zinc-300/60">
-          <h2 className="text-xs uppercase tracking-[0.3em] text-zinc-500 font-mono">
-            Capability Demonstration
-          </h2>
           <div className="p-8 border border-zinc-300 bg-white/60 rounded-3xl space-y-3 shadow-sm">
             <p className="text-xs text-zinc-500 font-mono uppercase tracking-wider">Case Study: The White Absolute</p>
             <p className="text-xl font-serif text-[#111111]">Asset: Lucio Fontana (1968) // Valuation &amp; Arbitrage</p>
@@ -65,10 +59,6 @@ export default function AdvisingClient() {
 
         {/* The Protocol */}
         <section className="space-y-12 pt-12 border-t border-zinc-300/60">
-          <h2 className="text-xs uppercase tracking-[0.3em] text-zinc-500 font-mono">
-            The Protocol
-          </h2>
-
           <div className="space-y-12">
             <div className="space-y-3 group">
               <span className="text-xs font-mono text-zinc-400 uppercase tracking-widest">01</span>
@@ -97,10 +87,7 @@ export default function AdvisingClient() {
         </section>
 
         {/* Call to Action */}
-        <footer className="pt-16 border-t border-zinc-300/60 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
-          <p className="text-xs font-mono uppercase tracking-widest text-zinc-500">
-            Response time: Within 24 hours
-          </p>
+        <footer className="pt-16 border-t border-zinc-300/60 flex justify-end">
           <Link 
             href="mailto:contact@merkurov.love"
             className="group inline-flex items-center gap-4 border-b-2 border-zinc-900 pb-1.5 hover:border-zinc-500 transition-all duration-300"

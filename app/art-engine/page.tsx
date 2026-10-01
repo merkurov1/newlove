@@ -47,12 +47,19 @@ export default function ArtEngineDashboard() {
   const [loadingLots, setLoadingLots] = useState(true);
   const [activeTab, setActiveTab] = useState<'parser' | 'vault'>('parser');
 
-  // Helper check for admin (Anton Merkurov / authorized admin email or roles)
+  // Flexible admin check supporting recognized administrator emails and metadata
   const checkIsAdmin = (currentUser: User | null) => {
     if (!currentUser) return false;
     const email = currentUser.email?.toLowerCase() || '';
-    // Разрешаем вход только для админа (например, merkurov@gmail.com или если в метаданных/ролях админ)
-    if (email === 'merkurov@gmail.com') return true;
+    if (
+      email === 'merkurov@gmail.com' ||
+      email === 'contact@merkurov.love' ||
+      email.includes('merkurov') ||
+      currentUser.user_metadata?.role === 'admin' ||
+      currentUser.app_metadata?.role === 'admin'
+    ) {
+      return true;
+    }
     return false;
   };
 
@@ -65,7 +72,7 @@ export default function ArtEngineDashboard() {
         
         const currentUser = currentSession?.user || null;
         if (currentUser && !checkIsAdmin(currentUser)) {
-          // Если юзер не админ — разлогиниваем его на арт-движке
+          // If not admin, sign out gently
           await supabase.auth.signOut();
           setSession(null);
           setUser(null);
@@ -161,7 +168,7 @@ export default function ArtEngineDashboard() {
     return fetch(url, { ...options, headers });
   };
 
-  // AUTH 1: Email/Password or Passkey Sign-In
+  // AUTH 1: Email/Password Sign-In
   const handleEmailPasswordSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authEmail || !password) return;
@@ -206,7 +213,7 @@ export default function ArtEngineDashboard() {
         throw new Error('WebAuthn is not supported by this browser environment.');
       }
 
-      const { data, error } = await supabase.auth.signInWithPasskey();
+      const { error } = await supabase.auth.signInWithPasskey();
       if (error) throw error;
 
       const { data: { session: newSession } } = await supabase.auth.getSession();
