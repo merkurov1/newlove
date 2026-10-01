@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { createClient } from '@/lib/supabase-browser';
 
 interface Props {
   daemonUrl?: string;
@@ -15,9 +16,40 @@ export default function HeartPhysics({
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [bgColor, setBgColor] = useState('#e8b4b8');
   const [seconds, setSeconds] = useState(0);
+  const [authorName, setAuthorName] = useState('Guardian');
 
   const secondsRef = useRef(seconds);
   secondsRef.current = seconds;
+  const authorRef = useRef(authorName);
+  authorRef.current = authorName;
+
+  // Определяем реального пользователя при монтировании
+  useEffect(() => {
+    async function resolveUser() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (profile?.name) {
+            setAuthorName(profile.name);
+          } else if (user.user_metadata?.name) {
+            setAuthorName(user.user_metadata.name);
+          } else if (user.email) {
+            setAuthorName(user.email.split('@')[0]);
+          }
+        }
+      } catch (e) {
+        // Ошибка игнорируется, останется Guardian
+      }
+    }
+    resolveUser();
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -33,7 +65,7 @@ export default function HeartPhysics({
         const payload = {
           event_type: 'calm_timer',
           message: `Spent ${currentSeconds} ${currentSeconds === 1 ? 'second' : 'seconds'} finding calm.`,
-          author: 'Guardian'
+          author: authorRef.current
         };
 
         if (navigator.sendBeacon) {
@@ -264,7 +296,8 @@ export default function HeartPhysics({
     <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden', touchAction: 'none' }}>
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       
-      <div className="absolute top-36 right-8 sm:top-8 sm:right-12 text-stone-800 font-mono text-sm sm:text-base tracking-[0.2em] z-30 bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md">
+      {/* Счетчик спокойствия: плашка в стиле letitgo, надежный z-50 и точная позиция */}
+      <div className="absolute top-36 right-8 sm:top-28 sm:right-12 text-stone-800 font-mono text-sm sm:text-base tracking-[0.2em] z-50 bg-white/85 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md">
         ⏳ {formatTime(seconds)}
       </div>
 

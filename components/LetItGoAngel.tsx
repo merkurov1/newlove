@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { createClient } from '@/lib/supabase-browser';
 
 const ANGEL_WITH_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png';
@@ -15,10 +16,42 @@ export default function LetItGoAngel() {
   const [clickCount, setClickCount] = useState(0);
   const [showWithoutHeart, setShowWithoutHeart] = useState(false);
   const [skyGradient, setSkyGradient] = useState('bg-gradient-to-b from-[#87CEEB] via-[#B0E0E6] to-[#E0F6FF]');
+  const [authorName, setAuthorName] = useState('Visitor');
 
   const clickCountRef = useRef(clickCount);
   clickCountRef.current = clickCount;
+  const authorRef = useRef(authorName);
+  authorRef.current = authorName;
+
   const heartIdCounter = useRef(0);
+
+  // Определяем реального пользователя при монтировании
+  useEffect(() => {
+    async function resolveUser() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (profile?.name) {
+            setAuthorName(profile.name);
+          } else if (user.user_metadata?.name) {
+            setAuthorName(user.user_metadata.name);
+          } else if (user.email) {
+            setAuthorName(user.email.split('@')[0]);
+          }
+        }
+      } catch (e) {
+        // Ошибка игнорируется, останется Visitor
+      }
+    }
+    resolveUser();
+  }, []);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -40,7 +73,7 @@ export default function LetItGoAngel() {
         const payload = {
           event_type: 'ASH',
           message: `Released ${count} ${count === 1 ? 'burden' : 'burdens'} into the digital sky.`,
-          author: 'Visitor'
+          author: authorRef.current
         };
 
         if (navigator.sendBeacon) {
@@ -80,7 +113,8 @@ export default function LetItGoAngel() {
       
       <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
 
-      <div className="absolute top-36 right-8 sm:top-28 sm:right-12 text-stone-700 font-mono text-sm sm:text-base tracking-[0.2em] z-50 bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md animate-fade-in">
+      {/* Счетчик с надежной плашкой */}
+      <div className="absolute top-36 right-8 sm:top-28 sm:right-12 text-stone-800 font-mono text-sm sm:text-base tracking-[0.2em] z-50 bg-white/85 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md animate-fade-in">
         ❤️ {clickCount}
       </div>
 
