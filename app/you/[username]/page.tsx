@@ -14,7 +14,7 @@ interface PageProps {
 
 export default async function UserProfilePage({ params }: PageProps) {
   const { username } = params;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // 1. Запрашиваем профиль пользователя по уникальному username
   const { data: profile, error } = await supabase
@@ -47,7 +47,6 @@ export default async function UserProfilePage({ params }: PageProps) {
         .order('created_at', { ascending: false })
     ]);
     
-    // Исправлено: присваиваем данные корректно в userCasts
     if (castsRes.data) userCasts = castsRes.data;
     
     if (logsByUserIdRes.data && logsByUserIdRes.data.length > 0) {
@@ -67,26 +66,18 @@ export default async function UserProfilePage({ params }: PageProps) {
   const isAdmin = roleNorm === 'ADMIN';
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#F6F4F0] via-[#F0ECE6] to-[#E8E3DA] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white flex flex-col justify-between antialiased relative">
+    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-black selection:text-white flex flex-col justify-between antialiased relative overflow-x-hidden">
       
       <Header />
 
-      {/* Subtle Paper Grain Overlay */}
-      <div
-        className="fixed inset-0 pointer-events-none opacity-[0.02] mix-blend-overlay z-10"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25'filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-        }}
-      />
-
       {/* MAIN CONTAINER */}
-      <main className="max-w-3xl mx-auto w-full px-6 pt-36 pb-24 space-y-10 relative z-20 flex-1">
+      <div className="max-w-3xl mx-auto w-full px-6 pt-36 md:pt-44 pb-24 space-y-10 relative z-20 flex-1">
         
         {/* Navigation / Back link */}
         <div>
           <Link
             href="/temple"
-            className="inline-flex items-center gap-2 text-xs font-mono font-medium text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-widest"
+            className="inline-flex items-center gap-2 text-[11px] font-mono font-medium text-zinc-500 hover:text-[#111111] transition-colors uppercase tracking-[0.2em]"
           >
             <ArrowLeft size={14} />
             <span>Return to Sanctuary</span>
@@ -94,7 +85,7 @@ export default async function UserProfilePage({ params }: PageProps) {
         </div>
 
         {/* PROFILE CARD */}
-        <div className="p-8 sm:p-10 rounded-3xl bg-white/80 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.04)] space-y-8">
+        <div className="p-8 sm:p-10 rounded-3xl bg-white/75 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.04)] space-y-8">
           
           {/* Avatar & Header Info */}
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
@@ -108,23 +99,23 @@ export default async function UserProfilePage({ params }: PageProps) {
 
             <div className="space-y-3 overflow-hidden flex-1">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
-                <h1 className="text-2xl sm:text-3xl font-serif font-normal text-zinc-900 tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-serif font-medium text-[#111111] tracking-tight">
                   {profile.name || username}
                 </h1>
                 {isAdmin && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-50 border border-pink-200/60 text-pink-700 text-[10px] font-mono uppercase tracking-widest">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-50 border border-pink-200/60 text-pink-700 text-[10px] font-mono uppercase tracking-[0.2em]">
                     <ShieldCheck size={12} />
                     Admin
                   </span>
                 )}
                 {profile.is_subscribed && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200/60 text-amber-800 text-[10px] font-mono uppercase tracking-widest">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200/60 text-amber-800 text-[10px] font-mono uppercase tracking-[0.2em]">
                     <Sparkles size={12} />
                     Subscriber
                   </span>
                 )}
               </div>
-              <p className="text-xs font-mono text-zinc-400 tracking-wider">
+              <p className="text-xs font-mono text-zinc-400 tracking-widest">
                 @{profile.username || username}
               </p>
 
@@ -144,8 +135,8 @@ export default async function UserProfilePage({ params }: PageProps) {
 
           {/* Bio Section */}
           {profile.bio && (
-            <div className="pt-6 border-t border-zinc-200/60 space-y-2">
-              <h3 className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">Biography</h3>
+            <div className="pt-6 border-t border-zinc-200/80 space-y-2">
+              <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-400">Biography</h3>
               <p className="text-base text-zinc-800 leading-relaxed font-serif whitespace-pre-wrap">
                 {profile.bio}
               </p>
@@ -154,13 +145,13 @@ export default async function UserProfilePage({ params }: PageProps) {
 
           {/* Website Link */}
           {profile.website && (
-            <div className="pt-6 border-t border-zinc-200/60 space-y-2">
-              <h3 className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">External Archive</h3>
+            <div className="pt-6 border-t border-zinc-200/80 space-y-2">
+              <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-400">External Archive</h3>
               <a
                 href={profile.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm font-medium text-zinc-900 hover:opacity-60 transition-opacity underline underline-offset-4 decoration-zinc-300 font-mono"
+                className="inline-flex items-center gap-2 text-sm font-medium text-[#111111] hover:opacity-65 transition-opacity underline underline-offset-4 decoration-zinc-300 font-mono"
               >
                 <Globe size={15} className="text-zinc-500" />
                 <span>{profile.website.replace(/^https?:\/\//, '')}</span>
@@ -173,16 +164,16 @@ export default async function UserProfilePage({ params }: PageProps) {
         {/* CASTS / ARCHETYPES HISTORY SECTION */}
         <div className="space-y-4">
           <div className="flex items-center justify-between px-2">
-            <h3 className="text-xs font-mono uppercase tracking-widest text-zinc-500">
+            <h3 className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">
               Psychometric Casts & Manifestations ({userCasts.length})
             </h3>
-            <Link href="/cast" className="text-xs font-mono text-zinc-900 hover:underline">
+            <Link href="/cast" className="text-xs font-mono text-[#111111] hover:underline uppercase tracking-wider">
               + New Cast
             </Link>
           </div>
 
           {userCasts.length === 0 ? (
-            <div className="p-10 rounded-3xl bg-white/40 border border-zinc-200 text-center text-zinc-400 font-mono text-xs uppercase tracking-wider">
+            <div className="p-10 rounded-3xl bg-white/40 border border-zinc-200/80 text-center text-zinc-400 font-mono text-xs uppercase tracking-widest">
               No archetypes manifested yet.
             </div>
           ) : (
@@ -212,13 +203,13 @@ export default async function UserProfilePage({ params }: PageProps) {
         {/* TEMPLE TRANSMISSIONS / LOGS SECTION */}
         <div className="space-y-4">
           <div className="flex items-center justify-between px-2">
-            <h3 className="text-xs font-mono uppercase tracking-widest text-zinc-500">
+            <h3 className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">
               Temple Transmissions ({userLogs.length})
             </h3>
           </div>
 
           {userLogs.length === 0 ? (
-            <div className="p-10 rounded-3xl bg-white/40 border border-zinc-200 text-center text-zinc-400 font-mono text-xs uppercase tracking-wider">
+            <div className="p-10 rounded-3xl bg-white/40 border border-zinc-200/80 text-center text-zinc-400 font-mono text-xs uppercase tracking-widest">
               No transmissions recorded yet.
             </div>
           ) : (
@@ -245,14 +236,14 @@ export default async function UserProfilePage({ params }: PageProps) {
           )}
         </div>
 
-      </main>
+      </div>
 
       {/* FOOTER DIRECTORY */}
-      <footer className="w-full max-w-4xl mx-auto flex justify-between items-center px-6 py-6 border-t border-zinc-300/80 font-mono text-xs text-zinc-500 uppercase tracking-[0.25em] mt-16 z-20">
+      <footer className="w-full max-w-4xl mx-auto flex justify-between items-center px-6 py-6 border-t border-zinc-200/80 font-mono text-xs text-zinc-500 uppercase tracking-[0.25em] mt-16 z-20">
         <span>Merkurov Private Office</span>
         <span>Digital Heritage Architecture</span>
       </footer>
 
-    </div>
+    </main>
   );
 }

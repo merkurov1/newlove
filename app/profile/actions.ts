@@ -1,4 +1,3 @@
-'use me'
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
@@ -8,7 +7,7 @@ import { revalidatePath } from 'next/cache';
 export async function updateProfile(formData: FormData) {
   const currentUser = await getCurrentUser();
   if (!currentUser) {
-    return { error: 'Пользователь не авторизован' };
+    return { error: 'Unauthorized' };
   }
 
   const fullName = formData.get('fullName') as string;
@@ -25,7 +24,7 @@ export async function updateProfile(formData: FormData) {
     .eq('id', currentUser.id);
 
   if (error) {
-    return { error: 'Не удалось обновить профиль' };
+    return { error: 'Failed to update profile' };
   }
 
   revalidatePath('/profile');
