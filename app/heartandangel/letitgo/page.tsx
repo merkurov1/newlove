@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import LetItGoAngel from '@/components/LetItGoAngel';
-import TempleWrapper from '@/components/TempleWrapper'; // Используем новый Wrapper
+import TempleWrapper from '@/components/TempleWrapper';
 import TempleEntry from '@/components/TempleEntry.client';
 import './letitgo.css';
 
@@ -25,19 +25,18 @@ export const metadata = {
 
 export default function LetItGoPage() {
   return (
-    <div className="letitgo-container">
+    <div className="letitgo-container w-screen h-[100dvh] overflow-hidden relative bg-[#0A0A0A] flex flex-col items-center justify-center select-none">
       <TempleEntry />
-      {/* 
-        Обертка для режима Храма.
-        Скрывает хедер сайта и добавляет навигацию "Назад", 
-        если в URL есть ?mode=temple
-      */}
+      
+      {/* Обертка режима Храма */}
       <Suspense fallback={null}>
         <TempleWrapper />
       </Suspense>
 
-      {/* Твой основной контент */}
-      <LetItGoAngel />
+      {/* Интерактивный компонент ангела */}
+      <div className="w-full h-full flex items-center justify-center relative">
+        <LetItGoAngel />
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { createClient } from '@/lib/supabase-browser';
 
 interface Props {
   daemonUrl?: string;
@@ -14,12 +15,13 @@ export default function HeartPhysics({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [bgColor, setBgColor] = useState('#e8b4b8');
+  const hasLoggedRef = useRef(false);
 
   // Определение фонового цвета по времени суток
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour >= 6 && hour < 18) {
-      setBgColor('#e8b4b8'); // День (Оригинальный)
+      setBgColor('#e8b4b8'); // День
     } else if (hour >= 18 && hour < 22) {
       setBgColor('#e0a1a6'); // Закат
     } else {
@@ -51,14 +53,15 @@ export default function HeartPhysics({
     };
     window.addEventListener('resize', handleResize);
 
-    const daemonWidth = 240;
-    const daemonHeight = 360;
+    // Адаптивный размер чертика в зависимости от экрана
+    const daemonWidth = Math.min(width * 0.35, 260);
+    const daemonHeight = daemonWidth * 1.5;
 
     let handX = width / 2 + daemonWidth * 0.35;
     let handY = height - daemonHeight * 0.48;
 
-    let balloonX = handX;
-    let balloonY = handY - 300;
+    let balloonX = width / 2;
+    let balloonY = handY - 260;
     let vx = 0;
     let vy = 0;
     let angle = 0;
@@ -66,9 +69,8 @@ export default function HeartPhysics({
     let windX = 0;
     let windY = 0;
 
-    const restLength = 280;
+    const restLength = Math.min(height * 0.3, 280);
 
-    // Пульсация и вибрация нити
     let currentHeartScale = 1;
     let targetHeartScale = 1;
     let stringVibration = 0;
@@ -88,24 +90,41 @@ export default function HeartPhysics({
     window.addEventListener('deviceorientation', handleOrientation);
     window.addEventListener('mousemove', handleMouseMove);
 
+    const logInteractionToTemple = async () => {
+      if (hasLoggedRef.current) return;
+      hasLoggedRef.current = true;
+      try {
+        const supabase = createClient();
+        await supabase.from('temple_log').insert({
+          message: 'Found balance in Keep Calm',
+          event_type: 'heartandangel',
+          author: 'Guardian'
+        });
+      } catch (e) {
+        // Ошибку логирования глушим, чтобы не прерывать арт
+      }
+    };
+
     const handleTouch = (e: TouchEvent | MouseEvent) => {
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
       const dist = Math.hypot(clientX - balloonX, clientY - balloonY);
-      if (dist < 120) {
-        vx += (Math.random() - 0.5) * 24;
-        vy -= 18;
+      if (dist < 140) {
+        vx += (Math.random() - 0.5) * 20;
+        vy -= 15;
         targetHeartScale = 1.25;
-        stringVibration = 15; // Запуск эффекта гитарной струны
+        stringVibration = 15;
 
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           navigator.vibrate(15);
         }
+
+        logInteractionToTemple();
       }
     };
 
-    window.addEventListener('touchstart', handleTouch);
+    window.addEventListener('touchstart', handleTouch, { passive: true });
     window.addEventListener('mousedown', handleTouch);
 
     let animationFrameId: number;
@@ -120,13 +139,12 @@ export default function HeartPhysics({
       const dy = balloonY - handY;
       const currentLength = Math.hypot(dx, dy);
 
-      vy -= 0.5;
-
-      vx += windX * 0.06;
-      vy += windY * 0.06;
+      vy -= 0.4;
+      vx += windX * 0.05;
+      vy += windY * 0.05;
 
       if (currentLength > restLength) {
-        const tension = (currentLength - restLength) * 0.09;
+        const tension = (currentLength - restLength) * 0.08;
         const angleSpring = Math.atan2(dy, dx);
         vx -= Math.cos(angleSpring) * tension;
         vy -= Math.sin(angleSpring) * tension;
@@ -147,10 +165,12 @@ export default function HeartPhysics({
       const daemonY = height - daemonHeight;
 
       // 1. Чёртик
-      ctx.drawImage(daemonImg, daemonX, daemonY, daemonWidth, daemonHeight);
+      if (daemonImg.complete) {
+        ctx.drawImage(daemonImg, daemonX, daemonY, daemonWidth, daemonHeight);
+      }
 
-      // 2. Динамическая точка узла
-      const heartSize = 140 * currentHeartScale;
+      // 2. Узел сердца
+      const heartSize = Math.min(width * 0.22, 140) * currentHeartScale;
       const knotRelativeX = 0;
       const knotRelativeY = heartSize / 2;
 
@@ -160,7 +180,7 @@ export default function HeartPhysics({
       const knotX = balloonX + (knotRelativeX * cosA - knotRelativeY * sinA);
       const knotY = balloonY + (knotRelativeX * sinA + knotRelativeY * cosA);
 
-      // 3. Вибрирующая нить
+      // 3. Нить
       ctx.beginPath();
       ctx.moveTo(handX, handY);
 
@@ -174,17 +194,19 @@ export default function HeartPhysics({
       ctx.stroke();
 
       // 4. Сердце
-      ctx.save();
-      ctx.translate(balloonX, balloonY);
-      ctx.rotate(angle);
-      ctx.drawImage(
-        heartImg,
-        -heartSize / 2,
-        -heartSize / 2,
-        heartSize,
-        heartSize
-      );
-      ctx.restore();
+      if (heartImg.complete) {
+        ctx.save();
+        ctx.translate(balloonX, balloonY);
+        ctx.rotate(angle);
+        ctx.drawImage(
+          heartImg,
+          -heartSize / 2,
+          -heartSize / 2,
+          heartSize,
+          heartSize
+        );
+        ctx.restore();
+      }
 
       animationFrameId = requestAnimationFrame(render);
     };
@@ -222,14 +244,14 @@ export default function HeartPhysics({
   };
 
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden' }}>
-      <canvas ref={canvasRef} style={{ display: 'block' }} />
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden', touchAction: 'none' }}>
+      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       {!permissionGranted && (
         <button
           onClick={requestGyroPermission}
           style={{
             position: 'absolute',
-            bottom: '24px',
+            bottom: '32px',
             left: '50%',
             transform: 'translateX(-50%)',
             padding: '12px 24px',
@@ -238,9 +260,13 @@ export default function HeartPhysics({
             background: '#ffffff',
             color: '#1a1a1a',
             fontFamily: 'sans-serif',
+            fontSize: '12px',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
             fontWeight: 'bold',
             cursor: 'pointer',
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            zIndex: 30,
           }}
         >
           Enable Gyroscope 📱
