@@ -41,9 +41,11 @@ export default function VigilPage() {
           if (newRow.owner_name) setLastGuardian(newRow.owner_name);
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, () => {
-        calculateIntensity();
-        refreshGuardians();
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, (payload: any) => {
+        if (payload?.new?.event_type === 'vigil_spark') {
+          calculateIntensity();
+          refreshGuardians();
+        }
       })
       .subscribe();
 
@@ -86,7 +88,7 @@ export default function VigilPage() {
       const { data, error } = await supabase
         .from('temple_log')
         .select('author, message, created_at')
-        .eq('event_type', 'vigil')
+        .eq('event_type', 'vigil_spark')
         .gt('created_at', yesterday)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -134,7 +136,7 @@ export default function VigilPage() {
       const { data: userLogs } = await supabase
         .from('temple_log')
         .select('created_at')
-        .eq('event_type', 'vigil')
+        .eq('event_type', 'vigil_spark')
         .eq('author', userName)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -176,7 +178,7 @@ export default function VigilPage() {
       
       await supabase.from('temple_log').insert({
         message: `${userName} transmitted a spark`,
-        event_type: 'vigil',
+        event_type: 'vigil_spark',
         author: userName
       });
       
@@ -247,7 +249,6 @@ export default function VigilPage() {
               </div>
             </div>
 
-            {/* Красивая сияющая искра (световой сгусток с хвостом) */}
             <AnimatePresence>
               {spark && (
                 <motion.div
