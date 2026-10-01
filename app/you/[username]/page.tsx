@@ -29,12 +29,13 @@ export default async function UserProfilePage({ params }: PageProps) {
 
   const targetId = profile.id || profile.user_id;
 
-  // 2. Параллельная или последовательная выборка связанных данных (Casts & Temple Logs)
+  // 2. Параллельная выборка связанных данных (Casts & Temple Logs)
   let userCasts: any[] = [];
-  let userLogsCount = 0;
+  let userLogs: any[] = [];
 
   if (targetId) {
-    const [{ data: castsData }, { count: logsCount }] = await Promise.all([
+    // Сначала пробуем получить логи по user_id, а также параллельно casts
+    const [castsRes, logsByUserIdRes] = await Promise.all([
       supabase
         .from('casts')
         .select('*')
@@ -42,12 +43,24 @@ export default async function UserProfilePage({ params }: PageProps) {
         .order('created_at', { ascending: false }),
       supabase
         .from('temple_log')
-        .select('*', { count: 'exact', head: true })
-        .eq('author', profile.name || username)
+        .select('*')
+        .eq('user_id', targetId)
+        .order('created_at', { ascending: false })
     ]);
     
-    if (castsData) userCasts = castsData;
-    if (logsCount !== null) userLogsCount = logsCount;
+    if (castsRes.data) userCasts = castsData = castsRes.data;
+    
+    if (logsByUserIdRes.data && logsByUserIdRes.data.length > 0) {
+      userLogs = logsByUserIdRes.data;
+    } else if (profile.name) {
+      // Запасной вариант по имени автора, если user_id не проставлен в temple_log
+      const { data: logsByName } = await supabase
+        .from('temple_log')
+        .select('*')
+        .eq('author', profile.name)
+        .order('created_at', { ascending: false });
+      if (logsByName) userLogs = logsByName;
+    }
   }
 
   const userInitials = profile.name ? profile.name.substring(0, 2).toUpperCase() : 'AM';
@@ -124,7 +137,7 @@ export default async function UserProfilePage({ params }: PageProps) {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Radio size={14} className="text-amber-600" />
-                  <span>{userLogsCount} Temple Transmissions</span>
+                  <span>{userLogs.length} Temple Transmissions</span>
                 </div>
               </div>
             </div>
@@ -189,6 +202,42 @@ export default async function UserProfilePage({ params }: PageProps) {
                   {cast.analysis?.executive_summary && (
                     <p className="text-sm text-zinc-700 leading-relaxed font-serif">
                       {cast.analysis.executive_summary}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* TEMPLE TRANSMISSIONS / LOGS SECTION */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <h3 className="text-xs font-mono uppercase tracking-widest text-zinc-500">
+              Temple Transmissions ({userLogs.length})
+            </h3>
+          </div>
+
+          {userLogs.length === 0 ? (
+            <div className="p-10 rounded-3xl bg-white/40 border border-zinc-200 text-center text-zinc-400 font-mono text-xs uppercase tracking-wider">
+              No transmissions recorded yet.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {userLogs.map((log) => (
+                <div key={log.id} className="p-6 rounded-3xl bg-white/80 backdrop-blur-xl border border-zinc-200/80 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-amber-700 font-mono text-xs font-bold uppercase tracking-wider">
+                      <Radio size={16} />
+                      <span>{log.title || 'Sanctuary Entry'}</span>
+                    </div>
+                    <span className="text-zinc-400 font-mono text-xs">
+                      {new Date(log.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {log.content && (
+                    <p className="text-sm text-zinc-700 leading-relaxed font-serif whitespace-pre-wrap">
+                      {log.content}
                     </p>
                   )}
                 </div>
