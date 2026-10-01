@@ -11,7 +11,7 @@ export default function Header() {
   const { user, profile, roles, isLoading, signOut } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeEcosystem, setActiveEcosystem] = useState<'temple' | 'curators' | 'heart' | null>('temple');
+  const [activeEcosystem, setActiveEcosystem] = useState<'merkurov' | 'temple' | 'curators' | 'heart'>('merkurov');
   
   const pathname = usePathname() || '';
   const profileRef = useRef<HTMLDivElement>(null);
@@ -37,7 +37,7 @@ export default function Header() {
     } else if (pathname.startsWith('/temple') || pathname.startsWith('/cast') || pathname.startsWith('/vigil') || pathname.startsWith('/absolution')) {
       setActiveEcosystem('temple');
     } else {
-      setActiveEcosystem(null); // На главной или других страницах не подсвечиваем подразделы принудительно
+      setActiveEcosystem('merkurov');
     }
   }, [pathname]);
 
@@ -49,6 +49,18 @@ export default function Header() {
   const isAdmin = roles.includes('ADMIN');
 
   const ecosystems = [
+    { 
+      id: 'merkurov', 
+      label: 'Merkurov', 
+      mainHref: '/',
+      links: [
+        { name: 'Lobby', href: '/lobby' },
+        { name: 'About', href: '/isakeyforall' },
+        { name: 'Advising', href: '/advising' },
+        { name: 'Unframed', href: '/unframed' },
+        { name: 'Journal', href: '/journal' }
+      ]
+    },
     { 
       id: 'temple', 
       label: 'Digital Temple', 
@@ -215,9 +227,9 @@ export default function Header() {
               ))}
             </div>
 
-            {activeEcosystem && currentEco.links.length > 0 && <div className="w-[1px] h-6 bg-zinc-200" />}
+            {currentEco.links.length > 0 && <div className="w-[1px] h-6 bg-zinc-200" />}
 
-            {activeEcosystem && currentEco.links.length > 0 && (
+            {currentEco.links.length > 0 && (
               <nav className="flex items-center gap-6">
                 {currentEco.links.map((link) => (
                   <Link
@@ -268,7 +280,7 @@ export default function Header() {
               ))}
             </div>
 
-            {activeEcosystem && currentEco.links.length > 0 && (
+            {currentEco.links.length > 0 && (
               <div className="border-t border-zinc-100 pt-5 space-y-2.5">
                 <div className="font-mono text-xs uppercase text-zinc-400 tracking-wider mb-3">
                   Projects in {currentEco.label}:
