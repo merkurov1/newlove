@@ -1,6 +1,7 @@
+import type { Metadata } from 'next';
 import HeartPhysics from '@/components/HeartPhysics';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Keep Calm — Digital Temple',
   description: 'Find your balance and maintain calm in the digital space.',
   openGraph: {
@@ -27,8 +28,7 @@ export const metadata = {
   },
 };
 
-export default function Home() {
-  // Прямые публичные ссылки на файлы в Supabase Storage
+export default function Page() {
   const daemonUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Daemon.png';
   const heartUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png';
 

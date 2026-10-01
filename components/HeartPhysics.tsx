@@ -19,7 +19,6 @@ export default function HeartPhysics({
   const secondsRef = useRef(seconds);
   secondsRef.current = seconds;
 
-  // Таймер спокойствия (считает секунды пребывания на странице)
   useEffect(() => {
     const timer = setInterval(() => {
       setSeconds((prev) => prev + 1);
@@ -27,11 +26,10 @@ export default function HeartPhysics({
     return () => clearInterval(timer);
   }, []);
 
-  // Отправка результатов в базу temple_logs при уходе со страницы
   useEffect(() => {
     return () => {
       const currentSeconds = secondsRef.current;
-      if (currentSeconds > 2) { // Не отправляем случайные микро-заходы
+      if (currentSeconds > 2) {
         const payload = {
           event_type: 'calm_timer',
           message: `Spent ${currentSeconds} ${currentSeconds === 1 ? 'second' : 'seconds'} finding calm.`,
@@ -53,15 +51,14 @@ export default function HeartPhysics({
     };
   }, []);
 
-  // Определение фонового цвета по времени суток
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour >= 6 && hour < 18) {
-      setBgColor('#e8b4b8'); // День
+      setBgColor('#e8b4b8');
     } else if (hour >= 18 && hour < 22) {
-      setBgColor('#e0a1a6'); // Закат
+      setBgColor('#e0a1a6');
     } else {
-      setBgColor('#2b1d24'); // Ночь
+      setBgColor('#2b1d24');
     }
   }, []);
 
@@ -89,7 +86,6 @@ export default function HeartPhysics({
     };
     window.addEventListener('resize', handleResize);
 
-    // Адаптивный размер чертика в зависимости от экрана
     const daemonWidth = Math.min(width * 0.35, 260);
     const daemonHeight = daemonWidth * 1.5;
 
@@ -183,12 +179,10 @@ export default function HeartPhysics({
       const daemonX = width / 2 - daemonWidth / 2;
       const daemonY = height - daemonHeight;
 
-      // 1. Чёртик
       if (daemonImg.complete) {
         ctx.drawImage(daemonImg, daemonX, daemonY, daemonWidth, daemonHeight);
       }
 
-      // 2. Узел сердца
       const heartSize = Math.min(width * 0.22, 140) * currentHeartScale;
       const knotRelativeX = 0;
       const knotRelativeY = heartSize / 2;
@@ -199,7 +193,6 @@ export default function HeartPhysics({
       const knotX = balloonX + (knotRelativeX * cosA - knotRelativeY * sinA);
       const knotY = balloonY + (knotRelativeX * sinA + knotRelativeY * cosA);
 
-      // 3. Нить
       ctx.beginPath();
       ctx.moveTo(handX, handY);
 
@@ -212,7 +205,6 @@ export default function HeartPhysics({
       ctx.lineWidth = 1.8;
       ctx.stroke();
 
-      // 4. Сердце
       if (heartImg.complete) {
         ctx.save();
         ctx.translate(balloonX, balloonY);
@@ -262,7 +254,6 @@ export default function HeartPhysics({
     }
   };
 
-  // Красивое форматирование таймера (минуты:секунды)
   const formatTime = (secs: number) => {
     const mins = Math.floor(secs / 60);
     const remainSecs = secs % 60;
@@ -273,7 +264,6 @@ export default function HeartPhysics({
     <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden', touchAction: 'none' }}>
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       
-      {/* Таймер спокойствия (на мобилках сдвинут ниже top-36, чтобы не налезать на хедры) */}
       <div className="absolute top-36 right-8 sm:top-8 sm:right-12 text-stone-800 font-mono text-sm sm:text-base tracking-[0.2em] z-30 bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md">
         ⏳ {formatTime(seconds)}
       </div>

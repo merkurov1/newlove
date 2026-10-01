@@ -34,7 +34,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'message or audio required' }, { status: 400 })
     }
 
-    // Пытаемся извлечь пользователя из заголовка авторизации
     const authHeader = req.headers.get('authorization')
     let userId: string | null = null
     let authorName = body.author || 'Anonymous'
