@@ -327,84 +327,84 @@ export default function TempleClient() {
           
           {/* LEFT SIDEBAR: MANIFEST & RITUALS */}
           <aside className="lg:col-span-4 lg:sticky lg:top-32 space-y-6">
-            <div className="p-6 sm:p-8 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/90 shadow-[0_20px_40px_rgba(0,0,0,0.03)] space-y-6">
+            <div className="p-6 sm:p-8 rounded-3xl bg-white/85 backdrop-blur-2xl border border-zinc-200/95 shadow-[0_20px_40px_rgba(0,0,0,0.03)] space-y-6">
               
               <div className="space-y-3">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md">
+                <span className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500 bg-zinc-100 px-3 py-1 rounded-md">
                   Digital Temple
                 </span>
-                <h1 className="font-serif text-2xl font-normal text-zinc-900 tracking-tight">
+                <h1 className="font-serif text-2xl sm:text-3xl font-normal text-zinc-900 tracking-tight">
                   Digital Temple
                 </h1>
-                <p className="text-sm font-serif text-zinc-700 leading-relaxed">
-                  реальное место в интернете, где работают собственные ритуалы, а каждый посетитель оставляет после себя след.
+                <p className="text-base sm:text-lg font-serif text-zinc-800 leading-relaxed">
+                  A real place on the internet where rituals work and every visitor leaves a trace.
                 </p>
               </div>
 
-              <div className="space-y-3 pt-2 border-t border-zinc-200/60">
+              <div className="space-y-4 pt-4 border-t border-zinc-200/60">
                 <h2 className="font-mono text-xs uppercase tracking-[0.15em] text-zinc-500">
-                  Пять ритуалов храма:
+                  Five Temple Rituals:
                 </h2>
                 
-                <div className="space-y-3 font-serif text-xs text-zinc-700">
-                  <Link href="/cast" className="block p-3 rounded-2xl bg-zinc-50/80 border border-zinc-200/60 hover:bg-white hover:border-zinc-300 transition-all group">
-                    <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-zinc-900 uppercase tracking-wider mb-1">
+                <div className="space-y-3 font-serif">
+                  <Link href="/cast" className="block p-3.5 sm:p-4 rounded-2xl bg-zinc-50/90 border border-zinc-200/80 hover:bg-white hover:border-zinc-300 transition-all group">
+                    <div className="flex items-center justify-between font-mono text-xs font-bold text-zinc-900 uppercase tracking-wider mb-1">
                       <span>CAST</span>
-                      <ExternalLink size={12} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
+                      <ExternalLink size={14} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
                     </div>
-                    <p className="text-zinc-600 leading-normal">
-                      Оценка психики. Несколько вопросов — и ваш Agency Index, архетип и персональный результат.
+                    <p className="text-sm sm:text-base text-zinc-800 leading-normal">
+                      Psyche assessment, Agency Index & archetype.
                     </p>
                   </Link>
 
-                  <Link href="/vigil" className="block p-3 rounded-2xl bg-zinc-50/80 border border-zinc-200/60 hover:bg-white hover:border-zinc-300 transition-all group">
-                    <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-zinc-900 uppercase tracking-wider mb-1">
+                  <Link href="/vigil" className="block p-3.5 sm:p-4 rounded-2xl bg-zinc-50/90 border border-zinc-200/80 hover:bg-white hover:border-zinc-300 transition-all group">
+                    <div className="flex items-center justify-between font-mono text-xs font-bold text-zinc-900 uppercase tracking-wider mb-1">
                       <span>VIGIL</span>
-                      <ExternalLink size={12} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
+                      <ExternalLink size={14} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
                     </div>
-                    <p className="text-zinc-600 leading-normal">
-                      Бдение. Оставьте свой spark в храме и присоединитесь к тем, кто бодрствует.
+                    <p className="text-sm sm:text-base text-zinc-800 leading-normal">
+                      Vigil & spark in the temple.
                     </p>
                   </Link>
 
-                  <Link href="/absolution" className="block p-3 rounded-2xl bg-zinc-50/80 border border-zinc-200/60 hover:bg-white hover:border-zinc-300 transition-all group">
-                    <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-zinc-900 uppercase tracking-wider mb-1">
+                  <Link href="/absolution" className="block p-3.5 sm:p-4 rounded-2xl bg-zinc-50/90 border border-zinc-200/80 hover:bg-white hover:border-zinc-300 transition-all group">
+                    <div className="flex items-center justify-between font-mono text-xs font-bold text-zinc-900 uppercase tracking-wider mb-1">
                       <span>ABSOLUTION</span>
-                      <ExternalLink size={12} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
+                      <ExternalLink size={14} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
                     </div>
-                    <p className="text-zinc-600 leading-normal">
-                      Отпущение грехов. Исповедуйтесь в том, что вас тревожит, и пройдите ритуал освобождения.
+                    <p className="text-sm sm:text-base text-zinc-800 leading-normal">
+                      Confession & release from anxiety.
                     </p>
                   </Link>
 
-                  <Link href="/heartandangel/calm" className="block p-3 rounded-2xl bg-zinc-50/80 border border-zinc-200/60 hover:bg-white hover:border-zinc-300 transition-all group">
-                    <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-zinc-900 uppercase tracking-wider mb-1">
+                  <Link href="/heartandangel/calm" className="block p-3.5 sm:p-4 rounded-2xl bg-zinc-50/90 border border-zinc-200/80 hover:bg-white hover:border-zinc-300 transition-all group">
+                    <div className="flex items-center justify-between font-mono text-xs font-bold text-zinc-900 uppercase tracking-wider mb-1">
                       <span>CALM</span>
-                      <ExternalLink size={12} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
+                      <ExternalLink size={14} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
                     </div>
-                    <p className="text-zinc-600 leading-normal">
-                      Поиск спокойствия. Ритуал для того момента, когда вокруг слишком много шума и нужно вернуть внимание к себе.
+                    <p className="text-sm sm:text-base text-zinc-800 leading-normal">
+                      Finding calm & centering attention.
                     </p>
                   </Link>
 
-                  <Link href="/heartandangel/letitgo" className="block p-3 rounded-2xl bg-zinc-50/80 border border-zinc-200/60 hover:bg-white hover:border-zinc-300 transition-all group">
-                    <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-zinc-900 uppercase tracking-wider mb-1">
+                  <Link href="/heartandangel/letitgo" className="block p-3.5 sm:p-4 rounded-2xl bg-zinc-50/90 border border-zinc-200/80 hover:bg-white hover:border-zinc-300 transition-all group">
+                    <div className="flex items-center justify-between font-mono text-xs font-bold text-zinc-900 uppercase tracking-wider mb-1">
                       <span>LET IT GO</span>
-                      <ExternalLink size={12} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
+                      <ExternalLink size={14} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
                     </div>
-                    <p className="text-zinc-600 leading-normal">
-                      Отпускание проблем. Оставьте здесь то, что больше не хотите нести с собой.
+                    <p className="text-sm sm:text-base text-zinc-800 leading-normal">
+                      Release problems and burdens.
                     </p>
                   </Link>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-zinc-200/60 space-y-2 text-xs font-serif text-zinc-600 leading-relaxed">
+              <div className="pt-4 border-t border-zinc-200/60 space-y-2 text-sm sm:text-base font-serif text-zinc-800 leading-relaxed">
                 <p>
-                  У храма есть своя память. Она собирается из действий посетителей и постепенно становится частью самого места.
+                  The temple has its own memory, built from visitor actions and woven into the place.
                 </p>
-                <p className="font-mono text-[11px] uppercase tracking-wider text-zinc-900 font-semibold pt-1">
-                  Храм работает.
+                <p className="font-mono text-xs uppercase tracking-wider text-zinc-900 font-bold pt-1">
+                  The temple is working.
                 </p>
               </div>
 
