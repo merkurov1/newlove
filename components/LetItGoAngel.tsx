@@ -25,13 +25,15 @@ export default function LetItGoAngel() {
 
   const heartIdCounter = useRef(0);
 
-  // Определяем реального пользователя при монтировании
+  // Точный аналог получения имени пользователя как в рабочих примерах
   useEffect(() => {
-    async function resolveUser() {
+    async function resolveAuthor() {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
+        
         if (user) {
+          // Ищем имя в таблице users
           const { data: profile } = await supabase
             .from('users')
             .select('name')
@@ -47,10 +49,10 @@ export default function LetItGoAngel() {
           }
         }
       } catch (e) {
-        // Ошибка игнорируется, останется Visitor
+        console.error('Failed to resolve author name', e);
       }
     }
-    resolveUser();
+    resolveAuthor();
   }, []);
 
   useEffect(() => {
@@ -113,7 +115,6 @@ export default function LetItGoAngel() {
       
       <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
 
-      {/* Счетчик с надежной плашкой */}
       <div className="absolute top-36 right-8 sm:top-28 sm:right-12 text-stone-800 font-mono text-sm sm:text-base tracking-[0.2em] z-50 bg-white/85 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md animate-fade-in">
         ❤️ {clickCount}
       </div>

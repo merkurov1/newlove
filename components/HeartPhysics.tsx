@@ -23,12 +23,13 @@ export default function HeartPhysics({
   const authorRef = useRef(authorName);
   authorRef.current = authorName;
 
-  // Определяем реального пользователя при монтировании
+  // Точный аналог получения имени пользователя из базы
   useEffect(() => {
-    async function resolveUser() {
+    async function resolveAuthor() {
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
+        
         if (user) {
           const { data: profile } = await supabase
             .from('users')
@@ -45,10 +46,10 @@ export default function HeartPhysics({
           }
         }
       } catch (e) {
-        // Ошибка игнорируется, останется Guardian
+        console.error('Failed to resolve author name', e);
       }
     }
-    resolveUser();
+    resolveAuthor();
   }, []);
 
   useEffect(() => {
@@ -296,7 +297,6 @@ export default function HeartPhysics({
     <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden', touchAction: 'none' }}>
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       
-      {/* Счетчик спокойствия: плашка в стиле letitgo, надежный z-50 и точная позиция */}
       <div className="absolute top-36 right-8 sm:top-28 sm:right-12 text-stone-800 font-mono text-sm sm:text-base tracking-[0.2em] z-50 bg-white/85 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md">
         ⏳ {formatTime(seconds)}
       </div>
