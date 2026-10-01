@@ -67,7 +67,7 @@ function Paywall({ onUnlock }: { onUnlock: () => void }) {
   return (
     <div className="min-h-screen bg-[#0d0d0d] text-white flex flex-col selection:bg-white selection:text-black">
       <Header />
-      <div className="flex-1 flex items-center justify-center px-6 pt-32 pb-16">
+      <div className="flex-1 flex items-center justify-center px-6 pt-36 pb-16">
         <div className="w-full max-w-xl text-center space-y-6">
           <div className="flex justify-center">
             <div className="flex h-16 w-16 items-center justify-center border border-white/20 rounded-2xl bg-white/5 backdrop-blur-md">
@@ -129,7 +129,7 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Инициализация прав доступа и настроек
+  // Жесткая синхронная проверка прав доступа при монтировании
   useEffect(() => {
     try {
       const storedPrefs = window.localStorage.getItem(PREFS_KEY);
@@ -138,24 +138,22 @@ export default function BookReaderPage() {
         setPrefs({ ...DEFAULT_PREFS, ...parsed });
       }
 
-      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
-      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
-
       const params = new URLSearchParams(window.location.search);
       const paid = params.get('paid') === '1';
       const adminParam = params.get('admin') === '1';
 
       if (paid) {
         window.localStorage.setItem(UNLOCKED_KEY, 'true');
-        setUnlocked(true);
       }
       if (adminParam) {
         window.localStorage.setItem(ADMIN_KEY, 'true');
-        setAdmin(true);
       }
 
-      if (storedUnlocked || paid) setUnlocked(true);
-      if (storedAdmin || adminParam) setAdmin(true);
+      const storedUnlocked = window.localStorage.getItem(UNLOCKED_KEY) === 'true';
+      const storedAdmin = window.localStorage.getItem(ADMIN_KEY) === 'true';
+
+      setUnlocked(storedUnlocked || paid);
+      setAdmin(storedAdmin || adminParam);
     } catch {
       // Игнорируем ошибки хранилища
     } finally {
@@ -163,7 +161,7 @@ export default function BookReaderPage() {
     }
   }, []);
 
-  // Загрузка книги только при успешной авторизации
+  // Загрузка книги
   useEffect(() => {
     if (!isInitialized) return;
     if (!unlocked && !admin) {
@@ -206,7 +204,6 @@ export default function BookReaderPage() {
     });
   }, []);
 
-  // Расчет прогресса чтения
   useEffect(() => {
     const updateProgress = () => {
       const documentHeight = document.documentElement.scrollHeight - window.innerHeight;
@@ -227,7 +224,6 @@ export default function BookReaderPage() {
     };
   }, [content]);
 
-  // Генерация оглавления (TOC)
   useEffect(() => {
     if (!content) {
       setToc([]);
@@ -336,7 +332,7 @@ export default function BookReaderPage() {
   const borderClass = prefs.theme === 'dark' ? 'border-white/10' : prefs.theme === 'sepia' ? 'border-[#3c2f2f]/15' : 'border-black/10';
   const readerFont = prefs.fontFamily === 'serif' ? 'font-serif' : 'font-sans';
 
-  // Пока данные инициализируются, показываем пустой экран или лоадер, исключая мгновенный проскок платной книги
+  // ЖЕСТКИЙ БЛОКАТОР: Если не инициализировано ИЛИ не разблокировано — рендерим Paywall немедленно
   if (!isInitialized || (!unlocked && !admin)) {
     return <Paywall onUnlock={unlockHandler} />;
   }
@@ -345,7 +341,7 @@ export default function BookReaderPage() {
     return (
       <div className={`min-h-screen ${currentThemeClass} flex flex-col`}>
         <Header />
-        <div className="flex-1 flex items-center justify-center pt-20">
+        <div className="flex-1 flex items-center justify-center pt-24">
           <div className="text-center space-y-4">
             <div className={`font-mono text-[10px] uppercase tracking-[0.25em] ${mutedClass}`}>
               Opening manuscript...
@@ -360,7 +356,7 @@ export default function BookReaderPage() {
     return (
       <div className={`min-h-screen ${currentThemeClass} flex flex-col`}>
         <Header />
-        <div className="flex-1 flex items-center justify-center px-6 pt-20">
+        <div className="flex-1 flex items-center justify-center px-6 pt-24">
           <div className="max-w-md text-center space-y-4">
             <div className={`font-mono text-[10px] uppercase tracking-[0.25em] ${mutedClass}`}>Reader error</div>
             <p className="text-sm font-serif">{error}</p>
@@ -381,8 +377,8 @@ export default function BookReaderPage() {
     <div className={`min-h-screen ${currentThemeClass} transition-colors duration-300 relative`}>
       <Header />
 
-      {/* TOP READER BAR — зафиксировано корректно ниже хедера (top-16 md:top-20) */}
-      <div className={`sticky top-16 md:top-20 z-30 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/90' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/90' : 'bg-[#faf9f5]/90'} backdrop-blur-md`}>
+      {/* TOP READER BAR — безопасный отступ сверху (top-14 md:top-16), чтобы гарантированно не улетать под хедер */}
+      <div className={`sticky top-14 md:top-16 z-30 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/90' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/90' : 'bg-[#faf9f5]/90'} backdrop-blur-md`}>
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link
