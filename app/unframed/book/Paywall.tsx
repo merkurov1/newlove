@@ -2,21 +2,17 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Lock, ShieldCheck, CreditCard } from 'lucide-react';
+import { Lock, CreditCard, LogIn } from 'lucide-react';
 import Link from 'next/link';
 
-interface PaywallProps {
-  onUnlock?: () => void;
-}
-
-export default function Paywall({ onUnlock }: PaywallProps) {
+export default function Paywall() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
   const handleStripeCheckout = async () => {
     setLoading(true);
     try {
-      const successUrl = window.location.origin + '/unframed/book?paid=1';
+      const successUrl = window.location.origin + '/unframed/book';
       const cancelUrl = window.location.origin + '/unframed/book';
 
       const res = await fetch('/api/stripe/checkout', {
@@ -44,12 +40,6 @@ export default function Paywall({ onUnlock }: PaywallProps) {
     }
   };
 
-  const handleBypassAdmin = () => {
-    if (onUnlock) {
-      onUnlock();
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center px-6 relative selection:bg-red-600 selection:text-white font-sans">
       <div
@@ -71,7 +61,7 @@ export default function Paywall({ onUnlock }: PaywallProps) {
           UNFRAMED / Manuscript
         </h1>
         <p className="font-serif text-zinc-400 text-sm mb-8 leading-relaxed">
-          Full digital access to the memoir requires a secure purchase via Stripe or verified administrative clearance.
+          Full digital access to the memoir requires a secure purchase via Stripe or authentication with a registered account.
         </p>
 
         <div className="space-y-4">
@@ -93,14 +83,13 @@ export default function Paywall({ onUnlock }: PaywallProps) {
         </div>
 
         <div className="mt-8 pt-6 border-t border-zinc-900 flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={handleBypassAdmin}
-            className="w-full bg-zinc-900 text-zinc-300 border border-zinc-800 font-mono text-[10px] uppercase tracking-widest py-3 hover:border-red-600 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer"
+          <Link
+            href="/login"
+            className="w-full bg-zinc-900 text-zinc-300 border border-zinc-800 font-mono text-[10px] uppercase tracking-widest py-3 hover:border-red-600 hover:text-white transition-all flex items-center justify-center gap-2"
           >
-            <ShieldCheck size={14} className="text-red-500" />
-            <span>Author / Admin Bypass</span>
-          </button>
+            <LogIn size={14} className="text-red-500" />
+            <span>Sign In to Your Account</span>
+          </Link>
 
           <Link
             href="/unframed"
