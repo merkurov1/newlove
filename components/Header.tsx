@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { User, Settings, LogOut, ShieldCheck, Menu, X } from 'lucide-react';
+import { User, Settings, LogOut, ShieldCheck, Menu, X, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
 
@@ -11,21 +11,31 @@ export default function Header() {
   const { user, profile, roles, isLoading, signOut } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeEcosystem, setActiveEcosystem] = useState<'merkurov' | 'temple' | 'curators' | 'heart'>('merkurov');
+  const [activeEcosystem, setActiveEcosystem] = useState<'temple' | 'curators' | 'heart'>('temple');
   
   const pathname = usePathname() || '';
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  // Закрытие выпадающего меню при клике вне его области
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     setIsProfileOpen(false);
     setIsMobileMenuOpen(false);
-    if (pathname.startsWith('/temple') || pathname.startsWith('/cast') || pathname.startsWith('/vigil') || pathname.startsWith('/absolution')) {
-      setActiveEcosystem('temple');
-    } else if (pathname.startsWith('/art-engine') || pathname.startsWith('/selection')) {
+    if (pathname.startsWith('/art-engine') || pathname.startsWith('/selection')) {
       setActiveEcosystem('curators');
     } else if (pathname.startsWith('/heartandangel')) {
       setActiveEcosystem('heart');
     } else {
-      setActiveEcosystem('merkurov');
+      setActiveEcosystem('temple');
     }
   }, [pathname]);
 
@@ -37,18 +47,6 @@ export default function Header() {
   const isAdmin = roles.includes('ADMIN');
 
   const ecosystems = [
-    { 
-      id: 'merkurov', 
-      label: 'Merkurov', 
-      mainHref: '/lobby',
-      links: [
-        { name: 'Lobby', href: '/lobby' },
-        { name: 'About', href: '/isakeyforall' },
-        { name: 'Advising', href: '/advising' },
-        { name: 'Unframed', href: '/unframed' },
-        { name: 'Journal', href: '/journal' }
-      ]
-    },
     { 
       id: 'temple', 
       label: 'Digital Temple', 
@@ -65,7 +63,6 @@ export default function Header() {
       label: 'Curators Engine', 
       mainHref: '/art-engine',
       links: [
-        { name: 'Art Engine', href: '/art-engine' },
         { name: 'Selection', href: '/selection' }
       ]
     },
@@ -89,13 +86,15 @@ export default function Header() {
           
           {/* LEFT: AVATAR & BRAND */}
           <div className="flex items-center gap-5">
-            <div className="relative">
+            <div className="relative" ref={profileRef}>
               {isLoading ? (
                 <div className="w-12 h-12 rounded-full bg-zinc-200 animate-pulse" />
               ) : user ? (
                 <button
+                  type="button"
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className="w-12 h-12 rounded-full overflow-hidden bg-zinc-900 text-white font-medium text-sm flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 transition-all"
+                  className="w-12 h-12 rounded-full overflow-hidden bg-zinc-900 text-white font-medium text-sm flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  aria-label="User Menu"
                 >
                   {userImage ? (
                     <img src={userImage} alt={userName} className="w-full h-full object-cover" />
@@ -112,40 +111,84 @@ export default function Header() {
                 </Link>
               )}
 
-              {/* Profile Popover */}
+              {/* Refined Profile Popover (Liquid Glass & Clean Typography) */}
               <AnimatePresence>
                 {isProfileOpen && user && (
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    initial={{ opacity: 0, scale: 0.96, y: 8 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="absolute left-0 mt-3 w-72 p-5 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-50 space-y-4"
+                    exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    className="absolute left-0 mt-3 w-80 p-5 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-50 space-y-4"
                   >
-                    <div className="flex items-center gap-3.5 pb-3.5 border-b border-zinc-200/50">
-                      <div className="w-11 h-11 rounded-full overflow-hidden bg-zinc-900 text-white font-medium flex items-center justify-center text-sm">
+                    {/* User Info Header */}
+                    <div className="flex items-center gap-3.5 pb-4 border-b border-zinc-100">
+                      <div className="w-12 h-12 rounded-2xl overflow-hidden bg-zinc-900 text-white font-medium flex items-center justify-center text-sm shadow-inner shrink-0">
                         {userImage ? <img src={userImage} alt={userName} className="w-full h-full object-cover" /> : <span>{userInitials}</span>}
                       </div>
                       <div className="overflow-hidden">
-                        <div className="text-sm font-semibold text-zinc-900 truncate">{userName}</div>
+                        <div className="text-sm font-bold text-zinc-900 truncate">{userName}</div>
                         <div className="text-xs text-zinc-500 font-mono truncate">{user.email}</div>
                       </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <Link href={profileHref} onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100">
-                        <User size={16} className="text-zinc-500" /> Profile & Archetype
+                    {/* Navigation Options */}
+                    <div className="space-y-1">
+                      <Link 
+                        href={profileHref} 
+                        onClick={() => setIsProfileOpen(false)} 
+                        className="group w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100/80 transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-zinc-100 text-zinc-600 group-hover:bg-white group-hover:shadow-sm transition-all">
+                            <User size={16} />
+                          </div>
+                          <span>Profile & Archetype</span>
+                        </div>
+                        <ChevronRight size={14} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
                       </Link>
-                      <Link href="/profile" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100">
-                        <Settings size={16} className="text-zinc-500" /> Settings
+
+                      <Link 
+                        href="/profile" 
+                        onClick={() => setIsProfileOpen(false)} 
+                        className="group w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100/80 transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-zinc-100 text-zinc-600 group-hover:bg-white group-hover:shadow-sm transition-all">
+                            <Settings size={16} />
+                          </div>
+                          <span>Settings</span>
+                        </div>
+                        <ChevronRight size={14} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
                       </Link>
+
                       {isAdmin && (
-                        <Link href="/admin" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium text-pink-700 bg-pink-50">
-                          <ShieldCheck size={16} className="text-pink-600" /> Admin Panel
+                        <Link 
+                          href="/admin" 
+                          onClick={() => setIsProfileOpen(false)} 
+                          className="group w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-medium text-pink-700 bg-pink-50/60 hover:bg-pink-100/60 transition-all"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-xl bg-pink-100 text-pink-600">
+                              <ShieldCheck size={16} />
+                            </div>
+                            <span>Admin Panel</span>
+                          </div>
+                          <ChevronRight size={14} className="text-pink-400 group-hover:translate-x-0.5 transition-transform" />
                         </Link>
                       )}
-                      <button onClick={() => { setIsProfileOpen(false); signOut(); }} className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl text-sm font-medium text-rose-600 hover:bg-rose-50">
-                        <LogOut size={16} /> Sign Out
-                      </button>
+
+                      <div className="pt-2 border-t border-zinc-100">
+                        <button 
+                          onClick={() => { setIsProfileOpen(false); signOut(); }} 
+                          className="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-sm font-medium text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                        >
+                          <div className="p-2 rounded-xl bg-rose-100/60 text-rose-600">
+                            <LogOut size={16} />
+                          </div>
+                          <span>Sign Out</span>
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -159,10 +202,8 @@ export default function Header() {
 
           {/* DESKTOP ECOSYSTEM SWITCHER & SUB-LINKS */}
           <div className="hidden lg:flex items-center gap-8">
-            
-            {/* Ecosystem Switcher Capsule */}
             <div className="flex items-center bg-zinc-100 p-1.5 rounded-full border border-zinc-200/60 font-mono text-xs uppercase tracking-wider">
-              {ecosystems.slice(1).map((eco) => (
+              {ecosystems.map((eco) => (
                 <Link
                   key={eco.id}
                   href={eco.mainHref}
@@ -173,10 +214,8 @@ export default function Header() {
               ))}
             </div>
 
-            {/* Divider */}
             {currentEco.links.length > 0 && <div className="w-[1px] h-6 bg-zinc-200" />}
 
-            {/* Current Ecosystem Sub-Links */}
             {currentEco.links.length > 0 && (
               <nav className="flex items-center gap-6">
                 {currentEco.links.map((link) => (
