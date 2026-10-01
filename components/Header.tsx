@@ -52,7 +52,6 @@ export default function Header() {
       label: 'Digital Temple', 
       mainHref: '/temple',
       links: [
-        { name: 'Temple', href: '/temple' },
         { name: 'Cast', href: '/cast' },
         { name: 'Vigil', href: '/vigil' },
         { name: 'Absolution', href: '/absolution' }
