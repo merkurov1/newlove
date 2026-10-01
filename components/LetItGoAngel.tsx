@@ -4,9 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 
 const ANGEL_WITH_HEART =
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0918.png';
-const ANGEL_WITHOUT_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png';
+const ANGEL_WITHOUT_HEART =
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0918.png';
 const HEART_IMAGE =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0920.png';
 
@@ -50,7 +50,7 @@ export default function LetItGoAngel() {
     setFlyingHearts((prev) => [...prev, { id: newHeartId }]);
     setClickCount((prev) => prev + 1);
 
-    // Ангел переходит в состояние БЕЗ сердца (IMG_0919) и остается в нем
+    // Ангел переходит в состояние БЕЗ сердца и остается в нем
     setShowWithoutHeart(true);
 
     // Удаляем улетевшее сердечко из DOM после завершения анимации (4 секунды)
@@ -73,13 +73,13 @@ export default function LetItGoAngel() {
       {/* Единый контейнер для ангела и сердец */}
       <div className="relative w-full max-w-3xl h-full flex items-end justify-center pb-[10vh] z-20">
         
-        {/* Ангел (один контейнер, переключение состояний через opacity чтобы не мигало) */}
+        {/* Ангел */}
         <div 
           className="relative cursor-pointer transition-transform duration-200 active:scale-95 flex items-center justify-center p-4 w-[480px] h-[480px] max-w-[65vw] max-h-[55vh]"
           onClick={handleClick}
           title="Click to let go"
         >
-          {/* До клика: ангел с сердцем (0918) */}
+          {/* Дефолтное состояние: ангел с сердцем (0919) */}
           <Image
             src={ANGEL_WITH_HEART}
             alt="Angel with heart"
@@ -91,7 +91,7 @@ export default function LetItGoAngel() {
             priority
           />
 
-          {/* После клика: ангел без сердца (0919) */}
+          {/* После клика: ангел без сердца (0918) */}
           <Image
             src={ANGEL_WITHOUT_HEART}
             alt="Angel without heart"
@@ -104,7 +104,7 @@ export default function LetItGoAngel() {
           />
         </div>
 
-        {/* Улетающее отдельно сердечко (IMG_0920.png) */}
+        {/* Улетающее сердце (увеличен размер до 180px) */}
         {flyingHearts.map((heart) => (
           <div
             key={heart.id}
@@ -112,16 +112,16 @@ export default function LetItGoAngel() {
             style={{
               bottom: '42%',
               left: '50%',
-              width: 60,
-              height: 60,
-              marginLeft: '-30px',
+              width: 180,
+              height: 180,
+              marginLeft: '-90px',
             }}
           >
             <Image
               src={HEART_IMAGE}
               alt="Flying Heart"
-              width={60}
-              height={60}
+              width={180}
+              height={180}
               className="object-contain filter drop-shadow-[0_0_20px_rgba(255,100,100,0.8)]"
             />
           </div>
@@ -139,7 +139,7 @@ export default function LetItGoAngel() {
             opacity: 1;
           }
           100% {
-            transform: translateY(-70vh) scale(1.4) translateX(20px) rotate(12deg);
+            transform: translateY(-70vh) scale(1.2) translateX(20px) rotate(12deg);
             opacity: 0;
           }
         }
