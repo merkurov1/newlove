@@ -11,7 +11,7 @@ export default function Header() {
   const { user, profile, roles, isLoading, signOut } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeEcosystem, setActiveEcosystem] = useState<'merkurov' | 'temple' | 'curators' | 'heart'>('merkurov');
+  const [activeEcosystem, setActiveEcosystem] = useState<'temple' | 'curators' | 'heart' | null>(null);
   
   const pathname = usePathname() || '';
   const profileRef = useRef<HTMLDivElement>(null);
@@ -37,7 +37,7 @@ export default function Header() {
     } else if (pathname.startsWith('/temple') || pathname.startsWith('/cast') || pathname.startsWith('/vigil') || pathname.startsWith('/absolution')) {
       setActiveEcosystem('temple');
     } else {
-      setActiveEcosystem('merkurov');
+      setActiveEcosystem(null);
     }
   }, [pathname]);
 
@@ -48,19 +48,8 @@ export default function Header() {
   const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
   const isAdmin = roles.includes('ADMIN');
 
+  // Основные экосистемы
   const ecosystems = [
-    { 
-      id: 'merkurov', 
-      label: 'Merkurov', 
-      mainHref: '/',
-      links: [
-        { name: 'Lobby', href: '/lobby' },
-        { name: 'About', href: '/isakeyforall' },
-        { name: 'Advising', href: '/advising' },
-        { name: 'Unframed', href: '/unframed' },
-        { name: 'Journal', href: '/journal' }
-      ]
-    },
     { 
       id: 'temple', 
       label: 'Digital Temple', 
@@ -90,7 +79,16 @@ export default function Header() {
     }
   ];
 
-  const currentEco = ecosystems.find(e => e.id === activeEcosystem) || ecosystems[0];
+  // Рубрики главного сайта
+  const mainRubrics = [
+    { name: 'Lobby', href: '/lobby' },
+    { name: 'About', href: '/isakeyforall' },
+    { name: 'Advising', href: '/advising' },
+    { name: 'Unframed', href: '/unframed' },
+    { name: 'Journal', href: '/journal' }
+  ];
+
+  const currentEco = ecosystems.find(e => e.id === activeEcosystem);
 
   return (
     <>
@@ -124,7 +122,7 @@ export default function Header() {
                 </Link>
               )}
 
-              {/* Refined Profile Popover (Responsive & Clean) */}
+              {/* Refined Profile Popover */}
               <AnimatePresence>
                 {isProfileOpen && user && (
                   <motion.div
@@ -134,7 +132,6 @@ export default function Header() {
                     transition={{ duration: 0.2, ease: 'easeOut' }}
                     className="absolute left-0 sm:left-auto sm:right-auto mt-3 w-[calc(100vw-3rem)] max-w-[320px] p-5 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-4"
                   >
-                    {/* User Info Header */}
                     <div className="flex items-center gap-3.5 pb-4 border-b border-zinc-100">
                       <div className="w-12 h-12 rounded-2xl overflow-hidden bg-zinc-900 text-white font-medium flex items-center justify-center text-sm shadow-inner shrink-0">
                         {userImage ? <img src={userImage} alt={userName} className="w-full h-full object-cover" /> : <span>{userInitials}</span>}
@@ -145,7 +142,6 @@ export default function Header() {
                       </div>
                     </div>
 
-                    {/* Navigation Options */}
                     <div className="space-y-1">
                       <Link 
                         href={profileHref} 
@@ -213,25 +209,28 @@ export default function Header() {
             </Link>
           </div>
 
-          {/* DESKTOP ECOSYSTEM SWITCHER & SUB-LINKS */}
-          <div className="hidden lg:flex items-center gap-8">
+          {/* DESKTOP NAVIGATION: ECOSYSTEMS & RUBRICS */}
+          <div className="hidden lg:flex items-center gap-6">
+            
+            {/* Ecosystem Switcher Capsule */}
             <div className="flex items-center bg-zinc-100 p-1.5 rounded-full border border-zinc-200/60 font-mono text-xs uppercase tracking-wider">
               {ecosystems.map((eco) => (
                 <Link
                   key={eco.id}
                   href={eco.mainHref}
-                  className={`px-5 py-2 rounded-full transition-all ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white shadow-sm font-semibold' : 'text-zinc-500 hover:text-zinc-900'}`}
+                  className={`px-4 py-2 rounded-full transition-all ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white shadow-sm font-semibold' : 'text-zinc-500 hover:text-zinc-900'}`}
                 >
                   {eco.label}
                 </Link>
               ))}
             </div>
 
-            {currentEco.links.length > 0 && <div className="w-[1px] h-6 bg-zinc-200" />}
+            <div className="w-[1px] h-6 bg-zinc-200" />
 
-            {currentEco.links.length > 0 && (
-              <nav className="flex items-center gap-6">
-                {currentEco.links.map((link) => (
+            {/* Sub-links (if ecosystem is active) or Main Rubrics */}
+            <nav className="flex items-center gap-5">
+              {activeEcosystem && currentEco ? (
+                currentEco.links.map((link) => (
                   <Link
                     key={link.name}
                     href={link.href}
@@ -239,9 +238,20 @@ export default function Header() {
                   >
                     {link.name}
                   </Link>
-                ))}
-              </nav>
-            )}
+                ))
+              ) : (
+                mainRubrics.map((link) => (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    className={`text-sm font-mono uppercase tracking-[0.15s] transition-colors ${pathname === link.href ? 'text-zinc-900 font-bold underline underline-offset-4' : 'text-zinc-400 hover:text-zinc-900'}`}
+                  >
+                    {link.name}
+                  </Link>
+                ))
+              )}
+            </nav>
+
           </div>
 
           {/* MOBILE MENU TOGGLE BUTTON */}
@@ -258,7 +268,7 @@ export default function Header() {
         </div>
       </header>
 
-      {/* MOBILE DRAWER */}
+      {/* MOBILE DRAWER (Identical Structure) */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
@@ -267,6 +277,7 @@ export default function Header() {
             exit={{ opacity: 0, y: -20 }}
             className="fixed inset-x-0 top-24 bg-white/95 backdrop-blur-3xl border-b border-zinc-200 shadow-2xl z-40 p-6 lg:hidden space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto"
           >
+            {/* Ecosystems Grid */}
             <div className="grid grid-cols-1 gap-2.5 font-mono text-sm uppercase tracking-wider">
               {ecosystems.map((eco) => (
                 <Link
@@ -280,12 +291,13 @@ export default function Header() {
               ))}
             </div>
 
-            {currentEco.links.length > 0 && (
-              <div className="border-t border-zinc-100 pt-5 space-y-2.5">
-                <div className="font-mono text-xs uppercase text-zinc-400 tracking-wider mb-3">
-                  Projects in {currentEco.label}:
-                </div>
-                {currentEco.links.map((link) => (
+            {/* Rubrics / Sub-links */}
+            <div className="border-t border-zinc-100 pt-5 space-y-2.5">
+              <div className="font-mono text-xs uppercase text-zinc-400 tracking-wider mb-3">
+                {activeEcosystem && currentEco ? `Projects in ${currentEco.label}:` : 'Rubrics & Navigation:'}
+              </div>
+              {activeEcosystem && currentEco ? (
+                currentEco.links.map((link) => (
                   <Link
                     key={link.name}
                     href={link.href}
@@ -294,9 +306,20 @@ export default function Header() {
                   >
                     {link.name}
                   </Link>
-                ))}
-              </div>
-            )}
+                ))
+              ) : (
+                mainRubrics.map((link) => (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`block p-3.5 rounded-2xl text-base font-medium transition-colors ${pathname === link.href ? 'bg-zinc-900 text-white shadow-sm' : 'bg-zinc-50 text-zinc-800 hover:bg-zinc-100'}`}
+                  >
+                    {link.name}
+                  </Link>
+                ))
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
