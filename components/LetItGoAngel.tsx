@@ -13,7 +13,6 @@ const HEART_IMAGE =
 export default function LetItGoAngel() {
   const [flyingHearts, setFlyingHearts] = useState<{ id: number }[]>([]);
   const [clickCount, setClickCount] = useState(0);
-  const [showWithoutHeart, setShowWithoutHeart] = useState(false);
 
   const clickCountRef = useRef(clickCount);
   clickCountRef.current = clickCount;
@@ -50,14 +49,14 @@ export default function LetItGoAngel() {
     setFlyingHearts((prev) => [...prev, { id: newHeartId }]);
     setClickCount((prev) => prev + 1);
 
-    // Ангел переходит в состояние БЕЗ сердца и остается в нем
-    setShowWithoutHeart(true);
-
-    // Удаляем улетевшее сердечко из DOM после завершения анимации (4 секунды)
+    // Удаляем улетевшее сердечко из DOM ровно по завершении анимации полета (6 секунд)
     setTimeout(() => {
       setFlyingHearts((prev) => prev.filter((h) => h.id !== newHeartId));
-    }, 4000);
+    }, 6000);
   };
+
+  // Ангел автоматически без сердца, пока летит хотя бы одно сердечко
+  const showWithoutHeart = flyingHearts.length > 0;
 
   return (
     <main className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-b from-[#87CEEB] via-[#B0E0E6] to-[#E0F6FF] flex flex-col items-center justify-end select-none">
@@ -91,7 +90,7 @@ export default function LetItGoAngel() {
             priority
           />
 
-          {/* После клика: ангел без сердца (0918) */}
+          {/* Состояние полета: ангел без сердца (0918) */}
           <Image
             src={ANGEL_WITHOUT_HEART}
             alt="Angel without heart"
@@ -104,7 +103,7 @@ export default function LetItGoAngel() {
           />
         </div>
 
-        {/* Улетающее сердце (увеличен размер до 180px) */}
+        {/* Улетающее сердце (увеличенный размер 340px) */}
         {flyingHearts.map((heart) => (
           <div
             key={heart.id}
@@ -112,40 +111,40 @@ export default function LetItGoAngel() {
             style={{
               bottom: '42%',
               left: '50%',
-              width: 180,
-              height: 180,
-              marginLeft: '-90px',
+              width: 340,
+              height: 340,
+              marginLeft: '-170px',
             }}
           >
             <Image
               src={HEART_IMAGE}
               alt="Flying Heart"
-              width={180}
-              height={180}
+              width={340}
+              height={340}
               className="object-contain filter drop-shadow-[0_0_20px_rgba(255,100,100,0.8)]"
             />
           </div>
         ))}
       </div>
 
-      {/* CSS-анимация полета сердечка вверх */}
+      {/* CSS-анимация плавного полета сердечка вверх (6 секунд) */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes flyAway {
           0% {
-            transform: translateY(0) scale(0.6) rotate(0deg);
+            transform: translateY(0) scale(0.4) rotate(0deg);
             opacity: 1;
           }
-          20% {
+          15% {
             opacity: 1;
           }
           100% {
-            transform: translateY(-70vh) scale(1.2) translateX(20px) rotate(12deg);
+            transform: translateY(-75vh) scale(1.1) translateX(25px) rotate(15deg);
             opacity: 0;
           }
         }
 
         .animate-fly-away {
-          animation: flyAway 4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+          animation: flyAway 6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
         }
       ` }} />
     </main>
