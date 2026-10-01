@@ -1,17 +1,21 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import { createClient } from '@supabase/supabase-js'
-import { NextResponse } from 'next/server'
+import OpenAI from 'openai';
+import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
 
-export const runtime = 'nodejs'
+export const runtime = 'nodejs';
 
-const apiKey = (process.env.GOOGLE_API_KEY || "").trim()
-const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY! 
+const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabase = createClient(sbUrl, sbKey);
 
-const genAI = new GoogleGenerativeAI(apiKey)
-const supabase = createClient(sbUrl, sbKey)
-
-const MODEL_NAME = 'gemini-2.5-flash'
+// Список рабочих и бесплатных моделей OpenRouter (fallback по очереди)
+const FREE_MODELS = [
+  'openrouter/free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'deepseek/deepseek-r1:free',
+  'qwen/qwen-2.5-72b-instruct:free',
+  'google/gemma-2-9b-it:free'
+];
 
 function buildSystemPrompt(language: 'en' | 'ru') {
   const langNote = language === 'ru' ? 'OUTPUT MUST BE IN RUSSIAN.' : 'OUTPUT MUST BE IN ENGLISH.'
@@ -77,6 +81,11 @@ function extractJSON(text: string) {
 
 export async function POST(req: Request) {
   try {
+    const apiKey = (process.env.OPENROUTER_API_KEY || "").trim();
+    if (!apiKey) {
+      return NextResponse.json({ error: 'API Key missing.' }, { status: 500 });
+    }
+
     const { answers, language } = await req.json()
     const lang: 'en' | 'ru' = language === 'ru' ? 'ru' : 'en'
 
@@ -93,18 +102,47 @@ export async function POST(req: Request) {
       if (user) userId = user.id
     }
 
+    const openai = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: apiKey,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://merkurov.love',
+        'X-Title': 'Digital Temple Cast Protocol',
+      },
+    });
+
     const systemPrompt = buildSystemPrompt(lang)
-
-    const model = genAI.getGenerativeModel({ 
-        model: MODEL_NAME, 
-        systemInstruction: systemPrompt,
-        generationConfig: { responseMimeType: "application/json" }
-    })
-
     const userText = `USER ANSWERS:\n${answers.map((a: string, i: number) => `${i + 1}.${a}`).join('\n')}`
-    
-    const result = await model.generateContent(userText)
-    const rawText = result.response.text()
+
+    let completion = null;
+    let lastError = null;
+
+    // Перебираем модели, пока одна из них не ответит
+    for (const model of FREE_MODELS) {
+      try {
+        completion = await openai.chat.completions.create({
+          model: model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userText }
+          ],
+          temperature: 0.7,
+          response_format: { type: 'json_object' }
+        });
+        if (completion?.choices[0]?.message?.content) {
+          break; // Успешно получили ответ
+        }
+      } catch (err: any) {
+        console.warn(`[Cast] Model ${model} failed:`, err?.message || err);
+        lastError = err;
+      }
+    }
+
+    if (!completion) {
+      throw lastError || new Error('All free models are currently unavailable.');
+    }
+
+    const rawText = completion.choices[0]?.message?.content || '{}';
 
     let parsed = extractJSON(rawText)
     let archetype = 'VOID'
@@ -155,8 +193,8 @@ export async function POST(req: Request) {
         recordId: record?.id 
     })
 
-  } catch (err) {
+  } catch (err: any) {
     console.error('Cast route fatal error:', err)
-    return NextResponse.json({ error: 'Internal Core Error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal Core Error', details: err?.message || String(err) }, { status: 500 })
   }
 }
