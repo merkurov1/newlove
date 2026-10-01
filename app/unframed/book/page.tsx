@@ -67,7 +67,6 @@ function Paywall({ onUnlock }: { onUnlock: () => void }) {
   return (
     <div className="min-h-screen bg-[#0d0d0d] text-white flex flex-col selection:bg-white selection:text-black">
       <Header />
-      {/* Исправлен отступ сверху, чтобы контент не уезжал под шапку */}
       <div className="flex-1 flex items-center justify-center px-6 pt-32 pb-16">
         <div className="w-full max-w-xl text-center space-y-6">
           <div className="flex justify-center">
@@ -373,8 +372,8 @@ export default function BookReaderPage() {
     <div className={`min-h-screen ${currentThemeClass} transition-colors duration-300 relative`}>
       <Header />
 
-      {/* TOP READER BAR — заменено top-20 / top-24 на корректные значения под высоту Header (например, top-16 / top-20), чтобы исключить наложения */}
-      <div className={`sticky top-16 md:top-20 z-35 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/90' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/90' : 'bg-[#faf9f5]/90'} backdrop-blur-md`}>
+      {/* TOP READER BAR — корректный отступ top-16 md:top-20 исключает наложение на шапку */}
+      <div className={`sticky top-16 md:top-20 z-30 border-b ${borderClass} ${prefs.theme === 'dark' ? 'bg-[#121212]/90' : prefs.theme === 'sepia' ? 'bg-[#f4ecd8]/90' : 'bg-[#faf9f5]/90'} backdrop-blur-md`}>
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link
