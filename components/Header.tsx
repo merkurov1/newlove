@@ -11,7 +11,7 @@ export default function Header() {
   const { user, profile, roles, isLoading, signOut } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeEcosystem, setActiveEcosystem] = useState<'temple' | 'curators' | 'heart'>('temple');
+  const [activeEcosystem, setActiveEcosystem] = useState<'temple' | 'curators' | 'heart' | null>('temple');
   
   const pathname = usePathname() || '';
   const profileRef = useRef<HTMLDivElement>(null);
@@ -34,8 +34,10 @@ export default function Header() {
       setActiveEcosystem('curators');
     } else if (pathname.startsWith('/heartandangel')) {
       setActiveEcosystem('heart');
-    } else {
+    } else if (pathname.startsWith('/temple') || pathname.startsWith('/cast') || pathname.startsWith('/vigil') || pathname.startsWith('/absolution')) {
       setActiveEcosystem('temple');
+    } else {
+      setActiveEcosystem(null); // На главной или других страницах не подсвечиваем подразделы принудительно
     }
   }, [pathname]);
 
@@ -213,9 +215,9 @@ export default function Header() {
               ))}
             </div>
 
-            {currentEco.links.length > 0 && <div className="w-[1px] h-6 bg-zinc-200" />}
+            {activeEcosystem && currentEco.links.length > 0 && <div className="w-[1px] h-6 bg-zinc-200" />}
 
-            {currentEco.links.length > 0 && (
+            {activeEcosystem && currentEco.links.length > 0 && (
               <nav className="flex items-center gap-6">
                 {currentEco.links.map((link) => (
                   <Link
@@ -266,7 +268,7 @@ export default function Header() {
               ))}
             </div>
 
-            {currentEco.links.length > 0 && (
+            {activeEcosystem && currentEco.links.length > 0 && (
               <div className="border-t border-zinc-100 pt-5 space-y-2.5">
                 <div className="font-mono text-xs uppercase text-zinc-400 tracking-wider mb-3">
                   Projects in {currentEco.label}:
