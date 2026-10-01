@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Globe, ShieldCheck, ScanFace, Sparkles, Radio, Flame } from 'lucide-react';
+import { ArrowLeft, Globe, ShieldCheck, ScanFace, Sparkles, Radio } from 'lucide-react';
 import Header from '@/components/Header';
 
 export const dynamic = 'force-dynamic';
@@ -34,7 +34,6 @@ export default async function UserProfilePage({ params }: PageProps) {
   let userLogs: any[] = [];
 
   if (targetId) {
-    // Сначала пробуем получить логи по user_id, а также параллельно casts
     const [castsRes, logsByUserIdRes] = await Promise.all([
       supabase
         .from('casts')
@@ -48,12 +47,12 @@ export default async function UserProfilePage({ params }: PageProps) {
         .order('created_at', { ascending: false })
     ]);
     
-    if (castsRes.data) userCasts = castsData = castsRes.data;
+    // Исправлено: присваиваем данные корректно в userCasts
+    if (castsRes.data) userCasts = castsRes.data;
     
     if (logsByUserIdRes.data && logsByUserIdRes.data.length > 0) {
       userLogs = logsByUserIdRes.data;
     } else if (profile.name) {
-      // Запасной вариант по имени автора, если user_id не проставлен в temple_log
       const { data: logsByName } = await supabase
         .from('temple_log')
         .select('*')
@@ -229,15 +228,15 @@ export default async function UserProfilePage({ params }: PageProps) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-amber-700 font-mono text-xs font-bold uppercase tracking-wider">
                       <Radio size={16} />
-                      <span>{log.title || 'Sanctuary Entry'}</span>
+                      <span>{log.title || log.event_type || 'Sanctuary Entry'}</span>
                     </div>
                     <span className="text-zinc-400 font-mono text-xs">
                       {new Date(log.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  {log.content && (
+                  {log.message && (
                     <p className="text-sm text-zinc-700 leading-relaxed font-serif whitespace-pre-wrap">
-                      {log.content}
+                      {log.message}
                     </p>
                   )}
                 </div>
