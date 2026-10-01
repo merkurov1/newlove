@@ -129,7 +129,7 @@ export default function Paywall({ onUnlock }: PaywallProps) {
         </div>
       </motion.div>
 
-      {/* Secure Admin Modal */}
+      {/* Admin Modal */}
       <AnimatePresence>
         {showAdminModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/80 backdrop-blur-sm">
@@ -141,7 +141,7 @@ export default function Paywall({ onUnlock }: PaywallProps) {
             >
               <button 
                 onClick={() => setShowAdminModal(false)}
-                className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+                className="absolute top-4 right-4 text-zinc-500 hover:text-white cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -161,7 +161,7 @@ export default function Paywall({ onUnlock }: PaywallProps) {
                 )}
                 <button
                   type="submit"
-                  className="w-full bg-red-600 text-white font-mono text-[10px] uppercase tracking-widest py-3 font-bold hover:bg-red-500 transition-colors"
+                  className="w-full bg-red-600 text-white font-mono text-[10px] uppercase tracking-widest py-3 font-bold hover:bg-red-500 transition-colors cursor-pointer"
                 >
                   Authorize
                 </button>

@@ -74,7 +74,6 @@ export default function BookReaderPage() {
 
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // Проверка доступа и верификация Stripe сессии при возврате
   useEffect(() => {
     setIsMounted(true);
     const verifyAndLoad = async () => {
@@ -82,7 +81,6 @@ export default function BookReaderPage() {
         const params = new URLSearchParams(window.location.search);
         const sessionId = params.get('session_id');
 
-        // Если вернулись из Stripe сосессией — верифицируем на сервере
         if (sessionId) {
           const verifyRes = await fetch(`/api/unframed/verify?session_id=${sessionId}`);
           if (verifyRes.ok) {
@@ -90,7 +88,6 @@ export default function BookReaderPage() {
           }
         }
 
-        // Загружаем контент книги через защищенный эндпоинт
         const res = await fetch('/api/unframed/content');
         if (res.status === 401) {
           setUnlocked(false);
@@ -103,7 +100,6 @@ export default function BookReaderPage() {
         setContent(data.content);
         setUnlocked(true);
 
-        // Настройки читалки
         const storedPrefs = window.localStorage.getItem(PREFS_KEY);
         if (storedPrefs) {
           const parsed = JSON.parse(storedPrefs) as Partial<ReaderPrefs>;
@@ -130,7 +126,6 @@ export default function BookReaderPage() {
     });
   }, []);
 
-  // Расчет прогресса чтения
   useEffect(() => {
     const updateProgress = () => {
       const documentHeight = document.documentElement.scrollHeight - window.innerHeight;
@@ -151,7 +146,6 @@ export default function BookReaderPage() {
     };
   }, [content]);
 
-  // Генерация оглавления
   useEffect(() => {
     if (!content) return;
     const lines = content.split(/\r?\n/);
@@ -351,7 +345,6 @@ export default function BookReaderPage() {
         </div>
       </div>
 
-      {/* TOC Sidebar */}
       {showToc && (
         <div className="fixed inset-0 z-50" onClick={() => setShowToc(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />
@@ -389,7 +382,6 @@ export default function BookReaderPage() {
         </div>
       )}
 
-      {/* Settings Sidebar */}
       {showSettings && (
         <div className="fixed inset-0 z-50" onClick={() => setShowSettings(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" />

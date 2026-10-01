@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'headers';
+import { cookies } from 'next/headers';
 import fs from 'fs/promises';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const hasAccess = cookieStore.get('unframed_access')?.value === 'true';
     const isAdmin = cookieStore.get('unframed_admin')?.value === 'true';
 
@@ -13,7 +15,6 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Храните файл в защищенной директории (например, в корне проекта в папке /content)
     const filePath = path.join(process.cwd(), 'content', 'Unframed.markdown');
     const fileContent = await fs.readFile(filePath, 'utf8');
 
