@@ -33,11 +33,11 @@ interface TemplePost {
 }
 
 const RITUALS = [
-  { href: '/cast', label: 'Cast', desc: 'Psyche & archetype', accent: 'text-indigo-600' },
-  { href: '/vigil', label: 'Vigil', desc: 'Spark & watch', accent: 'text-amber-600' },
-  { href: '/absolution', label: 'Absolution', desc: 'Confess & release', accent: 'text-emerald-600' },
-  { href: '/heartandangel/calm', label: 'Calm', desc: 'Center attention', accent: 'text-purple-600' },
-  { href: '/heartandangel/letitgo', label: 'Let It Go', desc: 'Drop the burden', accent: 'text-rose-600' }
+  { href: '/cast', label: 'Cast', desc: 'Psyche & archetype', icon: Compass, accent: 'text-indigo-600', border: 'hover:border-indigo-300' },
+  { href: '/vigil', label: 'Vigil', desc: 'Spark & watch', icon: Flame, accent: 'text-amber-600', border: 'hover:border-amber-300' },
+  { href: '/absolution', label: 'Absolution', desc: 'Confess & release', icon: ShieldCheck, accent: 'text-emerald-600', border: 'hover:border-emerald-300' },
+  { href: '/heartandangel/calm', label: 'Calm', desc: 'Center attention', icon: Moon, accent: 'text-purple-600', border: 'hover:border-purple-300' },
+  { href: '/heartandangel/letitgo', label: 'Let It Go', desc: 'Drop the burden', icon: Trash2, accent: 'text-rose-600', border: 'hover:border-rose-300' }
 ];
 
 function getEventVisuals(eventType: string) {
@@ -325,15 +325,73 @@ export default function TempleClient() {
 
       <Header />
 
-      <main className="max-w-7xl mx-auto px-6 pt-36 lg:pt-41 pb-32 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+      <main className="max-w-7xl mx-auto px-6 pt-36 lg:pt-40 pb-32 relative z-10 space-y-10">
+        
+        {/* TOP LEVEL: COMPACT CENTRAL ALTAR */}
+        <section className="max-w-xl mx-auto">
+          <div className="p-4 sm:p-5 rounded-3xl bg-white/90 backdrop-blur-2xl border border-zinc-200/95 shadow-[0_15px_40px_rgba(0,0,0,0.03)] space-y-3 transition-all hover:border-zinc-300">
+            <textarea
+              value={postText}
+              onChange={(e) => setPostText(e.target.value)}
+              placeholder="Broadcast a whisper, drop a link, or record a voice note..."
+              rows={2}
+              className="w-full bg-transparent text-sm sm:text-base text-zinc-900 placeholder-zinc-400 resize-none focus:outline-none font-serif leading-relaxed"
+            />
+
+            {audioBlobUrl && (
+              <div className="flex items-center justify-between p-2.5 rounded-2xl bg-zinc-100/90 border border-zinc-200 shadow-inner">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center">
+                    <Volume2 size={12} />
+                  </div>
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-zinc-700">Voice Note Ready</span>
+                </div>
+                <audio controls src={audioBlobUrl} className="h-7 max-w-[180px]" />
+              </div>
+            )}
+
+            {error && (
+              <p role="alert" className="font-mono text-[10px] uppercase tracking-wider text-rose-600">
+                {error}
+              </p>
+            )}
+
+            <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60">
+              <button
+                type="button"
+                onClick={toggleRecording}
+                className={`px-3 py-1.5 rounded-full transition-all border flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider ${
+                  isRecording
+                    ? 'bg-rose-500 text-white border-rose-500 animate-pulse shadow-sm'
+                    : 'bg-white text-zinc-700 border-zinc-200/90 hover:bg-zinc-50 shadow-xs'
+                }`}
+              >
+                {isRecording ? <Square size={11} /> : <Mic size={11} />}
+                <span>{isRecording ? 'Stop' : 'Voice'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSendPost}
+                disabled={isSubmitting || (!postText.trim() && !audioBlobUrl)}
+                className="flex items-center gap-1.5 px-5 py-1.5 rounded-full bg-zinc-900 text-white font-medium text-[11px] shadow-xs hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40 font-mono uppercase tracking-wider cursor-pointer"
+              >
+                <span>{isSubmitting ? 'Transmitting...' : 'Broadcast'}</span>
+                <Send size={11} />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* LOWER LEVEL: TWO EQUAL SEGMENTS (Manifesto & Rituals vs. Temple Ledger) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* LEFT SIDEBAR: MANIFEST & RITUALS (Sticky sanctuary anchor) */}
-          <aside className="lg:col-span-4 lg:sticky lg:top-32 space-y-6">
-            <div className="p-6 sm:p-7 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/90 shadow-[0_15px_35px_rgba(0,0,0,0.02)] space-y-6">
+          {/* LEFT SEGMENT: MANIFESTO & ENHANCED RITUAL PORTALS */}
+          <section className="lg:col-span-5 space-y-6">
+            <div className="p-6 sm:p-8 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/90 shadow-[0_15px_35px_rgba(0,0,0,0.02)] space-y-6">
               
               <div className="space-y-3">
-                <h1 className="font-serif text-2xl sm:text-[28px] font-normal text-zinc-900 tracking-tight leading-[1.2]">
+                <h1 className="font-serif text-2xl sm:text-3xl font-normal text-zinc-900 tracking-tight leading-snug">
                   A real place on the internet where rituals work and every visitor leaves a trace.
                 </h1>
                 <p className="text-sm font-serif text-zinc-600 leading-relaxed">
@@ -341,27 +399,37 @@ export default function TempleClient() {
                 </p>
               </div>
 
-              <div className="space-y-3 pt-4 border-t border-zinc-200/60">
-                <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-zinc-400">
+              <div className="space-y-3.5 pt-4 border-t border-zinc-200/60">
+                <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">
                   Temple Rituals:
                 </h2>
                 
-                <div className="space-y-2 font-serif">
-                  {RITUALS.map((r) => (
-                    <Link
-                      key={r.href}
-                      href={r.href}
-                      className="block p-3 rounded-2xl bg-zinc-50/70 border border-zinc-200/70 hover:bg-white hover:border-zinc-300 transition-all group"
-                    >
-                      <div className="flex items-center justify-between font-mono text-xs font-bold uppercase tracking-wider mb-0.5">
-                        <span className={r.accent}>{r.label}</span>
-                        <ExternalLink size={12} className="text-zinc-300 group-hover:text-zinc-900 transition-colors" />
-                      </div>
-                      <p className="text-xs text-zinc-500 group-hover:text-zinc-800 transition-colors leading-snug">
-                        {r.desc}
-                      </p>
-                    </Link>
-                  ))}
+                <div className="space-y-2.5 font-serif">
+                  {RITUALS.map((r) => {
+                    const RitualIcon = r.icon;
+                    return (
+                      <Link
+                        key={r.href}
+                        href={r.href}
+                        className={`block p-4 rounded-2xl bg-zinc-50/80 border border-zinc-200/80 hover:bg-white transition-all group ${r.border}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`p-1.5 rounded-xl bg-white shadow-xs ${r.accent}`}>
+                              <RitualIcon size={16} />
+                            </div>
+                            <span className={`font-mono text-xs font-bold uppercase tracking-wider ${r.accent}`}>
+                              {r.label}
+                            </span>
+                          </div>
+                          <ExternalLink size={13} className="text-zinc-300 group-hover:text-zinc-900 transition-colors" />
+                        </div>
+                        <p className="text-xs sm:text-sm text-zinc-600 group-hover:text-zinc-900 transition-colors leading-normal pl-8">
+                          {r.desc}
+                        </p>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -373,131 +441,69 @@ export default function TempleClient() {
               </div>
 
             </div>
-          </aside>
+          </section>
 
-          {/* RIGHT COLUMN: ELEGANT COMPACT ALTAR & STREAM */}
-          <div className="lg:col-span-8 space-y-6">
+          {/* RIGHT SEGMENT: LIVING STREAM / TEMPLE LEDGER */}
+          <section className="lg:col-span-7 space-y-3">
+            <div className="flex items-center justify-between pb-2 px-1">
+              <span className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Temple Ledger</span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-400">Live Feed</span>
+            </div>
 
-            {/* 1. THE ALTAR (Refined, compact, centered proportions) */}
-            <section className="relative max-w-2xl mx-auto lg:mx-0">
-              <div className="p-4 sm:p-5 rounded-2xl bg-white/90 backdrop-blur-2xl border border-zinc-200/95 shadow-[0_10px_30px_rgba(0,0,0,0.03)] space-y-3 transition-all hover:border-zinc-300">
-                <textarea
-                  value={postText}
-                  onChange={(e) => setPostText(e.target.value)}
-                  placeholder="Broadcast a whisper, drop a link, or record a voice note..."
-                  rows={2}
-                  className="w-full bg-transparent text-sm sm:text-base text-zinc-900 placeholder-zinc-400 resize-none focus:outline-none font-serif leading-relaxed"
-                />
+            {!loaded ? (
+              <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-400 font-mono text-xs uppercase tracking-wider animate-pulse">
+                Listening to the temple...
+              </div>
+            ) : posts.length === 0 ? (
+              <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-500 font-mono text-xs uppercase tracking-wider">
+                The logbook is empty. Leave the first trace.
+              </div>
+            ) : (
+              <div className="bg-white/80 backdrop-blur-xl border border-zinc-200/90 rounded-3xl divide-y divide-zinc-200/60 shadow-[0_15px_35px_rgba(0,0,0,0.02)] overflow-hidden">
+                {posts.map((post) => {
+                  const PostIcon = post.icon || Sparkles;
 
-                {audioBlobUrl && (
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-100/90 border border-zinc-200 shadow-inner">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center">
-                        <Volume2 size={12} />
+                  return (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      key={post.id}
+                      className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-white transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 bg-white border-zinc-200/80 ${post.color || 'text-zinc-800'}`}>
+                          <PostIcon size={11} className={post.color} />
+                          <span>{post.label}</span>
+                        </span>
+
+                        <span className="font-mono text-xs font-semibold text-zinc-800 shrink-0">
+                          {post.author}
+                        </span>
+
+                        <span className="text-zinc-300 shrink-0">•</span>
+
+                        <div className="text-sm text-zinc-900 font-serif truncate">
+                          {renderContentWithLinks(post.content)}
+                        </div>
                       </div>
-                      <span className="font-mono text-[11px] uppercase tracking-wider text-zinc-700">Voice Note Ready</span>
-                    </div>
-                    <audio controls src={audioBlobUrl} className="h-7 max-w-[180px]" />
-                  </div>
-                )}
 
-                {error && (
-                  <p role="alert" className="font-mono text-[10px] uppercase tracking-wider text-rose-600">
-                    {error}
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60">
-                  <button
-                    type="button"
-                    onClick={toggleRecording}
-                    className={`px-3 py-1.5 rounded-full transition-all border flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider ${
-                      isRecording
-                        ? 'bg-rose-500 text-white border-rose-500 animate-pulse shadow-sm'
-                        : 'bg-white text-zinc-700 border-zinc-200/90 hover:bg-zinc-50 shadow-xs'
-                    }`}
-                  >
-                    {isRecording ? <Square size={11} /> : <Mic size={11} />}
-                    <span>{isRecording ? 'Stop' : 'Voice'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSendPost}
-                    disabled={isSubmitting || (!postText.trim() && !audioBlobUrl)}
-                    className="flex items-center gap-1.5 px-5 py-1.5 rounded-full bg-zinc-900 text-white font-medium text-[11px] shadow-xs hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40 font-mono uppercase tracking-wider cursor-pointer"
-                  >
-                    <span>{isSubmitting ? 'Transmitting...' : 'Broadcast'}</span>
-                    <Send size={11} />
-                  </button>
-                </div>
+                      <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                        {post.audioUrl && (
+                          <audio controls src={post.audioUrl} className="h-6 w-32 rounded-lg" />
+                        )}
+                        <span className="font-mono text-[11px] text-zinc-400 whitespace-nowrap">
+                          {post.time}
+                        </span>
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
-            </section>
-
-            {/* 2. THE LIVING STREAM (Single-line borderless lines, exquisite typography) */}
-            <section className="space-y-2 pt-2">
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-200/60 px-1">
-                <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-zinc-400">Temple Ledger</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-400">Live Feed</span>
-              </div>
-
-              {!loaded ? (
-                <div className="p-8 text-center rounded-2xl bg-white/30 border border-zinc-200/40 text-zinc-400 font-mono text-xs uppercase tracking-wider animate-pulse">
-                  Listening to the temple...
-                </div>
-              ) : posts.length === 0 ? (
-                <div className="p-8 text-center rounded-2xl bg-white/30 border border-zinc-200/40 text-zinc-500 font-mono text-xs uppercase tracking-wider">
-                  The logbook is empty. Leave the first trace.
-                </div>
-              ) : (
-                <div className="bg-white/70 backdrop-blur-xl border border-zinc-200/80 rounded-2xl divide-y divide-zinc-200/50 shadow-[0_10px_30px_rgba(0,0,0,0.02)] overflow-hidden">
-                  {posts.map((post) => {
-                    const PostIcon = post.icon || Sparkles;
-
-                    return (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        key={post.id}
-                        className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-white/80 transition-colors"
-                      >
-                        {/* Left part: Badge, Author & Content in single clean flow */}
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 bg-white border-zinc-200/80 ${post.color || 'text-zinc-800'}`}>
-                            <PostIcon size={11} className={post.color} />
-                            <span>{post.label}</span>
-                          </span>
-
-                          <span className="font-mono text-xs font-semibold text-zinc-800 shrink-0">
-                            {post.author}
-                          </span>
-
-                          <span className="text-zinc-300 shrink-0">•</span>
-
-                          <div className="text-sm text-zinc-900 font-serif truncate">
-                            {renderContentWithLinks(post.content)}
-                          </div>
-                        </div>
-
-                        {/* Right part: Time & optional audio */}
-                        <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
-                          {post.audioUrl && (
-                            <audio controls src={post.audioUrl} className="h-6 w-32 rounded-lg" />
-                          )}
-                          <span className="font-mono text-[11px] text-zinc-400 whitespace-nowrap">
-                            {post.time}
-                          </span>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-          </div>
+            )}
+          </section>
 
         </div>
+
       </main>
     </div>
   );
