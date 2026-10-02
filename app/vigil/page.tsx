@@ -4,11 +4,61 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Clock, Sparkles, Flame } from 'lucide-react';
-import Header from '@/components/Header';
+import { Heart, Clock, Sparkles, Flame, Volume2, Radio } from 'lucide-react';
+import Link from 'next/link';
+import Image from 'next/image';
 
 const ANGEL_GIF = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
 const FLAME_ID = 1;
+const ASSETS = {
+  ambientAudio: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Drift%20of%20Glass.mp3',
+};
+
+// Освещение по времени суток (единое с /temple и /world)
+function getTimeLighting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) {
+    return {
+      bg: 'bg-[#F5F2EB]',
+      text: 'text-stone-900',
+      subText: 'text-stone-600',
+      navHover: 'hover:text-black',
+      glow: 'from-amber-200/40 via-orange-100/20 to-transparent',
+      vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 243, 224, 0.7) 0%, rgba(245, 242, 235, 1) 85%)',
+      cardBg: 'bg-white/80 border-stone-200 text-stone-900 shadow-xl'
+    };
+  } else if (hour >= 11 && hour < 17) {
+    return {
+      bg: 'bg-[#FAF8F5]',
+      text: 'text-stone-900',
+      subText: 'text-stone-600',
+      navHover: 'hover:text-black',
+      glow: 'from-stone-200/50 via-transparent to-transparent',
+      vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.9) 0%, rgba(250, 248, 245, 1) 90%)',
+      cardBg: 'bg-white/90 border-stone-200 text-stone-900 shadow-xl'
+    };
+  } else if (hour >= 17 && hour < 21) {
+    return {
+      bg: 'bg-[#1f1a18]',
+      text: 'text-stone-100',
+      subText: 'text-stone-300',
+      navHover: 'hover:text-white',
+      glow: 'from-orange-900/40 via-rose-950/20 to-transparent',
+      vignette: 'radial-gradient(circle at 50% 40%, rgba(70, 35, 25, 0.5) 0%, rgba(31, 26, 24, 1) 90%)',
+      cardBg: 'bg-stone-900/90 border-stone-800 text-stone-100 shadow-2xl'
+    };
+  } else {
+    return {
+      bg: 'bg-[#0b0c10]',
+      text: 'text-stone-200',
+      subText: 'text-stone-400',
+      navHover: 'hover:text-white',
+      glow: 'from-indigo-950/60 via-blue-950/20 to-transparent',
+      vignette: 'radial-gradient(circle at 50% 30%, rgba(20, 25, 45, 0.6) 0%, rgba(11, 12, 16, 1) 90%)',
+      cardBg: 'bg-zinc-900/90 border-zinc-800 text-zinc-100 shadow-2xl'
+    };
+  }
+}
 
 export default function VigilPage() {
   const supabase = createClient();
@@ -16,8 +66,9 @@ export default function VigilPage() {
 
   const angelRef = useRef<HTMLDivElement>(null);
   const heartRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const [intensity, setIntensity] = useState(1);
+  const [intensity, setIntensity] = useState(1); // Динамика от 1 до 10
   const [lastGuardian, setLastGuardian] = useState('Loading...');
   const [timeLeft, setTimeLeft] = useState('');
   const [flameData, setFlameData] = useState<any>(null);
@@ -26,10 +77,13 @@ export default function VigilPage() {
   const [isLighting, setIsLighting] = useState(false);
   const [spark, setSpark] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [lighting, setLighting] = useState(getTimeLighting());
 
   const userName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || '';
 
   useEffect(() => {
+    setLighting(getTimeLighting());
     refreshData();
 
     const channel = supabase
@@ -50,10 +104,12 @@ export default function VigilPage() {
       .subscribe();
 
     const timer = setInterval(updateTimer, 1000);
+    const lightTimer = setInterval(() => setLighting(getTimeLighting()), 60000);
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(timer);
+      clearInterval(lightTimer);
     };
   }, []);
 
@@ -73,12 +129,8 @@ export default function VigilPage() {
 
   const calculateIntensity = async () => {
     const uniqueCount = await refreshGuardians();
-    let level = 1;
-    if (uniqueCount <= 0) level = 1;
-    else if (uniqueCount < 5) level = 2;
-    else if (uniqueCount < 10) level = 3;
-    else if (uniqueCount < 15) level = 4;
-    else level = 5;
+    // Динамика от 1 до 10
+    let level = Math.min(10, Math.max(1, uniqueCount));
     setIntensity(level);
   };
 
@@ -106,7 +158,7 @@ export default function VigilPage() {
       });
 
       const unique = Array.from(new Set(names));
-      setGuardians(unique.slice(0, 8));
+      setGuardians(unique.slice(0, 10));
       return unique.length;
     } catch {
       return 0;
@@ -124,6 +176,16 @@ export default function VigilPage() {
       const h = Math.floor(remaining / 3600000);
       const m = Math.floor((remaining % 3600000) / 60000);
       setTimeLeft(`${h}h ${m}m remaining`);
+    }
+  };
+
+  const toggleAudio = () => {
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      audioRef.current.play().then(() => setIsPlayingAudio(true)).catch(() => {});
     }
   };
 
@@ -191,64 +253,91 @@ export default function VigilPage() {
     setTimeout(() => {
       setSpark(null);
       setIsLighting(false);
-    }, 1000);
+    }, 1200);
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white font-mono flex flex-col relative selection:bg-orange-500/30 overflow-x-hidden antialiased">
-      
-      <Header />
+    <main 
+      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 sm:p-12 transition-colors duration-1000`}
+      style={{ backgroundImage: lighting.vignette }}
+    >
+      <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
-      <div 
-        className="absolute inset-0 transition-opacity duration-1000 pointer-events-none mt-24"
-        style={{ 
-          background: `radial-gradient(circle at center, rgba(255,100,0,${0.12 * intensity}) 0%, rgba(10,10,10,1) 75%)` 
-        }} 
-      />
+      {/* Верхняя панель: Навигация между помещениями Храма */}
+      <header className="relative z-45 flex justify-between items-center w-full max-w-5xl mx-auto pt-2">
+        <Link 
+          href="/heartandangel/temple"
+          className={`font-serif text-sm tracking-widest ${lighting.subText} ${lighting.navHover} transition-colors`}
+        >
+          ← Back to Temple
+        </Link>
 
-      <main className="flex-1 max-w-3xl mx-auto w-full px-6 pt-36 pb-20 flex flex-col items-center justify-between relative z-10">
-        
-        <div className="w-full flex justify-between items-center border-b border-zinc-800 pb-4">
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <Flame size={14} className="text-orange-500" />
-            <span className="uppercase tracking-widest">Sanctuary Vigil [Level {intensity}]</span>
-          </div>
-          <div className="flex items-center gap-2 bg-zinc-900/80 border border-zinc-800 px-3.5 py-1.5 rounded-full">
-            <Clock size={12} className="text-orange-500" />
-            <span className="text-[10px] uppercase tracking-widest text-zinc-400">Status:</span>
-            <span className="text-xs font-bold text-white">{timeLeft || 'Checking...'}</span>
-          </div>
-        </div>
-
-        <div className="w-full py-16 flex flex-col sm:flex-row items-center justify-center gap-12 sm:gap-20 relative">
-          
-          <div 
-            ref={angelRef}
-            className="relative w-40 h-40 sm:w-48 sm:h-48 flex items-center justify-center shrink-0"
+        <div className="flex items-center gap-6">
+          <button
+            onClick={toggleAudio}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${
+              lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10') 
+                ? 'bg-white/10 hover:bg-white/20 text-stone-200' 
+                : 'bg-stone-200/60 hover:bg-stone-200 text-stone-800'
+            }`}
           >
-            <div className={`absolute inset-0 bg-orange-500/15 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
-            <img 
-              src={ANGEL_GIF} 
-              className={`w-full h-full object-contain filter contrast-125 transition-all duration-500 ${isLighting ? 'brightness-150 scale-105 drop-shadow-[0_0_30px_rgba(255,165,0,0.8)]' : 'brightness-90'}`} 
-              alt="Angel with candle" 
-            />
+            {isPlayingAudio ? <Volume2 size={14} className="text-amber-400 animate-pulse" /> : <Radio size={14} />}
+            <span>{isPlayingAudio ? 'Sound On' : 'Sound Off'}</span>
+          </button>
+
+          <Link href="/heartandangel/calm" className={`font-serif text-lg font-light ${lighting.navHover} transition-all`}>
+            Calm
+          </Link>
+          <Link href="/heartandangel/letitgo" className={`font-serif text-lg font-light ${lighting.navHover} transition-all`}>
+            Let It Go
+          </Link>
+        </div>
+      </header>
+
+      {/* Атмосферный фоновый свет */}
+      <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[110px] pointer-events-none transition-all duration-1000`} />
+
+      {/* Центральная часть: Ангел слева, Сердце сверху справа */}
+      <div className="flex-1 max-w-4xl mx-auto w-full py-10 flex flex-col items-center justify-center relative z-10 gap-10">
+        
+        <div className="w-full flex flex-col sm:flex-row items-center justify-around gap-12 sm:gap-24 relative">
+          
+          {/* Ангел (в стиле Tempe / World) */}
+          <div ref={angelRef} className="relative flex flex-col items-center">
+            <div className="absolute -bottom-2 w-28 h-6 bg-black/20 rounded-full blur-[8px]" />
+            <div className={`absolute inset-0 bg-amber-500/20 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
+            <div className="relative w-36 h-44 sm:w-48 sm:h-56 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
+              <Image 
+                src={ANGEL_GIF} 
+                alt="Guardian Angel" 
+                fill 
+                className={`object-contain transition-all duration-500 ${isLighting ? 'brightness-125 scale-105 drop-shadow-[0_0_30px_rgba(255,165,0,0.8)]' : ''}`} 
+                priority 
+                unoptimized 
+              />
+            </div>
           </div>
 
+          {/* Сердце (в правом верхнем углу композиции, реагирует на уровень от 1 до 10) */}
           <div className="relative flex items-center justify-center" ref={heartRef}>
             <div 
-              className="relative transition-all duration-700 ease-in-out"
-              style={{ transform: `scale(${Math.max(1, 0.9 + intensity * 0.08)})` }}
+              className="relative transition-all duration-700 ease-in-out cursor-pointer"
+              style={{ transform: `scale(${0.9 + (intensity / 10) * 0.4})` }}
             >
               <motion.div 
-                animate={{ scale: [1, 1.12, 1], opacity: [0.6, 0.9, 0.6] }}
+                animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.85, 0.5] }}
                 transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                className="w-40 h-40 sm:w-48 sm:h-48 bg-gradient-to-t from-orange-600 via-red-600 to-transparent rounded-full blur-[50px] opacity-75 mix-blend-screen"
+                className="w-36 h-36 sm:w-48 sm:h-48 bg-gradient-to-t from-orange-500 via-rose-500 to-transparent rounded-full blur-[45px] opacity-75 mix-blend-screen"
               />
               <div className="absolute inset-0 flex items-center justify-center">
-                <Heart size={80} className="text-white fill-orange-500/25 drop-shadow-[0_0_30px_rgba(255,140,0,0.7)] stroke-[1.5]" />
+                <Heart 
+                  size={75 + intensity * 3} 
+                  className="text-white fill-orange-500/30 drop-shadow-[0_0_35px_rgba(255,140,0,0.8)] stroke-[1.5]" 
+                />
               </div>
             </div>
 
+            {/* Анимированная искра с траекторией полета */}
             <AnimatePresence>
               {spark && (
                 <motion.div
@@ -259,40 +348,44 @@ export default function VigilPage() {
                     scale: 0.5 
                   }}
                   animate={{ 
-                    x: 0, 
-                    y: 0, 
+                    x: [0, (spark.end.x - spark.start.x) * 0.3, 0], 
+                    y: [0, -60, 0], 
                     opacity: [0, 1, 1, 0], 
-                    scale: [0.8, 1.8, 1.2, 0.4] 
+                    scale: [0.8, 2, 1.2, 0.4] 
                   }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.85, ease: [0.25, 1, 0.5, 1] }}
-                  className="absolute z-50 pointer-events-none flex items-center justify-center"
+                  transition={{ duration: 1.1, ease: [0.25, 1, 0.5, 1] }}
+                  className="fixed z-50 pointer-events-none flex items-center justify-center"
+                  style={{ left: spark.start.x, top: spark.start.y }}
                 >
-                  <div className="w-8 h-8 bg-amber-300 rounded-full blur-[2px] shadow-[0_0_25px_8px_#ff9900]" />
-                  <div className="absolute w-3 h-3 bg-white rounded-full shadow-[0_0_10px_2px_#ffffff]" />
+                  <div className="w-10 h-10 bg-amber-300 rounded-full blur-[3px] shadow-[0_0_30px_10px_#ff9900]" />
+                  <div className="absolute w-4 h-4 bg-white rounded-full shadow-[0_0_15px_4px_#ffffff]" />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         </div>
 
+        {/* Блок информации и управления */}
         <div className="w-full max-w-md space-y-6">
           
-          <div className="text-center space-y-1 bg-zinc-900/60 border border-zinc-800/80 p-5 rounded-3xl backdrop-blur-xl">
-            <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-500">Last Guardian</div>
-            <div className="text-base font-serif font-normal text-white">
+          {/* Последний хранитель */}
+          <div className="text-center space-y-1 bg-stone-500/10 border border-stone-500/20 p-5 rounded-3xl backdrop-blur-xl shadow-sm">
+            <div className="font-mono text-[10px] uppercase tracking-[0.25em] opacity-60">Last Guardian</div>
+            <div className="font-serif text-lg font-normal">
               {lastGuardian}
             </div>
           </div>
 
+          {/* Список активных защитников за 24 часа */}
           <div className="space-y-2">
-            <div className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 text-center">Active Guardians (24h)</div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.25em] opacity-60 text-center">Active Guardians (24h)</div>
             <div className="flex flex-wrap gap-2 justify-center min-h-[32px]">
               {guardians.length === 0 ? (
-                <div className="text-xs text-zinc-600">No recent sparks recorded</div>
+                <div className="font-mono text-xs opacity-50">No recent sparks recorded</div>
               ) : (
                 guardians.map((g, i) => (
-                  <div key={g + i} className="text-xs px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full text-zinc-300 font-sans">
+                  <div key={g + i} className="font-mono text-xs px-3 py-1 bg-stone-500/10 border border-stone-500/20 rounded-full opacity-90">
                     {g}
                   </div>
                 ))
@@ -300,44 +393,60 @@ export default function VigilPage() {
             </div>
           </div>
 
-          <div className="space-y-3 pt-2">
-            <div className="text-center text-xs text-zinc-400">
-              {isLoading ? (
-                <span className="text-zinc-600">Verifying session...</span>
-              ) : userName ? (
-                <div>Connected as <span className="font-semibold text-white">{userName}</span></div>
-              ) : (
-                <div className="text-amber-400/90 flex items-center justify-center gap-1.5">
-                  <Sparkles size={14} />
-                  <span>Please <a href="/login" className="underline hover:text-white">sign in</a> to participate in the vigil</span>
-                </div>
-              )}
+          {/* Статус сессии, таймер и кнопка */}
+          <div className="space-y-4 pt-2">
+            <div className="text-center space-y-1">
+              <div className="font-mono text-xs">
+                {isLoading ? (
+                  <span className="opacity-50">Verifying session...</span>
+                ) : userName ? (
+                  <div>Connected as <span className="font-semibold">{userName}</span></div>
+                ) : (
+                  <div className="text-amber-500 flex items-center justify-center gap-1.5">
+                    <Sparkles size={14} />
+                    <span>Please <Link href="/login" className="underline hover:opacity-80">sign in</Link> to participate</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Таймер под Connected as */}
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <Clock size={12} className="text-amber-500" />
+                <span className="font-mono text-[11px] uppercase tracking-wider opacity-80">{timeLeft || 'Checking status...'}</span>
+              </div>
             </div>
 
+            {/* Кнопка Send Spark — крупная и выразительная */}
             <button 
               onClick={triggerRitual}
               disabled={isLighting || !userName}
               className={`
-                group relative w-full h-14 border border-zinc-700 bg-zinc-900/90 
+                group relative w-full h-16 border shadow-xl
                 flex items-center justify-center gap-3 rounded-2xl
-                transition-all active:scale-95 hover:bg-zinc-800 disabled:opacity-40 cursor-pointer shadow-lg
+                transition-all active:scale-95 disabled:opacity-40 cursor-pointer font-mono
+                ${lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
+                  ? 'bg-stone-100 text-stone-900 border-stone-200 hover:bg-white'
+                  : 'bg-stone-900 text-white border-stone-800 hover:bg-stone-800'
+                }
               `}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-2xl" />
-              <Heart size={16} className={`text-orange-500 fill-orange-500/20 ${isLighting ? 'animate-bounce' : ''}`} />
-              <span className="text-xs font-bold tracking-[0.2em] uppercase text-white">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-2xl" />
+              <Heart size={18} className={`text-orange-500 fill-orange-500/30 ${isLighting ? 'animate-bounce' : ''}`} />
+              <span className="text-xs font-bold tracking-[0.25em] uppercase">
                 {isLighting ? 'TRANSMITTING SPARK...' : 'SEND SPARK'}
               </span>
             </button>
 
             {rateLimitMsg && (
-              <div className="text-xs text-rose-400 text-center font-sans">{rateLimitMsg}</div>
+              <div className="font-mono text-xs text-rose-500 text-center">{rateLimitMsg}</div>
             )}
           </div>
 
         </div>
 
-      </main>
-    </div>
+      </div>
+
+      <div className="h-4" />
+    </main>
   );
 }

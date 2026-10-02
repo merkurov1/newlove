@@ -315,9 +315,7 @@ export default function TempleClient() {
               Let It Go
             </Link>
             <Link 
-              href="https://merkurov.love/vigil" 
-              target="_blank" 
-              rel="noopener noreferrer" 
+              href="/vigil" 
               className={`font-serif text-2xl sm:text-4xl font-light tracking-wide transition-transform ${lighting.navHover}`}
             >
               Vigil
