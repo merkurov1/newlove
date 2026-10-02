@@ -33,13 +33,13 @@ const MINI_PROJECTS = [
 
 export default function HeartAndAngelHub() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const videoId = 'Q5Kdzf9BJkE'; // ID видео с YouTube канала
+  const videoId = 'cfmUSH0rTno'; // Обновленный ID видео
 
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       <Header />
 
-      {/* Hero-блок (убран лишний класс block) */}
+      {/* Hero-блок (клик на всю картинку ведет в World) */}
       <Link 
         href="/heartandangel/world"
         className="relative w-full h-[500px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5] group cursor-pointer"
@@ -117,20 +117,13 @@ export default function HeartAndAngelHub() {
           </p>
         </article>
 
-        {/* 2. Живой видеопортал с YouTube канала (после манифеста) */}
-        <div className="w-full space-y-6">
-          <div className="text-center">
-            <span className="text-xs font-mono uppercase tracking-[0.25em] text-stone-400">
-              Moving Archive
-            </span>
-            <h3 className="text-2xl font-serif text-stone-900 mt-2">The Living Portal</h3>
-          </div>
-
+        {/* 2. Увеличенный живой видеопортал (без плашек и заголовков) */}
+        <div className="w-full">
           <div 
             onClick={() => setIsModalOpen(true)}
-            className="group relative w-full aspect-[16/9] sm:aspect-[21/9] rounded-3xl overflow-hidden bg-stone-900 shadow-xl cursor-pointer border border-stone-200/80 transition-all duration-500 hover:scale-[1.01]"
+            className="group relative w-full aspect-[16/9] sm:aspect-[16/10] rounded-3xl overflow-hidden bg-stone-900 shadow-2xl cursor-pointer border border-stone-200/80 transition-all duration-500 hover:scale-[1.01]"
           >
-            <div className="absolute inset-0 pointer-events-none scale-125 opacity-85 transition-opacity duration-500 group-hover:opacity-100">
+            <div className="absolute inset-0 pointer-events-none scale-125 opacity-90 transition-opacity duration-500 group-hover:opacity-100">
               <iframe
                 src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${videoId}&disablekb=1&modestbranding=1&iv_load_policy=3`}
                 title="Heart & Angel Portal"
@@ -139,26 +132,12 @@ export default function HeartAndAngelHub() {
               />
             </div>
 
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity group-hover:opacity-75" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
 
-            <div className="absolute inset-0 p-8 sm:p-12 flex flex-col justify-between z-10">
-              <div className="flex justify-between items-start">
-                <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-[10px] font-mono tracking-widest uppercase border border-white/30">
-                  Live Stream
-                </span>
-                <span className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30 group-hover:bg-white group-hover:text-stone-900 transition-colors">
-                  ▶
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="text-2xl sm:text-3xl font-serif font-medium text-white tracking-tight">
-                  Glimpses from the Studio
-                </h4>
-                <p className="text-white/80 text-xs sm:text-sm font-light max-w-md">
-                  Click to open the cinematic archive with full ambient sound.
-                </p>
-              </div>
+            <div className="absolute bottom-6 right-6 z-10">
+              <span className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30 group-hover:bg-white group-hover:text-stone-900 transition-colors shadow-lg">
+                ▶
+              </span>
             </div>
           </div>
         </div>
@@ -168,14 +147,23 @@ export default function HeartAndAngelHub() {
           <HeartAndAngelSection images={images} />
         </div>
 
-        {/* 4. Созвездие мини-проектов */}
+        {/* 4. Блок The Concept */}
+        <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm space-y-6">
+          <span className="text-xs font-mono uppercase tracking-[0.25em] text-stone-400 block">
+            The Concept
+          </span>
+          <h3 className="text-3xl font-serif font-medium text-stone-900">
+            A Universal Language of Symbols
+          </h3>
+          <p className="text-stone-700 font-light leading-relaxed text-base sm:text-lg">
+            By stripping away the superfluous and focusing on the core archetypes of the Heart and the Angel, 
+            the project builds a bridge between ancient visual traditions and modern digital consciousness. 
+            It offers a sanctuary of meaning where every visitor can find personal resonance.
+          </p>
+        </div>
+
+        {/* 5. Мини-проекты */}
         <div className="w-full space-y-8">
-          <div className="text-center">
-            <span className="text-xs font-mono uppercase tracking-[0.25em] text-stone-400">
-              Constellation
-            </span>
-            <h3 className="text-2xl font-serif text-stone-900 mt-2">Mini Projects</h3>
-          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {MINI_PROJECTS.map((proj, idx) => (
               <Link
