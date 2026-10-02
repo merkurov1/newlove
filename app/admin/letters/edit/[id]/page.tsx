@@ -45,26 +45,39 @@ export default async function EditLetterPage({ params }: PageProps) {
   if (error || !letter) notFound();
   
   return (
-    <div>
+    <div className="max-w-5xl mx-auto space-y-8 pb-16 font-sans">
       <CloseableHero />
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Редактирование выпуска рассылки</h1>
+      
+      <div className="border-b border-neutral-200 pb-6">
+        <h1 className="font-serif text-2xl sm:text-3xl tracking-tight text-neutral-900 mb-1">
+          Редактирование выпуска
+        </h1>
+        <p className="font-mono text-xs text-neutral-500 uppercase tracking-wider">
+          Управление контентом и рассылкой
+        </p>
+      </div>
       
       <ContentForm initialData={letter} saveAction={updateLetter} type="выпуск" />
       
       {letter.published ? (
-        <div className="mt-8 p-6 bg-blue-50 border border-blue-200 rounded-lg">
-          <h2 className="text-xl font-semibold text-blue-900 mb-4">
-            📧 Отправка рассылки подписчикам
-          </h2>
+        <div className="bg-white border border-neutral-200 p-8 space-y-6 rounded-none">
+          <div className="border-b border-neutral-100 pb-4">
+            <h2 className="font-serif text-lg text-neutral-900">
+              Отправка рассылки подписчикам
+            </h2>
+            <p className="font-mono text-xs text-neutral-500 mt-1">
+              Материал опубликован и готов к рассылке.
+            </p>
+          </div>
           <SendLetterForm letter={letter} />
         </div>
       ) : (
-        <div className="mt-8 p-6 bg-gray-50 border border-gray-200 rounded-lg">
-          <h2 className="text-xl font-semibold text-gray-700 mb-2">
-            📧 Отправка рассылки
+        <div className="bg-neutral-50 border border-neutral-200 p-6 rounded-none space-y-2">
+          <h2 className="font-serif text-base text-neutral-800">
+            Отправка рассылки недоступна
           </h2>
-          <p className="text-gray-600">
-            Сначала опубликуйте письмо на сайте, затем здесь появится возможность отправить рассылку подписчикам.
+          <p className="font-mono text-xs text-neutral-500 leading-relaxed">
+            Сначала опубликуйте письмо на сайте (отметьте галочку «Publish to Live Archive»), затем здесь появится возможность отправить рассылку подписчикам.
           </p>
         </div>
       )}

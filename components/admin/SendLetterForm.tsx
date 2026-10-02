@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, ChangeEvent } from 'react';
 import { sendLetter } from '@/app/admin/actions';
 import NewsletterJobStatus from './NewsletterJobStatus';
 
@@ -11,7 +11,6 @@ export default function SendLetterForm({ letter }: { letter: any }) {
   const [jobId, setJobId] = useState<string | null>(null);
 
   async function handleSendLetter(formData: FormData) {
-    // Prevent double-send if already loading
     if (isLoading) {
       console.warn('Отправка уже в процессе, игнорируем повторный клик');
       return;
@@ -24,16 +23,15 @@ export default function SendLetterForm({ letter }: { letter: any }) {
       if (testEmail) formData.set('testEmail', testEmail);
       const result = await sendLetter(null, formData);
       if (result?.status === 'success') {
-        setMessage(`✅ ${result.message}`);
-        // If result contains jobId, show job status component
+        setMessage(`✓ ${result.message}`);
         if (result.jobId) {
           setJobId(result.jobId);
         }
       } else {
-        setMessage(`❌ ${result?.message || 'Ошибка'}`);
+        setMessage(`✕ ${result?.message || 'Ошибка'}`);
       }
     } catch (error) {
-      setMessage('❌ Произошла ошибка при отправке рассылки');
+      setMessage('✕ Произошла ошибка при отправке рассылки');
     } finally {
       setIsLoading(false);
     }
@@ -41,84 +39,76 @@ export default function SendLetterForm({ letter }: { letter: any }) {
 
   if (letter?.sentAt) {
     return (
-      <div className="text-green-700">
-        ✅ Рассылка уже отправлена: {new Date(letter.sentAt).toLocaleString('ru-RU')}
+      <div className="font-mono text-xs text-neutral-900 py-2 flex items-center gap-2">
+        <span className="inline-block h-1.5 w-1.5 bg-neutral-900" />
+        Рассылка отправлена: {new Date(letter.sentAt).toLocaleString('ru-RU')}
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-        <p className="text-yellow-800 text-sm">
-          <strong>📝 Публикация ≠ Отправка рассылки</strong>
-          <br />
-          • Публикация = письмо появляется на сайте
-          <br />
-          • Отправка рассылки = письмо приходит подписчикам на email
-        </p>
+    <div className="space-y-6 font-sans">
+      <div className="border-l-2 border-neutral-900 bg-neutral-50 p-4 font-mono text-xs text-neutral-800 space-y-1">
+        <span className="font-bold uppercase tracking-wider block mb-1">Публикация ≠ Отправка рассылки</span>
+        <p>• Публикация — письмо появляется в публичном архиве на сайте.</p>
+        <p>• Отправка рассылки — диспетчер доставляет письмо на email подписчиков.</p>
       </div>
 
-      <p className="text-blue-700 mb-4">
-        Письмо готово к отправке. Убедитесь что содержимое корректное, затем нажмите кнопку ниже.
+      <p className="font-serif text-sm text-neutral-700 italic">
+        Материал готов к дистрибуции. Убедитесь в корректности содержимого перед запуском.
       </p>
 
       {message && !jobId && (
-        <div className="mb-4 p-3 bg-white border rounded-md">{message}</div>
+        <div className="border border-neutral-200 bg-white p-4 font-mono text-xs text-neutral-900">
+          {message}
+        </div>
       )}
 
       {jobId && (
-        <div className="mb-4">
+        <div>
           <NewsletterJobStatus jobId={jobId} onComplete={() => {
-            // Refresh page after completion to show updated sentAt
             window.location.reload();
           }} />
         </div>
       )}
 
-      <form action={handleSendLetter} className="flex gap-3 flex-col md:flex-row">
+      <form action={handleSendLetter} className="space-y-4">
         <input type="hidden" name="letterId" value={letter.id} />
 
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input
             type="email"
             name="testEmail"
             value={testEmail}
-            onChange={(e) => setTestEmail(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setTestEmail(e.target.value)}
             placeholder="Тестовый email (опционально)"
-            className="px-3 py-2 border rounded-md mr-2"
+            className="flex-1 bg-neutral-50/50 border border-neutral-200 px-4 py-3 font-mono text-xs text-neutral-900 focus:bg-white focus:border-neutral-900 focus:outline-none transition rounded-none"
           />
           <button
             type="submit"
             disabled={isLoading}
-            className="px-6 py-3 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest px-6 py-3 transition-all rounded-none disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[200px]"
           >
             {isLoading ? (
               <>
-                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                Отправляем...
+                <div className="animate-spin w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-none" />
+                <span>Трансляция...</span>
               </>
             ) : (
-              <>
-                📧 {testEmail ? 'Отправить тест' : 'Отправить рассылку'}
-              </>
+              <span>{testEmail ? 'Отправить тест' : 'Запустить рассылку'}</span>
             )}
           </button>
         </div>
       </form>
 
-      <div className="text-sm text-gray-600 mt-3 p-3 bg-gray-50 border border-gray-200 rounded-md">
-        <p className="font-semibold mb-2">ℹ️ Важная информация о рассылке:</p>
-        <ul className="list-disc list-inside space-y-1">
-          <li>⚠️ После отправки отменить нельзя</li>
-          <li>✉️ Письмо будет доставлено только <strong>активным</strong> подписчикам (isActive=true)</li>
-          <li>🔒 Подписчики становятся активными только после подтверждения email</li>
-          <li>❌ Неподтвержденные подписчики (isActive=false) НЕ получат письмо</li>
-          <li>🚫 Повторная отправка той же рассылки заблокирована системой</li>
+      <div className="border border-neutral-200 bg-neutral-50 p-4 font-mono text-xs text-neutral-500 space-y-2">
+        <p className="font-bold uppercase tracking-wider text-neutral-700">Протокол рассылки:</p>
+        <ul className="list-disc list-inside space-y-1 pl-1">
+          <li>Отмена после запуска невозможна.</li>
+          <li>Адресаты: только подписчики с подтвержденным статусом (<code className="text-neutral-900">isActive=true</code>).</li>
+          <li>Неподтвержденные адреса исключаются автоматически.</li>
+          <li>Повторная отправка идентичного выпуска заблокирована на уровне базы данных.</li>
         </ul>
-        <p className="mt-2 text-xs text-gray-500">
-          💡 Чтобы увидеть список всех подписчиков и их статусы, используйте SQL запрос из файла migrations/2025-11-09_check_subscribers.sql
-        </p>
       </div>
     </div>
   );

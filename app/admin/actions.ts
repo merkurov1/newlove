@@ -1,3 +1,4 @@
+// ===== ФАЙЛ: app/actions.ts =====
 'use server';
 
 import { cookies } from 'next/headers';
@@ -55,24 +56,22 @@ async function recordRevalidationAudit(
 
 /**
  * Проверяет, является ли текущий пользователь администратором.
+ * (Исправлено для совместимости с асинхронным cookies() в Next.js 15)
  */
 async function verifyAdmin() {
-  const buildRequest = () => {
-    const cookieHeader = cookies()
-      .getAll()
-      .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
-      .join('; ');
-    return new Request('http://localhost', { headers: { cookie: cookieHeader } });
-  };
-  const user = await requireAdminFromRequest(buildRequest());
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
+    .join('; ');
+    
+  const req = new Request('http://localhost', { headers: { cookie: cookieHeader } });
+  const user = await requireAdminFromRequest(req);
   return { user };
 }
 
 /**
  * Resolve a Supabase client suitable for server actions.
- * Prefer a request-aware client (supports cookies/session). If that
- * isn't available, fall back to the server client (service role when
- * requested).
  */
 async function getSupabaseForAction(useServiceRole = false) {
   try {
@@ -145,7 +144,6 @@ export async function createArticle(formData: any) {
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   await upsertTagsAndLink(supabase, 'article', articleId, parsedTags);
 
-  // Revalidate tag pages and root so tag listing / sliders update immediately
   try {
     for (const t of parsedTags || []) {
       const slug = slugifyTag(t);
@@ -300,7 +298,6 @@ export async function createProject(formData: any) {
   const parsedTags = parseTagNames(formData.get('tags')?.toString());
   await upsertTagsAndLink(supabase, 'project', projectId, parsedTags);
 
-  // Revalidate tag pages + project pages
   try {
     for (const t of parsedTags || []) {
       const slug = slugifyTag(t);
@@ -311,11 +308,10 @@ export async function createProject(formData: any) {
     console.warn('Tag revalidation failed:', e);
   }
 
-  // Ревалидация всех страниц, где отображаются проекты
   revalidatePath('/admin/projects');
   revalidatePath(`/admin/projects/edit/${projectId}`);
   if (published) {
-    revalidatePath(`/${slug}`); // Ревалидация публичной страницы проекта
+    revalidatePath(`/${slug}`);
   }
 
   redirect(`/admin/projects/edit/${projectId}`);
@@ -373,11 +369,10 @@ export async function updateProject(formData: any) {
     console.warn('Tag revalidation failed:', e);
   }
 
-  // Ревалидация всех страниц, где отображаются проекты
   revalidatePath('/admin/projects');
   revalidatePath(`/admin/projects/edit/${id}`);
   if (published) {
-    revalidatePath(`/${slug}`); // Ревалидация публичной страницы проекта
+    revalidatePath(`/${slug}`);
   }
 
   redirect('/admin/projects');
@@ -402,14 +397,13 @@ export async function deleteProject(formData: any) {
   }
 
   revalidatePath('/admin/projects');
-  revalidatePath('/', 'layout'); // Ревалидация root layout для обновления Header
+  revalidatePath('/', 'layout');
   if (project) revalidatePath(`/${project.slug}`);
 }
 
 // --- Профиль пользователя (User-Context) ---
-// Использует правильный паттерн для Server Actions - createClient() + auth.getUser()
+
 export async function updateProfile(prevState: any, formData: any) {
-  // Get authenticated user from anon client (to verify session)
   const anonClient = createClient();
   const {
     data: { user },
@@ -432,7 +426,6 @@ export async function updateProfile(prevState: any, formData: any) {
     };
   }
 
-  // Use service-role client for updating users table (anon doesn't have UPDATE permission)
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   const { data: updatedUser, error } = await supabase
     .from('users')
@@ -448,7 +441,6 @@ export async function updateProfile(prevState: any, formData: any) {
 
   if (error) {
     if (error.code === '23505') {
-      // Unique constraint violation
       return { status: 'error', message: 'Этот username уже занят.' };
     }
     console.error('Supabase update user error:', error);
@@ -457,7 +449,6 @@ export async function updateProfile(prevState: any, formData: any) {
 
   revalidatePath('/profile');
   revalidatePath(`/you/${updatedUser.username}`);
-  // Return success so client-side form handlers can navigate reliably
   return { status: 'success', message: 'Профиль обновлён.', username: updatedUser.username };
 }
 
@@ -468,7 +459,6 @@ export async function adminUpdateUserRole(userId: any, role: any) {
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!userId || !role) throw new Error('User ID и Role обязательны.');
 
-  // Update auth user's metadata
   const { error } = await supabase.auth.admin.updateUserById(userId, { user_metadata: { role } });
   if (error) {
     console.error('adminUpdateUserRole error (auth):', error);
@@ -476,8 +466,6 @@ export async function adminUpdateUserRole(userId: any, role: any) {
   }
 
   try {
-    // Keep the users table in sync if it exists in the project schema.
-    // Merge existing user_metadata to avoid clobbering other fields.
     const { data: userRow } = await supabase
       .from('users')
       .select('user_metadata,email')
@@ -489,11 +477,9 @@ export async function adminUpdateUserRole(userId: any, role: any) {
       await supabase.from('users').update({ user_metadata: mergedMeta }).eq('id', userId);
     }
 
-    // If role is SUBSCRIBER, ensure there's a subscriber record linked to this user
     if (String(role).toUpperCase() === 'SUBSCRIBER') {
       const email = userRow?.email || null;
       if (email) {
-        // Check if subscriber exists first to avoid foreign key conflicts
         const { data: existingSub } = await supabase
           .from('subscribers')
           .select('id')
@@ -501,13 +487,11 @@ export async function adminUpdateUserRole(userId: any, role: any) {
           .maybeSingle();
 
         if (existingSub) {
-          // Update existing subscriber
           await supabase
             .from('subscribers')
             .update({ userId, isActive: true })
             .eq('id', existingSub.id);
         } else {
-          // Create new subscriber
           const insertPayload = { id: createId(), email, userId, isActive: true };
           await supabase.from('subscribers').insert(insertPayload);
         }
@@ -515,7 +499,6 @@ export async function adminUpdateUserRole(userId: any, role: any) {
     }
   } catch (syncErr) {
     console.warn('adminUpdateUserRole: failed to sync users/subscribers tables', syncErr);
-    // Sentry removed
   }
 
   revalidatePath('/admin/users');
@@ -527,11 +510,7 @@ export async function adminDeleteUser(userId: any) {
   const supabase = getServerSupabaseClient({ useServiceRole: true });
   if (!userId) throw new Error('User ID обязателен.');
 
-  // First, unlink or delete subscriber records associated with this user
   try {
-    // Option 1: Nullify userId to keep email subscription active but unlinked
-    // Option 2: Delete subscriber entirely
-    // Using Option 1 (safer - keeps subscription but unlinks from deleted user)
     const { error: subError } = await supabase
       .from('subscribers')
       .update({ userId: null })
@@ -555,12 +534,7 @@ export async function adminDeleteUser(userId: any) {
 
 // --- Управление подпиской пользователя ---
 
-/**
- * Toggle user subscription status (subscribe/unsubscribe)
- * Can be called from profile page or admin panel
- */
 export async function toggleUserSubscription(prevState: any, formData: any) {
-  // Get authenticated user
   const anonClient = createClient();
   const {
     data: { user },
@@ -571,11 +545,10 @@ export async function toggleUserSubscription(prevState: any, formData: any) {
     return { status: 'error', message: 'Вы не авторизованы.' };
   }
 
-  const action = formData.get('action')?.toString(); // 'subscribe' or 'unsubscribe'
+  const action = formData.get('action')?.toString();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
   try {
-    // Get user data
     const { data: userData } = await supabase
       .from('users')
       .select('email, is_subscribed')
@@ -587,7 +560,6 @@ export async function toggleUserSubscription(prevState: any, formData: any) {
     }
 
     if (action === 'subscribe') {
-      // Check if subscriber exists
       const { data: existingSub } = await supabase
         .from('subscribers')
         .select('*')
@@ -595,13 +567,11 @@ export async function toggleUserSubscription(prevState: any, formData: any) {
         .maybeSingle();
 
       if (existingSub) {
-        // Update existing
         await supabase
           .from('subscribers')
           .update({ userId: user.id, isActive: true })
           .eq('id', existingSub.id);
       } else {
-        // Create new
         await supabase.from('subscribers').insert({
           id: createId(),
           email: userData.email,
@@ -610,16 +580,12 @@ export async function toggleUserSubscription(prevState: any, formData: any) {
         });
       }
 
-      // Update users table (trigger will do it, but for immediate feedback)
       await supabase.from('users').update({ is_subscribed: true }).eq('id', user.id);
 
       revalidatePath('/profile');
       return { status: 'success', message: 'Вы успешно подписались на рассылку!' };
     } else if (action === 'unsubscribe') {
-      // Deactivate subscription
       await supabase.from('subscribers').update({ isActive: false }).eq('userId', user.id);
-
-      // Update users table
       await supabase.from('users').update({ is_subscribed: false }).eq('id', user.id);
 
       revalidatePath('/profile');
@@ -633,25 +599,19 @@ export async function toggleUserSubscription(prevState: any, formData: any) {
   }
 }
 
-/**
- * Admin action: toggle subscription for any user
- */
 export async function adminToggleUserSubscription(userId: any, subscribe: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
   try {
-    // Get user data from public.users first
     let userData = await supabase.from('users').select('email').eq('id', userId).maybeSingle();
 
-    // If user doesn't exist in public.users, get from auth.users and create
     if (!userData?.data?.email) {
       const { data: authUser } = await supabase.auth.admin.getUserById(userId);
       if (!authUser?.user?.email) {
         return { status: 'error', message: 'У пользователя нет email.' };
       }
 
-      // Create user in public.users
       const { error: insertError } = await supabase.from('users').insert({
         id: userId,
         email: authUser.user.email,
@@ -659,7 +619,6 @@ export async function adminToggleUserSubscription(userId: any, subscribe: any) {
       });
 
       if (insertError && insertError.code !== '23505') {
-        // Ignore duplicate key error
         console.error('Error creating user in public.users:', insertError);
       }
 
@@ -672,7 +631,6 @@ export async function adminToggleUserSubscription(userId: any, subscribe: any) {
     }
 
     if (subscribe) {
-      // Subscribe user
       const { data: existingSub } = await supabase
         .from('subscribers')
         .select('*')
@@ -693,11 +651,9 @@ export async function adminToggleUserSubscription(userId: any, subscribe: any) {
         });
       }
     } else {
-      // Unsubscribe user
       await supabase.from('subscribers').update({ isActive: false }).eq('userId', userId);
     }
 
-    // Update users table
     await supabase.from('users').update({ is_subscribed: subscribe }).eq('id', userId);
 
     revalidatePath('/admin/users');
@@ -721,13 +677,11 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
 
   const { user } = await getUserAndSupabaseForRequest(new Request('http://localhost'));
 
-  // Use service-role client for writes (in case RLS prevents anon/request client from inserting)
   let svc;
   try {
     svc = getServerSupabaseClient({ useServiceRole: true });
   } catch (e: any) {
     console.error('subscribeToNewsletter: service role client not available', e);
-    // Sentry removed
     return {
       status: 'error',
       message: 'Сервер не настроен для обработки подписок (SUPABASE_SERVICE_ROLE_KEY отсутствует).',
@@ -735,10 +689,8 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
     };
   }
 
-  // Check if subscriber already exists to avoid foreign key conflicts
   let subscriber;
   try {
-    // First, try to find existing subscriber by email
     const { data: existingSub } = await svc
       .from('subscribers')
       .select('*')
@@ -746,15 +698,12 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
       .maybeSingle();
 
     if (existingSub) {
-      // Update existing subscriber
       subscriber = existingSub;
-      // Update userId if user is logged in
       if (user?.id && subscriber.userId !== user.id) {
         await svc.from('subscribers').update({ userId: user.id }).eq('id', subscriber.id);
         subscriber.userId = user.id;
       }
     } else {
-      // Create new subscriber with new ID
       const payload = { id: createId(), email, userId: user?.id || null, isActive: false };
       const insertRes = await svc.from('subscribers').insert(payload).select().single();
 
@@ -770,8 +719,7 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
     if (String(code) === '42501') {
       return {
         status: 'error',
-        message:
-          'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.',
+        message: 'Права на запись в базу отсутствуют. Проверьте SUPABASE_SERVICE_ROLE_KEY и привилегии.',
         code,
         details: error,
       };
@@ -783,11 +731,10 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
     return { status: 'success', message: 'Вы уже подписаны.' };
   }
 
-  // generate confirmation token and insert into subscriber_tokens
   try {
     const confirmToken = createId();
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     const { error: tokenErr } = await svc.from('subscriber_tokens').insert({
       subscriber_id: subscriber.id,
       type: 'confirm',
@@ -797,12 +744,9 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
     });
     if (tokenErr) {
       console.warn('Failed to insert confirm token:', tokenErr.message || tokenErr);
-      // Sentry removed
     } else {
       const confirmUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-confirm?token=${confirmToken}`;
-      console.info('Created confirm token for subscriber', subscriber.email);
 
-      // Send confirmation email
       const apiKey = process.env.RESEND_API_KEY;
       if (apiKey) {
         try {
@@ -841,13 +785,9 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
               </html>
             `,
           });
-          console.info('Confirmation email sent to', email);
         } catch (emailErr) {
           console.error('Failed to send confirmation email:', emailErr);
-          // Don't fail the subscription, token is already created
         }
-      } else {
-        console.warn('RESEND_API_KEY not configured, confirmation email not sent');
       }
 
       return {
@@ -910,7 +850,7 @@ export async function createLetter(formData: any) {
 
   const parsedTags = parseTagNames(tagsString);
   await upsertTagsAndLink(supabase, 'letter', letterId, parsedTags);
-  // Revalidate tag pages + Audit
+  
   try {
     for (const t of parsedTags || []) {
       const slug = slugifyTag(t);
@@ -920,7 +860,7 @@ export async function createLetter(formData: any) {
   } catch (e) {
     console.warn('Tag revalidation failed:', e);
   }
-  // Audit and revalidate
+
   await recordRevalidationAudit(
     supabase,
     user?.id,
@@ -997,7 +937,6 @@ export async function updateLetter(formData: any) {
     console.warn('Tag revalidation failed:', e);
   }
 
-  // Audit and revalidate
   await recordRevalidationAudit(
     supabase,
     null,
@@ -1014,11 +953,6 @@ export async function updateLetter(formData: any) {
   redirect('/admin/letters');
 }
 
-/**
- * Server action to delete a letter. Returns void on success and throws on error.
- * @param {FormData} formData
- * @returns {Promise<void>}
- */
 export async function deleteLetter(formData: any) {
   await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
@@ -1034,15 +968,7 @@ export async function deleteLetter(formData: any) {
     let { error } = await supabase.from('letters').delete().eq('id', id);
 
     if (error && String(error.code) === '42501') {
-      console.error(
-        'Supabase delete letter permission denied (42501). Attempting retry with service role client if available.'
-      );
-      // Sentry removed
-
       if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        console.warn(
-          'Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server; throwing error.'
-        );
         throw new Error(
           'Permission denied for table letters (42501). SUPABASE_SERVICE_ROLE_KEY is not configured on the server.'
         );
@@ -1052,41 +978,28 @@ export async function deleteLetter(formData: any) {
         const svc = getServerSupabaseClient({ useServiceRole: true });
         const retry = await svc.from('letters').delete().eq('id', id);
         if (retry.error) {
-          console.error('Retry with service role failed:', retry.error);
-          // Sentry removed
           throw new Error(
-            'Ошибка при удалении письма: permission denied for table letters. Убедитесь, что сервисная роль имеет права на таблицу `letters`. Рекомендация: выполните sql/ensure_service_role_grants.sql в Supabase SQL Editor (или вручную выдайте соответствующие права).'
+            'Ошибка при удалении письма: permission denied for table letters.'
           );
         }
-        // success via retry
         error = null;
       } catch (e: any) {
-        console.error('Error upserting subscriber:', error);
-        // Sentry removed
         throw new Error(
-          'Не удалось удалить письмо: ' +
-            (e?.message || String(e)) +
-            '. Проверьте права сервисной роли и выполните sql/ensure_service_role_grants.sql'
+          'Не удалось удалить письмо: ' + (e?.message || String(e))
         );
       }
     }
 
     if (error) {
-      console.error('Supabase delete letter error:', error);
-      // Sentry removed
       throw new Error(
-        'Ошибка при удалении письма: ' +
-          (error.message || String(error)) +
-          '. Если это ошибка прав (42501), убедитесь в настройке сервисной роли.'
+        'Ошибка при удалении письма: ' + (error.message || String(error))
       );
     }
 
     revalidatePath('/admin/letters');
-    console.info('revalidatePath: requesting revalidation for /letters (admin action)');
     await recordRevalidationAudit(supabase, null, 'delete_letter');
     revalidatePath('/letters');
     if (letter?.published) revalidatePath(`/letters/${letter.slug}`);
-    // server action expects void return on success
     return;
   } catch (e: any) {
     console.error('deleteLetter exception:', e);
@@ -1110,22 +1023,16 @@ export async function sendLetter(prevState: any, formData: any) {
     .eq('id', letterId)
     .maybeSingle();
   if (letterErr || !letter) {
-    console.error('sendLetter: failed to load letter', letterErr);
     return { status: 'error', message: 'Письмо не найдено.' };
   }
 
-  // Prevent accidental re-sending of already sent newsletters (unless it's a test email)
   if (!testEmail && letter.sentAt) {
-    console.warn(
-      `Attempted to re-send letter ${letterId} that was already sent at ${letter.sentAt}`
-    );
     return {
       status: 'error',
-      message: `❌ Эта рассылка уже была отправлена ${new Date(letter.sentAt).toLocaleString('ru-RU')}. Повторная отправка запрещена для избежания дублирования писем.`,
+      message: `❌ Эта рассылка уже была отправлена ${new Date(letter.sentAt).toLocaleString('ru-RU')}. Повторная отправка запрещена.`,
     };
   }
 
-  // Normalize letter object for sendNewsletterToSubscriber
   const letterObj = {
     id: letter.id,
     title: letter.title,
@@ -1139,7 +1046,6 @@ export async function sendLetter(prevState: any, formData: any) {
     })(),
   };
 
-  // If a testEmail is provided, send a single test email and return result
   if (testEmail) {
     const testSubscriber = { id: createId(), email: testEmail };
     const res = await sendNewsletterToSubscriber(testSubscriber, letterObj, {
@@ -1159,7 +1065,6 @@ export async function sendLetter(prevState: any, formData: any) {
     };
   }
 
-  // Try to enqueue the letter for background sending if a jobs table exists
   try {
     const jobId = createId();
     const { error: jobErr } = await supabase.from('newsletter_jobs').insert({
@@ -1170,23 +1075,17 @@ export async function sendLetter(prevState: any, formData: any) {
     });
 
     if (!jobErr) {
-      console.info(`Newsletter job ${jobId} created for letter ${letterId}`);
       return {
         status: 'success',
         message: 'Письмо поставлено в очередь на отправку. Обработка начнется в течение минуты.',
         jobId,
       };
-    } else {
-      console.warn('Failed to create newsletter job, falling back to direct send:', jobErr);
     }
   } catch (e: any) {
-    console.warn('newsletter_jobs table not available, using fallback:', e?.message);
-    // table may not exist — fallthrough to limited send
+    // fallback
   }
 
-  // Safe fallback: send to a limited number of subscribers
-  // TODO: Implement proper background job processing with newsletter_jobs table
-  const SEND_LIMIT = parseInt(process.env.NEWSLETTER_SEND_LIMIT || '100'); // Increased from 20 to 100
+  const SEND_LIMIT = parseInt(process.env.NEWSLETTER_SEND_LIMIT || '100');
 
   try {
     const { data: subs, error: subsErr } = await supabase
@@ -1195,16 +1094,9 @@ export async function sendLetter(prevState: any, formData: any) {
       .eq('isActive', true)
       .limit(SEND_LIMIT);
 
-    if (subsErr) {
-      console.error('sendLetter: failed to load subscribers', subsErr);
-      return { status: 'error', message: 'Не удалось получить список подписчиков.' };
-    }
-
-    if (!subs || subs.length === 0) {
+    if (subsErr || !subs || subs.length === 0) {
       return { status: 'error', message: 'Нет активных подписчиков для отправки.' };
     }
-
-    console.info(`Starting newsletter send to ${subs.length} subscribers (limit: ${SEND_LIMIT})`);
 
     let sent = 0;
     let failed = 0;
@@ -1216,15 +1108,12 @@ export async function sendLetter(prevState: any, formData: any) {
           sent++;
         } else {
           failed++;
-          console.warn(`Failed to send to ${s.email}:`, r.error);
         }
       } catch (e: any) {
         failed++;
-        console.warn('sendLetter: send to subscriber failed', e);
       }
     }
 
-    // Mark letter as sent
     await supabase.from('letters').update({ sentAt: new Date().toISOString() }).eq('id', letterId);
 
     const message =
@@ -1232,16 +1121,8 @@ export async function sendLetter(prevState: any, formData: any) {
         ? `✅ Отправлено ${sent} из ${subs.length} подписчикам. ❌ Ошибок: ${failed}`
         : `✅ Успешно отправлено ${sent} подписчикам`;
 
-    if (subs.length >= SEND_LIMIT) {
-      return {
-        status: 'success',
-        message: `${message}\n⚠️ Достигнут лимит ${SEND_LIMIT} писем. Для большей аудитории создайте таблицу newsletter_jobs.`,
-      };
-    }
-
     return { status: 'success', message };
   } catch (e: any) {
-    console.error('sendLetter fallback failed', e);
     return {
       status: 'error',
       message: 'Не удалось отправить рассылку: ' + (e?.message || String(e)),
@@ -1249,27 +1130,17 @@ export async function sendLetter(prevState: any, formData: any) {
   }
 }
 
-// --- On-demand revalidation helper ---
-/**
- * Server action to trigger on-demand revalidation of the letters listing page.
- * Runs under the same admin guard as other actions.
- */
 export async function revalidateLetters() {
   await verifyAdmin();
   try {
     const supabase = getServerSupabaseClient({ useServiceRole: true });
-    // Attempt to record who triggered the revalidation
     try {
-      const user = (await requireAdminFromRequest(new Request('http://localhost'))).user;
+      const user = (await verifyAdmin()).user;
       await recordRevalidationAudit(supabase, user?.id, 'manual_revalidate');
-    } catch (e: any) {
-      // ignore
-    }
+    } catch (e: any) {}
     revalidatePath('/letters');
-    // Redirect back to admin with a query param so UI can show a success banner
     redirect('/admin?revalidated=1');
   } catch (e: any) {
-    console.error('revalidateLetters error:', e);
     throw e;
   }
 }
@@ -1299,12 +1170,11 @@ export async function createPostcard(formData: any) {
   });
 
   if (error) {
-    console.error('Supabase insert postcard error:', error);
     throw new Error('Ошибка при создании открытки: ' + error.message);
   }
 
   revalidatePath('/admin/postcards');
-  revalidatePath('/letters'); // Обновляем страницу с открытками
+  revalidatePath('/letters');
 }
 
 export async function updatePostcard(formData: any) {
@@ -1333,7 +1203,6 @@ export async function updatePostcard(formData: any) {
     .eq('id', id);
 
   if (error) {
-    console.error('Supabase update postcard error:', error);
     throw new Error('Ошибка при обновлении открытки: ' + error.message);
   }
 
@@ -1347,7 +1216,6 @@ export async function deletePostcard(formData: any) {
   const id = formData.get('id')?.toString();
   if (!id) throw new Error('Postcard ID is required.');
 
-  // Проверка на связанные заказы
   const { count } = await supabase
     .from('postcard_orders')
     .select('*', { count: 'exact', head: true })
@@ -1360,7 +1228,6 @@ export async function deletePostcard(formData: any) {
   const { error } = await supabase.from('postcards').delete().eq('id', id);
 
   if (error) {
-    console.error('Supabase delete postcard error:', error);
     throw new Error('Ошибка при удалении открытки: ' + error.message);
   }
 
