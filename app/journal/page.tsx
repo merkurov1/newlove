@@ -73,7 +73,7 @@ export default async function JournalPage({ searchParams }: Props) {
   let initialLetters: any[] = [];
   try {
     const supabase = createClient();
-    const selectCols = 'id, title, slug, content, published, publishedAt, sentAt, createdAt, authorId, summary';
+    const selectCols = 'id, title, slug, content, published, publishedAt, sentAt, createdAt, authorId';
 
     let lettersData: any[] | null = null;
     let queryError: any = null;
@@ -112,7 +112,6 @@ export default async function JournalPage({ searchParams }: Props) {
         title: l.title,
         slug: l.slug,
         preview:
-          l.summary ||
           getPreviewText(l.content) ||
           (typeof l.content === 'string'
             ? (l.content.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 320) + (l.content.length > 320 ? '...' : ''))
