@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Clock, Sparkles, Flame, Volume2, Radio } from 'lucide-react';
+import { Heart, Clock, Sparkles, Volume2, Radio, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -63,8 +63,8 @@ export default function VigilPage() {
   const supabase = createClient();
   const { user, profile, isLoading } = useAuth();
 
-  const angelRef = useRef<HTMLDivElement>(null);
-  const heartRef = useRef<HTMLDivElement>(null);
+  const angelRef = useRef<HTMLDivElement | null>(null);
+  const heartRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const [intensity, setIntensity] = useState(1);
@@ -153,7 +153,7 @@ export default function VigilPage() {
       });
 
       const unique = Array.from(new Set(names));
-      setGuardians(unique.slice(0, 10));
+      setGuardians(unique.slice(0, 8));
       return unique.length;
     } catch {
       return 0;
@@ -257,16 +257,21 @@ export default function VigilPage() {
     >
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
-      {/* Верхняя панель: Навигация между помещениями Храма */}
-      <header className="relative z-45 flex justify-between items-center w-full max-w-5xl mx-auto pt-2">
+      {/* Верхняя панель: Кнопка Back to Temple и управление звуком */}
+      <header className="relative z-50 flex flex-wrap justify-between items-center w-full max-w-7xl mx-auto pt-2 gap-4">
         <Link 
-          href="/vigil"
-          className={`font-serif text-sm tracking-widest ${lighting.subText} ${lighting.navHover} transition-colors`}
+          href="/temple"
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs font-serif tracking-wider cursor-pointer ${
+            lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10') 
+              ? 'bg-white/10 border-white/20 text-stone-200 hover:bg-white/20' 
+              : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white'
+          }`}
         >
-          ← Back to Temple
+          <ArrowLeft size={14} />
+          <span>Back to Temple</span>
         </Link>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
           <button
             onClick={toggleAudio}
             className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${
@@ -278,156 +283,146 @@ export default function VigilPage() {
             {isPlayingAudio ? <Volume2 size={14} className="text-amber-400 animate-pulse" /> : <Radio size={14} />}
             <span>{isPlayingAudio ? 'Sound On' : 'Sound Off'}</span>
           </button>
-
-          <Link href="/heartandangel/calm" className={`font-serif text-lg font-light ${lighting.navHover} transition-all`}>
-            Calm
-          </Link>
-          <Link href="/heartandangel/letitgo" className={`font-serif text-lg font-light ${lighting.navHover} transition-all`}>
-            Let It Go
-          </Link>
         </div>
       </header>
 
       {/* Атмосферный фоновый свет */}
-      <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[110px] pointer-events-none transition-all duration-1000`} />
+      <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[120px] pointer-events-none transition-all duration-1000`} />
 
-      {/* Центральная часть: Ангел смещен ниже и левее, Сердце сверху справа */}
-      <div className="flex-1 max-w-4xl mx-auto w-full py-10 flex flex-col items-center justify-center relative z-10 gap-10">
-        
-        <div className="w-full flex flex-col sm:flex-row items-center justify-around gap-12 sm:gap-24 relative">
-          
-          {/* Ангел (смещен ниже и левее) */}
-          <div ref={angelRef} className="relative flex flex-col items-center sm:translate-y-6 sm:-translate-x-4">
-            <div className="absolute -bottom-2 w-28 h-6 bg-black/20 rounded-full blur-[8px]" />
-            <div className={`absolute inset-0 bg-amber-500/20 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
-            <div className="relative w-36 h-44 sm:w-48 sm:h-56 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
-              <Image 
-                src={ANGEL_GIF} 
-                alt="Guardian Angel" 
-                fill 
-                className={`object-contain transition-all duration-500 ${isLighting ? 'brightness-125 scale-105 drop-shadow-[0_0_30px_rgba(255,165,0,0.8)]' : ''}`} 
-                priority 
-                unoptimized 
-              />
-            </div>
-          </div>
+      {/* АНГЕЛ: Слева снизу (как герой в /temple) */}
+      <div ref={angelRef} className="absolute left-[8%] bottom-[8%] sm:left-[15%] sm:bottom-[15%] z-30 flex flex-col items-center pointer-events-none">
+        <div className="absolute -bottom-2 w-32 h-6 bg-black/25 rounded-full blur-[8px]" />
+        <div className={`absolute inset-0 bg-amber-500/20 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
+        <div className="relative w-32 h-40 sm:w-44 sm:h-52 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
+          <Image 
+            src={ANGEL_GIF} 
+            alt="Guardian Angel" 
+            fill 
+            className={`object-contain transition-all duration-500 ${isLighting ? 'brightness-125 scale-105 drop-shadow-[0_0_30px_rgba(255,165,0,0.8)]' : ''}`} 
+            priority 
+            unoptimized 
+          />
+        </div>
+      </div>
 
-          {/* Сердце */}
-          <div className="relative flex items-center justify-center" ref={heartRef}>
-            <div 
-              className="relative transition-all duration-700 ease-in-out cursor-pointer"
-              style={{ transform: `scale(${0.9 + (intensity / 10) * 0.4})` }}
-            >
-              <motion.div 
-                animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.85, 0.5] }}
-                transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                className="w-36 h-36 sm:w-48 sm:h-48 bg-gradient-to-t from-orange-500 via-rose-500 to-transparent rounded-full blur-[45px] opacity-75 mix-blend-screen"
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Heart 
-                  size={75 + intensity * 3} 
-                  className="text-white fill-orange-500/30 drop-shadow-[0_0_35px_rgba(255,140,0,0.8)] stroke-[1.5]" 
-                />
-              </div>
-            </div>
-
-            {/* Анимированная искра с траекторией полета */}
-            <AnimatePresence>
-              {spark && (
-                <motion.div
-                  initial={{ 
-                    x: spark.start.x - spark.end.x, 
-                    y: spark.start.y - spark.end.y, 
-                    opacity: 0, 
-                    scale: 0.5 
-                  }}
-                  animate={{ 
-                    x: [0, (spark.end.x - spark.start.x) * 0.3, 0], 
-                    y: [0, -60, 0], 
-                    opacity: [0, 1, 1, 0], 
-                    scale: [0.8, 2, 1.2, 0.4] 
-                  }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 1.1, ease: [0.25, 1, 0.5, 1] }}
-                  className="fixed z-50 pointer-events-none flex items-center justify-center"
-                  style={{ left: spark.start.x, top: spark.start.y }}
-                >
-                  <div className="w-10 h-10 bg-amber-300 rounded-full blur-[3px] shadow-[0_0_30px_10px_#ff9900]" />
-                  <div className="absolute w-4 h-4 bg-white rounded-full shadow-[0_0_15px_4px_#ffffff]" />
-                </motion.div>
-              )}
-            </AnimatePresence>
+      {/* СЕРДЦЕ: В правом верхнем углу (с отступами по 20% / адаптивно) */}
+      <div ref={heartRef} className="absolute top-[12%] right-[10%] sm:top-[20%] sm:right-[20%] z-30 flex items-center justify-center">
+        <div 
+          className="relative transition-all duration-700 ease-in-out cursor-pointer"
+          style={{ transform: `scale(${0.9 + (intensity / 10) * 0.4})` }}
+        >
+          <motion.div 
+            animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.85, 0.5] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+            className="w-32 h-32 sm:w-44 sm:h-44 bg-gradient-to-t from-orange-500 via-rose-500 to-transparent rounded-full blur-[45px] opacity-75 mix-blend-screen"
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Heart 
+              size={65 + intensity * 3} 
+              className="text-white fill-orange-500/30 drop-shadow-[0_0_35px_rgba(255,140,0,0.8)] stroke-[1.5]" 
+            />
           </div>
         </div>
 
-        {/* Блок информации и управления (без Last Guardian) */}
-        <div className="w-full max-w-md space-y-6">
-          
-          {/* Список активных защитников за 24 часа */}
-          <div className="space-y-2">
-            <div className="font-mono text-[10px] uppercase tracking-[0.25em] opacity-60 text-center">Active Guardians (24h)</div>
-            <div className="flex flex-wrap gap-2 justify-center min-h-[32px]">
-              {guardians.length === 0 ? (
-                <div className="font-mono text-xs opacity-50">No recent sparks recorded</div>
-              ) : (
-                guardians.map((g, i) => (
-                  <div key={g + i} className="font-mono text-xs px-3 py-1 bg-stone-500/10 border border-stone-500/20 rounded-full opacity-90">
-                    {g}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Статус сессии, таймер и кнопка */}
-          <div className="space-y-4 pt-2">
-            <div className="text-center space-y-1">
-              <div className="font-mono text-xs">
-                {isLoading ? (
-                  <span className="opacity-50">Verifying session...</span>
-                ) : userName ? (
-                  <div>Connected as <span className="font-semibold">{userName}</span></div>
-                ) : (
-                  <div className="text-amber-500 flex items-center justify-center gap-1.5">
-                    <Sparkles size={14} />
-                    <span>Please <Link href="/login" className="underline hover:opacity-80">sign in</Link> to participate</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Таймер под Connected as */}
-              <div className="flex items-center justify-center gap-2 pt-1">
-                <Clock size={12} className="text-amber-500" />
-                <span className="font-mono text-[11px] uppercase tracking-wider opacity-80">{timeLeft || 'Checking status...'}</span>
-              </div>
-            </div>
-
-            {/* Кнопка Send Spark — крупная и выразительная */}
-            <button 
-              onClick={triggerRitual}
-              disabled={isLighting || !userName}
-              className={`
-                group relative w-full h-16 border shadow-xl
-                flex items-center justify-center gap-3 rounded-2xl
-                transition-all active:scale-95 disabled:opacity-40 cursor-pointer font-mono
-                ${lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
-                  ? 'bg-stone-100 text-stone-900 border-stone-200 hover:bg-white'
-                  : 'bg-stone-900 text-white border-stone-800 hover:bg-stone-800'
-                }
-              `}
+        {/* Анимированная искра с траекторией полета */}
+        <AnimatePresence>
+          {spark && (
+            <motion.div
+              initial={{ 
+                x: spark.start.x - spark.end.x, 
+                y: spark.start.y - spark.end.y, 
+                opacity: 0, 
+                scale: 0.5 
+              }}
+              animate={{ 
+                x: [0, (spark.end.x - spark.start.x) * 0.3, 0], 
+                y: [0, -60, 0], 
+                opacity: [0, 1, 1, 0], 
+                scale: [0.8, 2, 1.2, 0.4] 
+              }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1.1, ease: [0.25, 1, 0.5, 1] }}
+              className="fixed z-50 pointer-events-none flex items-center justify-center"
+              style={{ left: spark.start.x, top: spark.start.y }}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-2xl" />
-              <Heart size={18} className={`text-orange-500 fill-orange-500/30 ${isLighting ? 'animate-bounce' : ''}`} />
-              <span className="text-xs font-bold tracking-[0.25em] uppercase">
-                {isLighting ? 'TRANSMITTING SPARK...' : 'SEND SPARK'}
-              </span>
-            </button>
+              <div className="w-10 h-10 bg-amber-300 rounded-full blur-[3px] shadow-[0_0_30px_10px_#ff9900]" />
+              <div className="absolute w-4 h-4 bg-white rounded-full shadow-[0_0_15px_4px_#ffffff]" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-            {rateLimitMsg && (
-              <div className="font-mono text-xs text-rose-500 text-center">{rateLimitMsg}</div>
+      {/* ЦЕНТР ЭКРАНА: Active Guardians (крупные, заметные) и элементы управления */}
+      <div className="flex-1 max-w-xl mx-auto w-full py-16 sm:py-24 flex flex-col items-center justify-center relative z-20 gap-10 text-center my-auto">
+        
+        {/* Active Guardians — крупные и по центру экрана */}
+        <div className="w-full space-y-4">
+          <div className="font-mono text-xs uppercase tracking-[0.3em] opacity-70">Active Guardians (24h)</div>
+          <div className="flex flex-wrap gap-3 justify-center items-center min-h-[50px] px-2">
+            {guardians.length === 0 ? (
+              <div className="font-serif text-sm opacity-50 italic">No recent sparks recorded yet. Be the first.</div>
+            ) : (
+              guardians.map((g, i) => (
+                <div 
+                  key={g + i} 
+                  className={`font-serif text-sm sm:text-base px-4 py-2 rounded-2xl border shadow-md backdrop-blur-md transition-transform hover:scale-105 ${
+                    lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
+                      ? 'bg-white/10 border-white/20 text-stone-100'
+                      : 'bg-white/90 border-stone-300 text-stone-900'
+                  }`}
+                >
+                  {g}
+                </div>
+              ))
             )}
           </div>
+        </div>
 
+        {/* Статус сессии, таймер и кнопка Send Spark */}
+        <div className="w-full max-w-md space-y-5 pt-4">
+          <div className="text-center space-y-1.5">
+            <div className="font-mono text-xs">
+              {isLoading ? (
+                <span className="opacity-50">Verifying session...</span>
+              ) : userName ? (
+                <div className="opacity-90">Connected as <span className="font-semibold">{userName}</span></div>
+              ) : (
+                <div className="text-amber-500 flex items-center justify-center gap-1.5">
+                  <Sparkles size={14} />
+                  <span>Please <Link href="/login" className="underline hover:opacity-80">sign in</Link> to participate</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-center gap-2">
+              <Clock size={13} className="text-amber-500" />
+              <span className="font-mono text-xs uppercase tracking-wider opacity-85">{timeLeft || 'Checking status...'}</span>
+            </div>
+          </div>
+
+          <button 
+            onClick={triggerRitual}
+            disabled={isLighting || !userName}
+            className={`
+              group relative w-full h-16 border shadow-2xl
+              flex items-center justify-center gap-3 rounded-2xl
+              transition-all active:scale-95 disabled:opacity-40 cursor-pointer font-mono
+              ${lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
+                ? 'bg-stone-100 text-stone-900 border-stone-200 hover:bg-white'
+                : 'bg-stone-900 text-white border-stone-800 hover:bg-stone-800'
+              }
+            `}
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-2xl" />
+            <Heart size={18} className={`text-orange-500 fill-orange-500/30 ${isLighting ? 'animate-bounce' : ''}`} />
+            <span className="text-xs font-bold tracking-[0.25em] uppercase">
+              {isLighting ? 'TRANSMITTING SPARK...' : 'SEND SPARK'}
+            </span>
+          </button>
+
+          {rateLimitMsg && (
+            <div className="font-mono text-xs text-rose-500 text-center">{rateLimitMsg}</div>
+          )}
         </div>
 
       </div>
