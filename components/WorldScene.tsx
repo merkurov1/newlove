@@ -55,7 +55,7 @@ export default function WorldScene() {
 
   // Управление фоновой музыкой
   const toggleAudio = (e: React.MouseEvent) => {
-    e.stopPropagation(); // чтобы клик не вызывал дождь из сердечек
+    e.stopPropagation();
     if (!audioRef.current) return;
 
     if (isPlayingAudio) {
@@ -110,12 +110,11 @@ export default function WorldScene() {
       <div className="absolute top-6 right-6 z-40">
         <button
           onClick={toggleAudio}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 backdrop-blur-md border border-white/40 text-white/90 hover:bg-white/30 transition-all shadow-lg group"
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/25 backdrop-blur-md border border-white/40 text-white/90 hover:bg-white/35 transition-all shadow-lg group"
           title={isPlayingAudio ? "Выключить музыку" : "Включить музыку"}
         >
           {isPlayingAudio ? (
             <>
-              {/* Иконка динамика со звуком */}
               <svg className="w-5 h-5 text-pink-200 animate-pulse" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
               </svg>
@@ -123,7 +122,6 @@ export default function WorldScene() {
             </>
           ) : (
             <>
-              {/* Иконка выключенного звука */}
               <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
@@ -138,10 +136,10 @@ export default function WorldScene() {
       <div className="absolute inset-0 opacity-30 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 w-[200%] h-full flex animate-clouds-move">
           <div className="w-1/2 h-full relative">
-            <Image src={ASSETS.clouds} alt="Clouds" fill className="object-cover filter blur-[1px]" />
+            <Image src={ASSETS.clouds} alt="" fill className="object-cover filter blur-[1px]" draggable={false} />
           </div>
           <div className="w-1/2 h-full relative">
-            <Image src={ASSETS.clouds} alt="Clouds" fill className="object-cover filter blur-[1px]" />
+            <Image src={ASSETS.clouds} alt="" fill className="object-cover filter blur-[1px]" draggable={false} />
           </div>
         </div>
       </div>
@@ -152,7 +150,7 @@ export default function WorldScene() {
           isNight ? 'opacity-0' : 'opacity-90 drop-shadow-[0_0_30px_rgba(255,220,100,0.5)]'
         }`}
       >
-        <Image src={ASSETS.sun} alt="Sun" fill className="object-contain animate-spin-slow" />
+        <Image src={ASSETS.sun} alt="" fill className="object-contain animate-spin-slow" draggable={false} />
       </div>
 
       {/* Звезды ночью */}
@@ -168,12 +166,12 @@ export default function WorldScene() {
 
       {/* 4. Композиция */}
       
-      {/* Герой с фиксированным равным размером контейнера */}
+      {/* Герой */}
       <div className="absolute bottom-[20vh] left-[32%] -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center">
         <div className="absolute -bottom-1 w-24 h-5 bg-black/20 rounded-full blur-[4px]" />
         {heroUrl && (
           <div className="w-32 h-36 sm:w-38 sm:h-44 flex items-end justify-center drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
-            <Image src={heroUrl} alt="Hero" width={160} height={180} className="w-full h-full object-contain" priority />
+            <Image src={heroUrl} alt="" width={160} height={180} className="w-full h-full object-contain" priority draggable={false} />
           </div>
         )}
       </div>
@@ -181,9 +179,8 @@ export default function WorldScene() {
       {/* Сердечко-шарик по центру с длинной изящной ниточкой */}
       <div className="absolute top-[18%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center animate-bounce-slow">
         <div className="w-20 sm:w-28 md:w-32 h-20 sm:h-28 md:h-32 drop-shadow-[0_10px_25px_rgba(239,68,68,0.4)] relative">
-          <Image src={ASSETS.heart} alt="Heart Balloon" fill className="object-contain" priority />
+          <Image src={ASSETS.heart} alt="" fill className="object-contain" priority draggable={false} />
         </div>
-        {/* Удлиненная ниточка */}
         <svg className="w-8 h-36 overflow-visible -mt-1" viewBox="0 0 20 120">
           <path
             d="M 10 0 Q 22 60 4 115"
@@ -199,13 +196,12 @@ export default function WorldScene() {
       <div className="absolute bottom-[20vh] right-[32%] translate-x-1/2 z-20 pointer-events-none flex flex-col items-center">
         <div className="absolute -bottom-1 w-28 h-5 bg-black/20 rounded-full blur-[4px]" />
         <div className="w-32 sm:w-40 md:w-48 h-auto drop-shadow-[0_10px_25px_rgba(0,0,0,0.3)] relative">
-          <Image src={ASSETS.house} alt="House and Tree" width={200} height={200} className="w-full h-auto object-contain" priority />
-          {/* Свет в окне ночью */}
+          <Image src={ASSETS.house} alt="" width={200} height={200} className="w-full h-auto object-contain" priority draggable={false} />
           <div className={`absolute bottom-[35%] right-7 w-2.5 h-3.5 bg-amber-300 rounded-sm blur-[0.5px] transition-opacity duration-1000 ${isNight ? 'opacity-100 shadow-[0_0_10px_#fde047]' : 'opacity-0'}`} />
         </div>
       </div>
 
-      {/* 5. Падающие сердечки (HeartRain.png) */}
+      {/* 5. Падающие сердечки */}
       {fallingHearts.map((h) => (
         <div
           key={h.id}
@@ -218,7 +214,7 @@ export default function WorldScene() {
             transform: `rotate(${Math.sin(h.y * 0.05) * 20}deg)`,
           }}
         >
-          <Image src={ASSETS.heartRain} alt="Falling Heart" fill className="object-contain filter drop-shadow-[0_0_15px_rgba(255,100,100,0.7)]" />
+          <Image src={ASSETS.heartRain} alt="" fill className="object-contain filter drop-shadow-[0_0_15px_rgba(255,100,100,0.7)]" draggable={false} />
         </div>
       ))}
 
