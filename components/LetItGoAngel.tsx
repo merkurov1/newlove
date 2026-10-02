@@ -52,13 +52,13 @@ export default function LetItGoAngel() {
       if (count > 0) {
         const payload = {
           event_type: 'ASH',
-          message: `Released ${count} ${count === 1 ? 'burden' : 'burdens'} into the digital sky.`,
+          message: `Released ${count}${count === 1 ? 'burden' : 'burdens'} into the digital sky.`,
           author: authorRef.current,
           token: tokenRef.current
         };
 
         if (navigator.sendBeacon) {
-          const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+          const blob = new Blob([JSON.stringify(payload)], { type: 'application/json'}`;
           navigator.sendBeacon('/api/temple_logs', blob);
         } else {
           fetch('/api/temple_logs', {
@@ -92,16 +92,20 @@ export default function LetItGoAngel() {
   return (
     <main className={`relative w-full h-[100dvh] overflow-hidden ${skyGradient} flex flex-col items-center justify-end select-none animate-fade-in transition-colors duration-1000`}>
       
-      {/* Верхняя панель с кнопкой возврата и счетчиком */}
-      <header className="absolute top-0 left-0 w-full z-50 flex justify-between items-center p-6 sm:p-12 pointer-events-auto">
-        <Link 
-          href="/temple"
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/80 text-stone-900 shadow-md transition-all text-xs font-serif tracking-wider hover:bg-white cursor-pointer"
-        >
-          <span>← Back to Temple</span>
-        </Link>
+      {/* Верхняя панель: Кнопка посередине вверху, счетчик справа */}
+      <header className="absolute top-0 left-0 w-full z-50 flex justify-between items-center p-6 sm:p-12 pointer-events-none">
+        <div className="hidden sm:block w-32" /> {/* Балансирующий блок слева для центрирования */}
 
-        <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/30 shadow-md animate-fade-in">
+        <div className="pointer-events-auto">
+          <Link 
+            href="/heartandangel/world"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/80 text-stone-900 shadow-md transition-all text-xs font-serif tracking-wider hover:bg-white cursor-pointer"
+          >
+            <span>← Back to World</span>
+          </Link>
+        </div>
+
+        <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/30 shadow-md animate-fade-in pointer-events-auto">
           ❤️ {clickCount}
         </div>
       </header>

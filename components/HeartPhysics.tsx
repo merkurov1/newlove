@@ -277,16 +277,20 @@ export default function HeartPhysics({
     <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden', touchAction: 'none' }}>
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       
-      {/* Верхняя панель с кнопкой возврата в Храм и таймером */}
-      <header className="absolute top-0 left-0 w-full z-50 flex justify-between items-center p-6 sm:p-12 pointer-events-auto">
-        <Link 
-          href="/temple"
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/80 text-stone-900 shadow-md transition-all text-xs font-serif tracking-wider hover:bg-white cursor-pointer"
-        >
-          <span>← Back to Temple</span>
-        </Link>
+      {/* Верхняя панель: Кнопка посередине вверху, таймер справа */}
+      <header className="absolute top-0 left-0 w-full z-50 flex justify-between items-center p-6 sm:p-12 pointer-events-none">
+        <div className="hidden sm:block w-32" /> {/* Балансирующий блок слева для идеального центрирования */}
 
-        <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/30 shadow-md">
+        <div className="pointer-events-auto">
+          <Link 
+            href="/temple"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-full backdrop-blur-md border border-stone-400/30 bg-white/85 text-stone-900 shadow-md transition-all text-xs font-serif tracking-wider hover:bg-white cursor-pointer"
+          >
+            <span>← Back to Temple</span>
+          </Link>
+        </div>
+
+        <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/85 px-4 py-2 rounded-full backdrop-blur-md border border-stone-400/30 shadow-md pointer-events-auto">
           ⏳ {formatTime(seconds)}
         </div>
       </header>

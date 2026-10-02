@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/components/AuthContext';
 import { motion } from 'framer-motion';
@@ -16,7 +16,6 @@ import {
   X,
   Users,
   Activity,
-  Calendar,
   Layers
 } from 'lucide-react';
 import Link from 'next/link';
@@ -79,7 +78,7 @@ function getTimeLighting() {
       navHover: 'hover:text-black hover:scale-105',
       glow: 'from-amber-200/30 via-orange-100/10 to-transparent',
       vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 243, 224, 0.6) 0%, rgba(245, 242, 235, 1) 80%)',
-      cardBg: 'bg-white/85 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
+      cardBg: 'bg-white/90 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
     };
   } else if (hour >= 11 && hour < 17) {
     return {
@@ -89,7 +88,7 @@ function getTimeLighting() {
       navHover: 'hover:text-black hover:scale-105',
       glow: 'from-stone-200/40 via-transparent to-transparent',
       vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.8) 0%, rgba(250, 248, 245, 1) 85%)',
-      cardBg: 'bg-white/90 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
+      cardBg: 'bg-white/95 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
     };
   } else if (hour >= 17 && hour < 21) {
     return {
@@ -99,7 +98,7 @@ function getTimeLighting() {
       navHover: 'hover:text-white hover:scale-105',
       glow: 'from-orange-900/30 via-rose-950/20 to-transparent',
       vignette: 'radial-gradient(circle at 50% 40%, rgba(70, 35, 25, 0.4) 0%, rgba(31, 26, 24, 1) 90%)',
-      cardBg: 'bg-stone-900/90 border-stone-800 text-stone-100 shadow-2xl backdrop-blur-2xl'
+      cardBg: 'bg-stone-900/95 border-stone-800 text-stone-100 shadow-2xl backdrop-blur-2xl'
     };
   } else {
     return {
@@ -109,7 +108,7 @@ function getTimeLighting() {
       navHover: 'hover:text-white hover:scale-105',
       glow: 'from-indigo-950/50 via-blue-950/20 to-transparent',
       vignette: 'radial-gradient(circle at 50% 30%, rgba(20, 25, 45, 0.5) 0%, rgba(11, 12, 16, 1) 90%)',
-      cardBg: 'bg-zinc-900/90 border-zinc-800 text-zinc-100 shadow-2xl backdrop-blur-2xl'
+      cardBg: 'bg-zinc-900/95 border-zinc-800 text-zinc-100 shadow-2xl backdrop-blur-2xl'
     };
   }
 }
@@ -188,7 +187,6 @@ export default function TempleClient() {
 
         setPosts(formatted);
 
-        // Подсчет статистики для Chronicles
         const authorsSet = new Set(rawData.map((i: any) => i.author).filter(Boolean));
         const vigils = rawData.filter((i: any) => (i.event_type || '').toUpperCase().includes('VIGIL')).length;
         const ashes = rawData.filter((i: any) => (i.event_type || '').toUpperCase() === 'ASH').length;
@@ -230,7 +228,7 @@ export default function TempleClient() {
     }
   };
 
-  const backButtonStyle = lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
+  const actionButtonStyle = lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
     ? 'bg-white/10 border-white/20 text-stone-200 hover:bg-white/20'
     : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white';
 
@@ -241,18 +239,20 @@ export default function TempleClient() {
     >
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
-      {/* Верхняя панель: Кнопка Back to World в стиле раздела /world */}
+      {/* Верхняя панель: Кнопка Back to World посередине вверху, звук справа */}
       <header className="relative z-45 flex justify-between items-center w-full max-w-7xl mx-auto pt-2">
+        <div className="w-24 hidden sm:block" /> {/* Балансирующий элемент слева */}
+
         <Link 
           href="/heartandangel/world"
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs font-serif tracking-wider cursor-pointer ${backButtonStyle}`}
+          className={`flex items-center gap-2 px-6 py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
         >
           <span>← Back to World</span>
         </Link>
 
         <button
           onClick={toggleAudio}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${backButtonStyle}`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${actionButtonStyle}`}
         >
           {isPlayingAudio ? <Volume2 size={14} className="text-pink-400 animate-pulse" /> : <Radio size={14} />}
           <span>{isPlayingAudio ? 'Sound On' : 'Sound Off'}</span>
@@ -296,11 +296,10 @@ export default function TempleClient() {
             </Link>
           </div>
 
-          {/* Разделенные кнопки: Chronicles, Traces и Справка (?) */}
           <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
             <button
               onClick={() => setIsChroniclesOpen(true)}
-              className={`px-5 py-2.5 rounded-full backdrop-blur-md border shadow-md flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-xs tracking-wider uppercase ${backButtonStyle}`}
+              className={`px-5 py-2.5 rounded-full backdrop-blur-md border shadow-md flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-xs tracking-wider uppercase ${actionButtonStyle}`}
             >
               <Activity size={14} className="opacity-80" />
               <span>Chronicles</span>
@@ -308,7 +307,7 @@ export default function TempleClient() {
 
             <button
               onClick={() => setIsTracesOpen(true)}
-              className={`px-5 py-2.5 rounded-full backdrop-blur-md border shadow-md flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-xs tracking-wider uppercase ${backButtonStyle}`}
+              className={`px-5 py-2.5 rounded-full backdrop-blur-md border shadow-md flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-xs tracking-wider uppercase ${actionButtonStyle}`}
             >
               <Layers size={14} className="opacity-80" />
               <span>Traces</span>
@@ -316,7 +315,7 @@ export default function TempleClient() {
 
             <button
               onClick={() => setIsInfoOpen(true)}
-              className={`w-10 h-10 rounded-full border backdrop-blur-md shadow-md flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic ${backButtonStyle}`}
+              className={`w-10 h-10 rounded-full border backdrop-blur-md shadow-md flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic ${actionButtonStyle}`}
               title="About Temple"
             >
               ?
@@ -351,7 +350,7 @@ export default function TempleClient() {
         </div>
       )}
 
-      {/* Модальное окно: Traces (Лента живых событий) */}
+      {/* Модальное окно: Traces (Лента живых событий с иконками и одной строкой на больших экранах) */}
       {isTracesOpen && (
         <div 
           onClick={() => setIsTracesOpen(false)}
@@ -359,7 +358,7 @@ export default function TempleClient() {
         >
           <div 
             onClick={(e: any) => e.stopPropagation()}
-            className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-lg w-full border space-y-5 relative shadow-2xl max-h-[80vh] flex flex-col`}
+            className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-2xl w-full border space-y-5 relative shadow-2xl max-h-[80vh] flex flex-col`}
           >
             <div className="flex items-center justify-between border-b pb-4 border-stone-500/20">
               <div>
@@ -380,22 +379,37 @@ export default function TempleClient() {
               ) : posts.length === 0 ? (
                 <p className="font-mono text-xs opacity-60 uppercase tracking-widest py-8 text-center">No traces recorded yet.</p>
               ) : (
-                posts.slice(0, 15).map((post) => (
-                  <div key={post.id} className="p-3.5 rounded-2xl bg-stone-500/5 border border-stone-500/10 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[11px] uppercase tracking-wider font-semibold opacity-80">{post.author}</span>
-                      <span className="font-mono text-[10px] opacity-50">{post.time}</span>
+                posts.slice(0, 15).map((post) => {
+                  const IconComponent = post.icon || Radio;
+                  return (
+                    <div key={post.id} className="p-3.5 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all hover:bg-stone-500/10">
+                      <div className="flex items-center gap-3 min-w-[160px]">
+                        <div className={`w-8 h-8 rounded-full bg-stone-500/10 flex items-center justify-center shrink-0 ${post.color || 'text-stone-400'}`}>
+                          <IconComponent size={16} />
+                        </div>
+                        <div>
+                          <span className="font-mono text-[10px] uppercase tracking-wider block opacity-60">{post.label}</span>
+                          <span className="font-mono text-xs font-semibold">{post.author}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 font-serif text-sm font-light opacity-90 sm:px-2 line-clamp-1">
+                        {post.content}
+                      </div>
+
+                      <div className="font-mono text-[10px] opacity-50 shrink-0 text-right sm:text-left">
+                        {post.time}
+                      </div>
                     </div>
-                    <p className="font-serif text-sm font-light opacity-95">{post.content}</p>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Модальное окно: Chronicles (Статистика храма) */}
+      {/* Модальное окно: Chronicles (Равномерно переверстанная чистая статистика) */}
       {isChroniclesOpen && (
         <div 
           onClick={() => setIsChroniclesOpen(false)}
@@ -406,10 +420,7 @@ export default function TempleClient() {
             className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-md w-full border space-y-6 relative shadow-2xl`}
           >
             <div className="flex items-center justify-between border-b pb-4 border-stone-500/20">
-              <div>
-                <h3 className="font-serif text-2xl font-normal">Temple Chronicles</h3>
-                <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">Aggregated metrics &amp; logs</p>
-              </div>
+              <h3 className="font-serif text-2xl font-normal">Chronicles</h3>
               <button 
                 onClick={() => setIsChroniclesOpen(false)}
                 className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
@@ -418,34 +429,30 @@ export default function TempleClient() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 py-2">
-              <div className="p-4 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center text-center space-y-1">
-                <Users size={20} className="opacity-70 mb-1" />
-                <span className="font-mono text-2xl font-bold">{stats.uniqueAuthors}</span>
+            <div className="grid grid-cols-2 gap-4 py-1">
+              <div className="p-5 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center justify-center text-center space-y-1.5 shadow-sm">
+                <Users size={22} className="opacity-70 mb-1" />
+                <span className="font-mono text-3xl font-bold tracking-tight">{stats.uniqueAuthors}</span>
                 <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Unique Seekers</span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center text-center space-y-1">
-                <Activity size={20} className="opacity-70 mb-1" />
-                <span className="font-mono text-2xl font-bold">{stats.totalLogs}</span>
+              <div className="p-5 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center justify-center text-center space-y-1.5 shadow-sm">
+                <Activity size={22} className="opacity-70 mb-1" />
+                <span className="font-mono text-3xl font-bold tracking-tight">{stats.totalLogs}</span>
                 <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Total Offerings</span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center text-center space-y-1">
-                <Flame size={20} className="text-amber-500 mb-1" />
-                <span className="font-mono text-2xl font-bold">{stats.vigilsCount}</span>
+              <div className="p-5 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center justify-center text-center space-y-1.5 shadow-sm">
+                <Flame size={22} className="text-amber-500 mb-1" />
+                <span className="font-mono text-3xl font-bold tracking-tight">{stats.vigilsCount}</span>
                 <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Vigil Sparks</span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center text-center space-y-1">
-                <Trash2 size={20} className="text-rose-500 mb-1" />
-                <span className="font-mono text-2xl font-bold">{stats.letItGoCount}</span>
+              <div className="p-5 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center justify-center text-center space-y-1.5 shadow-sm">
+                <Trash2 size={22} className="text-rose-500 mb-1" />
+                <span className="font-mono text-3xl font-bold tracking-tight">{stats.letItGoCount}</span>
                 <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Ashes Released</span>
               </div>
-            </div>
-
-            <div className="text-center font-mono text-[10px] uppercase tracking-widest opacity-50 pt-2 border-t border-stone-500/10">
-              Continuously updated from temple_logs
             </div>
           </div>
         </div>

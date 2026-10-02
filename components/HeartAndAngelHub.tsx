@@ -3,7 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, Sparkles, Play } from 'lucide-react';
+import { ArrowLeft, Sparkles, Play } from 'lucide-react';
 
 const ASSETS = {
   angel: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
@@ -98,7 +98,7 @@ export default function HeartAndAngelPage() {
           <div className="relative w-full aspect-video rounded-3xl overflow-hidden shadow-2xl bg-stone-900 border border-stone-200">
             <iframe 
               className="absolute inset-0 w-full h-full"
-              src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" // Замените на актуальную ссылку YouTube видео проекта
+              src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" 
               title="Heart & Angel Cinematic"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
               allowFullScreen
