@@ -21,7 +21,6 @@ function getTimeLighting() {
       bg: 'bg-[#F5F2EB]',
       text: 'text-stone-900',
       subText: 'text-stone-600',
-      navHover: 'hover:text-black',
       glow: 'from-amber-200/40 via-orange-100/20 to-transparent',
       vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 243, 224, 0.7) 0%, rgba(245, 242, 235, 1) 85%)',
       cardBg: 'bg-white/80 border-stone-200 text-stone-900 shadow-xl'
@@ -31,7 +30,6 @@ function getTimeLighting() {
       bg: 'bg-[#FAF8F5]',
       text: 'text-stone-900',
       subText: 'text-stone-600',
-      navHover: 'hover:text-black',
       glow: 'from-stone-200/50 via-transparent to-transparent',
       vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.9) 0%, rgba(250, 248, 245, 1) 90%)',
       cardBg: 'bg-white/90 border-stone-200 text-stone-900 shadow-xl'
@@ -41,7 +39,6 @@ function getTimeLighting() {
       bg: 'bg-[#1f1a18]',
       text: 'text-stone-100',
       subText: 'text-stone-300',
-      navHover: 'hover:text-white',
       glow: 'from-orange-900/40 via-rose-950/20 to-transparent',
       vignette: 'radial-gradient(circle at 50% 40%, rgba(70, 35, 25, 0.5) 0%, rgba(31, 26, 24, 1) 90%)',
       cardBg: 'bg-stone-900/90 border-stone-800 text-stone-100 shadow-2xl'
@@ -51,7 +48,6 @@ function getTimeLighting() {
       bg: 'bg-[#0b0c10]',
       text: 'text-stone-200',
       subText: 'text-stone-400',
-      navHover: 'hover:text-white',
       glow: 'from-indigo-950/60 via-blue-950/20 to-transparent',
       vignette: 'radial-gradient(circle at 50% 30%, rgba(20, 25, 45, 0.6) 0%, rgba(11, 12, 16, 1) 90%)',
       cardBg: 'bg-zinc-900/90 border-zinc-800 text-zinc-100 shadow-2xl'
@@ -250,6 +246,10 @@ export default function VigilPage() {
     }, 1200);
   };
 
+  const buttonStyleClass = lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
+    ? 'bg-white/10 border-white/20 text-stone-200 hover:bg-white/20'
+    : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white';
+
   return (
     <main 
       className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 sm:p-12 transition-colors duration-1000`}
@@ -257,15 +257,13 @@ export default function VigilPage() {
     >
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
-      {/* Верхняя панель: Кнопка Back to Temple и управление звуком */}
-      <header className="relative z-50 flex flex-wrap justify-between items-center w-full max-w-7xl mx-auto pt-2 gap-4">
+      {/* Верхняя панель: Back to Temple строго по центру */}
+      <header className="relative z-50 flex justify-between items-center w-full max-w-7xl mx-auto pt-2 gap-4">
+        <div className="w-28 hidden sm:block" /> {/* Балансирующий элемент слева */}
+
         <Link 
           href="/temple"
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs font-serif tracking-wider cursor-pointer ${
-            lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10') 
-              ? 'bg-white/10 border-white/20 text-stone-200 hover:bg-white/20' 
-              : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white'
-          }`}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs font-serif tracking-wider cursor-pointer ${buttonStyleClass}`}
         >
           <ArrowLeft size={14} />
           <span>Back to Temple</span>
@@ -274,11 +272,7 @@ export default function VigilPage() {
         <div className="flex items-center gap-4">
           <button
             onClick={toggleAudio}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${
-              lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10') 
-                ? 'bg-white/10 hover:bg-white/20 text-stone-200' 
-                : 'bg-stone-200/60 hover:bg-stone-200 text-stone-800'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${buttonStyleClass}`}
           >
             {isPlayingAudio ? <Volume2 size={14} className="text-amber-400 animate-pulse" /> : <Radio size={14} />}
             <span>{isPlayingAudio ? 'Sound On' : 'Sound Off'}</span>
@@ -289,7 +283,7 @@ export default function VigilPage() {
       {/* Атмосферный фоновый свет */}
       <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[120px] pointer-events-none transition-all duration-1000`} />
 
-      {/* АНГЕЛ: Слева снизу (как герой в /temple) */}
+      {/* АНГЕЛ: Слева снизу */}
       <div ref={angelRef} className="absolute left-[8%] bottom-[8%] sm:left-[15%] sm:bottom-[15%] z-30 flex flex-col items-center pointer-events-none">
         <div className="absolute -bottom-2 w-32 h-6 bg-black/25 rounded-full blur-[8px]" />
         <div className={`absolute inset-0 bg-amber-500/20 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
@@ -352,7 +346,7 @@ export default function VigilPage() {
         </AnimatePresence>
       </div>
 
-      {/* ЦЕНТР ЭКРАНА: Единая аккуратная композиция */}
+      {/* ЦЕНТР ЭКРАНА: Единая композиция */}
       <div className="flex-1 max-w-md mx-auto w-full py-12 flex flex-col items-center justify-center relative z-25 my-auto">
         <div className={`w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl ${lighting.cardBg} flex flex-col items-center gap-6 text-center shadow-2xl transition-colors duration-1000`}>
           
@@ -366,11 +360,7 @@ export default function VigilPage() {
                 guardians.map((g, i) => (
                   <div 
                     key={g + i} 
-                    className={`font-serif text-xs sm:text-sm px-3.5 py-1.5 rounded-full border shadow-sm transition-transform hover:scale-105 ${
-                      lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
-                        ? 'bg-white/10 border-white/20 text-stone-200'
-                        : 'bg-stone-100 border-stone-200 text-stone-800'
-                    }`}
+                    className={`font-serif text-xs sm:text-sm px-3.5 py-1.5 rounded-full border shadow-sm transition-transform hover:scale-105 ${buttonStyleClass}`}
                   >
                     {g}
                   </div>
@@ -382,7 +372,7 @@ export default function VigilPage() {
           {/* Разделитель */}
           <div className={`w-full h-[1px] ${lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10') ? 'bg-white/10' : 'bg-stone-200'}`} />
 
-          {/* Статус сессии, таймер и кнопка Send Spark */}
+          {/* Статус сессии, таймер и аккуратная кнопка Send Spark */}
           <div className="w-full space-y-4">
             <div className="text-center space-y-1.5">
               <div className="font-mono text-xs">
@@ -408,19 +398,15 @@ export default function VigilPage() {
               onClick={triggerRitual}
               disabled={isLighting || !userName}
               className={`
-                group relative w-full h-14 border shadow-xl
-                flex items-center justify-center gap-3 rounded-2xl
-                transition-all active:scale-95 disabled:opacity-40 cursor-pointer font-mono
-                ${lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
-                  ? 'bg-stone-100 text-stone-900 border-stone-200 hover:bg-white'
-                  : 'bg-stone-900 text-white border-stone-800 hover:bg-stone-800'
-                }
+                group relative w-full h-12 border backdrop-blur-md shadow-md
+                flex items-center justify-center gap-2.5 rounded-full
+                transition-all active:scale-95 disabled:opacity-40 cursor-pointer font-serif text-xs tracking-widest uppercase
+                ${buttonStyleClass}
               `}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-2xl" />
-              <Heart size={16} className={`text-orange-500 fill-orange-500/30 ${isLighting ? 'animate-bounce' : ''}`} />
-              <span className="text-xs font-bold tracking-[0.25em] uppercase">
-                {isLighting ? 'TRANSMITTING SPARK...' : 'SEND SPARK'}
+              <Heart size={14} className={`text-orange-500 fill-orange-500/30 ${isLighting ? 'animate-bounce' : ''}`} />
+              <span>
+                {isLighting ? 'Transmitting Spark...' : 'Send Spark'}
               </span>
             </button>
 
