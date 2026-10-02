@@ -36,7 +36,6 @@ export default function LettersArchive({ initialLetters = [], lastUpdated = null
             Last update: {new Date(lastUpdated).toLocaleString('en-US')}
           </div>
         )}
-        {/* debug output removed */}
 
         {/* Client-side refresh component as fallback for stale caches */}
         <div className="mt-4">
@@ -66,8 +65,6 @@ export default function LettersArchive({ initialLetters = [], lastUpdated = null
           </Link>
         </article>
       ))}
-
-      {/* debug info removed */}
     </div>
   );
 }
