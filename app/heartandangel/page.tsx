@@ -51,47 +51,47 @@ export default function HeartAndAngelPage() {
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       <Header />
 
-      {/* Полноэкранный Hero-блок с картинкой World.png */}
-      <div className="relative w-full h-[100dvh] min-h-[700px] flex flex-col justify-between overflow-hidden">
+      {/* Hero-блок: на мобильных без растягивания (object-contain), на десктопе во весь экран (object-cover) */}
+      <div className="relative w-full h-[500px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5]">
         <Image
           src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
           alt="Heart & Angel World"
           fill
-          className="object-cover"
+          className="object-contain md:object-cover"
           priority
           draggable={false}
         />
-        {/* Градиент для идеальной читаемости текста */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/40 pointer-events-none" />
+        {/* Градиент для читаемости текста */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 pointer-events-none md:bg-gradient-to-t md:from-black/80 md:via-black/25 md:to-black/40" />
 
         {/* Верхняя часть Hero: заголовок справа сверху */}
-        <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pt-32 md:pt-40 flex justify-end">
-          <div className="text-right space-y-2 max-w-lg text-white">
-            <span className="text-xs font-mono uppercase tracking-[0.25em] text-stone-300 block">
+        <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pt-24 sm:pt-32 md:pt-40 flex justify-end">
+          <div className="text-right space-y-1 sm:space-y-2 max-w-lg text-white drop-shadow-md">
+            <span className="text-[10px] sm:text-xs font-mono uppercase tracking-[0.25em] text-stone-200 block">
               Visual Mythology
             </span>
-            <h1 className="text-4xl sm:text-6xl font-serif font-normal tracking-tight text-white">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl font-serif font-normal tracking-tight text-white">
               Heart &amp; Angel
             </h1>
-            <p className="text-base sm:text-lg font-light text-stone-200 font-serif italic">
+            <p className="text-sm sm:text-base md:text-lg font-light text-stone-200 font-serif italic">
               A universal mythology for a fragmented world.
             </p>
           </div>
         </div>
 
-        {/* Нижняя часть Hero: подняли блок выше (pb-32 вместо pb-20), чтобы текст не наезжал на персонажа */}
-        <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pb-32 sm:pb-36 flex flex-col items-start space-y-4">
-          <div className="max-w-xl space-y-3">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-serif font-medium text-white tracking-tight">
+        {/* Нижняя часть Hero: текст слева снизу, аккуратно сбалансированный */}
+        <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pb-8 sm:pb-16 md:pb-28 flex flex-col items-start space-y-3">
+          <div className="max-w-xl space-y-2 sm:space-y-3 drop-shadow-md">
+            <h2 className="text-2xl sm:text-3xl md:text-5xl font-serif font-medium text-white tracking-tight">
               Enter the Living World
             </h2>
-            <p className="text-white/85 text-sm sm:text-base font-light leading-relaxed">
+            <p className="text-white/90 text-xs sm:text-sm md:text-base font-light leading-relaxed max-w-md">
               Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.
             </p>
-            <div className="pt-2">
+            <div className="pt-1 sm:pt-2">
               <Link
                 href="/heartandangel/world"
-                className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-white text-stone-900 text-sm font-medium tracking-wide shadow-2xl hover:bg-stone-100 transition-all duration-300"
+                className="inline-flex items-center gap-2 sm:gap-3 px-6 py-3 sm:px-8 sm:py-4 rounded-full bg-white text-stone-900 text-xs sm:text-sm font-medium tracking-wide shadow-2xl hover:bg-stone-100 transition-all duration-300"
               >
                 <span>Explore World</span>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
