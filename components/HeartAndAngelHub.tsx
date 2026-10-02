@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import Header from '@/components/Header';
-import HeartAndAngelSection from '@/components/HeartAndAngelSection';
 
 const images = [
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759212266765-IMG_0514.png',
@@ -33,7 +32,7 @@ const MINI_PROJECTS = [
 
 export default function HeartAndAngelHub() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const videoId = 'cfmUSH0rTno'; // Обновленный ID видео
+  const videoId = 'cfmUSH0rTno';
 
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
@@ -117,7 +116,7 @@ export default function HeartAndAngelHub() {
           </p>
         </article>
 
-        {/* 2. Увеличенный живой видеопортал (без плашек и заголовков) */}
+        {/* 2. Увеличенный живой видеопортал */}
         <div className="w-full">
           <div 
             onClick={() => setIsModalOpen(true)}
@@ -142,12 +141,82 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* 3. Галерея с работами */}
-        <div className="w-full">
-          <HeartAndAngelSection images={images} />
+        {/* 3. Галерея подряд (лента с сохранением оригинальных пропорций) */}
+        <div className="w-full space-y-12">
+          {images.map((src, idx) => (
+            <div 
+              key={idx} 
+              className="relative w-full bg-white border border-stone-200/80 p-6 sm:p-12 rounded-3xl shadow-sm flex flex-col items-center group transition-all duration-500 hover:border-stone-400"
+            >
+              <div className="w-full flex justify-between items-center mb-6">
+                <span className="font-mono text-xs uppercase tracking-widest text-stone-400">
+                  Artifact 0{idx + 1}
+                </span>
+                <span className="font-mono text-[10px] text-stone-400">
+                  REF_{String(idx + 1).padStart(2, '0')}
+                </span>
+              </div>
+              
+              <div className="relative w-full max-w-3xl aspect-[4/3] sm:aspect-[16/10] flex items-center justify-center">
+                <Image
+                  src={src}
+                  alt={`Artifact ${idx + 1}`}
+                  fill
+                  className="object-contain drop-shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]"
+                  sizes="(max-width: 1024px) 100vw, 800px"
+                />
+              </div>
+            </div>
+          ))}
         </div>
 
-        
+        {/* 4. Блок The Concept */}
+        <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
+            <div className="md:col-span-7 space-y-6">
+              <h2 className="font-serif text-2xl text-black tracking-tight">
+                The Concept
+              </h2>
+              <p className="font-serif text-lg text-neutral-800 leading-relaxed">
+                Heart &amp; Angel is a transmedia art project about choice, archetypes, and digital identity. 
+                Each image is a digital artifact. We do not stretch them to fit screens; 
+                we build the space around them to honor their scale.
+              </p>
+              <p className="font-serif text-base text-neutral-600 leading-relaxed">
+                This project explores love not as a romantic category, but as the only viable strategy for survival. 
+                It is an investigation into the physics of empathy in a broken world.
+              </p>
+            </div>
+
+            <div className="md:col-span-5 space-y-8 pt-2 md:pt-0">
+              <div>
+                <h3 className="font-mono text-xs font-bold uppercase tracking-widest text-neutral-400 mb-3">
+                  The Medium
+                </h3>
+                <ul className="space-y-3 text-sm font-serif text-neutral-900">
+                  <li className="flex items-start">
+                    <span className="w-24 font-bold shrink-0">Ink &amp; Paper</span>
+                    <span>Grounding the spirit in the physical.</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="w-24 font-bold shrink-0">Digital / AR</span>
+                    <span>Living in the ether.</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="w-24 font-bold shrink-0">Code</span>
+                    <span>Empathy as a ritual.</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="border-l-2 border-black pl-4">
+                <p className="italic font-serif text-neutral-500">
+                  &quot;Love is necessary. Love is never enough.&quot;
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* 5. Мини-проекты */}
         <div className="w-full space-y-8">
