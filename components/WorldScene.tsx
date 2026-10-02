@@ -18,7 +18,6 @@ interface FallingHeart {
   y: number;
   size: number;
   speed: number;
-  sway: number;
   swaySpeed: number;
 }
 
@@ -30,10 +29,10 @@ export default function WorldScene() {
   const nextHeartId = useRef(0);
 
   useEffect(() => {
-    // Случайный выбор между ангелом и демоном
+    // Случайный выбор героя при загрузке
     setHeroUrl(Math.random() > 0.5 ? ASSETS.angel : ASSETS.daemon);
 
-    // Определение времени суток по локальным часам пользователя
+    // Время суток по часам пользователя (как в LetItGoAngel)
     const hour = new Date().getHours();
     if (hour >= 6 && hour < 12) {
       setTimeGradient('from-[#A2D2FF] via-[#BDE0FE] to-[#FFC8DD]'); // Утро
@@ -50,6 +49,7 @@ export default function WorldScene() {
     }
   }, []);
 
+  // Дождь из сердечек при клике
   const triggerHeartRain = () => {
     const newHearts: FallingHeart[] = Array.from({ length: 12 }).map(() => ({
       id: nextHeartId.current++,
@@ -57,7 +57,6 @@ export default function WorldScene() {
       y: -50 - Math.random() * 150,
       size: 25 + Math.random() * 20,
       speed: 1.5 + Math.random() * 2,
-      sway: Math.random() * 40,
       swaySpeed: 0.02 + Math.random() * 0.03,
     }));
     setFallingHearts((prev) => [...prev, ...newHearts]);
@@ -80,12 +79,12 @@ export default function WorldScene() {
   }, [fallingHearts]);
 
   return (
-    <div
+    <main
       onClick={triggerHeartRain}
       className={`relative w-full h-[calc(100vh-6rem)] mt-24 overflow-hidden bg-gradient-to-b ${timeGradient} transition-colors duration-1000 select-none cursor-pointer flex flex-col justify-end`}
     >
-      {/* 1. Бесконечно движущиеся облака */}
-      <div className="absolute inset-0 opacity-35 pointer-events-none overflow-hidden">
+      {/* 1. Плавные движущиеся облака */}
+      <div className="absolute inset-0 opacity-30 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 w-[200%] h-full flex animate-clouds-move">
           <div className="w-1/2 h-full relative">
             <Image src={ASSETS.clouds} alt="Clouds" fill className="object-cover filter blur-[1px]" />
@@ -96,10 +95,10 @@ export default function WorldScene() {
         </div>
       </div>
 
-      {/* 2. Солнце / Луна с мягким свечением */}
+      {/* 2. Солнце (скрыто ночью, светится днем/на закате) */}
       <div
-        className={`absolute top-16 left-1/4 w-36 h-36 md:w-44 md:h-44 pointer-events-none transition-opacity duration-1000 ${
-          isNight ? 'opacity-0' : 'opacity-90 drop-shadow-[0_0_35px_rgba(255,220,100,0.6)]'
+        className={`absolute top-12 left-[15%] w-32 h-32 md:w-40 md:h-40 pointer-events-none transition-opacity duration-1000 ${
+          isNight ? 'opacity-0' : 'opacity-90 drop-shadow-[0_0_30px_rgba(255,220,100,0.5)]'
         }`}
       >
         <Image src={ASSETS.sun} alt="Sun" fill className="object-contain animate-spin-slow" />
@@ -110,45 +109,45 @@ export default function WorldScene() {
         <div className="absolute top-12 left-20 w-1.5 h-1.5 bg-white rounded-full animate-ping" />
         <div className="absolute top-24 right-1/3 w-2 h-2 bg-white rounded-full opacity-90 shadow-[0_0_8px_#fff]" />
         <div className="absolute top-36 left-1/4 w-1 h-1 bg-white rounded-full opacity-70" />
-        <div className="absolute top-20 right-20 w-2 h-2 bg-white rounded-full animate-pulse" />
+        <div className="absolute top-20 right-24 w-2 h-2 bg-white rounded-full animate-pulse" />
       </div>
 
-      {/* 3. Объемная земля (холмистый луг) с тенью */}
-      <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 rounded-t-[50%] scale-x-125 pointer-events-none shadow-[inset_0_15px_25px_rgba(0,0,0,0.2)]" />
+      {/* 3. Лужайка (земля) снизу */}
+      <div className="absolute bottom-0 left-0 w-full h-[20vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 rounded-t-[50%] scale-x-125 pointer-events-none shadow-[inset_0_15px_25px_rgba(0,0,0,0.2)]" />
 
-      {/* 4. Безопасная центрированная сцена (Stage), исключающая вылет за рамки */}
-      <div className="relative w-full max-w-6xl mx-auto h-full flex items-end justify-between px-8 md:px-16 pb-6 z-20 pointer-events-none">
+      {/* 4. Центрированная сцена (Stage) с отступами от краев экрана */}
+      <div className="relative w-full max-w-5xl mx-auto h-full flex items-end justify-between px-12 sm:px-20 md:px-28 pb-4 z-20 pointer-events-none">
         
-        {/* Герой слева с контактной тенью */}
-        <div className="relative flex flex-col items-center">
-          <div className="absolute -bottom-2 w-28 h-6 bg-black/25 rounded-full blur-[4px]" />
+        {/* Герой (аккуратно смещен от левого края) */}
+        <div className="relative flex flex-col items-center mb-1">
+          <div className="absolute -bottom-1 w-24 h-5 bg-black/20 rounded-full blur-[4px]" />
           {heroUrl && (
-            <div className="w-28 sm:w-36 md:w-44 h-auto drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)] transition-transform hover:scale-105">
-              <Image src={heroUrl} alt="Hero" width={180} height={180} className="w-full h-auto object-contain" priority />
+            <div className="w-24 sm:w-32 md:w-36 h-auto drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
+              <Image src={heroUrl} alt="Hero" width={160} height={160} className="w-full h-auto object-contain" priority />
             </div>
           )}
         </div>
 
-        {/* Сердечко-шарик по центру с анимацией парения */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center animate-bounce-slow">
-          <div className="w-24 sm:w-32 md:w-36 h-24 sm:h-32 md:h-36 drop-shadow-[0_10px_30px_rgba(239,68,68,0.5)] relative">
+        {/* Сердечко-шарик по центру неба */}
+        <div className="absolute top-[28%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center animate-bounce-slow">
+          <div className="w-20 sm:w-28 md:w-32 h-20 sm:h-28 md:h-32 drop-shadow-[0_10px_25px_rgba(239,68,68,0.4)] relative">
             <Image src={ASSETS.heart} alt="Heart Balloon" fill className="object-contain" priority />
           </div>
         </div>
 
-        {/* Домик справа с контактной тенью и окном */}
-        <div className="relative flex flex-col items-center">
-          <div className="absolute -bottom-2 w-32 h-6 bg-black/25 rounded-full blur-[4px]" />
-          <div className="w-36 sm:w-44 md:w-52 h-auto drop-shadow-[0_10px_25px_rgba(0,0,0,0.3)] relative">
-            <Image src={ASSETS.house} alt="House and Tree" width={220} height={220} className="w-full h-auto object-contain" priority />
-            {/* Свечение окна в ночное время */}
-            <div className={`absolute bottom-1/3 right-8 w-3 h-4 bg-amber-300 rounded-sm blur-[0.5px] transition-opacity duration-1000 ${isNight ? 'opacity-100 shadow-[0_0_10px_#fde047]' : 'opacity-0'}`} />
+        {/* Домик и дерево (аккуратно смещены от правого края) */}
+        <div className="relative flex flex-col items-center mb-1">
+          <div className="absolute -bottom-1 w-28 h-5 bg-black/20 rounded-full blur-[4px]" />
+          <div className="w-32 sm:w-40 md:w-48 h-auto drop-shadow-[0_10px_25px_rgba(0,0,0,0.3)] relative">
+            <Image src={ASSETS.house} alt="House and Tree" width={200} height={200} className="w-full h-auto object-contain" priority />
+            {/* Свет в окне домика ночью */}
+            <div className={`absolute bottom-[35%] right-7 w-2.5 h-3.5 bg-amber-300 rounded-sm blur-[0.5px] transition-opacity duration-1000 ${isNight ? 'opacity-100 shadow-[0_0_10px_#fde047]' : 'opacity-0'}`} />
           </div>
         </div>
 
       </div>
 
-      {/* 5. Интерактивные падающие сердечки при клике */}
+      {/* 5. Падающие сердечки при клике */}
       {fallingHearts.map((h) => (
         <div
           key={h.id}
@@ -165,7 +164,7 @@ export default function WorldScene() {
         </div>
       ))}
 
-      {/* CSS-анимации для облаков, вращения солнца и покачивания */}
+      {/* Анимации */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes cloudsMove {
           0% { transform: translateX(0); }
@@ -177,12 +176,12 @@ export default function WorldScene() {
         }
         @keyframes bounceSlow {
           0%, 100% { transform: translate(-50%, 0); }
-          50% { transform: translate(-50%, -12px); }
+          50% { transform: translate(-50%, -10px); }
         }
-        .animate-clouds-move { animation: cloudsMove 40s linear infinite; }
-        .animate-spin-slow { animation: spinSlow 30s linear infinite; }
+        .animate-clouds-move { animation: cloudsMove 45s linear infinite; }
+        .animate-spin-slow { animation: spinSlow 35s linear infinite; }
         .animate-bounce-slow { animation: bounceSlow 4s ease-in-out infinite; }
       ` }} />
-    </div>
+    </main>
   );
 }
