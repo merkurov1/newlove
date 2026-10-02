@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     siteName: 'Merkurov',
     images: [
       {
-        url: '/og-temple.jpg', // Замени при необходимости на актуальную картинку в public
+        url: '/og-temple.jpg',
         width: 1200,
         height: 630,
         alt: 'Digital Temple',

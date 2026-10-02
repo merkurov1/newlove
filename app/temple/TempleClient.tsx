@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Image from 'next/image';
 import Header from '@/components/Header';
 import { useAuth } from '@/components/AuthContext';
 import { motion } from 'framer-motion';
@@ -18,9 +19,16 @@ import {
   ShieldCheck,
   Moon,
   Fingerprint,
-  Lock
+  Lock,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
+
+const ASSETS = {
+  angel: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
+  daemon: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Daemon1.png',
+  ambientAudio: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Drift%20of%20Glass.mp3',
+};
 
 interface TemplePost {
   id: string | number;
@@ -33,14 +41,6 @@ interface TemplePost {
   icon?: any;
   color?: string;
 }
-
-const RITUALS = [
-  { href: '/cast', label: 'Cast', desc: 'Psyche & archetype navigation', icon: Compass, accent: 'text-indigo-600', bg: 'hover:bg-indigo-50/40', border: 'hover:border-indigo-300' },
-  { href: '/vigil', label: 'Vigil', desc: 'Spark & watch the flame', icon: Flame, accent: 'text-amber-600', bg: 'hover:bg-amber-50/40', border: 'hover:border-amber-300' },
-  { href: '/absolution', label: 'Absolution', desc: 'Confess & release burdens', icon: ShieldCheck, accent: 'text-emerald-600', bg: 'hover:bg-emerald-50/40', border: 'hover:border-emerald-300' },
-  { href: '/heartandangel/calm', label: 'Calm', desc: 'Center attention in silence', icon: Moon, accent: 'text-purple-600', bg: 'hover:bg-purple-50/40', border: 'hover:border-purple-300' },
-  { href: '/heartandangel/letitgo', label: 'Let It Go', desc: 'Drop the heavy weight', icon: Trash2, accent: 'text-rose-600', bg: 'hover:bg-rose-50/40', border: 'hover:border-rose-300' }
-];
 
 function getEventVisuals(eventType: string) {
   switch (eventType?.toUpperCase()) {
@@ -77,7 +77,12 @@ function formatTime(iso?: string) {
 export default function TempleClient() {
   const { user, profile } = useAuth();
   const isLoggedIn = !!user;
-  
+
+  const [heroUrl, setHeroUrl] = useState<string>('');
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isEventsOpen, setIsEventsOpen] = useState(false);
+
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<TemplePost[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -85,8 +90,8 @@ export default function TempleClient() {
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [traceCount, setTraceCount] = useState<number>(1420);
 
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -94,6 +99,10 @@ export default function TempleClient() {
   const baseTextRef = useRef('');
 
   const userName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Visitor';
+
+  useEffect(() => {
+    setHeroUrl(Math.random() > 0.5 ? ASSETS.angel : ASSETS.daemon);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -122,8 +131,6 @@ export default function TempleClient() {
         if (!res.ok) return;
         const json = await res.json();
         if (cancelled || !json || !Array.isArray(json.data)) return;
-
-        setTraceCount(1240 + json.data.length * 3);
 
         const formatted: TemplePost[] = json.data
           .filter((item: any) => {
@@ -174,6 +181,18 @@ export default function TempleClient() {
       clearInterval(interval);
     };
   }, []);
+
+  const toggleAudio = () => {
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      audioRef.current.play().then(() => {
+        setIsPlayingAudio(true);
+      }).catch((err) => console.log("Audio error:", err));
+    }
+  };
 
   const stopRecording = useCallback(() => {
     const mr = mediaRecorderRef.current;
@@ -284,7 +303,6 @@ export default function TempleClient() {
       setPosts(prev => [newItem, ...prev]);
       setPostText('');
       setAudioBlobUrl(null);
-      setTraceCount(c => c + 1);
     } catch (e) {
       console.error('Failed to transmit post', e);
       setError('Connection lost. Try again.');
@@ -293,261 +311,137 @@ export default function TempleClient() {
     }
   };
 
-  const renderContentWithLinks = (text: string) => {
-    if (!text) return null;
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
-
-    return parts.map((part, index) => {
-      if (index % 2 === 1) {
-        try {
-          const hostname = new URL(part).hostname.replace('www.', '');
-          return (
-            <a
-              key={index}
-              href={part}
-              target="_blank"
-              rel="noopener noreferrer nofollow ugc"
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-900 text-xs font-mono hover:bg-zinc-200 transition-colors mx-1"
-            >
-              <ExternalLink size={11} className="shrink-0 text-zinc-500" />
-              <span>{hostname}</span>
-            </a>
-          );
-        } catch {
-          return (
-            <a key={index} href={part} target="_blank" rel="noopener noreferrer nofollow ugc" className="text-zinc-900 underline underline-offset-2">
-              {part}
-            </a>
-          );
-        }
-      }
-      return part;
-    });
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#F6F4F0] via-[#F0ECE6] to-[#E8E3DA] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white relative overflow-x-hidden antialiased">
-      
-      {/* Solemn sanctuary ambient glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1400px] h-[650px] bg-gradient-to-tr from-amber-300/10 via-indigo-300/5 to-purple-300/10 blur-[180px] pointer-events-none rounded-full" />
+    <main className="relative w-full h-[100dvh] bg-[#FAF8F5] text-[#111] font-sans overflow-hidden select-none flex flex-col justify-between p-6 sm:p-12">
+      {/* Скрытый аудиоэлемент */}
+      <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
-      <Header />
+      {/* Верхняя панель: Назад в мир слева, Меню и Звук справа сверху */}
+      <header className="relative z-45 flex justify-between items-center w-full max-w-7xl mx-auto pt-2">
+        <Link 
+          href="/heartandangel/world"
+          className="font-serif text-sm tracking-widest text-stone-600 hover:text-black transition-colors"
+        >
+          ← Back to World
+        </Link>
 
-      <main className="max-w-7xl mx-auto px-6 pt-36 lg:pt-40 pb-32 relative z-10 space-y-10">
-        
-        {/* TOP LEVEL: COMPACT CENTRAL ALTAR (RESTRICTED TO LOGGED-IN USERS) */}
-        <section className="max-w-xl mx-auto">
-          <div className={`p-4 sm:p-5 rounded-3xl bg-white/90 backdrop-blur-2xl border transition-all shadow-[0_15px_40px_rgba(0,0,0,0.03)] space-y-3 ${
-            isLoggedIn ? 'border-zinc-200/95 hover:border-zinc-300' : 'border-zinc-200/60 opacity-90'
-          }`}>
-            <textarea
-              value={postText}
-              onChange={(e) => setPostText(e.target.value)}
-              placeholder={isLoggedIn ? "Broadcast a whisper, drop a link, or record a voice note..." : "Sign in to leave a trace in the temple..."}
-              disabled={!isLoggedIn}
-              rows={2}
-              className={`w-full bg-transparent text-sm sm:text-base text-zinc-900 placeholder-zinc-400 resize-none focus:outline-none font-serif leading-relaxed ${
-                !isLoggedIn ? 'cursor-not-allowed text-zinc-400' : ''
-              }`}
-            />
+        <nav className="flex items-center gap-6 sm:gap-10">
+          <button
+            onClick={toggleAudio}
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-stone-200/60 hover:bg-stone-200 transition-all text-stone-800 text-xs font-medium tracking-wide shadow-sm cursor-pointer"
+          >
+            {isPlayingAudio ? <Volume2 size={14} className="text-pink-500 animate-pulse" /> : <Radio size={14} />}
+            <span>{isPlayingAudio ? 'Sound On' : 'Sound Off'}</span>
+          </button>
 
-            {audioBlobUrl && (
-              <div className="flex items-center justify-between p-2.5 rounded-2xl bg-zinc-100/90 border border-zinc-200 shadow-inner">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center">
-                    <Volume2 size={12} />
-                  </div>
-                  <span className="font-mono text-[11px] uppercase tracking-wider text-zinc-700">Voice Note Ready</span>
-                </div>
-                <audio controls src={audioBlobUrl} className="h-7 max-w-[180px]" />
-              </div>
-            )}
+          <Link href="/heartandangel/calm" className="font-serif text-lg sm:text-xl font-light hover:italic transition-all">
+            Calm
+          </Link>
+          <Link href="/heartandangel/letitgo" className="font-serif text-lg sm:text-xl font-light hover:italic transition-all">
+            Let It Go
+          </Link>
+          <Link href="https://merkurov.love/vigil" target="_blank" rel="noopener noreferrer" className="font-serif text-lg sm:text-xl font-light hover:italic transition-all">
+            Vigil
+          </Link>
+        </nav>
+      </header>
 
-            {error && (
-              <p role="alert" className="font-mono text-[10px] uppercase tracking-wider text-rose-600">
-                {error}
-              </p>
-            )}
+      {/* Центр комнаты / Основное пространство */}
+      <div className="relative w-full flex-1 flex items-center justify-center">
+        {/* Герой слева снизу (отступ 20% от краев) */}
+        <div className="absolute left-[20%] bottom-[20%] z-20 flex flex-col items-center pointer-events-none">
+          <div className="absolute -bottom-2 w-28 h-6 bg-black/15 rounded-full blur-[6px]" />
+          {heroUrl && (
+            <div className="relative w-36 h-44 sm:w-48 sm:h-56 flex items-end justify-center drop-shadow-[0_15px_25px_rgba(0,0,0,0.2)]">
+              <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
+            </div>
+          )}
+        </div>
+      </div>
 
-            <div className="flex items-center justify-between pt-2.5 border-t border-zinc-200/60">
-              <button
-                type="button"
-                onClick={toggleRecording}
-                disabled={!isLoggedIn}
-                className={`px-3 py-1.5 rounded-full transition-all border flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider ${
-                  !isLoggedIn
-                    ? 'bg-zinc-100 text-zinc-400 border-zinc-200 cursor-not-allowed opacity-60'
-                    : isRecording
-                    ? 'bg-rose-500 text-white border-rose-500 animate-pulse shadow-sm'
-                    : 'bg-white text-zinc-700 border-zinc-200/90 hover:bg-zinc-50 shadow-xs'
-                }`}
-              >
-                {isRecording ? <Square size={11} /> : <Mic size={11} />}
-                <span>{isRecording ? 'Stop' : 'Voice'}</span>
-              </button>
+      {/* Плавающие кнопки управления (Справа снизу) */}
+      <div className="absolute bottom-8 right-8 z-45 flex items-center gap-3">
+        {/* Кнопка событий */}
+        <button 
+          onClick={() => setIsEventsOpen(!isEventsOpen)}
+          className="w-12 h-12 rounded-full bg-white border border-stone-200 shadow-lg flex items-center justify-center text-stone-800 hover:bg-stone-50 transition-all font-mono text-sm cursor-pointer"
+          title="Temple Events"
+        >
+          ✦
+        </button>
 
-              {isLoggedIn ? (
-                <button
-                  type="button"
-                  onClick={handleSendPost}
-                  disabled={isSubmitting || (!postText.trim() && !audioBlobUrl)}
-                  className="flex items-center gap-1.5 px-5 py-1.5 rounded-full bg-zinc-900 text-white font-medium text-[11px] shadow-xs hover:bg-zinc-800 active:scale-95 transition-all disabled:opacity-40 font-mono uppercase tracking-wider cursor-pointer"
-                >
-                  <span>{isSubmitting ? 'Transmitting...' : 'Broadcast'}</span>
-                  <Send size={11} />
-                </button>
+        {/* Кнопка с вопросом для флоатинга с текстом */}
+        <button 
+          onClick={() => setIsInfoOpen(!isInfoOpen)}
+          className="w-12 h-12 rounded-full bg-stone-900 text-white shadow-lg flex items-center justify-center hover:bg-stone-800 transition-all font-serif text-lg italic cursor-pointer"
+          title="About Temple"
+        >
+          ?
+        </button>
+      </div>
+
+      {/* Флоатинг с текстом (?) */}
+      {isInfoOpen && (
+        <div 
+          onClick={() => setIsInfoOpen(false)}
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
+        >
+          <div 
+            onClick={(e: any) => e.stopPropagation()}
+            className="bg-white rounded-3xl p-8 max-w-md shadow-2xl border border-stone-200 space-y-4 relative"
+          >
+            <button 
+              onClick={() => setIsInfoOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-500 hover:text-black transition-colors cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+            <h3 className="font-serif text-2xl text-stone-900">The Sanctuary</h3>
+            <p className="font-serif text-stone-600 text-sm leading-relaxed font-light">
+              This digital temple is a quiet space of presence. Here, the boundaries between the physical artifacts and the digital ether dissolve into pure observation, rituals work, and every visitor leaves a trace.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Флоатинг с событиями (Компактный список БЕЗ разделителей) */}
+      {isEventsOpen && (
+        <div 
+          onClick={() => setIsEventsOpen(false)}
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
+        >
+          <div 
+            onClick={(e: any) => e.stopPropagation()}
+            className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-stone-200 space-y-6 relative"
+          >
+            <button 
+              onClick={() => setIsEventsOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-500 hover:text-black transition-colors cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+            <h3 className="font-serif text-2xl text-stone-900">Chronicles &amp; Traces</h3>
+            
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              {!loaded ? (
+                <p className="font-mono text-xs text-stone-400 uppercase tracking-widest animate-pulse">Loading temple history...</p>
+              ) : posts.length === 0 ? (
+                <p className="font-mono text-xs text-stone-400 uppercase tracking-widest">No traces recorded yet.</p>
               ) : (
-                <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-zinc-400 px-3 py-1">
-                  <Lock size={11} className="text-zinc-400" />
-                  <span>Sign in required</span>
-                </div>
+                posts.slice(0, 10).map((post) => (
+                  <div key={post.id} className="space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] text-stone-400 uppercase tracking-wider">{post.author}</span>
+                      <span className="font-mono text-[10px] text-stone-400">{post.time}</span>
+                    </div>
+                    <p className="font-serif text-sm text-stone-800 font-light line-clamp-2">{post.content}</p>
+                  </div>
+                ))
               )}
             </div>
           </div>
-        </section>
-
-        {/* LOWER LEVEL: BALANCED TWO SEGMENTS */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-          
-          {/* LEFT SEGMENT: MANIFESTO & SACRED RITUAL SHRINES */}
-          <section className="lg:col-span-5 flex flex-col justify-between">
-            <div className="p-6 sm:p-8 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/90 shadow-[0_15px_35px_rgba(0,0,0,0.02)] space-y-6 flex-1 flex flex-col justify-between">
-              
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <h1 className="font-serif text-2xl sm:text-3xl font-normal text-zinc-900 tracking-tight leading-snug">
-                    A real place on the internet where rituals work and every visitor leaves a trace.
-                  </h1>
-                  <p className="text-sm font-serif text-zinc-600 leading-relaxed">
-                    The temple has its own memory, woven from your actions and whispers.
-                  </p>
-                </div>
-
-                <div className="space-y-3 pt-4 border-t border-zinc-200/60">
-                  <div className="flex items-center justify-between">
-                    <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">
-                      Sanctuary Gates:
-                    </h2>
-                    <span className="flex h-2 w-2 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                    </span>
-                  </div>
-                  
-                  <div className="space-y-2 font-serif">
-                    {RITUALS.map((r) => {
-                      const RitualIcon = r.icon;
-                      return (
-                        <Link
-                          key={r.href}
-                          href={r.href}
-                          className={`block p-3.5 rounded-2xl bg-gradient-to-r from-zinc-50/90 to-white border border-zinc-200/80 transition-all duration-300 group shadow-2xs ${r.bg} ${r.border}`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className={`p-2 rounded-xl bg-white border border-zinc-200/60 shadow-xs ${r.accent} group-hover:scale-110 transition-transform`}>
-                                <RitualIcon size={16} />
-                              </div>
-                              <div>
-                                <span className={`font-mono text-xs font-bold uppercase tracking-wider block ${r.accent}`}>
-                                  {r.label}
-                                </span>
-                                <span className="text-xs text-zinc-500 group-hover:text-zinc-800 transition-colors">
-                                  {r.desc}
-                                </span>
-                              </div>
-                            </div>
-                            <ExternalLink size={13} className="text-zinc-300 group-hover:text-zinc-900 transition-colors shrink-0" />
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* LIVE TEMPLE STATISTICS & FOOTER NOTE */}
-              <div className="pt-5 border-t border-zinc-200/60 space-y-4">
-                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-900 text-white shadow-sm">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 rounded-xl bg-zinc-800 text-amber-400">
-                      <Fingerprint size={16} />
-                    </div>
-                    <span className="font-mono text-xs uppercase tracking-wider text-zinc-300">Sanctuary Pulse</span>
-                  </div>
-                  <div className="flex items-baseline gap-1.5 font-mono">
-                    <span className="text-sm font-bold text-amber-300">{traceCount.toLocaleString()}</span>
-                    <span className="text-[10px] uppercase tracking-widest text-zinc-400">traces recorded</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-xs font-serif text-zinc-500 px-1">
-                  <span>The memory grows.</span>
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-800 font-bold">Temple is working</span>
-                </div>
-              </div>
-
-            </div>
-          </section>
-
-          {/* RIGHT SEGMENT: LIVING STREAM / TEMPLE LEDGER */}
-          <section className="lg:col-span-7 flex flex-col">
-            {!loaded ? (
-              <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-400 font-mono text-xs uppercase tracking-wider animate-pulse h-full flex items-center justify-center">
-                Listening to the temple...
-              </div>
-            ) : posts.length === 0 ? (
-              <div className="p-12 text-center rounded-3xl bg-white/40 border border-zinc-200/60 text-zinc-500 font-mono text-xs uppercase tracking-wider h-full flex items-center justify-center">
-                The logbook is empty. Leave the first trace.
-              </div>
-            ) : (
-              <div className="bg-white/80 backdrop-blur-xl border border-zinc-200/90 rounded-3xl divide-y divide-zinc-200/60 shadow-[0_15px_35px_rgba(0,0,0,0.02)] overflow-hidden flex-1 flex flex-col justify-start">
-                {posts.map((post) => {
-                  const PostIcon = post.icon || Sparkles;
-
-                  return (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      key={post.id}
-                      className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-white transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 bg-white border-zinc-200/80 ${post.color || 'text-zinc-800'}`}>
-                          <PostIcon size={11} className={post.color} />
-                          <span>{post.label}</span>
-                        </span>
-
-                        <span className="font-mono text-xs font-semibold text-zinc-800 shrink-0">
-                          {post.author}
-                        </span>
-
-                        <span className="text-zinc-300 shrink-0">•</span>
-
-                        <div className="text-sm text-zinc-900 font-serif truncate">
-                          {renderContentWithLinks(post.content)}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
-                        {post.audioUrl && (
-                          <audio controls src={post.audioUrl} className="h-6 w-32 rounded-lg" />
-                        )}
-                        <span className="font-mono text-[11px] text-zinc-400 whitespace-nowrap">
-                          {post.time}
-                        </span>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
         </div>
-
-      </main>
-    </div>
+      )}
+    </main>
   );
 }

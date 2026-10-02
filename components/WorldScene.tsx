@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 
 const ASSETS = {
   angel: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
@@ -55,7 +56,7 @@ export default function WorldScene() {
   }, []);
 
   // Отслеживание положения мыши для плавного следования сердца
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = (e: any) => {
     const { innerWidth, innerHeight } = window;
     const x = (e.clientX - innerWidth / 2) / (innerWidth / 2); // от -1 до 1
     const y = (e.clientY - innerHeight / 2) / (innerHeight / 2); // от -1 до 1
@@ -63,7 +64,7 @@ export default function WorldScene() {
   };
 
   // Управление фоновой музыкой
-  const toggleAudio = (e: React.MouseEvent) => {
+  const toggleAudio = (e: any) => {
     e.stopPropagation();
     if (!audioRef.current) return;
 
@@ -79,7 +80,7 @@ export default function WorldScene() {
     }
   };
 
-  const triggerHeartRain = (e: React.MouseEvent) => {
+  const triggerHeartRain = (e: any) => {
     if ((e.target as HTMLElement).closest('button')) return;
 
     const newHearts: FallingHeart[] = Array.from({ length: 12 }).map(() => ({
@@ -207,14 +208,18 @@ export default function WorldScene() {
         </svg>
       </div>
 
-      {/* Домик (фиксированный) */}
-      <div className="absolute bottom-[20vh] right-[32%] translate-x-1/2 z-20 pointer-events-none flex flex-col items-center">
+      {/* Домик (переход в Temple) */}
+      <Link 
+        href="/temple"
+        onClick={(e: any) => e.stopPropagation()}
+        className="absolute bottom-[20vh] right-[32%] translate-x-1/2 z-20 flex flex-col items-center cursor-pointer group"
+      >
         <div className="absolute -bottom-1 w-28 h-5 bg-black/20 rounded-full blur-[4px]" />
-        <div className="w-32 sm:w-40 md:w-48 h-auto drop-shadow-[0_10px_25px_rgba(0,0,0,0.3)] relative">
+        <div className="w-32 sm:w-40 md:w-48 h-auto drop-shadow-[0_10px_25px_rgba(0,0,0,0.3)] relative transition-transform duration-300 group-hover:scale-105">
           <Image src={ASSETS.house} alt="" width={200} height={200} className="w-full h-auto object-contain" priority draggable={false} />
           <div className={`absolute bottom-[35%] right-7 w-2.5 h-3.5 bg-amber-300 rounded-sm blur-[0.5px] transition-opacity duration-1000 ${isNight ? 'opacity-100 shadow-[0_0_10px_#fde047]' : 'opacity-0'}`} />
         </div>
-      </div>
+      </Link>
 
       {/* 5. Падающие сердечки */}
       {fallingHearts.map((h) => (
