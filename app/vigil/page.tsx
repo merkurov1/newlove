@@ -14,7 +14,6 @@ const ASSETS = {
   ambientAudio: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Drift%20of%20Glass.mp3',
 };
 
-// Освещение по времени суток (единое с /temple и /world)
 function getTimeLighting() {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 11) {
@@ -68,8 +67,7 @@ export default function VigilPage() {
   const heartRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const [intensity, setIntensity] = useState(1); // Динамика от 1 до 10
-  const [lastGuardian, setLastGuardian] = useState('Loading...');
+  const [intensity, setIntensity] = useState(1);
   const [timeLeft, setTimeLeft] = useState('');
   const [flameData, setFlameData] = useState<any>(null);
   const [guardians, setGuardians] = useState<string[]>([]);
@@ -92,7 +90,6 @@ export default function VigilPage() {
         const newRow = payload?.new;
         if (newRow && newRow.id === FLAME_ID) {
           setFlameData(newRow);
-          if (newRow.owner_name) setLastGuardian(newRow.owner_name);
         }
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, (payload: any) => {
@@ -121,7 +118,6 @@ export default function VigilPage() {
     const { data: flame } = await supabase.from('vigil_hearts').select('*').eq('id', FLAME_ID).maybeSingle();
     if (flame) {
       setFlameData(flame);
-      if (flame.owner_name) setLastGuardian(flame.owner_name);
     }
     await calculateIntensity();
     await refreshGuardians();
@@ -129,7 +125,6 @@ export default function VigilPage() {
 
   const calculateIntensity = async () => {
     const uniqueCount = await refreshGuardians();
-    // Динамика от 1 до 10
     let level = Math.min(10, Math.max(1, uniqueCount));
     setIntensity(level);
   };
@@ -244,7 +239,6 @@ export default function VigilPage() {
         author: userName
       });
       
-      setLastGuardian(userName);
       setFlameData({ ...flameData, last_lit_at: nowISO });
     } catch (e) {
       console.error(e);
@@ -266,7 +260,7 @@ export default function VigilPage() {
       {/* Верхняя панель: Навигация между помещениями Храма */}
       <header className="relative z-45 flex justify-between items-center w-full max-w-5xl mx-auto pt-2">
         <Link 
-          href="/heartandangel/temple"
+          href="/vigil"
           className={`font-serif text-sm tracking-widest ${lighting.subText} ${lighting.navHover} transition-colors`}
         >
           ← Back to Temple
@@ -297,13 +291,13 @@ export default function VigilPage() {
       {/* Атмосферный фоновый свет */}
       <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[110px] pointer-events-none transition-all duration-1000`} />
 
-      {/* Центральная часть: Ангел слева, Сердце сверху справа */}
+      {/* Центральная часть: Ангел смещен ниже и левее, Сердце сверху справа */}
       <div className="flex-1 max-w-4xl mx-auto w-full py-10 flex flex-col items-center justify-center relative z-10 gap-10">
         
         <div className="w-full flex flex-col sm:flex-row items-center justify-around gap-12 sm:gap-24 relative">
           
-          {/* Ангел (в стиле Tempe / World) */}
-          <div ref={angelRef} className="relative flex flex-col items-center">
+          {/* Ангел (смещен ниже и левее) */}
+          <div ref={angelRef} className="relative flex flex-col items-center sm:translate-y-6 sm:-translate-x-4">
             <div className="absolute -bottom-2 w-28 h-6 bg-black/20 rounded-full blur-[8px]" />
             <div className={`absolute inset-0 bg-amber-500/20 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
             <div className="relative w-36 h-44 sm:w-48 sm:h-56 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
@@ -318,7 +312,7 @@ export default function VigilPage() {
             </div>
           </div>
 
-          {/* Сердце (в правом верхнем углу композиции, реагирует на уровень от 1 до 10) */}
+          {/* Сердце */}
           <div className="relative flex items-center justify-center" ref={heartRef}>
             <div 
               className="relative transition-all duration-700 ease-in-out cursor-pointer"
@@ -366,17 +360,9 @@ export default function VigilPage() {
           </div>
         </div>
 
-        {/* Блок информации и управления */}
+        {/* Блок информации и управления (без Last Guardian) */}
         <div className="w-full max-w-md space-y-6">
           
-          {/* Последний хранитель */}
-          <div className="text-center space-y-1 bg-stone-500/10 border border-stone-500/20 p-5 rounded-3xl backdrop-blur-xl shadow-sm">
-            <div className="font-mono text-[10px] uppercase tracking-[0.25em] opacity-60">Last Guardian</div>
-            <div className="font-serif text-lg font-normal">
-              {lastGuardian}
-            </div>
-          </div>
-
           {/* Список активных защитников за 24 часа */}
           <div className="space-y-2">
             <div className="font-mono text-[10px] uppercase tracking-[0.25em] opacity-60 text-center">Active Guardians (24h)</div>
