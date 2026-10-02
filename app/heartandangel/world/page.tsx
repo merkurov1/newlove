@@ -1,10 +1,10 @@
 export const dynamic = 'force-dynamic';
 
 import React from 'react';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import type { Metadata } from 'next';
 import WorldScene from '@/components/WorldScene';
 
-export const metadata = sanitizeMetadata({
+export const metadata: Metadata = {
   title: 'World | Heart & Angel | Anton Merkurov',
   description: 'Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.',
   alternates: {
@@ -33,12 +33,12 @@ export const metadata = sanitizeMetadata({
     site: '@merkurov',
     images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png'],
   },
-});
+};
 
 export default function WorldPage() {
   return (
     <div className="relative w-full min-h-screen bg-[#111] overflow-hidden">
-      {/* Интерактивная сцена World (без отвлекающих элементов) */}
+      {/* Интерактивная сцена World */}
       <WorldScene />
     </div>
   );

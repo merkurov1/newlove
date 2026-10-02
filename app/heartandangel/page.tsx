@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Header from '@/components/Header';
+import HeartAndAngelSection from '@/components/HeartAndAngelSection';
 
 export const metadata = sanitizeMetadata({
   title: 'Heart & Angel | Anton Merkurov',
@@ -27,6 +28,13 @@ export const metadata = sanitizeMetadata({
     site: '@merkurov',
   },
 });
+
+const images = [
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759212266765-IMG_0514.png',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759213959968-IMG_0517.png',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759231831822-IMG_0518.png',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759231854148-IMG_0519.jpeg',
+];
 
 const MINI_PROJECTS = [
   {
@@ -128,6 +136,11 @@ export default function HeartAndAngelPage() {
             capital onto decentralized ledgers to ensure permanence across mediums.
           </p>
         </article>
+
+        {/* Галерея с работами */}
+        <div className="w-full">
+          <HeartAndAngelSection images={images} />
+        </div>
 
         {/* Созвездие мини-проектов (3 карточки) */}
         <div className="w-full space-y-8">
