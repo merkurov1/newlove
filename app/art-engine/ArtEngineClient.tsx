@@ -606,57 +606,32 @@ export default function ArtEngineClient() {
       {/* Main Layout Container with Top Padding for Fixed Header */}
       <div className="max-w-7xl mx-auto pt-32 sm:pt-36 pb-24 px-4 sm:px-6 lg:px-12 space-y-6 sm:space-y-10 overflow-x-hidden">
         
-        {/* Terminal Header Info */}
-        <div className="flex flex-col items-center justify-center text-center border-b border-neutral-200/80 pb-8 bg-white/80 backdrop-blur-xl px-4 sm:px-8 py-8 sm:py-12 rounded-3xl shadow-sm border">
-          <div className="space-y-2 max-w-2xl">
-            <span className="text-[10px] sm:text-xs font-mono tracking-[0.15em] sm:tracking-[0.3em] uppercase text-neutral-400 font-semibold block px-1">
-              Institutional Art Advisory & Market Intelligence
-            </span>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif text-neutral-900 tracking-tight font-normal break-words">
-              Art Intelligence Terminal
-            </h1>
-          </div>
-
-          {user && (
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:gap-3 bg-neutral-50 border border-neutral-200 px-3 py-1.5 text-[11px] sm:text-xs font-mono rounded-full max-w-full">
+        {/* Terminal Header Info / Admin status if logged in */}
+        {user && (
+          <div className="flex flex-col items-center justify-center text-center border-b border-neutral-200/80 pb-6 bg-white/80 backdrop-blur-xl px-4 sm:px-8 py-6 rounded-3xl shadow-sm border">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 bg-neutral-50 border border-neutral-200 px-4 py-2 text-xs font-mono rounded-full">
               <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
-              <span className="text-neutral-800 break-all">{user.email} (Admin)</span>
-              <button onClick={handleLogout} className="text-neutral-400 hover:text-neutral-900 underline ml-1 font-bold uppercase text-[10px]">Exit</button>
+              <span className="text-neutral-800 break-all">{user.email} (Admin Session Active)</span>
+              <button onClick={handleLogout} className="text-neutral-400 hover:text-neutral-900 underline ml-2 font-bold uppercase text-[10px]">Exit</button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {!loadingUser && !user ? (
-          <div className="space-y-8 max-w-4xl mx-auto">
-            {/* Original Terminal Landing Box */}
-            <div className="py-12 sm:py-24 text-center space-y-6 sm:space-y-10 bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-20 rounded-3xl shadow-sm">
-              <div className="space-y-3">
-                <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif text-neutral-900 leading-tight">
-                  Fine Art Banking & Advisory Infrastructure
-                </h2>
-                
-                <p className="text-xs sm:text-base md:text-lg font-serif text-neutral-600 leading-relaxed font-light max-w-2xl mx-auto pt-1">
-                  Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists. Generate institutional-quality investment memoranda in seconds.
-                </p>
-              </div>
-
-              <div className="pt-2 flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 font-mono">
-                <button
-                  onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
-                  className="bg-neutral-900 hover:bg-black text-white text-xs uppercase tracking-widest px-8 py-3.5 transition shadow-sm font-bold rounded-full"
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
-                  className="bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 text-xs uppercase tracking-widest px-8 py-3.5 transition font-bold rounded-full"
-                >
-                  Request Access
-                </button>
+          <div className="space-y-10 max-w-4xl mx-auto">
+            {/* 1. ART INTELLIGENCE TERMINAL BANNER */}
+            <div className="flex flex-col items-center justify-center text-center bg-white/80 backdrop-blur-xl px-4 sm:px-8 py-10 sm:py-14 rounded-3xl shadow-sm border border-neutral-200/80">
+              <div className="space-y-2 max-w-2xl">
+                <span className="text-[10px] sm:text-xs font-mono tracking-[0.15em] sm:tracking-[0.3em] uppercase text-neutral-400 font-semibold block px-1">
+                  Institutional Art Advisory & Market Intelligence
+                </span>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif text-neutral-900 tracking-tight font-normal break-words">
+                  Art Intelligence Terminal
+                </h1>
               </div>
             </div>
 
-            {/* INTEGRATED INSTITUTIONAL CASE STUDIES (WHITE CUBE STYLE) */}
+            {/* 2. THREE INSTITUTIONAL CASE STUDIES (INSERTED IN THE MIDDLE) */}
             <div className="bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-14 rounded-3xl shadow-sm space-y-10">
               <div className="text-center space-y-2">
                 <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-neutral-400 block">
@@ -717,10 +692,38 @@ export default function ArtEngineClient() {
                 </div>
               </div>
             </div>
+
+            {/* 3. FINE ART BANKING & ADVISORY INFRASTRUCTURE (LOGIN BOX) */}
+            <div className="py-12 sm:py-16 text-center space-y-6 sm:space-y-10 bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-20 rounded-3xl shadow-sm">
+              <div className="space-y-3">
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif text-neutral-900 leading-tight">
+                  Fine Art Banking & Advisory Infrastructure
+                </h2>
+                
+                <p className="text-xs sm:text-base md:text-lg font-serif text-neutral-600 leading-relaxed font-light max-w-2xl mx-auto pt-1">
+                  Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists. Generate institutional-quality investment memoranda in seconds.
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 font-mono">
+                <button
+                  onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
+                  className="bg-neutral-900 hover:bg-black text-white text-xs uppercase tracking-widest px-8 py-3.5 transition shadow-sm font-bold rounded-full"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
+                  className="bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 text-xs uppercase tracking-widest px-8 py-3.5 transition font-bold rounded-full"
+                >
+                  Request Access
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <>
-            {/* Navigation Tabs */}
+            {/* Navigation Tabs (Authenticated Terminal View) */}
             <nav className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center border-b border-neutral-200/80 bg-white/80 backdrop-blur-xl px-4 sm:px-8 py-3 sm:py-4 gap-3 rounded-2xl shadow-sm border">
               <div className="flex gap-4 sm:gap-8 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
                 <button

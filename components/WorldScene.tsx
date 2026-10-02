@@ -1,119 +1,173 @@
 'use client';
 
-import { useState } from 'react';
-import Header from '@/components/Header';
+import React, { useState, useEffect, useRef } from 'react';
 
-export default function HeartAngelClient() {
-  const [hovered, setHovered] = useState(false);
+const ASSETS = {
+  angel: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
+  daemon: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Daemon1.png',
+  heart: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Heart1.png',
+  house: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/House1.png',
+  sun: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Sun1.png',
+  clouds: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Clouds.png',
+};
+
+type TimeOfDay = 'day' | 'sunset' | 'night';
+
+interface FallingHeart {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  speed: number;
+  sway: number;
+  swaySpeed: number;
+}
+
+export default function WorldScene() {
+  const [heroUrl, setHeroUrl] = useState<string>('');
+  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
+  const [fallingHearts, setFallingHearts] = useState<FallingHeart[]>([]);
+  const nextHeartId = useRef(0);
+
+  useEffect(() => {
+    setHeroUrl(Math.random() > 0.5 ? ASSETS.angel : ASSETS.daemon);
+
+    const timer = setInterval(() => {
+      setTimeOfDay((prev) => {
+        if (prev === 'day') return 'sunset';
+        if (prev === 'sunset') return 'night';
+        return 'day';
+      });
+    }, 15000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Дождь из сердечек по клику/жесту
+  const triggerHeartRain = () => {
+    const newHearts: FallingHeart[] = Array.from({ length: 15 }).map(() => ({
+      id: nextHeartId.current++,
+      x: Math.random() * window.innerWidth,
+      y: -50 - Math.random() * 200,
+      size: 15 + Math.random() * 20,
+      speed: 1.5 + Math.random() * 2,
+      sway: Math.random() * 50,
+      swaySpeed: 0.02 + Math.random() * 0.03,
+    }));
+
+    setFallingHearts((prev) => [...prev, ...newHearts]);
+  };
+
+  useEffect(() => {
+    if (fallingHearts.length === 0) return;
+
+    const animationFrame = requestAnimationFrame(() => {
+      setFallingHearts((prev) =>
+        prev
+          .map((h) => ({
+            ...h,
+            y: h.y + h.speed,
+            x: h.x + Math.sin(h.y * h.swaySpeed) * 0.5,
+          }))
+          .filter((h) => h.y < window.innerHeight + 50)
+      );
+    });
+
+    return () => cancelAnimationFrame(animationFrame);
+  }, [fallingHearts]);
+
+  const bgStyles = {
+    day: 'from-sky-300 via-indigo-200 to-blue-400',
+    sunset: 'from-orange-400 via-pink-400 to-purple-600',
+    night: 'from-slate-900 via-indigo-950 to-blue-950',
+  };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-neutral-900 font-sans selection:bg-neutral-900 selection:text-white overflow-x-hidden relative flex flex-col">
-      
-      {/* HEADER */}
-      <Header />
-
-      {/* MAIN VISUAL STAGE (Top padding added to avoid header collision) */}
-      <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 pt-28 sm:pt-36 pb-16 flex flex-col justify-between relative min-h-[75vh]">
-        
-        {/* SKY ELEMENTS (Sun & Clouds scaled down) */}
-        <div className="absolute inset-x-0 top-24 px-8 pointer-events-none flex justify-between items-start z-0 opacity-90">
-          {/* Sun (reduced by half: w-12 h-12 instead of w-24) */}
-          <div className="relative left-12 sm:left-24">
-            <div className="w-12 h-12 rounded-full bg-yellow-300 shadow-sm animate-pulse flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full border border-yellow-400 scale-125 opacity-60"></div>
-            </div>
-          </div>
-
-          {/* Cloud 1 */}
-          <div className="bg-white/70 backdrop-blur-sm rounded-full px-4 py-1.5 shadow-sm text-[10px] font-mono text-neutral-400 tracking-widest uppercase">
-            [ empathy // source code ]
-          </div>
-        </div>
-
-        {/* CENTERED BALLOON & THREAD */}
-        <div className="absolute left-1/2 top-32 -translate-x-1/2 z-10 flex flex-col items-center pointer-events-none">
-          {/* Heart Balloon (Centered on screen) */}
-          <div 
-            className={`w-10 h-10 bg-rose-600 rotate-45 relative rounded-sm shadow-md transition-transform duration-500 cursor-pointer pointer-events-auto ${hovered ? 'scale-110' : 'scale-100'}`}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-          >
-            <div className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-rose-600"></div>
-            <div className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-rose-600"></div>
-            {/* Balloon knot */}
-            <div className="absolute bottom-[-6px] right-[-6px] w-2.5 h-2.5 bg-rose-700 rotate-45"></div>
-          </div>
-
-          {/* Corrected Thread / String connecting balloon to character */}
-          <svg className="overflow-visible w-40 h-56" style={{ transform: 'translateX(-35px)' }}>
-            <path 
-              d="M 40 6 Q 10 70 -35 180" 
-              fill="none" 
-              stroke="#a3a3a3" 
-              strokeWidth="1.5" 
-              strokeDasharray="3 3"
-            />
-          </svg>
-        </div>
-
-        {/* SCENE STAGE (Ground, Character, House, Tree) */}
-        <div className="relative w-full h-[450px] mt-auto flex items-end justify-between px-4 sm:px-16 z-10">
-          
-          {/* GROUND LINE (Otrisovannaja zemlya) */}
-          <div className="absolute bottom-0 inset-x-0 h-1 bg-neutral-300 rounded-full"></div>
-          <div className="absolute bottom-[-10px] left-10 right-10 h-3 bg-gradient-to-t from-neutral-200/50 to-transparent blur-sm"></div>
-
-          {/* LEFT: CHARACTER (Reduced by half) */}
-          <div className="relative mb-1 flex flex-col items-center scale-50 origin-bottom">
-            {/* Head */}
-            <div className="w-24 h-24 rounded-full border-2 border-neutral-900 bg-white shadow-sm flex items-center justify-center relative">
-              <div className="w-2 h-2 bg-neutral-900 rounded-full absolute right-8 top-10"></div>
-            </div>
-            {/* Body / Cloak & Backpack */}
-            <div className="w-28 h-36 bg-white border-2 border-neutral-900 rounded-t-full rounded-b-2xl relative -mt-3 shadow-sm flex items-center justify-center">
-              <div className="absolute -left-6 top-6 w-12 h-20 bg-neutral-100 border-2 border-neutral-900 rounded-2xl -rotate-12"></div>
-            </div>
-            {/* Legs */}
-            <div className="flex gap-6 -mt-1">
-              <div className="w-2.5 h-12 bg-neutral-900 rounded-full"></div>
-              <div className="w-2.5 h-12 bg-neutral-900 rounded-full"></div>
-            </div>
-          </div>
-
-          {/* RIGHT: HOUSE & TREE (Reduced by 3 times) */}
-          <div className="relative mb-1 flex items-end gap-3 scale-[0.35] origin-bottom-right">
-            {/* Tree */}
-            <div className="flex flex-col items-center relative -right-4">
-              <div className="w-36 h-36 rounded-full border-4 border-neutral-900 bg-emerald-500 relative overflow-hidden shadow-sm">
-                <div className="absolute inset-0 border-2 border-neutral-900 rounded-full opacity-40 scale-90"></div>
-                <div className="absolute top-0 right-4 w-4 h-4 bg-yellow-300 rounded-full border border-neutral-900"></div>
-              </div>
-              <div className="w-4 h-28 bg-neutral-800 border-x-2 border-neutral-900 -mt-4"></div>
-            </div>
-
-            {/* House */}
-            <div className="relative flex flex-col items-center">
-              {/* Roof */}
-              <div className="w-44 h-28 bg-purple-500 border-4 border-neutral-900 rounded-t-full relative z-20 shadow-sm flex items-center justify-center">
-                <div className="w-3 h-3 bg-white rounded-full border border-neutral-900"></div>
-              </div>
-              {/* House Body */}
-              <div className="w-36 h-44 bg-white border-4 border-neutral-900 border-t-0 relative -mt-2 rounded-b-3xl flex flex-col items-center justify-start pt-6 shadow-sm">
-                {/* Window */}
-                <div className="w-14 h-14 rounded-full border-3 border-neutral-900 bg-yellow-100 flex items-center justify-center relative">
-                  <div className="absolute inset-0 flex items-center justify-center"><div className="w-full h-0.5 bg-neutral-900"></div></div>
-                  <div className="absolute inset-0 flex items-center justify-center"><div className="h-full w-0.5 bg-neutral-900"></div></div>
-                </div>
-                {/* Door */}
-                <div className="w-12 h-20 border-3 border-neutral-900 border-b-0 rounded-t-full mt-auto bg-neutral-50"></div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
+    <div
+      onClick={triggerHeartRain}
+      className={`relative w-full h-[calc(100vh-5rem)] mt-20 overflow-hidden bg-gradient-to-b ${bgStyles[timeOfDay]} transition-colors duration-1000 select-none cursor-pointer`}
+    >
+      {/* 1. Облака (уменьшенные и с мягкой прозрачностью) */}
+      <div className="absolute inset-0 opacity-30 pointer-events-none scale-90">
+        <img
+          src={ASSETS.clouds}
+          alt="Clouds"
+          className="w-full h-full object-cover filter blur-[1px]"
+        />
       </div>
 
+      {/* 2. Солнце (уменьшено в 2 раза) */}
+      <div
+        className={`absolute top-8 left-1/4 w-16 h-16 transition-opacity duration-1000 pointer-events-none ${
+          timeOfDay === 'night' ? 'opacity-0' : 'opacity-90'
+        }`}
+      >
+        <img src={ASSETS.sun} alt="Sun" className="w-full h-full object-contain animate-spin-slow" />
+      </div>
+
+      {/* 3. Звезды (ночной режим) */}
+      <div
+        className={`absolute inset-0 transition-opacity duration-1000 pointer-events-none ${
+          timeOfDay === 'night' ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        <div className="absolute top-10 left-10 w-1.5 h-1.5 bg-white rounded-full animate-ping" />
+        <div className="absolute top-20 right-1/4 w-2 h-2 bg-white rounded-full opacity-80" />
+        <div className="absolute top-32 left-1/3 w-1 h-1 bg-white rounded-full opacity-60" />
+        <div className="absolute top-16 right-16 w-2 h-2 bg-white rounded-full animate-pulse" />
+      </div>
+
+      {/* 4. Дом и дерево (уменьшены в 3 раза, стоят на земле) */}
+      <div className="absolute bottom-4 right-12 w-24 md:w-32 pointer-events-none">
+        <img src={ASSETS.house} alt="House and Tree" className="w-full h-auto drop-shadow-md" />
+        {/* Ночное свечение в окошке */}
+        <div
+          className={`absolute bottom-8 right-7 w-2.5 h-3.5 bg-amber-300 rounded-sm blur-[1px] transition-opacity duration-1000 ${
+            timeOfDay === 'night' ? 'opacity-90 shadow-[0_0_10px_#fde047]' : 'opacity-0'
+          }`}
+        />
+      </div>
+
+      {/* 5. Герой (уменьшен в 2 раза, стоит на земле слева) */}
+      {heroUrl && (
+        <div className="absolute bottom-4 left-12 md:left-20 w-20 md:w-28 pointer-events-none">
+          <img src={heroUrl} alt="Hero" className="w-full h-auto drop-shadow-sm" />
+        </div>
+      )}
+
+      {/* 6. Сердечко-шарик по центру экрана */}
+      <div className="absolute top-20 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none animate-bounce-slow">
+        <img src={ASSETS.heart} alt="Heart Balloon" className="w-12 h-12 md:w-16 md:h-16 drop-shadow-lg" />
+      </div>
+
+      {/* 7. Нитка от руки героя к центру шарика */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none">
+        <path
+          d="M calc(3rem + 36px) calc(100% - 55px) Q calc(50% - 40px) calc(50% + 10px) 50% 115px"
+          fill="none"
+          stroke="rgba(0,0,0,0.25)"
+          strokeWidth="1.5"
+        />
+      </svg>
+
+      {/* 8. Дождь из маленьких сердечек */}
+      {fallingHearts.map((h) => (
+        <img
+          key={h.id}
+          src={ASSETS.heart}
+          alt="Falling Heart"
+          style={{
+            position: 'absolute',
+            left: `${h.x}px`,
+            top: `${h.y}px`,
+            width: `${h.size}px`,
+            height: `${h.size}px`,
+            pointerEvents: 'none',
+            opacity: 0.85,
+            transform: `rotate(${Math.sin(h.y * 0.05) * 15}deg)`,
+          }}
+        />
+      ))}
     </div>
   );
 }
