@@ -43,13 +43,12 @@ export default function WorldScene() {
     return () => clearInterval(timer);
   }, []);
 
-  // Дождь из сердечек по клику/жесту
   const triggerHeartRain = () => {
     const newHearts: FallingHeart[] = Array.from({ length: 15 }).map(() => ({
       id: nextHeartId.current++,
       x: Math.random() * window.innerWidth,
       y: -50 - Math.random() * 200,
-      size: 15 + Math.random() * 20,
+      size: 20 + Math.random() * 25,
       speed: 1.5 + Math.random() * 2,
       sway: Math.random() * 50,
       swaySpeed: 0.02 + Math.random() * 0.03,
@@ -87,7 +86,7 @@ export default function WorldScene() {
       onClick={triggerHeartRain}
       className={`relative w-full h-[calc(100vh-5rem)] mt-20 overflow-hidden bg-gradient-to-b ${bgStyles[timeOfDay]} transition-colors duration-1000 select-none cursor-pointer`}
     >
-      {/* 1. Облака (уменьшенные и с мягкой прозрачностью) */}
+      {/* 1. Облака */}
       <div className="absolute inset-0 opacity-30 pointer-events-none scale-90">
         <img
           src={ASSETS.clouds}
@@ -96,16 +95,16 @@ export default function WorldScene() {
         />
       </div>
 
-      {/* 2. Солнце (уменьшено в 2 раза) */}
+      {/* 2. Солнце (увеличено примерно в 3 раза) */}
       <div
-        className={`absolute top-8 left-1/4 w-16 h-16 transition-opacity duration-1000 pointer-events-none ${
+        className={`absolute top-12 left-1/4 w-44 h-44 transition-opacity duration-1000 pointer-events-none ${
           timeOfDay === 'night' ? 'opacity-0' : 'opacity-90'
         }`}
       >
         <img src={ASSETS.sun} alt="Sun" className="w-full h-full object-contain animate-spin-slow" />
       </div>
 
-      {/* 3. Звезды (ночной режим) */}
+      {/* 3. Звезды (ночь) */}
       <div
         className={`absolute inset-0 transition-opacity duration-1000 pointer-events-none ${
           timeOfDay === 'night' ? 'opacity-100' : 'opacity-0'
@@ -117,40 +116,43 @@ export default function WorldScene() {
         <div className="absolute top-16 right-16 w-2 h-2 bg-white rounded-full animate-pulse" />
       </div>
 
-      {/* 4. Дом и дерево (уменьшены в 3 раза, стоят на земле) */}
-      <div className="absolute bottom-4 right-12 w-24 md:w-32 pointer-events-none">
+      {/* 4. Отрисованная земля (лужайка снизу) */}
+      <div className="absolute bottom-0 left-0 w-full h-16 bg-gradient-to-t from-emerald-600 to-emerald-500 rounded-t-[50%] scale-x-125 pointer-events-none opacity-90 shadow-inner" />
+
+      {/* 5. Дом и дерево (увеличены, смещены выше и правее) */}
+      <div className="absolute bottom-8 right-16 w-36 md:w-48 pointer-events-none">
         <img src={ASSETS.house} alt="House and Tree" className="w-full h-auto drop-shadow-md" />
-        {/* Ночное свечение в окошке */}
+        {/* Ночное свечение окна */}
         <div
-          className={`absolute bottom-8 right-7 w-2.5 h-3.5 bg-amber-300 rounded-sm blur-[1px] transition-opacity duration-1000 ${
-            timeOfDay === 'night' ? 'opacity-90 shadow-[0_0_10px_#fde047]' : 'opacity-0'
+          className={`absolute bottom-12 right-10 w-3.5 h-5 bg-amber-300 rounded-sm blur-[1px] transition-opacity duration-1000 ${
+            timeOfDay === 'night' ? 'opacity-90 shadow-[0_0_12px_#fde047]' : 'opacity-0'
           }`}
         />
       </div>
 
-      {/* 5. Герой (уменьшен в 2 раза, стоит на земле слева) */}
+      {/* 6. Герой (выше, правее, не выпадает из кадра) */}
       {heroUrl && (
-        <div className="absolute bottom-4 left-12 md:left-20 w-20 md:w-28 pointer-events-none">
-          <img src={heroUrl} alt="Hero" className="w-full h-auto drop-shadow-sm" />
+        <div className="absolute bottom-8 left-20 md:left-32 w-28 md:w-36 pointer-events-none">
+          <img src={heroUrl} alt="Hero" className="w-full h-auto drop-shadow-md" />
         </div>
       )}
 
-      {/* 6. Сердечко-шарик по центру экрана */}
-      <div className="absolute top-20 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none animate-bounce-slow">
-        <img src={ASSETS.heart} alt="Heart Balloon" className="w-12 h-12 md:w-16 md:h-16 drop-shadow-lg" />
+      {/* 7. Сердечко-шарик по центру (увеличено в 2 раза) */}
+      <div className="absolute top-24 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none animate-bounce-slow">
+        <img src={ASSETS.heart} alt="Heart Balloon" className="w-24 h-24 md:w-32 md:h-32 drop-shadow-xl" />
       </div>
 
-      {/* 7. Нитка от руки героя к центру шарика */}
+      {/* 8. Скорректированная нитка от руки героя к шарику */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none">
         <path
-          d="M calc(3rem + 36px) calc(100% - 55px) Q calc(50% - 40px) calc(50% + 10px) 50% 115px"
+          d="M calc(5rem + 48px) calc(100% - 75px) Q calc(50% - 50px) calc(50% + 20px) 50% 150px"
           fill="none"
-          stroke="rgba(0,0,0,0.25)"
-          strokeWidth="1.5"
+          stroke="rgba(0,0,0,0.3)"
+          strokeWidth="2"
         />
       </svg>
 
-      {/* 8. Дождь из маленьких сердечек */}
+      {/* 9. Дождь из сердечек */}
       {fallingHearts.map((h) => (
         <img
           key={h.id}
@@ -160,8 +162,8 @@ export default function WorldScene() {
             position: 'absolute',
             left: `${h.x}px`,
             top: `${h.y}px`,
-            width: `${h.size}px`,
-            height: `${h.size}px`,
+            width: `${h.size * 1.5}px`,
+            height: `${h.size * 1.5}px`,
             pointerEvents: 'none',
             opacity: 0.85,
             transform: `rotate(${Math.sin(h.y * 0.05) * 15}deg)`,

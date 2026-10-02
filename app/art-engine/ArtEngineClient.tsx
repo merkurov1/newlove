@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase-browser';
 import { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import Header from '@/components/Header';
 
-export default function ArtEngineClient() {
+export default function ArtEngineDashboard() {
   // Auth State
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -47,19 +47,12 @@ export default function ArtEngineClient() {
   const [loadingLots, setLoadingLots] = useState(true);
   const [activeTab, setActiveTab] = useState<'parser' | 'vault'>('parser');
 
-  // Flexible admin check supporting recognized administrator emails and metadata
+  // Helper check for admin (Anton Merkurov / authorized admin email or roles)
   const checkIsAdmin = (currentUser: User | null) => {
     if (!currentUser) return false;
     const email = currentUser.email?.toLowerCase() || '';
-    if (
-      email === 'merkurov@gmail.com' ||
-      email === 'contact@merkurov.love' ||
-      email.includes('merkurov') ||
-      currentUser.user_metadata?.role === 'admin' ||
-      currentUser.app_metadata?.role === 'admin'
-    ) {
-      return true;
-    }
+    // Разрешаем вход только для админа (например, merkurov@gmail.com или если в метаданных/ролях админ)
+    if (email === 'merkurov@gmail.com') return true;
     return false;
   };
 
@@ -72,6 +65,7 @@ export default function ArtEngineClient() {
         
         const currentUser = currentSession?.user || null;
         if (currentUser && !checkIsAdmin(currentUser)) {
+          // Если юзер не админ — разлогиниваем его на арт-движке
           await supabase.auth.signOut();
           setSession(null);
           setUser(null);
@@ -167,7 +161,7 @@ export default function ArtEngineClient() {
     return fetch(url, { ...options, headers });
   };
 
-  // AUTH 1: Email/Password Sign-In
+  // AUTH 1: Email/Password or Passkey Sign-In
   const handleEmailPasswordSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authEmail || !password) return;
@@ -212,7 +206,7 @@ export default function ArtEngineClient() {
         throw new Error('WebAuthn is not supported by this browser environment.');
       }
 
-      const { error } = await supabase.auth.signInWithPasskey();
+      const { data, error } = await supabase.auth.signInWithPasskey();
       if (error) throw error;
 
       const { data: { session: newSession } } = await supabase.auth.getSession();
@@ -970,7 +964,6 @@ export default function ArtEngineClient() {
                             )}
                           </div>
 
-                          (p-5 sm:p-6 flex-1 flex flex-col justify-between space-y-3)
                           <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between space-y-3">
                             <div>
                               <div className="flex justify-between items-start text-neutral-400 font-mono text-[10px] uppercase tracking-wider mb-1 gap-2">
