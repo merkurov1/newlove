@@ -11,6 +11,7 @@ const ASSETS = {
   sun: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Sun1.png',
   clouds: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Clouds.png',
   heartRain: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/HeartRain.png',
+  ambientAudio: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Drift%20of%20Glass.mp3',
 };
 
 interface FallingHeart {
@@ -27,6 +28,9 @@ export default function WorldScene() {
   const [timeGradient, setTimeGradient] = useState('');
   const [isNight, setIsNight] = useState(false);
   const [fallingHearts, setFallingHearts] = useState<FallingHeart[]>([]);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const nextHeartId = useRef(0);
 
   useEffect(() => {
@@ -48,6 +52,23 @@ export default function WorldScene() {
       setIsNight(true);
     }
   }, []);
+
+  // Управление фоновой музыкой
+  const toggleAudio = (e: React.MouseEvent) => {
+    e.stopPropagation(); // чтобы клик не вызывал дождь из сердечек
+    if (!audioRef.current) return;
+
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      audioRef.current.play().then(() => {
+        setIsPlayingAudio(true);
+      }).catch((err) => {
+        console.log("Audio playback error:", err);
+      });
+    }
+  };
 
   const triggerHeartRain = () => {
     const newHearts: FallingHeart[] = Array.from({ length: 12 }).map(() => ({
@@ -82,6 +103,37 @@ export default function WorldScene() {
       onClick={triggerHeartRain}
       className={`relative w-full h-[calc(100vh-6rem)] mt-24 overflow-hidden bg-gradient-to-b ${timeGradient} transition-colors duration-1000 select-none cursor-pointer flex flex-col justify-end`}
     >
+      {/* Скрытый аудиоэлемент */}
+      <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
+
+      {/* Кнопка управления звуком в правом верхнем углу сцены */}
+      <div className="absolute top-6 right-6 z-40">
+        <button
+          onClick={toggleAudio}
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 backdrop-blur-md border border-white/40 text-white/90 hover:bg-white/30 transition-all shadow-lg group"
+          title={isPlayingAudio ? "Выключить музыку" : "Включить музыку"}
+        >
+          {isPlayingAudio ? (
+            <>
+              {/* Иконка динамика со звуком */}
+              <svg className="w-5 h-5 text-pink-200 animate-pulse" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+              <span className="text-xs font-medium tracking-wide">Sound On</span>
+            </>
+          ) : (
+            <>
+              {/* Иконка выключенного звука */}
+              <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+              <span className="text-xs font-medium tracking-wide">Sound Off</span>
+            </>
+          )}
+        </button>
+      </div>
+
       {/* 1. Облака */}
       <div className="absolute inset-0 opacity-30 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 w-[200%] h-full flex animate-clouds-move">
@@ -116,25 +168,25 @@ export default function WorldScene() {
 
       {/* 4. Композиция */}
       
-      {/* Герой: сдвинут ближе к центру (left-[32%]) */}
+      {/* Герой с фиксированным равным размером контейнера */}
       <div className="absolute bottom-[20vh] left-[32%] -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center">
         <div className="absolute -bottom-1 w-24 h-5 bg-black/20 rounded-full blur-[4px]" />
         {heroUrl && (
-          <div className="w-28 sm:w-36 md:w-40 h-auto drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
-            <Image src={heroUrl} alt="Hero" width={160} height={160} className="w-full h-auto object-contain" priority />
+          <div className="w-32 h-36 sm:w-38 sm:h-44 flex items-end justify-center drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
+            <Image src={heroUrl} alt="Hero" width={160} height={180} className="w-full h-full object-contain" priority />
           </div>
         )}
       </div>
 
-      {/* Сердечко-шарик по центру с аккуратно свисающей ниточкой */}
+      {/* Сердечко-шарик по центру с длинной изящной ниточкой */}
       <div className="absolute top-[18%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center animate-bounce-slow">
         <div className="w-20 sm:w-28 md:w-32 h-20 sm:h-28 md:h-32 drop-shadow-[0_10px_25px_rgba(239,68,68,0.4)] relative">
           <Image src={ASSETS.heart} alt="Heart Balloon" fill className="object-contain" priority />
         </div>
-        {/* Аккуратный хвостик-ниточка под сердцем */}
-        <svg className="w-6 h-12 overflow-visible -mt-1" viewBox="0 0 20 40">
+        {/* Удлиненная ниточка */}
+        <svg className="w-8 h-36 overflow-visible -mt-1" viewBox="0 0 20 120">
           <path
-            d="M 10 0 Q 15 20 5 38"
+            d="M 10 0 Q 22 60 4 115"
             fill="none"
             stroke="rgba(40, 40, 40, 0.45)"
             strokeWidth="2"
@@ -143,7 +195,7 @@ export default function WorldScene() {
         </svg>
       </div>
 
-      {/* Домик: сдвинут ближе к центру (right-[32%]) */}
+      {/* Домик */}
       <div className="absolute bottom-[20vh] right-[32%] translate-x-1/2 z-20 pointer-events-none flex flex-col items-center">
         <div className="absolute -bottom-1 w-28 h-5 bg-black/20 rounded-full blur-[4px]" />
         <div className="w-32 sm:w-40 md:w-48 h-auto drop-shadow-[0_10px_25px_rgba(0,0,0,0.3)] relative">
