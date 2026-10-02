@@ -1,49 +1,44 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, ChangeEvent } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 import TagInput from '@/components/admin/TagInput';
 import BlockEditorImproved from '@/components/admin/BlockEditorImproved';
 import RichTextArea from '@/components/admin/RichTextArea';
 import { createSeoSlug } from '@/lib/slugUtils';
-
 import { EditorJsBlock } from '@/types/blocks';
 
-
-
-
-
 interface ContentFormProps {
-  initialData?: any;
-  saveAction: any;
+  initialData?: Record<string, any>;
+  saveAction: (formData: FormData) => void | Promise<any>;
   type: string;
 }
 
 function parseBlocks(raw: any): EditorJsBlock[] {
   if (!raw) return [];
   let arr = Array.isArray(raw) ? raw : (() => { try { return JSON.parse(raw); } catch { return []; } })();
-  // Validate and coerce to EditorJsBlock shape
   return arr.filter((block: any) => block && typeof block.type === 'string' && block.data && typeof block.data === 'object');
 }
-
 
 export default function ContentForm({ initialData, saveAction, type }: ContentFormProps) {
   const safeInitial = initialData && typeof initialData === 'object' ? initialData : {};
   const isEditing = !!safeInitial && !!safeInitial.id;
+  
   const [title, setTitle] = useState(safeInitial.title || '');
   const [artist, setArtist] = useState(safeInitial.artist || '');
   const [curatorNote, setCuratorNote] = useState(safeInitial.curatorNote || '');
   const [quote, setQuote] = useState(safeInitial.quote || '');
   const [specs, setSpecs] = useState(safeInitial.specs || '');
   const [slug, setSlug] = useState(safeInitial.slug || '');
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false); // Всегда разрешаем автогенерацию
-  const [content, setContent] = useState<EditorJsBlock[]>(parseBlocks(safeInitial.content));
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [content, setContent] = useState<EditorJsBlock[]>(() => parseBlocks(safeInitial.content));
   const [published, setPublished] = useState(safeInitial.published || false);
   const [error, setError] = useState('');
   const [slugError, setSlugError] = useState('');
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [role, setRole] = useState<string | null>(null);
+  const [, setUser] = useState<any>(null);
+  const [, setRole] = useState<string | null>(null);
+
   useEffect(() => {
     const supabase = createClient();
     const getUser = async () => {
@@ -55,11 +50,11 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     const { data: listener } = supabase.auth.onAuthStateChange(() => getUser());
     return () => { try { listener?.subscription?.unsubscribe?.(); } catch {} };
   }, []);
+
   const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
 
-  // Функция проверки уникальности slug
   const checkSlugUniqueness = useCallback(async (slugToCheck: string) => {
-    if (!slugToCheck || isEditing) return; // Для редактирования не проверяем
+    if (!slugToCheck || isEditing) return;
 
     setIsCheckingSlug(true);
     setSlugError('');
@@ -69,39 +64,36 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       const data = await response.json();
       
       if (!data.available) {
-        setSlugError('Этот URL уже используется. Измените slug.');
+        setSlugError('Slug is already in use. Please modify.');
       }
     } catch (err) {
-      console.error('Ошибка проверки slug:', err);
+      console.error('Slug validation error:', err);
     } finally {
       setIsCheckingSlug(false);
     }
   }, [isEditing, safeInitial.id]);
 
-  // Автогенерация slug из artist и title
   useEffect(() => {
     if (!slugManuallyEdited && (artist.trim() || title.trim())) {
       const base = [artist, title].filter(Boolean).join(' ');
       const generatedSlug = createSeoSlug(base);
       setSlug(generatedSlug);
-      // Проверяем уникальность только для новых записей
       if (!isEditing) {
         checkSlugUniqueness(generatedSlug);
       }
     }
   }, [artist, title, slugManuallyEdited, isEditing, checkSlugUniqueness]);
 
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTitleChange = (e: ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);
   };
 
-  const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSlugChange = (e: ChangeEvent<HTMLInputElement>) => {
     const newSlug = e.target.value;
     setSlug(newSlug);
-    setSlugManuallyEdited(true); // Отмечаем, что slug редактировался вручную
-    setSlugError(''); // Сбрасываем ошибку
+    setSlugManuallyEdited(true);
+    setSlugError('');
     
-    // Проверяем уникальность при ручном вводе
     if (newSlug.trim()) {
       checkSlugUniqueness(newSlug);
     }
@@ -128,65 +120,64 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     return true;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    // Do not prevent default here; allow the native form submission to reach
-    // the server action when validation passes. We will call
-    // e.preventDefault() only on failure paths to stop submission.
-    // Perform a server-side role check to avoid relying solely on client-side
-    // metadata which can be stale or blocked by RLS. This endpoint uses the
-    // service-role key (when available) to determine if the current session
-    // belongs to an ADMIN. It is safe to call from the browser (same-origin).
+  async function handleSubmit(e: any) {
     setError('');
     setIsCheckingSlug(true);
+
     try {
       const res = await fetch('/api/user/role', { credentials: 'same-origin' });
       if (!res.ok) {
           e.preventDefault();
-          setError('Не удалось проверить привилегии администратора. Попробуйте позже.');
+          setError('Authorization check failed. Please try again.');
           setIsCheckingSlug(false);
-          return false;
+          return;
       }
       const body = await res.json();
       const serverRole = (body && body.role) ? String(body.role).toUpperCase() : 'ANON';
       if (serverRole !== 'ADMIN') {
           e.preventDefault();
-          setError('Ошибка: нет прав администратора. Войдите как админ.');
+          setError('Access denied: Administrator privileges required.');
           setIsCheckingSlug(false);
-          return false;
+          return;
       }
     } catch (err) {
-      console.error('Ошибка проверки роли на сервере:', err);
-        e.preventDefault();
-        setError('Не удалось проверить привилегии администратора. Попробуйте позже.');
-        setIsCheckingSlug(false);
-        return false;
+      console.error('Server role verification error:', err);
+      e.preventDefault();
+      setError('Authorization check failed. Please try again.');
+      setIsCheckingSlug(false);
+      return;
     } finally {
       setIsCheckingSlug(false);
     }
+
     if (!validateBlocks(content)) {
       e.preventDefault();
-      setError('Проверьте структуру блоков: должен быть хотя бы один корректный блок.');
-      return false;
+      setError('Invalid block structure: At least one valid content block is required.');
+      return;
     }
+
     if (slugError) {
       e.preventDefault();
-      setError('Исправьте ошибки в URL перед сохранением.');
-      return false;
+      setError('Please resolve URL errors before saving.');
+      return;
     }
+
+    const contentTextArea = e.currentTarget.elements.namedItem('content') as HTMLTextAreaElement;
+    if (contentTextArea) {
+      contentTextArea.value = JSON.stringify(content);
+    }
+
     setError('');
-    // Allow the form to proceed (the server-side actions will re-check permissions)
-    return true;
   }
 
-  // Функция для отправки тестового письма
   async function handleTestSend() {
     if (!title || !content.length) {
-      setError('Заполните название и содержание письма для тестовой отправки');
+      setError('Title and content are required for test dispatch.');
       return;
     }
 
     try {
-      setError('Отправляем тестовое письмо...');
+      setError('Transmitting test dispatch...');
       
       const response = await fetch('/api/admin/letters/test-send', {
         method: 'POST',
@@ -201,38 +192,44 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
 
       if (response.ok) {
         const data = await response.json();
-        setError(`✅ ${data.message}`);
+        setError(`✓ ${data.message || 'Test dispatch successful.'}`);
       } else {
         const data = await response.json();
-        setError(`❌ Ошибка отправки: ${data.error || 'Неизвестная ошибка'}`);
+        setError(`✕ Transmission error: ${data.error || 'Unknown error'}`);
       }
-    } catch (err) {
-      setError('❌ Ошибка при отправке тестового письма');
+    } catch {
+      setError('✕ Failed to transmit test dispatch.');
     }
   }
 
-
-
   return (
-  <form action={saveAction} className="space-y-6 bg-white p-4 sm:p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
-  {isEditing && <input type="hidden" name="id" value={safeInitial.id} />}
+    <form 
+      action={saveAction} 
+      className="bg-white border border-neutral-200 p-8 sm:p-12 space-y-8 font-sans max-w-5xl mx-auto shadow-none" 
+      onSubmit={handleSubmit}
+    >
+      {isEditing && <input type="hidden" name="id" value={safeInitial.id} />}
       
-      {/* Поля только для статей */}
       {type !== 'выпуск' && (
-        <>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label htmlFor="artist" className="block text-sm font-medium text-gray-700">Artist Name</label>
+            <label htmlFor="artist" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
+              Artist
+            </label>
             <input
               type="text"
               name="artist"
               id="artist"
               value={artist}
-              onChange={e => setArtist(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setArtist(e.target.value)}
+              placeholder="e.g. Sergey Merkurov"
+              className="w-full bg-neutral-50/50 border border-neutral-200 px-4 py-3 text-sm text-neutral-900 focus:bg-white focus:border-neutral-900 focus:outline-none transition rounded-none font-serif"
             />
           </div>
           <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700">Artwork Title</label>
+            <label htmlFor="title" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
+              Artwork Title *
+            </label>
             <input
               type="text"
               name="title"
@@ -240,58 +237,18 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
               required
               value={title}
               onChange={handleTitleChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
+              placeholder="e.g. Monumental Study"
+              className="w-full bg-neutral-50/50 border border-neutral-200 px-4 py-3 text-sm text-neutral-900 focus:bg-white focus:border-neutral-900 focus:outline-none transition rounded-none font-serif italic"
             />
           </div>
-          <div>
-            <label htmlFor="curatorNote" className="block text-sm font-medium text-gray-700">Curator's Note</label>
-            <RichTextArea
-              value={curatorNote}
-              onChange={setCuratorNote}
-              placeholder="Enter curator's note..."
-              className="font-serif"
-              minHeight="120px"
-            />
-            <input type="hidden" name="curatorNote" value={curatorNote} />
-            <p className="mt-1 text-xs text-gray-500">
-              Поддерживается форматирование: bold, italic, links (копируйте с сохранением стилей)
-            </p>
-          </div>
-          <div>
-            <label htmlFor="quote" className="block text-sm font-medium text-gray-700">Artist Quote</label>
-            <textarea
-              name="quote"
-              id="quote"
-              value={quote}
-              onChange={e => setQuote(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3 min-h-[80px] italic"
-            />
-            <p className="mt-1 text-xs text-gray-500">Используйте переносы строк для форматирования</p>
-          </div>
-          <div>
-            <label htmlFor="specs" className="block text-sm font-medium text-gray-700">Specs (Material, Dimensions, Context)</label>
-            <RichTextArea
-              value={specs}
-              onChange={setSpecs}
-              placeholder="Material: Oil on masonite
-Dimensions: 51 x 60 cm
-Context: Rossini, Paris
-Est. €40k"
-              className="font-mono text-sm"
-              minHeight="80px"
-            />
-            <input type="hidden" name="specs" value={specs} />
-            <p className="mt-1 text-xs text-gray-500">
-              Поддерживается форматирование: bold, italic (копируйте с сохранением стилей)
-            </p>
-          </div>
-        </>
+        </div>
       )}
       
-      {/* Поле Title для писем */}
       {type === 'выпуск' && (
         <div>
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700">Название письма</label>
+          <label htmlFor="title" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
+            Edition Title *
+          </label>
           <input
             type="text"
             name="title"
@@ -299,24 +256,79 @@ Est. €40k"
             required
             value={title}
             onChange={handleTitleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-base px-3 py-3"
+            placeholder="Issue headline..."
+            className="w-full bg-neutral-50/50 border border-neutral-200 px-4 py-3 text-sm text-neutral-900 focus:bg-white focus:border-neutral-900 focus:outline-none transition rounded-none font-serif"
           />
         </div>
       )}
+
+      {type !== 'выпуск' && (
+        <>
+          <div>
+            <label htmlFor="curatorNote" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
+              Curator's Note
+            </label>
+            <div className="border border-neutral-200 bg-neutral-50/30 p-1">
+              <RichTextArea
+                value={curatorNote}
+                onChange={setCuratorNote}
+                placeholder="Enter curatorial context..."
+                className="font-serif text-sm"
+                minHeight="140px"
+              />
+            </div>
+            <input type="hidden" name="curatorNote" value={curatorNote} />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor="quote" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
+                Artist Statement / Quote
+              </label>
+              <textarea
+                name="quote"
+                id="quote"
+                value={quote}
+                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setQuote(e.target.value)}
+                placeholder="Direct quotation..."
+                className="w-full bg-neutral-50/50 border border-neutral-200 px-4 py-3 text-sm text-neutral-900 focus:bg-white focus:border-neutral-900 focus:outline-none transition rounded-none font-serif italic min-h-[120px]"
+              />
+            </div>
+            <div>
+              <label htmlFor="specs" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
+                Specs & Provenance
+              </label>
+              <div className="border border-neutral-200 bg-neutral-50/30 p-1">
+                <RichTextArea
+                  value={specs}
+                  onChange={setSpecs}
+                  placeholder="Material, Dimensions, Year..."
+                  className="font-mono text-xs"
+                  minHeight="120px"
+                />
+              </div>
+              <input type="hidden" name="specs" value={specs} />
+            </div>
+          </div>
+        </>
+      )}
+
       <div>
-        <label htmlFor="slug" className="block text-sm font-medium text-gray-700">
-          URL (slug)
+        <div className="flex items-center justify-between mb-2">
+          <label htmlFor="slug" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500">
+            URL Slug *
+          </label>
           {!slugManuallyEdited && (
-            <span className="text-xs text-gray-500 ml-2">
-              (автогенерируется из названия)
+            <span className="font-mono text-[10px] text-neutral-400">
+              [Auto-generated]
             </span>
           )}
           {isCheckingSlug && (
-            <span className="text-xs text-blue-500 ml-2">
-              (проверяем уникальность...)
+            <span className="font-mono text-[10px] text-neutral-900 animate-pulse">
+              Verifying availability...
             </span>
           )}
-        </label>
+        </div>
         <input
           type="text"
           name="slug"
@@ -324,54 +336,72 @@ Est. €40k"
           required
           value={slug}
           onChange={handleSlugChange}
-          className={`mt-1 block w-full rounded-md shadow-sm text-base px-3 py-3 ${
-            slugError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+          className={`w-full bg-neutral-50/50 border px-4 py-3 text-xs font-mono text-neutral-900 focus:bg-white focus:outline-none transition rounded-none ${
+            slugError ? 'border-rose-600 focus:border-rose-600' : 'border-neutral-200 focus:border-neutral-900'
           }`}
         />
-        {slugError && (
-          <p className="mt-1 text-sm text-red-600">{slugError}</p>
-        )}
+        {slugError && <p className="mt-2 font-mono text-xs text-rose-600">{slugError}</p>}
       </div>
-    <TagInput initialTags={safeInitial.tags} onChange={setTags} />
-    <BlockEditorImproved value={content} onChange={setContent} />
+
+      <div className="border-t border-neutral-200 pt-8">
+        <TagInput initialTags={safeInitial.tags} onChange={setTags} />
+      </div>
+
+      <div className="border-t border-neutral-200 pt-8">
+        <label className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-4">
+          Composition Blocks
+        </label>
+        <BlockEditorImproved value={content} onChange={setContent} />
+      </div>
+
       <input type="hidden" name="tags" value={JSON.stringify(tags)} />
-      <textarea name="content" value={JSON.stringify(content)} readOnly hidden />
+      <textarea name="content" defaultValue={JSON.stringify(content)} readOnly hidden />
       <input type="hidden" name="artist" value={artist} />
       <input type="hidden" name="curatorNote" value={curatorNote} />
       <input type="hidden" name="quote" value={quote} />
       <input type="hidden" name="specs" value={specs} />
-      {error && <div className="text-red-600 text-sm font-medium">{error}</div>}
-      <div className="flex items-center mt-2 mb-2">
-        <input
-          id="published"
-          name="published"
-          type="checkbox"
-          checked={published}
-          onChange={e => setPublished(e.target.checked)}
-          className="h-6 w-6 rounded border-gray-300 text-blue-600"
-        />
-        <label htmlFor="published" className="ml-3 block text-base text-gray-900">
-          Опубликовано на сайте
-        </label>
+
+      {error && (
+        <div className="border-l-2 border-neutral-900 bg-neutral-50 p-4 font-mono text-xs text-neutral-900">
+          {error}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between border-y border-neutral-200 py-6">
+        <div className="flex items-center space-x-3">
+          <input
+            id="published"
+            name="published"
+            type="checkbox"
+            checked={published}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setPublished(e.target.checked)}
+            className="h-4 w-4 rounded-none border-neutral-300 text-neutral-900 focus:ring-0 cursor-pointer"
+          />
+          <label htmlFor="published" className="font-mono text-xs uppercase tracking-wider text-neutral-800 cursor-pointer select-none">
+            Publish to Live Archive
+          </label>
+        </div>
+        <span className="font-mono text-[10px] text-neutral-400">
+          {published ? 'Status: Public' : 'Status: Draft'}
+        </span>
       </div>
-      <p className="text-sm text-gray-600 mb-4">
-        ✓ Опубликованные письма видны на сайте в разделе Letters<br/>
-        📧 Отправка рассылки — отдельная операция (после публикации)
-      </p>
-      <div className="mt-4 space-y-3">
-        <button type="submit" className="w-full flex justify-center py-3 px-4 border rounded-md shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 min-h-[44px]">
-          {isEditing ? 'Сохранить изменения' : `Создать ${type}`}
+
+      <div className="space-y-3 pt-2">
+        <button 
+          type="submit" 
+          className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-4 transition-all rounded-none shadow-none flex items-center justify-center"
+        >
+          {isEditing ? 'Save Changes' : `Create ${type}`}
         </button>
         
-        {/* Кнопка тестовой отправки только для писем */}
         {type === 'выпуск' && (
           <button 
             type="button" 
             onClick={handleTestSend}
             disabled={!title || !content.length}
-            className="w-full flex justify-center py-3 px-4 border border-orange-500 rounded-md shadow-sm text-base font-medium text-orange-600 bg-white hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            className="w-full border border-neutral-300 hover:border-neutral-900 text-neutral-900 bg-transparent font-mono text-xs uppercase tracking-widest py-4 transition-all rounded-none disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
           >
-            📧 Отправить тест админу
+            Dispatch Test Preview
           </button>
         )}
       </div>
