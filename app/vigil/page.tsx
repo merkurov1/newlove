@@ -305,7 +305,7 @@ export default function VigilPage() {
         </div>
       </div>
 
-      {/* СЕРДЦЕ: В правом верхнем углу (с отступами по 20% / адаптивно) */}
+      {/* СЕРДЦЕ: В правом верхнем углу */}
       <div ref={heartRef} className="absolute top-[12%] right-[10%] sm:top-[20%] sm:right-[20%] z-30 flex items-center justify-center">
         <div 
           className="relative transition-all duration-700 ease-in-out cursor-pointer"
@@ -352,79 +352,84 @@ export default function VigilPage() {
         </AnimatePresence>
       </div>
 
-      {/* ЦЕНТР ЭКРАНА: Active Guardians (крупные, заметные) и элементы управления */}
-      <div className="flex-1 max-w-xl mx-auto w-full py-16 sm:py-24 flex flex-col items-center justify-center relative z-20 gap-10 text-center my-auto">
-        
-        {/* Active Guardians — крупные и по центру экрана */}
-        <div className="w-full space-y-4">
-          <div className="font-mono text-xs uppercase tracking-[0.3em] opacity-70">Active Guardians (24h)</div>
-          <div className="flex flex-wrap gap-3 justify-center items-center min-h-[50px] px-2">
-            {guardians.length === 0 ? (
-              <div className="font-serif text-sm opacity-50 italic">No recent sparks recorded yet. Be the first.</div>
-            ) : (
-              guardians.map((g, i) => (
-                <div 
-                  key={g + i} 
-                  className={`font-serif text-sm sm:text-base px-4 py-2 rounded-2xl border shadow-md backdrop-blur-md transition-transform hover:scale-105 ${
-                    lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
-                      ? 'bg-white/10 border-white/20 text-stone-100'
-                      : 'bg-white/90 border-stone-300 text-stone-900'
-                  }`}
-                >
-                  {g}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Статус сессии, таймер и кнопка Send Spark */}
-        <div className="w-full max-w-md space-y-5 pt-4">
-          <div className="text-center space-y-1.5">
-            <div className="font-mono text-xs">
-              {isLoading ? (
-                <span className="opacity-50">Verifying session...</span>
-              ) : userName ? (
-                <div className="opacity-90">Connected as <span className="font-semibold">{userName}</span></div>
+      {/* ЦЕНТР ЭКРАНА: Единая аккуратная композиция */}
+      <div className="flex-1 max-w-md mx-auto w-full py-12 flex flex-col items-center justify-center relative z-25 my-auto">
+        <div className={`w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl ${lighting.cardBg} flex flex-col items-center gap-6 text-center shadow-2xl transition-colors duration-1000`}>
+          
+          {/* Active Guardians */}
+          <div className="w-full space-y-3">
+            <div className="font-mono text-xs uppercase tracking-[0.3em] opacity-70">Active Guardians (24h)</div>
+            <div className="flex flex-wrap gap-2 justify-center items-center min-h-[40px]">
+              {guardians.length === 0 ? (
+                <div className="font-serif text-sm opacity-50 italic">No recent sparks recorded yet. Be the first.</div>
               ) : (
-                <div className="text-amber-500 flex items-center justify-center gap-1.5">
-                  <Sparkles size={14} />
-                  <span>Please <Link href="/login" className="underline hover:opacity-80">sign in</Link> to participate</span>
-                </div>
+                guardians.map((g, i) => (
+                  <div 
+                    key={g + i} 
+                    className={`font-serif text-xs sm:text-sm px-3.5 py-1.5 rounded-full border shadow-sm transition-transform hover:scale-105 ${
+                      lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
+                        ? 'bg-white/10 border-white/20 text-stone-200'
+                        : 'bg-stone-100 border-stone-200 text-stone-800'
+                    }`}
+                  >
+                    {g}
+                  </div>
+                ))
               )}
             </div>
-
-            <div className="flex items-center justify-center gap-2">
-              <Clock size={13} className="text-amber-500" />
-              <span className="font-mono text-xs uppercase tracking-wider opacity-85">{timeLeft || 'Checking status...'}</span>
-            </div>
           </div>
 
-          <button 
-            onClick={triggerRitual}
-            disabled={isLighting || !userName}
-            className={`
-              group relative w-full h-16 border shadow-2xl
-              flex items-center justify-center gap-3 rounded-2xl
-              transition-all active:scale-95 disabled:opacity-40 cursor-pointer font-mono
-              ${lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
-                ? 'bg-stone-100 text-stone-900 border-stone-200 hover:bg-white'
-                : 'bg-stone-900 text-white border-stone-800 hover:bg-stone-800'
-              }
-            `}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-2xl" />
-            <Heart size={18} className={`text-orange-500 fill-orange-500/30 ${isLighting ? 'animate-bounce' : ''}`} />
-            <span className="text-xs font-bold tracking-[0.25em] uppercase">
-              {isLighting ? 'TRANSMITTING SPARK...' : 'SEND SPARK'}
-            </span>
-          </button>
+          {/* Разделитель */}
+          <div className={`w-full h-[1px] ${lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10') ? 'bg-white/10' : 'bg-stone-200'}`} />
 
-          {rateLimitMsg && (
-            <div className="font-mono text-xs text-rose-500 text-center">{rateLimitMsg}</div>
-          )}
+          {/* Статус сессии, таймер и кнопка Send Spark */}
+          <div className="w-full space-y-4">
+            <div className="text-center space-y-1.5">
+              <div className="font-mono text-xs">
+                {isLoading ? (
+                  <span className="opacity-50">Verifying session...</span>
+                ) : userName ? (
+                  <div className="opacity-90">Connected as <span className="font-semibold">{userName}</span></div>
+                ) : (
+                  <div className="text-amber-500 flex items-center justify-center gap-1.5">
+                    <Sparkles size={14} />
+                    <span>Please <Link href="/login" className="underline hover:opacity-80">sign in</Link> to participate</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-center gap-2">
+                <Clock size={13} className="text-amber-500" />
+                <span className="font-mono text-xs uppercase tracking-wider opacity-85">{timeLeft || 'Checking status...'}</span>
+              </div>
+            </div>
+
+            <button 
+              onClick={triggerRitual}
+              disabled={isLighting || !userName}
+              className={`
+                group relative w-full h-14 border shadow-xl
+                flex items-center justify-center gap-3 rounded-2xl
+                transition-all active:scale-95 disabled:opacity-40 cursor-pointer font-mono
+                ${lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
+                  ? 'bg-stone-100 text-stone-900 border-stone-200 hover:bg-white'
+                  : 'bg-stone-900 text-white border-stone-800 hover:bg-stone-800'
+                }
+              `}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-2xl" />
+              <Heart size={16} className={`text-orange-500 fill-orange-500/30 ${isLighting ? 'animate-bounce' : ''}`} />
+              <span className="text-xs font-bold tracking-[0.25em] uppercase">
+                {isLighting ? 'TRANSMITTING SPARK...' : 'SEND SPARK'}
+              </span>
+            </button>
+
+            {rateLimitMsg && (
+              <div className="font-mono text-xs text-rose-500 text-center">{rateLimitMsg}</div>
+            )}
+          </div>
+
         </div>
-
       </div>
 
       <div className="h-4" />
