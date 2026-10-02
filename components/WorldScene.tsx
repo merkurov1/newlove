@@ -54,7 +54,7 @@ export default function WorldScene() {
     }
   }, []);
 
-  // Отслеживание движения мыши для параллакса
+  // Отслеживание положения мыши для плавного следования сердца
   const handleMouseMove = (e: React.MouseEvent) => {
     const { innerWidth, innerHeight } = window;
     const x = (e.clientX - innerWidth / 2) / (innerWidth / 2); // от -1 до 1
@@ -80,7 +80,6 @@ export default function WorldScene() {
   };
 
   const triggerHeartRain = (e: React.MouseEvent) => {
-    // Не запускать дождь, если кликнули по кнопке звука
     if ((e.target as HTMLElement).closest('button')) return;
 
     const newHearts: FallingHeart[] = Array.from({ length: 12 }).map(() => ({
@@ -119,7 +118,7 @@ export default function WorldScene() {
       {/* Скрытый аудиоэлемент */}
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
-      {/* Кнопка управления звуком в правом верхнем углу сцены */}
+      {/* Кнопка управления звуком */}
       <div className="absolute top-6 right-6 z-45">
         <button
           onClick={toggleAudio}
@@ -145,11 +144,8 @@ export default function WorldScene() {
         </button>
       </div>
 
-      {/* 1. Облака (самый дальний слой параллакса) */}
-      <div 
-        className="absolute inset-0 opacity-30 pointer-events-none overflow-hidden transition-transform duration-200 ease-out"
-        style={{ transform: `translate(${-mousePos.x * 15}px, ${-mousePos.y * 10}px)` }}
-      >
+      {/* 1. Облака (фиксированные) */}
+      <div className="absolute inset-0 opacity-30 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 w-[200%] h-full flex animate-clouds-move">
           <div className="w-1/2 h-full relative">
             <Image src={ASSETS.clouds} alt="" fill className="object-cover filter blur-[1px]" draggable={false} />
@@ -160,25 +156,17 @@ export default function WorldScene() {
         </div>
       </div>
 
-      {/* 2. Солнце / Небесный слой */}
+      {/* 2. Солнце (фиксированное) */}
       <div
-        className={`absolute top-16 left-[20%] w-32 h-32 md:w-40 md:h-40 pointer-events-none transition-opacity duration-1000 ease-out`}
-        style={{
-          opacity: isNight ? 0 : 0.9,
-          transform: `translate(${mousePos.x * 20}px, ${mousePos.y * 15}px)`
-        }}
+        className={`absolute top-16 left-[20%] w-32 h-32 md:w-40 md:h-40 pointer-events-none transition-opacity duration-1000 ${
+          isNight ? 'opacity-0' : 'opacity-90 drop-shadow-[0_0_30px_rgba(255,220,100,0.5)]'
+        }`}
       >
-        <Image src={ASSETS.sun} alt="" fill className="object-contain animate-spin-slow drop-shadow-[0_0_30px_rgba(255,220,100,0.5)]" draggable={false} />
+        <Image src={ASSETS.sun} alt="" fill className="object-contain animate-spin-slow" draggable={false} />
       </div>
 
-      {/* Звезды ночью */}
-      <div 
-        className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-out`}
-        style={{
-          opacity: isNight ? 1 : 0,
-          transform: `translate(${mousePos.x * 10}px, ${mousePos.y * 10}px)`
-        }}
-      >
+      {/* Звезды ночью (фиксированные) */}
+      <div className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ${isNight ? 'opacity-100' : 'opacity-0'}`}>
         <div className="absolute top-12 left-20 w-1.5 h-1.5 bg-white rounded-full animate-ping" />
         <div className="absolute top-24 right-1/3 w-2 h-2 bg-white rounded-full opacity-90 shadow-[0_0_8px_#fff]" />
         <div className="absolute top-36 left-1/4 w-1 h-1 bg-white rounded-full opacity-70" />
@@ -188,13 +176,8 @@ export default function WorldScene() {
       {/* 3. Уровень земли */}
       <div className="absolute bottom-0 left-0 w-full h-[30vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 rounded-t-[50%] scale-x-125 pointer-events-none shadow-[inset_0_20px_30px_rgba(0,0,0,0.25)]" />
 
-      {/* 4. Композиция персонажей и объектов с параллаксом средней глубины */}
-      
-      {/* Герой */}
-      <div 
-        className="absolute bottom-[20vh] left-[32%] -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center transition-transform duration-150 ease-out"
-        style={{ transform: `translate(calc(-50% + ${mousePos.x * 25}px), ${mousePos.y * 15}px)` }}
-      >
+      {/* 4. Герой (фиксированный) */}
+      <div className="absolute bottom-[20vh] left-[32%] -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center">
         <div className="absolute -bottom-1 w-24 h-5 bg-black/20 rounded-full blur-[4px]" />
         {heroUrl && (
           <div className="w-32 h-36 sm:w-38 sm:h-44 flex items-end justify-center drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
@@ -203,10 +186,12 @@ export default function WorldScene() {
         )}
       </div>
 
-      {/* Центральное сердце на ниточке */}
+      {/* Центральное сердце-шарик (плавно движется за курсором мыши) */}
       <div 
-        className="absolute top-[18%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center animate-bounce-slow transition-transform duration-150 ease-out"
-        style={{ transform: `translate(calc(-50% + ${mousePos.x * 18}px), ${mousePos.y * 10}px)` }}
+        className="absolute top-[18%] left-1/2 z-20 pointer-events-none flex flex-col items-center animate-bounce-slow transition-transform duration-300 ease-out"
+        style={{ 
+          transform: `translate(calc(-50% + ${mousePos.x * 35}px), calc(-50% + ${mousePos.y * 25}px))` 
+        }}
       >
         <div className="w-20 sm:w-28 md:w-32 h-20 sm:h-28 md:h-32 drop-shadow-[0_10px_25px_rgba(239,68,68,0.4)] relative">
           <Image src={ASSETS.heart} alt="" fill className="object-contain" priority draggable={false} />
@@ -222,11 +207,8 @@ export default function WorldScene() {
         </svg>
       </div>
 
-      {/* Домик */}
-      <div 
-        className="absolute bottom-[20vh] right-[32%] translate-x-1/2 z-20 pointer-events-none flex flex-col items-center transition-transform duration-150 ease-out"
-        style={{ transform: `translate(calc(50% + ${mousePos.x * 30}px), ${mousePos.y * 18}px)` }}
-      >
+      {/* Домик (фиксированный) */}
+      <div className="absolute bottom-[20vh] right-[32%] translate-x-1/2 z-20 pointer-events-none flex flex-col items-center">
         <div className="absolute -bottom-1 w-28 h-5 bg-black/20 rounded-full blur-[4px]" />
         <div className="w-32 sm:w-40 md:w-48 h-auto drop-shadow-[0_10px_25px_rgba(0,0,0,0.3)] relative">
           <Image src={ASSETS.house} alt="" width={200} height={200} className="w-full h-auto object-contain" priority draggable={false} />
@@ -234,7 +216,7 @@ export default function WorldScene() {
         </div>
       </div>
 
-      {/* 5. Падающие сердечки (передний план) */}
+      {/* 5. Падающие сердечки */}
       {fallingHearts.map((h) => (
         <div
           key={h.id}
