@@ -18,8 +18,9 @@ import {
   Compass,
   ShieldCheck,
   Moon,
-  Fingerprint,
-  Lock,
+  Sun,
+  Sunrise,
+  Sunset,
   X
 } from 'lucide-react';
 import Link from 'next/link';
@@ -46,23 +47,23 @@ function getEventVisuals(eventType: string) {
   switch (eventType?.toUpperCase()) {
     case 'VIGIL':
     case 'VIGIL_SPARK':
-      return { icon: Flame, color: 'text-amber-600', label: 'Vigil' };
+      return { icon: Flame, color: 'text-amber-500', label: 'Vigil' };
     case 'ASH':
-      return { icon: Trash2, color: 'text-rose-600', label: 'Let It Go' };
+      return { icon: Trash2, color: 'text-rose-500', label: 'Let It Go' };
     case 'CAST':
-      return { icon: Compass, color: 'text-indigo-600', label: 'Cast' };
+      return { icon: Compass, color: 'text-indigo-400', label: 'Cast' };
     case 'ABSOLUTION':
-      return { icon: ShieldCheck, color: 'text-emerald-600', label: 'Absolution' };
+      return { icon: ShieldCheck, color: 'text-emerald-400', label: 'Absolution' };
     case 'HEARTANDANGEL':
     case 'MEDITATION':
     case 'SILENCE':
-      return { icon: Moon, color: 'text-purple-600', label: 'Calm' };
+      return { icon: Moon, color: 'text-purple-400', label: 'Calm' };
     case 'WHISPER':
-      return { icon: Sparkles, color: 'text-zinc-900', label: 'Whisper' };
+      return { icon: Sparkles, color: 'text-amber-300', label: 'Whisper' };
     case 'AUDIO_WHISPER':
-      return { icon: Mic, color: 'text-zinc-900', label: 'Voice' };
+      return { icon: Mic, color: 'text-amber-300', label: 'Voice' };
     default:
-      return { icon: Radio, color: 'text-zinc-600', label: eventType || 'Log' };
+      return { icon: Radio, color: 'text-stone-400', label: eventType || 'Log' };
   }
 }
 
@@ -74,6 +75,56 @@ function formatTime(iso?: string) {
   return `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${time}`;
 }
 
+// Определение освещения и палитры по текущему времени суток
+function getTimeLighting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) {
+    // Утро (Рассвет)
+    return {
+      name: 'Morning Light',
+      bg: 'bg-[#F5F2EB]',
+      text: 'text-stone-900',
+      subText: 'text-stone-600',
+      navHover: 'hover:text-black',
+      glow: 'from-amber-200/30 via-orange-100/10 to-transparent',
+      vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 243, 224, 0.6) 0%, rgba(245, 242, 235, 1) 80%)'
+    };
+  } else if (hour >= 11 && hour < 17) {
+    // День (Яркий свет)
+    return {
+      name: 'Daylight',
+      bg: 'bg-[#FAF8F5]',
+      text: 'text-stone-900',
+      subText: 'text-stone-600',
+      navHover: 'hover:text-black',
+      glow: 'from-stone-200/40 via-transparent to-transparent',
+      vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.8) 0%, rgba(250, 248, 245, 1) 85%)'
+    };
+  } else if (hour >= 17 && hour < 21) {
+    // Вечер (Закат)
+    return {
+      name: 'Dusk',
+      bg: 'bg-[#1f1a18]',
+      text: 'text-stone-100',
+      subText: 'text-stone-300',
+      navHover: 'hover:text-white',
+      glow: 'from-orange-900/30 via-rose-950/20 to-transparent',
+      vignette: 'radial-gradient(circle at 50% 40%, rgba(70, 35, 25, 0.4) 0%, rgba(31, 26, 24, 1) 90%)'
+    };
+  } else {
+    // Ночь (Глубокий мрак с лунным светом)
+    return {
+      name: 'Night Sanctuary',
+      bg: 'bg-[#0b0c10]',
+      text: 'text-stone-200',
+      subText: 'text-stone-400',
+      navHover: 'hover:text-white',
+      glow: 'from-indigo-950/50 via-blue-950/20 to-transparent',
+      vignette: 'radial-gradient(circle at 50% 30%, rgba(20, 25, 45, 0.5) 0%, rgba(11, 12, 16, 1) 90%)'
+    };
+  }
+}
+
 export default function TempleClient() {
   const { user, profile } = useAuth();
   const isLoggedIn = !!user;
@@ -82,6 +133,7 @@ export default function TempleClient() {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isEventsOpen, setIsEventsOpen] = useState(false);
+  const [lighting, setLighting] = useState(getTimeLighting());
 
   const [postText, setPostText] = useState('');
   const [posts, setPosts] = useState<TemplePost[]>([]);
@@ -102,6 +154,13 @@ export default function TempleClient() {
 
   useEffect(() => {
     setHeroUrl(Math.random() > 0.5 ? ASSETS.angel : ASSETS.daemon);
+    setLighting(getTimeLighting());
+
+    // Обновляем свет раз в минуту при изменении времени
+    const timer = setInterval(() => {
+      setLighting(getTimeLighting());
+    }, 60000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -264,55 +323,11 @@ export default function TempleClient() {
     }
   };
 
-  const handleSendPost = async () => {
-    if (!isLoggedIn || ((!postText.trim() && !audioBlobUrl) || isSubmitting)) return;
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const payload = {
-        event_type: audioBlobUrl ? 'AUDIO_WHISPER' : 'WHISPER',
-        message: postText || 'Voice transmission',
-        audio_url: audioBlobUrl || null,
-        author: userName
-      };
-
-      const res = await fetch('/api/temple_logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        setError('The temple did not accept the transmission. Try again.');
-        return;
-      }
-
-      const json = await res.json().catch(() => ({}));
-      const visuals = getEventVisuals(payload.event_type);
-      const newItem: TemplePost = {
-        id: json?.data?.id ?? `local-${Date.now()}`,
-        type: payload.event_type,
-        label: visuals.label,
-        author: userName,
-        time: formatTime(),
-        content: payload.message,
-        audioUrl: audioBlobUrl,
-        icon: visuals.icon,
-        color: visuals.color
-      };
-      setPosts(prev => [newItem, ...prev]);
-      setPostText('');
-      setAudioBlobUrl(null);
-    } catch (e) {
-      console.error('Failed to transmit post', e);
-      setError('Connection lost. Try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
-    <main className="relative w-full h-[100dvh] bg-[#FAF8F5] text-[#111] font-sans overflow-hidden select-none flex flex-col justify-between p-6 sm:p-12">
+    <main 
+      className={`relative w-full h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-hidden select-none flex flex-col justify-between p-6 sm:p-12 transition-colors duration-1000`}
+      style={{ backgroundImage: lighting.vignette }}
+    >
       {/* Скрытый аудиоэлемент */}
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
@@ -320,7 +335,7 @@ export default function TempleClient() {
       <header className="relative z-45 flex justify-between items-center w-full max-w-7xl mx-auto pt-2">
         <Link 
           href="/heartandangel/world"
-          className="font-serif text-sm tracking-widest text-stone-600 hover:text-black transition-colors"
+          className={`font-serif text-sm tracking-widest ${lighting.subText} ${lighting.navHover} transition-colors`}
         >
           ← Back to World
         </Link>
@@ -328,31 +343,38 @@ export default function TempleClient() {
         <nav className="flex items-center gap-6 sm:gap-10">
           <button
             onClick={toggleAudio}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-stone-200/60 hover:bg-stone-200 transition-all text-stone-800 text-xs font-medium tracking-wide shadow-sm cursor-pointer"
+            className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${
+              lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10') 
+                ? 'bg-white/10 hover:bg-white/20 text-stone-200' 
+                : 'bg-stone-200/60 hover:bg-stone-200 text-stone-800'
+            }`}
           >
-            {isPlayingAudio ? <Volume2 size={14} className="text-pink-500 animate-pulse" /> : <Radio size={14} />}
+            {isPlayingAudio ? <Volume2 size={14} className="text-pink-400 animate-pulse" /> : <Radio size={14} />}
             <span>{isPlayingAudio ? 'Sound On' : 'Sound Off'}</span>
           </button>
 
-          <Link href="/heartandangel/calm" className="font-serif text-lg sm:text-xl font-light hover:italic transition-all">
+          <Link href="/heartandangel/calm" className={`font-serif text-lg sm:text-xl font-light ${lighting.navHover} transition-all`}>
             Calm
           </Link>
-          <Link href="/heartandangel/letitgo" className="font-serif text-lg sm:text-xl font-light hover:italic transition-all">
+          <Link href="/heartandangel/letitgo" className={`font-serif text-lg sm:text-xl font-light ${lighting.navHover} transition-all`}>
             Let It Go
           </Link>
-          <Link href="https://merkurov.love/vigil" target="_blank" rel="noopener noreferrer" className="font-serif text-lg sm:text-xl font-light hover:italic transition-all">
+          <Link href="https://merkurov.love/vigil" target="_blank" rel="noopener noreferrer" className={`font-serif text-lg sm:text-xl font-light ${lighting.navHover} transition-all`}>
             Vigil
           </Link>
         </nav>
       </header>
 
-      {/* Центр комнаты / Основное пространство */}
+      {/* Центр комнаты с источником освещения времени суток */}
       <div className="relative w-full flex-1 flex items-center justify-center">
+        {/* Атмосферный свет/градиент комнаты в зависимости от времени */}
+        <div className={`absolute w-[450px] h-[450px] sm:w-[650px] sm:h-[650px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
+
         {/* Герой слева снизу (отступ 20% от краев) */}
         <div className="absolute left-[20%] bottom-[20%] z-20 flex flex-col items-center pointer-events-none">
-          <div className="absolute -bottom-2 w-28 h-6 bg-black/15 rounded-full blur-[6px]" />
+          <div className="absolute -bottom-2 w-28 h-6 bg-black/25 rounded-full blur-[8px]" />
           {heroUrl && (
-            <div className="relative w-36 h-44 sm:w-48 sm:h-56 flex items-end justify-center drop-shadow-[0_15px_25px_rgba(0,0,0,0.2)]">
+            <div className="relative w-36 h-44 sm:w-48 sm:h-56 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
               <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
             </div>
           )}
@@ -364,7 +386,11 @@ export default function TempleClient() {
         {/* Кнопка событий */}
         <button 
           onClick={() => setIsEventsOpen(!isEventsOpen)}
-          className="w-12 h-12 rounded-full bg-white border border-stone-200 shadow-lg flex items-center justify-center text-stone-800 hover:bg-stone-50 transition-all font-mono text-sm cursor-pointer"
+          className={`w-12 h-12 rounded-full backdrop-blur-md border shadow-lg flex items-center justify-center transition-all font-mono text-sm cursor-pointer ${
+            lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
+              ? 'bg-white/10 border-white/20 text-stone-100 hover:bg-white/20'
+              : 'bg-white border-stone-200 text-stone-800 hover:bg-stone-50'
+          }`}
           title="Temple Events"
         >
           ✦
@@ -373,7 +399,11 @@ export default function TempleClient() {
         {/* Кнопка с вопросом для флоатинга с текстом */}
         <button 
           onClick={() => setIsInfoOpen(!isInfoOpen)}
-          className="w-12 h-12 rounded-full bg-stone-900 text-white shadow-lg flex items-center justify-center hover:bg-stone-800 transition-all font-serif text-lg italic cursor-pointer"
+          className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all font-serif text-lg italic cursor-pointer ${
+            lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
+              ? 'bg-stone-100 text-stone-900 hover:bg-white'
+              : 'bg-stone-900 text-white hover:bg-stone-800'
+          }`}
           title="About Temple"
         >
           ?
@@ -384,11 +414,11 @@ export default function TempleClient() {
       {isInfoOpen && (
         <div 
           onClick={() => setIsInfoOpen(false)}
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
         >
           <div 
             onClick={(e: any) => e.stopPropagation()}
-            className="bg-white rounded-3xl p-8 max-w-md shadow-2xl border border-stone-200 space-y-4 relative"
+            className="bg-white text-stone-900 rounded-3xl p-8 max-w-md shadow-2xl border border-stone-200 space-y-4 relative"
           >
             <button 
               onClick={() => setIsInfoOpen(false)}
@@ -396,23 +426,23 @@ export default function TempleClient() {
             >
               <X size={16} />
             </button>
-            <h3 className="font-serif text-2xl text-stone-900">The Sanctuary</h3>
+            <h3 className="font-serif text-2xl">The Sanctuary</h3>
             <p className="font-serif text-stone-600 text-sm leading-relaxed font-light">
-              This digital temple is a quiet space of presence. Here, the boundaries between the physical artifacts and the digital ether dissolve into pure observation, rituals work, and every visitor leaves a trace.
+              This digital temple is a quiet space of presence. Lighting shifts with the real hours of the world. Here, rituals work, and every visitor leaves a trace.
             </p>
           </div>
         </div>
       )}
 
-      {/* Флоатинг с событиями (Компактный список БЕЗ разделителей) */}
+      {/* Флоатинг с событиями (Компактный лог) */}
       {isEventsOpen && (
         <div 
           onClick={() => setIsEventsOpen(false)}
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
         >
           <div 
             onClick={(e: any) => e.stopPropagation()}
-            className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-stone-200 space-y-6 relative"
+            className="bg-white text-stone-900 rounded-3xl p-8 max-w-md w-full shadow-2xl border border-stone-200 space-y-6 relative"
           >
             <button 
               onClick={() => setIsEventsOpen(false)}
@@ -420,7 +450,7 @@ export default function TempleClient() {
             >
               <X size={16} />
             </button>
-            <h3 className="font-serif text-2xl text-stone-900">Chronicles &amp; Traces</h3>
+            <h3 className="font-serif text-2xl">Chronicles &amp; Traces</h3>
             
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
               {!loaded ? (
