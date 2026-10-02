@@ -628,7 +628,7 @@ export default function ArtEngineClient() {
 
         {!loadingUser && !user ? (
           <div className="space-y-10">
-            {/* Original Unauthenticated View */}
+            {/* Original Hero Card */}
             <div className="py-12 sm:py-24 max-w-4xl mx-auto text-center space-y-6 sm:space-y-10 bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-20 rounded-3xl shadow-sm">
               <div className="space-y-3">
                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif text-neutral-900 leading-tight">
