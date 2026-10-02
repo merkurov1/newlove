@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
@@ -88,7 +88,7 @@ export default function ArtEngineClient() {
 
     initAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event: AuthChangeEvent, currentSession: Session | null) => {
         const currentUser = currentSession?.user || null;
         if (currentUser && !checkIsAdmin(currentUser)) {
@@ -104,7 +104,7 @@ export default function ArtEngineClient() {
     );
 
     return () => {
-      subscription.unsubscribe();
+      authListener?.subscription?.unsubscribe();
     };
   }, []);
 
@@ -155,20 +155,20 @@ export default function ArtEngineClient() {
   };
 
   const authFetch = async (url: string, options: RequestInit = {}) => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string> || {})
-    };
+    const headers = new Headers(options.headers);
+    if (!headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
 
     if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
+      headers.set('Authorization', `Bearer ${session.access_token}`);
     }
 
     return fetch(url, { ...options, headers });
   };
 
   // AUTH 1: Email/Password Sign-In
-  const handleEmailPasswordSignIn = async (e: React.FormEvent) => {
+  const handleEmailPasswordSignIn = async (e: any) => {
     e.preventDefault();
     if (!authEmail || !password) return;
     setAuthLoading(true);
@@ -212,7 +212,7 @@ export default function ArtEngineClient() {
         throw new Error('WebAuthn is not supported by this browser environment.');
       }
 
-      const { error } = await supabase.auth.signInWithPasskey();
+      const { error } = await (supabase.auth as any).signInWithPasskey();
       if (error) throw error;
 
       const { data: { session: newSession } } = await supabase.auth.getSession();
@@ -241,7 +241,7 @@ export default function ArtEngineClient() {
   };
 
   // REQUEST ACCESS HANDLER
-  const handleRequestAccess = async (e: React.FormEvent) => {
+  const handleRequestAccess = async (e: any) => {
     e.preventDefault();
     if (!authEmail) return;
     setAuthLoading(true);
@@ -525,7 +525,7 @@ export default function ArtEngineClient() {
                       required
                       placeholder="merkurov@gmail.com"
                       value={authEmail}
-                      onChange={e => setAuthEmail(e.target.value)}
+                      onChange={(e: any) => setAuthEmail(e.target.value)}
                       className="w-full bg-neutral-50 border border-neutral-300 px-3.5 py-3 text-xs sm:text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition rounded-xl"
                     />
                   </div>
@@ -539,7 +539,7 @@ export default function ArtEngineClient() {
                       required
                       placeholder="••••••••"
                       value={password}
-                      onChange={e => setPassword(e.target.value)}
+                      onChange={(e: any) => setPassword(e.target.value)}
                       className="w-full bg-neutral-50 border border-neutral-300 px-3.5 py-3 text-xs sm:text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono transition rounded-xl"
                     />
                   </div>
@@ -580,7 +580,7 @@ export default function ArtEngineClient() {
                       required
                       placeholder="director@artgallery.com"
                       value={authEmail}
-                      onChange={e => setAuthEmail(e.target.value)}
+                      onChange={(e: any) => setAuthEmail(e.target.value)}
                       className="w-full bg-neutral-50 border border-neutral-300 px-3.5 py-3 text-xs sm:text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 transition rounded-xl"
                     />
                     <p className="text-[10px] text-neutral-400 mt-2 leading-relaxed">
@@ -787,7 +787,7 @@ export default function ArtEngineClient() {
                         placeholder="https://www.sothebys.com/en/buy/..." 
                         className="flex-1 bg-neutral-50 border border-neutral-300 px-3.5 py-3 text-xs text-neutral-900 focus:outline-none focus:border-neutral-900 transition font-mono placeholder:text-neutral-400 break-all rounded-2xl"
                         value={input.link}
-                        onChange={e => setInput({...input, link: e.target.value})}
+                        onChange={(e: any) => setInput({...input, link: e.target.value})}
                       />
                       <button 
                         onClick={handleAutoParse} 
@@ -835,7 +835,7 @@ export default function ArtEngineClient() {
                           placeholder="Artist Name" 
                           className="w-full bg-neutral-50 border border-neutral-300 p-3 text-xs text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono rounded-xl" 
                           value={input.artist} 
-                          onChange={e => setInput({...input, artist: e.target.value})} 
+                          onChange={(e: any) => setInput({...input, artist: e.target.value})} 
                         />
                       </div>
                       <div>
@@ -844,7 +844,7 @@ export default function ArtEngineClient() {
                           placeholder="Artwork Title" 
                           className="w-full bg-neutral-50 border border-neutral-300 p-3 text-xs text-neutral-900 focus:outline-none focus:border-neutral-900 font-mono rounded-xl" 
                           value={input.title} 
-                          onChange={e => setInput({...input, title: e.target.value})} 
+                          onChange={(e: any) => setInput({...input, title: e.target.value})} 
                         />
                       </div>
                     </div>

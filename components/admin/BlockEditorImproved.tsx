@@ -10,6 +10,7 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
+  UniqueIdentifier,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -23,18 +24,27 @@ import TiptapEditor from './TiptapEditor';
 import GalleryBlockEditor from './GalleryBlockEditor';
 import { EditorJsBlock } from '@/types/blocks';
 
-// Типы блоков
 const BLOCK_TYPES = {
-  richText: { label: 'Текст', icon: '📝', color: 'blue' },
-  gallery: { label: 'Галерея', icon: '🖼️', color: 'green' },
-  columns: { label: 'Колонки', icon: '📰', color: 'purple' },
-  quote: { label: 'Цитата', icon: '💬', color: 'orange' },
-  video: { label: 'Видео', icon: '📹', color: 'red' },
-  code: { label: 'Код', icon: '💻', color: 'gray' },
-  image: { label: 'Изображение', icon: '🎨', color: 'pink' },
+  richText: { label: 'Текст', icon: '📝', desc: 'Абзац или статья' },
+  gallery: { label: 'Галерея', icon: '🖼️', desc: 'Сетка изображений' },
+  columns: { label: 'Колонки', icon: '📰', desc: 'Мультиколонки' },
+  quote: { label: 'Цитата', icon: '💬', desc: 'Высказывание со ссылкой' },
+  video: { label: 'Видео', icon: '📹', desc: 'YouTube / Vimeo' },
+  code: { label: 'Код', icon: '💻', desc: 'Блок кода' },
+  image: { label: 'Изображение', icon: '🎨', desc: 'Картинка с подписью' },
 };
 
-// Компонент для отдельного блока с drag-and-drop
+interface SortableBlockProps {
+  key?: string | number;
+  block: EditorJsBlock;
+  index: number;
+  isCollapsed: boolean;
+  onToggleCollapse: (idx: number) => void;
+  onBlockChange: (idx: number, block: EditorJsBlock) => void;
+  onDuplicate: (idx: number) => void;
+  onRemove: (idx: number) => void;
+}
+
 function SortableBlock({
   block,
   index,
@@ -43,7 +53,7 @@ function SortableBlock({
   onBlockChange,
   onDuplicate,
   onRemove,
-}: any) {
+}: SortableBlockProps) {
   const {
     attributes,
     listeners,
@@ -56,45 +66,41 @@ function SortableBlock({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.4 : 1,
   };
 
-  const blockType = BLOCK_TYPES[block.type as keyof typeof BLOCK_TYPES] || { label: block.type, icon: '📄', color: 'gray' };
+  const blockType = BLOCK_TYPES[block.type as keyof typeof BLOCK_TYPES] || { label: block.type, icon: '📄' };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="border-2 border-gray-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow mb-4"
+      className="border border-neutral-200 rounded-2xl bg-white shadow-xs hover:shadow-md transition-all mb-4 overflow-hidden group"
     >
-      {/* Заголовок блока с drag handle */}
-      <div className="flex items-center justify-between p-3 bg-gray-50 border-b border-gray-200 rounded-t-lg">
+      <div className="flex items-center justify-between px-4 py-3 bg-neutral-50/70 border-b border-neutral-100 rounded-t-2xl">
         <div className="flex items-center gap-3">
-          {/* Drag handle */}
           <button
             type="button"
             {...attributes}
             {...listeners}
-            className="cursor-move p-1 hover:bg-gray-200 rounded text-gray-500"
+            className="cursor-grab active:cursor-grabbing p-1 hover:bg-neutral-200/60 rounded text-neutral-400 hover:text-neutral-700 transition-colors"
             title="Перетащить блок"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
             </svg>
           </button>
           
-          {/* Иконка и название типа блока */}
-          <span className="text-lg">{blockType.icon}</span>
-          <span className="font-semibold text-gray-700">{blockType.label}</span>
-          <span className="text-xs text-gray-400">#{index + 1}</span>
+          <span className="text-base">{blockType.icon}</span>
+          <span className="font-medium text-neutral-800 text-sm">{blockType.label}</span>
+          <span className="text-xs text-neutral-400 font-mono">#{index + 1}</span>
         </div>
 
-        {/* Кнопки управления */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 opacity-90 sm:opacity-40 group-hover:opacity-100 transition-opacity">
           <button
             type="button"
             onClick={() => onToggleCollapse(index)}
-            className="p-1.5 hover:bg-gray-200 rounded text-gray-600"
+            className="p-1.5 hover:bg-neutral-200/60 rounded text-neutral-600 transition-colors"
             title={isCollapsed ? 'Развернуть' : 'Свернуть'}
           >
             {isCollapsed ? (
@@ -111,8 +117,8 @@ function SortableBlock({
           <button
             type="button"
             onClick={() => onDuplicate(index)}
-            className="p-1.5 hover:bg-blue-100 rounded text-blue-600 text-xs font-medium"
-            title="Дублировать (Cmd+D)"
+            className="p-1.5 hover:bg-neutral-200/60 rounded text-neutral-600 transition-colors"
+            title="Дублировать"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -122,8 +128,8 @@ function SortableBlock({
           <button
             type="button"
             onClick={() => onRemove(index)}
-            className="p-1.5 hover:bg-red-100 rounded text-red-600"
-            title="Удалить (Cmd+Delete)"
+            className="p-1.5 hover:bg-rose-50 rounded text-neutral-400 hover:text-rose-600 transition-colors"
+            title="Удалить"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -132,9 +138,8 @@ function SortableBlock({
         </div>
       </div>
 
-      {/* Содержимое блока (сворачиваемое) */}
       {!isCollapsed && (
-        <div className="p-4">
+        <div className="p-4 bg-white">
           <BlockContent block={block} index={index} onBlockChange={onBlockChange} />
         </div>
       )}
@@ -142,8 +147,13 @@ function SortableBlock({
   );
 }
 
-// Компонент для рендеринга содержимого блока
-function BlockContent({ block, index, onBlockChange }: any) {
+interface BlockContentProps {
+  block: EditorJsBlock;
+  index: number;
+  onBlockChange: (idx: number, block: EditorJsBlock) => void;
+}
+
+function BlockContent({ block, index, onBlockChange }: BlockContentProps) {
   const handleChange = (newData: any) => {
     onBlockChange(index, { ...block, data: newData });
   };
@@ -153,7 +163,7 @@ function BlockContent({ block, index, onBlockChange }: any) {
       return (
         <TiptapEditor
           value={block.data.html}
-          onChange={(html: any) => handleChange({ html })}
+          onChange={(html: string) => handleChange({ html })}
         />
       );
 
@@ -168,44 +178,47 @@ function BlockContent({ block, index, onBlockChange }: any) {
     case 'code':
       return (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Код</label>
+          <label className="block text-xs font-mono uppercase tracking-wider text-neutral-400 mb-2">Исходный код</label>
           <textarea
-            className="w-full font-mono text-sm border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            rows={8}
+            className="w-full font-mono text-sm border border-neutral-200 rounded-xl p-3 bg-neutral-50/50 focus:bg-white focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 transition-all text-neutral-900"
+            rows={6}
             value={block.data.code}
-            onChange={(e) => handleChange({ code: e.target.value })}
-            placeholder="Введите код..."
+            onChange={(e: any) => handleChange({ code: e.target.value })}
+            placeholder="// Введите код..."
           />
         </div>
       );
 
     case 'image':
       return (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">URL изображения</label>
-          <input
-            type="text"
-            className="w-full border border-gray-300 rounded-lg p-3 mb-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            value={block.data.url}
-            onChange={(e) => handleChange({ ...block.data, url: e.target.value })}
-            placeholder="https://example.com/image.jpg"
-          />
-          <label className="block text-sm font-medium text-gray-700 mb-2">Подпись</label>
-          <input
-            type="text"
-            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            value={block.data.caption || ''}
-            onChange={(e) => handleChange({ ...block.data, caption: e.target.value })}
-            placeholder="Подпись к изображению (необязательно)"
-          />
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-mono uppercase tracking-wider text-neutral-400 mb-1.5">URL изображения</label>
+            <input
+              type="text"
+              className="w-full border border-neutral-200 rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 transition-all text-neutral-900"
+              value={block.data.url}
+              onChange={(e: any) => handleChange({ ...block.data, url: e.target.value })}
+              placeholder="https://..."
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-mono uppercase tracking-wider text-neutral-400 mb-1.5">Подпись</label>
+            <input
+              type="text"
+              className="w-full border border-neutral-200 rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 transition-all text-neutral-900"
+              value={block.data.caption || ''}
+              onChange={(e: any) => handleChange({ ...block.data, caption: e.target.value })}
+              placeholder="Описание под изображением..."
+            />
+          </div>
           {block.data.url && (
-            <div className="mt-4">
+            <div className="mt-3 relative w-full h-48 rounded-xl overflow-hidden border border-neutral-200 bg-neutral-100">
               <Image
                 src={block.data.url}
-                alt={block.data.caption || 'Превью изображения'}
-                width={400}
-                height={300}
-                className="rounded-lg border border-gray-200 object-cover"
+                alt={block.data.caption || 'Preview'}
+                fill
+                className="object-cover"
               />
             </div>
           )}
@@ -216,7 +229,7 @@ function BlockContent({ block, index, onBlockChange }: any) {
       return (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-xs font-mono uppercase tracking-wider text-neutral-400">
               Колонки ({block.data.columns.length})
             </label>
             <div className="flex gap-2">
@@ -228,7 +241,7 @@ function BlockContent({ block, index, onBlockChange }: any) {
                   }
                 }}
                 disabled={block.data.columns.length >= 3}
-                className="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="text-xs px-2.5 py-1 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 disabled:opacity-40 transition-colors"
               >
                 + Колонка
               </button>
@@ -240,7 +253,7 @@ function BlockContent({ block, index, onBlockChange }: any) {
                   }
                 }}
                 disabled={block.data.columns.length <= 1}
-                className="text-sm px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="text-xs px-2.5 py-1 border border-neutral-200 text-neutral-700 rounded-lg hover:bg-neutral-50 disabled:opacity-40 transition-colors"
               >
                 − Колонка
               </button>
@@ -248,17 +261,16 @@ function BlockContent({ block, index, onBlockChange }: any) {
           </div>
           <div className={`grid gap-4 ${block.data.columns.length === 2 ? 'grid-cols-2' : block.data.columns.length === 3 ? 'grid-cols-3' : 'grid-cols-1'}`}>
             {block.data.columns.map((column: any, colIdx: number) => (
-              <div key={colIdx} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                <label className="block text-xs text-gray-600 mb-2 font-medium">
-                  Колонка {colIdx + 1}
-                </label>
+              <div key={colIdx} className="border border-neutral-200 rounded-xl p-3 bg-neutral-50/40">
+                <span className="block text-[11px] font-mono text-neutral-400 mb-1.5">Колонка {colIdx + 1}</span>
                 <TiptapEditor
                   value={column.html}
-                  onChange={(html: any) => {
+                  onChange={(html: string) => {
                     const newColumns = [...block.data.columns];
                     newColumns[colIdx] = { html };
                     handleChange({ columns: newColumns });
                   }}
+                  minHeight="100px"
                 />
               </div>
             ))}
@@ -270,34 +282,34 @@ function BlockContent({ block, index, onBlockChange }: any) {
       return (
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Текст цитаты</label>
+            <label className="block text-xs font-mono uppercase tracking-wider text-neutral-400 mb-1.5">Текст цитаты</label>
             <textarea
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-              rows={4}
+              className="w-full border border-neutral-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 transition-all text-neutral-900"
+              rows={3}
               value={block.data.text}
-              onChange={(e) => handleChange({ ...block.data, text: e.target.value })}
-              placeholder="Введите текст цитаты..."
+              onChange={(e: any) => handleChange({ ...block.data, text: e.target.value })}
+              placeholder="Введите цитату..."
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Автор</label>
+              <label className="block text-xs font-mono uppercase tracking-wider text-neutral-400 mb-1.5">Автор</label>
               <input
                 type="text"
-                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className="w-full border border-neutral-200 rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 transition-all text-neutral-900"
                 value={block.data.author || ''}
-                onChange={(e) => handleChange({ ...block.data, author: e.target.value })}
-                placeholder="Автор цитаты"
+                onChange={(e: any) => handleChange({ ...block.data, author: e.target.value })}
+                placeholder="Имя автора"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Источник</label>
+              <label className="block text-xs font-mono uppercase tracking-wider text-neutral-400 mb-1.5">Источник</label>
               <input
                 type="text"
-                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className="w-full border border-neutral-200 rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 transition-all text-neutral-900"
                 value={block.data.source || ''}
-                onChange={(e) => handleChange({ ...block.data, source: e.target.value })}
-                placeholder="Книга, статья..."
+                onChange={(e: any) => handleChange({ ...block.data, source: e.target.value })}
+                placeholder="Книга / Издание"
               />
             </div>
           </div>
@@ -308,59 +320,48 @@ function BlockContent({ block, index, onBlockChange }: any) {
       return (
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">URL видео</label>
+            <label className="block text-xs font-mono uppercase tracking-wider text-neutral-400 mb-1.5">URL видео</label>
             <input
               type="text"
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              className="w-full border border-neutral-200 rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 transition-all text-neutral-900"
               value={block.data.url}
-              onChange={(e) => {
+              onChange={(e: any) => {
                 const url = e.target.value;
-                const platform = url.includes('youtube') || url.includes('youtu.be')
-                  ? 'youtube'
-                  : url.includes('vimeo')
-                  ? 'vimeo'
-                  : 'other';
+                const platform = url.includes('youtube') || url.includes('youtu.be') ? 'youtube' : 'vimeo';
                 handleChange({ ...block.data, url, platform });
               }}
-              placeholder="https://www.youtube.com/watch?v=... или https://vimeo.com/..."
+              placeholder="https://youtube.com/watch?v=..."
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Подпись</label>
+            <label className="block text-xs font-mono uppercase tracking-wider text-neutral-400 mb-1.5">Подпись</label>
             <input
               type="text"
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              className="w-full border border-neutral-200 rounded-xl px-3 py-2 text-sm focus:ring-1 focus:ring-neutral-400 focus:border-neutral-400 transition-all text-neutral-900"
               value={block.data.caption || ''}
-              onChange={(e) => handleChange({ ...block.data, caption: e.target.value })}
-              placeholder="Подпись к видео (необязательно)"
+              onChange={(e: any) => handleChange({ ...block.data, caption: e.target.value })}
+              placeholder="Подпись к видео..."
             />
           </div>
-          {block.data.url && (
-            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800">
-                📹 Предпросмотр:{' '}
-                {block.data.platform === 'youtube'
-                  ? 'YouTube'
-                  : block.data.platform === 'vimeo'
-                  ? 'Vimeo'
-                  : 'Видео'}
-              </p>
-            </div>
-          )}
         </div>
       );
 
     default:
-      return <div className="text-gray-500">Неизвестный тип блока: {block.type}</div>;
+      return <div className="text-neutral-400 text-sm">Неизвестный блок</div>;
   }
 }
 
-// Command Palette для быстрого добавления блоков
-function CommandPalette({ isOpen, onClose, onAddBlock }: any) {
+interface CommandPaletteProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onAddBlock: (type: string) => void;
+}
+
+function CommandPalette({ isOpen, onClose, onAddBlock }: CommandPaletteProps) {
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const filteredTypes = Object.entries(BLOCK_TYPES).filter(([key, config]) =>
+  const filteredTypes = Object.entries(BLOCK_TYPES).filter(([_, config]) =>
     config.label.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -387,6 +388,8 @@ function CommandPalette({ isOpen, onClose, onAddBlock }: any) {
           onAddBlock(filteredTypes[selectedIndex][0]);
           onClose();
         }
+      } else if (e.key === 'Escape') {
+        onClose();
       }
     };
 
@@ -398,81 +401,75 @@ function CommandPalette({ isOpen, onClose, onAddBlock }: any) {
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center pt-32 z-50"
+      className="fixed inset-0 bg-neutral-950/20 backdrop-blur-xs flex items-start justify-center pt-24 z-50 p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl shadow-xl border border-neutral-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+        onClick={(e: any) => e.stopPropagation()}
       >
-        <div className="p-4 border-b">
+        <div className="p-3 border-b border-neutral-100">
           <input
             type="text"
-            className="w-full text-lg px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Найти блок..."
+            className="w-full px-3 py-2 text-sm bg-neutral-50 rounded-xl border border-neutral-200 focus:outline-none focus:bg-white focus:ring-1 focus:ring-neutral-400"
+            placeholder="Поиск блока..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e: any) => setSearch(e.target.value)}
             autoFocus
           />
         </div>
-        <div className="max-h-96 overflow-y-auto">
+        <div className="max-h-80 overflow-y-auto p-2 space-y-1">
           {filteredTypes.length > 0 ? (
             filteredTypes.map(([key, config], idx) => (
               <button
                 key={key}
                 type="button"
-                className={`w-full text-left px-6 py-4 hover:bg-blue-50 flex items-center gap-4 transition-colors ${
-                  idx === selectedIndex ? 'bg-blue-100' : ''
+                className={`w-full text-left px-3 py-2.5 rounded-xl flex items-center justify-between transition-colors ${
+                  idx === selectedIndex ? 'bg-neutral-100 text-neutral-900' : 'hover:bg-neutral-50 text-neutral-700'
                 }`}
                 onClick={() => {
                   onAddBlock(key);
                   onClose();
                 }}
               >
-                <span className="text-3xl">{config.icon}</span>
-                <div>
-                  <div className="font-semibold text-gray-900">{config.label}</div>
-                  <div className="text-sm text-gray-500">Добавить {config.label.toLowerCase()}</div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{config.icon}</span>
+                  <div>
+                    <div className="font-medium text-sm text-neutral-900">{config.label}</div>
+                    <div className="text-xs text-neutral-400">{config.desc}</div>
+                  </div>
                 </div>
+                <span className="text-[10px] font-mono text-neutral-400 bg-neutral-100 px-2 py-1 rounded-md">↵</span>
               </button>
             ))
           ) : (
-            <div className="p-8 text-center text-gray-500">Ничего не найдено</div>
+            <div className="py-8 text-center text-sm text-neutral-400">Ничего не найдено</div>
           )}
-        </div>
-        <div className="p-3 bg-gray-50 border-t text-xs text-gray-500 flex items-center justify-between">
-          <span>↑↓ Навигация</span>
-          <span>Enter Выбрать</span>
-          <span>Esc Закрыть</span>
         </div>
       </div>
     </div>
   );
 }
 
-// Основной компонент BlockEditor
-export default function BlockEditorImproved({ value, onChange }: { value: EditorJsBlock[]; onChange: (blocks: EditorJsBlock[]) => void }) {
+interface BlockEditorImprovedProps {
+  value: EditorJsBlock[];
+  onChange: (blocks: EditorJsBlock[]) => void;
+}
+
+export default function BlockEditorImproved({ value, onChange }: BlockEditorImprovedProps) {
   const [blocks, setBlocks] = useState<EditorJsBlock[]>(Array.isArray(value) ? value : []);
   const [collapsedBlocks, setCollapsedBlocks] = useState<Set<number>>(new Set());
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // Синхронизация с внешним value
   useEffect(() => {
     setBlocks(Array.isArray(value) ? value : []);
   }, [value]);
 
-  // Обновление внешнего состояния
   const updateBlocks = useCallback(
     (newBlocks: EditorJsBlock[]) => {
       setBlocks(newBlocks);
@@ -481,19 +478,15 @@ export default function BlockEditorImproved({ value, onChange }: { value: Editor
     [onChange]
   );
 
-  // Обработчик перетаскивания
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-
     if (over && active.id !== over.id) {
       const oldIndex = parseInt(String(active.id).replace('block-', ''));
       const newIndex = parseInt(String(over.id).replace('block-', ''));
-      const newBlocks = arrayMove(blocks, oldIndex, newIndex);
-      updateBlocks(newBlocks);
+      updateBlocks(arrayMove(blocks, oldIndex, newIndex));
     }
   };
 
-  // Добавление блока
   const addBlock = (type: string) => {
     let block: EditorJsBlock;
     switch (type) {
@@ -524,79 +517,66 @@ export default function BlockEditorImproved({ value, onChange }: { value: Editor
     updateBlocks([...blocks, block]);
   };
 
-  // Изменение блока
   const handleBlockChange = (idx: number, newBlock: EditorJsBlock) => {
-    const newBlocks = blocks.map((b, i) => (i === idx ? newBlock : b));
-    updateBlocks(newBlocks);
+    updateBlocks(blocks.map((b, i) => (i === idx ? newBlock : b)));
   };
 
-  // Дублирование блока
   const duplicateBlock = (idx: number) => {
     const blockToDuplicate = JSON.parse(JSON.stringify(blocks[idx]));
-    const newBlocks = [...blocks.slice(0, idx + 1), blockToDuplicate, ...blocks.slice(idx + 1)];
-    updateBlocks(newBlocks);
+    updateBlocks([...blocks.slice(0, idx + 1), blockToDuplicate, ...blocks.slice(idx + 1)]);
   };
 
-  // Удаление блока
   const removeBlock = (idx: number) => {
-    const newBlocks = blocks.filter((_, i) => i !== idx);
-    updateBlocks(newBlocks);
+    updateBlocks(blocks.filter((_, i) => i !== idx));
   };
 
-  // Сворачивание/разворачивание блока
   const toggleCollapse = (idx: number) => {
     setCollapsedBlocks((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(idx)) {
-        newSet.delete(idx);
-      } else {
-        newSet.add(idx);
-      }
+      if (newSet.has(idx)) newSet.delete(idx);
+      else newSet.add(idx);
       return newSet;
     });
   };
 
-  // Глобальные клавиатурные шорткаты
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl+K для открытия палитры команд
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsPaletteOpen(true);
       }
     };
-
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
+  const sortableItems: UniqueIdentifier[] = blocks.map((_, idx) => `block-${idx}`);
+
   return (
-    <div className="space-y-6">
-      {/* Заголовок редактора */}
-      <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">Редактор контента</h3>
-          <p className="text-sm text-gray-500 mt-1">
+          <h3 className="text-sm font-semibold text-neutral-900 tracking-wide uppercase">Структура контента</h3>
+          <p className="text-xs text-neutral-400 mt-0.5">
             {blocks.length} {blocks.length === 1 ? 'блок' : blocks.length < 5 ? 'блока' : 'блоков'}
           </p>
         </div>
         <button
           type="button"
           onClick={() => setIsPaletteOpen(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium"
+          className="px-3.5 py-1.5 bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 transition-colors flex items-center gap-2 text-xs font-medium shadow-xs"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Добавить блок (⌘K)
+          <span>Добавить блок</span>
+          <kbd className="bg-neutral-800 text-neutral-300 px-1.5 py-0.5 rounded text-[10px] font-mono">⌘K</kbd>
         </button>
       </div>
 
-      {/* Список блоков с drag-and-drop */}
       {blocks.length > 0 ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={blocks.map((_, idx) => `block-${idx}`)} strategy={verticalListSortingStrategy}>
-            {blocks.map((block, idx) => (
+          <SortableContext 
+            items={sortableItems} 
+            strategy={verticalListSortingStrategy}
+            children={blocks.map((block, idx) => (
               <SortableBlock
                 key={`block-${idx}`}
                 block={block}
@@ -608,54 +588,37 @@ export default function BlockEditorImproved({ value, onChange }: { value: Editor
                 onRemove={removeBlock}
               />
             ))}
-          </SortableContext>
+          />
         </DndContext>
       ) : (
-        <div className="text-center py-16 px-4 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50">
-          <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <p className="text-gray-600 font-medium mb-2">Контент пока пуст</p>
-          <p className="text-gray-500 text-sm mb-4">Добавьте первый блок чтобы начать</p>
+        <div className="text-center py-12 px-4 border border-dashed border-neutral-300 rounded-2xl bg-neutral-50/50">
+          <p className="text-neutral-600 font-medium text-sm mb-1">Контент пуст</p>
+          <p className="text-neutral-400 text-xs mb-4">Нажмите кнопку ниже или используйте ⌘K</p>
           <button
             type="button"
             onClick={() => setIsPaletteOpen(true)}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="px-4 py-2 bg-neutral-900 text-white text-xs font-medium rounded-xl hover:bg-neutral-800 transition-colors"
           >
-            Добавить блок
+            Добавить первый блок
           </button>
         </div>
       )}
 
-      {/* Панель быстрого добавления блоков */}
-      <div className="flex flex-wrap gap-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
-        <span className="text-sm text-gray-600 font-medium self-center mr-2">Быстрое добавление:</span>
-        {Object.entries(BLOCK_TYPES).map(([key, config]) => {
-          const colorClasses = {
-            blue: 'border-blue-200 text-blue-700 hover:bg-blue-50',
-            green: 'border-green-200 text-green-700 hover:bg-green-50',
-            purple: 'border-purple-200 text-purple-700 hover:bg-purple-50',
-            orange: 'border-orange-200 text-orange-700 hover:bg-orange-50',
-            red: 'border-red-200 text-red-700 hover:bg-red-50',
-            gray: 'border-gray-200 text-gray-700 hover:bg-gray-50',
-            pink: 'border-pink-200 text-pink-700 hover:bg-pink-50',
-          };
-          
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => addBlock(key)}
-              className={`px-3 py-2 bg-white border-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2 hover:shadow-sm ${colorClasses[config.color as keyof typeof colorClasses] || colorClasses.gray}`}
-            >
-              <span>{config.icon}</span>
-              <span>{config.label}</span>
-            </button>
-          );
-        })}
+      <div className="flex flex-wrap gap-1.5 p-3 bg-neutral-50/70 rounded-2xl border border-neutral-200">
+        <span className="text-xs text-neutral-400 font-mono self-center mr-2">Добавить:</span>
+        {Object.entries(BLOCK_TYPES).map(([key, config]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => addBlock(key)}
+            className="px-2.5 py-1.5 bg-white border border-neutral-200 rounded-xl hover:border-neutral-300 hover:bg-neutral-100/60 transition-all text-xs font-medium text-neutral-700 flex items-center gap-1.5 shadow-2xs"
+          >
+            <span>{config.icon}</span>
+            <span>{config.label}</span>
+          </button>
+        ))}
       </div>
 
-      {/* Command Palette */}
       <CommandPalette isOpen={isPaletteOpen} onClose={() => setIsPaletteOpen(false)} onAddBlock={addBlock} />
     </div>
   );

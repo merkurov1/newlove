@@ -3,94 +3,82 @@
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase-browser';
 
-export default function PasskeyAuth() {
+interface PasskeyAuthProps {
+  onSuccess?: () => void;
+  onError?: (error: string) => void;
+}
+
+export default function PasskeyAuth({ onSuccess, onError }: PasskeyAuthProps) {
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [email, setEmail] = useState('merkurov@gmail.com');
-  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
-  const handlePasskeyLogin = async () => {
+  const handlePasskeySignIn = async (e: any) => {
+    e.preventDefault();
     setLoading(true);
-    setMessage(null);
-    try {
-      const { data, error } = await supabase.auth.signInWithPasskey();
-      if (error) throw error;
+    setError('');
 
-      setMessage('Success! Redirecting...');
-      window.location.href = '/admin';
+    try {
+      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+        throw new Error('WebAuthn is not supported by this browser environment.');
+      }
+
+      const { error: authError } = await (supabase.auth as any).signInWithPasskey();
+      if (authError) throw authError;
+
+      if (onSuccess) onSuccess();
     } catch (err: any) {
-      setMessage(`Passkey error: ${err.message || err}`);
+      const errorMessage = err?.message || 'Passkey authentication failed';
+      setError(errorMessage);
+      if (onError) onError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEmailPasswordLogin = async (e: React.FormEvent) => {
+  const handlePasskeySignUp = async (e: any) => {
     e.preventDefault();
     setLoading(true);
-    setMessage(null);
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+    setError('');
 
-      setMessage('Session created! Redirecting...');
-      window.location.href = '/admin';
+    try {
+      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+        throw new Error('WebAuthn is not supported by this browser environment.');
+      }
+
+      const signUpFn = (supabase.auth as any).signUpWithPasskey;
+      if (!signUpFn) {
+        throw new Error('Passkey registration is not supported in this client version.');
+      }
+
+      const { error: authError } = await signUpFn();
+      if (authError) throw authError;
+
+      if (onSuccess) onSuccess();
     } catch (err: any) {
-      setMessage(`Error: ${err.message || err}`);
+      const errorMessage = err?.message || 'Passkey registration failed';
+      setError(errorMessage);
+      if (onError) onError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="p-6 bg-neutral-900 rounded-2xl border border-white/10 text-white max-w-sm mx-auto my-8 shadow-2xl">
-      <h3 className="text-lg font-bold mb-2">Admin Sign In</h3>
-      {message && (
-        <div className="p-2 mb-3 text-xs bg-white/5 rounded border border-white/10 text-neutral-300">
-          {message}
+    <div className="space-y-4">
+      {error && (
+        <div className="bg-rose-50 border-l-2 border-rose-600 p-3 text-xs font-mono text-rose-800 rounded-xl">
+          {error}
         </div>
       )}
       
       <button
         type="button"
-        onClick={handlePasskeyLogin}
+        onClick={handlePasskeySignIn}
         disabled={loading}
-        className="w-full py-2.5 px-4 bg-white text-black font-semibold rounded-xl hover:bg-neutral-200 transition text-sm mb-4 cursor-pointer disabled:opacity-50"
+        className="w-full bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 flex items-center justify-center gap-2 font-bold rounded-xl shadow-sm"
       >
-        {loading ? 'Processing...' : 'Sign in with Passkey'}
+        🛡️ {loading ? 'Verifying Passkey...' : 'Sign in with Passkey'}
       </button>
-
-      <div className="relative flex py-2 items-center">
-        <div className="flex-grow border-t border-white/10"></div>
-        <span className="flex-shrink mx-4 text-xs text-neutral-500 uppercase tracking-widest">or</span>
-        <div className="flex-grow border-t border-white/10"></div>
-      </div>
-
-      <form onSubmit={handleEmailPasswordLogin} className="flex flex-col gap-2.5 mt-2">
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          required
-          className="p-2.5 bg-neutral-800 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-white/30"
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          required
-          className="p-2.5 bg-neutral-800 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-white/30"
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-2.5 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-500 transition text-sm cursor-pointer mt-1 disabled:opacity-50"
-        >
-          {loading ? 'Working...' : 'Bootstrap Session'}
-        </button>
-      </form>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import React from 'react';
 import ArtEngineClient from './ArtEngineClient';
 
 export const metadata = {
@@ -21,7 +21,7 @@ export const metadata = {
 
 export default function ArtEnginePage() {
   return (
-    <Suspense
+    <React.Suspense
       fallback={
         <div className="min-h-screen bg-white flex items-center justify-center font-mono text-xs uppercase tracking-widest text-gray-400">
           Initializing Terminal...
@@ -29,6 +29,6 @@ export default function ArtEnginePage() {
       }
     >
       <ArtEngineClient />
-    </Suspense>
+    </React.Suspense>
   );
 }

@@ -14,7 +14,7 @@ export default function Header() {
   const [activeEcosystem, setActiveEcosystem] = useState<'temple' | 'curators' | 'heart' | null>(null);
   
   const pathname = usePathname() || '';
-  const profileRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement | null>(null);
 
   // Закрытие выпадающего меню при клике вне его области
   useEffect(() => {
