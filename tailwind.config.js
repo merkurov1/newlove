@@ -29,7 +29,7 @@ module.exports = {
           700: '#be185d',
         }
       },
-      // --- НОВЫЙ БЛОК ДЛЯ НАСТРОЙКИ ТИПОГРАФИКИ ---
+      // --- НАСТРОЙКА ТИПОГРАФИКИ ---
       typography: ({ theme }) => ({
         DEFAULT: {
           css: {
@@ -75,6 +75,15 @@ module.exports = {
           '50%': { backgroundPosition: '100% 50%' },
           '100%': { backgroundPosition: '0% 50%' },
         },
+        // --- ДОБАВЛЕННЫЕ КЛЮЧИ ДЛЯ МИРА АНГЕЛА ---
+        'bounce-slow': {
+          '0%, 100%': { transform: 'translateY(0) rotate(-2deg)' },
+          '50%': { transform: 'translateY(-10px) rotate(2deg)' },
+        },
+        'spin-slow': {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
       },
       animation: {
         fadeIn: 'fadeIn 400ms ease-out forwards',
@@ -82,6 +91,9 @@ module.exports = {
         float: 'float 6s ease-in-out infinite',
         shimmer: 'shimmer 1.6s linear infinite',
         gradientMove: 'gradientMove 8s ease infinite',
+        // --- ДОБАВЛЕННЫЕ АНИМАЦИИ ДЛЯ МИРА АНГЕЛА ---
+        'bounce-slow': 'bounce-slow 6s ease-in-out infinite',
+        'spin-slow': 'spin-slow 60s linear infinite',
       },
       backgroundImage: {
         'soft-gradient': 'linear-gradient(135deg, rgba(254, 215, 232, 0.6), rgba(237, 85, 156, 0.6))',

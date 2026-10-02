@@ -627,8 +627,8 @@ export default function ArtEngineClient() {
         </div>
 
         {!loadingUser && !user ? (
-          <div className="space-y-10">
-            {/* Original Hero Card */}
+          <div className="space-y-8">
+            {/* Original Unauthenticated Promo Box */}
             <div className="py-12 sm:py-24 max-w-4xl mx-auto text-center space-y-6 sm:space-y-10 bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-20 rounded-3xl shadow-sm">
               <div className="space-y-3">
                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif text-neutral-900 leading-tight">
@@ -656,7 +656,7 @@ export default function ArtEngineClient() {
               </div>
             </div>
 
-            {/* INTEGRATED INSTITUTIONAL CASE STUDIES (WHITE CUBE STYLE) */}
+            {/* INTEGRATED INSTITUTIONAL CASE STUDIES (EXACTLY WHERE REQUESTED, WHITE CUBE STYLE) */}
             <div className="max-w-4xl mx-auto bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-14 rounded-3xl shadow-sm space-y-10">
               <div className="text-center space-y-2">
                 <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-neutral-400 block">
