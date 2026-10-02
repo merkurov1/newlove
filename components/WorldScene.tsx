@@ -110,13 +110,24 @@ export default function WorldScene() {
         <div className="absolute top-20 right-24 w-2 h-2 bg-white rounded-full animate-pulse" />
       </div>
 
-      {/* 3. Поднятый уровень земли */}
+      {/* 3. Уровень земли */}
       <div className="absolute bottom-0 left-0 w-full h-[30vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 rounded-t-[50%] scale-x-125 pointer-events-none shadow-[inset_0_20px_30px_rgba(0,0,0,0.25)]" />
 
-      {/* 4. Композиция по четвертям экрана */}
+      {/* 4. Нитка от сердца к герою */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none z-15">
+        <path
+          d="M 50% calc(18% + 35px) Q calc(36%) calc(42%) calc(21.5%) calc(100% - 21vh - 40px)"
+          fill="none"
+          stroke="rgba(0,0,0,0.3)"
+          strokeWidth="2"
+          strokeDasharray="4 2"
+        />
+      </svg>
+
+      {/* 5. Композиция */}
       
-      {/* Герой: сдвинут вправо ближе к четверти экрана (left-[24%]) */}
-      <div className="absolute bottom-[24vh] left-[24%] -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center">
+      {/* Герой: чуть левее (left-[21%]) и чуть ниже (bottom-[21vh]) */}
+      <div className="absolute bottom-[21vh] left-[21%] -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center">
         <div className="absolute -bottom-1 w-24 h-5 bg-black/20 rounded-full blur-[4px]" />
         {heroUrl && (
           <div className="w-28 sm:w-36 md:w-40 h-auto drop-shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
@@ -125,15 +136,15 @@ export default function WorldScene() {
         )}
       </div>
 
-      {/* Сердечко-шарик по центру */}
-      <div className="absolute top-[26%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center animate-bounce-slow">
+      {/* Сердечко-шарик: чуть выше (top-[18%]) */}
+      <div className="absolute top-[18%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center animate-bounce-slow">
         <div className="w-20 sm:w-28 md:w-32 h-20 sm:h-28 md:h-32 drop-shadow-[0_10px_25px_rgba(239,68,68,0.4)] relative">
           <Image src={ASSETS.heart} alt="Heart Balloon" fill className="object-contain" priority />
         </div>
       </div>
 
-      {/* Домик: сдвинут влево к четверти от правого края (right-[24%]) */}
-      <div className="absolute bottom-[24vh] right-[24%] translate-x-1/2 z-20 pointer-events-none flex flex-col items-center">
+      {/* Домик: чуть правее (right-[21%]) и чуть ниже (bottom-[21vh]) */}
+      <div className="absolute bottom-[21vh] right-[21%] translate-x-1/2 z-20 pointer-events-none flex flex-col items-center">
         <div className="absolute -bottom-1 w-28 h-5 bg-black/20 rounded-full blur-[4px]" />
         <div className="w-32 sm:w-40 md:w-48 h-auto drop-shadow-[0_10px_25px_rgba(0,0,0,0.3)] relative">
           <Image src={ASSETS.house} alt="House and Tree" width={200} height={200} className="w-full h-auto object-contain" priority />
@@ -142,7 +153,7 @@ export default function WorldScene() {
         </div>
       </div>
 
-      {/* 5. Падающие сердечки */}
+      {/* 6. Падающие сердечки */}
       {fallingHearts.map((h) => (
         <div
           key={h.id}
