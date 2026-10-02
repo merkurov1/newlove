@@ -1,278 +1,185 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import Header from '@/components/Header';
+import { ArrowRight, Sparkles, Play } from 'lucide-react';
 
-const images = [
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759212266765-IMG_0514.png',
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759213959968-IMG_0517.png',
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759231831822-IMG_0518.png',
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759231854148-IMG_0519.jpeg',
-];
+const ASSETS = {
+  angel: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
+  daemon: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Daemon1.png',
+  heart: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0920.png',
+};
 
-const MINI_PROJECTS = [
-  {
-    title: 'Let It Go',
-    description: 'Release burdens into the digital sky and watch them float away.',
-    href: '/heartandangel/letitgo',
-  },
-  {
-    title: 'Calm',
-    description: 'Find serenity through gyroscope-driven balance and heartbeat interactions.',
-    href: '/heartandangel/calm',
-  },
-  {
-    title: 'Vigil',
-    description: 'A quiet digital sanctuary for digital presence and shared observation.',
-    href: '/vigil',
-  },
-];
-
-export default function HeartAndAngelHub() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const videoId = 'cfmUSH0rTno';
-
+export default function HeartAndAngelPage() {
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
-      <Header />
+    <main className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans selection:bg-orange-500/20 overflow-x-hidden">
+      
+      {/* DECORATIVE TOP BORDER */}
+      <div className="h-1 w-full bg-black fixed top-0 z-50" />
 
-      {/* Hero-блок (клик на всю картинку ведет в World) */}
-      <Link 
-        href="/heartandangel/world"
-        className="relative w-full h-[500px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5] group cursor-pointer"
-      >
-        <Image
-          src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
-          alt="Heart & Angel World"
-          fill
-          className="object-contain md:object-cover transition-transform duration-700 group-hover:scale-[1.01]"
-          priority
-          draggable={false}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 pointer-events-none md:bg-gradient-to-t md:from-black/80 md:via-black/25 md:to-black/40" />
-
-        <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pt-24 sm:pt-32 md:pt-40 flex justify-end">
-          <div className="text-right space-y-1 sm:space-y-2 max-w-lg text-white drop-shadow-md">
-            <span className="text-[10px] sm:text-xs font-mono uppercase tracking-[0.25em] text-stone-200 block">
-              Visual Mythology
-            </span>
-            <h1 className="text-3xl sm:text-5xl md:text-6xl font-serif font-normal tracking-tight text-white">
-              Heart &amp; Angel
-            </h1>
-            <p className="text-sm sm:text-base md:text-lg font-light text-stone-200 font-serif italic">
-              A universal mythology for a fragmented world.
-            </p>
-          </div>
-        </div>
-
-        <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pb-8 sm:pb-16 md:pb-28 flex flex-col items-start space-y-3">
-          <div className="max-w-xl space-y-2 sm:space-y-3 drop-shadow-md">
-            <h2 className="text-2xl sm:text-3xl md:text-5xl font-serif font-medium text-white tracking-tight">
-              Enter the Living World
-            </h2>
-            <p className="text-white/90 text-xs sm:text-sm md:text-base font-light leading-relaxed max-w-md">
-              Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.
-            </p>
-            <div className="pt-1 sm:pt-2" onClick={(e) => e.stopPropagation()}>
-              <Link
-                href="/heartandangel/world"
-                className="inline-flex items-center gap-2 sm:gap-3 px-6 py-3 sm:px-8 sm:py-4 rounded-full bg-white text-stone-900 text-xs sm:text-sm font-medium tracking-wide shadow-2xl hover:bg-stone-100 transition-all duration-300"
-              >
-                <span>Explore World</span>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </Link>
-
-      {/* Основной контент страницы */}
-      <div className="max-w-4xl mx-auto px-6 py-24 space-y-24">
-        
-        {/* 1. Нарратив и манифест */}
-        <article className="prose prose-lg prose-stone prose-p:font-light prose-p:leading-relaxed prose-headings:font-serif max-w-none w-full space-y-8 bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm">
-          <p className="first-letter:text-5xl first-letter:font-serif first-letter:font-bold first-letter:float-left first-letter:mr-3 first-letter:mt-[-8px]">
-            Heart &amp; Angel is an ongoing multidisciplinary art project exploring archetypal figures 
-            through painting, digital graphics, augmented reality, and Web3 smart contract mechanics.
-          </p>
-
-          <p>
-            In an era dominated by noise, algorithmic fragmentation, and cynicism, the project seeks 
-            to reintroduce universal symbols that bypass intellectual defense mechanisms and speak 
-            directly to human intuition.
-          </p>
-
-          <blockquote className="border-l-2 border-stone-900 pl-6 my-8 py-2 italic font-serif text-xl sm:text-2xl text-stone-900">
-            &quot;Simplicity is the ultimate sophistication of survival.&quot;
-          </blockquote>
-
-          <p>
-            Each piece serves as both a physical artifact and a digital token—anchoring emotional 
-            capital onto decentralized ledgers to ensure permanence across mediums.
-          </p>
-        </article>
-
-        {/* 2. Увеличенный живой видеопортал */}
-        <div className="w-full">
-          <div 
-            onClick={() => setIsModalOpen(true)}
-            className="group relative w-full aspect-[16/9] sm:aspect-[16/10] rounded-3xl overflow-hidden bg-stone-900 shadow-2xl cursor-pointer border border-stone-200/80 transition-all duration-500 hover:scale-[1.01]"
-          >
-            <div className="absolute inset-0 pointer-events-none scale-125 opacity-90 transition-opacity duration-500 group-hover:opacity-100">
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${videoId}&disablekb=1&modestbranding=1&iv_load_policy=3`}
-                title="Heart & Angel Portal"
-                className="w-full h-full object-cover border-0"
-                allow="autoplay"
-              />
-            </div>
-
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
-
-            <div className="absolute bottom-6 right-6 z-10">
-              <span className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30 group-hover:bg-white group-hover:text-stone-900 transition-colors shadow-lg">
-                ▶
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Галерея с работами */}
-        <div className="w-full">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
-            {images.map((src, idx) => (
-              <div 
-                key={idx} 
-                className="relative w-full aspect-square bg-white border border-stone-200/80 p-8 flex items-center justify-center group transition-all duration-500 hover:border-stone-400 rounded-3xl shadow-sm"
-              >
-                <div className="absolute top-6 right-6 font-mono text-[10px] text-stone-400 group-hover:text-stone-700 transition-colors">
-                  REF_{String(idx + 1).padStart(2, '0')}
-                </div>
-                
-                <div className="relative w-full h-full">
-                  <Image
-                    src={src}
-                    alt={`Artifact ${idx + 1}`}
-                    fill
-                    className="object-contain drop-shadow-xl transition-transform duration-500 group-hover:scale-105"
-                    sizes="(max-width: 768px) 100vw, 50vw"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 4. Блок The Concept */}
-        <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
-            <div className="md:col-span-7 space-y-6">
-              <h2 className="font-serif text-2xl text-black tracking-tight">
-                The Concept
-              </h2>
-              <p className="font-serif text-lg text-neutral-800 leading-relaxed">
-                Heart &amp; Angel is a transmedia art project about choice, archetypes, and digital identity. 
-                Each image is a digital artifact. We do not stretch them to fit screens; 
-                we build the space around them to honor their scale.
-              </p>
-              <p className="font-serif text-base text-neutral-600 leading-relaxed">
-                This project explores love not as a romantic category, but as the only viable strategy for survival. 
-                It is an investigation into the physics of empathy in a broken world.
-              </p>
-            </div>
-
-            <div className="md:col-span-5 space-y-8 pt-2 md:pt-0">
-              <div>
-                <h3 className="font-mono text-xs font-bold uppercase tracking-widest text-neutral-400 mb-3">
-                  The Medium
-                </h3>
-                <ul className="space-y-3 text-sm font-serif text-neutral-900">
-                  <li className="flex items-start">
-                    <span className="w-24 font-bold shrink-0">Ink &amp; Paper</span>
-                    <span>Grounding the spirit in the physical.</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="w-24 font-bold shrink-0">Digital / AR</span>
-                    <span>Living in the ether.</span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="w-24 font-bold shrink-0">Code</span>
-                    <span>Empathy as a ritual.</span>
-                  </li>
-                </ul>
-              </div>
-
-              <div className="border-l-2 border-black pl-4">
-                <p className="italic font-serif text-neutral-500">
-                  &quot;Love is necessary. Love is never enough.&quot;
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 5. Мини-проекты */}
-        <div className="w-full space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {MINI_PROJECTS.map((proj, idx) => (
-              <Link
-                key={idx}
-                href={proj.href}
-                className="group p-8 rounded-3xl bg-white hover:bg-stone-50 border border-stone-200/80 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-6"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono tracking-widest text-stone-400 uppercase">
-                      0{idx + 1}
-                    </span>
-                    <span className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-600 group-hover:bg-stone-900 group-hover:text-white transition-colors">
-                      →
-                    </span>
-                  </div>
-                  <h4 className="text-2xl font-serif font-medium text-stone-900">
-                    {proj.title}
-                  </h4>
-                  <p className="text-stone-600 text-sm font-light leading-relaxed">
-                    {proj.description}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-
+      {/* NAVIGATION / BACK TO TEMPLE */}
+      <div className="max-w-5xl mx-auto px-6 pt-8 pb-4 flex justify-between items-center">
+        <Link 
+          href="/temple"
+          className="font-serif text-sm tracking-widest text-stone-600 hover:text-black transition-colors"
+        >
+          ← Back to Temple
+        </Link>
+        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-stone-400">
+          #HEARTANDANGEL
+        </span>
       </div>
 
-      {/* Модальное окно для полноэкранного просмотра со звуком */}
-      {isModalOpen && (
-        <div 
-          onClick={() => setIsModalOpen(false)}
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-8 animate-fadeIn"
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-5xl aspect-[16/9] bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10"
-          >
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-white/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/40 transition-colors"
+      <div className="max-w-4xl mx-auto px-6 py-12 md:py-20 flex flex-col items-center space-y-24">
+        
+        {/* 1. HERO SECTION */}
+        <section className="w-full flex flex-col items-center text-center space-y-8">
+          <div className="space-y-4 max-w-2xl">
+            <h1 
+              className="font-serif text-5xl sm:text-7xl md:text-8xl font-light tracking-tight text-stone-900"
+              style={{ fontFamily: 'Cormorant Garamond, serif' }}
             >
-              ✕
-            </button>
-            <iframe
-              src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&controls=1&modestbranding=1`}
-              title="Heart & Angel Archive Full"
-              className="w-full h-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              Heart &amp; Angel
+            </h1>
+            <p className="font-serif text-xl sm:text-2xl md:text-3xl text-stone-700 italic font-light leading-relaxed">
+              The universal mythology for a fragmented world.
+            </p>
+            <p className="font-mono text-xs sm:text-sm uppercase tracking-[0.25em] text-stone-500 pt-2">
+              The Greatest love story ever told.
+            </p>
+          </div>
+
+          {/* Visual preview or artwork */}
+          <div className="relative w-full max-w-md h-72 sm:h-96 my-6 flex items-center justify-center">
+            <div className="absolute inset-0 bg-gradient-to-tr from-amber-200/40 via-orange-100/20 to-transparent rounded-full blur-3xl pointer-events-none" />
+            <Image 
+              src={ASSETS.angel} 
+              alt="Heart & Angel Artwork" 
+              fill 
+              className="object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.15)]"
+              priority 
+            />
+          </div>
+
+          {/* Enter the living world button */}
+          <div className="pt-4">
+            <Link 
+              href="/heartandangel/world"
+              className="group inline-flex items-center gap-4 px-8 py-4 rounded-full bg-stone-900 text-white hover:bg-stone-800 transition-all shadow-xl hover:scale-105 cursor-pointer font-mono text-xs tracking-[0.25em] uppercase"
+            >
+              <span>Enter the living world</span>
+              <ArrowLeft size={16} className="rotate-180 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
+        </section>
+
+        {/* 2. DESCRIPTION BLOCK */}
+        <section className="w-full max-w-2xl space-y-6 text-center sm:text-left border-y border-stone-200 py-16">
+          <h2 className="font-mono text-xs uppercase tracking-[0.3em] text-stone-400 text-center sm:text-left">
+            Manifesto &amp; Presence
+          </h2>
+          <p className="font-serif text-xl sm:text-2xl font-light leading-relaxed text-stone-800">
+            Angel and Demon—non-binary archetypes navigating existence—communicate with the Heart across changing circumstances. The core thesis is simple yet radical: to promote love, care, and unconditional respect in a hyper-digital era.
+          </p>
+          <p className="font-serif text-base font-light leading-relaxed text-stone-600">
+            This is a transmedia project uniting humanity and technology. Through presence, shared rituals, and modern spatial protocols, we build a sanctuary where every visitor leaves an indelible trace.
+          </p>
+        </section>
+
+        {/* 3. YOUTUBE BLOCK */}
+        <section className="w-full space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="font-mono text-xs uppercase tracking-[0.3em] text-stone-400">
+              Moving Image / Cinematic
+            </h2>
+            <Play size={16} className="text-stone-400" />
+          </div>
+          <div className="relative w-full aspect-video rounded-3xl overflow-hidden shadow-2xl bg-stone-900 border border-stone-200">
+            <iframe 
+              className="absolute inset-0 w-full h-full"
+              src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" // Замените на актуальную ссылку YouTube видео проекта
+              title="Heart & Angel Cinematic"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
               allowFullScreen
             />
           </div>
-        </div>
-      )}
+        </section>
+
+        {/* 4. CONCEPT BLOCK */}
+        <section className="w-full grid grid-cols-1 md:grid-cols-2 gap-10 items-center bg-stone-100/70 p-8 sm:p-12 rounded-3xl border border-stone-200/80">
+          <div className="space-y-4">
+            <span className="font-mono text-xs uppercase tracking-[0.3em] text-orange-600">Core Concept</span>
+            <h3 className="font-serif text-3xl sm:text-4xl font-light text-stone-900">
+              The Network of Hearts
+            </h3>
+            <p className="font-serif text-stone-700 font-light leading-relaxed text-base">
+              Everything starts with a heart. In cities and virtual realms alike, hearts are scattered as focal points of attention. Finding them requires presence, walking, and tuned awareness.
+            </p>
+          </div>
+          <div className="relative w-full h-64 flex items-center justify-center">
+            <Image 
+              src={ASSETS.heart} 
+              alt="Heart Concept" 
+              width={260} 
+              height={260} 
+              className="object-contain drop-shadow-[0_15px_30px_rgba(255,100,100,0.3)] animate-pulse" 
+            />
+          </div>
+        </section>
+
+        {/* 5. GALLERY BLOCK */}
+        <section className="w-full space-y-8">
+          <div className="flex items-center justify-between">
+            <h2 className="font-mono text-xs uppercase tracking-[0.3em] text-stone-400">
+              Visual Archive &amp; Artifacts
+            </h2>
+            <span className="font-mono text-xs text-stone-400">Gallery</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="relative aspect-[4/5] rounded-3xl overflow-hidden bg-stone-200 shadow-lg border border-stone-200 group">
+              <Image 
+                src={ASSETS.angel} 
+                alt="Artifact Angel" 
+                fill 
+                className="object-contain p-8 group-hover:scale-105 transition-transform duration-700" 
+              />
+              <div className="absolute bottom-4 left-4 right-4 p-4 rounded-2xl bg-white/80 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity">
+                <p className="font-serif text-sm font-medium">Guardian Archetype I</p>
+                <p className="font-mono text-[10px] opacity-60 uppercase">Digital Print / Canvas</p>
+              </div>
+            </div>
+
+            <div className="relative aspect-[4/5] rounded-3xl overflow-hidden bg-stone-200 shadow-lg border border-stone-200 group">
+              <Image 
+                src={ASSETS.daemon} 
+                alt="Artifact Daemon" 
+                fill 
+                className="object-contain p-8 group-hover:scale-105 transition-transform duration-700" 
+              />
+              <div className="absolute bottom-4 left-4 right-4 p-4 rounded-2xl bg-white/80 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity">
+                <p className="font-serif text-sm font-medium">Daemon Archetype I</p>
+                <p className="font-mono text-[10px] opacity-60 uppercase">Digital Print / Canvas</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 6. END / FOOTER */}
+        <footer className="w-full pt-12 pb-8 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-center">
+          <div className="font-mono text-xs uppercase tracking-widest text-stone-500">
+            &copy; {new Date().getFullYear()} Anton Merkurov
+          </div>
+          <Link 
+            href="/temple"
+            className="font-serif text-sm text-stone-800 hover:text-black underline tracking-wide"
+          >
+            Return to Digital Temple
+          </Link>
+        </footer>
+
+      </div>
     </main>
   );
 }
