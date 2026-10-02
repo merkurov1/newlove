@@ -113,13 +113,13 @@ export default function WorldScene() {
     <main
       onClick={triggerHeartRain}
       onMouseMove={handleMouseMove}
-      className={`relative w-full h-[calc(100vh-6rem)] mt-24 overflow-hidden bg-gradient-to-b ${timeGradient} transition-colors duration-1000 select-none cursor-pointer flex flex-col justify-end`}
+      className={`relative w-full h-[100dvh] pt-24 overflow-hidden bg-gradient-to-b ${timeGradient} transition-colors duration-1000 select-none cursor-pointer flex flex-col justify-end`}
     >
       {/* Скрытый аудиоэлемент */}
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
       {/* Кнопка управления звуком */}
-      <div className="absolute top-6 right-6 z-45">
+      <div className="absolute top-28 right-6 z-45">
         <button
           onClick={toggleAudio}
           className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/25 backdrop-blur-md border border-white/40 text-white/90 hover:bg-white/35 transition-all shadow-lg group"
@@ -158,7 +158,7 @@ export default function WorldScene() {
 
       {/* 2. Солнце (фиксированное) */}
       <div
-        className={`absolute top-16 left-[20%] w-32 h-32 md:w-40 md:h-40 pointer-events-none transition-opacity duration-1000 ${
+        className={`absolute top-36 left-[20%] w-32 h-32 md:w-40 md:h-40 pointer-events-none transition-opacity duration-1000 ${
           isNight ? 'opacity-0' : 'opacity-90 drop-shadow-[0_0_30px_rgba(255,220,100,0.5)]'
         }`}
       >
@@ -167,10 +167,10 @@ export default function WorldScene() {
 
       {/* Звезды ночью (фиксированные) */}
       <div className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ${isNight ? 'opacity-100' : 'opacity-0'}`}>
-        <div className="absolute top-12 left-20 w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-        <div className="absolute top-24 right-1/3 w-2 h-2 bg-white rounded-full opacity-90 shadow-[0_0_8px_#fff]" />
-        <div className="absolute top-36 left-1/4 w-1 h-1 bg-white rounded-full opacity-70" />
-        <div className="absolute top-20 right-24 w-2 h-2 bg-white rounded-full animate-pulse" />
+        <div className="absolute top-28 left-20 w-1.5 h-1.5 bg-white rounded-full animate-ping" />
+        <div className="absolute top-40 right-1/3 w-2 h-2 bg-white rounded-full opacity-90 shadow-[0_0_8px_#fff]" />
+        <div className="absolute top-48 left-1/4 w-1 h-1 bg-white rounded-full opacity-70" />
+        <div className="absolute top-32 right-24 w-2 h-2 bg-white rounded-full animate-pulse" />
       </div>
 
       {/* 3. Уровень земли */}
@@ -188,7 +188,7 @@ export default function WorldScene() {
 
       {/* Центральное сердце-шарик (плавно движется за курсором мыши) */}
       <div 
-        className="absolute top-[18%] left-1/2 z-20 pointer-events-none flex flex-col items-center animate-bounce-slow transition-transform duration-300 ease-out"
+        className="absolute top-[28%] left-1/2 z-20 pointer-events-none flex flex-col items-center animate-bounce-slow transition-transform duration-300 ease-out"
         style={{ 
           transform: `translate(calc(-50% + ${mousePos.x * 35}px), calc(-50% + ${mousePos.y * 25}px))` 
         }}
