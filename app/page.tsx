@@ -69,10 +69,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* --- FOOTER DIRECTORY --- */}
-        <footer className="w-full max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2 pt-6 border-t border-zinc-300/80 shrink-0 font-mono text-[10px] sm:text-xs text-zinc-500 uppercase tracking-[0.25em] mt-12 z-20 text-center">
-        </footer>
-
+    
       </main>
     </>
   );
