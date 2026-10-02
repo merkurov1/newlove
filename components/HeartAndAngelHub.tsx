@@ -147,20 +147,7 @@ export default function HeartAndAngelHub() {
           <HeartAndAngelSection images={images} />
         </div>
 
-        {/* 4. Блок The Concept */}
-        <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm space-y-6">
-          <span className="text-xs font-mono uppercase tracking-[0.25em] text-stone-400 block">
-            The Concept
-          </span>
-          <h3 className="text-3xl font-serif font-medium text-stone-900">
-            A Universal Language of Symbols
-          </h3>
-          <p className="text-stone-700 font-light leading-relaxed text-base sm:text-lg">
-            By stripping away the superfluous and focusing on the core archetypes of the Heart and the Angel, 
-            the project builds a bridge between ancient visual traditions and modern digital consciousness. 
-            It offers a sanctuary of meaning where every visitor can find personal resonance.
-          </p>
-        </div>
+        
 
         {/* 5. Мини-проекты */}
         <div className="w-full space-y-8">
