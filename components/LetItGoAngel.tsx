@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
 
 const ANGEL_WITH_HEART =
@@ -91,11 +92,21 @@ export default function LetItGoAngel() {
   return (
     <main className={`relative w-full h-[100dvh] overflow-hidden ${skyGradient} flex flex-col items-center justify-end select-none animate-fade-in transition-colors duration-1000`}>
       
-      <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
+      {/* Верхняя панель с кнопкой возврата и счетчиком */}
+      <header className="absolute top-0 left-0 w-full z-50 flex justify-between items-center p-6 sm:p-12 pointer-events-auto">
+        <Link 
+          href="/temple"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/80 text-stone-900 shadow-md transition-all text-xs font-serif tracking-wider hover:bg-white cursor-pointer"
+        >
+          <span>← Back to Temple</span>
+        </Link>
 
-      <div className="absolute top-36 right-8 sm:top-28 sm:right-12 text-stone-800 font-mono text-sm sm:text-base tracking-[0.2em] z-50 bg-white/85 px-4 py-2 rounded-full backdrop-blur-md border border-white/40 shadow-md animate-fade-in">
-        ❤️ {clickCount}
-      </div>
+        <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/30 shadow-md animate-fade-in">
+          ❤️ {clickCount}
+        </div>
+      </header>
+
+      <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
 
       <div className="relative w-full max-w-3xl h-full flex items-end justify-center pb-[10vh] z-20">
         <div 
