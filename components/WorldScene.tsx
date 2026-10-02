@@ -84,7 +84,7 @@ export default function WorldScene() {
   return (
     <div
       onClick={triggerHeartRain}
-      className={`relative w-full h-[calc(100vh-5rem)] mt-20 overflow-hidden bg-gradient-to-b ${bgStyles[timeOfDay]} transition-colors duration-1000 select-none cursor-pointer`}
+      className={`relative w-full h-[calc(100vh-6rem)] mt-24 overflow-hidden bg-gradient-to-b ${bgStyles[timeOfDay]} transition-colors duration-1000 select-none cursor-pointer`}
     >
       {/* 1. Облака */}
       <div className="absolute inset-0 opacity-30 pointer-events-none scale-90">
@@ -95,9 +95,9 @@ export default function WorldScene() {
         />
       </div>
 
-      {/* 2. Солнце (опущено ниже, крупное) */}
+      {/* 2. Солнце (опущено ниже) */}
       <div
-        className={`absolute top-20 left-1/4 w-44 h-44 transition-opacity duration-1000 pointer-events-none ${
+        className={`absolute top-36 left-1/4 w-44 h-44 transition-opacity duration-1000 pointer-events-none ${
           timeOfDay === 'night' ? 'opacity-0' : 'opacity-90'
         }`}
       >
@@ -117,10 +117,10 @@ export default function WorldScene() {
       </div>
 
       {/* 4. Отрисованная земля (поднята выше) */}
-      <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-emerald-600 to-emerald-500 rounded-t-[40%] scale-x-125 pointer-events-none opacity-95 shadow-inner" />
+      <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-emerald-600 to-emerald-500 rounded-t-[40%] scale-x-125 pointer-events-none opacity-95 shadow-inner" />
 
-      {/* 5. Дом и дерево (выше, сдвинуты левее) */}
-      <div className="absolute bottom-16 right-28 md:right-40 w-36 md:w-48 pointer-events-none">
+      {/* 5. Дом и дерево (выше, смещены левее) */}
+      <div className="absolute bottom-20 right-48 md:right-64 w-36 md:w-48 pointer-events-none">
         <img src={ASSETS.house} alt="House and Tree" className="w-full h-auto drop-shadow-md" />
         {/* Ночное свечение окна */}
         <div
@@ -130,22 +130,22 @@ export default function WorldScene() {
         />
       </div>
 
-      {/* 6. Герой (выше, крупнее, сдвинут правее) */}
+      {/* 6. Герой (левее, выше, ровно на земле) */}
       {heroUrl && (
-        <div className="absolute bottom-16 left-28 md:left-44 w-32 md:w-40 pointer-events-none">
+        <div className="absolute bottom-20 left-16 md:left-28 w-32 md:w-40 pointer-events-none">
           <img src={heroUrl} alt="Hero" className="w-full h-auto drop-shadow-md" />
         </div>
       )}
 
-      {/* 7. Сердечко-шарик по центру (опущено ниже) */}
-      <div className="absolute top-36 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none animate-bounce-slow">
+      {/* 7. Сердечко-шарик (опущено ниже) */}
+      <div className="absolute top-48 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none animate-bounce-slow">
         <img src={ASSETS.heart} alt="Heart Balloon" className="w-24 h-24 md:w-32 md:h-32 drop-shadow-xl" />
       </div>
 
-      {/* 8. Нитка под новые координаты */}
+      {/* 8. Скорректированная нитка */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none">
         <path
-          d="M calc(7rem + 54px) calc(100% - 105px) Q calc(50% - 50px) calc(50% + 10px) 50% 190px"
+          d="M calc(4rem + 54px) calc(100% - 130px) Q calc(50% - 50px) calc(50% + 20px) 50% 230px"
           fill="none"
           stroke="rgba(0,0,0,0.3)"
           strokeWidth="2"
