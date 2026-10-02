@@ -1,11 +1,18 @@
 import Link from 'next/link';
 import PasskeyAuth from '@/components/PasskeyAuth';
+import { revalidateLetters } from './actions';
 
 export const dynamic = 'force-dynamic';
 
-import { revalidateLetters } from './actions';
+interface AdminDashboardProps {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }> | { [key: string]: string | string[] | undefined };
+}
 
-export default async function AdminDashboard({ searchParams }: { searchParams?: any }) {
+export default async function AdminDashboard({ searchParams }: AdminDashboardProps) {
+  // Safe handling for Next.js 15+ async searchParams
+  const resolvedSearchParams = searchParams instanceof Promise ? await searchParams : searchParams;
+  const revalidated = resolvedSearchParams?.revalidated === '1';
+
   let stats = { articles: 0, projects: 0, letters: 0, postcards: 0 };
   let recentArticles: any[] = [];
   let recentProjects: any[] = [];
@@ -14,36 +21,44 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
   try {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
-    const [articlesCount, projectsCount, lettersCount, postcardsCount, articlesData, projectsData] =
-      await Promise.all([
-        serverSupabase.from('articles').select('id', { count: 'exact', head: true }),
-        serverSupabase.from('projects').select('id', { count: 'exact', head: true }),
-        serverSupabase.from('letters').select('id', { count: 'exact', head: true }),
-        serverSupabase.from('postcards').select('id', { count: 'exact', head: true }),
-        serverSupabase
-          .from('articles')
-          .select('id,title,slug,published,author:authorId(name),updatedAt')
-          .order('updatedAt', { ascending: false })
-          .limit(5),
-        serverSupabase
-          .from('projects')
-          .select('id,title,slug,published,createdAt')
-          .order('createdAt', { ascending: false })
-          .limit(5),
-      ]);
+
+    const [
+      articlesCount,
+      projectsCount,
+      lettersCount,
+      postcardsCount,
+      articlesData,
+      projectsData,
+    ] = await Promise.all([
+      serverSupabase.from('articles').select('id', { count: 'exact', head: true }),
+      serverSupabase.from('projects').select('id', { count: 'exact', head: true }),
+      serverSupabase.from('letters').select('id', { count: 'exact', head: true }),
+      serverSupabase.from('postcards').select('id', { count: 'exact', head: true }),
+      serverSupabase
+        .from('articles')
+        .select('id,title,slug,published,author:authorId(name),updatedAt')
+        .order('updatedAt', { ascending: false })
+        .limit(5),
+      serverSupabase
+        .from('projects')
+        .select('id,title,slug,published,createdAt')
+        .order('createdAt', { ascending: false })
+        .limit(5),
+    ]);
+
     stats = {
       articles: articlesCount.count ?? 0,
       projects: projectsCount.count ?? 0,
       letters: lettersCount.count ?? 0,
       postcards: postcardsCount.count ?? 0,
     };
+
     recentArticles = Array.isArray(articlesData.data) ? articlesData.data : [];
     recentProjects = Array.isArray(projectsData.data) ? projectsData.data : [];
   } catch (e) {
     console.error('Admin dashboard data fetch error:', e);
     dataUnavailable = true;
   }
-  const revalidated = searchParams?.revalidated === '1';
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 p-6 md:p-12 space-y-12 max-w-7xl mx-auto selection:bg-white selection:text-black">
@@ -144,7 +159,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
           Force clear cache and revalidate public letter feeds immediately after updates.
         </p>
         <form
-          action={async (formData: FormData) => {
+          action={async () => {
             'use server';
             try {
               await revalidateLetters();

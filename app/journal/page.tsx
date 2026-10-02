@@ -13,7 +13,7 @@ export const metadata = sanitizeMetadata({
 });
 
 interface Props {
-  searchParams?: { [key: string]: string | string[] | undefined };
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }> | { [key: string]: string | string[] | undefined };
 }
 
 // Функция для очистки текста превью — поддерживает `data.html` и `data.text` в блоках
@@ -31,25 +31,21 @@ function getPreviewText(content: any, limit = 320) {
   let text = '';
 
   if (typeof content === 'string') {
-    // Try JSON (EditorJS-like or custom blocks)
     try {
       const json = JSON.parse(content);
       const blocks = Array.isArray(json) ? json : json?.blocks || [];
       const parts: string[] = [];
       for (const b of blocks) {
         if (!b || !b.data) continue;
-        // Support different shapes: b.data.html, b.data.text, or plain string
         const html = typeof b.data === 'string' ? b.data : b.data.html || b.data.text || '';
         const part = stripHtml(html);
         if (part) parts.push(part);
       }
       text = parts.join(' ');
       if (!text) {
-        // Fallback: treat original string as HTML/plain text
         text = stripHtml(content);
       }
     } catch {
-      // Not JSON — treat as HTML/plain text
       text = stripHtml(content);
     }
   } else if (typeof content === 'object') {
@@ -69,20 +65,23 @@ function getPreviewText(content: any, limit = 320) {
 }
 
 export default async function JournalPage({ searchParams }: Props) {
+  // Safe resolution for Next.js 15+ async searchParams
+  if (searchParams instanceof Promise) {
+    await searchParams;
+  }
+
   let initialLetters: any[] = [];
   try {
     const supabase = createClient();
-    const selectCols = 'id, title, slug, content, published, publishedAt, sentAt, createdAt, authorId';
+    const selectCols = 'id, title, slug, content, published, publishedAt, sentAt, createdAt, authorId, summary';
 
-    // Try ordering by `sentAt` (newest first). If that errors or returns no rows,
-    // fall back to ordering by `publishedAt` to avoid showing an empty list.
     let lettersData: any[] | null = null;
     let queryError: any = null;
 
     try {
       const res = await supabase
         .from('letters')
-        .select(selectCols as any)
+        .select(selectCols)
         .eq('published', true)
         .order('sentAt', { ascending: false })
         .limit(50);
@@ -93,11 +92,10 @@ export default async function JournalPage({ searchParams }: Props) {
     }
 
     if ((!lettersData || lettersData.length === 0) && !queryError) {
-      // If sentAt produced zero rows, try publishedAt as a fallback
       try {
         const res2 = await supabase
           .from('letters')
-          .select(selectCols as any)
+          .select(selectCols)
           .eq('published', true)
           .order('publishedAt', { ascending: false })
           .limit(50);
@@ -113,7 +111,6 @@ export default async function JournalPage({ searchParams }: Props) {
         id: l.id,
         title: l.title,
         slug: l.slug,
-        // Use summary when available, else try parsed preview, else fallback to stripped raw content
         preview:
           l.summary ||
           getPreviewText(l.content) ||
@@ -121,6 +118,8 @@ export default async function JournalPage({ searchParams }: Props) {
             ? (l.content.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 320) + (l.content.length > 320 ? '...' : ''))
             : ''),
         publishedAt: l.publishedAt,
+        sentAt: l.sentAt,
+        createdAt: l.createdAt,
       }));
     } else if (queryError) {
       console.error('Journal query error:', queryError);
@@ -132,26 +131,41 @@ export default async function JournalPage({ searchParams }: Props) {
   return (
     <main className="min-h-screen bg-[#FDFBF7] text-[#111] font-sans selection:bg-black selection:text-white">
         
-        {/* HEADER (match /advising) */}
+        {/* HEADER */}
         <div className="max-w-3xl mx-auto px-6 py-20 md:py-32">
           <CenteredHeader eyebrow={<>// System Logs</>} title={<>The Journal</>} subtitle={<>Notes on art, technology, and the architecture of value.</>} />
           <SubscribeFormClient />
         </div>
 
-        {/* ARTICLES: single-column, centered like /advising */}
-        <div className="max-w-3xl mx-auto px-6 space-y-12">
-          {initialLetters.map((article) => (
-            <article key={article.id} className="group">
-              <Link href={`/journal/${article.slug}`} className="block">
-                <div className="mb-3 font-mono text-[10px] uppercase tracking-widest text-gray-400">
-                  {new Date(article.publishedAt || article.sentAt || article.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </div>
-                <h2 className="text-2xl md:text-4xl font-serif font-medium text-black mb-3 group-hover:text-red-600 transition-colors duration-300 leading-tight">{article.title}</h2>
-                <p className="text-base md:text-lg text-gray-700 font-serif leading-relaxed mb-4 whitespace-pre-line">{article.preview}</p>
-                <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest border-b border-black pb-1 group-hover:border-red-600 group-hover:text-red-600 transition-all">Read Dispatch <ArrowRight size={12} /></div>
-              </Link>
-            </article>
-          ))}
+        {/* ARTICLES */}
+        <div className="max-w-3xl mx-auto px-6 space-y-12 pb-24">
+          {initialLetters.length === 0 ? (
+            <div className="text-center text-gray-500 font-serif py-12">No dispatches found.</div>
+          ) : (
+            initialLetters.map((article) => {
+              const displayDate = article.publishedAt || article.sentAt || article.createdAt;
+              return (
+                <article key={article.id} className="group">
+                  <Link href={`/journal/${article.slug}`} className="block">
+                    {displayDate && (
+                      <div className="mb-3 font-mono text-[10px] uppercase tracking-widest text-gray-400">
+                        {new Date(displayDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </div>
+                    )}
+                    <h2 className="text-2xl md:text-4xl font-serif font-medium text-black mb-3 group-hover:text-red-600 transition-colors duration-300 leading-tight">
+                      {article.title}
+                    </h2>
+                    <p className="text-base md:text-lg text-gray-700 font-serif leading-relaxed mb-4 whitespace-pre-line">
+                      {article.preview}
+                    </p>
+                    <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest border-b border-black pb-1 group-hover:border-red-600 group-hover:text-red-600 transition-all">
+                      Read Dispatch <ArrowRight size={12} />
+                    </div>
+                  </Link>
+                </article>
+              );
+            })
+          )}
         </div>
     </main>
   );

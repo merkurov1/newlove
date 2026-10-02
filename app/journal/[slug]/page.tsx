@@ -7,8 +7,14 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { getFirstImage, generateDescription } from '@/lib/contentUtils';
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
-  const slug = params.slug;
+interface PageProps {
+  params: Promise<{ slug: string }> | { slug: string };
+}
+
+export async function generateMetadata({ params }: PageProps) {
+  const resolvedParams = params instanceof Promise ? await params : params;
+  const slug = resolvedParams.slug;
+  
   try {
     const supabase = createClient();
     const { data: letter } = await supabase
@@ -20,7 +26,6 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
     if (!letter) return { title: 'Journal | Merkurov' };
 
-    // Try to build a short description and extract the first image for social cards
     let description = '';
     try {
       description = generateDescription(letter.content || '') || '';
@@ -61,8 +66,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   }
 }
 
-export default async function LetterPage({ params }: { params: { slug: string } }) {
-  const slug = params.slug;
+export default async function LetterPage({ params }: PageProps) {
+  const resolvedParams = params instanceof Promise ? await params : params;
+  const slug = resolvedParams.slug;
   const supabase = createClient();
 
   const { data: letter, error } = await supabase
@@ -92,8 +98,6 @@ export default async function LetterPage({ params }: { params: { slug: string } 
 
   return (
     <main className="min-h-screen bg-white text-zinc-900 selection:bg-black selection:text-white font-serif">
-      
-      {/* NAV */}
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-zinc-100 py-4 px-6 md:px-12 flex justify-between items-center">
         <Link 
           href="/journal" 
@@ -105,13 +109,10 @@ export default async function LetterPage({ params }: { params: { slug: string } 
       </nav>
 
       <article className="max-w-3xl mx-auto px-6 py-16 md:py-24">
-        
-        {/* HEADER */}
         <header className="mb-16 md:mb-20 text-center">
           <h1 className="text-4xl md:text-6xl font-serif font-medium leading-tight mb-8 text-black">
             {letter.title}
           </h1>
-          
           <div className="flex justify-center items-center gap-4 text-xs font-mono uppercase tracking-widest text-zinc-500">
              <span>{dateStr}</span>
              <span className="w-1 h-1 bg-zinc-300 rounded-full"></span>
@@ -119,7 +120,6 @@ export default async function LetterPage({ params }: { params: { slug: string } 
           </div>
         </header>
 
-        {/* CONTENT */}
         <div className="prose prose-lg md:prose-xl prose-stone max-w-none 
           prose-headings:font-serif prose-headings:font-medium prose-headings:text-black
           prose-p:font-serif prose-p:text-zinc-800 prose-p:leading-[1.8]
@@ -127,7 +127,6 @@ export default async function LetterPage({ params }: { params: { slug: string } 
           prose-blockquote:border-l-2 prose-blockquote:border-black prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-zinc-800
           prose-code:font-mono prose-code:text-sm prose-code:bg-zinc-100 prose-code:px-1 prose-code:rounded
           mb-24">
-            
             {blocks && blocks.length > 0 ? (
               <BlockRenderer blocks={blocks} />
             ) : (
@@ -135,17 +134,14 @@ export default async function LetterPage({ params }: { params: { slug: string } 
                  Content loading...
               </div>
             )}
-            
         </div>
 
-        {/* SIGNATURE */}
         <div className="flex justify-center mb-20">
            <div className="text-center">
               <span className="font-serif italic text-2xl text-zinc-400">A.M.</span>
            </div>
         </div>
 
-        {/* COMMENTS */}
         <section className="border-t border-zinc-100 pt-16">
             <div className="flex items-center gap-3 mb-8">
                <MessageSquare size={18} className="text-zinc-400" />
@@ -157,7 +153,6 @@ export default async function LetterPage({ params }: { params: { slug: string } 
                 <LetterCommentsClient slug={slug} />
             </div>
         </section>
-
       </article>
     </main>
   );
