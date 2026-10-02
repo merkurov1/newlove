@@ -627,30 +627,95 @@ export default function ArtEngineClient() {
         </div>
 
         {!loadingUser && !user ? (
-          <div className="py-12 sm:py-24 max-w-4xl mx-auto text-center space-y-6 sm:space-y-10 bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-20 rounded-3xl shadow-sm">
-            <div className="space-y-3">
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif text-neutral-900 leading-tight">
-                Fine Art Banking & Advisory Infrastructure
-              </h2>
-              
-              <p className="text-xs sm:text-base md:text-lg font-serif text-neutral-600 leading-relaxed font-light max-w-2xl mx-auto pt-1">
-                Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists. Generate institutional-quality investment memoranda in seconds.
-              </p>
+          <div className="space-y-10">
+            {/* Promo / Auth Hero Box */}
+            <div className="py-12 sm:py-24 max-w-4xl mx-auto text-center space-y-6 sm:space-y-10 bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-20 rounded-3xl shadow-sm">
+              <div className="space-y-3">
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif text-neutral-900 leading-tight">
+                  Fine Art Banking & Advisory Infrastructure
+                </h2>
+                
+                <p className="text-xs sm:text-base md:text-lg font-serif text-neutral-600 leading-relaxed font-light max-w-2xl mx-auto pt-1">
+                  Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists. Generate institutional-quality investment memoranda in seconds.
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 font-mono">
+                <button
+                  onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
+                  className="bg-neutral-900 hover:bg-black text-white text-xs uppercase tracking-widest px-8 py-3.5 transition shadow-sm font-bold rounded-full"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
+                  className="bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 text-xs uppercase tracking-widest px-8 py-3.5 transition font-bold rounded-full"
+                >
+                  Request Access
+                </button>
+              </div>
             </div>
 
-            <div className="pt-2 flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 font-mono">
-              <button
-                onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
-                className="bg-neutral-900 hover:bg-black text-white text-xs uppercase tracking-widest px-8 py-3.5 transition shadow-sm font-bold rounded-full"
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
-                className="bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 text-xs uppercase tracking-widest px-8 py-3.5 transition font-bold rounded-full"
-              >
-                Request Access
-              </button>
+            {/* INTEGRATED INSTITUTIONAL CASE STUDIES (WHITE CUBE STYLE) */}
+            <div className="max-w-4xl mx-auto bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-14 rounded-3xl shadow-sm space-y-10">
+              <div className="text-center space-y-2">
+                <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-neutral-400 block">
+                  [ CURATOR ENGINE — INSTITUTIONAL CASE STUDIES ]
+                </span>
+                <h3 className="text-2xl sm:text-3xl font-serif text-neutral-900">
+                  AI-Driven Art Valuation & Heritage Architecture
+                </h3>
+              </div>
+
+              <div className="space-y-8 divide-y divide-neutral-100">
+                {/* Case 1: Fontana */}
+                <div className="pt-6 first:pt-0">
+                  <Link href="/case-study/fontana" className="block group">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1 font-mono text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
+                      <span>Asset: Lucio Fontana (1968) // Valuation & Arbitrage</span>
+                      <span className="text-neutral-400 group-hover:text-neutral-900 transition-colors mt-1 sm:mt-0">Analyze →</span>
+                    </div>
+                    <h4 className="font-serif text-xl sm:text-2xl text-neutral-900 group-hover:text-red-700 transition-colors mb-2">
+                      CASE STUDY: THE WHITE ABSOLUTE
+                    </h4>
+                    <p className="font-serif italic text-neutral-600 text-sm sm:text-base leading-relaxed">
+                      See how the Curator Engine analyzes liquidity, risk, and market arbitrage for institutional-grade assets. This is the level of depth I bring to every acquisition.
+                    </p>
+                  </Link>
+                </div>
+
+                {/* Case 2: Garcia */}
+                <div className="pt-6">
+                  <Link href="/case-study/garcia" className="block group">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1 font-mono text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
+                      <span>Asset: Emil Garcia // Curation & Packaging</span>
+                      <span className="text-neutral-400 group-hover:text-neutral-900 transition-colors mt-1 sm:mt-0">Examine →</span>
+                    </div>
+                    <h4 className="font-serif text-xl sm:text-2xl text-neutral-900 group-hover:text-red-700 transition-colors mb-2">
+                      CASE STUDY: POETICS OF SILENCE
+                    </h4>
+                    <p className="font-serif italic text-neutral-600 text-sm sm:text-base leading-relaxed">
+                      Examine how AI-assisted provenance and structural framing transform non-conformist heritage into sovereign cultural capital.
+                    </p>
+                  </Link>
+                </div>
+
+                {/* Case 3: Pivovarov */}
+                <div className="pt-6">
+                  <Link href="/case-study/pivovarov" className="block group">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1 font-mono text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
+                      <span>Asset: Ilya Pivovarov // Conceptual Dossier</span>
+                      <span className="text-neutral-400 group-hover:text-neutral-900 transition-colors mt-1 sm:mt-0">Read Dossier →</span>
+                    </div>
+                    <h4 className="font-serif text-xl sm:text-2xl text-neutral-900 group-hover:text-red-700 transition-colors mb-2">
+                      CASE STUDY: TOTAL LONELINESS
+                    </h4>
+                    <p className="font-serif italic text-neutral-600 text-sm sm:text-base leading-relaxed">
+                      A foundational case study in Moscow Conceptualism, exploring inward-facing rigour, total solitude, and institutional endurance.
+                    </p>
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -970,7 +1035,6 @@ export default function ArtEngineClient() {
                             )}
                           </div>
 
-                          (p-5 sm:p-6 flex-1 flex flex-col justify-between space-y-3)
                           <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between space-y-3">
                             <div>
                               <div className="flex justify-between items-start text-neutral-400 font-mono text-[10px] uppercase tracking-wider mb-1 gap-2">
