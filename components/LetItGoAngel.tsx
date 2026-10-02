@@ -58,7 +58,7 @@ export default function LetItGoAngel() {
         };
 
         if (navigator.sendBeacon) {
-          const blob = new Blob([JSON.stringify(payload)], { type: 'application/json'}`;
+          const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
           navigator.sendBeacon('/api/temple_logs', blob);
         } else {
           fetch('/api/temple_logs', {
