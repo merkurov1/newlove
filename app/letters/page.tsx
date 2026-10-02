@@ -1,7 +1,4 @@
 import NewsletterSubscribe from '@/components/letters/NewsletterSubscribe';
-import { Suspense } from 'react';
-import LettersArchive from '@/components/letters/LettersArchive';
-import PostcardShop from '@/components/letters/PostcardShop';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { createClient } from '@/lib/supabase/server';
 import nextDynamic from 'next/dynamic';
@@ -20,45 +17,46 @@ interface Props {
 }
 
 export default async function LettersPage({ searchParams }: Props) {
-  // NOTE: removed temporary server debug output for production.
-
-  // Fetch published letters server-side to provide initial data to the client
   let initialLetters: any[] = [];
   let lastUpdated: string | null = null;
-  try {
-    // Use anon client by default so this page renders even when SUPABASE_SERVICE_ROLE_KEY
-    // is not configured in the environment. Only use service role when debug is requested.
-    const supabase = createClient();
-    // Use anon-safe select columns (don't join protected `User` table here).
-    const selectCols = 'id, title, slug, published, publishedAt, createdAt, authorId';
 
+  try {
+    const supabase = createClient();
+    
     const { data: lettersData, error } = await supabase
       .from('letters')
-      // cast to any to avoid TypeScript parsing issues with PostgREST relation syntax
-      .select(selectCols as any)
+      .select('*')
       .eq('published', true)
-      .order('publishedAt', { ascending: false })
       .limit(100);
-    if (!error && Array.isArray(lettersData)) {
-      initialLetters = lettersData.map((l: any) => ({
-        id: l.id,
-        title: l.title,
-        slug: l.slug,
-        publishedAt: l.publishedAt,
-        createdAt: l.createdAt,
-        author: { name: (Array.isArray(l.User) ? l.User[0]?.name : l.User?.name) || null },
-      }));
-      if ((lettersData as any).length > 0) {
-        const first = (lettersData as any)[0];
-        lastUpdated = first.publishedAt || first.createdAt || null;
+
+    if (error) {
+      console.error('Server initial letters fetch error:', error);
+    } else if (Array.isArray(lettersData)) {
+      initialLetters = lettersData.map((l: any) => {
+        const pubDate = l.publishedAt || l.published_at || l.createdAt || l.created_at;
+        return {
+          id: l.id,
+          title: l.title,
+          slug: l.slug,
+          publishedAt: pubDate,
+          createdAt: l.createdAt || l.created_at,
+          author: { name: l.author?.name || l.author_name || null },
+        };
+      });
+
+      initialLetters.sort((a, b) => {
+        const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+        const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      if (initialLetters.length > 0) {
+        lastUpdated = initialLetters[0].publishedAt || initialLetters[0].createdAt || null;
       }
-    } else if (error) {
-      console.error('Server initial letters fetch error', error);
     }
   } catch (e) {
-    console.error('Server initial letters fetch unexpected error', e);
+    console.error('Server initial letters fetch unexpected error:', e);
   }
-  // ...existing code...
 
   return (
     <>
@@ -81,26 +79,32 @@ export default async function LettersPage({ searchParams }: Props) {
 
         {/* Table of Contents */}
         <section className="w-full max-w-2xl mx-auto flex-1">
-          <ul className="flex flex-col gap-10">
-            {initialLetters.map((letter) => (
-              <li key={letter.id}>
-                <a href={`/letters/${letter.slug}`} className="block group">
-                  <span
-                    className="block text-2xl md:text-3xl font-serif font-bold text-black group-hover:underline tracking-wide leading-snug"
-                    style={{ fontFamily: 'Playfair Display, Times New Roman, serif' }}
-                  >
-                    {letter.title}
-                  </span>
-                  <span
-                    className="block text-xs text-gray-400 mt-1 tracking-widest"
-                    style={{ letterSpacing: '0.12em' }}
-                  >
-                    {letter.publishedAt ? new Date(letter.publishedAt).getFullYear() : ''}
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
+          {initialLetters.length === 0 ? (
+            <div className="text-center text-gray-400 py-12 font-serif italic">
+              No entries found.
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-10">
+              {initialLetters.map((letter) => (
+                <li key={letter.id}>
+                  <a href={`/letters/${letter.slug}`} className="block group">
+                    <span
+                      className="block text-2xl md:text-3xl font-serif font-bold text-black group-hover:underline tracking-wide leading-snug"
+                      style={{ fontFamily: 'Playfair Display, Times New Roman, serif' }}
+                    >
+                      {letter.title}
+                    </span>
+                    <span
+                      className="block text-xs text-gray-400 mt-1 tracking-widest"
+                      style={{ letterSpacing: '0.12em' }}
+                    >
+                      {letter.publishedAt ? new Date(letter.publishedAt).getFullYear() : ''}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* Minimalist Newsletter Subscribe at the very bottom */}
