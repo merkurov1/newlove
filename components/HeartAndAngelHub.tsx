@@ -33,16 +33,16 @@ const MINI_PROJECTS = [
 
 export default function HeartAndAngelHub() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const videoId = 'Q5Kdzf9BJkE'; // ID видео с вашего YouTube канала
+  const videoId = 'Q5Kdzf9BJkE'; // ID видео с YouTube канала
 
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       <Header />
 
-      {/* Hero-блок (клик ведет в World) */}
+      {/* Hero-блок (убран лишний класс block) */}
       <Link 
         href="/heartandangel/world"
-        className="relative w-full h-[500px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5] block group cursor-pointer"
+        className="relative w-full h-[500px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5] group cursor-pointer"
       >
         <Image
           src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
