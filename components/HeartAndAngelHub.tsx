@@ -141,33 +141,30 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* 3. Галерея подряд (лента с сохранением оригинальных пропорций) */}
-        <div className="w-full space-y-12">
-          {images.map((src, idx) => (
-            <div 
-              key={idx} 
-              className="relative w-full bg-white border border-stone-200/80 p-6 sm:p-12 rounded-3xl shadow-sm flex flex-col items-center group transition-all duration-500 hover:border-stone-400"
-            >
-              <div className="w-full flex justify-between items-center mb-6">
-                <span className="font-mono text-xs uppercase tracking-widest text-stone-400">
-                  Artifact 0{idx + 1}
-                </span>
-                <span className="font-mono text-[10px] text-stone-400">
+        {/* 3. Галерея с работами */}
+        <div className="w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
+            {images.map((src, idx) => (
+              <div 
+                key={idx} 
+                className="relative w-full aspect-square bg-white border border-stone-200/80 p-8 flex items-center justify-center group transition-all duration-500 hover:border-stone-400 rounded-3xl shadow-sm"
+              >
+                <div className="absolute top-6 right-6 font-mono text-[10px] text-stone-400 group-hover:text-stone-700 transition-colors">
                   REF_{String(idx + 1).padStart(2, '0')}
-                </span>
+                </div>
+                
+                <div className="relative w-full h-full">
+                  <Image
+                    src={src}
+                    alt={`Artifact ${idx + 1}`}
+                    fill
+                    className="object-contain drop-shadow-xl transition-transform duration-500 group-hover:scale-105"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                  />
+                </div>
               </div>
-              
-              <div className="relative w-full max-w-3xl aspect-[4/3] sm:aspect-[16/10] flex items-center justify-center">
-                <Image
-                  src={src}
-                  alt={`Artifact ${idx + 1}`}
-                  fill
-                  className="object-contain drop-shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]"
-                  sizes="(max-width: 1024px) 100vw, 800px"
-                />
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* 4. Блок The Concept */}
