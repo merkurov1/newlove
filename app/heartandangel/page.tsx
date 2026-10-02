@@ -59,6 +59,7 @@ export default function HeartAndAngelPage() {
           fill
           className="object-cover"
           priority
+          draggable={false}
         />
         {/* Градиент для идеальной читаемости текста */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/40 pointer-events-none" />
@@ -78,8 +79,8 @@ export default function HeartAndAngelPage() {
           </div>
         </div>
 
-        {/* Нижняя часть Hero: кнопка входа и описание World слева */}
-        <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pb-20 flex flex-col items-start space-y-4">
+        {/* Нижняя часть Hero: подняли блок выше (pb-32 вместо pb-20), чтобы текст не наезжал на персонажа */}
+        <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pb-32 sm:pb-36 flex flex-col items-start space-y-4">
           <div className="max-w-xl space-y-3">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-serif font-medium text-white tracking-tight">
               Enter the Living World
