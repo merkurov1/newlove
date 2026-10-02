@@ -1,28 +1,35 @@
+import type { Metadata } from 'next';
 import Link from "next/link";
-import { SubmitButton } from "./submit-button"; // Создадим ниже компонент кнопки
+import { SubmitButton } from "./submit-button";
 import { submitInquiry } from "./actions";
 
-export const metadata = {
-  title: 'The Merkurov Doctrine — Research',
-  description: 'A forensic study: The Digital Decay — a chronicle and analysis (2010–2025).',
+export const metadata: Metadata = {
+  title: 'The Merkurov Doctrine — Research | Anton Merkurov',
+  description: 'A forensic study: The Digital Decay — a chronicle and analysis (2010–2025) by Anton Merkurov.',
+  alternates: {
+    canonical: 'https://www.merkurov.love/research',
+  },
   openGraph: {
-    title: 'The Merkurov Doctrine — Research',
+    title: 'The Merkurov Doctrine — Research | Anton Merkurov',
     description: 'A forensic study: The Digital Decay — a chronicle and analysis (2010–2025).',
     url: 'https://www.merkurov.love/research',
+    siteName: 'Anton Merkurov',
     images: [
       {
         url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
         width: 1200,
         height: 630,
-        alt: 'Merkurov.love',
+        alt: 'The Merkurov Doctrine — Research',
       },
     ],
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'The Merkurov Doctrine — Research',
+    title: 'The Merkurov Doctrine — Research | Anton Merkurov',
     description: 'A forensic study: The Digital Decay — a chronicle and analysis (2010–2025).',
+    creator: '@merkurov',
+    site: '@merkurov',
   },
 };
 
@@ -146,11 +153,11 @@ export default function ResearchPage() {
                 />
               </div>
               <input 
-                name="email" 
-                type="email"
-                placeholder="Institutional Email" 
-                className="w-full bg-zinc-900 border border-zinc-800 p-3 text-sm text-white focus:outline-none focus:border-red-900 transition"
-                required
+                  name="email" 
+                  type="email"
+                  placeholder="Institutional Email" 
+                  className="w-full bg-zinc-900 border border-zinc-800 p-3 text-sm text-white focus:outline-none focus:border-red-900 transition"
+                  required
               />
               <SubmitButton />
             </form>

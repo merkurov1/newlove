@@ -1,15 +1,32 @@
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
 import './swiper-init';
 import CenteredHeader from '@/components/CenteredHeader';
 import Header from '@/components/Header';
 
-// --- БЛОК МЕТАДАННЫХ ---
-export const metadata = sanitizeMetadata({
-  title: 'Selection | Merkurov.love',
-  description: 'Chronicles of silence & art.',
-});
+// --- SEO METADATA & CANONICAL ---
+export const metadata: Metadata = {
+  title: "Selection & Chronicles | Anton Merkurov",
+  description: "Chronicles of silence & art. Curated selections and non-conformist masterworks by Anton Merkurov.",
+  alternates: {
+    canonical: "https://www.merkurov.love/selection",
+  },
+  openGraph: {
+    title: "Selection & Chronicles | Anton Merkurov",
+    description: "Chronicles of silence & art. Curated selections and non-conformist masterworks by Anton Merkurov.",
+    url: "https://www.merkurov.love/selection",
+    siteName: "Anton Merkurov",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Selection & Chronicles | Anton Merkurov",
+    description: "Chronicles of silence & art. Curated selections and non-conformist masterworks by Anton Merkurov.",
+    creator: "@merkurov",
+    site: "@merkurov",
+  },
+};
 
 export default async function SelectionPage() {
   const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');

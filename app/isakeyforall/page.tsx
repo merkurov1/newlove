@@ -7,6 +7,23 @@ import Header from '@/components/Header';
 export const metadata = sanitizeMetadata({
   title: 'Love is a Key for All | Anton Merkurov',
   description: 'Anton Merkurov: Artist. Digital Architect. Humanist. Operating at the intersection of legacy and future.',
+  alternates: {
+    canonical: 'https://www.merkurov.love/isakeyforall',
+  },
+  openGraph: {
+    title: 'Love is a Key for All | Anton Merkurov',
+    description: 'Anton Merkurov: Artist. Digital Architect. Humanist. Operating at the intersection of legacy and future.',
+    url: 'https://www.merkurov.love/isakeyforall',
+    siteName: 'Anton Merkurov',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Love is a Key for All | Anton Merkurov',
+    description: 'Anton Merkurov: Artist. Digital Architect. Humanist. Operating at the intersection of legacy and future.',
+    creator: '@merkurov',
+    site: '@merkurov',
+  },
 });
 
 export default function IsAKeyForAllPage() {

@@ -1,14 +1,32 @@
 export const dynamic = 'force-dynamic';
 
 import React from 'react';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import HeartAndAngelSection from '@/components/HeartAndAngelSection';
 import CenteredHeader from '@/components/CenteredHeader';
 import Header from '@/components/Header';
 
-export const metadata = {
-  title: 'Heart & Angel | Merkurov.love',
-  description: 'A universal mythology for a fragmented world.'
-};
+export const metadata = sanitizeMetadata({
+  title: 'Heart & Angel | Anton Merkurov',
+  description: 'A universal mythology for a fragmented world.',
+  alternates: {
+    canonical: 'https://www.merkurov.love/heartandangel',
+  },
+  openGraph: {
+    title: 'Heart & Angel | Anton Merkurov',
+    description: 'A universal mythology for a fragmented world.',
+    url: 'https://www.merkurov.love/heartandangel',
+    siteName: 'Anton Merkurov',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Heart & Angel | Anton Merkurov',
+    description: 'A universal mythology for a fragmented world.',
+    creator: '@merkurov',
+    site: '@merkurov',
+  },
+});
 
 const images = [
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759212266765-IMG_0514.png',

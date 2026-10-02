@@ -99,10 +99,10 @@ export const metadata = sanitizeMetadata({
   },
   icons: {
     icon: '/favicon.ico',
-    apple: '/apple-touch-icon.png', // Recommended to add this file if not present
+    apple: '/apple-touch-icon.png',
   },
   alternates: {
-    canonical: 'https://www.merkurov.love',
+    // Убран жесткий корень, чтобы подразделы могли задавать свой собственный canonical
     languages: {
       'en-US': 'https://www.merkurov.love',
     },
@@ -119,7 +119,6 @@ export const metadata = sanitizeMetadata({
 export const dynamic = 'force-dynamic';
 
 // --- STRUCTURED DATA (JSON-LD) ---
-// This tells Google WHO you are, not just what the page says.
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Person',
@@ -130,22 +129,18 @@ const jsonLd = {
     'https://twitter.com/merkurov',
     'https://www.facebook.com/merkurov',
     'https://www.linkedin.com/in/merkurov',
-    'https://en.wikipedia.org/wiki/Sergey_Merkurov', // Linking heritage
+    'https://en.wikipedia.org/wiki/Sergey_Merkurov',
   ],
   jobTitle: 'Art Dealer & Digital Strategist',
   knowsAbout: ['Art Market', 'Digital Heritage', 'Soviet Monumentalism', 'Blockchain Technology'],
   description: 'Great-grandson of Sergey Merkurov. Expert in digital heritage and high-end art investment.',
 };
 
-import { safeData } from '@/lib/safeSerialize';
-
 async function getPublicProjects() {
   try {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
     let projects: any[] = [];
-    // ... (rest of logic remains same)
-    // Simplified for brevity in this snippet, keep your original fetch logic here
     if (supabase) {
        const res = await supabase
         .from('projects')
@@ -168,7 +163,6 @@ async function getPublicProjects() {
 }
 
 async function getSubscriberCount() {
-  // Keep your existing logic
   try {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
@@ -188,7 +182,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const subscriberCount = await getSubscriberCount();
 
   return (
-    // CHANGED: lang="en" for global targeting
     <html lang="en" className={inter.variable}>
       <head>
         <link rel="preconnect" href="https://txvkqcitalfbjytmnawq.supabase.co" />
