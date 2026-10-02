@@ -3,11 +3,11 @@ export const dynamic = 'force-dynamic';
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import type { Metadata } from 'next';
 import Header from '@/components/Header';
 import HeartAndAngelSection from '@/components/HeartAndAngelSection';
 
-export const metadata = sanitizeMetadata({
+export const metadata: Metadata = {
   title: 'Heart & Angel | Anton Merkurov',
   description: 'A universal mythology for a fragmented world.',
   alternates: {
@@ -18,6 +18,14 @@ export const metadata = sanitizeMetadata({
     description: 'A universal mythology for a fragmented world.',
     url: 'https://www.merkurov.love/heartandangel',
     siteName: 'Anton Merkurov',
+    images: [
+      {
+        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png',
+        width: 1200,
+        height: 630,
+        alt: 'Heart & Angel | Anton Merkurov',
+      },
+    ],
     type: 'website',
   },
   twitter: {
@@ -26,8 +34,9 @@ export const metadata = sanitizeMetadata({
     description: 'A universal mythology for a fragmented world.',
     creator: '@merkurov',
     site: '@merkurov',
+    images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png'],
   },
-});
+};
 
 const images = [
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759212266765-IMG_0514.png',
@@ -50,7 +59,7 @@ const MINI_PROJECTS = [
   {
     title: 'Vigil',
     description: 'A quiet digital sanctuary for digital presence and shared observation.',
-    href: '/heartandangel/vigil',
+    href: '/vigil',
   },
 ];
 
@@ -59,13 +68,16 @@ export default function HeartAndAngelPage() {
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       <Header />
 
-      {/* Hero-блок: на мобильных без растягивания (object-contain), на десктопе во весь экран (object-cover) */}
-      <div className="relative w-full h-[500px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5]">
+      {/* Hero-блок обернут в Link для перехода по клику на всю картинку */}
+      <Link 
+        href="/heartandangel/world"
+        className="relative w-full h-[500px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5] block group cursor-pointer"
+      >
         <Image
           src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
           alt="Heart & Angel World"
           fill
-          className="object-contain md:object-cover"
+          className="object-contain md:object-cover transition-transform duration-700 group-hover:scale-[1.01]"
           priority
           draggable={false}
         />
@@ -87,7 +99,7 @@ export default function HeartAndAngelPage() {
           </div>
         </div>
 
-        {/* Нижняя часть Hero: текст слева снизу, аккуратно сбалансированный */}
+        {/* Нижняя часть Hero: текст слева снизу */}
         <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pb-8 sm:pb-16 md:pb-28 flex flex-col items-start space-y-3">
           <div className="max-w-xl space-y-2 sm:space-y-3 drop-shadow-md">
             <h2 className="text-2xl sm:text-3xl md:text-5xl font-serif font-medium text-white tracking-tight">
@@ -96,7 +108,7 @@ export default function HeartAndAngelPage() {
             <p className="text-white/90 text-xs sm:text-sm md:text-base font-light leading-relaxed max-w-md">
               Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.
             </p>
-            <div className="pt-1 sm:pt-2">
+            <div className="pt-1 sm:pt-2" onClick={(e) => e.stopPropagation()}>
               <Link
                 href="/heartandangel/world"
                 className="inline-flex items-center gap-2 sm:gap-3 px-6 py-3 sm:px-8 sm:py-4 rounded-full bg-white text-stone-900 text-xs sm:text-sm font-medium tracking-wide shadow-2xl hover:bg-stone-100 transition-all duration-300"
@@ -109,7 +121,7 @@ export default function HeartAndAngelPage() {
             </div>
           </div>
         </div>
-      </div>
+      </Link>
 
       {/* Основной контент страницы */}
       <div className="max-w-4xl mx-auto px-6 py-24 space-y-24">
