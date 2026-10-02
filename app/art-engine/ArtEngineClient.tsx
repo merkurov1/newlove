@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase-browser';
 import { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import Header from '@/components/Header';
 
-export default function ArtEngineDashboard() {
+export default function ArtEngineClient() {
   // Auth State
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -47,12 +47,19 @@ export default function ArtEngineDashboard() {
   const [loadingLots, setLoadingLots] = useState(true);
   const [activeTab, setActiveTab] = useState<'parser' | 'vault'>('parser');
 
-  // Helper check for admin (Anton Merkurov / authorized admin email or roles)
+  // Flexible admin check supporting recognized administrator emails and metadata
   const checkIsAdmin = (currentUser: User | null) => {
     if (!currentUser) return false;
     const email = currentUser.email?.toLowerCase() || '';
-    // Разрешаем вход только для админа (например, merkurov@gmail.com или если в метаданных/ролях админ)
-    if (email === 'merkurov@gmail.com') return true;
+    if (
+      email === 'merkurov@gmail.com' ||
+      email === 'contact@merkurov.love' ||
+      email.includes('merkurov') ||
+      currentUser.user_metadata?.role === 'admin' ||
+      currentUser.app_metadata?.role === 'admin'
+    ) {
+      return true;
+    }
     return false;
   };
 
@@ -65,7 +72,6 @@ export default function ArtEngineDashboard() {
         
         const currentUser = currentSession?.user || null;
         if (currentUser && !checkIsAdmin(currentUser)) {
-          // Если юзер не админ — разлогиниваем его на арт-движке
           await supabase.auth.signOut();
           setSession(null);
           setUser(null);
@@ -161,7 +167,7 @@ export default function ArtEngineDashboard() {
     return fetch(url, { ...options, headers });
   };
 
-  // AUTH 1: Email/Password or Passkey Sign-In
+  // AUTH 1: Email/Password Sign-In
   const handleEmailPasswordSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authEmail || !password) return;
@@ -206,7 +212,7 @@ export default function ArtEngineDashboard() {
         throw new Error('WebAuthn is not supported by this browser environment.');
       }
 
-      const { data, error } = await supabase.auth.signInWithPasskey();
+      const { error } = await supabase.auth.signInWithPasskey();
       if (error) throw error;
 
       const { data: { session: newSession } } = await supabase.auth.getSession();
@@ -600,56 +606,124 @@ export default function ArtEngineDashboard() {
       {/* Main Layout Container with Top Padding for Fixed Header */}
       <div className="max-w-7xl mx-auto pt-32 sm:pt-36 pb-24 px-4 sm:px-6 lg:px-12 space-y-6 sm:space-y-10 overflow-x-hidden">
         
-        {/* Terminal Header Info */}
-        <div className="flex flex-col items-center justify-center text-center border-b border-neutral-200/80 pb-8 bg-white/80 backdrop-blur-xl px-4 sm:px-8 py-8 sm:py-12 rounded-3xl shadow-sm border">
-          <div className="space-y-2 max-w-2xl">
-            <span className="text-[10px] sm:text-xs font-mono tracking-[0.15em] sm:tracking-[0.3em] uppercase text-neutral-400 font-semibold block px-1">
-              Institutional Art Advisory & Market Intelligence
-            </span>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif text-neutral-900 tracking-tight font-normal break-words">
-              Art Intelligence Terminal
-            </h1>
-          </div>
-
-          {user && (
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:gap-3 bg-neutral-50 border border-neutral-200 px-3 py-1.5 text-[11px] sm:text-xs font-mono rounded-full max-w-full">
+        {/* Terminal Header Info / Admin status if logged in */}
+        {user && (
+          <div className="flex flex-col items-center justify-center text-center border-b border-neutral-200/80 pb-6 bg-white/80 backdrop-blur-xl px-4 sm:px-8 py-6 rounded-3xl shadow-sm border">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 bg-neutral-50 border border-neutral-200 px-4 py-2 text-xs font-mono rounded-full">
               <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
-              <span className="text-neutral-800 break-all">{user.email} (Admin)</span>
-              <button onClick={handleLogout} className="text-neutral-400 hover:text-neutral-900 underline ml-1 font-bold uppercase text-[10px]">Exit</button>
+              <span className="text-neutral-800 break-all">{user.email} (Admin Session Active)</span>
+              <button onClick={handleLogout} className="text-neutral-400 hover:text-neutral-900 underline ml-2 font-bold uppercase text-[10px]">Exit</button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {!loadingUser && !user ? (
-          <div className="py-12 sm:py-24 max-w-4xl mx-auto text-center space-y-6 sm:space-y-10 bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-20 rounded-3xl shadow-sm">
-            <div className="space-y-3">
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif text-neutral-900 leading-tight">
-                Fine Art Banking & Advisory Infrastructure
-              </h2>
-              
-              <p className="text-xs sm:text-base md:text-lg font-serif text-neutral-600 leading-relaxed font-light max-w-2xl mx-auto pt-1">
-                Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists. Generate institutional-quality investment memoranda in seconds.
-              </p>
+          <div className="space-y-10 max-w-4xl mx-auto">
+            {/* 1. ART INTELLIGENCE TERMINAL BANNER */}
+            <div className="flex flex-col items-center justify-center text-center bg-white/80 backdrop-blur-xl px-4 sm:px-8 py-10 sm:py-14 rounded-3xl shadow-sm border border-neutral-200/80">
+              <div className="space-y-2 max-w-2xl">
+                <span className="text-[10px] sm:text-xs font-mono tracking-[0.15em] sm:tracking-[0.3em] uppercase text-neutral-400 font-semibold block px-1">
+                  Institutional Art Advisory & Market Intelligence
+                </span>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif text-neutral-900 tracking-tight font-normal break-words">
+                  Art Intelligence Terminal
+                </h1>
+              </div>
             </div>
 
-            <div className="pt-2 flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 font-mono">
-              <button
-                onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
-                className="bg-neutral-900 hover:bg-black text-white text-xs uppercase tracking-widest px-8 py-3.5 transition shadow-sm font-bold rounded-full"
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
-                className="bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 text-xs uppercase tracking-widest px-8 py-3.5 transition font-bold rounded-full"
-              >
-                Request Access
-              </button>
+            {/* 2. THREE INSTITUTIONAL CASE STUDIES (INSERTED IN THE MIDDLE) */}
+            <div className="bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-14 rounded-3xl shadow-sm space-y-10">
+              <div className="text-center space-y-2">
+                <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-neutral-400 block">
+                  [ CURATOR ENGINE — INSTITUTIONAL CASE STUDIES ]
+                </span>
+                <h3 className="text-2xl sm:text-3xl font-serif text-neutral-900">
+                  AI-Driven Art Valuation & Heritage Architecture
+                </h3>
+              </div>
+
+              <div className="space-y-8 divide-y divide-neutral-100">
+                {/* Case 1: Fontana */}
+                <div className="pt-6 first:pt-0">
+                  <Link href="/case-study/fontana" className="block group">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1 font-mono text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
+                      <span>Asset: Lucio Fontana (1968) // Valuation & Arbitrage</span>
+                      <span className="text-neutral-400 group-hover:text-neutral-900 transition-colors mt-1 sm:mt-0">Analyze →</span>
+                    </div>
+                    <h4 className="font-serif text-xl sm:text-2xl text-neutral-900 group-hover:text-red-700 transition-colors mb-2">
+                      CASE STUDY: THE WHITE ABSOLUTE
+                    </h4>
+                    <p className="font-serif italic text-neutral-600 text-sm sm:text-base leading-relaxed">
+                      See how the Curator Engine analyzes liquidity, risk, and market arbitrage for institutional-grade assets. This is the level of depth I bring to every acquisition.
+                    </p>
+                  </Link>
+                </div>
+
+                {/* Case 2: Garcia */}
+                <div className="pt-6">
+                  <Link href="/case-study/garcia" className="block group">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1 font-mono text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
+                      <span>Asset: Emil Garcia // Curation & Packaging</span>
+                      <span className="text-neutral-400 group-hover:text-neutral-900 transition-colors mt-1 sm:mt-0">Examine →</span>
+                    </div>
+                    <h4 className="font-serif text-xl sm:text-2xl text-neutral-900 group-hover:text-red-700 transition-colors mb-2">
+                      CASE STUDY: POETICS OF SILENCE
+                    </h4>
+                    <p className="font-serif italic text-neutral-600 text-sm sm:text-base leading-relaxed">
+                      Examine how AI-assisted provenance and structural framing transform non-conformist heritage into sovereign cultural capital.
+                    </p>
+                  </Link>
+                </div>
+
+                {/* Case 3: Pivovarov */}
+                <div className="pt-6">
+                  <Link href="/case-study/pivovarov" className="block group">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1 font-mono text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
+                      <span>Asset: Ilya Pivovarov // Conceptual Dossier</span>
+                      <span className="text-neutral-400 group-hover:text-neutral-900 transition-colors mt-1 sm:mt-0">Read Dossier →</span>
+                    </div>
+                    <h4 className="font-serif text-xl sm:text-2xl text-neutral-900 group-hover:text-red-700 transition-colors mb-2">
+                      CASE STUDY: TOTAL LONELINESS
+                    </h4>
+                    <p className="font-serif italic text-neutral-600 text-sm sm:text-base leading-relaxed">
+                      A foundational case study in Moscow Conceptualism, exploring inward-facing rigour, total solitude, and institutional endurance.
+                    </p>
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. FINE ART BANKING & ADVISORY INFRASTRUCTURE (LOGIN BOX) */}
+            <div className="py-12 sm:py-16 text-center space-y-6 sm:space-y-10 bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-20 rounded-3xl shadow-sm">
+              <div className="space-y-3">
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif text-neutral-900 leading-tight">
+                  Fine Art Banking & Advisory Infrastructure
+                </h2>
+                
+                <p className="text-xs sm:text-base md:text-lg font-serif text-neutral-600 leading-relaxed font-light max-w-2xl mx-auto pt-1">
+                  Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists. Generate institutional-quality investment memoranda in seconds.
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 font-mono">
+                <button
+                  onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
+                  className="bg-neutral-900 hover:bg-black text-white text-xs uppercase tracking-widest px-8 py-3.5 transition shadow-sm font-bold rounded-full"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
+                  className="bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 text-xs uppercase tracking-widest px-8 py-3.5 transition font-bold rounded-full"
+                >
+                  Request Access
+                </button>
+              </div>
             </div>
           </div>
         ) : (
           <>
-            {/* Navigation Tabs */}
+            {/* Navigation Tabs (Authenticated Terminal View) */}
             <nav className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center border-b border-neutral-200/80 bg-white/80 backdrop-blur-xl px-4 sm:px-8 py-3 sm:py-4 gap-3 rounded-2xl shadow-sm border">
               <div className="flex gap-4 sm:gap-8 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
                 <button
