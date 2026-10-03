@@ -1,7 +1,6 @@
-// components/profile/ProfileForm.js
 'use client';
 
-import { useActionState, useFormStatus } from 'react';
+import { useFormStatus, useFormState as useActionState } from 'react-dom';
 import { updateProfile } from '@/app/admin/actions';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';

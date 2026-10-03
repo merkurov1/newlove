@@ -1,35 +1,31 @@
-'use client';
-
 import React from 'react';
 import { Volume2, Radio } from 'lucide-react';
-import { useTempleAudio } from './layout';
+import { useTempleAudio } from '@/components/AudioContext';
 
 interface SoundToggleProps {
   className?: string;
-  iconClassName?: string;
-  showTextOnMobile?: boolean;
 }
 
-export default function SoundToggle({
-  className = '',
-  iconClassName = 'text-pink-400',
-  showTextOnMobile = false,
-}: SoundToggleProps) {
+export default function SoundToggle({ className = '' }: SoundToggleProps) {
   const { isPlaying, toggleAudio } = useTempleAudio();
 
   return (
     <button
       onClick={toggleAudio}
-      className={`flex items-center gap-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${className}`}
+      className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-mono uppercase tracking-wider transition-all cursor-pointer bg-white/80 backdrop-blur-md border border-stone-200 shadow-sm hover:bg-stone-100 ${className}`}
+      title={isPlaying ? 'Pause ambient audio' : 'Play ambient audio'}
     >
       {isPlaying ? (
-        <Volume2 size={14} className={`animate-pulse ${iconClassName}`} />
+        <>
+          <Volume2 className="w-4 h-4 text-emerald-600 animate-pulse" />
+          <span>Sound: On</span>
+        </>
       ) : (
-        <Radio size={14} />
+        <>
+          <Radio className="w-4 h-4 text-stone-400" />
+          <span>Sound: Off</span>
+        </>
       )}
-      <span className={showTextOnMobile ? '' : 'hidden sm:inline'}>
-        {isPlaying ? 'Sound On' : 'Sound Off'}
-      </span>
     </button>
   );
 }
