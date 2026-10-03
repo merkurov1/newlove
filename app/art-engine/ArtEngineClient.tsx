@@ -2,21 +2,26 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-browser';
-import { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
+import { useAuth } from '@/components/AuthContext';
 import Header from '@/components/Header';
+import { KeyRound, Mail, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export default function ArtEngineClient() {
-  // Auth State
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loadingUser, setLoadingUser] = useState(true);
+  const auth = useAuth() as any;
+  const user = auth?.user;
+  const session = auth?.session;
+  const isLoadingUser = auth?.isLoading;
+  const router = useRouter();
+
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'request'>('signin');
+  const [loginMethod, setLoginMethod] = useState<'main' | 'email'>('main');
   
-  // Auth Form State
   const [authEmail, setAuthEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [otpToken, setOtpToken] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [requestSuccess, setRequestSuccess] = useState(false);
@@ -46,67 +51,6 @@ export default function ArtEngineClient() {
   const [lots, setLots] = useState<any[]>([]);
   const [loadingLots, setLoadingLots] = useState(true);
   const [activeTab, setActiveTab] = useState<'parser' | 'vault'>('parser');
-
-  // Flexible admin check supporting recognized administrator emails and metadata
-  const checkIsAdmin = (currentUser: User | null) => {
-    if (!currentUser) return false;
-    const email = currentUser.email?.toLowerCase() || '';
-    if (
-      email === 'merkurov@gmail.com' ||
-      email === 'contact@merkurov.love' ||
-      email.includes('merkurov') ||
-      currentUser.user_metadata?.role === 'admin' ||
-      currentUser.app_metadata?.role === 'admin'
-    ) {
-      return true;
-    }
-    return false;
-  };
-
-  // Auth Initialization
-  useEffect(() => {
-    async function initAuth() {
-      try {
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        
-        const currentUser = currentSession?.user || null;
-        if (currentUser && !checkIsAdmin(currentUser)) {
-          await supabase.auth.signOut();
-          setSession(null);
-          setUser(null);
-        } else {
-          setSession(currentSession);
-          setUser(currentUser);
-        }
-      } catch (err) {
-        console.error('Auth initialization error:', err);
-      } finally {
-        setLoadingUser(false);
-      }
-    }
-
-    initAuth();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event: AuthChangeEvent, currentSession: Session | null) => {
-        const currentUser = currentSession?.user || null;
-        if (currentUser && !checkIsAdmin(currentUser)) {
-          supabase.auth.signOut();
-          setSession(null);
-          setUser(null);
-        } else {
-          setSession(currentSession);
-          setUser(currentUser);
-        }
-        setLoadingUser(false);
-      }
-    );
-
-    return () => {
-      authListener?.subscription?.unsubscribe();
-    };
-  }, []);
 
   // Fetch Lots for Vault
   const fetchLots = useCallback(async () => {
@@ -167,74 +111,85 @@ export default function ArtEngineClient() {
     return fetch(url, { ...options, headers });
   };
 
-  // AUTH 1: Email/Password Sign-In
-  const handleEmailPasswordSignIn = async (e: any) => {
-    e.preventDefault();
-    if (!authEmail || !password) return;
+  // Google OAuth Handler
+  const handleGoogleSignIn = async () => {
     setAuthLoading(true);
     setAuthError('');
-
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: authEmail,
-        password: password,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/art-engine`,
+        },
       });
-
       if (error) throw error;
+    } catch (err: any) {
+      setAuthError(err?.message || 'Google authentication error');
+      setAuthLoading(false);
+    }
+  };
 
-      if (data.user && !checkIsAdmin(data.user)) {
-        await supabase.auth.signOut();
-        throw new Error('Access restricted to authorized administrators only.');
+  // Passkey / WebAuthn Sign-In Handler
+  const handlePasskeySignIn = async () => {
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+        throw new Error('WebAuthn is not supported by this browser.');
       }
-
-      if (data.session) {
-        setSession(data.session);
-        setUser(data.user);
-        setShowAuthModal(false);
-        setAuthEmail('');
-        setPassword('');
-      }
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Authentication error';
-      setAuthError(errorMessage);
+      const { error } = await (supabase.auth as any).signInWithPasskey();
+      if (error) throw error;
+      setShowAuthModal(false);
+    } catch (err: any) {
+      setAuthError(err?.message || 'Passkey error');
     } finally {
       setAuthLoading(false);
     }
   };
 
-  // AUTH 2: Passkey / WebAuthn Sign-In
-  const handlePasskeySignIn = async () => {
+  // Email Magic Link / OTP request
+  const handleEmailLogin = async (e: any) => {
+    e.preventDefault();
+    if (!authEmail) return;
     setAuthLoading(true);
     setAuthError('');
 
     try {
-      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
-        throw new Error('WebAuthn is not supported by this browser environment.');
-      }
-
-      const { error } = await (supabase.auth as any).signInWithPasskey();
+      const { error } = await supabase.auth.signInWithOtp({
+        email: authEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/art-engine`,
+        }
+      });
       if (error) throw error;
+      setEmailSent(true);
+    } catch (err: any) {
+      setAuthError(err.message || 'Failed to dispatch secure access code');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
-      const { data: { session: newSession } } = await supabase.auth.getSession();
-      const currentUser = newSession?.user || null;
+  // Verify OTP token
+  const handleVerifyOtp = async (e: any) => {
+    e.preventDefault();
+    if (otpToken.length !== 6) {
+      setAuthError('Please enter a valid 6-digit verification code.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError('');
 
-      if (currentUser && !checkIsAdmin(currentUser)) {
-        await supabase.auth.signOut();
-        throw new Error('Passkey verified, but administrative privileges are missing.');
-      }
-
-      if (newSession) {
-        setSession(newSession);
-        setUser(currentUser);
-        setShowAuthModal(false);
-        return;
-      }
-      
-      throw new Error('Passkey authentication session not established.');
-      
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Passkey error';
-      setAuthError(errorMessage);
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email: authEmail,
+        token: otpToken,
+        type: 'email'
+      });
+      if (error) throw error;
+      setShowAuthModal(false);
+    } catch (err: any) {
+      setAuthError(err.message || 'Invalid verification code');
     } finally {
       setAuthLoading(false);
     }
@@ -260,18 +215,11 @@ export default function ArtEngineClient() {
       }
 
       setRequestSuccess(true);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Request error';
-      setAuthError(errorMessage);
+    } catch (err: any) {
+      setAuthError(err.message || 'Request error');
     } finally {
       setAuthLoading(false);
     }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
   };
 
   // PIPELINE 1: PARSE URL
@@ -321,8 +269,8 @@ export default function ArtEngineClient() {
         rawData: data.extracted || data 
       };
 
-    } catch (e: unknown) { 
-      const msg = e instanceof Error ? e.message : 'Parse error';
+    } catch (e: any) { 
+      const msg = e?.message || 'Parse error';
       setStatusText(`Error: ${msg}`);
       alert(`Parse failed: ${msg}`); 
       return null;
@@ -364,8 +312,8 @@ export default function ArtEngineClient() {
 
       setStatusText('Dossier synthesized');
       return resultLot;
-    } catch (e: unknown) { 
-      const msg = e instanceof Error ? e.message : 'Generation error';
+    } catch (e: any) { 
+      const msg = e?.message || 'Generation error';
       setStatusText(`Error: ${msg}`);
       alert(`Generation failed: ${msg}`); 
       return null;
@@ -404,8 +352,8 @@ export default function ArtEngineClient() {
       } else {
         throw new Error(data.error || 'API Error during save');
       }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Save error';
+    } catch (e: any) {
+      const msg = e?.message || 'Save error';
       setStatusText(`Save error: ${msg}`);
       alert(`Save Failed: ${msg}`);
     } finally { 
@@ -444,7 +392,7 @@ export default function ArtEngineClient() {
 
   const getInitials = (name?: string) => {
     if (!name) return 'CE';
-    return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    return name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
   };
 
   return (
@@ -453,10 +401,10 @@ export default function ArtEngineClient() {
       {/* HEADER */}
       <Header />
 
-      {/* AUTHENTICATION / REQUEST ACCESS MODAL */}
+      {/* UNIFIED AUTHENTICATION / REQUEST ACCESS MODAL */}
       {showAuthModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white border border-gray-200 max-w-md w-full p-8 shadow-2xl space-y-6 my-auto max-h-[90vh] overflow-y-auto">
+          <div className="bg-white border border-gray-200 max-w-md w-full p-8 shadow-2xl space-y-6 my-auto max-h-[90vh] overflow-y-auto rounded-3xl">
             
             <div className="flex justify-between items-start border-b border-gray-200 pb-4">
               <div>
@@ -468,90 +416,141 @@ export default function ArtEngineClient() {
                 </h3>
               </div>
               <button 
-                onClick={() => { setShowAuthModal(false); setAuthError(''); setRequestSuccess(false); }}
+                onClick={() => { setShowAuthModal(false); setAuthError(''); setRequestSuccess(false); setLoginMethod('main'); }}
                 className="text-gray-400 hover:text-black text-sm font-mono p-2"
               >
                 ✕
               </button>
             </div>
 
-            <div className="grid grid-cols-2 border border-gray-200 p-0.5 bg-gray-50 text-xs font-mono">
+            <div className="grid grid-cols-2 border border-gray-200 p-0.5 bg-gray-50 text-xs font-mono rounded-xl">
               <button
                 type="button"
                 onClick={() => { setAuthMode('signin'); setAuthError(''); setRequestSuccess(false); }}
-                className={`py-2 text-center uppercase tracking-wider transition ${authMode === 'signin' ? 'bg-white text-black font-bold shadow-sm' : 'text-gray-500 hover:text-black'}`}
+                className={`py-2.5 text-center uppercase tracking-wider transition rounded-lg ${authMode === 'signin' ? 'bg-white text-black font-bold shadow-sm' : 'text-gray-500 hover:text-black'}`}
               >
                 Sign In
               </button>
               <button
                 type="button"
                 onClick={() => { setAuthMode('request'); setAuthError(''); }}
-                className={`py-2 text-center uppercase tracking-wider transition ${authMode === 'request' ? 'bg-white text-black font-bold shadow-sm' : 'text-gray-500 hover:text-black'}`}
+                className={`py-2.5 text-center uppercase tracking-wider transition rounded-lg ${authMode === 'request' ? 'bg-white text-black font-bold shadow-sm' : 'text-gray-500 hover:text-black'}`}
               >
                 Request Access
               </button>
             </div>
 
             {authError && (
-              <div className="bg-rose-50 border-l-2 border-rose-600 p-3 text-xs font-mono text-rose-800">
+              <div className="bg-rose-50 border-l-2 border-rose-600 p-3 text-xs font-mono text-rose-800 rounded-xl">
                 {authError}
               </div>
             )}
 
             {authMode === 'signin' ? (
-              <div className="space-y-5">
-                <button
-                  type="button"
-                  onClick={handlePasskeySignIn}
-                  disabled={authLoading}
-                  className="w-full bg-white hover:bg-gray-50 text-black border border-gray-300 font-mono text-xs uppercase tracking-widest py-3 transition disabled:opacity-50 flex items-center justify-center gap-2 font-bold"
-                >
-                  🛡️ Sign in with Passkey
-                </button>
+              <div className="space-y-4">
+                {loginMethod === 'main' ? (
+                  <>
+                    {/* GOOGLE OAUTH */}
+                    <button
+                      type="button"
+                      onClick={handleGoogleSignIn}
+                      disabled={authLoading}
+                      className="w-full bg-black hover:bg-gray-800 text-white font-mono text-xs uppercase tracking-[0.2em] py-4 px-6 transition disabled:opacity-50 flex items-center justify-center gap-3 font-bold rounded-2xl shadow-sm"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.2 8.9 5 12 5z"/>
+                        <path fill="currentColor" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
+                        <path fill="currentColor" d="M5.3 14.7c-.2-.8-.4-1.7-.4-2.7s.2-1.9.4-2.7L1.6 6.4C.6 8.4 0 10.6 0 13s.6 4.6 1.6 6.6l3.7-2.9z"/>
+                        <path fill="currentColor" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.2-6.7-5.3L1.6 15.9C3.5 19.7 7.4 23 12 23z"/>
+                      </svg>
+                      <span>Continue with Google</span>
+                    </button>
 
-                <div className="relative flex py-1 items-center">
-                  <div className="flex-grow border-t border-gray-200"></div>
-                  <span className="flex-shrink mx-4 text-[10px] font-mono text-gray-400 uppercase tracking-widest">or password</span>
-                  <div className="flex-grow border-t border-gray-200"></div>
-                </div>
+                    {/* PASSKEY */}
+                    <button
+                      type="button"
+                      onClick={handlePasskeySignIn}
+                      disabled={authLoading}
+                      className="w-full bg-white hover:bg-gray-50 text-black border border-gray-300 font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 flex items-center justify-center gap-2 font-bold rounded-2xl shadow-sm"
+                    >
+                      <KeyRound size={16} /> Sign in with Passkey
+                    </button>
 
-                <form onSubmit={handleEmailPasswordSignIn} className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block mb-1.5">
-                      Email Address
-                    </label>
-                    <input 
-                      type="email"
-                      required
-                      placeholder="merkurov@gmail.com"
-                      value={authEmail}
-                      onChange={(e: any) => setAuthEmail(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-300 px-3.5 py-2.5 text-sm text-black focus:outline-none focus:border-black font-mono transition"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block mb-1.5">
-                      Password
-                    </label>
-                    <input 
-                      type="password"
-                      required
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e: any) => setPassword(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-300 px-3.5 py-2.5 text-sm text-black focus:outline-none focus:border-black font-mono transition"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={authLoading}
-                    className="w-full bg-black hover:bg-gray-800 text-white font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 font-bold"
-                  >
-                    {authLoading ? 'Verifying...' : 'Bootstrap Admin Session'}
-                  </button>
-                </form>
+                    {/* EMAIL OTP TOGGLE */}
+                    <button
+                      type="button"
+                      onClick={() => setLoginMethod('email')}
+                      className="w-full bg-white hover:bg-gray-50 text-black border border-gray-300 font-mono text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 flex items-center justify-center gap-2 font-bold rounded-2xl shadow-sm"
+                    >
+                      <Mail size={16} /> Email &amp; 6-Digit Code
+                    </button>
+                  </>
+                ) : (
+                  <form onSubmit={handleEmailLogin} className="space-y-4">
+                    {emailSent ? (
+                      <div className="p-4 rounded-2xl border border-gray-200 bg-gray-50 text-center space-y-3">
+                        <CheckCircle2 className="w-7 h-7 text-emerald-600 mx-auto" />
+                        <p className="font-mono text-xs text-gray-700">
+                          Code sent to <span className="font-bold">{authEmail}</span>
+                        </p>
+                        <div>
+                          <input
+                            type="text"
+                            maxLength={6}
+                            value={otpToken}
+                            onChange={(e: any) => setOtpToken(e.target.value)}
+                            placeholder="000000"
+                            className="w-full bg-white border border-gray-300 rounded-xl py-3 text-center text-black font-mono text-lg tracking-[0.4em] focus:outline-none focus:border-black"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleVerifyOtp}
+                            className="w-full mt-2.5 py-3 rounded-xl bg-black text-white font-mono text-xs uppercase tracking-widest font-bold"
+                          >
+                            Verify Code
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setEmailSent(false); setOtpToken(''); }}
+                          className="font-mono text-[10px] text-gray-500 uppercase underline"
+                        >
+                          Change email
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest block mb-1.5">
+                            Email Address
+                          </label>
+                          <input 
+                            type="email"
+                            required
+                            placeholder="name@domain.com"
+                            value={authEmail}
+                            onChange={(e: any) => setAuthEmail(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-300 px-3.5 py-3 text-sm text-black focus:outline-none focus:border-black font-mono rounded-xl"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={authLoading}
+                          className="w-full bg-black hover:bg-gray-800 text-white font-mono text-xs uppercase tracking-widest py-3.5 transition font-bold rounded-xl"
+                        >
+                          {authLoading ? 'Sending...' : 'Send Secure Code'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLoginMethod('main')}
+                          className="w-full text-center font-mono text-[10px] text-gray-500 uppercase tracking-widest hover:text-black pt-1 block"
+                        >
+                          ← Back to options
+                        </button>
+                      </>
+                    )}
+                  </form>
+                )}
               </div>
             ) : (
               requestSuccess ? (
@@ -564,7 +563,7 @@ export default function ArtEngineClient() {
                   <button
                     type="button"
                     onClick={() => { setShowAuthModal(false); setRequestSuccess(false); setAuthEmail(''); }}
-                    className="w-full bg-black text-white py-3 text-xs uppercase tracking-widest mt-2 font-bold"
+                    className="w-full bg-black text-white py-3 text-xs uppercase tracking-widest mt-2 font-bold rounded-xl"
                   >
                     Close Window
                   </button>
@@ -581,7 +580,7 @@ export default function ArtEngineClient() {
                       placeholder="director@artgallery.com"
                       value={authEmail}
                       onChange={(e: any) => setAuthEmail(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-300 px-3.5 py-2.5 text-sm text-black focus:outline-none focus:border-black transition"
+                      className="w-full bg-gray-50 border border-gray-300 px-3.5 py-3 text-sm text-black focus:outline-none focus:border-black transition rounded-xl"
                     />
                     <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">
                       Access is restricted to verified art dealers, family offices, museum curators, and financial institutions.
@@ -591,7 +590,7 @@ export default function ArtEngineClient() {
                   <button
                     type="submit"
                     disabled={authLoading}
-                    className="w-full bg-black hover:bg-gray-800 text-white text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 font-bold"
+                    className="w-full bg-black hover:bg-gray-800 text-white text-xs uppercase tracking-widest py-3.5 transition disabled:opacity-50 font-bold rounded-xl"
                   >
                     {authLoading ? 'Submitting Dossier...' : 'Submit Request'}
                   </button>
@@ -608,19 +607,19 @@ export default function ArtEngineClient() {
         
         {/* Terminal Header Info / Admin status if logged in */}
         {user && (
-          <div className="flex flex-col items-center justify-center text-center border-b border-gray-200 pb-6 bg-gray-50 px-8 py-6">
-            <div className="flex flex-wrap items-center justify-center gap-3 bg-white border border-gray-200 px-4 py-2 text-xs font-mono">
+          <div className="flex flex-col items-center justify-center text-center border-b border-gray-200 pb-6 bg-gray-50 px-8 py-6 rounded-3xl">
+            <div className="flex flex-wrap items-center justify-center gap-3 bg-white border border-gray-200 px-4 py-2 text-xs font-mono rounded-full">
               <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
               <span className="text-black">{user.email} (Admin Session Active)</span>
-              <button onClick={handleLogout} className="text-gray-400 hover:text-black underline ml-2 font-bold uppercase text-[10px]">Exit</button>
+              <button onClick={() => auth?.signOut?.()} className="text-gray-400 hover:text-black underline ml-2 font-bold uppercase text-[10px]">Exit</button>
             </div>
           </div>
         )}
 
-        {!loadingUser && !user ? (
+        {!isLoadingUser && !user ? (
           <div className="space-y-16 max-w-5xl mx-auto">
             {/* 1. ART INTELLIGENCE TERMINAL BANNER */}
-            <div className="flex flex-col items-center justify-center text-center bg-gray-50 border border-gray-200 px-8 py-16">
+            <div className="flex flex-col items-center justify-center text-center bg-gray-50 border border-gray-200 px-8 py-16 rounded-3xl">
               <div className="space-y-3 max-w-2xl">
                 <span className="text-xs font-mono tracking-[0.3em] uppercase text-gray-400 font-semibold block">
                   Institutional Art Advisory & Market Intelligence
@@ -635,7 +634,7 @@ export default function ArtEngineClient() {
             </div>
 
             {/* 2. THREE INSTITUTIONAL CASE STUDIES (FONTANA WHITE CUBE STYLE WITH CORRECT IMAGES) */}
-            <div className="bg-white border border-gray-200 p-8 md:p-14 space-y-12 shadow-sm">
+            <div className="bg-white border border-gray-200 p-8 md:p-14 space-y-12 shadow-sm rounded-3xl">
               <div className="text-center space-y-3">
                 <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 block">
                   [ CURATOR ENGINE — INSTITUTIONAL CASE STUDIES ]
@@ -647,9 +646,9 @@ export default function ArtEngineClient() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* Case 1: Fontana */}
-                <Link href="/case-study/fontana" className="group bg-white border border-gray-200 p-6 flex flex-col justify-between hover:border-black transition-colors shadow-sm">
+                <Link href="/case-study/fontana" className="group bg-white border border-gray-200 p-6 flex flex-col justify-between hover:border-black transition-colors shadow-sm rounded-2xl">
                   <div>
-                    <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100">
+                    <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
                       <img 
                         src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1022.jpeg" 
                         alt="Lucio Fontana White Absolute" 
@@ -675,9 +674,9 @@ export default function ArtEngineClient() {
                 </Link>
 
                 {/* Case 2: Garcia */}
-                <Link href="/case-study/garcia" className="group bg-white border border-gray-200 p-6 flex flex-col justify-between hover:border-black transition-colors shadow-sm">
+                <Link href="/case-study/garcia" className="group bg-white border border-gray-200 p-6 flex flex-col justify-between hover:border-black transition-colors shadow-sm rounded-2xl">
                   <div>
-                    <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100">
+                    <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
                       <img 
                         src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1047.jpeg" 
                         alt="Emil Garcia Poetics of Silence" 
@@ -703,9 +702,9 @@ export default function ArtEngineClient() {
                 </Link>
 
                 {/* Case 3: Pivovarov */}
-                <Link href="/case-study/pivovarov" className="group bg-white border border-gray-200 p-6 flex flex-col justify-between hover:border-black transition-colors shadow-sm">
+                <Link href="/case-study/pivovarov" className="group bg-white border border-gray-200 p-6 flex flex-col justify-between hover:border-black transition-colors shadow-sm rounded-2xl">
                   <div>
-                    <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100">
+                    <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
                       <img 
                         src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1039.jpeg" 
                         alt="Viktor Pivovarov Total Loneliness" 
@@ -733,7 +732,7 @@ export default function ArtEngineClient() {
             </div>
 
             {/* 3. FINE ART BANKING & ADVISORY INFRASTRUCTURE (LOGIN BOX) */}
-            <div className="py-16 text-center space-y-8 bg-white border border-gray-200 p-12 shadow-sm">
+            <div className="py-16 text-center space-y-8 bg-white border border-gray-200 p-12 shadow-sm rounded-3xl">
               <div className="space-y-3 max-w-xl mx-auto">
                 <h2 className="text-3xl md:text-4xl font-serif font-light text-black">
                   Fine Art Banking & Advisory Infrastructure
@@ -747,13 +746,13 @@ export default function ArtEngineClient() {
               <div className="flex flex-col sm:flex-row justify-center gap-4 font-mono">
                 <button
                   onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
-                  className="bg-black hover:bg-gray-800 text-white text-xs uppercase tracking-widest px-10 py-4 transition font-bold"
+                  className="bg-black hover:bg-gray-800 text-white text-xs uppercase tracking-widest px-10 py-4 transition font-bold rounded-full"
                 >
                   Sign In
                 </button>
                 <button
                   onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
-                  className="bg-white hover:bg-gray-50 text-black border border-black text-xs uppercase tracking-widest px-10 py-4 transition font-bold"
+                  className="bg-white hover:bg-gray-50 text-black border border-black text-xs uppercase tracking-widest px-10 py-4 transition font-bold rounded-full"
                 >
                   Request Access
                 </button>
@@ -763,7 +762,7 @@ export default function ArtEngineClient() {
         ) : (
           <>
             {/* Navigation Tabs (Authenticated Terminal View) */}
-            <nav className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center border-b border-gray-200 bg-gray-50 px-6 py-4 gap-3">
+            <nav className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center border-b border-gray-200 bg-gray-50 px-6 py-4 gap-3 rounded-2xl">
               <div className="flex gap-8 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
                 <button
                   onClick={() => setActiveTab('parser')}
@@ -789,7 +788,7 @@ export default function ArtEngineClient() {
 
               {activeTab === 'parser' && (
                 <div className="flex items-center justify-between sm:justify-end gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-200">
-                  <span className="text-xs font-mono text-gray-500 bg-white border border-gray-200 px-3 py-1 truncate max-w-[210px] sm:max-w-none">
+                  <span className="text-xs font-mono text-gray-500 bg-white border border-gray-200 px-3 py-1 truncate max-w-[210px] sm:max-w-none rounded-full">
                     {statusText}
                   </span>
                   <button 
@@ -807,7 +806,7 @@ export default function ArtEngineClient() {
                 
                 {/* Left Column: Input Panel */}
                 <div className="lg:col-span-5 space-y-6">
-                  <div className="bg-gray-50 border border-gray-200 p-6 space-y-4">
+                  <div className="bg-gray-50 border border-gray-200 p-6 space-y-4 rounded-3xl">
                     <div className="flex justify-between items-center">
                       <label className="text-[10px] font-mono text-gray-400 uppercase tracking-widest block">
                         Auction Lot URL Target
@@ -824,14 +823,14 @@ export default function ArtEngineClient() {
                       <input 
                         type="url"
                         placeholder="https://www.sothebys.com/en/buy/..." 
-                        className="flex-1 bg-white border border-gray-300 px-3.5 py-3 text-xs text-black focus:outline-none focus:border-black transition font-mono placeholder:text-gray-400 break-all"
+                        className="flex-1 bg-white border border-gray-300 px-3.5 py-3 text-xs text-black focus:outline-none focus:border-black transition font-mono placeholder:text-gray-400 break-all rounded-xl"
                         value={input.link}
                         onChange={(e: any) => setInput({...input, link: e.target.value})}
                       />
                       <button 
                         onClick={handleAutoParse} 
                         disabled={parsing || autoProcessing || !input.link} 
-                        className="bg-gray-100 hover:bg-gray-200 text-black px-4 py-3 text-xs font-mono uppercase tracking-wider transition disabled:opacity-40 border border-gray-300 shrink-0 font-bold"
+                        className="bg-gray-100 hover:bg-gray-200 text-black px-4 py-3 text-xs font-mono uppercase tracking-wider transition disabled:opacity-40 border border-gray-300 shrink-0 font-bold rounded-xl"
                       >
                         {parsing ? 'Parsing...' : 'Parse'}
                       </button>
@@ -840,19 +839,19 @@ export default function ArtEngineClient() {
                     <button
                       onClick={handleOneClickPipeline}
                       disabled={parsing || loading || saving || autoProcessing || !input.link}
-                      className="w-full bg-black hover:bg-gray-800 text-white py-3.5 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40 shadow-sm font-bold"
+                      className="w-full bg-black hover:bg-gray-800 text-white py-3.5 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40 shadow-sm font-bold rounded-xl"
                     >
                       {autoProcessing ? 'Executing Pipeline...' : '⚡ One-Click Full Ingestion'}
                     </button>
                   </div>
 
-                  <div className="bg-gray-50 border border-gray-200 p-6 space-y-5">
+                  <div className="bg-gray-50 border border-gray-200 p-6 space-y-5 rounded-3xl">
                     <div className="flex justify-between items-center border-b border-gray-200 pb-3">
                       <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Asset Visual Verification</span>
-                      {input.image_url && <span className="text-[10px] font-mono bg-emerald-50 text-emerald-800 px-2.5 py-0.5 border border-emerald-200 uppercase">Resolved</span>}
+                      {input.image_url && <span className="text-[10px] font-mono bg-emerald-50 text-emerald-800 px-2.5 py-0.5 border border-emerald-200 uppercase rounded-full">Resolved</span>}
                     </div>
 
-                    <div className="aspect-[4/3] w-full bg-white border border-gray-200 flex items-center justify-center relative overflow-hidden">
+                    <div className="aspect-[4/3] w-full bg-white border border-gray-200 flex items-center justify-center relative overflow-hidden rounded-2xl">
                       {input.image_url && !imgError ? (
                         <img 
                           src={input.image_url} 
@@ -872,7 +871,7 @@ export default function ArtEngineClient() {
                         <label className="text-[10px] font-mono text-gray-500 block mb-1 uppercase tracking-wider">Artist</label>
                         <input 
                           placeholder="Artist Name" 
-                          className="w-full bg-white border border-gray-300 p-3 text-xs text-black focus:outline-none focus:border-black font-mono" 
+                          className="w-full bg-white border border-gray-300 p-3 text-xs text-black focus:outline-none focus:border-black font-mono rounded-xl" 
                           value={input.artist} 
                           onChange={(e: any) => setInput({...input, artist: e.target.value})} 
                         />
@@ -881,7 +880,7 @@ export default function ArtEngineClient() {
                         <label className="text-[10px] font-mono text-gray-500 block mb-1 uppercase tracking-wider">Title</label>
                         <input 
                           placeholder="Artwork Title" 
-                          className="w-full bg-white border border-gray-300 p-3 text-xs text-black focus:outline-none focus:border-black font-mono" 
+                          className="w-full bg-white border border-gray-300 p-3 text-xs text-black focus:outline-none focus:border-black font-mono rounded-xl" 
                           value={input.title} 
                           onChange={(e: any) => setInput({...input, title: e.target.value})} 
                         />
@@ -891,7 +890,7 @@ export default function ArtEngineClient() {
                     <button 
                       onClick={() => generate()} 
                       disabled={loading || autoProcessing} 
-                      className="w-full bg-gray-100 hover:bg-gray-200 text-black border border-gray-300 py-3.5 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40 font-bold"
+                      className="w-full bg-gray-100 hover:bg-gray-200 text-black border border-gray-300 py-3.5 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40 font-bold rounded-xl"
                     >
                       {loading ? 'Synthesizing...' : 'Synthesize Curatorial Dossier'}
                     </button>
@@ -902,20 +901,20 @@ export default function ArtEngineClient() {
                 {/* Right Column: Output / Dossier Preview */}
                 <div className="lg:col-span-7">
                   {loading ? (
-                    <div className="bg-gray-50 border border-gray-200 p-10 space-y-6 animate-pulse">
-                      <div className="h-4 bg-gray-200 w-1/4"></div>
-                      <div className="h-8 bg-gray-200 w-3/4"></div>
-                      <div className="h-4 bg-gray-200 w-1/2"></div>
+                    <div className="bg-gray-50 border border-gray-200 p-10 space-y-6 animate-pulse rounded-3xl">
+                      <div className="h-4 bg-gray-200 w-1/4 rounded"></div>
+                      <div className="h-8 bg-gray-200 w-3/4 rounded"></div>
+                      <div className="h-4 bg-gray-200 w-1/2 rounded"></div>
                       <div className="space-y-3 pt-4">
-                        <div className="h-3 bg-gray-200 w-full"></div>
-                        <div className="h-3 bg-gray-200 w-5/6"></div>
-                        <div className="h-3 bg-gray-200 w-4/6"></div>
+                        <div className="h-3 bg-gray-200 w-full rounded"></div>
+                        <div className="h-3 bg-gray-200 w-5/6 rounded"></div>
+                        <div className="h-3 bg-gray-200 w-4/6 rounded"></div>
                       </div>
                     </div>
                   ) : output ? (
                     <div className="space-y-5">
                       
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-50 border border-gray-200 p-4 gap-3">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-50 border border-gray-200 p-4 gap-3 rounded-2xl">
                         <span className="text-xs font-mono text-gray-500 uppercase tracking-widest font-bold">
                           Investment Memorandum
                         </span>
@@ -930,7 +929,7 @@ export default function ArtEngineClient() {
 
                           <button 
                             onClick={() => setShowRawJson(!showRawJson)} 
-                            className="text-xs font-mono text-gray-600 hover:text-black transition border px-3 py-1.5 bg-white"
+                            className="text-xs font-mono text-gray-600 hover:text-black transition border px-3 py-1.5 bg-white rounded-xl"
                           >
                             {showRawJson ? 'View Card' : 'Raw JSON'}
                           </button>
@@ -938,7 +937,7 @@ export default function ArtEngineClient() {
                           <button 
                             onClick={() => saveToVault()} 
                             disabled={saving || autoProcessing || isSaved}
-                            className={`px-4 py-1.5 text-xs font-mono uppercase tracking-wider transition font-bold ${
+                            className={`px-4 py-1.5 text-xs font-mono uppercase tracking-wider transition font-bold rounded-xl ${
                               isSaved 
                                 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default' 
                                 : 'bg-black hover:bg-gray-800 text-white disabled:opacity-50'
@@ -950,13 +949,13 @@ export default function ArtEngineClient() {
                       </div>
 
                       {showRawJson ? (
-                        <div className="border border-gray-200 p-6 bg-gray-50 overflow-x-auto">
+                        <div className="border border-gray-200 p-6 bg-gray-50 overflow-x-auto rounded-3xl">
                           <pre className="text-black font-mono text-xs whitespace-pre-wrap max-h-[600px] overflow-y-auto">
                             {JSON.stringify(output, null, 2)}
                           </pre>
                         </div>
                       ) : (
-                        <div className="bg-gray-50 border border-gray-200 p-8 md:p-12 space-y-8 max-h-[750px] overflow-y-auto">
+                        <div className="bg-gray-50 border border-gray-200 p-8 md:p-12 space-y-8 max-h-[750px] overflow-y-auto rounded-3xl">
                           
                           <div className="border-b border-gray-200 pb-6 space-y-4">
                             <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
@@ -970,7 +969,7 @@ export default function ArtEngineClient() {
                                 {output.artist_dates && <p className="text-gray-500 italic text-sm mt-0.5">{output.artist_dates}</p>}
                               </div>
                               {output.estimate_raw && (
-                                <div className="text-left sm:text-right bg-white p-3 border border-gray-200 w-full sm:w-auto">
+                                <div className="text-left sm:text-right bg-white p-3 border border-gray-200 w-full sm:w-auto rounded-xl">
                                   <span className="text-[10px] font-mono text-gray-400 uppercase block">Estimate Valuation</span>
                                   <span className="text-sm font-mono text-black font-bold">{output.estimate_raw}</span>
                                 </div>
@@ -1018,7 +1017,7 @@ export default function ArtEngineClient() {
 
                     </div>
                   ) : (
-                    <div className="h-full min-h-[500px] flex flex-col items-center justify-center border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+                    <div className="h-full min-h-[500px] flex flex-col items-center justify-center border border-dashed border-gray-300 bg-gray-50 p-8 text-center rounded-3xl">
                       <div className="text-3xl font-serif text-gray-300 mb-2">†</div>
                       <h3 className="text-black font-serif text-lg mb-1">Awaiting Lot Ingestion</h3>
                       <p className="text-gray-400 text-xs font-mono max-w-sm leading-relaxed">
@@ -1033,9 +1032,9 @@ export default function ArtEngineClient() {
 
             {activeTab === 'vault' && (
               <div className="space-y-6 transition-opacity duration-300">
-                <div className="flex justify-between items-center border-b border-gray-200 bg-gray-50 p-6">
+                <div className="flex justify-between items-center border-b border-gray-200 bg-gray-50 p-6 rounded-2xl">
                   <span className="text-xs font-mono text-gray-500 uppercase tracking-widest font-bold">Secure Vault Archive</span>
-                  <button onClick={fetchLots} className="text-xs font-mono text-black hover:underline bg-white px-4 py-2 border border-gray-200">
+                  <button onClick={fetchLots} className="text-xs font-mono text-black hover:underline bg-white px-4 py-2 border border-gray-200 rounded-xl">
                     Refresh ↻
                   </button>
                 </div>
@@ -1043,15 +1042,15 @@ export default function ArtEngineClient() {
                 {loadingLots ? (
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {[1, 2, 3].map((n) => (
-                      <div key={n} className="bg-gray-50 border border-gray-200 p-6 space-y-4 animate-pulse">
-                        <div className="aspect-[4/3] bg-gray-200 w-full"></div>
-                        <div className="h-4 bg-gray-200 w-2/3"></div>
-                        <div className="h-3 bg-gray-200 w-1/3"></div>
+                      <div key={n} className="bg-gray-50 border border-gray-200 p-6 space-y-4 animate-pulse rounded-3xl">
+                        <div className="aspect-[4/3] bg-gray-200 w-full rounded-2xl"></div>
+                        <div className="h-4 bg-gray-200 w-2/3 rounded"></div>
+                        <div className="h-3 bg-gray-200 w-1/3 rounded"></div>
                       </div>
                     ))}
                   </div>
                 ) : lots.length === 0 ? (
-                  <div className="py-16 text-center font-mono text-xs text-gray-400 bg-gray-50 border border-gray-200 p-8">Vault archive is currently empty.</div>
+                  <div className="py-16 text-center font-mono text-xs text-gray-400 bg-gray-50 border border-gray-200 p-8 rounded-3xl">Vault archive is currently empty.</div>
                 ) : (
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {lots.map((lot) => {
@@ -1063,14 +1062,14 @@ export default function ArtEngineClient() {
                         <Link
                           key={lot.id}
                           href={`/art-engine/lots/${lot.id}`}
-                          className="group bg-gray-50 border border-gray-200 overflow-hidden hover:border-black transition flex flex-col"
+                          className="group bg-gray-50 border border-gray-200 overflow-hidden hover:border-black transition flex flex-col rounded-3xl shadow-sm"
                         >
                           <div className="aspect-[4/3] bg-white relative overflow-hidden flex items-center justify-center p-3 border-b border-gray-200">
                             {lot.image_path ? (
                               <img
                                 src={publicImg}
                                 alt={lot.title}
-                                className="object-contain max-h-full max-w-full group-hover:scale-105 transition duration-700"
+                                className="object-contain max-h-full max-w-full group-hover:scale-105 transition duration-700 rounded-2xl"
                               />
                             ) : (
                               <div className="font-serif text-xl text-gray-300">{getInitials(lot.artist)}</div>

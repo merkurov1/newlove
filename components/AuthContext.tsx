@@ -9,6 +9,8 @@ interface AuthContextType {
   profile: any;
   session: any;
   isLoading: boolean;
+  signInWithGoogle: () => Promise<void>;
+  signInWithPasskey: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -18,6 +20,8 @@ const initialAuthContext: AuthContextType = {
   profile: null,
   session: null,
   isLoading: true,
+  signInWithGoogle: async () => {},
+  signInWithPasskey: async () => {},
   signOut: async () => {},
   refreshProfile: async () => {},
 };
@@ -98,6 +102,34 @@ export function AuthProvider(props: React.PropsWithChildren<{}>) {
     };
   }, []);
 
+  const signInWithGoogle = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/art-engine`,
+        },
+      });
+      if (error) throw error;
+    } catch (e) {
+      console.error('Google sign-in error:', e);
+      throw e;
+    }
+  };
+
+  const signInWithPasskey = async () => {
+    try {
+      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+        throw new Error('WebAuthn is not supported by this browser.');
+      }
+      const { error } = await (supabase.auth as any).signInWithPasskey();
+      if (error) throw error;
+    } catch (e) {
+      console.error('Passkey sign-in error:', e);
+      throw e;
+    }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -112,6 +144,8 @@ export function AuthProvider(props: React.PropsWithChildren<{}>) {
       profile,
       session,
       isLoading,
+      signInWithGoogle,
+      signInWithPasskey,
       signOut,
       refreshProfile,
     }),

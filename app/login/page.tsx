@@ -4,13 +4,15 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
-import { ArrowLeft, KeyRound, Mail, Terminal, CheckCircle2, Sparkles, ShieldCheck, Hash } from 'lucide-react';
+import { createClient } from '@/lib/supabase-browser';
+import { ArrowLeft, KeyRound, Mail, Terminal, CheckCircle2, Sparkles } from 'lucide-react';
 
 export default function LoginPage() {
-  const { user, isLoading, signInWithGoogle } = useAuth();
+  const { user, isLoading, signInWithGoogle, signInWithPasskey } = useAuth();
   const router = useRouter();
+  const supabase = createClient();
 
-  const [authMode, setAuthMode] = useState<'methods' | 'email' | 'otp'>('methods');
+  const [authMode, setAuthMode] = useState<'methods' | 'email'>('methods');
   const [email, setEmail] = useState('');
   const [otpToken, setOtpToken] = useState('');
   const [emailSent, setEmailSent] = useState(false);
@@ -19,20 +21,25 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      router.push('/temple');
+      router.push('/art-engine');
     }
   }, [user, isLoading, router]);
 
-  // Отправка Magic Link / OTP запроса
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  // Отправка OTP через Supabase
+  const handleEmailLogin = async (e: any) => {
     e.preventDefault();
     if (!email) return;
     setSubmitting(true);
     setErrorMsg(null);
 
     try {
-      // Здесь вызывается Supabase Auth (например, supabase.auth.signInWithOtp)
-      await new Promise((r) => setTimeout(r, 1000));
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/art-engine`,
+        },
+      });
+      if (error) throw error;
       setEmailSent(true);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to dispatch secure access code');
@@ -42,7 +49,7 @@ export default function LoginPage() {
   };
 
   // Проверка 6-значного кода (OTP)
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: any) => {
     e.preventDefault();
     if (otpToken.length !== 6) {
       setErrorMsg('Please enter a valid 6-digit verification code.');
@@ -52,9 +59,13 @@ export default function LoginPage() {
     setErrorMsg(null);
 
     try {
-      // Здесь верификация через Supabase: supabase.auth.verifyOtp({ email, token: otpToken, type: 'email' })
-      await new Promise((r) => setTimeout(r, 1000));
-      router.push('/temple');
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token: otpToken,
+        type: 'email',
+      });
+      if (error) throw error;
+      router.push('/art-engine');
     } catch (err: any) {
       setErrorMsg(err.message || 'Invalid verification code');
     } finally {
@@ -67,10 +78,8 @@ export default function LoginPage() {
     setSubmitting(true);
     setErrorMsg(null);
     try {
-      // Поддержка WebAuthn в Supabase
-      // const { error } = await supabase.auth.signInWithPasskey();
-      await new Promise((r) => setTimeout(r, 1000));
-      alert('Passkey biometric authorization requested.');
+      await signInWithPasskey();
+      router.push('/art-engine');
     } catch (err: any) {
       setErrorMsg(err.message || 'Passkey authentication failed');
     } finally {
@@ -81,7 +90,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans flex flex-col justify-between px-6 py-12 selection:bg-black selection:text-white relative">
       
-      {/* Subtle Paper Grain Texture */}
       <div 
         className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
         style={{
@@ -129,7 +137,7 @@ export default function LoginPage() {
             <button
               onClick={() => signInWithGoogle()}
               disabled={isLoading || submitting}
-              className="w-full py-4 px-6 rounded-full bg-zinc-900 hover:bg-zinc-800 text-white font-mono text-xs uppercase tracking-[0.2em] shadow-lg shadow-zinc-900/10 active:scale-95 transition-all flex items-center justify-center gap-3"
+              className="w-full py-4 px-6 rounded-full bg-zinc-900 hover:bg-zinc-800 text-white font-mono text-xs uppercase tracking-[0.2em] shadow-lg shadow-zinc-900/10 active:scale-95 transition-all flex items-center justify-center gap-3 cursor-pointer"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.2 8.9 5 12 5z"/>
@@ -144,7 +152,7 @@ export default function LoginPage() {
             <button
               onClick={handlePasskeyLogin}
               disabled={isLoading || submitting}
-              className="w-full py-4 px-6 rounded-full bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-900 font-mono text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-sm"
+              className="w-full py-4 px-6 rounded-full bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-900 font-mono text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-sm cursor-pointer"
             >
               <KeyRound size={16} className="text-zinc-700" />
               <span>Sign in with Passkey</span>
@@ -153,7 +161,7 @@ export default function LoginPage() {
             {/* EMAIL / MAGIC LINK / OTP TOGGLE */}
             <button
               onClick={() => setAuthMode('email')}
-              className="w-full py-4 px-6 rounded-full bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-900 font-mono text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-sm"
+              className="w-full py-4 px-6 rounded-full bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-900 font-mono text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-sm cursor-pointer"
             >
               <Mail size={16} className="text-zinc-700" />
               <span>Email &amp; 6-Digit Code (OTP)</span>
@@ -167,7 +175,7 @@ export default function LoginPage() {
               <div className="p-6 rounded-2xl border border-zinc-200 bg-white/60 text-center space-y-4">
                 <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
                 <p className="font-mono text-xs text-zinc-700 uppercase tracking-wider">
-                  Verification code or link dispatched to <span className="text-black font-bold">{email}</span>
+                  Verification code dispatched to <span className="text-black font-bold">{email}</span>
                 </p>
                 
                 <div className="pt-2">
@@ -178,14 +186,14 @@ export default function LoginPage() {
                     type="text"
                     maxLength={6}
                     value={otpToken}
-                    onChange={(e) => setOtpToken(e.target.value)}
+                    onChange={(e: any) => setOtpToken(e.target.value)}
                     placeholder="000000"
                     className="w-full bg-white border border-zinc-300 rounded-2xl py-3 px-4 text-center text-black font-mono text-lg tracking-[0.5em] focus:outline-none focus:border-black transition-colors"
                   />
                   <button
                     type="button"
                     onClick={handleVerifyOtp}
-                    className="w-full mt-3 py-3 rounded-full bg-zinc-900 text-white font-mono text-xs uppercase tracking-[0.2em]"
+                    className="w-full mt-3 py-3 rounded-full bg-zinc-900 text-white font-mono text-xs uppercase tracking-[0.2em] cursor-pointer"
                   >
                     Verify Code
                   </button>
@@ -209,7 +217,7 @@ export default function LoginPage() {
                     type="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e: any) => setEmail(e.target.value)}
                     placeholder="name@domain.com"
                     className="w-full bg-white border border-zinc-300 rounded-2xl py-3 px-4 text-black font-mono text-xs focus:outline-none focus:border-black transition-colors shadow-inner"
                   />
@@ -217,9 +225,9 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full py-4 px-6 rounded-full bg-zinc-900 text-white font-bold uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all font-mono text-[10px] shadow-md"
+                  className="w-full py-4 px-6 rounded-full bg-zinc-900 text-white font-bold uppercase tracking-[0.2em] hover:bg-zinc-800 transition-all font-mono text-[10px] shadow-md cursor-pointer"
                 >
-                  {submitting ? 'Sending...' : 'Send Secure Code / Link'}
+                  {submitting ? 'Sending...' : 'Send Secure Code'}
                 </button>
                 <button
                   type="button"
