@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
-import SoundToggle from './SoundToggle';
+import SoundToggle from '@/components/SoundToggle';
 
 interface Props {
   daemonUrl?: string;
@@ -20,7 +20,6 @@ export default function HeartPhysics({
   const [bgColor, setBgColor] = useState('#e8b4b8');
   const [seconds, setSeconds] = useState(0);
 
-  // Вычисляем имя автора
   const currentAuthorName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Guardian';
 
   const secondsRef = useRef(seconds);
@@ -38,7 +37,6 @@ export default function HeartPhysics({
     return () => clearInterval(timer);
   }, []);
 
-  // Отправка таймера спокойствия с токеном и реальным автором
   useEffect(() => {
     return () => {
       const currentSeconds = secondsRef.current;
@@ -295,7 +293,6 @@ export default function HeartPhysics({
     >
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       
-      {/* Хeдер на сетке grid-cols-3 с безопасными отступами и SoundToggle */}
       <header className="absolute top-0 left-0 w-full z-30 pt-36 sm:pt-28 md:pt-32 px-4 sm:px-10 pointer-events-none">
         <div className="grid grid-cols-3 items-center w-full max-w-7xl mx-auto">
           <div className="flex justify-start pointer-events-auto">

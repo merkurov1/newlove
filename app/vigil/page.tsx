@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
-import { useTempleAudio } from '@/components/heartandangel/layout'; // Путь к вашему общему layout с AudioContext
+import { useTempleAudio } from '@/components/AudioContext';
+import SoundToggle from '@/components/SoundToggle';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Clock, Sparkles, Volume2, Radio, ArrowLeft } from 'lucide-react';
+import { Heart, Clock, Sparkles, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -56,7 +57,7 @@ function getTimeLighting() {
 export default function VigilPage() {
   const supabase = createClient();
   const { user, profile, isLoading } = useAuth();
-  const { isPlaying, toggleAudio } = useTempleAudio();
+  const { isPlaying } = useTempleAudio();
 
   const angelRef = useRef<HTMLDivElement | null>(null);
   const heartRef = useRef<HTMLDivElement | null>(null);
@@ -242,20 +243,11 @@ export default function VigilPage() {
       className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 sm:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      {/* Стандартизированный адаптивный хедер на сетке (grid-cols-3) с безопасными отступами сверху */}
       <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-24 sm:pt-28 md:pt-32 px-2 sm:px-4">
-        {/* Лево: Кнопка управления звуком (глобальный AudioContext) */}
         <div className="flex justify-start">
-          <button
-            onClick={toggleAudio}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-medium cursor-pointer ${buttonStyleClass}`}
-          >
-            {isPlaying ? <Volume2 size={14} className="text-amber-500 animate-pulse" /> : <Radio size={14} />}
-            <span className="hidden sm:inline">{isPlaying ? 'Sound On' : 'Sound Off'}</span>
-          </button>
+          <SoundToggle className={`px-3 sm:px-4 py-2 sm:py-2.5 border shadow-sm ${buttonStyleClass}`} />
         </div>
 
-        {/* Центр: Кнопка возврата в храм */}
         <div className="flex justify-center">
           <Link 
             href="/temple"
@@ -267,14 +259,11 @@ export default function VigilPage() {
           </Link>
         </div>
 
-        {/* Право: Пустой блок для баланса сетки */}
         <div />
       </header>
 
-      {/* Атмосферный фоновый свет */}
       <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[120px] pointer-events-none transition-all duration-1000`} />
 
-      {/* АНГЕЛ: Слева снизу */}
       <div ref={angelRef} className="absolute left-[8%] bottom-[8%] sm:left-[15%] sm:bottom-[15%] z-30 flex flex-col items-center pointer-events-none">
         <div className="absolute -bottom-2 w-32 h-6 bg-black/25 rounded-full blur-[8px]" />
         <div className={`absolute inset-0 bg-amber-500/20 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
@@ -290,7 +279,6 @@ export default function VigilPage() {
         </div>
       </div>
 
-      {/* СЕРДЦЕ: В правом верхнем углу */}
       <div ref={heartRef} className="absolute top-[18%] right-[10%] sm:top-[22%] sm:right-[20%] z-30 flex items-center justify-center">
         <div 
           className="relative transition-all duration-700 ease-in-out cursor-pointer"
@@ -309,7 +297,6 @@ export default function VigilPage() {
           </div>
         </div>
 
-        {/* Анимированная искра */}
         <AnimatePresence>
           {spark && (
             <motion.div
@@ -337,11 +324,9 @@ export default function VigilPage() {
         </AnimatePresence>
       </div>
 
-      {/* ЦЕНТР ЭКРАНА: Единая композиция */}
       <div className="flex-1 max-w-md mx-auto w-full py-12 flex flex-col items-center justify-center relative z-25 my-auto">
         <div className={`w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl ${lighting.cardBg} flex flex-col items-center gap-6 text-center shadow-2xl transition-colors duration-1000`}>
           
-          {/* Active Guardians */}
           <div className="w-full space-y-3">
             <div className="font-mono text-xs uppercase tracking-[0.3em] opacity-70">Active Guardians (24h)</div>
             <div className="flex flex-wrap gap-2 justify-center items-center min-h-[40px]">
@@ -360,10 +345,8 @@ export default function VigilPage() {
             </div>
           </div>
 
-          {/* Разделитель */}
           <div className={`w-full h-[1px] ${lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10') ? 'bg-white/10' : 'bg-stone-200'}`} />
 
-          {/* Статус сессии, таймер и кнопка Send Spark */}
           <div className="w-full space-y-4">
             <div className="text-center space-y-1.5">
               <div className="font-mono text-xs">

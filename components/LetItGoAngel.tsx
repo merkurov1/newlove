@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
-import SoundToggle from './SoundToggle';
+import SoundToggle from '@/components/SoundToggle';
 
 const ANGEL_WITH_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png';
@@ -91,7 +91,6 @@ export default function LetItGoAngel() {
   return (
     <main className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
       
-      {/* Хeдер на 3 колонки с безопасным отступом и SoundToggle */}
       <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-24 sm:pt-28 md:pt-32 px-2 sm:px-4">
         <div className="flex justify-start">
           <SoundToggle className="px-3 sm:px-4 py-2 sm:py-2.5 border border-white/30 bg-white/90 text-stone-900 shadow-md" />
@@ -114,10 +113,8 @@ export default function LetItGoAngel() {
         </div>
       </header>
 
-      {/* Трава внизу */}
       <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
 
-      {/* Центр экрана: Ангел и летающие сердца */}
       <div className="relative w-full flex-1 flex items-end justify-center pb-[10vh] pt-12 z-20 my-auto">
         <div 
           className={`relative transition-transform duration-200 flex items-center justify-center p-4 w-[480px] h-[480px] max-w-[70vw] max-h-[55vh] animate-fade-in ${

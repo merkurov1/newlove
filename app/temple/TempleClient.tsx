@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/components/AuthContext';
-import SoundToggle from './SoundToggle';
+import SoundToggle from '@/components/SoundToggle';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
@@ -225,7 +225,6 @@ export default function TempleClient() {
       className={`relative w-full min-h-[100dvh] h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-hidden select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      {/* Верхняя панель: трехколоночная сетка с безопасными отступами */}
       <header className="relative z-45 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-16 sm:pt-20 md:pt-24">
         <div />
         
@@ -243,11 +242,9 @@ export default function TempleClient() {
         </div>
       </header>
 
-      {/* ЦЕНТР ЭКРАНА: Главное интерактивное меню и алтарь */}
       <div className="relative w-full flex-1 flex flex-col items-center justify-center text-center px-4 my-auto">
         <div className={`absolute w-[300px] h-[300px] sm:w-[600px] sm:h-[600px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
 
-        {/* Герой слева снизу */}
         <div className="absolute left-[5%] sm:left-[12%] bottom-[10%] z-20 flex flex-col items-center pointer-events-none opacity-85 sm:opacity-100">
           <div className="absolute -bottom-2 w-20 sm:w-28 h-4 sm:h-6 bg-black/25 rounded-full blur-[8px]" />
           {heroUrl && (
@@ -257,7 +254,6 @@ export default function TempleClient() {
           )}
         </div>
 
-        {/* Кнопки навигации и ритуалов */}
         <div className="relative z-30 flex flex-col items-center gap-6 max-w-xl mx-auto w-full">
           <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
             <Link 
@@ -310,7 +306,6 @@ export default function TempleClient() {
 
       <div className="h-2 sm:h-4" />
 
-      {/* Модальное окно: Справка (?) */}
       <AnimatePresence>
         {isInfoOpen && (
           <motion.div 
@@ -342,7 +337,6 @@ export default function TempleClient() {
         )}
       </AnimatePresence>
 
-      {/* Модальное окно: Traces */}
       <AnimatePresence>
         {isTracesOpen && (
           <motion.div 
@@ -408,7 +402,6 @@ export default function TempleClient() {
         )}
       </AnimatePresence>
 
-      {/* Модальное окно: Chronicles */}
       <AnimatePresence>
         {isChroniclesOpen && (
           <motion.div 
