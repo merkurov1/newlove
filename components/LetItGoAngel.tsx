@@ -90,31 +90,33 @@ export default function LetItGoAngel() {
   };
 
   return (
-    <main className={`relative w-full h-[100dvh] overflow-hidden ${skyGradient} flex flex-col items-center justify-end select-none animate-fade-in transition-colors duration-1000`}>
+    <main className={`relative w-full min-h-[100dvh] h-[100dvh] overflow-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
       
-      {/* Верхняя панель: сетка из 3 колонок (баланс для центрирования кнопки и отображения счетчика) */}
-      <header className="absolute top-0 left-0 w-full z-50 grid grid-cols-3 items-center px-4 sm:px-12 pt-4 sm:pt-8 pointer-events-none">
+      {/* Верхняя панель: в нормальном потоке flex-контейнера */}
+      <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-2">
         <div /> {/* Пустой блок слева для симметрии сетки */}
 
-        <div className="flex justify-center pointer-events-auto">
+        <div className="flex justify-center">
           <Link 
             href="/heartandangel/world"
-            className="flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/80 text-stone-900 shadow-md transition-all text-xs font-serif tracking-wider hover:bg-white cursor-pointer"
+            className="flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full backdrop-blur-md border border-white/30 bg-white/80 text-stone-900 shadow-md transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer"
           >
             <span>← Back to World</span>
           </Link>
         </div>
 
-        <div className="flex justify-end pointer-events-auto">
+        <div className="flex justify-end">
           <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/30 shadow-md animate-fade-in">
             ❤️ {clickCount}
           </div>
         </div>
       </header>
 
+      {/* Трава внизу */}
       <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
 
-      <div className="relative w-full max-w-3xl h-full flex items-end justify-center pb-[10vh] z-20">
+      {/* Центр экрана: Ангел и летающие сердца */}
+      <div className="relative w-full flex-1 flex items-end justify-center pb-[10vh] z-20 my-auto">
         <div 
           className={`relative transition-transform duration-200 flex items-center justify-center p-4 w-[480px] h-[480px] max-w-[65vw] max-h-[55vh] animate-fade-in ${
             showWithoutHeart ? 'cursor-default' : 'cursor-pointer active:scale-95'
@@ -178,7 +180,7 @@ export default function LetItGoAngel() {
           15% { opacity: 1; }
           100% { transform: translateY(-80vh) scale(1.15) translateX(25px) rotate(15deg); opacity: 0; }
         }
-        .animate-fade-in { animation: fadeIn 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-fade-in { animation: fadeIn 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-fly-away { animation: flyAway 6s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
       ` }} />
     </main>
