@@ -38,7 +38,7 @@ export default function HeartAndAngelHub() {
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       <Header />
 
-      {/* Hero-блок (клик по картинке убран, обертка заменена на div) */}
+      {/* Hero-блок (клик по картинке убран, шрифты унифицированы) */}
       <div className="relative w-full h-[500px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5]">
         <Image
           src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
@@ -52,13 +52,13 @@ export default function HeartAndAngelHub() {
 
         <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pt-24 sm:pt-32 md:pt-40 flex justify-end">
           <div className="text-right space-y-2 sm:space-y-3 max-w-xl text-white drop-shadow-lg">
-            <h1 className="text-4xl sm:text-6xl md:text-7xl font-serif font-light tracking-tight text-white">
+            <h1 className="text-3xl sm:text-4xl md:text-6xl font-serif font-light tracking-wider text-white">
               Heart &amp; Angel
             </h1>
-            <p className="text-base sm:text-lg md:text-xl font-serif italic font-normal tracking-wide text-stone-200">
+            <p className="text-stone-100 text-sm sm:text-base md:text-lg font-serif font-light leading-relaxed tracking-wide">
               The universal mythology for a fragmented world.
             </p>
-            <p className="text-xs sm:text-sm font-sans tracking-[0.3em] uppercase text-stone-300 font-medium pt-1">
+            <p className="text-stone-200 text-xs sm:text-sm font-serif font-light tracking-[0.2em] uppercase pt-1">
               The Greatest love story ever told.
             </p>
           </div>
@@ -113,7 +113,7 @@ export default function HeartAndAngelHub() {
           </p>
         </article>
 
-        {/* 2. Увеличенный живой видеопортал */}
+        {/* 2. Увеличенный живой видеопортал (YouTube) */}
         <div className="w-full">
           <div 
             onClick={() => setIsModalOpen(true)}
@@ -138,36 +138,7 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* 3. Галерея подряд (лента с сохранением оригинальных пропорций) */}
-        <div className="w-full space-y-12">
-          {images.map((src, idx) => (
-            <div 
-              key={idx} 
-              className="relative w-full bg-white border border-stone-200/80 p-6 sm:p-12 rounded-3xl shadow-sm flex flex-col items-center group transition-all duration-500 hover:border-stone-400"
-            >
-              <div className="w-full flex justify-between items-center mb-6">
-                <span className="font-mono text-xs uppercase tracking-widest text-stone-400">
-                  Artifact 0{idx + 1}
-                </span>
-                <span className="font-mono text-[10px] text-stone-400">
-                  REF_{String(idx + 1).padStart(2, '0')}
-                </span>
-              </div>
-              
-              <div className="relative w-full max-w-3xl aspect-[4/3] sm:aspect-[16/10] flex items-center justify-center">
-                <Image
-                  src={src}
-                  alt={`Artifact ${idx + 1}`}
-                  fill
-                  className="object-contain drop-shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]"
-                  sizes="(max-width: 1024px) 100vw, 800px"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* 4. Блок The Concept */}
+        {/* 3. Блок The Concept (Concept) */}
         <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
             <div className="md:col-span-7 space-y-6">
@@ -213,6 +184,35 @@ export default function HeartAndAngelHub() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* 4. Галерея подряд (Галерея) */}
+        <div className="w-full space-y-12">
+          {images.map((src, idx) => (
+            <div 
+              key={idx} 
+              className="relative w-full bg-white border border-stone-200/80 p-6 sm:p-12 rounded-3xl shadow-sm flex flex-col items-center group transition-all duration-500 hover:border-stone-400"
+            >
+              <div className="w-full flex justify-between items-center mb-6">
+                <span className="font-mono text-xs uppercase tracking-widest text-stone-400">
+                  Artifact 0{idx + 1}
+                </span>
+                <span className="font-mono text-[10px] text-stone-400">
+                  REF_{String(idx + 1).padStart(2, '0')}
+                </span>
+              </div>
+              
+              <div className="relative w-full max-w-3xl aspect-[4/3] sm:aspect-[16/10] flex items-center justify-center">
+                <Image
+                  src={src}
+                  alt={`Artifact ${idx + 1}`}
+                  fill
+                  className="object-contain drop-shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]"
+                  sizes="(max-width: 1024px) 100vw, 800px"
+                />
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* 5. Мини-проекты */}
