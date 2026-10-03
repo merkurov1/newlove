@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
@@ -618,7 +618,7 @@ export default function ArtEngineClient() {
         )}
 
         {!loadingUser && !user ? (
-          <div className="space-y-10 max-w-4xl mx-auto">
+          <div className="space-y-12 max-w-5xl mx-auto">
             {/* 1. ART INTELLIGENCE TERMINAL BANNER */}
             <div className="flex flex-col items-center justify-center text-center bg-white/80 backdrop-blur-xl px-4 sm:px-8 py-10 sm:py-14 rounded-3xl shadow-sm border border-neutral-200/80">
               <div className="space-y-2 max-w-2xl">
@@ -631,8 +631,8 @@ export default function ArtEngineClient() {
               </div>
             </div>
 
-            {/* 2. THREE INSTITUTIONAL CASE STUDIES (INSERTED IN THE MIDDLE) */}
-            <div className="bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-14 rounded-3xl shadow-sm space-y-10">
+            {/* 2. THREE INSTITUTIONAL CASE STUDIES (ENHANCED WHITE CUBE GALLERY STYLE) */}
+            <div className="bg-white/80 backdrop-blur-xl border border-neutral-200/80 p-6 sm:p-14 rounded-3xl shadow-sm space-y-12">
               <div className="text-center space-y-2">
                 <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-neutral-400 block">
                   [ CURATOR ENGINE — INSTITUTIONAL CASE STUDIES ]
@@ -642,54 +642,90 @@ export default function ArtEngineClient() {
                 </h3>
               </div>
 
-              <div className="space-y-8 divide-y divide-neutral-100">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* Case 1: Fontana */}
-                <div className="pt-6 first:pt-0">
-                  <Link href="/case-study/fontana" className="block group">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1 font-mono text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
-                      <span>Asset: Lucio Fontana (1968) // Valuation & Arbitrage</span>
-                      <span className="text-neutral-400 group-hover:text-neutral-900 transition-colors mt-1 sm:mt-0">Analyze →</span>
+                <Link href="/case-study/fontana" className="group bg-[#FAF8F5] border border-neutral-200 rounded-2xl overflow-hidden hover:border-neutral-900 transition-all flex flex-col justify-between">
+                  <div>
+                    <div className="aspect-[4/3] bg-neutral-100 overflow-hidden relative border-b border-neutral-200">
+                      <img 
+                        src="https://www.omnesmag.com/wp-content/uploads/2023/06/unnamed-3-1.jpg" 
+                        alt="Lucio Fontana White Absolute" 
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                      />
                     </div>
-                    <h4 className="font-serif text-xl sm:text-2xl text-neutral-900 group-hover:text-red-700 transition-colors mb-2">
-                      CASE STUDY: THE WHITE ABSOLUTE
-                    </h4>
-                    <p className="font-serif italic text-neutral-600 text-sm sm:text-base leading-relaxed">
-                      See how the Curator Engine analyzes liquidity, risk, and market arbitrage for institutional-grade assets. This is the level of depth I bring to every acquisition.
-                    </p>
-                  </Link>
-                </div>
+                    <div className="p-6 space-y-3">
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-red-700 font-bold">
+                        Asset: Lucio Fontana (1968) // Valuation
+                      </div>
+                      <h4 className="font-serif text-xl text-neutral-900 group-hover:text-red-700 transition-colors">
+                        THE WHITE ABSOLUTE
+                      </h4>
+                      <p className="font-serif italic text-neutral-600 text-xs sm:text-sm leading-relaxed">
+                        See how the Curator Engine analyzes liquidity, risk, and market arbitrage for institutional-grade assets.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-6 pt-0 font-mono text-[11px] uppercase tracking-widest text-neutral-900 flex items-center justify-between border-t border-neutral-200/60 mt-4">
+                    <span>Analyze</span>
+                    <span className="group-hover:translate-x-1 transition-transform">→</span>
+                  </div>
+                </Link>
 
                 {/* Case 2: Garcia */}
-                <div className="pt-6">
-                  <Link href="/case-study/garcia" className="block group">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1 font-mono text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
-                      <span>Asset: Emil Garcia // Curation & Packaging</span>
-                      <span className="text-neutral-400 group-hover:text-neutral-900 transition-colors mt-1 sm:mt-0">Examine →</span>
+                <Link href="/case-study/garcia" className="group bg-[#FAF8F5] border border-neutral-200 rounded-2xl overflow-hidden hover:border-neutral-900 transition-all flex flex-col justify-between">
+                  <div>
+                    <div className="aspect-[4/3] bg-neutral-100 overflow-hidden relative border-b border-neutral-200">
+                      <img 
+                        src="https://images.squarespace-cdn.com/content/v1/596603e4893fc08f07aedd02/900f5f26-19f1-40d1-ba1c-e65cda3e0632/unlocking-symbolic-painting-detail-skount.jpg" 
+                        alt="Emil Garcia Poetics of Silence" 
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                      />
                     </div>
-                    <h4 className="font-serif text-xl sm:text-2xl text-neutral-900 group-hover:text-red-700 transition-colors mb-2">
-                      CASE STUDY: POETICS OF SILENCE
-                    </h4>
-                    <p className="font-serif italic text-neutral-600 text-sm sm:text-base leading-relaxed">
-                      Examine how AI-assisted provenance and structural framing transform non-conformist heritage into sovereign cultural capital.
-                    </p>
-                  </Link>
-                </div>
+                    <div className="p-6 space-y-3">
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
+                        Asset: Emil Garcia // Packaging
+                      </div>
+                      <h4 className="font-serif text-xl text-neutral-900 group-hover:text-red-700 transition-colors">
+                        POETICS OF SILENCE
+                      </h4>
+                      <p className="font-serif italic text-neutral-600 text-xs sm:text-sm leading-relaxed">
+                        Examine how AI-assisted provenance and structural framing transform non-conformist heritage into sovereign capital.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-6 pt-0 font-mono text-[11px] uppercase tracking-widest text-neutral-900 flex items-center justify-between border-t border-neutral-200/60 mt-4">
+                    <span>Examine</span>
+                    <span className="group-hover:translate-x-1 transition-transform">→</span>
+                  </div>
+                </Link>
 
                 {/* Case 3: Pivovarov */}
-                <div className="pt-6">
-                  <Link href="/case-study/pivovarov" className="block group">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1 font-mono text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
-                      <span>Asset: Ilya Pivovarov // Conceptual Dossier</span>
-                      <span className="text-neutral-400 group-hover:text-neutral-900 transition-colors mt-1 sm:mt-0">Read Dossier →</span>
+                <Link href="/case-study/pivovarov" className="group bg-[#FAF8F5] border border-neutral-200 rounded-2xl overflow-hidden hover:border-neutral-900 transition-all flex flex-col justify-between">
+                  <div>
+                    <div className="aspect-[4/3] bg-neutral-100 overflow-hidden relative border-b border-neutral-200">
+                      <img 
+                        src="https://static.themoscowtimes.com/image/article_1360/4b/284adbd87bb8432b91f87b430babc29f.jpg" 
+                        alt="Ilya Pivovarov Total Loneliness" 
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                      />
                     </div>
-                    <h4 className="font-serif text-xl sm:text-2xl text-neutral-900 group-hover:text-red-700 transition-colors mb-2">
-                      CASE STUDY: TOTAL LONELINESS
-                    </h4>
-                    <p className="font-serif italic text-neutral-600 text-sm sm:text-base leading-relaxed">
-                      A foundational case study in Moscow Conceptualism, exploring inward-facing rigour, total solitude, and institutional endurance.
-                    </p>
-                  </Link>
-                </div>
+                    <div className="p-6 space-y-3">
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-neutral-500 font-bold">
+                        Asset: Ilya Pivovarov // Dossier
+                      </div>
+                      <h4 className="font-serif text-xl text-neutral-900 group-hover:text-red-700 transition-colors">
+                        TOTAL LONELINESS
+                      </h4>
+                      <p className="font-serif italic text-neutral-600 text-xs sm:text-sm leading-relaxed">
+                        A foundational case study in Moscow Conceptualism, exploring inward-facing rigour and institutional endurance.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-6 pt-0 font-mono text-[11px] uppercase tracking-widest text-neutral-900 flex items-center justify-between border-t border-neutral-200/60 mt-4">
+                    <span>Read Dossier</span>
+                    <span className="group-hover:translate-x-1 transition-transform">→</span>
+                  </div>
+                </Link>
               </div>
             </div>
 
