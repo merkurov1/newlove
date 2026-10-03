@@ -1,249 +1,236 @@
-import { createClient } from '@/lib/supabase/server';
-import { notFound } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft, Globe, ShieldCheck, ScanFace, Sparkles, Radio } from 'lucide-react';
-import Header from '@/components/Header';
+'use client';
 
-export const dynamic = 'force-dynamic';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase-browser';
+import Header from '@/components/Header';
+import { ArrowLeft, Flame, Trash2, ShieldCheck, Moon, Sparkles, Radio } from 'lucide-react';
 
 interface PageProps {
-  params: {
-    username: string;
-  };
+  params: Promise<{ id: string }>;
 }
 
-export default async function UserProfilePage({ params }: PageProps) {
-  const { username } = params;
-  const supabase = await createClient();
-
-  // 1. Запрашиваем профиль пользователя по уникальному username
-  const { data: profile, error } = await supabase
-    .from('users')
-    .select('*')
-    .ilike('username', username)
-    .maybeSingle();
-
-  if (error || !profile) {
-    notFound();
+function getEventVisuals(eventType: string) {
+  switch (eventType?.toUpperCase()) {
+    case 'VIGIL':
+    case 'VIGIL_SPARK':
+      return { icon: Flame, color: 'text-amber-500', label: 'Vigil' };
+    case 'ASH':
+      return { icon: Trash2, color: 'text-rose-500', label: 'Let It Go' };
+    case 'CAST':
+      return { icon: Sparkles, color: 'text-indigo-400', label: 'Cast' };
+    case 'ABSOLUTION':
+      return { icon: ShieldCheck, color: 'text-emerald-400', label: 'Absolution' };
+    case 'HEARTANDANGEL':
+    case 'MEDITATION':
+    case 'SILENCE':
+      return { icon: Moon, color: 'text-purple-400', label: 'Calm' };
+    default:
+      return { icon: Radio, color: 'text-stone-400', label: eventType || 'Whisper' };
   }
+}
 
-  const targetId = profile.id || profile.user_id;
+function formatTime(iso?: string) {
+  const d = iso ? new Date(iso) : new Date();
+  if (isNaN(d.getTime())) return '';
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === new Date().toDateString()) return time;
+  return `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${time}`;
+}
 
-  // 2. Параллельная выборка связанных данных (Casts & Temple Logs)
-  let userCasts: any[] = [];
-  let userLogs: any[] = [];
+export default function PublicProfilePage({ params }: PageProps) {
+  const resolvedParams = (React as any).use(params);
+  const userId = resolvedParams.id;
+  const supabase = createClient();
 
-  if (targetId) {
-    const [castsRes, logsByUserIdRes] = await Promise.all([
-      supabase
-        .from('casts')
-        .select('*')
-        .eq('user_id', targetId)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('temple_log')
-        .select('*')
-        .eq('user_id', targetId)
-        .order('created_at', { ascending: false })
-    ]);
-    
-    if (castsRes.data) userCasts = castsRes.data;
-    
-    if (logsByUserIdRes.data && logsByUserIdRes.data.length > 0) {
-      userLogs = logsByUserIdRes.data;
-    } else if (profile.name) {
-      const { data: logsByName } = await supabase
-        .from('temple_log')
-        .select('*')
-        .eq('author', profile.name)
-        .order('created_at', { ascending: false });
-      if (logsByName) userLogs = logsByName;
+  const [profile, setProfile] = useState<any>(null);
+  const [userLogs, setUserLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchProfileData() {
+      if (!userId) return;
+      setLoading(true);
+
+      try {
+        // 1. Загрузка профиля по id или username
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .or(`id.eq.${userId},username.eq.${userId}`)
+          .maybeSingle();
+
+        const defaultProfile = {
+          id: userId,
+          full_name: 'Sanctuary Seeker',
+          bio: 'A quiet traveler within the Heart & Angel ecosystem.',
+          role: 'Guardian',
+        };
+
+        const currentProfile = profileError || !profileData ? defaultProfile : profileData;
+        setProfile(currentProfile);
+
+        // 2. Загрузка следов пользователя в храме
+        const authorName = currentProfile.full_name || currentProfile.username;
+        if (authorName) {
+          const { data: logsData } = await supabase
+            .from('temple_log')
+            .select('*')
+            .ilike('author', authorName)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+          if (logsData) {
+            setUserLogs(logsData);
+          }
+        }
+      } catch (e) {
+        console.error('Error fetching sanctuary profile:', e);
+      } finally {
+        setLoading(false);
+      }
     }
+
+    fetchProfileData();
+  }, [userId, supabase]);
+
+  const getInitials = (name?: string) => {
+    if (!name) return 'H&A';
+    return name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans flex flex-col justify-between">
+        <Header />
+        <div className="max-w-4xl mx-auto w-full px-6 py-32 text-center my-auto space-y-4 animate-pulse">
+          <div className="w-16 h-16 bg-stone-200 rounded-full mx-auto" />
+          <div className="h-6 bg-stone-200 w-48 mx-auto rounded" />
+          <div className="h-4 bg-stone-200 w-72 mx-auto rounded" />
+        </div>
+      </div>
+    );
   }
 
-  const userInitials = profile.name ? profile.name.substring(0, 2).toUpperCase() : 'AM';
-  const roleNorm = profile.role ? String(profile.role).toUpperCase() : 'USER';
-  const isAdmin = roleNorm === 'ADMIN';
+  const vigilsCount = userLogs.filter(l => (l.event_type || '').toLowerCase().includes('vigil')).length;
+  const ashesCount = userLogs.filter(l => (l.event_type || '').toLowerCase() === 'ash').length;
 
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-black selection:text-white flex flex-col justify-between antialiased relative overflow-x-hidden">
-      
+    <div className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans selection:bg-stone-900 selection:text-white antialiased">
       <Header />
 
-      {/* MAIN CONTAINER */}
-      <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 pt-28 sm:pt-36 md:pt-44 pb-20 sm:pb-24 space-y-8 sm:space-y-10 relative z-20 flex-1">
+      <main className="max-w-4xl mx-auto pt-32 sm:pt-36 pb-24 px-4 sm:px-6 lg:px-8 space-y-10">
         
-        {/* Navigation / Back link */}
+        {/* Navigation Back */}
         <div>
-          <Link
-            href="/temple"
-            className="inline-flex items-center gap-2 text-[11px] font-mono font-medium text-stone-500 hover:text-[#111111] transition-colors uppercase tracking-[0.2em]"
+          <Link 
+            href="/heartandangel/world" 
+            className="inline-flex items-center gap-2 font-serif text-xs uppercase tracking-widest text-stone-500 hover:text-stone-900 transition-colors"
           >
             <ArrowLeft size={14} />
-            <span>Return to Sanctuary</span>
+            <span>Back to Sanctuary World</span>
           </Link>
         </div>
 
-        {/* PROFILE CARD */}
-        <div className="p-6 sm:p-10 rounded-3xl bg-white/80 backdrop-blur-xl border border-stone-200/80 shadow-sm space-y-8">
-          
-          {/* Avatar & Header Info */}
+        {/* Profile Header Card */}
+        <div className="bg-white/85 backdrop-blur-md border border-stone-200 p-8 sm:p-10 rounded-3xl space-y-8 shadow-sm">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
-            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-gradient-to-tr from-stone-900 to-stone-700 text-white font-serif font-light text-2xl sm:text-3xl flex items-center justify-center shadow-xl ring-4 ring-white flex-shrink-0">
-              {profile.image || profile.avatar_url ? (
-                <img src={profile.image || profile.avatar_url} alt={profile.name || username} className="w-full h-full object-cover" />
+            <div className="w-20 h-20 rounded-2xl bg-stone-900 text-white flex items-center justify-center font-serif text-2xl tracking-widest shrink-0 shadow-md">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover rounded-2xl" />
               ) : (
-                <span>{userInitials}</span>
+                getInitials(profile?.full_name || profile?.username)
               )}
             </div>
 
-            <div className="space-y-3 overflow-hidden flex-1">
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-                <h1 className="text-2xl sm:text-3xl font-serif font-medium text-[#111111] tracking-tight">
-                  {profile.name || username}
-                </h1>
-                {isAdmin && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-50 border border-pink-200/60 text-pink-700 text-[10px] font-mono uppercase tracking-[0.2em]">
-                    <ShieldCheck size={12} />
-                    Admin
-                  </span>
-                )}
-                {profile.is_subscribed && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200/60 text-amber-800 text-[10px] font-mono uppercase tracking-[0.2em]">
-                    <Sparkles size={12} />
-                    Subscriber
-                  </span>
-                )}
+            <div className="space-y-2 flex-1">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                <span className="font-mono text-[10px] tracking-[0.25em] uppercase px-3 py-1 bg-stone-100 border border-stone-200 text-stone-600 rounded-full">
+                  {profile?.role || 'Sanctuary Guardian'}
+                </span>
+                <span className="font-mono text-[10px] tracking-widest text-stone-400">
+                  ID: {userId.slice(0, 8)}...
+                </span>
               </div>
-              <p className="text-xs font-mono text-stone-400 tracking-widest">
-                @{profile.username || username}
-              </p>
 
-              {/* Quick Activity Stats */}
-              <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-6 text-xs font-mono text-stone-500">
-                <div className="flex items-center gap-1.5">
-                  <ScanFace size={14} className="text-stone-700" />
-                  <span>{userCasts.length} Casts</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Radio size={14} className="text-stone-700" />
-                  <span>{userLogs.length} Temple Transmissions</span>
-                </div>
-              </div>
+              <h1 className="text-3xl sm:text-4xl font-serif font-light text-stone-900 tracking-tight">
+                {profile?.full_name || profile?.username || 'Seeker Dossier'}
+              </h1>
+
+              {profile?.bio && (
+                <p className="font-serif italic text-stone-600 text-sm sm:text-base max-w-2xl leading-relaxed pt-1">
+                  {profile.bio}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Bio Section */}
-          {profile.bio && (
-            <div className="pt-6 border-t border-stone-200/80 space-y-2">
-              <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-stone-400">Biography</h3>
-              <p className="text-base text-stone-800 leading-relaxed font-serif whitespace-pre-wrap font-light">
-                {profile.bio}
-              </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 border-t border-stone-200/80 pt-6 font-mono text-xs text-stone-500">
+            <div>
+              <span className="block text-[10px] text-stone-400 uppercase tracking-widest">Total Offerings</span>
+              <span className="text-stone-900 font-bold text-sm">{userLogs.length} Traces</span>
             </div>
-          )}
-
-          {/* Website Link */}
-          {profile.website && (
-            <div className="pt-6 border-t border-stone-200/80 space-y-2">
-              <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-stone-400">External Archive</h3>
-              <a
-                href={profile.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm font-medium text-[#111111] hover:opacity-65 transition-opacity underline underline-offset-4 decoration-stone-300 font-mono"
-              >
-                <Globe size={15} className="text-stone-500" />
-                <span>{profile.website.replace(/^https?:\/\//, '')}</span>
-              </a>
+            <div>
+              <span className="block text-[10px] text-stone-400 uppercase tracking-widest">Vigil Sparks</span>
+              <span className="text-amber-600 font-bold text-sm">{vigilsCount} Lit</span>
             </div>
-          )}
-
-        </div>
-
-        {/* CASTS / ARCHETYPES HISTORY SECTION */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between px-2">
-            <h3 className="text-xs font-mono uppercase tracking-[0.2em] text-stone-500">
-              Psychometric Casts &amp; Manifestations ({userCasts.length})
-            </h3>
-            <Link href="/cast" className="text-xs font-mono text-[#111111] hover:underline uppercase tracking-wider">
-              + New Cast
-            </Link>
+            <div>
+              <span className="block text-[10px] text-stone-400 uppercase tracking-widest">Ashes Released</span>
+              <span className="text-rose-600 font-bold text-sm">{ashesCount} Let Go</span>
+            </div>
           </div>
-
-          {userCasts.length === 0 ? (
-            <div className="p-8 sm:p-10 rounded-3xl bg-white/40 border border-stone-200/80 text-center text-stone-400 font-mono text-xs uppercase tracking-widest">
-              No archetypes manifested yet.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {userCasts.map((cast) => (
-                <div key={cast.id} className="p-6 rounded-3xl bg-white/80 backdrop-blur-xl border border-stone-200/80 shadow-sm space-y-3 transition-all hover:border-stone-400">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-stone-900 font-mono text-xs font-bold uppercase tracking-wider">
-                      <ScanFace size={16} className="text-stone-700" />
-                      <span>Archetype: {cast.archetype}</span>
-                    </div>
-                    <span className="text-stone-400 font-mono text-xs">
-                      {new Date(cast.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  {cast.analysis?.executive_summary && (
-                    <p className="text-sm text-stone-700 leading-relaxed font-serif font-light">
-                      {cast.analysis.executive_summary}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
-        {/* TEMPLE TRANSMISSIONS / LOGS SECTION */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between px-2">
-            <h3 className="text-xs font-mono uppercase tracking-[0.2em] text-stone-500">
-              Temple Transmissions ({userLogs.length})
-            </h3>
+        {/* User Sanctuary Traces Grid */}
+        <div className="space-y-6">
+          <div className="flex justify-between items-center border-b border-stone-200 pb-4">
+            <h2 className="text-xl font-serif text-stone-900">Sanctuary Traces &amp; Offerings</h2>
+            <span className="font-mono text-xs text-stone-400 uppercase tracking-widest">Ether Ledger</span>
           </div>
 
           {userLogs.length === 0 ? (
-            <div className="p-8 sm:p-10 rounded-3xl bg-white/40 border border-stone-200/80 text-center text-stone-400 font-mono text-xs uppercase tracking-widest">
-              No transmissions recorded yet.
+            <div className="bg-white/85 backdrop-blur-md border border-dashed border-stone-300 p-12 text-center rounded-3xl space-y-2 font-mono">
+              <p className="text-xs text-stone-400 uppercase tracking-wider">No offerings recorded in the ether for this seeker yet.</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {userLogs.map((log) => (
-                <div key={log.id} className="p-6 rounded-3xl bg-white/80 backdrop-blur-xl border border-stone-200/80 shadow-sm space-y-3 transition-all hover:border-stone-400">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-stone-900 font-mono text-xs font-bold uppercase tracking-wider">
-                      <Radio size={16} className="text-stone-700" />
-                      <span>{log.title || log.event_type || 'Sanctuary Entry'}</span>
+            <div className="space-y-3">
+              {userLogs.map((log) => {
+                const type = (log.event_type || 'WHISPER').toUpperCase();
+                const visuals = getEventVisuals(type);
+                const IconComp = visuals.icon;
+
+                return (
+                  <div 
+                    key={log.id} 
+                    className="bg-white/90 border border-stone-200 p-4 sm:p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4 text-xs sm:text-sm transition hover:border-stone-400"
+                  >
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className={`w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center ${visuals.color}`}>
+                        <IconComp size={16} />
+                      </div>
+                      <span className="font-mono text-xs font-bold uppercase tracking-wider text-stone-800">{visuals.label}</span>
                     </div>
-                    <span className="text-stone-400 font-mono text-xs">
-                      {new Date(log.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  {log.message && (
-                    <p className="text-sm text-stone-700 leading-relaxed font-serif font-light whitespace-pre-wrap">
+
+                    <div className="flex-1 font-serif text-xs sm:text-sm font-light text-stone-700 truncate px-2 text-left">
                       {log.message}
-                    </p>
-                  )}
-                </div>
-              ))}
+                    </div>
+
+                    <div className="font-mono text-[10px] text-stone-400 shrink-0 text-right">
+                      {formatTime(log.created_at)}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
-      </div>
+      </main>
 
-      {/* FOOTER DIRECTORY */}
-      <footer className="w-full max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center px-6 py-6 border-t border-stone-200/80 font-mono text-xs text-stone-500 uppercase tracking-[0.25em] gap-4 mt-16 z-20">
-        <span>Merkurov Private Office</span>
-        <span>Digital Heritage Architecture</span>
+      {/* Footer */}
+      <footer className="max-w-4xl mx-auto w-full px-6 py-12 text-center font-mono text-[10px] text-stone-400 uppercase tracking-[0.3em] border-t border-stone-200/60">
+        Heart &amp; Angel Sanctuary &copy; {new Date().getFullYear()}
       </footer>
-
-    </main>
+    </div>
   );
 }
