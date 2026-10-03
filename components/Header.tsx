@@ -8,7 +8,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
 
 export default function Header() {
-  const { user, profile, roles, isLoading, signOut } = useAuth();
+  const auth = useAuth() as any;
+  const user = auth?.user;
+  const profile = auth?.profile;
+  const roles = auth?.roles || profile?.roles || user?.user_metadata?.roles || [];
+  const isLoading = auth?.isLoading;
+  const signOut = auth?.signOut;
+
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeEcosystem, setActiveEcosystem] = useState<'curators' | 'heart' | null>(null);
@@ -39,12 +45,13 @@ export default function Header() {
     }
   }, [pathname]);
 
-  const username = profile?.username || user?.user_metadata?.username || (user as any)?.username || null;
+  const username = profile?.username || user?.user_metadata?.username || user?.username || null;
   const profileHref = username ? `/you/${username}` : '/profile';
   const userImage = profile?.image || profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
   const userName = profile?.name || user?.user_metadata?.name || user?.email || 'Guest';
   const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
-  const isAdmin = roles.includes('ADMIN');
+  
+  const isAdmin = Array.isArray(roles) && roles.includes('ADMIN');
 
   // Основные экосистемы (Digital Temple исключен)
   const ecosystems = [
@@ -177,7 +184,7 @@ export default function Header() {
 
                       <div className="pt-2 border-t border-zinc-100">
                         <button 
-                          onClick={() => { setIsProfileOpen(false); signOut(); }} 
+                          onClick={() => { setIsProfileOpen(false); signOut?.(); }} 
                           className="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-sm font-medium text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
                         >
                           <div className="p-2 rounded-xl bg-rose-100/60 text-rose-600">
