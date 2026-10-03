@@ -280,8 +280,8 @@ export default function HeartPhysics({
     >
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       
-      {/* Шапка с идентичной сеткой max-w-7xl и безопасными отступами для мобильных и десктопа */}
-      <header className="absolute top-0 left-0 w-full z-30 pt-24 sm:pt-28 md:pt-32 px-4 sm:px-10 pointer-events-none">
+      {/* Увеличенный отступ сверху для мобилок (pt-36), чтобы кнопки опустились еще ниже */}
+      <header className="absolute top-0 left-0 w-full z-30 pt-36 sm:pt-28 md:pt-32 px-4 sm:px-10 pointer-events-none">
         <div className="grid grid-cols-3 items-center w-full max-w-7xl mx-auto">
           <div />
 
