@@ -252,14 +252,14 @@ export default function VigilPage() {
 
   return (
     <main 
-      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 sm:p-12 transition-colors duration-1000`}
+      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 sm:p-12 pt-16 sm:pt-20 md:pt-24 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
-      {/* Верхняя панель: Back to Temple строго по центру */}
-      <header className="relative z-50 flex justify-between items-center w-full max-w-7xl mx-auto pt-2 gap-4">
-        <div className="w-28 hidden sm:block" /> {/* Балансирующий элемент слева */}
+      {/* Верхняя панель: безопасный отступ сверху */}
+      <header className="relative z-50 flex justify-between items-center w-full max-w-7xl mx-auto pt-4 sm:pt-6 gap-4">
+        <div className="w-28 hidden sm:block" />
 
         <Link 
           href="/temple"
@@ -300,7 +300,7 @@ export default function VigilPage() {
       </div>
 
       {/* СЕРДЦЕ: В правом верхнем углу */}
-      <div ref={heartRef} className="absolute top-[12%] right-[10%] sm:top-[20%] sm:right-[20%] z-30 flex items-center justify-center">
+      <div ref={heartRef} className="absolute top-[18%] right-[10%] sm:top-[22%] sm:right-[20%] z-30 flex items-center justify-center">
         <div 
           className="relative transition-all duration-700 ease-in-out cursor-pointer"
           style={{ transform: `scale(${0.9 + (intensity / 10) * 0.4})` }}
@@ -318,7 +318,7 @@ export default function VigilPage() {
           </div>
         </div>
 
-        {/* Анимированная искра с траекторией полета */}
+        {/* Анимированная искра */}
         <AnimatePresence>
           {spark && (
             <motion.div
@@ -372,7 +372,7 @@ export default function VigilPage() {
           {/* Разделитель */}
           <div className={`w-full h-[1px] ${lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10') ? 'bg-white/10' : 'bg-stone-200'}`} />
 
-          {/* Статус сессии, таймер и аккуратная кнопка Send Spark */}
+          {/* Статус сессии, таймер и кнопка Send Spark */}
           <div className="w-full space-y-4">
             <div className="text-center space-y-1.5">
               <div className="font-mono text-xs">
