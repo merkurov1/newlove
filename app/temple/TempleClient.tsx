@@ -16,7 +16,8 @@ import {
   X,
   Users,
   Activity,
-  Layers
+  Layers,
+  Clock
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -78,7 +79,7 @@ function getTimeLighting() {
       navHover: 'hover:text-black hover:scale-105',
       glow: 'from-amber-200/30 via-orange-100/10 to-transparent',
       vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 243, 224, 0.6) 0%, rgba(245, 242, 235, 1) 80%)',
-      cardBg: 'bg-white/90 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
+      cardBg: 'bg-white/95 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
     };
   } else if (hour >= 11 && hour < 17) {
     return {
@@ -129,7 +130,8 @@ export default function TempleClient() {
     totalLogs: 0,
     uniqueAuthors: 0,
     vigilsCount: 0,
-    letItGoCount: 0
+    letItGoCount: 0,
+    sanctuaryHour: new Date().getHours()
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -140,6 +142,7 @@ export default function TempleClient() {
 
     const timer = setInterval(() => {
       setLighting(getTimeLighting());
+      setStats(prev => ({ ...prev, sanctuaryHour: new Date().getHours() }));
     }, 60000);
     return () => clearInterval(timer);
   }, []);
@@ -195,7 +198,8 @@ export default function TempleClient() {
           totalLogs: rawData.length,
           uniqueAuthors: authorsSet.size,
           vigilsCount: vigils,
-          letItGoCount: ashes
+          letItGoCount: ashes,
+          sanctuaryHour: new Date().getHours()
         });
 
       } catch (e) {
@@ -234,18 +238,16 @@ export default function TempleClient() {
 
   return (
     <main 
-      className={`relative w-full h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-hidden select-none flex flex-col justify-between p-6 sm:p-12 transition-colors duration-1000`}
+      className={`relative w-full min-h-[100dvh] h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-hidden select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
-      {/* Верхняя панель: Кнопка Back to World посередине вверху, звук справа */}
-      <header className="relative z-45 flex justify-between items-center w-full max-w-7xl mx-auto pt-2">
-        <div className="w-24 hidden sm:block" /> {/* Балансирующий элемент слева */}
-
+      {/* Верхняя панель */}
+      <header className="relative z-45 flex justify-between items-center w-full max-w-7xl mx-auto pt-2 gap-2">
         <Link 
           href="/heartandangel/world"
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
+          className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
         >
           <span>← Back to World</span>
         </Link>
@@ -260,62 +262,62 @@ export default function TempleClient() {
       </header>
 
       {/* ЦЕНТР ЭКРАНА: Главное интерактивное меню и алтарь */}
-      <div className="relative w-full flex-1 flex flex-col items-center justify-center text-center">
-        <div className={`absolute w-[450px] h-[450px] sm:w-[650px] sm:h-[650px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
+      <div className="relative w-full flex-1 flex flex-col items-center justify-center text-center px-4 my-auto">
+        <div className={`absolute w-[300px] h-[300px] sm:w-[600px] sm:h-[600px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
 
         {/* Герой слева снизу */}
-        <div className="absolute left-[15%] bottom-[15%] z-20 flex flex-col items-center pointer-events-none">
-          <div className="absolute -bottom-2 w-28 h-6 bg-black/25 rounded-full blur-[8px]" />
+        <div className="absolute left-[5%] sm:left-[12%] bottom-[10%] z-20 flex flex-col items-center pointer-events-none opacity-85 sm:opacity-100">
+          <div className="absolute -bottom-2 w-20 sm:w-28 h-4 sm:h-6 bg-black/25 rounded-full blur-[8px]" />
           {heroUrl && (
-            <div className="relative w-32 h-40 sm:w-44 sm:h-52 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
+            <div className="relative w-24 h-32 sm:w-40 sm:h-48 flex items-end justify-center drop-shadow-[0_15px_25px_rgba(0,0,0,0.3)]">
               <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
             </div>
           )}
         </div>
 
-        {/* Пункты меню и раздельные кнопки управления */}
-        <div className="relative z-30 flex flex-col items-center gap-6 max-w-xl mx-auto px-4">
-          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10">
+        {/* Кнопки навигации и ритуалов */}
+        <div className="relative z-30 flex flex-col items-center gap-6 max-w-xl mx-auto w-full">
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
             <Link 
               href="/heartandangel/calm" 
-              className={`font-serif text-2xl sm:text-4xl font-light tracking-wide transition-transform ${lighting.navHover}`}
+              className={`px-6 sm:px-8 py-3 sm:py-3.5 rounded-full backdrop-blur-md border shadow-md font-serif text-sm sm:text-base tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
             >
               Calm
             </Link>
             <Link 
               href="/heartandangel/letitgo" 
-              className={`font-serif text-2xl sm:text-4xl font-light tracking-wide transition-transform ${lighting.navHover}`}
+              className={`px-6 sm:px-8 py-3 sm:py-3.5 rounded-full backdrop-blur-md border shadow-md font-serif text-sm sm:text-base tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
             >
               Let It Go
             </Link>
             <Link 
               href="/vigil" 
-              className={`font-serif text-2xl sm:text-4xl font-light tracking-wide transition-transform ${lighting.navHover}`}
+              className={`px-6 sm:px-8 py-3 sm:py-3.5 rounded-full backdrop-blur-md border shadow-md font-serif text-sm sm:text-base tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
             >
               Vigil
             </Link>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 mt-2">
             <button
               onClick={() => setIsChroniclesOpen(true)}
-              className={`px-5 py-2.5 rounded-full backdrop-blur-md border shadow-md flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-xs tracking-wider uppercase ${actionButtonStyle}`}
+              className={`px-4 sm:px-5 py-2 rounded-full backdrop-blur-md border shadow-sm flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-[11px] sm:text-xs tracking-wider uppercase ${actionButtonStyle}`}
             >
-              <Activity size={14} className="opacity-80" />
+              <Activity size={13} className="opacity-80" />
               <span>Chronicles</span>
             </button>
 
             <button
               onClick={() => setIsTracesOpen(true)}
-              className={`px-5 py-2.5 rounded-full backdrop-blur-md border shadow-md flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-xs tracking-wider uppercase ${actionButtonStyle}`}
+              className={`px-4 sm:px-5 py-2 rounded-full backdrop-blur-md border shadow-sm flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-[11px] sm:text-xs tracking-wider uppercase ${actionButtonStyle}`}
             >
-              <Layers size={14} className="opacity-80" />
+              <Layers size={13} className="opacity-80" />
               <span>Traces</span>
             </button>
 
             <button
               onClick={() => setIsInfoOpen(true)}
-              className={`w-10 h-10 rounded-full border backdrop-blur-md shadow-md flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic ${actionButtonStyle}`}
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full border backdrop-blur-sm shadow-sm flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic ${actionButtonStyle}`}
               title="About Temple"
             >
               ?
@@ -324,7 +326,7 @@ export default function TempleClient() {
         </div>
       </div>
 
-      <div className="h-4" />
+      <div className="h-2 sm:h-4" />
 
       {/* Модальное окно: Справка (?) */}
       {isInfoOpen && (
@@ -334,7 +336,7 @@ export default function TempleClient() {
         >
           <div 
             onClick={(e: any) => e.stopPropagation()}
-            className={`${lighting.cardBg} rounded-3xl p-8 max-w-md w-full border space-y-4 relative shadow-2xl`}
+            className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-md w-full border space-y-4 relative shadow-2xl`}
           >
             <button 
               onClick={() => setIsInfoOpen(false)}
@@ -350,7 +352,7 @@ export default function TempleClient() {
         </div>
       )}
 
-      {/* Модальное окно: Traces (Лента живых событий с иконками и одной строкой на больших экранах) */}
+      {/* Модальное окно: Traces (В одну строку без подложек, яркая иконка и название) */}
       {isTracesOpen && (
         <div 
           onClick={() => setIsTracesOpen(false)}
@@ -358,11 +360,11 @@ export default function TempleClient() {
         >
           <div 
             onClick={(e: any) => e.stopPropagation()}
-            className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-2xl w-full border space-y-5 relative shadow-2xl max-h-[80vh] flex flex-col`}
+            className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-2xl w-full border space-y-4 relative shadow-2xl max-h-[80vh] flex flex-col`}
           >
-            <div className="flex items-center justify-between border-b pb-4 border-stone-500/20">
+            <div className="flex items-center justify-between border-b pb-3 border-stone-500/20">
               <div>
-                <h3 className="font-serif text-2xl font-normal">Sanctuary Traces</h3>
+                <h3 className="font-serif text-xl sm:text-2xl font-normal">Sanctuary Traces</h3>
                 <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">Recent actions and offerings</p>
               </div>
               <button 
@@ -373,7 +375,7 @@ export default function TempleClient() {
               </button>
             </div>
             
-            <div className="space-y-3 overflow-y-auto pr-1 flex-1">
+            <div className="divide-y divide-stone-500/10 overflow-y-auto pr-1 flex-1">
               {!loaded ? (
                 <p className="font-mono text-xs opacity-60 uppercase tracking-widest animate-pulse py-8 text-center">Reading the ether...</p>
               ) : posts.length === 0 ? (
@@ -382,22 +384,19 @@ export default function TempleClient() {
                 posts.slice(0, 15).map((post) => {
                   const IconComponent = post.icon || Radio;
                   return (
-                    <div key={post.id} className="p-3.5 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all hover:bg-stone-500/10">
-                      <div className="flex items-center gap-3 min-w-[160px]">
-                        <div className={`w-8 h-8 rounded-full bg-stone-500/10 flex items-center justify-center shrink-0 ${post.color || 'text-stone-400'}`}>
-                          <IconComponent size={16} />
+                    <div key={post.id} className="py-3 flex items-center justify-between gap-3 text-xs sm:text-sm">
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <div className={`w-7 h-7 rounded-full bg-stone-500/10 flex items-center justify-center ${post.color || 'text-stone-400'}`}>
+                          <IconComponent size={15} />
                         </div>
-                        <div>
-                          <span className="font-mono text-[10px] uppercase tracking-wider block opacity-60">{post.label}</span>
-                          <span className="font-mono text-xs font-semibold">{post.author}</span>
-                        </div>
+                        <span className="font-mono text-xs font-bold uppercase tracking-wider">{post.label}</span>
                       </div>
 
-                      <div className="flex-1 font-serif text-sm font-light opacity-90 sm:px-2 line-clamp-1">
+                      <div className="flex-1 font-serif text-xs sm:text-sm font-light opacity-85 truncate px-2 text-center sm:text-left">
                         {post.content}
                       </div>
 
-                      <div className="font-mono text-[10px] opacity-50 shrink-0 text-right sm:text-left">
+                      <div className="font-mono text-[10px] opacity-50 shrink-0 text-right">
                         {post.time}
                       </div>
                     </div>
@@ -409,7 +408,7 @@ export default function TempleClient() {
         </div>
       )}
 
-      {/* Модальное окно: Chronicles (Равномерно переверстанная чистая статистика) */}
+      {/* Модальное окно: Chronicles (Чистая статистика без блоков под цифрами) */}
       {isChroniclesOpen && (
         <div 
           onClick={() => setIsChroniclesOpen(false)}
@@ -420,7 +419,10 @@ export default function TempleClient() {
             className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-md w-full border space-y-6 relative shadow-2xl`}
           >
             <div className="flex items-center justify-between border-b pb-4 border-stone-500/20">
-              <h3 className="font-serif text-2xl font-normal">Chronicles</h3>
+              <div>
+                <h3 className="font-serif text-2xl font-normal">Chronicles</h3>
+                <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">Sanctuary Analytics</p>
+              </div>
               <button 
                 onClick={() => setIsChroniclesOpen(false)}
                 className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
@@ -429,29 +431,29 @@ export default function TempleClient() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 py-1">
-              <div className="p-5 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center justify-center text-center space-y-1.5 shadow-sm">
-                <Users size={22} className="opacity-70 mb-1" />
-                <span className="font-mono text-3xl font-bold tracking-tight">{stats.uniqueAuthors}</span>
+            <div className="grid grid-cols-2 gap-6 py-2">
+              <div className="flex flex-col items-center justify-center text-center space-y-1">
+                <Users size={20} className="opacity-60 mb-1" />
+                <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.uniqueAuthors}</span>
                 <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Unique Seekers</span>
               </div>
 
-              <div className="p-5 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center justify-center text-center space-y-1.5 shadow-sm">
-                <Activity size={22} className="opacity-70 mb-1" />
-                <span className="font-mono text-3xl font-bold tracking-tight">{stats.totalLogs}</span>
+              <div className="flex flex-col items-center justify-center text-center space-y-1">
+                <Activity size={20} className="opacity-60 mb-1" />
+                <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.totalLogs}</span>
                 <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Total Offerings</span>
               </div>
 
-              <div className="p-5 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center justify-center text-center space-y-1.5 shadow-sm">
-                <Flame size={22} className="text-amber-500 mb-1" />
-                <span className="font-mono text-3xl font-bold tracking-tight">{stats.vigilsCount}</span>
+              <div className="flex flex-col items-center justify-center text-center space-y-1">
+                <Flame size={20} className="text-amber-500 mb-1" />
+                <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.vigilsCount}</span>
                 <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Vigil Sparks</span>
               </div>
 
-              <div className="p-5 rounded-2xl bg-stone-500/5 border border-stone-500/10 flex flex-col items-center justify-center text-center space-y-1.5 shadow-sm">
-                <Trash2 size={22} className="text-rose-500 mb-1" />
-                <span className="font-mono text-3xl font-bold tracking-tight">{stats.letItGoCount}</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Ashes Released</span>
+              <div className="flex flex-col items-center justify-center text-center space-y-1">
+                <Clock size={20} className="text-indigo-400 mb-1" />
+                <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.sanctuaryHour}:00</span>
+                <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Sanctuary Hour</span>
               </div>
             </div>
           </div>
