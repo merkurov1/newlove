@@ -12,7 +12,7 @@ interface SoundToggleProps {
 
 export default function SoundToggle({
   className = '',
-  iconClassName = 'text-amber-400',
+  iconClassName = 'text-pink-400',
   showTextOnMobile = false,
 }: SoundToggleProps) {
   const { isPlaying, toggleAudio } = useTempleAudio();

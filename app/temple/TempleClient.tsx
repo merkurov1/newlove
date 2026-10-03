@@ -3,13 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/components/AuthContext';
-import { useTempleAudio } from './layout';
+import SoundToggle from './SoundToggle';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
   Flame,
   Radio,
-  Volume2,
   Compass,
   ShieldCheck,
   Moon,
@@ -76,7 +75,6 @@ function getTimeLighting() {
       bg: 'bg-[#F5F2EB]',
       text: 'text-stone-900',
       subText: 'text-stone-600',
-      navHover: 'hover:text-black hover:scale-105',
       glow: 'from-amber-200/30 via-orange-100/10 to-transparent',
       vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 243, 224, 0.6) 0%, rgba(245, 242, 235, 1) 80%)',
       cardBg: 'bg-white/95 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
@@ -86,7 +84,6 @@ function getTimeLighting() {
       bg: 'bg-[#FAF8F5]',
       text: 'text-stone-900',
       subText: 'text-stone-600',
-      navHover: 'hover:text-black hover:scale-105',
       glow: 'from-stone-200/40 via-transparent to-transparent',
       vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.8) 0%, rgba(250, 248, 245, 1) 85%)',
       cardBg: 'bg-white/95 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl'
@@ -96,7 +93,6 @@ function getTimeLighting() {
       bg: 'bg-[#1f1a18]',
       text: 'text-stone-100',
       subText: 'text-stone-300',
-      navHover: 'hover:text-white hover:scale-105',
       glow: 'from-orange-900/30 via-rose-950/20 to-transparent',
       vignette: 'radial-gradient(circle at 50% 40%, rgba(70, 35, 25, 0.4) 0%, rgba(31, 26, 24, 1) 90%)',
       cardBg: 'bg-stone-900/95 border-stone-800 text-stone-100 shadow-2xl backdrop-blur-2xl'
@@ -106,7 +102,6 @@ function getTimeLighting() {
       bg: 'bg-[#0b0c10]',
       text: 'text-stone-200',
       subText: 'text-stone-400',
-      navHover: 'hover:text-white hover:scale-105',
       glow: 'from-indigo-950/50 via-blue-950/20 to-transparent',
       vignette: 'radial-gradient(circle at 50% 30%, rgba(20, 25, 45, 0.5) 0%, rgba(11, 12, 16, 1) 90%)',
       cardBg: 'bg-zinc-900/95 border-zinc-800 text-zinc-100 shadow-2xl backdrop-blur-2xl'
@@ -115,9 +110,6 @@ function getTimeLighting() {
 }
 
 export default function TempleClient() {
-  const { user, profile } = useAuth();
-  const { isPlaying, toggleAudio } = useTempleAudio();
-
   const [heroUrl, setHeroUrl] = useState<string>('');
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isTracesOpen, setIsTracesOpen] = useState(false);
@@ -149,7 +141,6 @@ export default function TempleClient() {
     let cancelled = false;
 
     async function fetchLogs() {
-      // Не опрашиваем бэкенд, если вкладка скрыта (экономия ресурсов и базы)
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
 
       try {
@@ -234,7 +225,7 @@ export default function TempleClient() {
       className={`relative w-full min-h-[100dvh] h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-hidden select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      {/* Верхняя панель: безопасный увеличенный отступ сверху (pt-16 sm:pt-20 md:pt-24) для мобильных и планшетов */}
+      {/* Верхняя панель: трехколоночная сетка с безопасными отступами */}
       <header className="relative z-45 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-16 sm:pt-20 md:pt-24">
         <div />
         
@@ -248,13 +239,7 @@ export default function TempleClient() {
         </div>
 
         <div className="flex justify-end">
-          <button
-            onClick={toggleAudio}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${actionButtonStyle}`}
-          >
-            {isPlaying ? <Volume2 size={14} className="text-pink-400 animate-pulse" /> : <Radio size={14} />}
-            <span>{isPlaying ? 'Sound On' : 'Sound Off'}</span>
-          </button>
+          <SoundToggle className={`px-4 py-2 border shadow-sm ${actionButtonStyle}`} />
         </div>
       </header>
 
