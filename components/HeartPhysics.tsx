@@ -277,22 +277,24 @@ export default function HeartPhysics({
     <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden', touchAction: 'none' }}>
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       
-      {/* Верхняя панель: Кнопка по центру, таймер справа */}
-      <header className="absolute top-0 left-0 w-full z-50 flex justify-between items-center p-6 sm:p-10 pointer-events-none">
-        {/* Пустой элемент для симметрии слева, чтобы кнопка была строго по центру */}
-        <div className="w-20 sm:w-32" />
+      {/* Шапка с безопасным отступом для iPad / iOS и абсолютным центрированием */}
+      <header className="absolute top-0 left-0 w-full z-[100] flex items-center justify-between px-4 sm:px-10 pt-[max(1.2rem,env(safe-area-inset-top))] sm:pt-6 pointer-events-none">
+        {/* Балансирующий блок слева */}
+        <div className="w-20 sm:w-36" />
 
-        <div className="pointer-events-auto">
+        {/* Центр: Кнопка Back to World */}
+        <div className="absolute left-1/2 -translate-x-1/2 pointer-events-auto">
           <Link 
             href="/heartandangel/world"
-            className="flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 rounded-full backdrop-blur-md border border-stone-400/35 bg-white/90 text-stone-900 shadow-xl transition-all text-xs font-serif tracking-wider hover:bg-white cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-3 rounded-full backdrop-blur-md border border-stone-400/40 bg-white/95 text-stone-900 shadow-2xl transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap"
           >
             <span>← Back to World</span>
           </Link>
         </div>
 
-        <div className="w-20 sm:w-32 flex justify-end pointer-events-auto">
-          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/90 px-4 py-2 rounded-full backdrop-blur-md border border-stone-400/35 shadow-xl">
+        {/* Справа: Таймер */}
+        <div className="pointer-events-auto ml-auto">
+          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/95 px-3 py-2 sm:px-4 sm:py-2 rounded-full backdrop-blur-md border border-stone-400/40 shadow-2xl whitespace-nowrap">
             ⏳ {formatTime(seconds)}
           </div>
         </div>
