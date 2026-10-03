@@ -1,7 +1,7 @@
 // components/profile/SubscriptionToggle.js
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState, useFormStatus } from 'react';
 import { toggleUserSubscription } from '@/app/admin/actions';
 import { useEffect, useState } from 'react';
 
@@ -11,13 +11,13 @@ function SubmitButton({ isSubscribed }) {
     <button 
       type="submit" 
       disabled={pending}
-      className={`px-4 py-2 rounded-md shadow-sm text-sm font-medium text-white disabled:opacity-50 transition-colors ${
+      className={`px-6 py-3 rounded-full text-xs font-mono uppercase tracking-widest transition-all shadow-sm active:scale-98 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
         isSubscribed 
-          ? 'bg-gray-600 hover:bg-gray-700' 
-          : 'bg-blue-600 hover:bg-blue-700'
+          ? 'bg-stone-200 text-stone-800 hover:bg-stone-300' 
+          : 'bg-stone-900 text-stone-100 hover:bg-stone-800'
       }`}
     >
-      {pending ? '...' : (isSubscribed ? 'Отписаться' : 'Подписаться')}
+      {pending ? 'Processing...' : (isSubscribed ? 'Unsubscribe' : 'Subscribe')}
     </button>
   );
 }
@@ -25,17 +25,16 @@ function SubmitButton({ isSubscribed }) {
 export default function SubscriptionToggle({ initialSubscribed = false }) {
   const [isSubscribed, setIsSubscribed] = useState(!!initialSubscribed);
   const initialState = { message: null, status: null };
-  const [state, dispatch] = useFormState(toggleUserSubscription, initialState);
+  const [state, formAction] = useActionState(toggleUserSubscription, initialState);
   const [showMessage, setShowMessage] = useState(false);
 
   useEffect(() => {
-    if (state.status === 'success') {
-      // Toggle local state
+    if (state?.status === 'success') {
       setIsSubscribed(!isSubscribed);
       setShowMessage(true);
-      const timer = setTimeout(() => setShowMessage(false), 3000);
+      const timer = setTimeout(() => setShowMessage(false), 4000);
       return () => clearTimeout(timer);
-    } else if (state.status === 'error') {
+    } else if (state?.status === 'error') {
       setShowMessage(true);
       const timer = setTimeout(() => setShowMessage(false), 5000);
       return () => clearTimeout(timer);
@@ -43,32 +42,36 @@ export default function SubscriptionToggle({ initialSubscribed = false }) {
   }, [state, isSubscribed]);
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-xl font-semibold text-gray-900 mb-3">Рассылка</h2>
-      <p className="text-sm text-gray-600 mb-4">
-        {isSubscribed 
-          ? 'Вы подписаны на еженедельную рассылку с новыми статьями и проектами.' 
-          : 'Подпишитесь на рассылку, чтобы получать новые статьи и инсайты медиарынка прямо на почту.'}
-      </p>
+    <div className="bg-white/85 backdrop-blur-2xl p-6 sm:p-10 rounded-3xl border border-stone-200/80 shadow-sm space-y-6">
+      <div>
+        <h2 className="font-serif text-xl sm:text-2xl text-stone-900 tracking-tight mb-2">
+          Newsletter Subscription
+        </h2>
+        <p className="font-serif text-sm text-stone-600 leading-relaxed font-light">
+          {isSubscribed 
+            ? 'You are currently subscribed to the weekly newsletter featuring new articles and projects.' 
+            : 'Subscribe to receive new articles, reflections, and insights directly in your inbox.'}
+        </p>
+      </div>
 
-      <form action={dispatch} className="flex items-center gap-4">
+      <form action={formAction} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-stone-200/80">
         <input type="hidden" name="action" value={isSubscribed ? 'unsubscribe' : 'subscribe'} />
         
-        <div className="flex items-center gap-2">
-          <div className={`w-3 h-3 rounded-full ${isSubscribed ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-          <span className="text-sm font-medium text-gray-700">
-            {isSubscribed ? 'Активна' : 'Неактивна'}
+        <div className="flex items-center gap-2.5">
+          <div className={`w-2.5 h-2.5 rounded-full ${isSubscribed ? 'bg-emerald-500' : 'bg-stone-300'}`}></div>
+          <span className="font-mono text-xs uppercase tracking-wider text-stone-600 font-medium">
+            {isSubscribed ? 'Active' : 'Inactive'}
           </span>
         </div>
 
         <SubmitButton isSubscribed={isSubscribed} />
       </form>
 
-      {showMessage && state.message && (
-        <div className={`mt-4 p-3 rounded-md text-sm ${
+      {showMessage && state?.message && (
+        <div className={`p-3 rounded-2xl border text-xs font-mono ${
           state.status === 'success' 
-            ? 'bg-green-50 text-green-800 border border-green-200' 
-            : 'bg-red-50 text-red-800 border border-red-200'
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+            : 'bg-rose-50 text-rose-700 border-rose-200'
         }`}>
           {state.message}
         </div>

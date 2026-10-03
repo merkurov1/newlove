@@ -398,8 +398,10 @@ export default function TempleClient() {
                         <span className="font-mono text-xs font-bold uppercase tracking-wider">{post.label}</span>
                       </div>
 
-                      <div className="flex-1 font-serif text-xs sm:text-sm font-light opacity-85 truncate px-2 text-center sm:text-left">
-                        {post.content}
+                      <div className="flex-1 font-serif text-xs sm:text-sm font-light opacity-85 truncate px-2 flex items-center gap-2 text-left">
+                        <span className="font-medium opacity-75 shrink-0 text-xs">{post.author}</span>
+                        <span className="opacity-40">•</span>
+                        <span className="truncate">{post.content}</span>
                       </div>
 
                       <div className="font-mono text-[10px] opacity-50 shrink-0 text-right">

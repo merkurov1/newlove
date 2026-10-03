@@ -71,13 +71,13 @@ export default async function UserProfilePage({ params }: PageProps) {
       <Header />
 
       {/* MAIN CONTAINER */}
-      <div className="max-w-3xl mx-auto w-full px-6 pt-36 md:pt-44 pb-24 space-y-10 relative z-20 flex-1">
+      <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 pt-28 sm:pt-36 md:pt-44 pb-20 sm:pb-24 space-y-8 sm:space-y-10 relative z-20 flex-1">
         
         {/* Navigation / Back link */}
         <div>
           <Link
             href="/temple"
-            className="inline-flex items-center gap-2 text-[11px] font-mono font-medium text-zinc-500 hover:text-[#111111] transition-colors uppercase tracking-[0.2em]"
+            className="inline-flex items-center gap-2 text-[11px] font-mono font-medium text-stone-500 hover:text-[#111111] transition-colors uppercase tracking-[0.2em]"
           >
             <ArrowLeft size={14} />
             <span>Return to Sanctuary</span>
@@ -85,11 +85,11 @@ export default async function UserProfilePage({ params }: PageProps) {
         </div>
 
         {/* PROFILE CARD */}
-        <div className="p-8 sm:p-10 rounded-3xl bg-white/75 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.04)] space-y-8">
+        <div className="p-6 sm:p-10 rounded-3xl bg-white/80 backdrop-blur-xl border border-stone-200/80 shadow-sm space-y-8">
           
           {/* Avatar & Header Info */}
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
-            <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-tr from-zinc-900 to-zinc-700 text-white font-medium text-2xl flex items-center justify-center shadow-xl ring-4 ring-white flex-shrink-0">
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden bg-gradient-to-tr from-stone-900 to-stone-700 text-white font-serif font-light text-2xl sm:text-3xl flex items-center justify-center shadow-xl ring-4 ring-white flex-shrink-0">
               {profile.image || profile.avatar_url ? (
                 <img src={profile.image || profile.avatar_url} alt={profile.name || username} className="w-full h-full object-cover" />
               ) : (
@@ -98,7 +98,7 @@ export default async function UserProfilePage({ params }: PageProps) {
             </div>
 
             <div className="space-y-3 overflow-hidden flex-1">
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
                 <h1 className="text-2xl sm:text-3xl font-serif font-medium text-[#111111] tracking-tight">
                   {profile.name || username}
                 </h1>
@@ -115,18 +115,18 @@ export default async function UserProfilePage({ params }: PageProps) {
                   </span>
                 )}
               </div>
-              <p className="text-xs font-mono text-zinc-400 tracking-widest">
+              <p className="text-xs font-mono text-stone-400 tracking-widest">
                 @{profile.username || username}
               </p>
 
               {/* Quick Activity Stats */}
-              <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-6 text-xs font-mono text-zinc-500">
+              <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-6 text-xs font-mono text-stone-500">
                 <div className="flex items-center gap-1.5">
-                  <ScanFace size={14} className="text-indigo-600" />
+                  <ScanFace size={14} className="text-stone-700" />
                   <span>{userCasts.length} Casts</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Radio size={14} className="text-amber-600" />
+                  <Radio size={14} className="text-stone-700" />
                   <span>{userLogs.length} Temple Transmissions</span>
                 </div>
               </div>
@@ -135,9 +135,9 @@ export default async function UserProfilePage({ params }: PageProps) {
 
           {/* Bio Section */}
           {profile.bio && (
-            <div className="pt-6 border-t border-zinc-200/80 space-y-2">
-              <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-400">Biography</h3>
-              <p className="text-base text-zinc-800 leading-relaxed font-serif whitespace-pre-wrap">
+            <div className="pt-6 border-t border-stone-200/80 space-y-2">
+              <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-stone-400">Biography</h3>
+              <p className="text-base text-stone-800 leading-relaxed font-serif whitespace-pre-wrap font-light">
                 {profile.bio}
               </p>
             </div>
@@ -145,15 +145,15 @@ export default async function UserProfilePage({ params }: PageProps) {
 
           {/* Website Link */}
           {profile.website && (
-            <div className="pt-6 border-t border-zinc-200/80 space-y-2">
-              <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-400">External Archive</h3>
+            <div className="pt-6 border-t border-stone-200/80 space-y-2">
+              <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-stone-400">External Archive</h3>
               <a
                 href={profile.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm font-medium text-[#111111] hover:opacity-65 transition-opacity underline underline-offset-4 decoration-zinc-300 font-mono"
+                className="inline-flex items-center gap-2 text-sm font-medium text-[#111111] hover:opacity-65 transition-opacity underline underline-offset-4 decoration-stone-300 font-mono"
               >
-                <Globe size={15} className="text-zinc-500" />
+                <Globe size={15} className="text-stone-500" />
                 <span>{profile.website.replace(/^https?:\/\//, '')}</span>
               </a>
             </div>
@@ -164,8 +164,8 @@ export default async function UserProfilePage({ params }: PageProps) {
         {/* CASTS / ARCHETYPES HISTORY SECTION */}
         <div className="space-y-4">
           <div className="flex items-center justify-between px-2">
-            <h3 className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">
-              Psychometric Casts & Manifestations ({userCasts.length})
+            <h3 className="text-xs font-mono uppercase tracking-[0.2em] text-stone-500">
+              Psychometric Casts &amp; Manifestations ({userCasts.length})
             </h3>
             <Link href="/cast" className="text-xs font-mono text-[#111111] hover:underline uppercase tracking-wider">
               + New Cast
@@ -173,24 +173,24 @@ export default async function UserProfilePage({ params }: PageProps) {
           </div>
 
           {userCasts.length === 0 ? (
-            <div className="p-10 rounded-3xl bg-white/40 border border-zinc-200/80 text-center text-zinc-400 font-mono text-xs uppercase tracking-widest">
+            <div className="p-8 sm:p-10 rounded-3xl bg-white/40 border border-stone-200/80 text-center text-stone-400 font-mono text-xs uppercase tracking-widest">
               No archetypes manifested yet.
             </div>
           ) : (
             <div className="space-y-4">
               {userCasts.map((cast) => (
-                <div key={cast.id} className="p-6 rounded-3xl bg-white/80 backdrop-blur-xl border border-zinc-200/80 shadow-sm space-y-3">
+                <div key={cast.id} className="p-6 rounded-3xl bg-white/80 backdrop-blur-xl border border-stone-200/80 shadow-sm space-y-3 transition-all hover:border-stone-400">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-indigo-700 font-mono text-xs font-bold uppercase tracking-wider">
-                      <ScanFace size={16} />
+                    <div className="flex items-center gap-2 text-stone-900 font-mono text-xs font-bold uppercase tracking-wider">
+                      <ScanFace size={16} className="text-stone-700" />
                       <span>Archetype: {cast.archetype}</span>
                     </div>
-                    <span className="text-zinc-400 font-mono text-xs">
+                    <span className="text-stone-400 font-mono text-xs">
                       {new Date(cast.created_at).toLocaleDateString()}
                     </span>
                   </div>
                   {cast.analysis?.executive_summary && (
-                    <p className="text-sm text-zinc-700 leading-relaxed font-serif">
+                    <p className="text-sm text-stone-700 leading-relaxed font-serif font-light">
                       {cast.analysis.executive_summary}
                     </p>
                   )}
@@ -203,30 +203,30 @@ export default async function UserProfilePage({ params }: PageProps) {
         {/* TEMPLE TRANSMISSIONS / LOGS SECTION */}
         <div className="space-y-4">
           <div className="flex items-center justify-between px-2">
-            <h3 className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500">
+            <h3 className="text-xs font-mono uppercase tracking-[0.2em] text-stone-500">
               Temple Transmissions ({userLogs.length})
             </h3>
           </div>
 
           {userLogs.length === 0 ? (
-            <div className="p-10 rounded-3xl bg-white/40 border border-zinc-200/80 text-center text-zinc-400 font-mono text-xs uppercase tracking-widest">
+            <div className="p-8 sm:p-10 rounded-3xl bg-white/40 border border-stone-200/80 text-center text-stone-400 font-mono text-xs uppercase tracking-widest">
               No transmissions recorded yet.
             </div>
           ) : (
             <div className="space-y-4">
               {userLogs.map((log) => (
-                <div key={log.id} className="p-6 rounded-3xl bg-white/80 backdrop-blur-xl border border-zinc-200/80 shadow-sm space-y-3">
+                <div key={log.id} className="p-6 rounded-3xl bg-white/80 backdrop-blur-xl border border-stone-200/80 shadow-sm space-y-3 transition-all hover:border-stone-400">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-amber-700 font-mono text-xs font-bold uppercase tracking-wider">
-                      <Radio size={16} />
+                    <div className="flex items-center gap-2 text-stone-900 font-mono text-xs font-bold uppercase tracking-wider">
+                      <Radio size={16} className="text-stone-700" />
                       <span>{log.title || log.event_type || 'Sanctuary Entry'}</span>
                     </div>
-                    <span className="text-zinc-400 font-mono text-xs">
+                    <span className="text-stone-400 font-mono text-xs">
                       {new Date(log.created_at).toLocaleDateString()}
                     </span>
                   </div>
                   {log.message && (
-                    <p className="text-sm text-zinc-700 leading-relaxed font-serif whitespace-pre-wrap">
+                    <p className="text-sm text-stone-700 leading-relaxed font-serif font-light whitespace-pre-wrap">
                       {log.message}
                     </p>
                   )}
@@ -239,7 +239,7 @@ export default async function UserProfilePage({ params }: PageProps) {
       </div>
 
       {/* FOOTER DIRECTORY */}
-      <footer className="w-full max-w-4xl mx-auto flex justify-between items-center px-6 py-6 border-t border-zinc-200/80 font-mono text-xs text-zinc-500 uppercase tracking-[0.25em] mt-16 z-20">
+      <footer className="w-full max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center px-6 py-6 border-t border-stone-200/80 font-mono text-xs text-stone-500 uppercase tracking-[0.25em] gap-4 mt-16 z-20">
         <span>Merkurov Private Office</span>
         <span>Digital Heritage Architecture</span>
       </footer>
