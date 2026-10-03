@@ -243,22 +243,28 @@ export default function TempleClient() {
     >
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
-      {/* Верхняя панель */}
-      <header className="relative z-45 flex justify-between items-center w-full max-w-7xl mx-auto pt-2 gap-2">
-        <Link 
-          href="/heartandangel/world"
-          className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
-        >
-          <span>← Back to World</span>
-        </Link>
+      {/* Верхняя панель (Back по центру, Sound справа) */}
+      <header className="relative z-45 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-2">
+        <div /> {/* Пустой блок слева для баланса сетки */}
+        
+        <div className="flex justify-center">
+          <Link 
+            href="/heartandangel/world"
+            className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
+          >
+            <span>← Back to World</span>
+          </Link>
+        </div>
 
-        <button
-          onClick={toggleAudio}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${actionButtonStyle}`}
-        >
-          {isPlayingAudio ? <Volume2 size={14} className="text-pink-400 animate-pulse" /> : <Radio size={14} />}
-          <span>{isPlayingAudio ? 'Sound On' : 'Sound Off'}</span>
-        </button>
+        <div className="flex justify-end">
+          <button
+            onClick={toggleAudio}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${actionButtonStyle}`}
+          >
+            {isPlayingAudio ? <Volume2 size={14} className="text-pink-400 animate-pulse" /> : <Radio size={14} />}
+            <span>{isPlayingAudio ? 'Sound On' : 'Sound Off'}</span>
+          </button>
+        </div>
       </header>
 
       {/* ЦЕНТР ЭКРАНА: Главное интерактивное меню и алтарь */}
@@ -352,7 +358,7 @@ export default function TempleClient() {
         </div>
       )}
 
-      {/* Модальное окно: Traces (В одну строку без подложек, яркая иконка и название) */}
+      {/* Модальное окно: Traces */}
       {isTracesOpen && (
         <div 
           onClick={() => setIsTracesOpen(false)}
@@ -408,7 +414,7 @@ export default function TempleClient() {
         </div>
       )}
 
-      {/* Модальное окно: Chronicles (Чистая статистика без блоков под цифрами) */}
+      {/* Модальное окно: Chronicles */}
       {isChroniclesOpen && (
         <div 
           onClick={() => setIsChroniclesOpen(false)}
