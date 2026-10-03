@@ -11,7 +11,7 @@ export default function Header() {
   const { user, profile, roles, isLoading, signOut } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeEcosystem, setActiveEcosystem] = useState<'temple' | 'curators' | 'heart' | null>(null);
+  const [activeEcosystem, setActiveEcosystem] = useState<'curators' | 'heart' | null>(null);
   
   const pathname = usePathname() || '';
   const profileRef = useRef<HTMLDivElement | null>(null);
@@ -34,8 +34,6 @@ export default function Header() {
       setActiveEcosystem('curators');
     } else if (pathname.startsWith('/heartandangel')) {
       setActiveEcosystem('heart');
-    } else if (pathname.startsWith('/temple') || pathname.startsWith('/cast') || pathname.startsWith('/vigil') || pathname.startsWith('/absolution')) {
-      setActiveEcosystem('temple');
     } else {
       setActiveEcosystem(null);
     }
@@ -48,18 +46,8 @@ export default function Header() {
   const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
   const isAdmin = roles.includes('ADMIN');
 
-  // Основные экосистемы
+  // Основные экосистемы (Digital Temple исключен)
   const ecosystems = [
-    { 
-      id: 'temple', 
-      label: 'Digital Temple', 
-      mainHref: '/temple',
-      links: [
-        { name: 'Cast', href: '/cast' },
-        { name: 'Vigil', href: '/vigil' },
-        { name: 'Absolution', href: '/absolution' }
-      ]
-    },
     { 
       id: 'curators', 
       label: 'Curators Engine', 
@@ -268,7 +256,7 @@ export default function Header() {
         </div>
       </header>
 
-      {/* MOBILE DRAWER (Identical Structure) */}
+      {/* MOBILE DRAWER */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
