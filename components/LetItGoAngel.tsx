@@ -90,15 +90,13 @@ export default function LetItGoAngel() {
   return (
     <main className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
       
-      {/* Верхняя панель: идеальное центрирование через flex-балансир */}
-      <header className="relative z-50 flex items-center justify-between w-full max-w-7xl mx-auto pt-2 gap-2">
+      {/* Верхняя панель: надежная сетка из 3 колонок в нормальном потоке документа */}
+      <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-2 gap-2">
         
-        {/* Невидимый балансир слева (повторяет ширину счетчика справа для идеального центра) */}
-        <div className="invisible opacity-0 pointer-events-none font-mono text-xs sm:text-sm px-4 py-2 whitespace-nowrap">
-          ❤️ {clickCount}
-        </div>
+        {/* Левая колонка (пустой балансир для идеального центрирования) */}
+        <div />
 
-        {/* Кнопка по центру */}
+        {/* Центральная колонка: Кнопка Back to World */}
         <div className="flex justify-center">
           <Link 
             href="/heartandangel/world"
@@ -108,9 +106,9 @@ export default function LetItGoAngel() {
           </Link>
         </div>
 
-        {/* Счетчик справа */}
+        {/* Правая колонка: Счетчик сердец */}
         <div className="flex justify-end">
-          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/85 px-4 py-2 rounded-full backdrop-blur-md border border-white/30 shadow-md whitespace-nowrap">
+          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/85 px-3 sm:px-4 py-2 rounded-full backdrop-blur-md border border-white/30 shadow-md whitespace-nowrap">
             ❤️ {clickCount}
           </div>
         </div>
