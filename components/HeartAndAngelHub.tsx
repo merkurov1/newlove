@@ -29,8 +29,8 @@ export default function HeartAndAngelHub() {
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       <Header />
 
-      {/* Hero-блок */}
-      <div className="relative w-full h-[600px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5]">
+      {/* Hero-блок с безопасным отступом сверху для мобильных */}
+      <div className="relative w-full h-[650px] sm:h-[700px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5]">
         <Image
           src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
           alt="Heart & Angel World"
@@ -42,7 +42,7 @@ export default function HeartAndAngelHub() {
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-black/40 pointer-events-none" />
 
         {/* Верхний текстовый блок */}
-        <div className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 pt-20 sm:pt-28 md:pt-36 flex justify-end">
+        <div className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 pt-32 sm:pt-36 md:pt-40 flex justify-end">
           <div className="text-right space-y-1.5 sm:space-y-3 max-w-lg text-white drop-shadow-lg">
             <h1 className="text-2xl sm:text-4xl md:text-6xl font-serif font-light tracking-wider text-white">
               Heart &amp; Angel
@@ -50,8 +50,8 @@ export default function HeartAndAngelHub() {
             <p className="text-stone-100 text-xs sm:text-base md:text-lg font-serif font-light leading-relaxed tracking-wide">
               The universal mythology for a fragmented world.
             </p>
-            <p className="text-stone-200 text-[10px] sm:text-sm font-serif font-light tracking-[0.2em] uppercase pt-0.5">
-              THE GREATEST LOVE STORY EVER TOLD.
+            <p className="text-stone-200 text-xs sm:text-sm font-serif font-light italic pt-0.5">
+              The Greatest Love Story Ever Told.
             </p>
           </div>
         </div>
