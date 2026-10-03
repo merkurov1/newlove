@@ -1,12 +1,8 @@
-// components/AuthProvider.tsx
+'use client';
 
-"use client";
+import React from 'react';
+import { AuthProvider as BaseAuthProvider } from './AuthContext';
 
-import { ReactNode } from 'react';
-import { AuthProviderInner } from './AuthContext';
-
-interface Props { children: ReactNode }
-
-export default function AuthProvider({ children }: Props) {
-  return <AuthProviderInner>{children}</AuthProviderInner>;
+export default function AuthProvider(props: React.PropsWithChildren<{}>) {
+  return <BaseAuthProvider {...props} />;
 }

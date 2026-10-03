@@ -1,7 +1,6 @@
-// components/profile/SubscriptionToggle.js
 'use client';
 
-import { useActionState, useFormStatus } from 'react';
+import { useFormStatus, useFormState as useActionState } from 'react-dom';
 import { toggleUserSubscription } from '@/app/admin/actions';
 import { useEffect, useState } from 'react';
 
