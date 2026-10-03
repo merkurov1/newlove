@@ -19,7 +19,6 @@ export default function LetItGoAngel() {
   const [showWithoutHeart, setShowWithoutHeart] = useState(false);
   const [skyGradient, setSkyGradient] = useState('bg-gradient-to-b from-[#87CEEB] via-[#B0E0E6] to-[#E0F6FF]');
 
-  // Вычисляем имя автора ровно так же, как в Header.tsx
   const currentAuthorName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Visitor';
 
   const clickCountRef = useRef(clickCount);
@@ -45,7 +44,6 @@ export default function LetItGoAngel() {
     }
   }, []);
 
-  // Отправка данных при уходе со страницы с токеном и реальным автором
   useEffect(() => {
     return () => {
       const count = clickCountRef.current;
@@ -90,23 +88,29 @@ export default function LetItGoAngel() {
   };
 
   return (
-    <main className={`relative w-full min-h-[100dvh] h-[100dvh] overflow-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
+    <main className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
       
-      {/* Верхняя панель: в нормальном потоке flex-контейнера */}
-      <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-2">
-        <div /> {/* Пустой блок слева для симметрии сетки */}
+      {/* Верхняя панель: идеальное центрирование через flex-балансир */}
+      <header className="relative z-50 flex items-center justify-between w-full max-w-7xl mx-auto pt-2 gap-2">
+        
+        {/* Невидимый балансир слева (повторяет ширину счетчика справа для идеального центра) */}
+        <div className="invisible opacity-0 pointer-events-none font-mono text-xs sm:text-sm px-4 py-2 whitespace-nowrap">
+          ❤️ {clickCount}
+        </div>
 
+        {/* Кнопка по центру */}
         <div className="flex justify-center">
           <Link 
             href="/heartandangel/world"
-            className="flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full backdrop-blur-md border border-white/30 bg-white/80 text-stone-900 shadow-md transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer"
+            className="flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/85 text-stone-900 shadow-md transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap"
           >
             <span>← Back to World</span>
           </Link>
         </div>
 
+        {/* Счетчик справа */}
         <div className="flex justify-end">
-          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-white/30 shadow-md animate-fade-in">
+          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/85 px-4 py-2 rounded-full backdrop-blur-md border border-white/30 shadow-md whitespace-nowrap">
             ❤️ {clickCount}
           </div>
         </div>
@@ -116,9 +120,9 @@ export default function LetItGoAngel() {
       <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
 
       {/* Центр экрана: Ангел и летающие сердца */}
-      <div className="relative w-full flex-1 flex items-end justify-center pb-[10vh] z-20 my-auto">
+      <div className="relative w-full flex-1 flex items-end justify-center pb-[10vh] pt-12 z-20 my-auto">
         <div 
-          className={`relative transition-transform duration-200 flex items-center justify-center p-4 w-[480px] h-[480px] max-w-[65vw] max-h-[55vh] animate-fade-in ${
+          className={`relative transition-transform duration-200 flex items-center justify-center p-4 w-[480px] h-[480px] max-w-[70vw] max-h-[55vh] animate-fade-in ${
             showWithoutHeart ? 'cursor-default' : 'cursor-pointer active:scale-95'
           }`}
           onClick={handleClick}
@@ -178,7 +182,7 @@ export default function LetItGoAngel() {
         @keyframes flyAway {
           0% { transform: translateY(0) scale(0.3) rotate(0deg); opacity: 1; }
           15% { opacity: 1; }
-          100% { transform: translateY(-80vh) scale(1.15) translateX(25px) rotate(15deg); opacity: 0; }
+          100% { transform: translateY(-85vh) scale(1.15) translateX(25px) rotate(15deg); opacity: 0; }
         }
         .animate-fade-in { animation: fadeIn 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-fly-away { animation: flyAway 6s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
