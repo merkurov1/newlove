@@ -277,8 +277,8 @@ export default function HeartPhysics({
     <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden', touchAction: 'none' }}>
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       
-      {/* Шапка с безопасным отступом для iPad / iOS и абсолютным центрированием */}
-      <header className="absolute top-0 left-0 w-full z-[100] flex items-center justify-between px-4 sm:px-10 pt-[max(1.2rem,env(safe-area-inset-top))] sm:pt-6 pointer-events-none">
+      {/* Панель управления HeartPhysics: расположена строго под глобальным хедером сайта (top-24 / top-28) */}
+      <header className="absolute top-24 sm:top-28 left-0 w-full z-30 flex items-center justify-between px-4 sm:px-10 pointer-events-none">
         {/* Балансирующий блок слева */}
         <div className="w-20 sm:w-36" />
 
