@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/components/AuthContext';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
   Flame,
@@ -16,8 +16,8 @@ import {
   X,
   Users,
   Activity,
-  Layers,
-  Clock
+  Clock,
+  Layers
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -237,14 +237,18 @@ export default function TempleClient() {
     : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white';
 
   return (
-    <main 
+    <motion.main 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       className={`relative w-full min-h-[100dvh] h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-hidden select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
-      {/* Верхняя панель (Back по центру, Sound справа) */}
-      <header className="relative z-45 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-2">
+      {/* Верхняя панель: безопасный отступ сверху (pt-10 sm:pt-14 md:pt-16), чтобы не наезжать на шапку iPad */}
+      <header className="relative z-45 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-10 sm:pt-14 md:pt-16">
         <div /> {/* Пустой блок слева для баланса сетки */}
         
         <div className="flex justify-center">
@@ -335,138 +339,162 @@ export default function TempleClient() {
       <div className="h-2 sm:h-4" />
 
       {/* Модальное окно: Справка (?) */}
-      {isInfoOpen && (
-        <div 
-          onClick={() => setIsInfoOpen(false)}
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
-        >
-          <div 
-            onClick={(e: any) => e.stopPropagation()}
-            className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-md w-full border space-y-4 relative shadow-2xl`}
+      <AnimatePresence>
+        {isInfoOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsInfoOpen(false)}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
           >
-            <button 
-              onClick={() => setIsInfoOpen(false)}
-              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
+            <motion.div 
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              onClick={(e: any) => e.stopPropagation()}
+              className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-md w-full border space-y-4 relative shadow-2xl`}
             >
-              <X size={16} />
-            </button>
-            <h3 className="font-serif text-2xl font-normal">The Sanctuary</h3>
-            <p className="font-serif text-sm leading-relaxed font-light opacity-90">
-              This digital temple is a quiet space of presence. Lighting shifts with the real hours of the world. Here, rituals work, and every visitor leaves a trace.
-            </p>
-          </div>
-        </div>
-      )}
+              <button 
+                onClick={() => setIsInfoOpen(false)}
+                className="absolute top-5 right-5 w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+              <h3 className="font-serif text-2xl font-normal">The Sanctuary</h3>
+              <p className="font-serif text-sm leading-relaxed font-light opacity-90">
+                This digital temple is a quiet space of presence. Lighting shifts with the real hours of the world. Here, rituals work, and every visitor leaves a trace.
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Модальное окно: Traces */}
-      {isTracesOpen && (
-        <div 
-          onClick={() => setIsTracesOpen(false)}
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
-        >
-          <div 
-            onClick={(e: any) => e.stopPropagation()}
-            className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-2xl w-full border space-y-4 relative shadow-2xl max-h-[80vh] flex flex-col`}
+      <AnimatePresence>
+        {isTracesOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsTracesOpen(false)}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
           >
-            <div className="flex items-center justify-between border-b pb-3 border-stone-500/20">
-              <div>
-                <h3 className="font-serif text-xl sm:text-2xl font-normal">Sanctuary Traces</h3>
-                <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">Recent actions and offerings</p>
+            <motion.div 
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              onClick={(e: any) => e.stopPropagation()}
+              className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-2xl w-full border space-y-4 relative shadow-2xl max-h-[80vh] flex flex-col`}
+            >
+              <div className="flex items-center justify-between border-b pb-3 border-stone-500/20">
+                <div>
+                  <h3 className="font-serif text-xl sm:text-2xl font-normal">Sanctuary Traces</h3>
+                  <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">Recent actions and offerings</p>
+                </div>
+                <button 
+                  onClick={() => setIsTracesOpen(false)}
+                  className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
               </div>
-              <button 
-                onClick={() => setIsTracesOpen(false)}
-                className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            
-            <div className="divide-y divide-stone-500/10 overflow-y-auto pr-1 flex-1">
-              {!loaded ? (
-                <p className="font-mono text-xs opacity-60 uppercase tracking-widest animate-pulse py-8 text-center">Reading the ether...</p>
-              ) : posts.length === 0 ? (
-                <p className="font-mono text-xs opacity-60 uppercase tracking-widest py-8 text-center">No traces recorded yet.</p>
-              ) : (
-                posts.slice(0, 15).map((post) => {
-                  const IconComponent = post.icon || Radio;
-                  return (
-                    <div key={post.id} className="py-3 flex items-center justify-between gap-3 text-xs sm:text-sm">
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <div className={`w-7 h-7 rounded-full bg-stone-500/10 flex items-center justify-center ${post.color || 'text-stone-400'}`}>
-                          <IconComponent size={15} />
+              
+              <div className="divide-y divide-stone-500/10 overflow-y-auto pr-1 flex-1">
+                {!loaded ? (
+                  <p className="font-mono text-xs opacity-60 uppercase tracking-widest animate-pulse py-8 text-center">Reading the ether...</p>
+                ) : posts.length === 0 ? (
+                  <p className="font-mono text-xs opacity-60 uppercase tracking-widest py-8 text-center">No traces recorded yet.</p>
+                ) : (
+                  posts.slice(0, 15).map((post) => {
+                    const IconComponent = post.icon || Radio;
+                    return (
+                      <div key={post.id} className="py-3 flex items-center justify-between gap-3 text-xs sm:text-sm">
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <div className={`w-7 h-7 rounded-full bg-stone-500/10 flex items-center justify-center ${post.color || 'text-stone-400'}`}>
+                            <IconComponent size={15} />
+                          </div>
+                          <span className="font-mono text-xs font-bold uppercase tracking-wider">{post.label}</span>
                         </div>
-                        <span className="font-mono text-xs font-bold uppercase tracking-wider">{post.label}</span>
-                      </div>
 
-                      <div className="flex-1 font-serif text-xs sm:text-sm font-light opacity-85 truncate px-2 flex items-center gap-2 text-left">
-                        <span className="font-medium opacity-75 shrink-0 text-xs">{post.author}</span>
-                        <span className="opacity-40">•</span>
-                        <span className="truncate">{post.content}</span>
-                      </div>
+                        <div className="flex-1 font-serif text-xs sm:text-sm font-light opacity-85 truncate px-2 flex items-center gap-2 text-left">
+                          <span className="font-medium opacity-75 shrink-0 text-xs">{post.author}</span>
+                          <span className="opacity-40">•</span>
+                          <span className="truncate">{post.content}</span>
+                        </div>
 
-                      <div className="font-mono text-[10px] opacity-50 shrink-0 text-right">
-                        {post.time}
+                        <div className="font-mono text-[10px] opacity-50 shrink-0 text-right">
+                          {post.time}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Модальное окно: Chronicles */}
-      {isChroniclesOpen && (
-        <div 
-          onClick={() => setIsChroniclesOpen(false)}
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
-        >
-          <div 
-            onClick={(e: any) => e.stopPropagation()}
-            className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-md w-full border space-y-6 relative shadow-2xl`}
+      <AnimatePresence>
+        {isChroniclesOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsChroniclesOpen(false)}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
           >
-            <div className="flex items-center justify-between border-b pb-4 border-stone-500/20">
-              <div>
-                <h3 className="font-serif text-2xl font-normal">Chronicles</h3>
-                <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">Sanctuary Analytics</p>
-              </div>
-              <button 
-                onClick={() => setIsChroniclesOpen(false)}
-                className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-6 py-2">
-              <div className="flex flex-col items-center justify-center text-center space-y-1">
-                <Users size={20} className="opacity-60 mb-1" />
-                <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.uniqueAuthors}</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Unique Seekers</span>
-              </div>
-
-              <div className="flex flex-col items-center justify-center text-center space-y-1">
-                <Activity size={20} className="opacity-60 mb-1" />
-                <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.totalLogs}</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Total Offerings</span>
+            <motion.div 
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              onClick={(e: any) => e.stopPropagation()}
+              className={`${lighting.cardBg} rounded-3xl p-6 sm:p-8 max-w-md w-full border space-y-6 relative shadow-2xl`}
+            >
+              <div className="flex items-center justify-between border-b pb-4 border-stone-500/20">
+                <div>
+                  <h3 className="font-serif text-2xl font-normal">Chronicles</h3>
+                  <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">Sanctuary Analytics</p>
+                </div>
+                <button 
+                  onClick={() => setIsChroniclesOpen(false)}
+                  className="w-8 h-8 rounded-full bg-stone-500/20 flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
               </div>
 
-              <div className="flex flex-col items-center justify-center text-center space-y-1">
-                <Flame size={20} className="text-amber-500 mb-1" />
-                <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.vigilsCount}</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Vigil Sparks</span>
-              </div>
+              <div className="grid grid-cols-2 gap-6 py-2">
+                <div className="flex flex-col items-center justify-center text-center space-y-1">
+                  <Users size={20} className="opacity-60 mb-1" />
+                  <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.uniqueAuthors}</span>
+                  <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Unique Seekers</span>
+                </div>
 
-              <div className="flex flex-col items-center justify-center text-center space-y-1">
-                <Clock size={20} className="text-indigo-400 mb-1" />
-                <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.sanctuaryHour}:00</span>
-                <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Sanctuary Hour</span>
+                <div className="flex flex-col items-center justify-center text-center space-y-1">
+                  <Activity size={20} className="opacity-60 mb-1" />
+                  <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.totalLogs}</span>
+                  <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Total Offerings</span>
+                </div>
+
+                <div className="flex flex-col items-center justify-center text-center space-y-1">
+                  <Flame size={20} className="text-amber-500 mb-1" />
+                  <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.vigilsCount}</span>
+                  <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Vigil Sparks</span>
+                </div>
+
+                <div className="flex flex-col items-center justify-center text-center space-y-1">
+                  <Clock size={20} className="text-indigo-400 mb-1" />
+                  <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.sanctuaryHour}:00</span>
+                  <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Sanctuary Hour</span>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </main>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.main>
   );
 }
