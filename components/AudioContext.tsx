@@ -1,6 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useRef, useState } from 'react';
+import createContext from 'react';
+import useContext from 'react';
+import useRef from 'react';
+import useState from 'react';
 
 const ASSETS = {
   ambientAudio: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Drift%20of%20Glass.mp3',
@@ -11,15 +14,19 @@ interface AudioContextType {
   toggleAudio: () => void;
 }
 
-const AudioContext = createContext<AudioContextType>({
+const initialContext: AudioContextType = {
   isPlaying: false,
   toggleAudio: () => {},
-});
+};
+
+// Никаких <AudioContextType> внутри функции! Тип выводится из initialContext
+const AudioContext = createContext(initialContext);
 
 export const useTempleAudio = () => useContext(AudioContext);
 
 export function GlobalAudioProvider({ children }: { children: React.ReactNode }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Используем `as` вместо передачи дженерика в useRef
+  const audioRef = useRef(null) as { current: HTMLAudioElement | null };
   const [isPlaying, setIsPlaying] = useState(false);
 
   const toggleAudio = () => {
@@ -30,14 +37,18 @@ export function GlobalAudioProvider({ children }: { children: React.ReactNode })
     } else {
       audioRef.current.play().then(() => {
         setIsPlaying(true);
-      }).catch((err) => console.log('Audio play error:', err));
+      }).catch((err: unknown) => {
+        console.log('Audio play error:', err);
+      });
     }
   };
 
+  const contextValue = { isPlaying, toggleAudio };
+
   return (
-    <AudioContext.Provider value={{ isPlaying, toggleAudio }}>
+    <AudioContext.Provider value={contextValue}>
       {children}
-      <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
+      <audio ref={audioRef as any} src={ASSETS.ambientAudio} loop preload="auto" />
     </AudioContext.Provider>
   );
 }

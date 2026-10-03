@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
-import SoundToggle from '@/components/SoundToggle';
+import SoundToggle from './SoundToggle';
 
 interface Props {
   daemonUrl?: string;

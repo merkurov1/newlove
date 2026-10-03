@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
-import { useTempleAudio } from '@/components/AudioContext';
-import SoundToggle from '@/components/SoundToggle';
+import { useTempleAudio } from '../../components/AudioContext';
+import SoundToggle from '../../components/SoundToggle';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Clock, Sparkles, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';

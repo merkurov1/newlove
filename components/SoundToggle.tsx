@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Volume2, Radio } from 'lucide-react';
-import { useTempleAudio } from '@/components/AudioContext';
+import { useTempleAudio } from './AudioContext';
 
 interface SoundToggleProps {
   className?: string;

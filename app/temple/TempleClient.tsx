@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/components/AuthContext';
-import SoundToggle from '@/components/SoundToggle';
+import SoundToggle from '../../components/SoundToggle';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
