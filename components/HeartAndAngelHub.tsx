@@ -12,24 +12,6 @@ const images = [
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759231854148-IMG_0519.jpeg',
 ];
 
-const MINI_PROJECTS = [
-  {
-    title: 'Let It Go',
-    description: 'Release burdens into the digital sky and watch them float away.',
-    href: '/heartandangel/letitgo',
-  },
-  {
-    title: 'Calm',
-    description: 'Find serenity through gyroscope-driven balance and heartbeat interactions.',
-    href: '/heartandangel/calm',
-  },
-  {
-    title: 'Vigil',
-    description: 'A quiet digital sanctuary for digital presence and shared observation.',
-    href: '/vigil',
-  },
-];
-
 export default function HeartAndAngelHub() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const videoId = 'cfmUSH0rTno';
@@ -38,7 +20,7 @@ export default function HeartAndAngelHub() {
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       <Header />
 
-      {/* Hero-блок (клик по картинке убран, шрифты унифицированы) */}
+      {/* Hero-блок */}
       <div className="relative w-full h-[500px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5]">
         <Image
           src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
@@ -138,7 +120,7 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* 3. Блок The Concept (Concept) */}
+        {/* 3. Блок The Concept */}
         <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
             <div className="md:col-span-7 space-y-6">
@@ -186,63 +168,22 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* 4. Галерея подряд (Галерея) */}
-        <div className="w-full space-y-12">
+        {/* 4. Галерея: сетка в два ряда без рамок и без меток */}
+        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-10 sm:gap-12">
           {images.map((src, idx) => (
             <div 
               key={idx} 
-              className="relative w-full bg-white border border-stone-200/80 p-6 sm:p-12 rounded-3xl shadow-sm flex flex-col items-center group transition-all duration-500 hover:border-stone-400"
+              className="relative w-full aspect-[4/3] flex items-center justify-center group"
             >
-              <div className="w-full flex justify-between items-center mb-6">
-                <span className="font-mono text-xs uppercase tracking-widest text-stone-400">
-                  Artifact 0{idx + 1}
-                </span>
-                <span className="font-mono text-[10px] text-stone-400">
-                  REF_{String(idx + 1).padStart(2, '0')}
-                </span>
-              </div>
-              
-              <div className="relative w-full max-w-3xl aspect-[4/3] sm:aspect-[16/10] flex items-center justify-center">
-                <Image
-                  src={src}
-                  alt={`Artifact ${idx + 1}`}
-                  fill
-                  className="object-contain drop-shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]"
-                  sizes="(max-width: 1024px) 100vw, 800px"
-                />
-              </div>
+              <Image
+                src={src}
+                alt={`Artifact ${idx + 1}`}
+                fill
+                className="object-contain drop-shadow-lg transition-transform duration-500 group-hover:scale-[1.03]"
+                sizes="(max-width: 768px) 100vw, 500px"
+              />
             </div>
           ))}
-        </div>
-
-        {/* 5. Мини-проекты */}
-        <div className="w-full space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {MINI_PROJECTS.map((proj, idx) => (
-              <Link
-                key={idx}
-                href={proj.href}
-                className="group p-8 rounded-3xl bg-white hover:bg-stone-50 border border-stone-200/80 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between space-y-6"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono tracking-widest text-stone-400 uppercase">
-                      0{idx + 1}
-                    </span>
-                    <span className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-600 group-hover:bg-stone-900 group-hover:text-white transition-colors">
-                      →
-                    </span>
-                  </div>
-                  <h4 className="text-2xl font-serif font-medium text-stone-900">
-                    {proj.title}
-                  </h4>
-                  <p className="text-stone-600 text-sm font-light leading-relaxed">
-                    {proj.description}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </div>
         </div>
 
       </div>
