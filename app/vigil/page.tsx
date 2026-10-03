@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
+import { useTempleAudio } from '@/components/heartandangel/layout'; // Путь к вашему общему layout с AudioContext
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Clock, Sparkles, Volume2, Radio, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -10,9 +11,6 @@ import Image from 'next/image';
 
 const ANGEL_GIF = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
 const FLAME_ID = 1;
-const ASSETS = {
-  ambientAudio: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Drift%20of%20Glass.mp3',
-};
 
 function getTimeLighting() {
   const hour = new Date().getHours();
@@ -58,10 +56,10 @@ function getTimeLighting() {
 export default function VigilPage() {
   const supabase = createClient();
   const { user, profile, isLoading } = useAuth();
+  const { isPlaying, toggleAudio } = useTempleAudio();
 
   const angelRef = useRef<HTMLDivElement | null>(null);
   const heartRef = useRef<HTMLDivElement | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const [intensity, setIntensity] = useState(1);
   const [timeLeft, setTimeLeft] = useState('');
@@ -71,7 +69,6 @@ export default function VigilPage() {
   const [isLighting, setIsLighting] = useState(false);
   const [spark, setSpark] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [lighting, setLighting] = useState(getTimeLighting());
 
   const userName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || '';
@@ -170,16 +167,6 @@ export default function VigilPage() {
     }
   };
 
-  const toggleAudio = () => {
-    if (!audioRef.current) return;
-    if (isPlayingAudio) {
-      audioRef.current.pause();
-      setIsPlayingAudio(false);
-    } else {
-      audioRef.current.play().then(() => setIsPlayingAudio(true)).catch(() => {});
-    }
-  };
-
   const triggerRitual = async () => {
     if (isLighting || !userName) return;
     setIsLighting(true);
@@ -252,32 +239,36 @@ export default function VigilPage() {
 
   return (
     <main 
-      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 sm:p-12 pt-16 sm:pt-20 md:pt-24 transition-colors duration-1000`}
+      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 sm:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
-
-      {/* Верхняя панель: безопасный отступ сверху */}
-      <header className="relative z-50 flex justify-between items-center w-full max-w-7xl mx-auto pt-4 sm:pt-6 gap-4">
-        <div className="w-28 hidden sm:block" />
-
-        <Link 
-          href="/temple"
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs font-serif tracking-wider cursor-pointer ${buttonStyleClass}`}
-        >
-          <ArrowLeft size={14} />
-          <span>Back to Temple</span>
-        </Link>
-
-        <div className="flex items-center gap-4">
+      {/* Стандартизированный адаптивный хедер на сетке (grid-cols-3) с безопасными отступами сверху */}
+      <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-24 sm:pt-28 md:pt-32 px-2 sm:px-4">
+        {/* Лево: Кнопка управления звуком (глобальный AudioContext) */}
+        <div className="flex justify-start">
           <button
             onClick={toggleAudio}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${buttonStyleClass}`}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-medium cursor-pointer ${buttonStyleClass}`}
           >
-            {isPlayingAudio ? <Volume2 size={14} className="text-amber-400 animate-pulse" /> : <Radio size={14} />}
-            <span>{isPlayingAudio ? 'Sound On' : 'Sound Off'}</span>
+            {isPlaying ? <Volume2 size={14} className="text-amber-500 animate-pulse" /> : <Radio size={14} />}
+            <span className="hidden sm:inline">{isPlaying ? 'Sound On' : 'Sound Off'}</span>
           </button>
         </div>
+
+        {/* Центр: Кнопка возврата в храм */}
+        <div className="flex justify-center">
+          <Link 
+            href="/temple"
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap ${buttonStyleClass}`}
+          >
+            <ArrowLeft size={14} />
+            <span>← Back</span>
+            <span className="hidden sm:inline">to Temple</span>
+          </Link>
+        </div>
+
+        {/* Право: Пустой блок для баланса сетки */}
+        <div />
       </header>
 
       {/* Атмосферный фоновый свет */}

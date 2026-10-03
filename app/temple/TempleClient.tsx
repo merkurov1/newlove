@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/components/AuthContext';
+import { useTempleAudio } from './layout';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
@@ -24,7 +25,6 @@ import Link from 'next/link';
 const ASSETS = {
   angel: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
   daemon: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Daemon1.png',
-  ambientAudio: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Drift%20of%20Glass.mp3',
 };
 
 interface TemplePost {
@@ -116,9 +116,9 @@ function getTimeLighting() {
 
 export default function TempleClient() {
   const { user, profile } = useAuth();
+  const { isPlaying, toggleAudio } = useTempleAudio();
 
   const [heroUrl, setHeroUrl] = useState<string>('');
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isTracesOpen, setIsTracesOpen] = useState(false);
   const [isChroniclesOpen, setIsChroniclesOpen] = useState(false);
@@ -133,8 +133,6 @@ export default function TempleClient() {
     letItGoCount: 0,
     sanctuaryHour: new Date().getHours()
   });
-
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     setHeroUrl(Math.random() > 0.5 ? ASSETS.angel : ASSETS.daemon);
@@ -151,6 +149,9 @@ export default function TempleClient() {
     let cancelled = false;
 
     async function fetchLogs() {
+      // Не опрашиваем бэкенд, если вкладка скрыта (экономия ресурсов и базы)
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+
       try {
         const res = await fetch('/api/temple_logs', { cache: 'no-store' });
         if (!res.ok) return;
@@ -211,7 +212,7 @@ export default function TempleClient() {
 
     fetchLogs();
     const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchLogs();
+      fetchLogs();
     }, 15000);
 
     return () => {
@@ -219,18 +220,6 @@ export default function TempleClient() {
       clearInterval(interval);
     };
   }, []);
-
-  const toggleAudio = () => {
-    if (!audioRef.current) return;
-    if (isPlayingAudio) {
-      audioRef.current.pause();
-      setIsPlayingAudio(false);
-    } else {
-      audioRef.current.play().then(() => {
-        setIsPlayingAudio(true);
-      }).catch((err) => console.log("Audio error:", err));
-    }
-  };
 
   const actionButtonStyle = lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
     ? 'bg-white/10 border-white/20 text-stone-200 hover:bg-white/20'
@@ -245,11 +234,9 @@ export default function TempleClient() {
       className={`relative w-full min-h-[100dvh] h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-hidden select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
-
       {/* Верхняя панель: безопасный увеличенный отступ сверху (pt-16 sm:pt-20 md:pt-24) для мобильных и планшетов */}
       <header className="relative z-45 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-16 sm:pt-20 md:pt-24">
-        <div /> {/* Пустой блок слева для баланса сетки */}
+        <div />
         
         <div className="flex justify-center">
           <Link 
@@ -265,8 +252,8 @@ export default function TempleClient() {
             onClick={toggleAudio}
             className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md transition-all text-xs font-medium tracking-wide shadow-sm cursor-pointer ${actionButtonStyle}`}
           >
-            {isPlayingAudio ? <Volume2 size={14} className="text-pink-400 animate-pulse" /> : <Radio size={14} />}
-            <span>{isPlayingAudio ? 'Sound On' : 'Sound Off'}</span>
+            {isPlaying ? <Volume2 size={14} className="text-pink-400 animate-pulse" /> : <Radio size={14} />}
+            <span>{isPlaying ? 'Sound On' : 'Sound Off'}</span>
           </button>
         </div>
       </header>

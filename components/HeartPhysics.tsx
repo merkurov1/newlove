@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
+import { useTempleAudio } from '../layout';
+import { Volume2, Radio } from 'lucide-react';
 
 interface Props {
   daemonUrl?: string;
@@ -14,6 +16,7 @@ export default function HeartPhysics({
   heartUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png',
 }: Props) {
   const { user, profile, session } = useAuth();
+  const { isPlaying, toggleAudio } = useTempleAudio();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [bgColor, setBgColor] = useState('#e8b4b8');
@@ -156,8 +159,21 @@ export default function HeartPhysics({
     window.addEventListener('mousedown', handleTouch);
 
     let animationFrameId: number;
+    let isTabVisible = !document.hidden;
+
+    const handleVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+      if (isTabVisible) {
+        render();
+      } else {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const render = () => {
+      if (!isTabVisible) return;
+
       ctx.clearRect(0, 0, width, height);
 
       handX = width / 2 + daemonWidth * 0.35;
@@ -243,6 +259,7 @@ export default function HeartPhysics({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('touchstart', handleTouch);
       window.removeEventListener('mousedown', handleTouch);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       cancelAnimationFrame(animationFrameId);
     };
   }, [daemonUrl, heartUrl, permissionGranted]);
@@ -280,11 +297,21 @@ export default function HeartPhysics({
     >
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       
-      {/* Увеличенный отступ сверху для мобилок (pt-36), чтобы кнопки опустились еще ниже */}
+      {/* Унифицированный хедер на сетке grid-cols-3 с безопасными отступами */}
       <header className="absolute top-0 left-0 w-full z-30 pt-36 sm:pt-28 md:pt-32 px-4 sm:px-10 pointer-events-none">
         <div className="grid grid-cols-3 items-center w-full max-w-7xl mx-auto">
-          <div />
+          {/* Лево: Кнопка управления звуком */}
+          <div className="flex justify-start pointer-events-auto">
+            <button
+              onClick={toggleAudio}
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-stone-400/40 bg-white/95 text-stone-900 shadow-2xl transition-all text-xs font-medium cursor-pointer"
+            >
+              {isPlaying ? <Volume2 size={14} className="text-pink-500 animate-pulse" /> : <Radio size={14} />}
+              <span className="hidden sm:inline">{isPlaying ? 'Sound On' : 'Sound Off'}</span>
+            </button>
+          </div>
 
+          {/* Центр: Кнопка возврата */}
           <div className="flex justify-center pointer-events-auto">
             <Link 
               href="/heartandangel/world"
@@ -295,6 +322,7 @@ export default function HeartPhysics({
             </Link>
           </div>
 
+          {/* Право: Таймер */}
           <div className="flex justify-end pointer-events-auto">
             <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.2em] bg-white/95 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-stone-400/40 shadow-2xl whitespace-nowrap">
               ⏳ {formatTime(seconds)}

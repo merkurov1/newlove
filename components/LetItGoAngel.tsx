@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
+import { useTempleAudio } from '../layout';
+import { Volume2, Radio } from 'lucide-react';
 
 const ANGEL_WITH_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png';
@@ -14,6 +16,7 @@ const HEART_IMAGE =
 
 export default function LetItGoAngel() {
   const { user, profile, session } = useAuth();
+  const { isPlaying, toggleAudio } = useTempleAudio();
   const [flyingHearts, setFlyingHearts] = useState<{ id: number }[]>([]);
   const [clickCount, setClickCount] = useState(0);
   const [showWithoutHeart, setShowWithoutHeart] = useState(false);
@@ -90,10 +93,20 @@ export default function LetItGoAngel() {
   return (
     <main className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
       
-      {/* Увеличенный отступ сверху (pt-24 sm:pt-28 md:pt-32) для защиты от перекрытия мобильной шапкой */}
+      {/* Унифицированный стандарт хедера на 3 колонки с безопасным отступом для мобилок */}
       <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-24 sm:pt-28 md:pt-32 px-2 sm:px-4">
-        <div />
+        {/* Лево: Кнопка управления звуком (глобальный AudioContext) */}
+        <div className="flex justify-start">
+          <button
+            onClick={toggleAudio}
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/90 text-stone-900 shadow-md transition-all text-xs font-medium cursor-pointer"
+          >
+            {isPlaying ? <Volume2 size={14} className="text-pink-500 animate-pulse" /> : <Radio size={14} />}
+            <span className="hidden sm:inline">{isPlaying ? 'Sound On' : 'Sound Off'}</span>
+          </button>
+        </div>
 
+        {/* Центр: Кнопка возврата */}
         <div className="flex justify-center">
           <Link 
             href="/heartandangel/world"
@@ -104,6 +117,7 @@ export default function LetItGoAngel() {
           </Link>
         </div>
 
+        {/* Право: Счетчик душевных тяжестей */}
         <div className="flex justify-end">
           <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.2em] bg-white/90 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-white/30 shadow-md whitespace-nowrap">
             ❤️ {clickCount}
