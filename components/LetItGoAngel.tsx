@@ -90,8 +90,8 @@ export default function LetItGoAngel() {
   return (
     <main className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
       
-      {/* Верхняя панель: абсолютное по центру расположение кнопки и правый счетчик */}
-      <header className="relative z-50 flex items-center justify-between w-full max-w-7xl mx-auto pt-6 sm:pt-8 px-2 sm:px-4 min-h-[48px]">
+      {/* Верхняя панель: увеличенный отступ сверху (pt-10 sm:pt-14 md:pt-16), чтобы не наезжать на шапку iPad */}
+      <header className="relative z-50 flex items-center justify-between w-full max-w-7xl mx-auto pt-10 sm:pt-14 md:pt-16 px-2 sm:px-4 min-h-[48px]">
         <div className="w-24 sm:w-32" />
 
         <div className="absolute left-1/2 -translate-x-1/2">
