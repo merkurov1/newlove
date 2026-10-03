@@ -90,21 +90,25 @@ export default function LetItGoAngel() {
   return (
     <main className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
       
-      {/* Верхняя панель: увеличенный отступ сверху (pt-10 sm:pt-14 md:pt-16), чтобы не наезжать на шапку iPad */}
-      <header className="relative z-50 flex items-center justify-between w-full max-w-7xl mx-auto pt-10 sm:pt-14 md:pt-16 px-2 sm:px-4 min-h-[48px]">
-        <div className="w-24 sm:w-32" />
+      {/* Стандартный адаптивный хедер на сетке (grid-cols-3): защищен от наезда на мобилках и планшетах */}
+      <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-16 sm:pt-20 md:pt-24 px-2 sm:px-4">
+        {/* Левая колонка (для баланса) */}
+        <div />
 
-        <div className="absolute left-1/2 -translate-x-1/2">
+        {/* Центральная колонка: Кнопка возврата */}
+        <div className="flex justify-center">
           <Link 
             href="/heartandangel/world"
-            className="flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/90 text-stone-900 shadow-md transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/90 text-stone-900 shadow-md transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap"
           >
-            <span>← Back to World</span>
+            <span>← Back</span>
+            <span className="hidden sm:inline">to World</span>
           </Link>
         </div>
 
-        <div className="ml-auto">
-          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/90 px-3.5 sm:px-4 py-2.5 rounded-full backdrop-blur-md border border-white/30 shadow-md whitespace-nowrap">
+        {/* Правая колонка: Счетчик */}
+        <div className="flex justify-end">
+          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.2em] bg-white/90 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-white/30 shadow-md whitespace-nowrap">
             ❤️ {clickCount}
           </div>
         </div>

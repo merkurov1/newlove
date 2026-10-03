@@ -274,27 +274,31 @@ export default function HeartPhysics({
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden', touchAction: 'none' }}>
+    <div 
+      className="animate-fade-in"
+      style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden', touchAction: 'none' }}
+    >
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       
-      {/* Панель управления HeartPhysics: расположена строго под глобальным хедером сайта (top-24 / top-28) */}
-      <header className="absolute top-24 sm:top-28 left-0 w-full z-30 flex items-center justify-between px-4 sm:px-10 pointer-events-none">
-        {/* Балансирующий блок слева */}
-        <div className="w-20 sm:w-36" />
+      {/* Стандартизированный адаптивный хедер на сетке (grid-cols-3): защищен от наезда шапки на мобильных устройствах и планшетах */}
+      <header className="absolute top-0 left-0 w-full z-30 grid grid-cols-3 items-center pt-16 sm:pt-20 md:pt-24 px-4 sm:px-10 pointer-events-none">
+        {/* Пустая колонка слева для баланса */}
+        <div />
 
         {/* Центр: Кнопка Back to World */}
-        <div className="absolute left-1/2 -translate-x-1/2 pointer-events-auto">
+        <div className="flex justify-center pointer-events-auto">
           <Link 
             href="/heartandangel/world"
-            className="flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-3 rounded-full backdrop-blur-md border border-stone-400/40 bg-white/95 text-stone-900 shadow-2xl transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-stone-400/40 bg-white/95 text-stone-900 shadow-2xl transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap"
           >
-            <span>← Back to World</span>
+            <span>← Back</span>
+            <span className="hidden sm:inline">to World</span>
           </Link>
         </div>
 
         {/* Справа: Таймер */}
-        <div className="pointer-events-auto ml-auto">
-          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/95 px-3 py-2 sm:px-4 sm:py-2 rounded-full backdrop-blur-md border border-stone-400/40 shadow-2xl whitespace-nowrap">
+        <div className="flex justify-end pointer-events-auto">
+          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.2em] bg-white/95 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-stone-400/40 shadow-2xl whitespace-nowrap">
             ⏳ {formatTime(seconds)}
           </div>
         </div>
@@ -326,6 +330,14 @@ export default function HeartPhysics({
           Enable Gyroscope 📱
         </button>
       )}
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.98); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-fade-in { animation: fadeIn 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      ` }} />
     </div>
   );
 }
