@@ -1,4 +1,5 @@
 import AuthProvider from '@/components/AuthProvider';
+import { GlobalAudioProvider } from '@/components/AudioContext';
 
 import './main.css';
 // Global Swiper styles
@@ -13,7 +14,6 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import NextDynamic from 'next/dynamic';
-import Script from 'next/script'; // Импорт для JSON-LD
 
 const UserSidebar = NextDynamic(() => import('@/components/UserSidebar'), { ssr: false });
 
@@ -34,7 +34,7 @@ const cormorant = Cormorant_Garamond({
 
 // --- STRATEGIC SEO: GLOBAL POSITIONING ---
 export const metadata = sanitizeMetadata({
-  metadataBase: new URL('https://www.merkurov.love'), // Critical for relative URLs
+  metadataBase: new URL('https://www.merkurov.love'),
   title: {
     default: 'Anton Merkurov | Art x Love x Money',
     template: '%s | Anton Merkurov',
@@ -67,7 +67,7 @@ export const metadata = sanitizeMetadata({
         alt: 'Anton Merkurov - Unframed',
       },
     ],
-    locale: 'en_US', // Primary locale is English
+    locale: 'en_US',
     type: 'website',
   },
   twitter: {
@@ -102,7 +102,6 @@ export const metadata = sanitizeMetadata({
     apple: '/apple-touch-icon.png',
   },
   alternates: {
-    // Убран жесткий корень, чтобы подразделы могли задавать свой собственный canonical
     languages: {
       'en-US': 'https://www.merkurov.love',
     },
@@ -203,16 +202,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         style={{ background: '#fff', color: '#333' }}
       >
         <AuthProvider>
-          <a
-            href="#main-content"
-            className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg"
-          >
-            Skip to content
-          </a>
-          <Header />
-          <UserSidebar />
-          <main id="main-content">{children}</main>
-          <Footer />
+          <GlobalAudioProvider>
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg"
+            >
+              Skip to content
+            </a>
+            <Header />
+            <UserSidebar />
+            <main id="main-content">{children}</main>
+            <Footer />
+          </GlobalAudioProvider>
         </AuthProvider>
         <Analytics />
         <SpeedInsights />
