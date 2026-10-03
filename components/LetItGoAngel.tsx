@@ -90,12 +90,10 @@ export default function LetItGoAngel() {
   return (
     <main className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
       
-      {/* Стандартный адаптивный хедер на сетке (grid-cols-3): защищен от наезда на мобилках и планшетах */}
-      <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-16 sm:pt-20 md:pt-24 px-2 sm:px-4">
-        {/* Левая колонка (для баланса) */}
+      {/* Увеличенный отступ сверху (pt-24 sm:pt-28 md:pt-32) для защиты от перекрытия мобильной шапкой */}
+      <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-24 sm:pt-28 md:pt-32 px-2 sm:px-4">
         <div />
 
-        {/* Центральная колонка: Кнопка возврата */}
         <div className="flex justify-center">
           <Link 
             href="/heartandangel/world"
@@ -106,7 +104,6 @@ export default function LetItGoAngel() {
           </Link>
         </div>
 
-        {/* Правая колонка: Счетчик */}
         <div className="flex justify-end">
           <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.2em] bg-white/90 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-white/30 shadow-md whitespace-nowrap">
             ❤️ {clickCount}
