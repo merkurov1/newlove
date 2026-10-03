@@ -12,6 +12,15 @@ const images = [
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759231854148-IMG_0519.jpeg',
 ];
 
+const SOCIAL_LINKS = [
+  { name: 'YouTube', href: 'https://www.instagram.com/heart_and_angel' },
+  { name: 'Instagram', href: 'https://www.instagram.com/heart_and_angel' },
+  { name: 'TikTok', href: 'https://www.tiktok.com/@merkurov' },
+  { name: 'Facebook', href: 'https://www.facebook.com/heartandangel.love' },
+  { name: 'Telegram', href: 'https://t.me/heartandangel' },
+  { name: 'Patreon', href: 'https://www.patreon.com/c/heartandangel' },
+];
+
 export default function HeartAndAngelHub() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const videoId = 'cfmUSH0rTno';
@@ -20,7 +29,7 @@ export default function HeartAndAngelHub() {
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       <Header />
 
-      {/* Hero-блок (адаптирован для мобильных и унифицирован по стилю) */}
+      {/* Hero-блок */}
       <div className="relative w-full h-[600px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5]">
         <Image
           src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
@@ -71,7 +80,7 @@ export default function HeartAndAngelHub() {
         </div>
       </div>
 
-      {/* Основной контент страницы с адаптированными отступами */}
+      {/* Основной контент страницы */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-24 space-y-12 sm:space-y-24">
         
         {/* 1. Нарратив и манифест */}
@@ -170,7 +179,7 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* 4. Галерея: адаптивная сетка (1 колонка на мобильных, 2 на планшетах и ПК) */}
+        {/* 4. Галерея: адаптивная сетка */}
         <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-8 sm:gap-12">
           {images.map((src, idx) => (
             <div 
@@ -186,6 +195,26 @@ export default function HeartAndAngelHub() {
               />
             </div>
           ))}
+        </div>
+
+        {/* 5. Блок социальных сетей */}
+        <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm text-center space-y-6">
+          <h3 className="font-serif text-xl sm:text-2xl text-stone-900 tracking-tight">
+            Connect &amp; Follow
+          </h3>
+          <div className="flex flex-wrap justify-center gap-3 sm:gap-4 pt-1">
+            {SOCIAL_LINKS.map((social, idx) => (
+              <a
+                key={idx}
+                href={social.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-5 py-2.5 rounded-full bg-stone-100 hover:bg-stone-900 hover:text-white text-stone-800 text-xs sm:text-sm font-mono tracking-wider uppercase transition-all duration-300 border border-stone-200/80 shadow-sm"
+              >
+                {social.name}
+              </a>
+            ))}
+          </div>
         </div>
 
       </div>
