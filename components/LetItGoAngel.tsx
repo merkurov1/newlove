@@ -90,25 +90,21 @@ export default function LetItGoAngel() {
   return (
     <main className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
       
-      {/* Верхняя панель: надежная сетка из 3 колонок в нормальном потоке документа */}
-      <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-2 gap-2">
-        
-        {/* Левая колонка (пустой балансир для идеального центрирования) */}
-        <div />
+      {/* Верхняя панель: абсолютное по центру расположение кнопки и правый счетчик */}
+      <header className="relative z-50 flex items-center justify-between w-full max-w-7xl mx-auto pt-6 sm:pt-8 px-2 sm:px-4 min-h-[48px]">
+        <div className="w-24 sm:w-32" />
 
-        {/* Центральная колонка: Кнопка Back to World */}
-        <div className="flex justify-center">
+        <div className="absolute left-1/2 -translate-x-1/2">
           <Link 
             href="/heartandangel/world"
-            className="flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/85 text-stone-900 shadow-md transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap"
+            className="flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/90 text-stone-900 shadow-md transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap"
           >
             <span>← Back to World</span>
           </Link>
         </div>
 
-        {/* Правая колонка: Счетчик сердец */}
-        <div className="flex justify-end">
-          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/85 px-3 sm:px-4 py-2 rounded-full backdrop-blur-md border border-white/30 shadow-md whitespace-nowrap">
+        <div className="ml-auto">
+          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.2em] bg-white/90 px-3.5 sm:px-4 py-2.5 rounded-full backdrop-blur-md border border-white/30 shadow-md whitespace-nowrap">
             ❤️ {clickCount}
           </div>
         </div>
