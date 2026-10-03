@@ -247,8 +247,8 @@ export default function TempleClient() {
     >
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
-      {/* Верхняя панель: безопасный отступ сверху (pt-10 sm:pt-14 md:pt-16), чтобы не наезжать на шапку iPad */}
-      <header className="relative z-45 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-10 sm:pt-14 md:pt-16">
+      {/* Верхняя панель: безопасный увеличенный отступ сверху (pt-16 sm:pt-20 md:pt-24) для мобильных и планшетов */}
+      <header className="relative z-45 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-16 sm:pt-20 md:pt-24">
         <div /> {/* Пустой блок слева для баланса сетки */}
         
         <div className="flex justify-center">
