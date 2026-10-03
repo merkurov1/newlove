@@ -12,5 +12,5 @@ export function createClient() {
   );
 }
 
-// Совместимость для файлов, которые импортируют готовый клиент `supabase`
+// Экспорт для компонентов, использующих импорт `supabase`
 export const supabase = createClient();
