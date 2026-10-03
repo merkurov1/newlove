@@ -50,7 +50,7 @@ export default function HeartAndAngelHub() {
             <p className="text-stone-100 text-xs sm:text-base md:text-lg font-serif font-light leading-relaxed tracking-wide">
               The universal mythology for a fragmented world.
             </p>
-            <p className="text-stone-200 text-xs sm:text-sm font-serif font-light italic pt-0.5">
+            <p className="text-stone-100 text-xs sm:text-base md:text-lg font-serif font-light leading-relaxed tracking-wide italic pt-0.5">
               The Greatest Love Story Ever Told.
             </p>
           </div>
