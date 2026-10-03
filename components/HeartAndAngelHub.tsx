@@ -38,47 +38,44 @@ export default function HeartAndAngelHub() {
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       <Header />
 
-      {/* Hero-блок (клик на всю картинку ведет в World) */}
-      <Link 
-        href="/heartandangel/world"
-        className="relative w-full h-[500px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5] group cursor-pointer"
-      >
+      {/* Hero-блок (клик по картинке убран, обертка заменена на div) */}
+      <div className="relative w-full h-[500px] sm:h-[650px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#FAF8F5]">
         <Image
           src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
           alt="Heart & Angel World"
           fill
-          className="object-contain md:object-cover transition-transform duration-700 group-hover:scale-[1.01]"
+          className="object-contain md:object-cover transition-transform duration-700"
           priority
           draggable={false}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 pointer-events-none md:bg-gradient-to-t md:from-black/80 md:via-black/25 md:to-black/40" />
 
         <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pt-24 sm:pt-32 md:pt-40 flex justify-end">
-          <div className="text-right space-y-1 sm:space-y-2 max-w-lg text-white drop-shadow-md">
-            <span className="text-[10px] sm:text-xs font-mono uppercase tracking-[0.25em] text-stone-200 block">
-              Visual Mythology
-            </span>
-            <h1 className="text-3xl sm:text-5xl md:text-6xl font-serif font-normal tracking-tight text-white">
+          <div className="text-right space-y-2 sm:space-y-3 max-w-xl text-white drop-shadow-lg">
+            <h1 className="text-4xl sm:text-6xl md:text-7xl font-serif font-light tracking-tight text-white">
               Heart &amp; Angel
             </h1>
-            <p className="text-sm sm:text-base md:text-lg font-light text-stone-200 font-serif italic">
-              A universal mythology for a fragmented world.
+            <p className="text-base sm:text-lg md:text-xl font-serif italic font-normal tracking-wide text-stone-200">
+              The universal mythology for a fragmented world.
+            </p>
+            <p className="text-xs sm:text-sm font-sans tracking-[0.3em] uppercase text-stone-300 font-medium pt-1">
+              The Greatest love story ever told.
             </p>
           </div>
         </div>
 
         <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pb-8 sm:pb-16 md:pb-28 flex flex-col items-start space-y-3">
-          <div className="max-w-xl space-y-2 sm:space-y-3 drop-shadow-md">
-            <h2 className="text-2xl sm:text-3xl md:text-5xl font-serif font-medium text-white tracking-tight">
+          <div className="max-w-xl space-y-3 drop-shadow-lg">
+            <h2 className="text-3xl sm:text-4xl md:text-6xl font-serif font-light tracking-wider text-white">
               Enter the Living World
             </h2>
-            <p className="text-white/90 text-xs sm:text-sm md:text-base font-light leading-relaxed max-w-md">
+            <p className="text-stone-100 text-sm sm:text-base md:text-lg font-serif font-light leading-relaxed max-w-md tracking-wide">
               Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.
             </p>
-            <div className="pt-1 sm:pt-2" onClick={(e: { stopPropagation: () => void }) => e.stopPropagation()}>
+            <div className="pt-2">
               <Link
                 href="/heartandangel/world"
-                className="inline-flex items-center gap-2 sm:gap-3 px-6 py-3 sm:px-8 sm:py-4 rounded-full bg-white text-stone-900 text-xs sm:text-sm font-medium tracking-wide shadow-2xl hover:bg-stone-100 transition-all duration-300"
+                className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-white text-stone-900 text-xs sm:text-sm font-sans font-medium tracking-widest uppercase shadow-2xl hover:bg-stone-100 transition-all duration-300 cursor-pointer"
               >
                 <span>Explore World</span>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -88,7 +85,7 @@ export default function HeartAndAngelHub() {
             </div>
           </div>
         </div>
-      </Link>
+      </div>
 
       {/* Основной контент страницы */}
       <div className="max-w-4xl mx-auto px-6 py-24 space-y-24">
