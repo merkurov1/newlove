@@ -39,18 +39,10 @@ function formatTime(iso?: string) {
 }
 
 export default function PublicProfilePage({ params }: PageProps) {
-  // Универсальная поддержка синхронных и асинхронных params во всех версиях Next.js
-  const [resolvedParams, setResolvedParams] = useState<{ id: string } | null>(
-    params instanceof Promise ? null : params
-  );
-
-  useEffect(() => {
-    if (params instanceof Promise) {
-      params.then(setResolvedParams);
-    }
-  }, [params]);
-
+  // Мгновенное и надежное разрешение params для любых версий Next.js
+  const resolvedParams = params instanceof Promise ? React.use(params) : params;
   const userId = resolvedParams?.id;
+  
   const supabase = createClient();
 
   const [profile, setProfile] = useState<any>(null);
