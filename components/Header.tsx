@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { User, Settings, LogOut, ShieldCheck, Menu, X, ChevronRight } from 'lucide-react';
+import { User, Settings, LogOut, ShieldCheck, Menu, X, ChevronRight, Compass, Heart, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
 
@@ -16,17 +16,21 @@ export default function Header() {
   const signOut = auth?.signOut;
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSiteMenuOpen, setIsSiteMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeEcosystem, setActiveEcosystem] = useState<'curators' | 'heart' | null>(null);
   
   const pathname = usePathname() || '';
   const profileRef = useRef<HTMLDivElement | null>(null);
+  const siteMenuRef = useRef<HTMLDivElement | null>(null);
 
-  // Закрытие выпадающего меню при клике вне его области
+  // Закрытие выпадающих меню при клике вне их областей
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
+      }
+      if (siteMenuRef.current && !siteMenuRef.current.contains(event.target as Node)) {
+        setIsSiteMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -35,17 +39,10 @@ export default function Header() {
 
   useEffect(() => {
     setIsProfileOpen(false);
+    setIsSiteMenuOpen(false);
     setIsMobileMenuOpen(false);
-    if (pathname.startsWith('/art-engine') || pathname.startsWith('/selection')) {
-      setActiveEcosystem('curators');
-    } else if (pathname.startsWith('/heartandangel')) {
-      setActiveEcosystem('heart');
-    } else {
-      setActiveEcosystem(null);
-    }
   }, [pathname]);
 
-  // Ссылаемся на реальный ID пользователя в Supabase для публичного профиля /you/[id]
   const userId = user?.id || profile?.id || '';
   const profileHref = userId ? `/you/${userId}` : '/profile';
   
@@ -55,52 +52,26 @@ export default function Header() {
   
   const isAdmin = Array.isArray(roles) && roles.includes('ADMIN');
 
-  // Основные экосистемы
-  const ecosystems = [
-    { 
-      id: 'curators', 
-      label: 'Curators Engine', 
-      mainHref: '/art-engine',
-      links: [
-        { name: 'Selection', href: '/selection' }
-      ]
-    },
-    { 
-      id: 'heart', 
-      label: 'Heart & Angel', 
-      mainHref: '/heartandangel',
-      links: [
-        { name: 'Let It Go', href: '/heartandangel/letitgo' },
-        { name: 'Keep Calm', href: '/heartandangel/calm' }
-      ]
-    }
-  ];
-
-  // Рубрики главного сайта
-  const mainRubrics = [
-    { name: 'Lobby', href: '/lobby' },
-    { name: 'About', href: '/isakeyforall' },
-    { name: 'Advising', href: '/advising' },
-    { name: 'Unframed', href: '/unframed' },
-    { name: 'Journal', href: '/journal' }
-  ];
-
-  const currentEco = ecosystems.find(e => e.id === activeEcosystem);
+  // Определяем, владелец ли сайта (Антон Меркуров) или сторонний пользователь
+  const isOwner = !user || userName.toLowerCase().includes('merkurov') || userName.toLowerCase().includes('антон');
+  const brandDisplay = isOwner ? 'Merkurov' : (userName.split(' ').slice(-1)[0] || userName);
 
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-2xl border-b border-zinc-200/60 shadow-[0_4px_30px_rgba(0,0,0,0.02)] transition-all">
         <div className="max-w-[1800px] mx-auto px-6 lg:px-10 h-24 flex items-center justify-between">
           
-          {/* LEFT: AVATAR & BRAND */}
+          {/* LEFT: AVATAR & BRAND / SURNAME */}
           <div className="flex items-center gap-5">
+            
+            {/* 1. АВАТАР И ПОЛЬЗОВАТЕЛЬСКОЕ МЕНЮ */}
             <div className="relative" ref={profileRef}>
               {isLoading ? (
                 <div className="w-12 h-12 rounded-full bg-zinc-200 animate-pulse" />
               ) : user ? (
                 <button
                   type="button"
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  onClick={() => { setIsProfileOpen(!isProfileOpen); setIsSiteMenuOpen(false); }}
                   className="w-12 h-12 rounded-full overflow-hidden bg-zinc-900 text-white font-medium text-sm flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
                   aria-label="User Menu"
                 >
@@ -119,138 +90,177 @@ export default function Header() {
                 </Link>
               )}
 
-              {/* Refined Profile Popover */}
+              {/* Ультра-лаконичное меню профиля (без дублирования аватара/почты и без линий) */}
               <AnimatePresence>
                 {isProfileOpen && user && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.96, y: 8 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.96, y: 8 }}
-                    transition={{ duration: 0.2, ease: 'easeOut' }}
-                    className="absolute left-0 sm:left-auto sm:right-auto mt-3 w-[calc(100vw-3rem)] max-w-[320px] p-5 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-4"
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className="absolute left-0 mt-3 w-64 p-2 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-50 space-y-1"
                   >
-                    <div className="flex items-center gap-3.5 pb-4 border-b border-zinc-100">
-                      <div className="w-12 h-12 rounded-2xl overflow-hidden bg-zinc-900 text-white font-medium flex items-center justify-center text-sm shadow-inner shrink-0">
-                        {userImage ? <img src={userImage} alt={userName} className="w-full h-full object-cover" /> : <span>{userInitials}</span>}
+                    <Link 
+                      href={profileHref} 
+                      onClick={() => setIsProfileOpen(false)} 
+                      className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100/80 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <User size={16} className="text-zinc-500" />
+                        <span>Profile</span>
                       </div>
-                      <div className="overflow-hidden">
-                        <div className="text-sm font-bold text-zinc-900 truncate">{userName}</div>
-                        <div className="text-xs text-zinc-500 font-mono truncate">{user.email}</div>
-                      </div>
-                    </div>
+                      <ChevronRight size={14} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
+                    </Link>
 
-                    <div className="space-y-1">
-                      {/* Public Profile Link -> /you/[id] */}
+                    <Link 
+                      href="/profile" 
+                      onClick={() => setIsProfileOpen(false)} 
+                      className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100/80 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Settings size={16} className="text-zinc-500" />
+                        <span>Settings</span>
+                      </div>
+                      <ChevronRight size={14} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
+                    </Link>
+
+                    {isAdmin && (
                       <Link 
-                        href={profileHref} 
+                        href="/admin" 
                         onClick={() => setIsProfileOpen(false)} 
-                        className="group w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100/80 transition-all"
+                        className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium text-pink-700 bg-pink-50/60 hover:bg-pink-100/60 transition-all"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-zinc-100 text-zinc-600 group-hover:bg-white group-hover:shadow-sm transition-all">
-                            <User size={16} />
-                          </div>
-                          <span>Profile</span>
+                          <ShieldCheck size={16} className="text-pink-600" />
+                          <span>Admin Panel</span>
                         </div>
-                        <ChevronRight size={14} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
+                        <ChevronRight size={14} className="text-pink-400 group-hover:translate-x-0.5 transition-transform" />
                       </Link>
+                    )}
 
-                      {/* Settings / Editing Link -> /profile */}
-                      <Link 
-                        href="/profile" 
-                        onClick={() => setIsProfileOpen(false)} 
-                        className="group w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100/80 transition-all"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-zinc-100 text-zinc-600 group-hover:bg-white group-hover:shadow-sm transition-all">
-                            <Settings size={16} />
-                          </div>
-                          <span>Settings</span>
-                        </div>
-                        <ChevronRight size={14} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
-                      </Link>
-
-                      {isAdmin && (
-                        <Link 
-                          href="/admin" 
-                          onClick={() => setIsProfileOpen(false)} 
-                          className="group w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-medium text-pink-700 bg-pink-50/60 hover:bg-pink-100/60 transition-all"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-xl bg-pink-100 text-pink-600">
-                              <ShieldCheck size={16} />
-                            </div>
-                            <span>Admin Panel</span>
-                          </div>
-                          <ChevronRight size={14} className="text-pink-400 group-hover:translate-x-0.5 transition-transform" />
-                        </Link>
-                      )}
-
-                      <div className="pt-2 border-t border-zinc-100">
-                        <button 
-                          onClick={() => { setIsProfileOpen(false); signOut?.(); }} 
-                          className="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-sm font-medium text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
-                        >
-                          <div className="p-2 rounded-xl bg-rose-100/60 text-rose-600">
-                            <LogOut size={16} />
-                          </div>
-                          <span>Sign Out</span>
-                        </button>
-                      </div>
-                    </div>
+                    <button 
+                      onClick={() => { setIsProfileOpen(false); signOut?.(); }} 
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium text-rose-600 hover:bg-rose-50 transition-all cursor-pointer text-left"
+                    >
+                      <LogOut size={16} className="text-rose-500" />
+                      <span>Sign Out</span>
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
-            <Link href="/" className="font-sans font-bold text-lg tracking-[0.2em] uppercase text-zinc-900">
-              Merkurov
-            </Link>
-          </div>
+            {/* 2. НАЗВАНИЕ / ФАМИЛИЯ И НАВИГАЦИОННОЕ МЕНЮ САЙТА */}
+            <div className="relative" ref={siteMenuRef}>
+              <button
+                type="button"
+                onClick={() => { setIsSiteMenuOpen(!isSiteMenuOpen); setIsProfileOpen(false); }}
+                className="font-sans font-bold text-lg tracking-[0.2em] uppercase text-zinc-900 hover:opacity-70 transition-opacity cursor-pointer flex items-center gap-2"
+              >
+                <span>{brandDisplay}</span>
+                <span className="text-xs font-mono text-zinc-400 font-normal">▼</span>
+              </button>
 
-          {/* DESKTOP NAVIGATION: ECOSYSTEMS & RUBRICS */}
-          <div className="hidden lg:flex items-center gap-6">
-            
-            {/* Ecosystem Switcher Capsule */}
-            <div className="flex items-center bg-zinc-100 p-1.5 rounded-full border border-zinc-200/60 font-mono text-xs uppercase tracking-wider">
-              {ecosystems.map((eco) => (
-                <Link
-                  key={eco.id}
-                  href={eco.mainHref}
-                  className={`px-4 py-2 rounded-full transition-all ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white shadow-sm font-semibold' : 'text-zinc-500 hover:text-zinc-900'}`}
-                >
-                  {eco.label}
-                </Link>
-              ))}
+              {/* Лаконичное выпадающее меню сайта */}
+              <AnimatePresence>
+                {isSiteMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className="absolute left-0 mt-4 w-80 p-4 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-6"
+                  >
+                    {/* Главные рубрики */}
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 px-3">Lobby &amp; Essays</div>
+                      <div className="grid grid-cols-2 gap-1">
+                        {[
+                          { name: 'Lobby', href: '/lobby' },
+                          { name: 'About', href: '/isakeyforall' },
+                          { name: 'Advising', href: '/advising' },
+                          { name: 'Unframed', href: '/unframed' },
+                          { name: 'Journal', href: '/journal' }
+                        ].map((item) => (
+                          <Link
+                            key={item.name}
+                            href={item.href}
+                            onClick={() => setIsSiteMenuOpen(false)}
+                            className="px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
+                          >
+                            {item.name}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Curators Engine */}
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 px-3 flex items-center gap-1.5">
+                        <Compass size={12} />
+                        <span>Curators Engine</span>
+                      </div>
+                      <div className="space-y-1">
+                        <Link
+                          href="/art-engine"
+                          onClick={() => setIsSiteMenuOpen(false)}
+                          className="block px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
+                        >
+                          Art Engine Hub
+                        </Link>
+                        <Link
+                          href="/selection"
+                          onClick={() => setIsSiteMenuOpen(false)}
+                          className="block px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
+                        >
+                          Selection
+                        </Link>
+                      </div>
+                    </div>
+
+                    {/* Heart & Angel */}
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 px-3 flex items-center gap-1.5">
+                        <Heart size={12} />
+                        <span>Heart &amp; Angel</span>
+                      </div>
+                      <div className="space-y-1">
+                        <Link
+                          href="/heartandangel/world"
+                          onClick={() => setIsSiteMenuOpen(false)}
+                          className="block px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
+                        >
+                          Sanctuary World
+                        </Link>
+                        <Link
+                          href="/heartandangel/calm"
+                          onClick={() => setIsSiteMenuOpen(false)}
+                          className="block px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
+                        >
+                          Calm
+                        </Link>
+                        <Link
+                          href="/heartandangel/letitgo"
+                          onClick={() => setIsSiteMenuOpen(false)}
+                          className="block px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
+                        >
+                          Let It Go
+                        </Link>
+                      </div>
+                    </div>
+
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            <div className="w-[1px] h-6 bg-zinc-200" />
+          </div>
 
-            {/* Sub-links or Main Rubrics */}
-            <nav className="flex items-center gap-5">
-              {activeEcosystem && currentEco ? (
-                currentEco.links.map((link) => (
-                  <Link
-                    key={link.name}
-                    href={link.href}
-                    className={`text-sm font-mono uppercase tracking-[0.15s] transition-colors ${pathname === link.href ? 'text-zinc-900 font-bold underline underline-offset-4' : 'text-zinc-400 hover:text-zinc-900'}`}
-                  >
-                    {link.name}
-                  </Link>
-                ))
-              ) : (
-                mainRubrics.map((link) => (
-                  <Link
-                    key={link.name}
-                    href={link.href}
-                    className={`text-sm font-mono uppercase tracking-[0.15s] transition-colors ${pathname === link.href ? 'text-zinc-900 font-bold underline underline-offset-4' : 'text-zinc-400 hover:text-zinc-900'}`}
-                  >
-                    {link.name}
-                  </Link>
-                ))
-              )}
-            </nav>
-
+          {/* DESKTOP QUICK LINKS */}
+          <div className="hidden lg:flex items-center gap-6 font-mono text-xs uppercase tracking-wider text-zinc-500">
+            <Link href="/lobby" className="hover:text-zinc-900 transition-colors">Lobby</Link>
+            <Link href="/art-engine" className="hover:text-zinc-900 transition-colors">Curators Engine</Link>
+            <Link href="/heartandangel/world" className="hover:text-zinc-900 transition-colors">Heart &amp; Angel</Link>
           </div>
 
           {/* MOBILE MENU TOGGLE BUTTON */}
@@ -276,48 +286,16 @@ export default function Header() {
             exit={{ opacity: 0, y: -20 }}
             className="fixed inset-x-0 top-24 bg-white/95 backdrop-blur-3xl border-b border-zinc-200 shadow-2xl z-40 p-6 lg:hidden space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto"
           >
-            {/* Ecosystems Grid */}
-            <div className="grid grid-cols-1 gap-2.5 font-mono text-sm uppercase tracking-wider">
-              {ecosystems.map((eco) => (
-                <Link
-                  key={eco.id}
-                  href={eco.mainHref}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`p-4 rounded-2xl text-left transition-all border flex items-center justify-between ${activeEcosystem === eco.id ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm font-bold' : 'bg-zinc-50 text-zinc-700 border-zinc-200'}`}
-                >
-                  <span>{eco.label}</span>
-                </Link>
-              ))}
-            </div>
-
-            {/* Rubrics / Sub-links */}
-            <div className="border-t border-zinc-100 pt-5 space-y-2.5">
-              <div className="font-mono text-xs uppercase text-zinc-400 tracking-wider mb-3">
-                {activeEcosystem && currentEco ? `Projects in ${currentEco.label}:` : 'Rubrics & Navigation:'}
+            <div className="space-y-4 font-mono text-sm uppercase tracking-wider">
+              <div className="text-xs text-zinc-400">Main Navigation</div>
+              <div className="grid grid-cols-1 gap-2">
+                <Link href="/lobby" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Lobby</Link>
+                <Link href="/art-engine" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Curators Engine</Link>
+                <Link href="/selection" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Selection</Link>
+                <Link href="/heartandangel/world" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Heart &amp; Angel World</Link>
+                <Link href="/heartandangel/calm" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Calm</Link>
+                <Link href="/heartandangel/letitgo" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Let It Go</Link>
               </div>
-              {activeEcosystem && currentEco ? (
-                currentEco.links.map((link) => (
-                  <Link
-                    key={link.name}
-                    href={link.href}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={`block p-3.5 rounded-2xl text-base font-medium transition-colors ${pathname === link.href ? 'bg-zinc-900 text-white shadow-sm' : 'bg-zinc-50 text-zinc-800 hover:bg-zinc-100'}`}
-                  >
-                    {link.name}
-                  </Link>
-                ))
-              ) : (
-                mainRubrics.map((link) => (
-                  <Link
-                    key={link.name}
-                    href={link.href}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={`block p-3.5 rounded-2xl text-base font-medium transition-colors ${pathname === link.href ? 'bg-zinc-900 text-white shadow-sm' : 'bg-zinc-50 text-zinc-800 hover:bg-zinc-100'}`}
-                  >
-                    {link.name}
-                  </Link>
-                ))
-              )}
             </div>
           </motion.div>
         )}
