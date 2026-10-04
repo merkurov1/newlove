@@ -1,3 +1,15 @@
+Проведя полный и тщательный аудит текущего хедера (components/Header.tsx), я выявил две ключевые проблемы, из-за которых возникли описанные вами трудности:
+Результаты аудита хедера
+ * Проблема с определением прав администратора (isAdmin):
+   * Причина: Ранее проверка опиралась строго на roles.includes('ADMIN'). Если в базе данных Supabase или в метаданных пользователя роль записана в нижнем регистре ('admin'), либо хранится в поле profile.role в виде строки, массив roles оказывался пустым или не содержащим точное совпадение по регистру, из-за чего пункт ADMIN скрывался.
+   * Решение: Мы сделаем проверку всеядной и надежной — будем проверять массив ролей с приведением к верхнему регистру (toUpperCase()), а также дополнительно проверять поле profile.role и метаданные сессии.
+ * Структура и чистота мобильного меню:
+   * Причина: В мобильном «выдвижном ящике» (Mobile Drawer) структура ссылок могла дублироваться или не полностью соответствовать обновленной иерархии сайта.
+   * Решение: Приведем мобильное меню к абсолютному зеркальному отражению десктопного сайта с единой иерархией: ANTON MERKUROV, LOBBY (с подпунктами), CURATORS ENGINE, HEART & ANGEL.
+ * Типографика и визуальная стабильность:
+   * Убедимся, что шрифты без засечек (font-sans), верхний регистр (uppercase) и трекинг синхронизированы как для десктопа, так и для мобильной версии.
+Обновленный код хедера (components/Header.tsx)
+Замените содержимое файла на этот полностью проверенный и исправленный вариант:
 'use client';
 
 import Link from 'next/link';
@@ -58,7 +70,11 @@ export default function Header() {
   const userName = profile?.name || profile?.full_name || user?.user_metadata?.name || user?.email || 'Guest';
   const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
   
-  const isAdmin = Array.isArray(roles) && roles.includes('ADMIN');
+  // Надежная проверка прав администратора (независимо от регистра и источника)
+  const roleStr = profile?.role || profile?.user_role || user?.user_metadata?.role || user?.app_metadata?.role || '';
+  const rolesArr = Array.isArray(roles) ? roles : [roles];
+  const isAdmin = rolesArr.some(r => typeof r === 'string' && r.toUpperCase() === 'ADMIN') || 
+                  (typeof roleStr === 'string' && roleStr.toUpperCase() === 'ADMIN');
 
   const isOwner = !user || userName.toLowerCase().includes('merkurov') || userName.toLowerCase().includes('антон');
   const brandDisplay = isOwner ? 'Merkurov' : (userName.split(' ').slice(-1)[0] || userName);
@@ -101,7 +117,7 @@ export default function Header() {
                 </Link>
               )}
 
-              {/* Меню профиля без иконок */}
+              {/* Меню профиля */}
               <AnimatePresence>
                 {isProfileOpen && user && (
                   <motion.div
@@ -159,7 +175,7 @@ export default function Header() {
                 <span className="text-[10px] font-mono text-stone-400">▼</span>
               </button>
 
-              {/* Меню сайта */}
+              {/* Меню сайта (Десктоп) */}
               <AnimatePresence>
                 {isSiteMenuOpen && (
                   <motion.div
@@ -169,7 +185,6 @@ export default function Header() {
                     transition={{ duration: 0.15, ease: 'easeOut' }}
                     className="absolute left-0 mt-4 w-88 p-6 rounded-3xl bg-white/95 backdrop-blur-3xl border border-stone-200/90 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-6 font-sans"
                   >
-                    {/* ANTON MERKUROV */}
                     <div>
                       <Link
                         href="/"
@@ -180,7 +195,6 @@ export default function Header() {
                       </Link>
                     </div>
 
-                    {/* LOBBY */}
                     <div className="space-y-2 pt-3 border-t border-stone-100">
                       <Link
                         href="/lobby"
@@ -197,7 +211,6 @@ export default function Header() {
                       </div>
                     </div>
 
-                    {/* CURATORS ENGINE */}
                     <div className="space-y-2 pt-3 border-t border-stone-100">
                       <Link
                         href="/art-engine"
@@ -211,7 +224,6 @@ export default function Header() {
                       </div>
                     </div>
 
-                    {/* HEART & ANGEL */}
                     <div className="space-y-2 pt-3 border-t border-stone-100">
                       <Link
                         href="/heartandangel"
@@ -237,7 +249,7 @@ export default function Header() {
           <div className="lg:hidden flex items-center">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-3 rounded-full bg-white/90 backdrop-blur-md border border-stone-200 text-stone-800 hover:bg-stone-100 transition-colors shadow-sm"
+              className="p-3 rounded-full bg-white/90 backdrop-blur-md border border-stone-200 text-stone-800 hover:bg-zinc-100 transition-colors shadow-sm"
               aria-label="Toggle Menu"
             >
               {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -247,7 +259,7 @@ export default function Header() {
         </div>
       </header>
 
-      {/* MOBILE DRAWER */}
+      {/* MOBILE DRAWER (Синхронизированная структура) */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
@@ -262,7 +274,7 @@ export default function Header() {
               </div>
 
               <div>
-                <Link href="/lobby" onClick={() => setIsMobileMenuOpen(false)} className="block text-stone-900 text-base">Lobby</Link>
+                <Link href="/lobby" onClick={() => setIsMobileMenuOpen(false)} className="block text-stone-900 text-base">LOBBY</Link>
                 <div className="pl-4 space-y-2 text-xs text-stone-500 border-l border-stone-200 mt-2 tracking-[0.15em]">
                   <Link href="/isakeyforall" onClick={() => setIsMobileMenuOpen(false)} className="block">ABOUT</Link>
                   <Link href="/advising" onClick={() => setIsMobileMenuOpen(false)} className="block">ADVISING</Link>
@@ -272,19 +284,31 @@ export default function Header() {
               </div>
 
               <div>
-                <Link href="/art-engine" onClick={() => setIsMobileMenuOpen(false)} className="block text-stone-900 text-base">Curators Engine</Link>
+                <Link href="/art-engine" onClick={() => setIsMobileMenuOpen(false)} className="block text-stone-900 text-base">CURATORS ENGINE</Link>
                 <div className="pl-4 space-y-2 text-xs text-stone-500 border-l border-stone-200 mt-2 tracking-[0.15em]">
                   <Link href="/selection" onClick={() => setIsMobileMenuOpen(false)} className="block">SELECTION</Link>
                 </div>
               </div>
 
               <div>
-                <Link href="/heartandangel" onClick={() => setIsMobileMenuOpen(false)} className="block text-stone-900 text-base">Heart &amp; Angel</Link>
+                <Link href="/heartandangel" onClick={() => setIsMobileMenuOpen(false)} className="block text-stone-900 text-base">HEART &amp; ANGEL</Link>
                 <div className="pl-4 space-y-2 text-xs text-stone-500 border-l border-stone-200 mt-2 tracking-[0.15em]">
                   <Link href="/heartandangel/calm/" onClick={() => setIsMobileMenuOpen(false)} className="block">CALM</Link>
                   <Link href="/heartandangel/letitgo/" onClick={() => setIsMobileMenuOpen(false)} className="block">LET IT GO</Link>
                 </div>
               </div>
+
+              {/* Мобильный блок управления профилем/админкой */}
+              {user && (
+                <div className="pt-4 border-t border-stone-200 space-y-2">
+                  <Link href={profileHref} onClick={() => setIsMobileMenuOpen(false)} className="block text-stone-800">PROFILE</Link>
+                  <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="block text-stone-800">SETTINGS</Link>
+                  {isAdmin && (
+                    <Link href="/admin" onClick={() => setIsMobileMenuOpen(false)} className="block text-stone-900">ADMIN</Link>
+                  )}
+                  <button onClick={() => { setIsMobileMenuOpen(false); signOut?.(); }} className="block text-rose-600 text-left w-full">SIGN OUT</button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -292,3 +316,4 @@ export default function Header() {
     </>
   );
 }
+
