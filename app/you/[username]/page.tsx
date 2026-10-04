@@ -39,7 +39,6 @@ function formatTime(iso?: string) {
 }
 
 export default function PublicProfilePage({ params }: PageProps) {
-  // Мгновенное и надежное разрешение params для любых версий Next.js
   const resolvedParams = params instanceof Promise ? React.use(params) : params;
   const userId = resolvedParams?.id;
   
@@ -66,28 +65,29 @@ export default function PublicProfilePage({ params }: PageProps) {
 
         const { data: profileData, error: profileError } = await profileQuery.maybeSingle();
 
-        const defaultProfile = {
-          id: userId,
-          full_name: 'Sanctuary Seeker',
-          bio: 'A quiet traveler within the Heart & Angel ecosystem.',
-          role: 'Guardian',
-        };
-
-        const currentProfile = profileError || !profileData ? defaultProfile : profileData;
+        // Если в таблице profiles записи нет, создаем базовый объект
+        let currentProfile = profileData;
+        if (profileError || !profileData) {
+          currentProfile = {
+            id: userId,
+            full_name: 'Sanctuary Seeker',
+            bio: 'A quiet traveler within the Heart & Angel ecosystem.',
+            role: 'Guardian',
+          };
+        }
         setProfile(currentProfile);
 
-        const authorName = currentProfile.full_name || currentProfile.username;
-        if (authorName) {
-          const { data: logsData } = await supabase
-            .from('temple_log')
-            .select('*')
-            .ilike('author', authorName)
-            .order('created_at', { ascending: false })
-            .limit(20);
+        // Загрузка следов пользователя в храме по имени или ID
+        const authorName = currentProfile.full_name || currentProfile.username || 'Anonymous';
+        const { data: logsData } = await supabase
+          .from('temple_log')
+          .select('*')
+          .or(`author.ilike.%${authorName}%,user_id.eq.${userId}`)
+          .order('created_at', { ascending: false })
+          .limit(20);
 
-          if (logsData) {
-            setUserLogs(logsData);
-          }
+        if (logsData) {
+          setUserLogs(logsData);
         }
       } catch (e) {
         console.error('Error fetching sanctuary profile:', e);
@@ -138,8 +138,8 @@ export default function PublicProfilePage({ params }: PageProps) {
         <div className="bg-white/85 backdrop-blur-md border border-stone-200 p-8 sm:p-10 rounded-3xl space-y-8 shadow-sm">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
             <div className="w-20 h-20 rounded-2xl bg-stone-900 text-white flex items-center justify-center font-serif text-2xl tracking-widest shrink-0 shadow-md">
-              {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover rounded-2xl" />
+              {profile?.avatar_url || profile?.image ? (
+                <img src={profile.avatar_url || profile.image} alt="Avatar" className="w-full h-full object-cover rounded-2xl" />
               ) : (
                 getInitials(profile?.full_name || profile?.username)
               )}
