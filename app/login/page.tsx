@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
 import { createClient } from '@/lib/supabase-browser';
-import { ArrowLeft, KeyRound, Mail, Terminal, CheckCircle2, Sparkles } from 'lucide-react';
+import { ArrowLeft, KeyRound, Mail, Wallet, Terminal, CheckCircle2, Sparkles } from 'lucide-react';
 
 export default function LoginPage() {
   const { user, isLoading, signInWithGoogle, signInWithPasskey } = useAuth();
@@ -87,6 +87,56 @@ export default function LoginPage() {
     }
   };
 
+  // Вход через Web3-кошелек с подписанием сообщения (SIWE)
+  const handleWalletLogin = async () => {
+    setErrorMsg(null);
+    if (typeof window === 'undefined' || !(window as any).ethereum) {
+      setErrorMsg('Web3 wallet not detected (e.g. MetaMask / Rabby)');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const ethersMod = await import('ethers');
+      const { ethers } = ethersMod as any;
+
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      await provider.send('eth_requestAccounts', []);
+      const signer = await provider.getSigner();
+      const address = await signer.getAddress();
+
+      const domain = window.location.host;
+      const statement = 'Sign in to Merkurov Private Sanctuary';
+      const issuedAt = new Date().toISOString();
+      const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\n${statement}\n\nIssued At: ${issuedAt}`;
+
+      const signature = await signer.signMessage(message);
+
+      const res = await fetch('/api/auth/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, message, signature }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Authentication failed');
+
+      if (data.session) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
+
+      router.push('/art-engine');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err?.message || 'Wallet authentication error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans flex flex-col justify-between px-6 py-12 selection:bg-black selection:text-white relative">
       
@@ -156,6 +206,16 @@ export default function LoginPage() {
             >
               <KeyRound size={16} className="text-zinc-700" />
               <span>Sign in with Passkey</span>
+            </button>
+
+            {/* WEB3 WALLET LOGIN */}
+            <button
+              onClick={handleWalletLogin}
+              disabled={isLoading || submitting}
+              className="w-full py-4 px-6 rounded-full bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-900 font-mono text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-sm cursor-pointer"
+            >
+              <Wallet size={16} className="text-zinc-700" />
+              <span>Connect Web3 Wallet</span>
             </button>
 
             {/* EMAIL / MAGIC LINK / OTP TOGGLE */}
