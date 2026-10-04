@@ -47,46 +47,53 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
 
   let profileId = '';
   let profileName = decodedParam;
-  let profileImage = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png';
+  let profileImage = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png'; // Дефолтный ангелок
 
   const isUuid = decodedParam.length === 36 || /^[0-9a-fA-F-]{36}$/.test(decodedParam);
 
-  // 1. Поиск пользователя в таблице 'users' (как в API-роуте)
+  // 1. Поиск профиля / пользователя в базе
   try {
+    let userData = null;
     if (isUuid) {
       profileId = decodedParam;
       const { data } = await supabase.from('users').select('*').eq('id', decodedParam).maybeSingle();
-      if (data) {
-        profileName = data.name || data.full_name || data.username || decodedParam;
-        if (data.image || data.avatar_url) profileImage = data.image || data.avatar_url;
-      }
+      userData = data;
     } else {
       const { data } = await supabase.from('users').select('*').ilike('name', decodedParam).maybeSingle();
-      if (data) {
-        profileId = data.id;
-        profileName = data.name || data.full_name || data.username || decodedParam;
-        if (data.image || data.avatar_url) profileImage = data.image || data.avatar_url;
+      userData = data;
+    }
+
+    if (userData) {
+      profileId = userData.id || profileId;
+      profileName = userData.name || userData.full_name || userData.username || decodedParam;
+      
+      // Ищем аватар в возможных полях (Google avatar, image, picture и т.д.)
+      const resolvedAvatar = userData.avatar_url || userData.image || userData.avatar || userData.picture || userData.photo;
+      if (resolvedAvatar && typeof resolvedAvatar === 'string' && resolvedAvatar.trim() !== '') {
+        profileImage = resolvedAvatar;
       }
     }
   } catch (e) {
-    console.warn('Users table fetch warning:', e);
+    console.warn('Profile fetch warning:', e);
   }
 
-  // 2. Загрузка логов из правильной таблицы 'temple_log' (по user_id ИЛИ author)
+  // 2. Расширенная загрузка логов из 'temple_log'
   let userLogs: any[] = [];
   try {
-    let query = supabase.from('temple_log').select('*');
-
-    if (profileId && !isUuid) {
-      query = query.or(`user_id.eq.${profileId},author.ilike.${profileName}`);
-    } else if (profileId) {
-      query = query.eq('user_id', profileId);
-    } else {
-      query = query.ilike('author', profileName);
+    const conditions: string[] = [`author.ilike.%${decodedParam}%`];
+    if (profileName && profileName !== decodedParam) {
+      conditions.push(`author.ilike.%${profileName}%`);
+    }
+    if (profileId) {
+      conditions.push(`user_id.eq.${profileId}`);
     }
 
-    const { data: logsData, error } = await query.order('created_at', { ascending: false });
-    
+    const { data: logsData, error } = await supabase
+      .from('temple_log')
+      .select('*')
+      .or(conditions.join(','))
+      .order('created_at', { ascending: false });
+
     if (!error && Array.isArray(logsData)) {
       userLogs = logsData.filter((item: any) => {
         const type = (item.event_type || '').toLowerCase();
@@ -100,7 +107,7 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans px-6 pt-36 md:pt-44 pb-24 selection:bg-black selection:text-white relative">
       
-      {/* Подложка с бумажной текстурой */}
+      {/* Текстура бумаги */}
       <div 
         className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
         style={{
@@ -127,7 +134,7 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
               src={profileImage} 
               alt={profileName} 
               fill 
-              className="object-contain p-2"
+              className="object-cover w-full h-full"
               priority
             />
           </div>
