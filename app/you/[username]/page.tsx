@@ -1,17 +1,16 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
-import Link from 'next/link';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { Flame, Moon, Compass, ShieldCheck, Sparkles, Radio, Trash2 } from 'lucide-react';
 
 interface ProfilePageProps {
   params: {
-    id: string;
+    username: string;
   };
 }
 
 function getEventVisuals(eventType: string) {
-  switch (eventType?.toUpperCase()) {
+  switch ((eventType || '').toUpperCase()) {
     case 'VIGIL':
     case 'VIGIL_SPARK':
       return { icon: Flame, label: 'Vigil' };
@@ -40,19 +39,21 @@ function formatTime(iso?: string) {
 }
 
 export default async function UserProfilePage({ params }: ProfilePageProps) {
-  const { id } = params;
+  const { username } = params;
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
-  if (!supabase) {
+  if (!supabase || !username) {
     return notFound();
   }
 
-  // 1. Загрузка профиля из базы (по UUID или username/name)
+  // 1. Загрузка профиля из базы
   let profileQuery = supabase.from('profiles').select('*');
-  if (id.length === 36 || /^[0-9a-fA-F-]{36}$/.test(id)) {
-    profileQuery = profileQuery.eq('id', id);
+  const decodedId = decodeURIComponent(username);
+  
+  if (decodedId.length === 36 || /^[0-9a-fA-F-]{36}$/.test(decodedId)) {
+    profileQuery = profileQuery.eq('id', decodedId);
   } else {
-    profileQuery = profileQuery.or(`username.eq.${id},name.eq.${id}`);
+    profileQuery = profileQuery.or(`username.eq.${decodedId},name.eq.${decodedId}`);
   }
 
   const { data: profileData, error: profileError } = await profileQuery.maybeSingle();
@@ -66,15 +67,22 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
   const profileImage = profile.image || profile.avatar_url || null;
   const memberSince = formatTime(profile.created_at);
 
-  // 2. Загрузка реальных логов из таблицы temple_logs для этого пользователя
-  const { data: logsData } = await supabase
-    .from('temple_logs')
-    .select('*')
-    .or(`author.ilike.%${profileName}%,user_id.eq.${profile.id}`)
-    .order('created_at', { ascending: false })
-    .limit(20);
+  // 2. Загрузка логов с гарантированной защитой от null
+  let userLogs: any[] = [];
+  try {
+    const { data: logsData } = await supabase
+      .from('temple_logs')
+      .select('*')
+      .or(`author.ilike.%${profileName}%,user_id.eq.${profile.id}`)
+      .order('created_at', { ascending: false })
+      .limit(20);
 
-  const userLogs = logsData || [];
+    if (Array.isArray(logsData)) {
+      userLogs = logsData;
+    }
+  } catch (e) {
+    console.warn('Failed to load temple logs for profile', e);
+  }
 
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans px-6 pt-32 pb-24 selection:bg-stone-200">
@@ -132,14 +140,14 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
               </div>
             ) : (
               userLogs.map((log: any) => {
-                const eventType = log.event_type || 'WHISPER';
+                const eventType = log?.event_type || 'WHISPER';
                 const visuals = getEventVisuals(eventType);
                 const IconComponent = visuals.icon;
-                const logTime = formatTime(log.created_at);
+                const logTime = formatTime(log?.created_at);
 
                 return (
                   <div 
-                    key={log.id} 
+                    key={log?.id || Math.random()} 
                     className="flex items-center justify-between p-4 rounded-2xl bg-white/80 backdrop-blur-md border border-stone-200/70 shadow-[0_2px_15px_rgba(0,0,0,0.02)] transition-all"
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
@@ -151,7 +159,7 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
                           {visuals.label}
                         </div>
                         <div className="font-serif text-sm text-stone-600 truncate mt-0.5">
-                          {log.message || '—'}
+                          {log?.message || '—'}
                         </div>
                       </div>
                     </div>

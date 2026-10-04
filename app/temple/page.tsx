@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import TempleClient from './TempleClient';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.merkurov.love'),
   title: 'Digital Temple',
   description: 'A real place on the internet where rituals work and every visitor leaves a trace.',
   openGraph: {
