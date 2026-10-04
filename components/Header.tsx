@@ -82,13 +82,13 @@ export default function Header() {
               ) : (
                 <Link
                   href="/login"
-                  className="px-4 py-2 rounded-full bg-zinc-900 text-white text-xs font-mono uppercase tracking-wider hover:bg-zinc-800 transition-all shadow-sm"
+                  className="px-4 py-2.5 rounded-full bg-zinc-900 text-white text-xs font-mono uppercase tracking-wider hover:bg-zinc-800 transition-all shadow-sm"
                 >
                   Sign In
                 </Link>
               )}
 
-              {/* Меню профиля */}
+              {/* Синхронизированное меню профиля */}
               <AnimatePresence>
                 {isProfileOpen && user && (
                   <motion.div
@@ -96,51 +96,51 @@ export default function Header() {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.96, y: 8 }}
                     transition={{ duration: 0.15, ease: 'easeOut' }}
-                    className="absolute left-0 mt-3 w-64 p-2 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-50 space-y-1"
+                    className="absolute left-0 mt-3 w-72 p-3 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-50 space-y-1.5 font-sans"
                   >
                     <Link 
                       href={profileHref} 
                       onClick={() => setIsProfileOpen(false)} 
-                      className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100/80 transition-all"
+                      className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl text-base font-serif text-zinc-800 hover:bg-zinc-100/80 transition-all"
                     >
                       <div className="flex items-center gap-3">
-                        <User size={16} className="text-zinc-500" />
+                        <User size={18} className="text-zinc-500" />
                         <span>Profile</span>
                       </div>
-                      <ChevronRight size={14} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
+                      <ChevronRight size={16} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
                     </Link>
 
                     <Link 
                       href="/profile" 
                       onClick={() => setIsProfileOpen(false)} 
-                      className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium text-zinc-700 hover:bg-zinc-100/80 transition-all"
+                      className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl text-base font-serif text-zinc-800 hover:bg-zinc-100/80 transition-all"
                     >
                       <div className="flex items-center gap-3">
-                        <Settings size={16} className="text-zinc-500" />
+                        <Settings size={18} className="text-zinc-500" />
                         <span>Settings</span>
                       </div>
-                      <ChevronRight size={14} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
+                      <ChevronRight size={16} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
                     </Link>
 
                     {isAdmin && (
                       <Link 
                         href="/admin" 
                         onClick={() => setIsProfileOpen(false)} 
-                        className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium text-pink-700 bg-pink-50/60 hover:bg-pink-100/60 transition-all"
+                        className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl text-base font-serif text-pink-700 bg-pink-50/60 hover:bg-pink-100/60 transition-all"
                       >
                         <div className="flex items-center gap-3">
-                          <ShieldCheck size={16} className="text-pink-600" />
+                          <ShieldCheck size={18} className="text-pink-600" />
                           <span>Admin Panel</span>
                         </div>
-                        <ChevronRight size={14} className="text-pink-400 group-hover:translate-x-0.5 transition-transform" />
+                        <ChevronRight size={16} className="text-pink-400 group-hover:translate-x-0.5 transition-transform" />
                       </Link>
                     )}
 
                     <button 
                       onClick={() => { setIsProfileOpen(false); signOut?.(); }} 
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium text-rose-600 hover:bg-rose-50 transition-all cursor-pointer text-left"
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-base font-serif text-rose-600 hover:bg-rose-50 transition-all cursor-pointer text-left"
                     >
-                      <LogOut size={16} className="text-rose-500" />
+                      <LogOut size={18} className="text-rose-500" />
                       <span>Sign Out</span>
                     </button>
                   </motion.div>
@@ -148,18 +148,18 @@ export default function Header() {
               </AnimatePresence>
             </div>
 
-            {/* 2. НАЗВАНИЕ / ФАМИЛИЯ С РАМКОЙ НА БЕЛОМ ФОНЕ */}
+            {/* 2. НАЗВАНИЕ / ФАМИЛИЯ С РАМКОЙ И УВЕЛИЧЕННЫМ ШРИФТОМ */}
             <div className="relative" ref={siteMenuRef}>
               <button
                 type="button"
                 onClick={() => { setIsSiteMenuOpen(!isSiteMenuOpen); setIsProfileOpen(false); }}
-                className="bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-zinc-200/80 shadow-sm font-sans font-bold text-base tracking-[0.18em] uppercase text-zinc-900 hover:border-zinc-400 transition-all cursor-pointer flex items-center gap-2.5"
+                className="bg-white/90 backdrop-blur-md px-5 py-3 rounded-2xl border border-zinc-200/80 shadow-sm font-sans font-bold text-lg tracking-[0.2em] uppercase text-zinc-900 hover:border-zinc-400 transition-all cursor-pointer flex items-center gap-3"
               >
                 <span>{brandDisplay}</span>
-                <span className="text-[10px] font-mono text-zinc-400">▼</span>
+                <span className="text-xs font-mono text-zinc-400">▼</span>
               </button>
 
-              {/* Лаконичное выпадающее меню сайта по вашему списку */}
+              {/* Синхронизированное меню сайта */}
               <AnimatePresence>
                 {isSiteMenuOpen && (
                   <motion.div
@@ -167,51 +167,51 @@ export default function Header() {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.96, y: 8 }}
                     transition={{ duration: 0.15, ease: 'easeOut' }}
-                    className="absolute left-0 mt-3 w-80 p-5 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-6 font-mono text-xs"
+                    className="absolute left-0 mt-3 w-84 p-5 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-5 font-sans"
                   >
                     {/* LOBBY */}
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <Link
                         href="/lobby"
                         onClick={() => setIsSiteMenuOpen(false)}
-                        className="block font-bold uppercase tracking-widest text-zinc-900 hover:text-zinc-600 transition-colors py-1"
+                        className="block font-serif text-lg font-medium text-zinc-900 hover:text-zinc-600 transition-colors"
                       >
                         LOBBY
                       </Link>
-                      <div className="pl-3 space-y-1 border-l border-zinc-200 text-zinc-600 uppercase tracking-wider">
-                        <Link href="/about" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">about</Link>
-                        <Link href="/advising" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">advising</Link>
-                        <Link href="/unframed" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">unframed</Link>
-                        <Link href="/journal" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">journal</Link>
+                      <div className="pl-4 space-y-1 border-l border-zinc-200 text-sm text-zinc-600">
+                        <Link href="/about" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-1 transition-colors">about</Link>
+                        <Link href="/advising" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-1 transition-colors">advising</Link>
+                        <Link href="/unframed" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-1 transition-colors">unframed</Link>
+                        <Link href="/journal" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-1 transition-colors">journal</Link>
                       </div>
                     </div>
 
                     {/* CURATORS ENGINE */}
-                    <div className="space-y-1">
+                    <div className="space-y-1.5 pt-2 border-t border-zinc-100">
                       <Link
                         href="/art-engine"
                         onClick={() => setIsSiteMenuOpen(false)}
-                        className="block font-bold uppercase tracking-widest text-zinc-900 hover:text-zinc-600 transition-colors py-1"
+                        className="block font-serif text-lg font-medium text-zinc-900 hover:text-zinc-600 transition-colors"
                       >
                         CURATORS ENGINE
                       </Link>
-                      <div className="pl-3 space-y-1 border-l border-zinc-200 text-zinc-600 uppercase tracking-wider">
-                        <Link href="/selection" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">selection</Link>
+                      <div className="pl-4 space-y-1 border-l border-zinc-200 text-sm text-zinc-600">
+                        <Link href="/selection" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-1 transition-colors">selection</Link>
                       </div>
                     </div>
 
                     {/* HEART & ANGEL */}
-                    <div className="space-y-1">
+                    <div className="space-y-1.5 pt-2 border-t border-zinc-100">
                       <Link
                         href="/heartandangel"
                         onClick={() => setIsSiteMenuOpen(false)}
-                        className="block font-bold uppercase tracking-widest text-zinc-900 hover:text-zinc-600 transition-colors py-1"
+                        className="block font-serif text-lg font-medium text-zinc-900 hover:text-zinc-600 transition-colors"
                       >
                         HEART &amp; ANGEL
                       </Link>
-                      <div className="pl-3 space-y-1 border-l border-zinc-200 text-zinc-600 uppercase tracking-wider">
-                        <Link href="/heartandangel/calm/" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">calm</Link>
-                        <Link href="/heartandangel/letitgo/" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">let it go</Link>
+                      <div className="pl-4 space-y-1 border-l border-zinc-200 text-sm text-zinc-600">
+                        <Link href="/heartandangel/calm/" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-1 transition-colors">calm</Link>
+                        <Link href="/heartandangel/letitgo/" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-1 transition-colors">let it go</Link>
                       </div>
                     </div>
 
@@ -226,7 +226,7 @@ export default function Header() {
           <div className="lg:hidden flex items-center">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-3 rounded-full bg-white/80 backdrop-blur-md border border-zinc-200 text-zinc-800 hover:bg-zinc-100 transition-colors shadow-sm"
+              className="p-3 rounded-full bg-white/90 backdrop-blur-md border border-zinc-200 text-zinc-800 hover:bg-zinc-100 transition-colors shadow-sm"
               aria-label="Toggle Menu"
             >
               {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -243,29 +243,32 @@ export default function Header() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-x-0 top-24 bg-white/95 backdrop-blur-3xl border-b border-zinc-200 shadow-2xl z-40 p-6 lg:hidden space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto font-mono text-xs uppercase tracking-wider"
+            className="fixed inset-x-0 top-24 bg-white/95 backdrop-blur-3xl border-b border-zinc-200 shadow-2xl z-40 p-6 lg:hidden space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto font-sans text-base"
           >
-            <div className="space-y-4">
-              <div className="text-zinc-400 font-bold">Lobby</div>
-              <div className="pl-3 space-y-2 text-zinc-700 border-l border-zinc-200">
-                <Link href="/lobby" onClick={() => setIsMobileMenuOpen(false)} className="block">Lobby Hub</Link>
-                <Link href="/about" onClick={() => setIsMobileMenuOpen(false)} className="block">About</Link>
-                <Link href="/advising" onClick={() => setIsMobileMenuOpen(false)} className="block">Advising</Link>
-                <Link href="/unframed" onClick={() => setIsMobileMenuOpen(false)} className="block">Unframed</Link>
-                <Link href="/journal" onClick={() => setIsMobileMenuOpen(false)} className="block">Journal</Link>
+            <div className="space-y-5">
+              <div>
+                <Link href="/lobby" onClick={() => setIsMobileMenuOpen(false)} className="block font-serif text-lg font-medium text-zinc-900">Lobby</Link>
+                <div className="pl-4 space-y-2 text-sm text-zinc-600 border-l border-zinc-200 mt-2">
+                  <Link href="/about" onClick={() => setIsMobileMenuOpen(false)} className="block">about</Link>
+                  <Link href="/advising" onClick={() => setIsMobileMenuOpen(false)} className="block">advising</Link>
+                  <Link href="/unframed" onClick={() => setIsMobileMenuOpen(false)} className="block">unframed</Link>
+                  <Link href="/journal" onClick={() => setIsMobileMenuOpen(false)} className="block">journal</Link>
+                </div>
               </div>
 
-              <div className="pt-2 text-zinc-400 font-bold">Curators Engine</div>
-              <div className="pl-3 space-y-2 text-zinc-700 border-l border-zinc-200">
-                <Link href="/art-engine" onClick={() => setIsMobileMenuOpen(false)} className="block">Art Engine Hub</Link>
-                <Link href="/selection" onClick={() => setIsMobileMenuOpen(false)} className="block">Selection</Link>
+              <div>
+                <Link href="/art-engine" onClick={() => setIsMobileMenuOpen(false)} className="block font-serif text-lg font-medium text-zinc-900">Curators Engine</Link>
+                <div className="pl-4 space-y-2 text-sm text-zinc-600 border-l border-zinc-200 mt-2">
+                  <Link href="/selection" onClick={() => setIsMobileMenuOpen(false)} className="block">selection</Link>
+                </div>
               </div>
 
-              <div className="pt-2 text-zinc-400 font-bold">Heart &amp; Angel</div>
-              <div className="pl-3 space-y-2 text-zinc-700 border-l border-zinc-200">
-                <Link href="/heartandangel" onClick={() => setIsMobileMenuOpen(false)} className="block">Sanctuary World</Link>
-                <Link href="/heartandangel/calm/" onClick={() => setIsMobileMenuOpen(false)} className="block">Calm</Link>
-                <Link href="/heartandangel/letitgo/" onClick={() => setIsMobileMenuOpen(false)} className="block">Let It Go</Link>
+              <div>
+                <Link href="/heartandangel" onClick={() => setIsMobileMenuOpen(false)} className="block font-serif text-lg font-medium text-zinc-900">Heart &amp; Angel</Link>
+                <div className="pl-4 space-y-2 text-sm text-zinc-600 border-l border-zinc-200 mt-2">
+                  <Link href="/heartandangel/calm/" onClick={() => setIsMobileMenuOpen(false)} className="block">calm</Link>
+                  <Link href="/heartandangel/letitgo/" onClick={() => setIsMobileMenuOpen(false)} className="block">let it go</Link>
+                </div>
               </div>
             </div>
           </motion.div>
