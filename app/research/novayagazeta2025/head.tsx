@@ -1,31 +1,36 @@
 import React from 'react';
+import DeepResearchClient from './DeepResearchClient';
 
-export default function Head() {
-  const title = 'From Content Censorship to Hardware Hegemony — Merkurov.Report';
-  const description = 'Analytical report (2025) by Anton Merkurov on the transformation of digital control in Russia — from content censorship to device and infrastructure control. Insightful forecasts and practical analysis for journalists and researchers.';
-  const image = '/images/og/novayagazeta2025.png';
-  const path = '/research/novayagazeta2025';
+export const metadata = {
+  title: 'From Content Censorship to Hardware Hegemony — Merkurov.Report',
+  description: 'Analytical report (2025) by Anton Merkurov on the transformation of digital control in Russia — from content censorship to device and infrastructure control.',
+  alternates: {
+    canonical: 'https://www.merkurov.love/research/novayagazeta2025',
+  },
+  openGraph: {
+    title: 'From Content Censorship to Hardware Hegemony — Merkurov.Report',
+    description: 'Analytical report (2025) by Anton Merkurov on the transformation of digital control in Russia.',
+    url: 'https://www.merkurov.love/research/novayagazeta2025',
+    siteName: 'Anton Merkurov',
+    type: 'article',
+    images: [
+      {
+        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
+        width: 1200,
+        height: 630,
+        alt: 'Cover image for NovayaGazeta 2025 report',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'From Content Censorship to Hardware Hegemony — Merkurov.Report',
+    description: 'Analytical report (2025) by Anton Merkurov on the transformation of digital control in Russia.',
+    creator: '@merkurov',
+    site: '@merkurov',
+  },
+};
 
-  return (
-    <>
-      <title>{title}</title>
-      <meta name="description" content={description} />
-
-      {/* Open Graph */}
-      <meta property="og:title" content={title} />
-      <meta property="og:description" content={description} />
-      <meta property="og:type" content="article" />
-      <meta property="og:image" content={image} />
-      <meta property="og:image:alt" content="Cover image for NovayaGazeta 2025 report" />
-
-      {/* Twitter */}
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={title} />
-      <meta name="twitter:description" content={description} />
-      <meta name="twitter:image" content={image} />
-
-      {/* Canonical / site */}
-      <link rel="canonical" href={path} />
-    </>
-  );
+export default function Page() {
+  return <DeepResearchClient />;
 }
