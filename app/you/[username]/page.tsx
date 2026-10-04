@@ -2,13 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase-browser';
 import Header from '@/components/Header';
 import { ArrowLeft, Flame, Trash2, ShieldCheck, Moon, Sparkles, Radio } from 'lucide-react';
-
-interface PageProps {
-  params: { id: string } | Promise<{ id: string }>;
-}
 
 function getEventVisuals(eventType: string) {
   switch (eventType?.toUpperCase()) {
@@ -38,9 +35,9 @@ function formatTime(iso?: string) {
   return `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${time}`;
 }
 
-export default function PublicProfilePage({ params }: PageProps) {
-  const resolvedParams = params instanceof Promise ? React.use(params) : params;
-  const userId = resolvedParams?.id;
+export default function PublicProfilePage() {
+  const params = useParams();
+  const userId = params?.id as string;
   
   const supabase = createClient();
 
@@ -65,7 +62,6 @@ export default function PublicProfilePage({ params }: PageProps) {
 
         const { data: profileData, error: profileError } = await profileQuery.maybeSingle();
 
-        // Если в таблице profiles записи нет, создаем базовый объект
         let currentProfile = profileData;
         if (profileError || !profileData) {
           currentProfile = {
@@ -77,7 +73,6 @@ export default function PublicProfilePage({ params }: PageProps) {
         }
         setProfile(currentProfile);
 
-        // Загрузка следов пользователя в храме по имени или ID
         const authorName = currentProfile.full_name || currentProfile.username || 'Anonymous';
         const { data: logsData } = await supabase
           .from('temple_log')
