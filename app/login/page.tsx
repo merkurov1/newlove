@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
 import { createClient } from '@/lib/supabase-browser';
-import { ArrowLeft, KeyRound, Mail, Wallet, Terminal, CheckCircle2, Sparkles } from 'lucide-react';
+import { ArrowLeft, KeyRound, Mail, Wallet, CheckCircle2 } from 'lucide-react';
 
 export default function LoginPage() {
   const { user, isLoading, signInWithGoogle, signInWithPasskey } = useAuth();
@@ -156,21 +156,18 @@ export default function LoginPage() {
           <ArrowLeft size={14} />
           <span>Return Home</span>
         </Link>
-        <span className="font-mono text-xs uppercase tracking-[0.25em] text-zinc-400 flex items-center gap-2">
-          <Terminal size={12} /> Digital Sanctuary Protocol
+        <span className="font-mono text-xs uppercase tracking-[0.25em] text-zinc-400">
+          Private Access
         </span>
       </div>
 
       {/* Center Liquid Glass Login Card */}
-      <div className="max-w-md w-full mx-auto my-auto z-20 p-8 sm:p-10 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.06)] space-y-8 relative">
+      <div className="max-w-md w-full mx-auto my-auto z-20 p-8 sm:p-12 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.04)] space-y-8 relative">
         <div className="space-y-3 text-center">
-          <div className="w-12 h-12 mx-auto rounded-full bg-zinc-900 text-white flex items-center justify-center shadow-md">
-            <Sparkles size={20} />
-          </div>
-          <h1 className="text-3xl font-serif font-light tracking-tight text-zinc-900 uppercase">
+          <h1 className="text-3xl font-serif font-light tracking-tight text-zinc-900">
             Authentication
           </h1>
-          <p className="font-serif text-sm text-zinc-500 leading-relaxed">
+          <p className="font-serif text-sm text-zinc-600 leading-relaxed max-w-sm mx-auto">
             Enter the private office ecosystem. Access your profile, psychometric archive, and curated data stream.
           </p>
         </div>
@@ -300,10 +297,6 @@ export default function LoginPage() {
             )}
           </form>
         )}
-
-        <div className="text-[10px] font-mono text-zinc-400 tracking-wider text-center border-t border-zinc-200 pt-4">
-          Secured via Supabase GoTrue Protocol &amp; WebAuthn
-        </div>
       </div>
 
       {/* Footer */}

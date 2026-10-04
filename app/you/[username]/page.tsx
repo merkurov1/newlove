@@ -51,64 +51,78 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
 
   const isUuid = decodedParam.length === 36 || /^[0-9a-fA-F-]{36}$/.test(decodedParam);
 
-  // 1. Поиск профиля по ID или имени
-  let profileQuery = supabase.from('profiles').select('*');
-  if (isUuid) {
-    profileQuery = profileQuery.eq('id', decodedParam);
-  } else {
-    profileQuery = profileQuery.or(`username.ilike.${decodedParam},name.ilike.${decodedParam}`);
-  }
-
-  const { data: profileData } = await profileQuery.maybeSingle();
-
-  if (profileData) {
-    profileId = profileData.id;
-    profileName = profileData.name || profileData.full_name || profileData.username || decodedParam;
-    if (profileData.image || profileData.avatar_url) {
-      profileImage = profileData.image || profileData.avatar_url;
+  // 1. Поиск пользователя в таблице 'users' (как в API-роуте)
+  try {
+    if (isUuid) {
+      profileId = decodedParam;
+      const { data } = await supabase.from('users').select('*').eq('id', decodedParam).maybeSingle();
+      if (data) {
+        profileName = data.name || data.full_name || data.username || decodedParam;
+        if (data.image || data.avatar_url) profileImage = data.image || data.avatar_url;
+      }
+    } else {
+      const { data } = await supabase.from('users').select('*').ilike('name', decodedParam).maybeSingle();
+      if (data) {
+        profileId = data.id;
+        profileName = data.name || data.full_name || data.username || decodedParam;
+        if (data.image || data.avatar_url) profileImage = data.image || data.avatar_url;
+      }
     }
-  } else if (isUuid) {
-    profileId = decodedParam;
+  } catch (e) {
+    console.warn('Users table fetch warning:', e);
   }
 
-  // 2. Загрузка логов по user_id ИЛИ по имени автора
-  let query = supabase.from('temple_logs').select('*');
-
-  if (profileId && profileName && profileName !== profileId && !isUuid) {
-    query = query.or(`user_id.eq.${profileId},author.ilike.${profileName}`);
-  } else if (profileId) {
-    query = query.eq('user_id', profileId);
-  } else {
-    query = query.ilike('author', profileName);
-  }
-
-  const { data: logsData } = await query.order('created_at', { ascending: false });
-
+  // 2. Загрузка логов из правильной таблицы 'temple_log' (по user_id ИЛИ author)
   let userLogs: any[] = [];
-  if (Array.isArray(logsData)) {
-    userLogs = logsData.filter((item: any) => {
-      const type = (item.event_type || '').toLowerCase();
-      return type !== 'enter' && type !== 'nav' && type !== 'confess';
-    });
+  try {
+    let query = supabase.from('temple_log').select('*');
+
+    if (profileId && !isUuid) {
+      query = query.or(`user_id.eq.${profileId},author.ilike.${profileName}`);
+    } else if (profileId) {
+      query = query.eq('user_id', profileId);
+    } else {
+      query = query.ilike('author', profileName);
+    }
+
+    const { data: logsData, error } = await query.order('created_at', { ascending: false });
+    
+    if (!error && Array.isArray(logsData)) {
+      userLogs = logsData.filter((item: any) => {
+        const type = (item.event_type || '').toLowerCase();
+        return type !== 'enter' && type !== 'nav' && type !== 'confess';
+      });
+    }
+  } catch (e) {
+    console.warn('temple_log fetch warning:', e);
   }
 
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans px-6 pt-32 pb-24 selection:bg-stone-200">
-      <div className="max-w-3xl mx-auto space-y-8">
+    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans px-6 pt-36 md:pt-44 pb-24 selection:bg-black selection:text-white relative">
+      
+      {/* Подложка с бумажной текстурой */}
+      <div 
+        className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        }}
+      />
+
+      <div className="max-w-3xl mx-auto space-y-8 relative z-20">
         
         {/* Навигация */}
         <div className="flex items-center justify-between">
           <Link 
             href="/heartandangel/world"
-            className="px-5 py-2.5 rounded-full bg-white/80 border border-stone-300 text-stone-900 shadow-sm text-xs font-serif tracking-wider hover:bg-white transition-all"
+            className="px-5 py-2.5 rounded-full bg-white/80 border border-zinc-200 text-zinc-900 shadow-sm font-mono text-xs uppercase tracking-widest hover:border-black transition-all"
           >
             ← Back to World
           </Link>
         </div>
 
         {/* Шапка профайла */}
-        <div className="bg-white/90 border border-stone-200 rounded-3xl p-8 shadow-xl backdrop-blur-md flex flex-col sm:flex-row items-center gap-6">
-          <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-stone-300 shadow-inner bg-stone-100 flex items-center justify-center shrink-0">
+        <div className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-8 shadow-sm flex flex-col sm:flex-row items-center gap-6">
+          <div className="relative w-24 h-24 rounded-full overflow-hidden border border-zinc-300 shadow-inner bg-zinc-50 flex items-center justify-center shrink-0">
             <Image 
               src={profileImage} 
               alt={profileName} 
@@ -118,24 +132,24 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
             />
           </div>
           <div className="text-center sm:text-left space-y-1">
-            <h1 className="font-serif text-3xl sm:text-4xl font-normal text-stone-900 tracking-tight">
-              {isUuid ? 'Sanctuary Member' : profileName}
+            <h1 className="font-serif text-3xl sm:text-4xl font-light text-zinc-900 tracking-tight">
+              {profileName}
             </h1>
-            <p className="font-mono text-xs uppercase tracking-widest text-stone-500">
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">
               Sanctuary Profile
             </p>
           </div>
         </div>
 
         {/* Список Offerings */}
-        <div className="bg-white/90 border border-stone-200 rounded-3xl p-6 sm:p-8 shadow-xl backdrop-blur-md space-y-6">
-          <h2 className="font-serif text-xl border-b pb-3 border-stone-200 text-stone-900">
+        <div className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+          <h2 className="font-serif text-2xl font-light border-b border-zinc-200 pb-4 text-zinc-900">
             Offerings
           </h2>
 
-          <div className="divide-y divide-stone-100">
+          <div className="divide-y divide-zinc-100">
             {userLogs.length === 0 ? (
-              <p className="font-mono text-xs opacity-60 uppercase tracking-widest py-8 text-center text-stone-500">
+              <p className="font-mono text-xs opacity-60 uppercase tracking-widest py-12 text-center text-zinc-500">
                 No offerings recorded for this profile yet.
               </p>
             ) : (
@@ -151,15 +165,15 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
                     className="py-4 flex items-center justify-between gap-4 text-sm"
                   >
                     <div className="flex items-center gap-3.5 shrink-0">
-                      <div className={`w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center ${visuals.color}`}>
+                      <div className={`w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center ${visuals.color}`}>
                         <IconComponent size={16} />
                       </div>
-                      <span className="font-mono text-xs font-bold uppercase tracking-wider text-stone-800">
+                      <span className="font-mono text-xs font-bold uppercase tracking-wider text-zinc-800">
                         {visuals.label}
                       </span>
                     </div>
 
-                    <div className="flex-1 font-serif font-light text-stone-800 truncate px-2 text-left">
+                    <div className="flex-1 font-serif font-light text-zinc-800 truncate px-2 text-left">
                       <span className="truncate opacity-90">{message}</span>
                     </div>
                   </div>
