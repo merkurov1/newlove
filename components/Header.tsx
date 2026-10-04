@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { User, Settings, LogOut, ShieldCheck, Menu, X, ChevronRight } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
 
@@ -101,7 +101,7 @@ export default function Header() {
                 </Link>
               )}
 
-              {/* Меню профиля */}
+              {/* Меню профиля без иконок */}
               <AnimatePresence>
                 {isProfileOpen && user && (
                   <motion.div
@@ -114,47 +114,34 @@ export default function Header() {
                     <Link 
                       href={profileHref} 
                       onClick={() => setIsProfileOpen(false)} 
-                      className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-stone-800 hover:bg-stone-100/80 transition-all"
+                      className="block w-full px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-stone-800 hover:bg-stone-100/80 transition-all"
                     >
-                      <div className="flex items-center gap-3">
-                        <User size={15} className="text-stone-400" />
-                        <span>Profile</span>
-                      </div>
-                      <ChevronRight size={14} className="text-stone-400 group-hover:translate-x-0.5 transition-transform" />
+                      Profile
                     </Link>
 
                     <Link 
                       href="/profile" 
                       onClick={() => setIsProfileOpen(false)} 
-                      className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-stone-800 hover:bg-stone-100/80 transition-all"
+                      className="block w-full px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-stone-800 hover:bg-stone-100/80 transition-all"
                     >
-                      <div className="flex items-center gap-3">
-                        <Settings size={15} className="text-stone-400" />
-                        <span>Settings</span>
-                      </div>
-                      <ChevronRight size={14} className="text-stone-400 group-hover:translate-x-0.5 transition-transform" />
+                      Settings
                     </Link>
 
                     {isAdmin && (
                       <Link 
                         href="/admin" 
                         onClick={() => setIsProfileOpen(false)} 
-                        className="group w-full flex items-center justify-between px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-pink-700 bg-pink-50/60 hover:bg-pink-100/60 transition-all"
+                        className="block w-full px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-stone-900 bg-stone-100/80 hover:bg-stone-200/80 transition-all"
                       >
-                        <div className="flex items-center gap-3">
-                          <ShieldCheck size={15} className="text-pink-600" />
-                          <span>Admin Panel</span>
-                        </div>
-                        <ChevronRight size={14} className="text-pink-400 group-hover:translate-x-0.5 transition-transform" />
+                        Admin
                       </Link>
                     )}
 
                     <button 
                       onClick={() => { setIsProfileOpen(false); signOut?.(); }} 
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-rose-600 hover:bg-rose-50 transition-all cursor-pointer text-left"
+                      className="w-full text-left px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
                     >
-                      <LogOut size={15} className="text-rose-500" />
-                      <span>Sign Out</span>
+                      Sign Out
                     </button>
                   </motion.div>
                 )}
