@@ -67,7 +67,7 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
       profileId = userData.id || profileId;
       profileName = userData.name || userData.full_name || userData.username || decodedParam;
       
-      // Ищем аватар в возможных полях (Google avatar, image, picture и т.д.)
+      // Ищем аватар в возможных полях
       const resolvedAvatar = userData.avatar_url || userData.image || userData.avatar || userData.picture || userData.photo;
       if (resolvedAvatar && typeof resolvedAvatar === 'string' && resolvedAvatar.trim() !== '') {
         profileImage = resolvedAvatar;
@@ -77,7 +77,7 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
     console.warn('Profile fetch warning:', e);
   }
 
-  // 2. Расширенная загрузка логов из 'temple_log'
+  // 2. Загрузка последних 10 логов из 'temple_log'
   let userLogs: any[] = [];
   try {
     const conditions: string[] = [`author.ilike.%${decodedParam}%`];
@@ -92,7 +92,8 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
       .from('temple_log')
       .select('*')
       .or(conditions.join(','))
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(10); // Ограничение: последние 10 записей
 
     if (!error && Array.isArray(logsData)) {
       userLogs = logsData.filter((item: any) => {

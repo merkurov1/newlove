@@ -55,10 +55,11 @@ export default function Header() {
   const userName = profile?.name || profile?.full_name || user?.user_metadata?.name || user?.email || 'Guest';
   const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
   
-  // Надежная проверка прав администратора
+  // Надежная проверка прав администратора (включая ваш email)
   const roleStr = profile?.role || profile?.user_role || user?.user_metadata?.role || user?.app_metadata?.role || '';
   const rolesArr = Array.isArray(roles) ? roles : [roles];
-  const isAdmin = rolesArr.some(r => typeof r === 'string' && r.toUpperCase() === 'ADMIN') || 
+  const isAdmin = user?.email === 'merkurov@gmail.com' || 
+                  rolesArr.some(r => typeof r === 'string' && r.toUpperCase() === 'ADMIN') || 
                   (typeof roleStr === 'string' && roleStr.toUpperCase() === 'ADMIN');
 
   const isOwner = !user || userName.toLowerCase().includes('merkurov') || userName.toLowerCase().includes('антон');
@@ -101,7 +102,7 @@ export default function Header() {
               </Link>
             )}
 
-            {/* Меню профиля (адаптивная ширина под мобильные) */}
+            {/* Меню профиля */}
             <AnimatePresence>
               {isProfileOpen && user && (
                 <motion.div
@@ -133,7 +134,7 @@ export default function Header() {
                       onClick={() => setIsProfileOpen(false)} 
                       className="block w-full px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-stone-900 bg-stone-100/80 hover:bg-stone-200/80 transition-all"
                     >
-                      Admin
+                      admin
                     </Link>
                   )}
 
@@ -159,7 +160,7 @@ export default function Header() {
               <span className="text-[10px] font-mono text-stone-400 shrink-0">▼</span>
             </button>
 
-            {/* Меню сайта (адаптивная ширина под мобильные) */}
+            {/* Меню сайта */}
             <AnimatePresence>
               {isSiteMenuOpen && (
                 <motion.div
