@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { User, Settings, LogOut, ShieldCheck, Menu, X, ChevronRight, Compass, Heart, BookOpen } from 'lucide-react';
+import { User, Settings, LogOut, ShieldCheck, Menu, X, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
 
@@ -23,7 +23,6 @@ export default function Header() {
   const profileRef = useRef<HTMLDivElement | null>(null);
   const siteMenuRef = useRef<HTMLDivElement | null>(null);
 
-  // Закрытие выпадающих меню при клике вне их областей
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
@@ -52,13 +51,12 @@ export default function Header() {
   
   const isAdmin = Array.isArray(roles) && roles.includes('ADMIN');
 
-  // Определяем, владелец ли сайта (Антон Меркуров) или сторонний пользователь
   const isOwner = !user || userName.toLowerCase().includes('merkurov') || userName.toLowerCase().includes('антон');
   const brandDisplay = isOwner ? 'Merkurov' : (userName.split(' ').slice(-1)[0] || userName);
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-2xl border-b border-zinc-200/60 shadow-[0_4px_30px_rgba(0,0,0,0.02)] transition-all">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-transparent backdrop-blur-md transition-all">
         <div className="max-w-[1800px] mx-auto px-6 lg:px-10 h-24 flex items-center justify-between">
           
           {/* LEFT: AVATAR & BRAND / SURNAME */}
@@ -67,7 +65,7 @@ export default function Header() {
             {/* 1. АВАТАР И ПОЛЬЗОВАТЕЛЬСКОЕ МЕНЮ */}
             <div className="relative" ref={profileRef}>
               {isLoading ? (
-                <div className="w-12 h-12 rounded-full bg-zinc-200 animate-pulse" />
+                <div className="w-12 h-12 rounded-full bg-zinc-200/50 animate-pulse" />
               ) : user ? (
                 <button
                   type="button"
@@ -90,7 +88,7 @@ export default function Header() {
                 </Link>
               )}
 
-              {/* Ультра-лаконичное меню профиля (без дублирования аватара/почты и без линий) */}
+              {/* Меню профиля */}
               <AnimatePresence>
                 {isProfileOpen && user && (
                   <motion.div
@@ -150,18 +148,18 @@ export default function Header() {
               </AnimatePresence>
             </div>
 
-            {/* 2. НАЗВАНИЕ / ФАМИЛИЯ И НАВИГАЦИОННОЕ МЕНЮ САЙТА */}
+            {/* 2. НАЗВАНИЕ / ФАМИЛИЯ С РАМКОЙ НА БЕЛОМ ФОНЕ */}
             <div className="relative" ref={siteMenuRef}>
               <button
                 type="button"
                 onClick={() => { setIsSiteMenuOpen(!isSiteMenuOpen); setIsProfileOpen(false); }}
-                className="font-sans font-bold text-lg tracking-[0.2em] uppercase text-zinc-900 hover:opacity-70 transition-opacity cursor-pointer flex items-center gap-2"
+                className="bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-zinc-200/80 shadow-sm font-sans font-bold text-base tracking-[0.18em] uppercase text-zinc-900 hover:border-zinc-400 transition-all cursor-pointer flex items-center gap-2.5"
               >
                 <span>{brandDisplay}</span>
-                <span className="text-xs font-mono text-zinc-400 font-normal">▼</span>
+                <span className="text-[10px] font-mono text-zinc-400">▼</span>
               </button>
 
-              {/* Лаконичное выпадающее меню сайта */}
+              {/* Лаконичное выпадающее меню сайта по вашему списку */}
               <AnimatePresence>
                 {isSiteMenuOpen && (
                   <motion.div
@@ -169,83 +167,51 @@ export default function Header() {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.96, y: 8 }}
                     transition={{ duration: 0.15, ease: 'easeOut' }}
-                    className="absolute left-0 mt-4 w-80 p-4 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-6"
+                    className="absolute left-0 mt-3 w-80 p-5 rounded-3xl bg-white/95 backdrop-blur-3xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-6 font-mono text-xs"
                   >
-                    {/* Главные рубрики */}
-                    <div className="space-y-1.5">
-                      <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 px-3">Lobby &amp; Essays</div>
-                      <div className="grid grid-cols-2 gap-1">
-                        {[
-                          { name: 'Lobby', href: '/lobby' },
-                          { name: 'About', href: '/isakeyforall' },
-                          { name: 'Advising', href: '/advising' },
-                          { name: 'Unframed', href: '/unframed' },
-                          { name: 'Journal', href: '/journal' }
-                        ].map((item) => (
-                          <Link
-                            key={item.name}
-                            href={item.href}
-                            onClick={() => setIsSiteMenuOpen(false)}
-                            className="px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
-                          >
-                            {item.name}
-                          </Link>
-                        ))}
+                    {/* LOBBY */}
+                    <div className="space-y-1">
+                      <Link
+                        href="/lobby"
+                        onClick={() => setIsSiteMenuOpen(false)}
+                        className="block font-bold uppercase tracking-widest text-zinc-900 hover:text-zinc-600 transition-colors py-1"
+                      >
+                        LOBBY
+                      </Link>
+                      <div className="pl-3 space-y-1 border-l border-zinc-200 text-zinc-600 uppercase tracking-wider">
+                        <Link href="/about" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">about</Link>
+                        <Link href="/advising" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">advising</Link>
+                        <Link href="/unframed" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">unframed</Link>
+                        <Link href="/journal" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">journal</Link>
                       </div>
                     </div>
 
-                    {/* Curators Engine */}
-                    <div className="space-y-1.5">
-                      <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 px-3 flex items-center gap-1.5">
-                        <Compass size={12} />
-                        <span>Curators Engine</span>
-                      </div>
-                      <div className="space-y-1">
-                        <Link
-                          href="/art-engine"
-                          onClick={() => setIsSiteMenuOpen(false)}
-                          className="block px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
-                        >
-                          Art Engine Hub
-                        </Link>
-                        <Link
-                          href="/selection"
-                          onClick={() => setIsSiteMenuOpen(false)}
-                          className="block px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
-                        >
-                          Selection
-                        </Link>
+                    {/* CURATORS ENGINE */}
+                    <div className="space-y-1">
+                      <Link
+                        href="/art-engine"
+                        onClick={() => setIsSiteMenuOpen(false)}
+                        className="block font-bold uppercase tracking-widest text-zinc-900 hover:text-zinc-600 transition-colors py-1"
+                      >
+                        CURATORS ENGINE
+                      </Link>
+                      <div className="pl-3 space-y-1 border-l border-zinc-200 text-zinc-600 uppercase tracking-wider">
+                        <Link href="/selection" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">selection</Link>
                       </div>
                     </div>
 
-                    {/* Heart & Angel */}
-                    <div className="space-y-1.5">
-                      <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 px-3 flex items-center gap-1.5">
-                        <Heart size={12} />
-                        <span>Heart &amp; Angel</span>
-                      </div>
-                      <div className="space-y-1">
-                        <Link
-                          href="/heartandangel/world"
-                          onClick={() => setIsSiteMenuOpen(false)}
-                          className="block px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
-                        >
-                          Sanctuary World
-                        </Link>
-                        <Link
-                          href="/heartandangel/calm"
-                          onClick={() => setIsSiteMenuOpen(false)}
-                          className="block px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
-                        >
-                          Calm
-                        </Link>
-                        <Link
-                          href="/heartandangel/letitgo"
-                          onClick={() => setIsSiteMenuOpen(false)}
-                          className="block px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-wider text-zinc-700 hover:bg-zinc-100 transition-colors"
-                        >
-                          Let It Go
-                        </Link>
+                    {/* HEART & ANGEL */}
+                    <div className="space-y-1">
+                      <Link
+                        href="/heartandangel"
+                        onClick={() => setIsSiteMenuOpen(false)}
+                        className="block font-bold uppercase tracking-widest text-zinc-900 hover:text-zinc-600 transition-colors py-1"
+                      >
+                        HEART &amp; ANGEL
+                      </Link>
+                      <div className="pl-3 space-y-1 border-l border-zinc-200 text-zinc-600 uppercase tracking-wider">
+                        <Link href="/heartandangel/calm/" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">calm</Link>
+                        <Link href="/heartandangel/letitgo/" onClick={() => setIsSiteMenuOpen(false)} className="block hover:text-zinc-900 py-0.5">let it go</Link>
                       </div>
                     </div>
 
@@ -256,21 +222,14 @@ export default function Header() {
 
           </div>
 
-          {/* DESKTOP QUICK LINKS */}
-          <div className="hidden lg:flex items-center gap-6 font-mono text-xs uppercase tracking-wider text-zinc-500">
-            <Link href="/lobby" className="hover:text-zinc-900 transition-colors">Lobby</Link>
-            <Link href="/art-engine" className="hover:text-zinc-900 transition-colors">Curators Engine</Link>
-            <Link href="/heartandangel/world" className="hover:text-zinc-900 transition-colors">Heart &amp; Angel</Link>
-          </div>
-
           {/* MOBILE MENU TOGGLE BUTTON */}
           <div className="lg:hidden flex items-center">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-3 rounded-full bg-zinc-100 text-zinc-800 hover:bg-zinc-200 transition-colors"
+              className="p-3 rounded-full bg-white/80 backdrop-blur-md border border-zinc-200 text-zinc-800 hover:bg-zinc-100 transition-colors shadow-sm"
               aria-label="Toggle Menu"
             >
-              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
           </div>
 
@@ -284,17 +243,29 @@ export default function Header() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-x-0 top-24 bg-white/95 backdrop-blur-3xl border-b border-zinc-200 shadow-2xl z-40 p-6 lg:hidden space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto"
+            className="fixed inset-x-0 top-24 bg-white/95 backdrop-blur-3xl border-b border-zinc-200 shadow-2xl z-40 p-6 lg:hidden space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto font-mono text-xs uppercase tracking-wider"
           >
-            <div className="space-y-4 font-mono text-sm uppercase tracking-wider">
-              <div className="text-xs text-zinc-400">Main Navigation</div>
-              <div className="grid grid-cols-1 gap-2">
-                <Link href="/lobby" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Lobby</Link>
-                <Link href="/art-engine" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Curators Engine</Link>
-                <Link href="/selection" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Selection</Link>
-                <Link href="/heartandangel/world" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Heart &amp; Angel World</Link>
-                <Link href="/heartandangel/calm" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Calm</Link>
-                <Link href="/heartandangel/letitgo" onClick={() => setIsMobileMenuOpen(false)} className="p-3 rounded-xl bg-zinc-50 hover:bg-zinc-100 text-zinc-800">Let It Go</Link>
+            <div className="space-y-4">
+              <div className="text-zinc-400 font-bold">Lobby</div>
+              <div className="pl-3 space-y-2 text-zinc-700 border-l border-zinc-200">
+                <Link href="/lobby" onClick={() => setIsMobileMenuOpen(false)} className="block">Lobby Hub</Link>
+                <Link href="/about" onClick={() => setIsMobileMenuOpen(false)} className="block">About</Link>
+                <Link href="/advising" onClick={() => setIsMobileMenuOpen(false)} className="block">Advising</Link>
+                <Link href="/unframed" onClick={() => setIsMobileMenuOpen(false)} className="block">Unframed</Link>
+                <Link href="/journal" onClick={() => setIsMobileMenuOpen(false)} className="block">Journal</Link>
+              </div>
+
+              <div className="pt-2 text-zinc-400 font-bold">Curators Engine</div>
+              <div className="pl-3 space-y-2 text-zinc-700 border-l border-zinc-200">
+                <Link href="/art-engine" onClick={() => setIsMobileMenuOpen(false)} className="block">Art Engine Hub</Link>
+                <Link href="/selection" onClick={() => setIsMobileMenuOpen(false)} className="block">Selection</Link>
+              </div>
+
+              <div className="pt-2 text-zinc-400 font-bold">Heart &amp; Angel</div>
+              <div className="pl-3 space-y-2 text-zinc-700 border-l border-zinc-200">
+                <Link href="/heartandangel" onClick={() => setIsMobileMenuOpen(false)} className="block">Sanctuary World</Link>
+                <Link href="/heartandangel/calm/" onClick={() => setIsMobileMenuOpen(false)} className="block">Calm</Link>
+                <Link href="/heartandangel/letitgo/" onClick={() => setIsMobileMenuOpen(false)} className="block">Let It Go</Link>
               </div>
             </div>
           </motion.div>
