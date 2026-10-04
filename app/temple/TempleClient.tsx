@@ -220,58 +220,60 @@ export default function TempleClient() {
 
   return (
     <div 
-      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-y-auto select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 transition-colors duration-1000`}
+      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-28 pb-12 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      <header className="relative z-40 flex items-center justify-between w-full max-w-7xl mx-auto pt-24 sm:pt-28 md:pt-36 px-3 sm:px-6">
+      <header className="relative z-40 flex items-center justify-between w-full max-w-7xl mx-auto px-2 sm:px-4">
         <Link 
           href="/heartandangel/world"
-          className={`flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
         >
           <span>← Back to World</span>
         </Link>
 
-        <SoundToggle className={`px-4 sm:px-4 py-2.5 border shadow-md ${actionButtonStyle}`} />
+        <SoundToggle className={`px-4 py-2.5 border shadow-sm ${actionButtonStyle}`} />
       </header>
 
-      <div className="relative w-full flex-1 flex flex-col items-center justify-center text-center px-4 my-auto py-10">
-        <div className={`absolute w-[300px] h-[300px] sm:w-[600px] sm:h-[600px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
+      <div className="relative w-full flex-1 flex flex-col items-center justify-center text-center px-4 my-auto py-12">
+        <div className={`absolute w-[280px] h-[280px] sm:w-[500px] sm:h-[500px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
 
-        <div className="absolute left-[5%] sm:left-[12%] bottom-[10%] z-20 flex flex-col items-center pointer-events-none opacity-85 sm:opacity-100">
-          <div className="absolute -bottom-2 w-20 sm:w-28 h-4 sm:h-6 bg-black/25 rounded-full blur-[8px]" />
+        {/* Хранитель (Артефакт/Ангел) */}
+        <div className="relative z-20 flex flex-col items-center mb-6 pointer-events-none">
+          <div className="absolute -bottom-2 w-24 h-5 bg-black/20 rounded-full blur-[10px]" />
           {heroUrl && (
-            <div className="relative w-24 h-32 sm:w-40 sm:h-48 flex items-end justify-center drop-shadow-[0_15px_25px_rgba(0,0,0,0.3)]">
+            <div className="relative w-28 h-36 sm:w-36 sm:h-48 flex items-end justify-center drop-shadow-[0_15px_25px_rgba(0,0,0,0.25)]">
               <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
             </div>
           )}
         </div>
 
-        <div className="relative z-30 flex flex-col items-center gap-6 max-w-xl mx-auto w-full">
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+        {/* Центральный пульт ритуалов */}
+        <div className="relative z-30 flex flex-col items-center gap-5 max-w-lg mx-auto w-full">
+          <div className="flex flex-wrap items-center justify-center gap-3">
             <Link 
               href="/heartandangel/calm" 
-              className={`px-6 sm:px-8 py-3 sm:py-3.5 rounded-full backdrop-blur-md border shadow-md font-serif text-sm sm:text-base tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
+              className={`px-7 py-3 rounded-full backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
             >
               Calm
             </Link>
             <Link 
               href="/heartandangel/letitgo" 
-              className={`px-6 sm:px-8 py-3 sm:py-3.5 rounded-full backdrop-blur-md border shadow-md font-serif text-sm sm:text-base tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
+              className={`px-7 py-3 rounded-full backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
             >
               Let It Go
             </Link>
             <Link 
               href="/vigil" 
-              className={`px-6 sm:px-8 py-3 sm:py-3.5 rounded-full backdrop-blur-md border shadow-md font-serif text-sm sm:text-base tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
+              className={`px-7 py-3 rounded-full backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
             >
               Vigil
             </Link>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 mt-2">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 mt-2">
             <button
               onClick={() => setIsChroniclesOpen(true)}
-              className={`px-4 sm:px-5 py-2 rounded-full backdrop-blur-md border shadow-sm flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-[11px] sm:text-xs tracking-wider uppercase ${actionButtonStyle}`}
+              className={`px-4 py-2 rounded-full backdrop-blur-md border shadow-sm flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-[11px] tracking-wider uppercase ${actionButtonStyle}`}
             >
               <Activity size={13} className="opacity-80" />
               <span>Chronicles</span>
@@ -279,7 +281,7 @@ export default function TempleClient() {
 
             <button
               onClick={() => setIsTracesOpen(true)}
-              className={`px-4 sm:px-5 py-2 rounded-full backdrop-blur-md border shadow-sm flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-[11px] sm:text-xs tracking-wider uppercase ${actionButtonStyle}`}
+              className={`px-4 py-2 rounded-full backdrop-blur-md border shadow-sm flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-[11px] tracking-wider uppercase ${actionButtonStyle}`}
             >
               <Layers size={13} className="opacity-80" />
               <span>Traces</span>
@@ -287,7 +289,7 @@ export default function TempleClient() {
 
             <button
               onClick={() => setIsInfoOpen(true)}
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full border backdrop-blur-sm shadow-sm flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic ${actionButtonStyle}`}
+              className={`w-9 h-9 rounded-full border backdrop-blur-sm shadow-sm flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic ${actionButtonStyle}`}
               title="About Temple"
             >
               ?
@@ -296,8 +298,9 @@ export default function TempleClient() {
         </div>
       </div>
 
-      <div className="h-2 sm:h-4" />
+      <div className="h-4" />
 
+      {/* Модальные окна */}
       <AnimatePresence>
         {isInfoOpen && (
           <motion.div 
