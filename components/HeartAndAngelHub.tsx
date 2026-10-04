@@ -29,46 +29,59 @@ export default function HeartAndAngelHub() {
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       <Header />
 
-      {/* Hero-блок с небесно-голубым фоном на мобильных */}
-      <div className="relative w-full h-[620px] sm:h-[700px] md:h-[100dvh] flex flex-col justify-between overflow-hidden bg-[#EAF2F8] md:bg-[#FAF8F5]">
-        <Image
-          src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
-          alt="Heart & Angel World"
-          fill
-          className="object-contain md:object-cover transition-transform duration-700"
-          priority
-          draggable={false}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/30 pointer-events-none md:bg-gradient-to-t md:from-black/75 md:via-black/20 md:to-black/40" />
+      {/* Hero-блок: раздельный для мобильных и десктопа */}
+      <div className="relative w-full bg-[#EAF2F8] md:bg-[#FAF8F5] md:h-[100dvh] md:flex md:flex-col md:justify-between md:overflow-hidden">
+        
+        {/* Desktop background image */}
+        <div className="hidden md:block absolute inset-0">
+          <Image
+            src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
+            alt="Heart & Angel World"
+            fill
+            className="object-cover transition-transform duration-700"
+            priority
+            draggable={false}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-black/40 pointer-events-none" />
+        </div>
 
-        {/* Верхний текстовый блок */}
-        <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pt-32 sm:pt-36 md:pt-40 flex justify-center md:justify-end text-center md:text-right">
-          <div className="space-y-2 sm:space-y-3 max-w-lg text-white drop-shadow-lg">
-            <h1 className="text-3xl sm:text-4xl md:text-6xl font-serif font-light tracking-wider text-white">
+        {/* --- МОБИЛЬНАЯ ВЕРСИЯ (< md): вертикальный поток без наложений --- */}
+        <div className="block md:hidden pt-28 pb-12 px-6 space-y-8 bg-[#EAF2F8]">
+          <div className="text-center space-y-2">
+            <h1 className="text-3xl font-serif font-light tracking-wider text-zinc-900">
               Heart &amp; Angel
             </h1>
-            <p className="text-stone-100 text-sm sm:text-base md:text-lg font-serif font-light leading-relaxed tracking-wide">
+            <p className="text-zinc-600 text-sm font-serif font-light leading-relaxed tracking-wide">
               The universal mythology for a fragmented world.
             </p>
-            <p className="text-stone-100 text-sm sm:text-base md:text-lg font-serif font-light leading-relaxed tracking-wide italic pt-0.5">
+            <p className="text-zinc-600 text-sm font-serif font-light leading-relaxed tracking-wide italic">
               The Greatest Love Story Ever Told.
             </p>
           </div>
-        </div>
 
-        {/* Нижний текстовый блок */}
-        <div className="relative z-10 max-w-7xl w-full mx-auto px-6 pb-10 sm:pb-16 md:pb-28 flex flex-col items-center md:items-start text-center md:text-left space-y-4">
-          <div className="max-w-xl space-y-3 drop-shadow-lg">
-            <h2 className="text-2xl sm:text-4xl md:text-6xl font-serif font-light tracking-wider text-white">
+          {/* Иллюстрация в виде аккуратной карточки */}
+          <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden shadow-xl bg-white/60 border border-stone-200/60">
+            <Image
+              src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
+              alt="Heart & Angel World"
+              fill
+              className="object-contain p-2"
+              priority
+              draggable={false}
+            />
+          </div>
+
+          <div className="text-center space-y-4">
+            <h2 className="text-2xl font-serif font-light tracking-wider text-zinc-900">
               Enter the Living World
             </h2>
-            <p className="text-stone-100 text-xs sm:text-base md:text-lg font-serif font-light leading-relaxed max-w-md tracking-wide mx-auto md:mx-0">
+            <p className="text-zinc-600 text-sm font-serif font-light leading-relaxed tracking-wide max-w-sm mx-auto">
               Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.
             </p>
             <div className="pt-2">
               <Link
                 href="/heartandangel/world"
-                className="inline-flex items-center gap-3 px-8 py-3.5 sm:py-4 rounded-full bg-white text-stone-900 text-xs sm:text-sm font-sans font-medium tracking-widest uppercase shadow-2xl hover:bg-stone-100 transition-all duration-300 cursor-pointer"
+                className="inline-flex items-center justify-center gap-3 w-full py-4 rounded-full bg-zinc-900 text-white text-xs font-sans font-medium tracking-widest uppercase shadow-lg hover:bg-zinc-800 transition-all duration-300 cursor-pointer"
               >
                 <span>Explore World</span>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -78,6 +91,46 @@ export default function HeartAndAngelHub() {
             </div>
           </div>
         </div>
+
+        {/* --- ДЕСКТОПНАЯ ВЕРСИЯ (md:): оригинальный полноэкранный дизайн --- */}
+        <div className="hidden md:flex flex-col justify-between h-full relative z-10">
+          <div className="max-w-7xl w-full mx-auto px-10 pt-36 flex justify-end">
+            <div className="text-right space-y-3 max-w-lg text-white drop-shadow-lg">
+              <h1 className="text-6xl font-serif font-light tracking-wider text-white">
+                Heart &amp; Angel
+              </h1>
+              <p className="text-stone-100 text-lg font-serif font-light leading-relaxed tracking-wide">
+                The universal mythology for a fragmented world.
+              </p>
+              <p className="text-stone-100 text-lg font-serif font-light leading-relaxed tracking-wide italic pt-0.5">
+                The Greatest Love Story Ever Told.
+              </p>
+            </div>
+          </div>
+
+          <div className="max-w-7xl w-full mx-auto px-10 pb-28 flex flex-col items-start space-y-3">
+            <div className="max-w-xl space-y-3 drop-shadow-lg">
+              <h2 className="text-6xl font-serif font-light tracking-wider text-white">
+                Enter the Living World
+              </h2>
+              <p className="text-stone-100 text-lg font-serif font-light leading-relaxed max-w-md tracking-wide">
+                Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.
+              </p>
+              <div className="pt-2">
+                <Link
+                  href="/heartandangel/world"
+                  className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-white text-stone-900 text-sm font-sans font-medium tracking-widest uppercase shadow-2xl hover:bg-stone-100 transition-all duration-300 cursor-pointer"
+                >
+                  <span>Explore World</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* Основной контент страницы */}
