@@ -218,27 +218,21 @@ export default function TempleClient() {
 
   return (
     <div 
-      className={`relative w-full min-h-[100dvh] h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-hidden select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 transition-colors duration-1000`}
+      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-y-auto select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      <header className="relative z-45 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-8 sm:pt-14 md:pt-20">
-        <div />
-        
-        <div className="flex justify-center">
-          <Link 
-            href="/heartandangel/world"
-            className={`flex items-center gap-2 px-4 sm:px-6 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
-          >
-            <span>← Back to World</span>
-          </Link>
-        </div>
+      <header className="relative z-45 flex items-center justify-between w-full max-w-7xl mx-auto pt-4 sm:pt-8 md:pt-12 px-2 sm:px-4">
+        <Link 
+          href="/heartandangel/world"
+          className={`flex items-center gap-2 px-3 sm:px-6 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
+        >
+          <span>← Back to World</span>
+        </Link>
 
-        <div className="flex justify-end">
-          <SoundToggle className={`px-4 py-2 border shadow-sm ${actionButtonStyle}`} />
-        </div>
+        <SoundToggle className={`px-3 sm:px-4 py-2 border shadow-sm ${actionButtonStyle}`} />
       </header>
 
-      <div className="relative w-full flex-1 flex flex-col items-center justify-center text-center px-4 my-auto">
+      <div className="relative w-full flex-1 flex flex-col items-center justify-center text-center px-4 my-auto py-8">
         <div className={`absolute w-[300px] h-[300px] sm:w-[600px] sm:h-[600px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
 
         <div className="absolute left-[5%] sm:left-[12%] bottom-[10%] z-20 flex flex-col items-center pointer-events-none opacity-85 sm:opacity-100">

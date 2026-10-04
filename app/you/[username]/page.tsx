@@ -7,7 +7,7 @@ import Header from '@/components/Header';
 import { ArrowLeft, Flame, Trash2, ShieldCheck, Moon, Sparkles, Radio } from 'lucide-react';
 
 interface PageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string } | Promise<{ id: string }>;
 }
 
 function getEventVisuals(eventType: string) {
@@ -39,8 +39,18 @@ function formatTime(iso?: string) {
 }
 
 export default function PublicProfilePage({ params }: PageProps) {
-  const resolvedParams = (React as any).use(params);
-  const userId = resolvedParams.id;
+  // Универсальная поддержка синхронных и асинхронных params во всех версиях Next.js
+  const [resolvedParams, setResolvedParams] = useState<{ id: string } | null>(
+    params instanceof Promise ? null : params
+  );
+
+  useEffect(() => {
+    if (params instanceof Promise) {
+      params.then(setResolvedParams);
+    }
+  }, [params]);
+
+  const userId = resolvedParams?.id;
   const supabase = createClient();
 
   const [profile, setProfile] = useState<any>(null);
@@ -53,12 +63,16 @@ export default function PublicProfilePage({ params }: PageProps) {
       setLoading(true);
 
       try {
-        // 1. Загрузка профиля по id или username
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .or(`id.eq.${userId},username.eq.${userId}`)
-          .maybeSingle();
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        
+        let profileQuery = supabase.from('profiles').select('*');
+        if (uuidRegex.test(userId)) {
+          profileQuery = profileQuery.eq('id', userId);
+        } else {
+          profileQuery = profileQuery.eq('username', userId);
+        }
+
+        const { data: profileData, error: profileError } = await profileQuery.maybeSingle();
 
         const defaultProfile = {
           id: userId,
@@ -70,7 +84,6 @@ export default function PublicProfilePage({ params }: PageProps) {
         const currentProfile = profileError || !profileData ? defaultProfile : profileData;
         setProfile(currentProfile);
 
-        // 2. Загрузка следов пользователя в храме
         const authorName = currentProfile.full_name || currentProfile.username;
         if (authorName) {
           const { data: logsData } = await supabase
@@ -99,7 +112,7 @@ export default function PublicProfilePage({ params }: PageProps) {
     return name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
   };
 
-  if (loading) {
+  if (loading || !userId) {
     return (
       <div className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans flex flex-col justify-between">
         <Header />
@@ -120,8 +133,6 @@ export default function PublicProfilePage({ params }: PageProps) {
       <Header />
 
       <main className="max-w-4xl mx-auto pt-32 sm:pt-36 pb-24 px-4 sm:px-6 lg:px-8 space-y-10">
-        
-        {/* Navigation Back */}
         <div>
           <Link 
             href="/heartandangel/world" 
@@ -132,7 +143,6 @@ export default function PublicProfilePage({ params }: PageProps) {
           </Link>
         </div>
 
-        {/* Profile Header Card */}
         <div className="bg-white/85 backdrop-blur-md border border-stone-200 p-8 sm:p-10 rounded-3xl space-y-8 shadow-sm">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
             <div className="w-20 h-20 rounded-2xl bg-stone-900 text-white flex items-center justify-center font-serif text-2xl tracking-widest shrink-0 shadow-md">
@@ -181,7 +191,6 @@ export default function PublicProfilePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* User Sanctuary Traces Grid */}
         <div className="space-y-6">
           <div className="flex justify-between items-center border-b border-stone-200 pb-4">
             <h2 className="text-xl font-serif text-stone-900">Sanctuary Traces &amp; Offerings</h2>
@@ -227,7 +236,6 @@ export default function PublicProfilePage({ params }: PageProps) {
 
       </main>
 
-      {/* Footer */}
       <footer className="max-w-4xl mx-auto w-full px-6 py-12 text-center font-mono text-[10px] text-stone-400 uppercase tracking-[0.3em] border-t border-stone-200/60">
         Heart &amp; Angel Sanctuary &copy; {new Date().getFullYear()}
       </footer>
