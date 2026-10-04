@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect, useCallback, ChangeEvent } from 'react';
 import { createClient } from '@/lib/supabase-browser';
@@ -205,7 +205,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   return (
     <form 
       action={saveAction} 
-      className="bg-white border border-neutral-200 p-8 sm:p-12 space-y-8 font-sans max-w-5xl mx-auto shadow-none" 
+      className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 p-8 sm:p-12 space-y-8 font-sans max-w-5xl mx-auto rounded-3xl shadow-sm" 
       onSubmit={handleSubmit}
     >
       {isEditing && <input type="hidden" name="id" value={safeInitial.id} />}
@@ -213,7 +213,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       {type !== 'выпуск' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label htmlFor="artist" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
+            <label htmlFor="artist" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
               Artist
             </label>
             <input
@@ -223,11 +223,11 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
               value={artist}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setArtist(e.target.value)}
               placeholder="e.g. Sergey Merkurov"
-              className="w-full bg-neutral-50/50 border border-neutral-200 px-4 py-3 text-sm text-neutral-900 focus:bg-white focus:border-neutral-900 focus:outline-none transition rounded-none font-serif"
+              className="w-full bg-white border border-zinc-200 px-4 py-3.5 text-sm text-zinc-900 focus:bg-white focus:border-black focus:outline-none transition rounded-2xl font-serif shadow-sm"
             />
           </div>
           <div>
-            <label htmlFor="title" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
+            <label htmlFor="title" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
               Artwork Title *
             </label>
             <input
@@ -238,7 +238,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
               value={title}
               onChange={handleTitleChange}
               placeholder="e.g. Monumental Study"
-              className="w-full bg-neutral-50/50 border border-neutral-200 px-4 py-3 text-sm text-neutral-900 focus:bg-white focus:border-neutral-900 focus:outline-none transition rounded-none font-serif italic"
+              className="w-full bg-white border border-zinc-200 px-4 py-3.5 text-sm text-zinc-900 focus:bg-white focus:border-black focus:outline-none transition rounded-2xl font-serif italic shadow-sm"
             />
           </div>
         </div>
@@ -246,7 +246,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       
       {type === 'выпуск' && (
         <div>
-          <label htmlFor="title" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
+          <label htmlFor="title" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
             Edition Title *
           </label>
           <input
@@ -257,7 +257,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
             value={title}
             onChange={handleTitleChange}
             placeholder="Issue headline..."
-            className="w-full bg-neutral-50/50 border border-neutral-200 px-4 py-3 text-sm text-neutral-900 focus:bg-white focus:border-neutral-900 focus:outline-none transition rounded-none font-serif"
+            className="w-full bg-white border border-zinc-200 px-4 py-3.5 text-sm text-zinc-900 focus:bg-white focus:border-black focus:outline-none transition rounded-2xl font-serif shadow-sm"
           />
         </div>
       )}
@@ -265,10 +265,10 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       {type !== 'выпуск' && (
         <>
           <div>
-            <label htmlFor="curatorNote" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
-              Curator's Note
+            <label htmlFor="curatorNote" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
+              Curator&apos;s Note
             </label>
-            <div className="border border-neutral-200 bg-neutral-50/30 p-1">
+            <div className="border border-zinc-200 bg-white p-2 rounded-2xl shadow-sm">
               <RichTextArea
                 value={curatorNote}
                 onChange={setCuratorNote}
@@ -282,7 +282,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label htmlFor="quote" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
+              <label htmlFor="quote" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
                 Artist Statement / Quote
               </label>
               <textarea
@@ -291,14 +291,14 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
                 value={quote}
                 onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setQuote(e.target.value)}
                 placeholder="Direct quotation..."
-                className="w-full bg-neutral-50/50 border border-neutral-200 px-4 py-3 text-sm text-neutral-900 focus:bg-white focus:border-neutral-900 focus:outline-none transition rounded-none font-serif italic min-h-[120px]"
+                className="w-full bg-white border border-zinc-200 px-4 py-3.5 text-sm text-zinc-900 focus:bg-white focus:border-black focus:outline-none transition rounded-2xl font-serif italic min-h-[120px] shadow-sm"
               />
             </div>
             <div>
-              <label htmlFor="specs" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-2">
-                Specs & Provenance
+              <label htmlFor="specs" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-2">
+                Specs &amp; Provenance
               </label>
-              <div className="border border-neutral-200 bg-neutral-50/30 p-1">
+              <div className="border border-zinc-200 bg-white p-2 rounded-2xl shadow-sm">
                 <RichTextArea
                   value={specs}
                   onChange={setSpecs}
@@ -315,16 +315,16 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label htmlFor="slug" className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500">
+          <label htmlFor="slug" className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400">
             URL Slug *
           </label>
           {!slugManuallyEdited && (
-            <span className="font-mono text-[10px] text-neutral-400">
+            <span className="font-mono text-[10px] text-zinc-400">
               [Auto-generated]
             </span>
           )}
           {isCheckingSlug && (
-            <span className="font-mono text-[10px] text-neutral-900 animate-pulse">
+            <span className="font-mono text-[10px] text-zinc-900 animate-pulse">
               Verifying availability...
             </span>
           )}
@@ -336,19 +336,19 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
           required
           value={slug}
           onChange={handleSlugChange}
-          className={`w-full bg-neutral-50/50 border px-4 py-3 text-xs font-mono text-neutral-900 focus:bg-white focus:outline-none transition rounded-none ${
-            slugError ? 'border-rose-600 focus:border-rose-600' : 'border-neutral-200 focus:border-neutral-900'
+          className={`w-full bg-white border px-4 py-3.5 text-xs font-mono text-zinc-900 focus:bg-white focus:outline-none transition rounded-2xl shadow-sm ${
+            slugError ? 'border-rose-600 focus:border-rose-600' : 'border-zinc-200 focus:border-black'
           }`}
         />
         {slugError && <p className="mt-2 font-mono text-xs text-rose-600">{slugError}</p>}
       </div>
 
-      <div className="border-t border-neutral-200 pt-8">
+      <div className="border-t border-zinc-200 pt-8">
         <TagInput initialTags={safeInitial.tags} onChange={setTags} />
       </div>
 
-      <div className="border-t border-neutral-200 pt-8">
-        <label className="block font-mono text-[11px] uppercase tracking-widest text-neutral-500 mb-4">
+      <div className="border-t border-zinc-200 pt-8">
+        <label className="block font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-4">
           Composition Blocks
         </label>
         <BlockEditorImproved value={content} onChange={setContent} />
@@ -362,12 +362,12 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       <input type="hidden" name="specs" value={specs} />
 
       {error && (
-        <div className="border-l-2 border-neutral-900 bg-neutral-50 p-4 font-mono text-xs text-neutral-900">
-          {error}
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 font-mono text-xs uppercase">
+          &gt; {error}
         </div>
       )}
 
-      <div className="flex items-center justify-between border-y border-neutral-200 py-6">
+      <div className="flex items-center justify-between border-y border-zinc-200 py-6">
         <div className="flex items-center space-x-3">
           <input
             id="published"
@@ -375,13 +375,13 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
             type="checkbox"
             checked={published}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setPublished(e.target.checked)}
-            className="h-4 w-4 rounded-none border-neutral-300 text-neutral-900 focus:ring-0 cursor-pointer"
+            className="h-4 w-4 rounded border-zinc-300 text-black focus:ring-0 cursor-pointer"
           />
-          <label htmlFor="published" className="font-mono text-xs uppercase tracking-wider text-neutral-800 cursor-pointer select-none">
+          <label htmlFor="published" className="font-mono text-xs uppercase tracking-wider text-zinc-800 cursor-pointer select-none">
             Publish to Live Archive
           </label>
         </div>
-        <span className="font-mono text-[10px] text-neutral-400">
+        <span className="font-mono text-[10px] text-zinc-400 uppercase tracking-widest">
           {published ? 'Status: Public' : 'Status: Draft'}
         </span>
       </div>
@@ -389,7 +389,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
       <div className="space-y-3 pt-2">
         <button 
           type="submit" 
-          className="w-full bg-neutral-900 hover:bg-black text-white font-mono text-xs uppercase tracking-widest py-4 transition-all rounded-none shadow-none flex items-center justify-center"
+          className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-mono text-xs uppercase tracking-widest py-4 transition-all rounded-full shadow-sm flex items-center justify-center cursor-pointer"
         >
           {isEditing ? 'Save Changes' : `Create ${type}`}
         </button>
@@ -399,7 +399,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
             type="button" 
             onClick={handleTestSend}
             disabled={!title || !content.length}
-            className="w-full border border-neutral-300 hover:border-neutral-900 text-neutral-900 bg-transparent font-mono text-xs uppercase tracking-widest py-4 transition-all rounded-none disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+            className="w-full border border-zinc-300 hover:border-black text-zinc-900 bg-white font-mono text-xs uppercase tracking-widest py-4 transition-all rounded-full disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer shadow-sm"
           >
             Dispatch Test Preview
           </button>
