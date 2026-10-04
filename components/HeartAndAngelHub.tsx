@@ -4,12 +4,24 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import Header from '@/components/Header';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { FreeMode, Mousewheel } from 'swiper/modules';
+import 'swiper/css/free-mode';
 
-const images = [
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759212266765-IMG_0514.png',
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759213959968-IMG_0517.png',
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759231831822-IMG_0518.png',
-  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/1759231854148-IMG_0519.jpeg',
+const galleryImages = [
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1508.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1510.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1511.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1513.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1514.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1516.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1517.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1519.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1521.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1522.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1523.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1524.JPG',
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Gallery/IMG_1525.JPG',
 ];
 
 const SOCIAL_LINKS = [
@@ -232,22 +244,40 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* 4. Галерея: адаптивная сетка */}
-        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-8 sm:gap-12">
-          {images.map((src, idx) => (
-            <div 
-              key={idx} 
-              className="relative w-full aspect-[4/3] flex items-center justify-center group"
-            >
-              <Image
-                src={src}
-                alt={`Artifact ${idx + 1}`}
-                fill
-                className="object-contain drop-shadow-lg transition-transform duration-500 group-hover:scale-[1.03]"
-                sizes="(max-width: 768px) 100vw, 500px"
-              />
-            </div>
-          ))}
+        {/* 4. Галерея: Swiper горизонтальная прокрутка */}
+        <div className="w-full space-y-4">
+          <div className="flex justify-between items-center px-2">
+            <h3 className="font-serif text-xl sm:text-2xl text-stone-900 tracking-tight">
+              Visual Archive
+            </h3>
+            <span className="font-mono text-xs text-stone-400 uppercase tracking-widest">
+              Swipe / Scroll
+            </span>
+          </div>
+
+          <Swiper
+            modules={[FreeMode, Mousewheel]}
+            spaceBetween={20}
+            slidesPerView={'auto'}
+            freeMode={true}
+            mousewheel={{ forceToAxis: true }}
+            grabCursor={true}
+            className="w-full !overflow-visible py-2"
+          >
+            {galleryImages.map((src, idx) => (
+              <SwiperSlide key={idx} className="!w-[300px] sm:!w-[420px] shrink-0">
+                <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden bg-white shadow-sm border border-stone-200/60 flex items-center justify-center p-3 group">
+                  <Image
+                    src={src}
+                    alt={`Gallery Artifact ${idx + 1}`}
+                    fill
+                    className="object-contain rounded-2xl transition-transform duration-700 group-hover:scale-105"
+                    sizes="(max-width: 768px) 300px, 420px"
+                  />
+                </div>
+              </SwiperSlide>
+            ))}
+          </Swiper>
         </div>
 
         {/* 5. Блок социальных сетей */}
