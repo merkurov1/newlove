@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import PasskeyAuth from '@/components/PasskeyAuth';
 import { revalidateLetters } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +34,7 @@ export default async function AdminDashboard({ searchParams }: AdminDashboardPro
       serverSupabase.from('postcards').select('id', { count: 'exact', head: true }),
       serverSupabase
         .from('articles')
-        .select('id,title,slug,published,author:authorId(name),updatedAt')
+        .select('id,title,slug,published,updatedAt')
         .order('updatedAt', { ascending: false })
         .limit(5),
       serverSupabase
@@ -60,183 +59,183 @@ export default async function AdminDashboard({ searchParams }: AdminDashboardPro
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50/60 text-neutral-900 p-6 md:p-12 space-y-10 max-w-7xl mx-auto selection:bg-neutral-900 selection:text-white font-sans">
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-neutral-200 pb-6">
-        <div>
-          <span className="text-xs uppercase tracking-widest text-neutral-400 font-mono font-medium">Control Center</span>
-          <h1 className="text-3xl font-extrabold tracking-tight mt-1 text-neutral-900">Admin Dashboard</h1>
-        </div>
-        
-        {/* Passkey management widget */}
-        <div className="w-full md:w-auto bg-white p-3 rounded-2xl border border-neutral-200 shadow-xs">
-          <PasskeyAuth />
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#FAF8F5] text-zinc-900 font-sans px-6 md:px-12 py-36 md:py-44 selection:bg-black selection:text-white relative">
+      
+      {/* Paper texture overlay */}
+      <div 
+        className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        }}
+      />
 
-      {dataUnavailable && (
-        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-          ⚠️ Database stats are temporarily unavailable. Check service-role credentials.
-        </div>
-      )}
+      <div className="max-w-7xl mx-auto space-y-12 relative z-20">
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        <Link
-          href="/admin/selection"
-          className="group bg-white border border-neutral-200/80 rounded-2xl p-6 hover:border-neutral-300 hover:shadow-md transition duration-200"
-        >
-          <div className="text-3xl font-extrabold text-neutral-900 group-hover:scale-105 transition-transform origin-left">{stats.articles}</div>
-          <div className="text-neutral-500 text-sm mt-2 font-medium">Articles</div>
-        </Link>
-        <Link
-          href="/admin/projects"
-          className="group bg-white border border-neutral-200/80 rounded-2xl p-6 hover:border-neutral-300 hover:shadow-md transition duration-200"
-        >
-          <div className="text-3xl font-extrabold text-neutral-900 group-hover:scale-105 transition-transform origin-left">{stats.projects}</div>
-          <div className="text-neutral-500 text-sm mt-2 font-medium">Projects</div>
-        </Link>
-        <Link
-          href="/admin/letters"
-          className="group bg-white border border-neutral-200/80 rounded-2xl p-6 hover:border-neutral-300 hover:shadow-md transition duration-200"
-        >
-          <div className="text-3xl font-extrabold text-neutral-900 group-hover:scale-105 transition-transform origin-left">{stats.letters}</div>
-          <div className="text-neutral-500 text-sm mt-2 font-medium">Letters</div>
-        </Link>
-        <Link
-          href="/admin/postcards"
-          className="group bg-white border border-neutral-200/80 rounded-2xl p-6 hover:border-neutral-300 hover:shadow-md transition duration-200"
-        >
-          <div className="text-3xl font-extrabold text-neutral-900 group-hover:scale-105 transition-transform origin-left">{stats.postcards}</div>
-          <div className="text-neutral-500 text-sm mt-2 font-medium">Postcards</div>
-        </Link>
-      </div>
+        {dataUnavailable && (
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 font-mono text-xs uppercase">
+            &gt; Database stats unavailable. Check service-role credentials.
+          </div>
+        )}
 
-      {/* Quick Actions */}
-      <div className="space-y-3">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">Quick Actions</h2>
-        <div className="flex flex-wrap gap-3">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
           <Link
-            href="/admin/selection/new"
-            className="px-4 py-2.5 rounded-xl bg-neutral-900 text-white font-medium text-sm hover:bg-neutral-800 transition shadow-xs"
+            href="/admin/selection"
+            className="group bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-8 hover:border-black transition-all duration-300 shadow-sm"
           >
-            + New Publication
+            <div className="font-serif text-4xl font-light text-zinc-900 group-hover:scale-105 transition-transform origin-left">{stats.articles}</div>
+            <div className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 mt-2">Articles</div>
           </Link>
           <Link
-            href="/admin/projects/new"
-            className="px-4 py-2.5 rounded-xl bg-white text-neutral-800 font-medium text-sm hover:bg-neutral-100 transition border border-neutral-200 shadow-xs"
+            href="/admin/projects"
+            className="group bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-8 hover:border-black transition-all duration-300 shadow-sm"
           >
-            + New Project
+            <div className="font-serif text-4xl font-light text-zinc-900 group-hover:scale-105 transition-transform origin-left">{stats.projects}</div>
+            <div className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 mt-2">Projects</div>
           </Link>
           <Link
-            href="/admin/letters/new"
-            className="px-4 py-2.5 rounded-xl bg-white text-neutral-800 font-medium text-sm hover:bg-neutral-100 transition border border-neutral-200 shadow-xs"
+            href="/admin/letters"
+            className="group bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-8 hover:border-black transition-all duration-300 shadow-sm"
           >
-            + New Letter
+            <div className="font-serif text-4xl font-light text-zinc-900 group-hover:scale-105 transition-transform origin-left">{stats.letters}</div>
+            <div className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 mt-2">Letters</div>
           </Link>
           <Link
-            href="/admin/users"
-            className="px-4 py-2.5 rounded-xl bg-white text-neutral-600 font-medium text-sm hover:bg-neutral-100 hover:text-neutral-900 transition border border-neutral-200 shadow-xs"
+            href="/admin/postcards"
+            className="group bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-8 hover:border-black transition-all duration-300 shadow-sm"
           >
-            Users & Access
+            <div className="font-serif text-4xl font-light text-zinc-900 group-hover:scale-105 transition-transform origin-left">{stats.postcards}</div>
+            <div className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 mt-2">Postcards</div>
           </Link>
         </div>
-      </div>
 
-      {revalidated && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
-          ✅ Revalidation requested for /letters. Check public archive shortly.
-        </div>
-      )}
-
-      {/* Reindexing Box */}
-      <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 space-y-4 shadow-xs">
-        <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">Manual Reindexing</h2>
-          <p className="text-sm text-neutral-500 mt-1">
-            Force clear cache and revalidate public letter feeds immediately after updates.
-          </p>
-        </div>
-        <form
-          action={async () => {
-            'use server';
-            try {
-              await revalidateLetters();
-            } catch (e) {
-              console.error('Admin revalidate button failed:', e);
-            }
-          }}
-        >
-          <button
-            type="submit"
-            className="px-4 py-2 bg-neutral-100 text-neutral-700 hover:text-neutral-900 border border-neutral-200 rounded-xl text-sm font-medium hover:bg-neutral-200/60 transition cursor-pointer"
-          >
-            Revalidate /letters Cache
-          </button>
-        </form>
-      </div>
-
-      {/* Recent Content Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-neutral-200">
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">Recent Articles</h3>
-          <div className="bg-white border border-neutral-200/80 rounded-2xl overflow-hidden divide-y divide-neutral-100 shadow-xs">
-            {recentArticles.length === 0 ? (
-              <div className="p-4 text-sm text-neutral-400">No articles found.</div>
-            ) : (
-              recentArticles.map((a) => (
-                <div key={a.id} className="p-4 flex items-center justify-between hover:bg-neutral-50 transition">
-                  <div className="space-y-1 truncate pr-4">
-                    <Link
-                      href={`/admin/selection/edit/${a.id}`}
-                      className="text-neutral-900 hover:text-blue-600 font-medium text-sm block truncate transition-colors"
-                    >
-                      {a.title}
-                    </Link>
-                    <span className="text-xs text-neutral-400 font-mono">/{a.slug}</span>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {a.published ? (
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">published</span>
-                    ) : (
-                      <span className="px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-500 text-xs font-medium">draft</span>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
+        {/* Quick Actions */}
+        <div className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-8 space-y-6 shadow-sm">
+          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Quick Actions</h2>
+          <div className="flex flex-wrap gap-3 font-mono text-xs uppercase tracking-wider">
+            <Link
+              href="/admin/selection/new"
+              className="px-6 py-3 rounded-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold transition shadow-sm"
+            >
+              + New Publication
+            </Link>
+            <Link
+              href="/admin/projects/new"
+              className="px-6 py-3 rounded-full bg-white hover:bg-zinc-50 text-zinc-900 border border-zinc-300 font-bold transition shadow-sm"
+            >
+              + New Project
+            </Link>
+            <Link
+              href="/admin/letters/new"
+              className="px-6 py-3 rounded-full bg-white hover:bg-zinc-50 text-zinc-900 border border-zinc-300 font-bold transition shadow-sm"
+            >
+              + New Letter
+            </Link>
+            <Link
+              href="/admin/users"
+              className="px-6 py-3 rounded-full bg-white hover:bg-zinc-50 text-zinc-600 hover:text-zinc-900 border border-zinc-300 font-bold transition shadow-sm"
+            >
+              Users &amp; Access
+            </Link>
           </div>
         </div>
 
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-mono">Recent Projects</h3>
-          <div className="bg-white border border-neutral-200/80 rounded-2xl overflow-hidden divide-y divide-neutral-100 shadow-xs">
-            {recentProjects.length === 0 ? (
-              <div className="p-4 text-sm text-neutral-400">No projects found.</div>
-            ) : (
-              recentProjects.map((p) => (
-                <div key={p.id} className="p-4 flex items-center justify-between hover:bg-neutral-50 transition">
-                  <div className="space-y-1 truncate pr-4">
-                    <Link
-                      href={`/admin/projects/edit/${p.id}`}
-                      className="text-neutral-900 hover:text-blue-600 font-medium text-sm block truncate transition-colors"
-                    >
-                      {p.title}
-                    </Link>
-                    <span className="text-xs text-neutral-400 font-mono">/{p.slug}</span>
+        {revalidated && (
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-mono text-xs uppercase">
+            &gt; Revalidation requested for /letters.
+          </div>
+        )}
+
+        {/* Reindexing Box */}
+        <div className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-8 space-y-6 shadow-sm">
+          <div>
+            <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Manual Reindexing</h2>
+            <p className="font-serif text-sm text-zinc-600 mt-1">
+              Force clear cache and revalidate public letter feeds immediately after updates.
+            </p>
+          </div>
+          <form
+            action={async () => {
+              'use server';
+              try {
+                await revalidateLetters();
+              } catch (e) {
+                console.error('Admin revalidate button failed:', e);
+              }
+            }}
+          >
+            <button
+              type="submit"
+              className="px-6 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-900 border border-zinc-300 rounded-full font-mono text-xs uppercase tracking-widest font-bold transition cursor-pointer shadow-sm"
+            >
+              Revalidate /letters Cache
+            </button>
+          </form>
+        </div>
+
+        {/* Recent Content Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-8 space-y-6 shadow-sm">
+            <h3 className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Recent Articles</h3>
+            <div className="divide-y divide-zinc-100">
+              {recentArticles.length === 0 ? (
+                <div className="py-8 font-mono text-xs text-zinc-400 uppercase">No articles found.</div>
+              ) : (
+                recentArticles.map((a) => (
+                  <div key={a.id} className="py-4 flex items-center justify-between">
+                    <div className="space-y-1 truncate pr-4">
+                      <Link
+                        href={`/admin/selection/edit/${a.id}`}
+                        className="font-serif text-lg text-zinc-900 hover:underline block truncate"
+                      >
+                        {a.title}
+                      </Link>
+                      <span className="font-mono text-[10px] text-zinc-400">/{a.slug}</span>
+                    </div>
+                    <div className="shrink-0 font-mono text-[10px] uppercase tracking-wider">
+                      {a.published ? (
+                        <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">published</span>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full bg-zinc-100 text-zinc-500">draft</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {p.published ? (
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">published</span>
-                    ) : (
-                      <span className="px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-500 text-xs font-medium">draft</span>
-                    )}
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-8 space-y-6 shadow-sm">
+            <h3 className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Recent Projects</h3>
+            <div className="divide-y divide-zinc-100">
+              {recentProjects.length === 0 ? (
+                <div className="py-8 font-mono text-xs text-zinc-400 uppercase">No projects found.</div>
+              ) : (
+                recentProjects.map((p) => (
+                  <div key={p.id} className="py-4 flex items-center justify-between">
+                    <div className="space-y-1 truncate pr-4">
+                      <Link
+                        href={`/admin/projects/edit/${p.id}`}
+                        className="font-serif text-lg text-zinc-900 hover:underline block truncate"
+                      >
+                        {p.title}
+                      </Link>
+                      <span className="font-mono text-[10px] text-zinc-400">/{p.slug}</span>
+                    </div>
+                    <div className="shrink-0 font-mono text-[10px] uppercase tracking-wider">
+                      {p.published ? (
+                        <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">published</span>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full bg-zinc-100 text-zinc-500">draft</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
+
       </div>
     </div>
   );
