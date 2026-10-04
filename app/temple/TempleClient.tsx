@@ -217,15 +217,11 @@ export default function TempleClient() {
     : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white';
 
   return (
-    <motion.main 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+    <div 
       className={`relative w-full min-h-[100dvh] h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-hidden select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      <header className="relative z-45 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-16 sm:pt-20 md:pt-24">
+      <header className="relative z-45 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-8 sm:pt-14 md:pt-20">
         <div />
         
         <div className="flex justify-center">
@@ -460,6 +456,6 @@ export default function TempleClient() {
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.main>
+    </div>
   );
 }

@@ -45,15 +45,17 @@ export default function Header() {
     }
   }, [pathname]);
 
-  const username = profile?.username || user?.user_metadata?.username || user?.username || null;
-  const profileHref = username ? `/you/${username}` : '/profile';
+  // Ссылаемся на реальный ID пользователя в Supabase для публичного профиля /you/[id]
+  const userId = user?.id || profile?.id || '';
+  const profileHref = userId ? `/you/${userId}` : '/profile';
+  
   const userImage = profile?.image || profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
-  const userName = profile?.name || user?.user_metadata?.name || user?.email || 'Guest';
+  const userName = profile?.name || profile?.full_name || user?.user_metadata?.name || user?.email || 'Guest';
   const userInitials = userName ? userName.substring(0, 2).toUpperCase() : 'AM';
   
   const isAdmin = Array.isArray(roles) && roles.includes('ADMIN');
 
-  // Основные экосистемы (Digital Temple исключен)
+  // Основные экосистемы
   const ecosystems = [
     { 
       id: 'curators', 
@@ -138,6 +140,7 @@ export default function Header() {
                     </div>
 
                     <div className="space-y-1">
+                      {/* Public Profile Link -> /you/[id] */}
                       <Link 
                         href={profileHref} 
                         onClick={() => setIsProfileOpen(false)} 
@@ -147,11 +150,12 @@ export default function Header() {
                           <div className="p-2 rounded-xl bg-zinc-100 text-zinc-600 group-hover:bg-white group-hover:shadow-sm transition-all">
                             <User size={16} />
                           </div>
-                          <span>Profile & Archetype</span>
+                          <span>Profile</span>
                         </div>
                         <ChevronRight size={14} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
                       </Link>
 
+                      {/* Settings / Editing Link -> /profile */}
                       <Link 
                         href="/profile" 
                         onClick={() => setIsProfileOpen(false)} 
@@ -222,7 +226,7 @@ export default function Header() {
 
             <div className="w-[1px] h-6 bg-zinc-200" />
 
-            {/* Sub-links (if ecosystem is active) or Main Rubrics */}
+            {/* Sub-links or Main Rubrics */}
             <nav className="flex items-center gap-5">
               {activeEcosystem && currentEco ? (
                 currentEco.links.map((link) => (
