@@ -396,7 +396,7 @@ export default function ArtEngineClient() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-black selection:bg-black selection:text-white font-sans antialiased break-words">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#111] selection:bg-black selection:text-white font-sans antialiased break-words">
       
       {/* HEADER */}
       <Header />
@@ -411,7 +411,7 @@ export default function ArtEngineClient() {
                 <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-gray-400 block mb-1">
                   {authMode === 'signin' ? 'ADMIN ACCESS' : 'ACCREDITATION SUITE'}
                 </span>
-                <h3 className="text-xl font-serif text-black">
+                <h3 className="text-xl font-serif text-[#111]">
                   {authMode === 'signin' ? 'Sign In' : 'Request Access'}
                 </h3>
               </div>
@@ -602,12 +602,12 @@ export default function ArtEngineClient() {
         </div>
       )}
 
-      {/* Main Layout Container with Top Padding for Fixed Header */}
-      <div className="max-w-7xl mx-auto pt-32 sm:pt-36 pb-24 px-4 sm:px-6 lg:px-12 space-y-8">
+      {/* Main Layout Container */}
+      <div className="max-w-7xl mx-auto pt-36 md:pt-44 pb-24 px-6 md:px-12 space-y-12">
         
         {/* Terminal Header Info / Admin status if logged in */}
         {user && (
-          <div className="flex flex-col items-center justify-center text-center border-b border-gray-200 pb-6 bg-gray-50 px-8 py-6 rounded-3xl">
+          <div className="flex flex-col items-center justify-center text-center border-b border-gray-200 pb-6 bg-white/80 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-sm">
             <div className="flex flex-wrap items-center justify-center gap-3 bg-white border border-gray-200 px-4 py-2 text-xs font-mono rounded-full">
               <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
               <span className="text-black">{user.email} (Admin Session Active)</span>
@@ -619,34 +619,34 @@ export default function ArtEngineClient() {
         {!isLoadingUser && !user ? (
           <div className="space-y-16 max-w-5xl mx-auto">
             {/* 1. ART INTELLIGENCE TERMINAL BANNER */}
-            <div className="flex flex-col items-center justify-center text-center bg-gray-50 border border-gray-200 px-8 py-16 rounded-3xl">
-              <div className="space-y-3 max-w-2xl">
-                <span className="text-xs font-mono tracking-[0.3em] uppercase text-gray-400 font-semibold block">
+            <div className="flex flex-col items-center justify-center text-center bg-white/80 backdrop-blur-xl border border-gray-200/80 px-8 py-16 rounded-3xl shadow-sm">
+              <div className="space-y-4 max-w-2xl">
+                <span className="font-mono text-xs tracking-[0.3em] uppercase text-gray-400 font-semibold block">
                   Institutional Art Advisory & Market Intelligence
                 </span>
-                <h1 className="text-4xl md:text-6xl font-serif font-light text-black tracking-tight">
+                <h1 className="text-5xl md:text-7xl font-serif font-light text-[#111] tracking-tight">
                   Art Intelligence Terminal
                 </h1>
-                <p className="font-serif italic text-gray-600 text-base md:text-lg pt-2">
+                <p className="font-serif italic text-gray-600 text-lg md:text-xl pt-2 leading-relaxed">
                   Professional-grade terminal engineered for art dealers, family offices, and private banking art-lending specialists.
                 </p>
               </div>
             </div>
 
-            {/* 2. THREE INSTITUTIONAL CASE STUDIES (FONTANA WHITE CUBE STYLE WITH CORRECT IMAGES) */}
-            <div className="bg-white border border-gray-200 p-8 md:p-14 space-y-12 shadow-sm rounded-3xl">
+            {/* 2. THREE INSTITUTIONAL CASE STUDIES */}
+            <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-8 md:p-14 space-y-12 shadow-sm rounded-3xl">
               <div className="text-center space-y-3">
                 <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 block">
                   [ CURATOR ENGINE — INSTITUTIONAL CASE STUDIES ]
                 </span>
-                <h3 className="text-2xl md:text-3xl font-serif font-light text-black">
+                <h3 className="text-3xl md:text-4xl font-serif font-light text-[#111]">
                   AI-Driven Art Valuation & Heritage Architecture
                 </h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* Case 1: Fontana */}
-                <Link href="/case-study/fontana" className="group bg-white border border-gray-200 p-6 flex flex-col justify-between hover:border-black transition-colors shadow-sm rounded-2xl">
+                <Link href="/case-study/fontana" className="group bg-white border border-gray-200/80 p-6 flex flex-col justify-between hover:border-black transition-all duration-300 shadow-sm rounded-2xl">
                   <div>
                     <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
                       <img 
@@ -659,7 +659,7 @@ export default function ArtEngineClient() {
                       <div className="font-mono text-[10px] uppercase tracking-wider text-gray-500 font-bold">
                         Asset: Lucio Fontana (1968) // Valuation
                       </div>
-                      <h4 className="font-serif text-xl text-black group-hover:text-gray-600 transition-colors">
+                      <h4 className="font-serif text-2xl text-[#111] group-hover:text-gray-600 transition-colors">
                         THE WHITE ABSOLUTE
                       </h4>
                       <p className="font-serif italic text-gray-600 text-xs sm:text-sm leading-relaxed">
@@ -667,14 +667,14 @@ export default function ArtEngineClient() {
                       </p>
                     </div>
                   </div>
-                  <div className="pt-6 font-mono text-[11px] uppercase tracking-widest text-black flex items-center justify-between border-t border-gray-100 mt-6 font-bold">
+                  <div className="pt-6 font-mono text-[11px] uppercase tracking-widest text-[#111] flex items-center justify-between border-t border-gray-100 mt-6 font-bold">
                     <span>Analyze</span>
                     <span className="group-hover:translate-x-1 transition-transform">→</span>
                   </div>
                 </Link>
 
                 {/* Case 2: Garcia */}
-                <Link href="/case-study/garcia" className="group bg-white border border-gray-200 p-6 flex flex-col justify-between hover:border-black transition-colors shadow-sm rounded-2xl">
+                <Link href="/case-study/garcia" className="group bg-white border border-gray-200/80 p-6 flex flex-col justify-between hover:border-black transition-all duration-300 shadow-sm rounded-2xl">
                   <div>
                     <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
                       <img 
@@ -687,7 +687,7 @@ export default function ArtEngineClient() {
                       <div className="font-mono text-[10px] uppercase tracking-wider text-gray-500 font-bold">
                         Asset: Emil Garcia // Packaging
                       </div>
-                      <h4 className="font-serif text-xl text-black group-hover:text-gray-600 transition-colors">
+                      <h4 className="font-serif text-2xl text-[#111] group-hover:text-gray-600 transition-colors">
                         POETICS OF SILENCE
                       </h4>
                       <p className="font-serif italic text-gray-600 text-xs sm:text-sm leading-relaxed">
@@ -695,14 +695,14 @@ export default function ArtEngineClient() {
                       </p>
                     </div>
                   </div>
-                  <div className="pt-6 font-mono text-[11px] uppercase tracking-widest text-black flex items-center justify-between border-t border-gray-100 mt-6 font-bold">
+                  <div className="pt-6 font-mono text-[11px] uppercase tracking-widest text-[#111] flex items-center justify-between border-t border-gray-100 mt-6 font-bold">
                     <span>Examine</span>
                     <span className="group-hover:translate-x-1 transition-transform">→</span>
                   </div>
                 </Link>
 
                 {/* Case 3: Pivovarov */}
-                <Link href="/case-study/pivovarov" className="group bg-white border border-gray-200 p-6 flex flex-col justify-between hover:border-black transition-colors shadow-sm rounded-2xl">
+                <Link href="/case-study/pivovarov" className="group bg-white border border-gray-200/80 p-6 flex flex-col justify-between hover:border-black transition-all duration-300 shadow-sm rounded-2xl">
                   <div>
                     <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
                       <img 
@@ -715,7 +715,7 @@ export default function ArtEngineClient() {
                       <div className="font-mono text-[10px] uppercase tracking-wider text-gray-500 font-bold">
                         Asset: Viktor Pivovarov // Dossier
                       </div>
-                      <h4 className="font-serif text-xl text-black group-hover:text-gray-600 transition-colors">
+                      <h4 className="font-serif text-2xl text-[#111] group-hover:text-gray-600 transition-colors">
                         TOTAL LONELINESS
                       </h4>
                       <p className="font-serif italic text-gray-600 text-xs sm:text-sm leading-relaxed">
@@ -723,7 +723,7 @@ export default function ArtEngineClient() {
                       </p>
                     </div>
                   </div>
-                  <div className="pt-6 font-mono text-[11px] uppercase tracking-widest text-black flex items-center justify-between border-t border-gray-100 mt-6 font-bold">
+                  <div className="pt-6 font-mono text-[11px] uppercase tracking-widest text-[#111] flex items-center justify-between border-t border-gray-100 mt-6 font-bold">
                     <span>Read Dossier</span>
                     <span className="group-hover:translate-x-1 transition-transform">→</span>
                   </div>
@@ -732,13 +732,13 @@ export default function ArtEngineClient() {
             </div>
 
             {/* 3. FINE ART BANKING & ADVISORY INFRASTRUCTURE (LOGIN BOX) */}
-            <div className="py-16 text-center space-y-8 bg-white border border-gray-200 p-12 shadow-sm rounded-3xl">
-              <div className="space-y-3 max-w-xl mx-auto">
-                <h2 className="text-3xl md:text-4xl font-serif font-light text-black">
+            <div className="py-16 text-center space-y-8 bg-white/80 backdrop-blur-xl border border-gray-200/80 p-12 shadow-sm rounded-3xl">
+              <div className="space-y-4 max-w-xl mx-auto">
+                <h2 className="text-3xl md:text-5xl font-serif font-light text-[#111]">
                   Fine Art Banking & Advisory Infrastructure
                 </h2>
                 
-                <p className="font-serif italic text-gray-600 text-base md:text-lg leading-relaxed">
+                <p className="font-serif italic text-gray-600 text-lg md:text-xl leading-relaxed">
                   Generate institutional-quality investment memoranda in seconds with absolute discretion.
                 </p>
               </div>
@@ -746,13 +746,13 @@ export default function ArtEngineClient() {
               <div className="flex flex-col sm:flex-row justify-center gap-4 font-mono">
                 <button
                   onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
-                  className="bg-black hover:bg-gray-800 text-white text-xs uppercase tracking-widest px-10 py-4 transition font-bold rounded-full"
+                  className="bg-black hover:bg-gray-800 text-white text-xs uppercase tracking-widest px-10 py-4 transition font-bold rounded-full shadow-sm"
                 >
                   Sign In
                 </button>
                 <button
                   onClick={() => { setAuthMode('request'); setShowAuthModal(true); }}
-                  className="bg-white hover:bg-gray-50 text-black border border-black text-xs uppercase tracking-widest px-10 py-4 transition font-bold rounded-full"
+                  className="bg-white hover:bg-gray-50 text-black border border-black text-xs uppercase tracking-widest px-10 py-4 transition font-bold rounded-full shadow-sm"
                 >
                   Request Access
                 </button>
@@ -762,7 +762,7 @@ export default function ArtEngineClient() {
         ) : (
           <>
             {/* Navigation Tabs (Authenticated Terminal View) */}
-            <nav className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center border-b border-gray-200 bg-gray-50 px-6 py-4 gap-3 rounded-2xl">
+            <nav className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center border-b border-gray-200 bg-white/80 backdrop-blur-xl px-6 py-4 gap-3 rounded-2xl shadow-sm">
               <div className="flex gap-8 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
                 <button
                   onClick={() => setActiveTab('parser')}
@@ -806,7 +806,7 @@ export default function ArtEngineClient() {
                 
                 {/* Left Column: Input Panel */}
                 <div className="lg:col-span-5 space-y-6">
-                  <div className="bg-gray-50 border border-gray-200 p-6 space-y-4 rounded-3xl">
+                  <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-6 space-y-4 rounded-3xl shadow-sm">
                     <div className="flex justify-between items-center">
                       <label className="text-[10px] font-mono text-gray-400 uppercase tracking-widest block">
                         Auction Lot URL Target
@@ -845,7 +845,7 @@ export default function ArtEngineClient() {
                     </button>
                   </div>
 
-                  <div className="bg-gray-50 border border-gray-200 p-6 space-y-5 rounded-3xl">
+                  <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-6 space-y-5 rounded-3xl shadow-sm">
                     <div className="flex justify-between items-center border-b border-gray-200 pb-3">
                       <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Asset Visual Verification</span>
                       {input.image_url && <span className="text-[10px] font-mono bg-emerald-50 text-emerald-800 px-2.5 py-0.5 border border-emerald-200 uppercase rounded-full">Resolved</span>}
@@ -901,7 +901,7 @@ export default function ArtEngineClient() {
                 {/* Right Column: Output / Dossier Preview */}
                 <div className="lg:col-span-7">
                   {loading ? (
-                    <div className="bg-gray-50 border border-gray-200 p-10 space-y-6 animate-pulse rounded-3xl">
+                    <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-10 space-y-6 animate-pulse rounded-3xl shadow-sm">
                       <div className="h-4 bg-gray-200 w-1/4 rounded"></div>
                       <div className="h-8 bg-gray-200 w-3/4 rounded"></div>
                       <div className="h-4 bg-gray-200 w-1/2 rounded"></div>
@@ -914,7 +914,7 @@ export default function ArtEngineClient() {
                   ) : output ? (
                     <div className="space-y-5">
                       
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-50 border border-gray-200 p-4 gap-3 rounded-2xl">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white/80 backdrop-blur-xl border border-gray-200/80 p-4 gap-3 rounded-2xl shadow-sm">
                         <span className="text-xs font-mono text-gray-500 uppercase tracking-widest font-bold">
                           Investment Memorandum
                         </span>
@@ -949,13 +949,13 @@ export default function ArtEngineClient() {
                       </div>
 
                       {showRawJson ? (
-                        <div className="border border-gray-200 p-6 bg-gray-50 overflow-x-auto rounded-3xl">
+                        <div className="border border-gray-200/80 p-6 bg-white/80 backdrop-blur-xl overflow-x-auto rounded-3xl shadow-sm">
                           <pre className="text-black font-mono text-xs whitespace-pre-wrap max-h-[600px] overflow-y-auto">
                             {JSON.stringify(output, null, 2)}
                           </pre>
                         </div>
                       ) : (
-                        <div className="bg-gray-50 border border-gray-200 p-8 md:p-12 space-y-8 max-h-[750px] overflow-y-auto rounded-3xl">
+                        <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-8 md:p-12 space-y-8 max-h-[750px] overflow-y-auto rounded-3xl shadow-sm">
                           
                           <div className="border-b border-gray-200 pb-6 space-y-4">
                             <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
@@ -963,13 +963,13 @@ export default function ArtEngineClient() {
                                 <span className="text-xs font-mono text-gray-400 uppercase tracking-widest">
                                   {output.auction_house || "AUCTION"} • LOT {output.lot_number || '—'}
                                 </span>
-                                <h2 className="text-2xl md:text-3xl font-serif text-black mt-1 font-normal">
+                                <h2 className="text-3xl md:text-4xl font-serif text-[#111] mt-1 font-normal">
                                   {output.artist || input.artist || "Unknown Artist"}
                                 </h2>
                                 {output.artist_dates && <p className="text-gray-500 italic text-sm mt-0.5">{output.artist_dates}</p>}
                               </div>
                               {output.estimate_raw && (
-                                <div className="text-left sm:text-right bg-white p-3 border border-gray-200 w-full sm:w-auto rounded-xl">
+                                <div className="text-left sm:text-right bg-white p-3 border border-gray-200 w-full sm:w-auto rounded-xl shadow-sm">
                                   <span className="text-[10px] font-mono text-gray-400 uppercase block">Estimate Valuation</span>
                                   <span className="text-sm font-mono text-black font-bold">{output.estimate_raw}</span>
                                 </div>
@@ -977,7 +977,7 @@ export default function ArtEngineClient() {
                             </div>
 
                             <div className="pt-2">
-                              <h3 className="text-lg md:text-xl font-serif italic text-black">
+                              <h3 className="text-xl md:text-2xl font-serif italic text-[#111]">
                                 {output.title || input.title} {output.year && <span className="not-italic text-gray-400 text-sm">({output.year})</span>}
                               </h3>
                               {output.medium && <p className="text-xs text-gray-600 mt-2 font-mono">{output.medium}</p>}
@@ -1017,9 +1017,9 @@ export default function ArtEngineClient() {
 
                     </div>
                   ) : (
-                    <div className="h-full min-h-[500px] flex flex-col items-center justify-center border border-dashed border-gray-300 bg-gray-50 p-8 text-center rounded-3xl">
+                    <div className="h-full min-h-[500px] flex flex-col items-center justify-center border border-dashed border-gray-300 bg-white/50 backdrop-blur-xl p-8 text-center rounded-3xl">
                       <div className="text-3xl font-serif text-gray-300 mb-2">†</div>
-                      <h3 className="text-black font-serif text-lg mb-1">Awaiting Lot Ingestion</h3>
+                      <h3 className="text-[#111] font-serif text-xl mb-1">Awaiting Lot Ingestion</h3>
                       <p className="text-gray-400 text-xs font-mono max-w-sm leading-relaxed">
                         Enter a valid auction lot URL on the left panel to trigger automated parsing and memo synthesis.
                       </p>
@@ -1032,9 +1032,9 @@ export default function ArtEngineClient() {
 
             {activeTab === 'vault' && (
               <div className="space-y-6 transition-opacity duration-300">
-                <div className="flex justify-between items-center border-b border-gray-200 bg-gray-50 p-6 rounded-2xl">
+                <div className="flex justify-between items-center border-b border-gray-200 bg-white/80 backdrop-blur-xl p-6 rounded-2xl shadow-sm">
                   <span className="text-xs font-mono text-gray-500 uppercase tracking-widest font-bold">Secure Vault Archive</span>
-                  <button onClick={fetchLots} className="text-xs font-mono text-black hover:underline bg-white px-4 py-2 border border-gray-200 rounded-xl">
+                  <button onClick={fetchLots} className="text-xs font-mono text-black hover:underline bg-white px-4 py-2 border border-gray-200 rounded-xl shadow-sm">
                     Refresh ↻
                   </button>
                 </div>
@@ -1042,7 +1042,7 @@ export default function ArtEngineClient() {
                 {loadingLots ? (
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {[1, 2, 3].map((n) => (
-                      <div key={n} className="bg-gray-50 border border-gray-200 p-6 space-y-4 animate-pulse rounded-3xl">
+                      <div key={n} className="bg-white/80 backdrop-blur-xl border border-gray-200 p-6 space-y-4 animate-pulse rounded-3xl shadow-sm">
                         <div className="aspect-[4/3] bg-gray-200 w-full rounded-2xl"></div>
                         <div className="h-4 bg-gray-200 w-2/3 rounded"></div>
                         <div className="h-3 bg-gray-200 w-1/3 rounded"></div>
@@ -1050,7 +1050,7 @@ export default function ArtEngineClient() {
                     ))}
                   </div>
                 ) : lots.length === 0 ? (
-                  <div className="py-16 text-center font-mono text-xs text-gray-400 bg-gray-50 border border-gray-200 p-8 rounded-3xl">Vault archive is currently empty.</div>
+                  <div className="py-16 text-center font-mono text-xs text-gray-400 bg-white/80 backdrop-blur-xl border border-gray-200 p-8 rounded-3xl shadow-sm">Vault archive is currently empty.</div>
                 ) : (
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {lots.map((lot) => {
@@ -1062,7 +1062,7 @@ export default function ArtEngineClient() {
                         <Link
                           key={lot.id}
                           href={`/art-engine/lots/${lot.id}`}
-                          className="group bg-gray-50 border border-gray-200 overflow-hidden hover:border-black transition flex flex-col rounded-3xl shadow-sm"
+                          className="group bg-white/80 backdrop-blur-xl border border-gray-200/80 overflow-hidden hover:border-black transition flex flex-col rounded-3xl shadow-sm hover:shadow-xl duration-300"
                         >
                           <div className="aspect-[4/3] bg-white relative overflow-hidden flex items-center justify-center p-3 border-b border-gray-200">
                             {lot.image_path ? (
@@ -1082,7 +1082,7 @@ export default function ArtEngineClient() {
                                 <span className="truncate">{lot.auction_house || 'AUCTION'}</span>
                                 <span className="text-black font-bold shrink-0">{lot.estimate}</span>
                               </div>
-                              <h2 className="text-lg font-serif text-black group-hover:underline">{lot.artist}</h2>
+                              <h2 className="text-xl font-serif text-[#111] group-hover:underline">{lot.artist}</h2>
                               <p className="text-xs text-gray-600 italic mt-1">{lot.title} {lot.year && `(${lot.year})`}</p>
                             </div>
 

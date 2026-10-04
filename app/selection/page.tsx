@@ -120,7 +120,7 @@ export default async function SelectionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-[#111] selection:bg-black selection:text-white relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#111] selection:bg-black selection:text-white relative overflow-x-hidden font-sans">
       
       {/* HEADER */}
       <Header />
@@ -128,7 +128,7 @@ export default async function SelectionPage() {
       {/* HEADER (narrow container like /advising) */}
       <div className="max-w-3xl mx-auto px-6 pt-36 md:pt-44 pb-16">
         <CenteredHeader>
-          <h1 className="text-5xl md:text-7xl font-serif font-medium leading-none tracking-tight mb-6">Selection.</h1>
+          <h1 className="text-5xl md:text-7xl font-serif font-light leading-none tracking-tight mb-6">Selection.</h1>
           <p className="text-xl font-serif italic text-gray-600 mb-6">Chronicles of silence & art.</p>
           <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-gray-500">
             [ Vault / {articlesToRender ? articlesToRender.length : 0} items ]

@@ -33,49 +33,63 @@ function getEventVisuals(eventType: string) {
 }
 
 export default async function UserProfilePage({ params }: ProfilePageProps) {
-  const rawUsername = params?.username || '';
-  const decodedUsername = decodeURIComponent(rawUsername).trim();
+  const rawParam = params?.username || '';
+  const decodedParam = decodeURIComponent(rawParam).trim();
 
-  if (!decodedUsername) {
+  if (!decodedParam) {
     return notFound();
   }
 
   const supabase = getServerSupabaseClient({ useServiceRole: true });
-
-  // 1. Поиск профиля в базе данных или fallback
-  let profileName = decodedUsername;
-  let profileImage = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png';
-
-  if (supabase) {
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('*')
-      .or(`username.ilike.${decodedUsername},name.ilike.${decodedUsername}`)
-      .maybeSingle();
-
-    if (profileData) {
-      profileName = profileData.name || profileData.full_name || decodedUsername;
-      if (profileData.image || profileData.avatar_url) {
-        profileImage = profileData.image || profileData.avatar_url;
-      }
-    }
+  if (!supabase) {
+    return notFound();
   }
 
-  // 2. Загрузка логов храма только для этого автора
-  let userLogs: any[] = [];
-  if (supabase) {
-    const { data: logsData } = await supabase
-      .from('temple_logs')
-      .select('*')
-      .ilike('author', decodedUsername)
-      .order('created_at', { ascending: false });
+  let profileId = '';
+  let profileName = decodedParam;
+  let profileImage = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png';
 
-    if (Array.isArray(logsData)) {
-      userLogs = logsData.filter((item: any) => {
-        const type = (item.event_type || '').toLowerCase();
-        return type !== 'enter' && type !== 'nav' && type !== 'confess';
-      });
+  const isUuid = decodedParam.length === 36 || /^[0-9a-fA-F-]{36}$/.test(decodedParam);
+
+  // 1. Поиск профиля по ID или имени
+  let profileQuery = supabase.from('profiles').select('*');
+  if (isUuid) {
+    profileQuery = profileQuery.eq('id', decodedParam);
+  } else {
+    profileQuery = profileQuery.or(`username.ilike.${decodedParam},name.ilike.${decodedParam}`);
+  }
+
+  const { data: profileData } = await profileQuery.maybeSingle();
+
+  if (profileData) {
+    profileId = profileData.id;
+    profileName = profileData.name || profileData.full_name || profileData.username || decodedParam;
+    if (profileData.image || profileData.avatar_url) {
+      profileImage = profileData.image || profileData.avatar_url;
     }
+  } else if (isUuid) {
+    profileId = decodedParam;
+  }
+
+  // 2. Загрузка логов по user_id ИЛИ по имени автора
+  let query = supabase.from('temple_logs').select('*');
+
+  if (profileId && profileName && profileName !== profileId && !isUuid) {
+    query = query.or(`user_id.eq.${profileId},author.ilike.${profileName}`);
+  } else if (profileId) {
+    query = query.eq('user_id', profileId);
+  } else {
+    query = query.ilike('author', profileName);
+  }
+
+  const { data: logsData } = await query.order('created_at', { ascending: false });
+
+  let userLogs: any[] = [];
+  if (Array.isArray(logsData)) {
+    userLogs = logsData.filter((item: any) => {
+      const type = (item.event_type || '').toLowerCase();
+      return type !== 'enter' && type !== 'nav' && type !== 'confess';
+    });
   }
 
   return (
@@ -105,7 +119,7 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
           </div>
           <div className="text-center sm:text-left space-y-1">
             <h1 className="font-serif text-3xl sm:text-4xl font-normal text-stone-900 tracking-tight">
-              {profileName}
+              {isUuid ? 'Sanctuary Member' : profileName}
             </h1>
             <p className="font-mono text-xs uppercase tracking-widest text-stone-500">
               Sanctuary Profile
