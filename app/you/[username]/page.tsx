@@ -5,7 +5,9 @@ import { Flame, Moon, Compass, ShieldCheck, Sparkles, Radio, Trash2 } from 'luci
 
 interface ProfilePageProps {
   params: {
-    username: string;
+    username?: string;
+    id?: string;
+    slug?: string;
   };
 }
 
@@ -39,16 +41,18 @@ function formatTime(iso?: string) {
 }
 
 export default async function UserProfilePage({ params }: ProfilePageProps) {
-  const { username } = params;
+  // Универсальный перехват параметров из любого названия динамической папки
+  const rawId = params?.username || params?.id || params?.slug || '';
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
-  if (!supabase || !username) {
+  if (!supabase || !rawId) {
     return notFound();
   }
 
+  const decodedId = decodeURIComponent(rawId);
+
   // 1. Загрузка профиля из базы
   let profileQuery = supabase.from('profiles').select('*');
-  const decodedId = decodeURIComponent(username);
   
   if (decodedId.length === 36 || /^[0-9a-fA-F-]{36}$/.test(decodedId)) {
     profileQuery = profileQuery.eq('id', decodedId);
@@ -56,9 +60,20 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
     profileQuery = profileQuery.or(`username.eq.${decodedId},name.eq.${decodedId}`);
   }
 
-  const { data: profileData, error: profileError } = await profileQuery.maybeSingle();
+  let { data: profileData, error: profileError } = await profileQuery.maybeSingle();
 
-  if (profileError || !profileData) {
+  // Авто-создание профиля, если в таблице profiles его еще не было (защита от 404)
+  if ((!profileData || profileError) && (decodedId.length === 36 || /^[0-9a-fA-F-]{36}$/.test(decodedId))) {
+    const newProfile = {
+      id: decodedId,
+      name: 'Seeker',
+      created_at: new Date().toISOString()
+    };
+    await supabase.from('profiles').upsert(newProfile);
+    profileData = newProfile;
+  }
+
+  if (!profileData) {
     return notFound();
   }
 
@@ -67,7 +82,7 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
   const profileImage = profile.image || profile.avatar_url || null;
   const memberSince = formatTime(profile.created_at);
 
-  // 2. Загрузка логов с гарантированной защитой от null
+  // 2. Загрузка логов с защитой от сбоев
   let userLogs: any[] = [];
   try {
     const { data: logsData } = await supabase
