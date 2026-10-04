@@ -1,6 +1,5 @@
 import React from 'react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { ArrowLeft, Flame, Trash2, ShieldCheck, Moon, Sparkles, Radio } from 'lucide-react';
 
@@ -35,26 +34,22 @@ function formatTime(iso?: string) {
 }
 
 interface PageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string } | Promise<{ id: string }>;
 }
 
 export default async function PublicProfilePage({ params }: PageProps) {
-  const resolvedParams = await params;
-  const userId = resolvedParams?.id;
-
-  if (!userId) {
-    notFound();
-  }
-
-  const supabase = getServerSupabaseClient({ useServiceRole: true });
+  // Универсальная поддержка синхронных и асинхронных params во всех версиях Next.js
+  const resolvedParams = params instanceof Promise ? await params : params;
+  const userId = resolvedParams?.id || 'unknown';
 
   let profile = null;
   let userLogs: any[] = [];
 
   try {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    
-    if (supabase) {
+    const supabase = getServerSupabaseClient({ useServiceRole: true });
+    if (supabase && userId !== 'unknown') {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
       let profileQuery = supabase.from('profiles').select('*');
       if (uuidRegex.test(userId)) {
         profileQuery = profileQuery.eq('id', userId);
@@ -64,25 +59,12 @@ export default async function PublicProfilePage({ params }: PageProps) {
 
       const { data: profileData } = await profileQuery.maybeSingle();
       profile = profileData;
-    }
-  } catch (e) {
-    console.error('Error fetching profile on server:', e);
-  }
 
-  const currentProfile = profile || {
-    id: userId,
-    full_name: 'Sanctuary Seeker',
-    bio: 'A quiet traveler within the Heart & Angel ecosystem.',
-    role: 'Guardian',
-  };
-
-  try {
-    if (supabase) {
-      const authorName = currentProfile.full_name || currentProfile.username || 'Anonymous';
+      const currentProfileName = profileData?.full_name || profileData?.username || 'Anonymous';
       const { data: logsData } = await supabase
         .from('temple_log')
         .select('*')
-        .or(`author.ilike.%${authorName}%,user_id.eq.${userId}`)
+        .or(`author.ilike.%${currentProfileName}%,user_id.eq.${userId}`)
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -91,8 +73,15 @@ export default async function PublicProfilePage({ params }: PageProps) {
       }
     }
   } catch (e) {
-    console.error('Error fetching temple logs on server:', e);
+    console.error('Error fetching profile data on server:', e);
   }
+
+  const currentProfile = profile || {
+    id: userId,
+    full_name: 'Sanctuary Seeker',
+    bio: 'A quiet traveler within the Heart & Angel ecosystem.',
+    role: 'Guardian',
+  };
 
   const getInitials = (name?: string) => {
     if (!name) return 'H&A';
