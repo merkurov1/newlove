@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/components/AuthContext';
-import SoundToggle from '../../components/SoundToggle';
+import SoundToggle from '../../../components/SoundToggle';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
@@ -221,8 +221,8 @@ export default function TempleClient() {
       className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-y-auto select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      {/* Увеличенный верхний отступ (pt-20 sm:pt-24 md:pt-32), чтобы кнопки были ниже */}
-      <header className="relative z-50 flex items-center justify-between w-full max-w-7xl mx-auto pt-20 sm:pt-24 md:pt-32 px-3 sm:px-6">
+      {/* Безопасный верхний отступ (pt-24 sm:pt-28 md:pt-36), чтобы элементы не налезали на фиксированный хедер сайта */}
+      <header className="relative z-40 flex items-center justify-between w-full max-w-7xl mx-auto pt-24 sm:pt-28 md:pt-36 px-3 sm:px-6">
         <Link 
           href="/heartandangel/world"
           className={`flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
