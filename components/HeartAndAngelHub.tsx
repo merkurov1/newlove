@@ -244,20 +244,11 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* 4. Галерея: Swiper горизонтальная прокрутка */}
-        <div className="w-full space-y-4">
-          <div className="flex justify-between items-center px-2">
-            <h3 className="font-serif text-xl sm:text-2xl text-stone-900 tracking-tight">
-              Visual Archive
-            </h3>
-            <span className="font-mono text-xs text-stone-400 uppercase tracking-widest">
-              Swipe / Scroll
-            </span>
-          </div>
-
+        {/* 4. Галерея: Swiper горизонтальная прокрутка (увеличенные карточки без заголовка) */}
+        <div className="w-full">
           <Swiper
             modules={[FreeMode, Mousewheel]}
-            spaceBetween={20}
+            spaceBetween={24}
             slidesPerView={'auto'}
             freeMode={true}
             mousewheel={{ forceToAxis: true }}
@@ -265,14 +256,14 @@ export default function HeartAndAngelHub() {
             className="w-full !overflow-visible py-2"
           >
             {galleryImages.map((src, idx) => (
-              <SwiperSlide key={idx} className="!w-[300px] sm:!w-[420px] shrink-0">
+              <SwiperSlide key={idx} className="!w-[360px] sm:!w-[520px] shrink-0">
                 <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden bg-white shadow-sm border border-stone-200/60 flex items-center justify-center p-3 group">
                   <Image
                     src={src}
                     alt={`Gallery Artifact ${idx + 1}`}
                     fill
                     className="object-contain rounded-2xl transition-transform duration-700 group-hover:scale-105"
-                    sizes="(max-width: 768px) 300px, 420px"
+                    sizes="(max-width: 768px) 360px, 520px"
                   />
                 </div>
               </SwiperSlide>
