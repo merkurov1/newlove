@@ -1,11 +1,10 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase-browser';
-import Header from '@/components/Header';
+import { notFound } from 'next/navigation';
+import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { ArrowLeft, Flame, Trash2, ShieldCheck, Moon, Sparkles, Radio } from 'lucide-react';
+
+export const dynamic = 'force-dynamic';
 
 function getEventVisuals(eventType: string) {
   switch (eventType?.toUpperCase()) {
@@ -35,91 +34,77 @@ function formatTime(iso?: string) {
   return `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${time}`;
 }
 
-export default function PublicProfilePage() {
-  const params = useParams();
-  const userId = params?.id as string;
-  
-  const supabase = createClient();
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
 
-  const [profile, setProfile] = useState<any>(null);
-  const [userLogs, setUserLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export default async function PublicProfilePage({ params }: PageProps) {
+  const resolvedParams = await params;
+  const userId = resolvedParams?.id;
 
-  useEffect(() => {
-    async function fetchProfileData() {
-      if (!userId) return;
-      setLoading(true);
+  if (!userId) {
+    notFound();
+  }
 
-      try {
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        
-        let profileQuery = supabase.from('profiles').select('*');
-        if (uuidRegex.test(userId)) {
-          profileQuery = profileQuery.eq('id', userId);
-        } else {
-          profileQuery = profileQuery.eq('username', userId);
-        }
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
 
-        const { data: profileData, error: profileError } = await profileQuery.maybeSingle();
+  let profile = null;
+  let userLogs: any[] = [];
 
-        let currentProfile = profileData;
-        if (profileError || !profileData) {
-          currentProfile = {
-            id: userId,
-            full_name: 'Sanctuary Seeker',
-            bio: 'A quiet traveler within the Heart & Angel ecosystem.',
-            role: 'Guardian',
-          };
-        }
-        setProfile(currentProfile);
+  try {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    
+    if (supabase) {
+      let profileQuery = supabase.from('profiles').select('*');
+      if (uuidRegex.test(userId)) {
+        profileQuery = profileQuery.eq('id', userId);
+      } else {
+        profileQuery = profileQuery.eq('username', userId);
+      }
 
-        const authorName = currentProfile.full_name || currentProfile.username || 'Anonymous';
-        const { data: logsData } = await supabase
-          .from('temple_log')
-          .select('*')
-          .or(`author.ilike.%${authorName}%,user_id.eq.${userId}`)
-          .order('created_at', { ascending: false })
-          .limit(20);
+      const { data: profileData } = await profileQuery.maybeSingle();
+      profile = profileData;
+    }
+  } catch (e) {
+    console.error('Error fetching profile on server:', e);
+  }
 
-        if (logsData) {
-          setUserLogs(logsData);
-        }
-      } catch (e) {
-        console.error('Error fetching sanctuary profile:', e);
-      } finally {
-        setLoading(false);
+  const currentProfile = profile || {
+    id: userId,
+    full_name: 'Sanctuary Seeker',
+    bio: 'A quiet traveler within the Heart & Angel ecosystem.',
+    role: 'Guardian',
+  };
+
+  try {
+    if (supabase) {
+      const authorName = currentProfile.full_name || currentProfile.username || 'Anonymous';
+      const { data: logsData } = await supabase
+        .from('temple_log')
+        .select('*')
+        .or(`author.ilike.%${authorName}%,user_id.eq.${userId}`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (logsData) {
+        userLogs = logsData;
       }
     }
-
-    fetchProfileData();
-  }, [userId, supabase]);
+  } catch (e) {
+    console.error('Error fetching temple logs on server:', e);
+  }
 
   const getInitials = (name?: string) => {
     if (!name) return 'H&A';
     return name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
   };
 
-  if (loading || !userId) {
-    return (
-      <div className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans flex flex-col justify-between">
-        <Header />
-        <div className="max-w-4xl mx-auto w-full px-6 py-32 text-center my-auto space-y-4 animate-pulse">
-          <div className="w-16 h-16 bg-stone-200 rounded-full mx-auto" />
-          <div className="h-6 bg-stone-200 w-48 mx-auto rounded" />
-          <div className="h-4 bg-stone-200 w-72 mx-auto rounded" />
-        </div>
-      </div>
-    );
-  }
-
   const vigilsCount = userLogs.filter(l => (l.event_type || '').toLowerCase().includes('vigil')).length;
   const ashesCount = userLogs.filter(l => (l.event_type || '').toLowerCase() === 'ash').length;
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans selection:bg-stone-900 selection:text-white antialiased">
-      <Header />
-
-      <main className="max-w-4xl mx-auto pt-32 sm:pt-36 pb-24 px-4 sm:px-6 lg:px-8 space-y-10">
+    <div className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans selection:bg-stone-900 selection:text-white antialiased pt-28 sm:pt-32">
+      <main className="max-w-4xl mx-auto pb-24 px-4 sm:px-6 lg:px-8 space-y-10">
         <div>
           <Link 
             href="/heartandangel/world" 
@@ -133,17 +118,17 @@ export default function PublicProfilePage() {
         <div className="bg-white/85 backdrop-blur-md border border-stone-200 p-8 sm:p-10 rounded-3xl space-y-8 shadow-sm">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
             <div className="w-20 h-20 rounded-2xl bg-stone-900 text-white flex items-center justify-center font-serif text-2xl tracking-widest shrink-0 shadow-md">
-              {profile?.avatar_url || profile?.image ? (
-                <img src={profile.avatar_url || profile.image} alt="Avatar" className="w-full h-full object-cover rounded-2xl" />
+              {currentProfile?.avatar_url || currentProfile?.image ? (
+                <img src={currentProfile.avatar_url || currentProfile.image} alt="Avatar" className="w-full h-full object-cover rounded-2xl" />
               ) : (
-                getInitials(profile?.full_name || profile?.username)
+                getInitials(currentProfile?.full_name || currentProfile?.username)
               )}
             </div>
 
             <div className="space-y-2 flex-1">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
                 <span className="font-mono text-[10px] tracking-[0.25em] uppercase px-3 py-1 bg-stone-100 border border-stone-200 text-stone-600 rounded-full">
-                  {profile?.role || 'Sanctuary Guardian'}
+                  {currentProfile?.role || 'Sanctuary Guardian'}
                 </span>
                 <span className="font-mono text-[10px] tracking-widest text-stone-400">
                   ID: {userId.slice(0, 8)}...
@@ -151,12 +136,12 @@ export default function PublicProfilePage() {
               </div>
 
               <h1 className="text-3xl sm:text-4xl font-serif font-light text-stone-900 tracking-tight">
-                {profile?.full_name || profile?.username || 'Seeker Dossier'}
+                {currentProfile?.full_name || currentProfile?.username || 'Seeker Dossier'}
               </h1>
 
-              {profile?.bio && (
+              {currentProfile?.bio && (
                 <p className="font-serif italic text-stone-600 text-sm sm:text-base max-w-2xl leading-relaxed pt-1">
-                  {profile.bio}
+                  {currentProfile.bio}
                 </p>
               )}
             </div>
@@ -220,12 +205,7 @@ export default function PublicProfilePage() {
             </div>
           )}
         </div>
-
       </main>
-
-      <footer className="max-w-4xl mx-auto w-full px-6 py-12 text-center font-mono text-[10px] text-stone-400 uppercase tracking-[0.3em] border-t border-stone-200/60">
-        Heart &amp; Angel Sanctuary &copy; {new Date().getFullYear()}
-      </footer>
     </div>
   );
 }
