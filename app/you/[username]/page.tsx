@@ -1,186 +1,142 @@
-import { notFound } from 'next/navigation';
-import Image from 'next/image';
-import { getServerSupabaseClient } from '@/lib/serverAuth';
-import { Flame, Moon, Compass, ShieldCheck, Sparkles, Radio, Trash2 } from 'lucide-react';
+'use client';
 
-interface ProfilePageProps {
-  params: {
-    username?: string;
-    id?: string;
-    slug?: string;
-  };
+import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { Radio, Flame, Compass, ShieldCheck, Moon, Sparkles, Trash2, Activity } from 'lucide-react';
+
+interface ProfilePost {
+  id: string | number;
+  type: string;
+  label: string;
+  author: string;
+  content: string;
+  icon: any;
+  color: string;
 }
 
 function getEventVisuals(eventType: string) {
-  switch ((eventType || '').toUpperCase()) {
+  switch (eventType?.toUpperCase()) {
     case 'VIGIL':
     case 'VIGIL_SPARK':
-      return { icon: Flame, label: 'Vigil' };
+      return { icon: Flame, color: 'text-amber-500', label: 'Vigil' };
     case 'ASH':
-      return { icon: Trash2, label: 'Let It Go' };
+      return { icon: Trash2, color: 'text-rose-500', label: 'Let It Go' };
     case 'CAST':
-      return { icon: Compass, label: 'Cast' };
+      return { icon: Compass, color: 'text-indigo-400', label: 'Cast' };
     case 'ABSOLUTION':
-      return { icon: ShieldCheck, label: 'Absolution' };
+      return { icon: ShieldCheck, color: 'text-emerald-400', label: 'Absolution' };
     case 'HEARTANDANGEL':
     case 'MEDITATION':
     case 'SILENCE':
-      return { icon: Moon, label: 'Calm' };
+      return { icon: Moon, color: 'text-purple-400', label: 'Calm' };
     case 'WHISPER':
-      return { icon: Sparkles, label: 'Whisper' };
+      return { icon: Sparkles, color: 'text-amber-300', label: 'Whisper' };
     default:
-      return { icon: Radio, label: eventType || 'Log' };
+      return { icon: Radio, color: 'text-stone-400', label: eventType || 'Log' };
   }
 }
 
-function formatTime(iso?: string) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
-  return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
-}
+export default function ProfilePage() {
+  const [posts, setPosts] = useState<ProfilePost[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
-export default async function UserProfilePage({ params }: ProfilePageProps) {
-  // Универсальный перехват параметров из любого названия динамической папки
-  const rawId = params?.username || params?.id || params?.slug || '';
-  const supabase = getServerSupabaseClient({ useServiceRole: true });
+  useEffect(() => {
+    async function fetchUserLogs() {
+      try {
+        const res = await fetch('/api/temple_logs', { cache: 'no-store' });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!json || !Array.isArray(json.data)) return;
 
-  if (!supabase || !rawId) {
-    return notFound();
-  }
+        const formatted: ProfilePost[] = json.data
+          .filter((item: any) => {
+            const type = (item.event_type || '').toLowerCase();
+            return type !== 'enter' && type !== 'nav' && type !== 'confess';
+          })
+          .map((item: any, index: number) => {
+            const type = (item.event_type || 'WHISPER').toUpperCase();
+            const visuals = getEventVisuals(type);
+            const cleanContent = String(item.message ?? '');
 
-  const decodedId = decodeURIComponent(rawId);
+            return {
+              id: item.id ?? `${item.created_at}-${index}`,
+              type,
+              label: visuals.label,
+              author: item.author || 'Anonymous',
+              content: cleanContent,
+              icon: visuals.icon,
+              color: visuals.color
+            };
+          });
 
-  // 1. Загрузка профиля из базы
-  let profileQuery = supabase.from('profiles').select('*');
-  
-  if (decodedId.length === 36 || /^[0-9a-fA-F-]{36}$/.test(decodedId)) {
-    profileQuery = profileQuery.eq('id', decodedId);
-  } else {
-    profileQuery = profileQuery.or(`username.eq.${decodedId},name.eq.${decodedId}`);
-  }
-
-  let { data: profileData, error: profileError } = await profileQuery.maybeSingle();
-
-  // Авто-создание профиля, если в таблице profiles его еще не было (защита от 404)
-  if ((!profileData || profileError) && (decodedId.length === 36 || /^[0-9a-fA-F-]{36}$/.test(decodedId))) {
-    const newProfile = {
-      id: decodedId,
-      name: 'Seeker',
-      created_at: new Date().toISOString()
-    };
-    await supabase.from('profiles').upsert(newProfile);
-    profileData = newProfile;
-  }
-
-  if (!profileData) {
-    return notFound();
-  }
-
-  const profile = profileData;
-  const profileName = profile.name || profile.full_name || 'Anonymous';
-  const profileImage = profile.image || profile.avatar_url || null;
-  const memberSince = formatTime(profile.created_at);
-
-  // 2. Загрузка логов с защитой от сбоев
-  let userLogs: any[] = [];
-  try {
-    const { data: logsData } = await supabase
-      .from('temple_logs')
-      .select('*')
-      .or(`author.ilike.%${profileName}%,user_id.eq.${profile.id}`)
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    if (Array.isArray(logsData)) {
-      userLogs = logsData;
+        setPosts(formatted);
+      } catch (e) {
+        console.warn('Failed to load profile logs', e);
+      } finally {
+        setLoaded(true);
+      }
     }
-  } catch (e) {
-    console.warn('Failed to load temple logs for profile', e);
-  }
+
+    fetchUserLogs();
+  }, []);
 
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans px-6 pt-32 pb-24 selection:bg-stone-200">
-      <div className="max-w-2xl mx-auto space-y-12">
+    <div className="relative w-full min-h-[100dvh] bg-[#FAF8F5] text-stone-900 font-sans p-6 sm:p-12 flex flex-col items-center">
+      <div className="w-full max-w-3xl mx-auto space-y-8">
         
-        {/* ХЕДЕР ПРОФИЛЯ */}
-        <div className="flex flex-col items-center text-center space-y-5">
-          {profileImage ? (
-            <div className="w-24 h-24 rounded-full overflow-hidden border border-stone-300 shadow-sm">
-              <Image 
-                src={profileImage} 
-                alt={profileName} 
-                width={96} 
-                height={96} 
-                className="w-full h-full object-cover"
-                priority
-              />
-            </div>
-          ) : (
-            <div className="w-24 h-24 rounded-full bg-stone-900 text-white font-sans font-bold text-2xl flex items-center justify-center shadow-sm">
-              {profileName.substring(0, 2).toUpperCase()}
-            </div>
-          )}
+        {/* Навигация назад */}
+        <div className="flex items-center justify-between">
+          <Link 
+            href="/heartandangel/world"
+            className="px-5 py-2.5 rounded-full bg-white/80 border border-stone-300 text-stone-900 shadow-sm text-xs font-serif tracking-wider hover:bg-white transition-all"
+          >
+            ← Back to World
+          </Link>
+        </div>
 
-          <div className="space-y-1.5">
-            <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-stone-900">
-              {profileName}
-            </h1>
-            
-            {memberSince && (
-              <p className="font-mono text-xs uppercase tracking-[0.2em] text-stone-500">
-                Since {memberSince}
-              </p>
-            )}
+        {/* Шапка профайла */}
+        <div className="bg-white/90 border border-stone-200 rounded-3xl p-8 shadow-xl backdrop-blur-md flex flex-col sm:flex-row items-center gap-6">
+          <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-stone-300 shadow-inner bg-stone-100 flex items-center justify-center">
+            {/* Аватар / Иконка */}
+            <Image 
+              src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png" 
+              alt="Profile Avatar"
+              fill
+              className="object-contain p-2"
+            />
+          </div>
+          <div className="text-center sm:text-left space-y-1">
+            <h1 className="font-serif text-3xl font-normal text-stone-900">Sanctuary Profile</h1>
+            <p className="font-mono text-xs uppercase tracking-widest text-stone-500">Connected to the Ether</p>
           </div>
         </div>
 
-        {/* РЕЕСТР ДЕЙСТВИЙ (TEMPLE LOGS) */}
-        <div className="space-y-6 pt-6 border-t border-stone-200/80">
-          <div className="flex items-center justify-between">
-            <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-stone-500">
-              Sanctuary Ledger
-            </h2>
-            <span className="font-mono text-xs text-stone-400">
-              {userLogs.length} {userLogs.length === 1 ? 'entry' : 'entries'}
-            </span>
-          </div>
+        {/* Список логов / Offerings (без дат и слова Seeker) */}
+        <div className="bg-white/90 border border-stone-200 rounded-3xl p-6 sm:p-8 shadow-xl backdrop-blur-md space-y-6">
+          <h2 className="font-serif text-xl border-b pb-3 border-stone-200">Recent Offerings</h2>
 
-          <div className="space-y-3">
-            {userLogs.length === 0 ? (
-              <div className="py-12 text-center">
-                <p className="font-serif italic text-sm text-stone-400">
-                  * No traces in the ether yet.*
-                </p>
-              </div>
+          <div className="divide-y divide-stone-100">
+            {!loaded ? (
+              <p className="font-mono text-xs opacity-60 uppercase tracking-widest animate-pulse py-8 text-center">Loading offerings...</p>
+            ) : posts.length === 0 ? (
+              <p className="font-mono text-xs opacity-60 uppercase tracking-widest py-8 text-center">No offerings recorded yet.</p>
             ) : (
-              userLogs.map((log: any) => {
-                const eventType = log?.event_type || 'WHISPER';
-                const visuals = getEventVisuals(eventType);
-                const IconComponent = visuals.icon;
-                const logTime = formatTime(log?.created_at);
-
+              posts.map((post) => {
+                const IconComponent = post.icon || Radio;
                 return (
-                  <div 
-                    key={log?.id || Math.random()} 
-                    className="flex items-center justify-between p-4 rounded-2xl bg-white/80 backdrop-blur-md border border-stone-200/70 shadow-[0_2px_15px_rgba(0,0,0,0.02)] transition-all"
-                  >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-600 shrink-0">
+                  <div key={post.id} className="py-4 flex items-center justify-between gap-4 text-sm">
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className={`w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center ${post.color}`}>
                         <IconComponent size={16} />
                       </div>
-                      <div className="min-w-0 text-left">
-                        <div className="font-mono text-xs font-bold uppercase tracking-wider text-stone-800">
-                          {visuals.label}
-                        </div>
-                        <div className="font-serif text-sm text-stone-600 truncate mt-0.5">
-                          {log?.message || '—'}
-                        </div>
-                      </div>
+                      <span className="font-mono text-xs font-bold uppercase tracking-wider">{post.label}</span>
                     </div>
 
-                    <div className="font-mono text-[11px] text-stone-400 shrink-0 pl-4">
-                      {logTime}
+                    <div className="flex-1 font-serif font-light text-stone-800 truncate px-2 flex items-center gap-2 text-left">
+                      <span className="font-medium text-stone-900 shrink-0">{post.author}</span>
+                      <span className="opacity-40">•</span>
+                      <span className="truncate opacity-90">{post.content}</span>
                     </div>
                   </div>
                 );
@@ -190,6 +146,6 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
         </div>
 
       </div>
-    </main>
+    </div>
   );
 }
