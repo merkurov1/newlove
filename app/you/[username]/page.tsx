@@ -1,9 +1,14 @@
-import React from 'react';
+import { notFound } from 'next/navigation';
+import Image from 'next/image';
 import Link from 'next/link';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
-import { ArrowLeft, Flame, Trash2, Sparkles, ShieldCheck, Moon, Radio } from 'lucide-react';
+import { Flame, Moon, Compass, ShieldCheck, Sparkles, Radio, Trash2 } from 'lucide-react';
 
-export const dynamic = 'force-dynamic';
+interface ProfilePageProps {
+  params: {
+    id: string;
+  };
+}
 
 function getEventVisuals(eventType: string) {
   switch (eventType?.toUpperCase()) {
@@ -13,196 +18,155 @@ function getEventVisuals(eventType: string) {
     case 'ASH':
       return { icon: Trash2, label: 'Let It Go' };
     case 'CAST':
-      return { icon: Sparkles, label: 'Cast' };
+      return { icon: Compass, label: 'Cast' };
     case 'ABSOLUTION':
       return { icon: ShieldCheck, label: 'Absolution' };
     case 'HEARTANDANGEL':
     case 'MEDITATION':
     case 'SILENCE':
       return { icon: Moon, label: 'Calm' };
+    case 'WHISPER':
+      return { icon: Sparkles, label: 'Whisper' };
     default:
-      return { icon: Radio, label: eventType || 'Whisper' };
+      return { icon: Radio, label: eventType || 'Log' };
   }
 }
 
 function formatTime(iso?: string) {
-  const d = iso ? new Date(iso) : new Date();
+  if (!iso) return '';
+  const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
-  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (d.toDateString() === new Date().toDateString()) return time;
-  return `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${time}`;
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-interface PageProps {
-  params: { id: string } | Promise<{ id: string }>;
-}
+export default async function UserProfilePage({ params }: ProfilePageProps) {
+  const { id } = params;
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
 
-export default async function PublicProfilePage({ params }: PageProps) {
-  const resolvedParams = params instanceof Promise ? await params : params;
-  const userId = resolvedParams?.id || 'unknown';
-
-  let profile = null;
-  let userLogs: any[] = [];
-
-  try {
-    const supabase = getServerSupabaseClient({ useServiceRole: true });
-    if (supabase && userId !== 'unknown') {
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      
-      let profileQuery = supabase.from('profiles').select('*');
-      if (uuidRegex.test(userId)) {
-        profileQuery = profileQuery.eq('id', userId);
-      } else {
-        profileQuery = profileQuery.eq('username', userId);
-      }
-
-      const { data: profileData } = await profileQuery.maybeSingle();
-      profile = profileData;
-
-      const currentProfileName = profileData?.full_name || profileData?.username || 'Anonymous';
-      const { data: logsData } = await supabase
-        .from('temple_log')
-        .select('*')
-        .or(`author.ilike.%${currentProfileName}%,user_id.eq.${userId}`)
-        .order('created_at', { ascending: false })
-        .limit(30);
-
-      if (logsData) {
-        userLogs = logsData;
-      }
-    }
-  } catch (e) {
-    console.error('Error fetching profile data on server:', e);
+  if (!supabase) {
+    return notFound();
   }
 
-  const currentProfile = profile || {
-    id: userId,
-    full_name: 'Sanctuary Seeker',
-    bio: 'A quiet traveler within the ecosystem.',
-    role: 'Guardian',
-  };
+  // 1. Загрузка профиля из базы (по UUID или username/name)
+  let profileQuery = supabase.from('profiles').select('*');
+  if (id.length === 36 || /^[0-9a-fA-F-]{36}$/.test(id)) {
+    profileQuery = profileQuery.eq('id', id);
+  } else {
+    profileQuery = profileQuery.or(`username.eq.${id},name.eq.${id}`);
+  }
 
-  const getInitials = (name?: string) => {
-    if (!name) return 'H&A';
-    return name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
-  };
+  const { data: profileData, error: profileError } = await profileQuery.maybeSingle();
 
-  const vigilsCount = userLogs.filter(l => (l.event_type || '').toLowerCase().includes('vigil')).length;
-  const ashesCount = userLogs.filter(l => (l.event_type || '').toLowerCase() === 'ash').length;
+  if (profileError || !profileData) {
+    return notFound();
+  }
+
+  const profile = profileData;
+  const profileName = profile.name || profile.full_name || 'Anonymous';
+  const profileImage = profile.image || profile.avatar_url || null;
+  const memberSince = formatTime(profile.created_at);
+
+  // 2. Загрузка реальных логов из таблицы temple_logs для этого пользователя
+  const { data: logsData } = await supabase
+    .from('temple_logs')
+    .select('*')
+    .or(`author.ilike.%${profileName}%,user_id.eq.${profile.id}`)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  const userLogs = logsData || [];
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans selection:bg-stone-900 selection:text-white antialiased pt-28 sm:pt-36">
-      <main className="max-w-4xl mx-auto pb-32 px-6 lg:px-8 space-y-12">
+    <main className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans px-6 pt-32 pb-24 selection:bg-stone-200">
+      <div className="max-w-2xl mx-auto space-y-12">
         
-        {/* BACK NAVIGATION */}
-        <div>
-          <Link 
-            href="/heartandangel/world" 
-            className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-stone-400 hover:text-stone-900 transition-colors"
-          >
-            <ArrowLeft size={13} />
-            <span>Sanctuary World</span>
-          </Link>
-        </div>
-
-        {/* DOSSIER HEADER */}
-        <div className="bg-white border border-stone-200/90 p-8 sm:p-12 rounded-3xl space-y-8">
-          <div className="flex flex-col sm:flex-row items-start gap-6">
-            
-            {/* AVATAR / INITIALS */}
-            <div className="w-20 h-20 rounded-2xl bg-stone-900 text-white flex items-center justify-center font-serif text-2xl tracking-widest shrink-0">
-              {currentProfile?.avatar_url || currentProfile?.image ? (
-                <img src={currentProfile.avatar_url || currentProfile.image} alt="Avatar" className="w-full h-full object-cover rounded-2xl" />
-              ) : (
-                getInitials(currentProfile?.full_name || currentProfile?.username)
-              )}
-            </div>
-
-            {/* INFO */}
-            <div className="space-y-3 flex-1">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="font-mono text-[10px] tracking-[0.2em] uppercase px-3 py-1 bg-stone-100 text-stone-600 rounded-md border border-stone-200">
-                  {currentProfile?.role || 'Guardian'}
-                </span>
-                <span className="font-mono text-[10px] tracking-widest text-stone-400">
-                  ID: {userId.slice(0, 8)}
-                </span>
-              </div>
-
-              <h1 className="text-3xl sm:text-4xl font-serif font-light text-stone-900 tracking-tight">
-                {currentProfile?.full_name || currentProfile?.username || 'Seeker'}
-              </h1>
-
-              {currentProfile?.bio && (
-                <p className="font-serif italic text-stone-600 text-sm sm:text-base leading-relaxed max-w-xl">
-                  {currentProfile.bio}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* METRICS BAR */}
-          <div className="grid grid-cols-3 gap-6 border-t border-stone-100 pt-6 font-mono text-xs">
-            <div>
-              <span className="block text-[10px] text-stone-400 uppercase tracking-widest mb-1">Total Traces</span>
-              <span className="text-stone-900 font-medium text-sm">{userLogs.length}</span>
-            </div>
-            <div>
-              <span className="block text-[10px] text-stone-400 uppercase tracking-widest mb-1">Vigils</span>
-              <span className="text-stone-900 font-medium text-sm">{vigilsCount}</span>
-            </div>
-            <div>
-              <span className="block text-[10px] text-stone-400 uppercase tracking-widest mb-1">Ashes</span>
-              <span className="text-stone-900 font-medium text-sm">{ashesCount}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* ETHER LEDGER / LOGS */}
-        <div className="space-y-6">
-          <div className="flex justify-between items-baseline border-b border-stone-200 pb-3">
-            <h2 className="font-serif text-xl font-light text-stone-900">Ether Ledger</h2>
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">Activity Stream</span>
-          </div>
-
-          {userLogs.length === 0 ? (
-            <div className="bg-white border border-dashed border-stone-300 p-12 text-center rounded-3xl font-mono text-xs text-stone-400 uppercase tracking-wider">
-              No offerings recorded in the ether.
+        {/* ХЕДЕР ПРОФИЛЯ */}
+        <div className="flex flex-col items-center text-center space-y-5">
+          {profileImage ? (
+            <div className="w-24 h-24 rounded-full overflow-hidden border border-stone-300 shadow-sm">
+              <Image 
+                src={profileImage} 
+                alt={profileName} 
+                width={96} 
+                height={96} 
+                className="w-full h-full object-cover"
+                priority
+              />
             </div>
           ) : (
-            <div className="space-y-2">
-              {userLogs.map((log) => {
-                const type = (log.event_type || 'WHISPER').toUpperCase();
-                const visuals = getEventVisuals(type);
-                const IconComp = visuals.icon;
+            <div className="w-24 h-24 rounded-full bg-stone-900 text-white font-sans font-bold text-2xl flex items-center justify-center shadow-sm">
+              {profileName.substring(0, 2).toUpperCase()}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <h1 className="font-serif text-3xl sm:text-4xl font-normal tracking-tight text-stone-900">
+              {profileName}
+            </h1>
+            
+            {memberSince && (
+              <p className="font-mono text-xs uppercase tracking-[0.2em] text-stone-500">
+                Since {memberSince}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* РЕЕСТР ДЕЙСТВИЙ (TEMPLE LOGS) */}
+        <div className="space-y-6 pt-6 border-t border-stone-200/80">
+          <div className="flex items-center justify-between">
+            <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-stone-500">
+              Sanctuary Ledger
+            </h2>
+            <span className="font-mono text-xs text-stone-400">
+              {userLogs.length} {userLogs.length === 1 ? 'entry' : 'entries'}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {userLogs.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="font-serif italic text-sm text-stone-400">
+                  * No traces in the ether yet.*
+                </p>
+              </div>
+            ) : (
+              userLogs.map((log: any) => {
+                const eventType = log.event_type || 'WHISPER';
+                const visuals = getEventVisuals(eventType);
+                const IconComponent = visuals.icon;
+                const logTime = formatTime(log.created_at);
 
                 return (
                   <div 
                     key={log.id} 
-                    className="bg-white border border-stone-200/80 px-6 py-4 rounded-2xl flex items-center justify-between gap-4 text-sm transition hover:border-stone-400"
+                    className="flex items-center justify-between p-4 rounded-2xl bg-white/80 backdrop-blur-md border border-stone-200/70 shadow-[0_2px_15px_rgba(0,0,0,0.02)] transition-all"
                   >
-                    <div className="flex items-center gap-3 shrink-0">
-                      <IconComp size={15} className="text-stone-400" />
-                      <span className="font-mono text-[11px] uppercase tracking-wider text-stone-800 w-24">
-                        {visuals.label}
-                      </span>
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-600 shrink-0">
+                        <IconComponent size={16} />
+                      </div>
+                      <div className="min-w-0 text-left">
+                        <div className="font-mono text-xs font-bold uppercase tracking-wider text-stone-800">
+                          {visuals.label}
+                        </div>
+                        <div className="font-serif text-sm text-stone-600 truncate mt-0.5">
+                          {log.message || '—'}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex-1 font-serif font-light text-stone-700 truncate px-4">
-                      {log.message}
-                    </div>
-
-                    <div className="font-mono text-[11px] text-stone-400 shrink-0 text-right">
-                      {formatTime(log.created_at)}
+                    <div className="font-mono text-[11px] text-stone-400 shrink-0 pl-4">
+                      {logTime}
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          )}
+              })
+            )}
+          </div>
         </div>
 
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
