@@ -1,17 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Suspense from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase-browser';
-import TempleWrapper from '@/components/TempleWrapper';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Защищенный импорт компонентов (предотвращает ошибки вида got: object)
+import * as TempleWrapperMod from '@/components/TempleWrapper';
+const TempleWrapper = (TempleWrapperMod as any).default || (TempleWrapperMod as any).TempleWrapper || TempleWrapperMod;
+
+import * as SoundToggleMod from '@/components/SoundToggle';
+const SoundToggle = (SoundToggleMod as any).default || (SoundToggleMod as any).SoundToggle || (SoundToggleMod as any).SoundButton || (() => null);
 
 // --- CONFIG ---
 const HEART_VIDEO = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-5300087847065473569.mp4'; 
 const PRESETS = [5, 20, 100]; // USD Amounts
 
-// Инициализируем клиент вне компонента (паттерн синглтона)
 const supabase = createClient();
 
 export default function TributePage() {
@@ -142,7 +146,9 @@ export default function TributePage() {
 
   return (
     <div className="min-h-screen bg-black text-[#e5b863] font-mono flex flex-col items-center relative overflow-x-hidden selection:bg-[#e5b863] selection:text-black">
-      <Suspense fallback={null}><TempleWrapper /></Suspense>
+      <React.Suspense fallback={null}>
+        {typeof TempleWrapper === 'function' ? <TempleWrapper /> : null}
+      </React.Suspense>
       
       {/* AMBIENT GLOW */}
       <div 
@@ -153,7 +159,7 @@ export default function TributePage() {
         }} 
       />
 
-      {/* TOP BAR: BACK TO TEMPLE */}
+      {/* TOP BAR: BACK TO TEMPLE & SOUND TOGGLE */}
       <div className="w-full max-w-md px-6 pt-6 flex justify-between items-center z-20">
         <Link 
           href="/temple"
@@ -161,6 +167,7 @@ export default function TributePage() {
         >
           ← Temple
         </Link>
+        {typeof SoundToggle === 'function' && <SoundToggle />}
       </div>
 
       <div className="z-10 w-full max-w-md px-6 flex flex-col items-center min-h-[calc(100vh-80px)] justify-center py-10">
