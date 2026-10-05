@@ -7,6 +7,7 @@ import { Sparkles, RotateCcw, Download } from 'lucide-react';
 
 import TempleTopBar from '@/components/TempleTopBar';
 import { useAuth } from '@/components/AuthContext';
+import { logTempleEvent } from '@/lib/templeLogger';
 
 const STAMP_DELAY = 1200;
 const STAMP_IMAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0947.png';
@@ -77,14 +78,10 @@ export default function AbsolutionPage() {
     setStep('processing');
 
     try {
-      await fetch('/api/temple_logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event_type: 'ABSOLUTION',
-          message: `${name} confessed: "${sinText}" and received joyous absolution.`,
-          author: name
-        })
+      await logTempleEvent({
+        event_type: 'ABSOLUTION',
+        message: `${name} confessed: "${sinText}" and received joyous absolution.`,
+        author: name
       });
     } catch (e) {
       console.error('Failed to log absolution to temple:', e);
@@ -138,25 +135,25 @@ export default function AbsolutionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0904] text-[#ffd700] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#ffd700] selection:text-black pt-40 sm:pt-44">
+    <div className="relative flex min-h-[100dvh] flex-col justify-between overflow-x-hidden bg-[#141210] p-6 font-sans text-stone-200 selection:bg-amber-300 selection:text-black sm:p-12">
       <div className="noise-overlay" />
 
       {/* RADIANT WARM GLOW */}
       <div 
         className="absolute inset-0 pointer-events-none transition-opacity duration-1000"
         style={{ 
-            background: 'radial-gradient(circle at center, rgba(255, 215, 0, 0.2) 0%, rgba(12, 9, 4, 0.95) 75%)',
+            background: 'radial-gradient(circle at 50% 40%, rgba(120, 75, 20, 0.30) 0%, rgba(20, 18, 16, 0.98) 75%)',
         }} 
       />
 
       <TempleTopBar />
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-6 relative z-25 w-full max-w-md mx-auto">
+      <main className="relative z-20 mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center py-12">
         
         {/* STAGE 1: CONFESSIONAL */}
         {step === 'confess' && (
-          <div className="w-full p-8 rounded-2xl bg-[#161004]/90 border border-[#ffd700]/30 shadow-[0_0_35px_rgba(255,215,0,0.15)] backdrop-blur-xl animate-in fade-in zoom-in duration-500 space-y-6">
+          <div className="w-full space-y-6 rounded-3xl border border-stone-800/80 bg-stone-900/90 p-6 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-500 sm:p-8">
               <div className="text-center space-y-2">
                   <div className="w-11 h-11 mx-auto rounded-full bg-[#241908] border border-[#ffd700]/40 flex items-center justify-center text-[#ffd700] shadow-[0_0_15px_rgba(255,215,0,0.3)]">
                       <Sparkles size={20} />
@@ -206,7 +203,7 @@ export default function AbsolutionPage() {
 
         {/* STAGE 2: PROCESSING */}
         {step === 'processing' && (
-          <div className="text-center p-10 rounded-2xl bg-[#161004]/90 border border-[#ffd700]/30 shadow-2xl space-y-4">
+          <div className="space-y-4 rounded-3xl border border-stone-800/80 bg-stone-900/90 p-10 text-center shadow-2xl backdrop-blur-xl">
               <div className="animate-spin text-3xl text-[#ffd700]">✨</div>
               <div className="text-[10px] text-[#ffd700] uppercase tracking-[0.3em] animate-pulse font-bold">
                   DISSOLVING BURDENS INTO LIGHT...

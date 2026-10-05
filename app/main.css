@@ -402,7 +402,7 @@ body.telegram-app header {
   gap: .75rem;
   width: min(100% - 2rem, 56rem);
   margin-inline: auto;
-  padding-top: clamp(4.5rem, 8vw, 7rem);
+  padding-top: clamp(5.75rem, 8vw, 7.5rem);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .temple-topbar__back, .temple-topbar__actions > button {

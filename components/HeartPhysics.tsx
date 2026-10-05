@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthContext';
 import TempleTopBar from './TempleTopBar';
+import { logTempleEvent } from '@/lib/templeLogger';
 
 interface Props {
   daemonUrl?: string;
@@ -40,24 +41,11 @@ export default function HeartPhysics({
     return () => {
       const currentSeconds = secondsRef.current;
       if (currentSeconds > 2) {
-        const payload = {
+        void logTempleEvent({
           event_type: 'MEDITATION',
           message: `Spent ${currentSeconds} ${currentSeconds === 1 ? 'second' : 'seconds'} finding calm.`,
-          author: authorRef.current,
-          token: tokenRef.current
-        };
-
-        if (navigator.sendBeacon) {
-          const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-          navigator.sendBeacon('/api/temple_logs', blob);
-        } else {
-          fetch('/api/temple_logs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            keepalive: true
-          }).catch(() => {});
-        }
+          author: authorRef.current
+        });
       }
     };
   }, []);

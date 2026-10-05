@@ -1,4 +1,9 @@
-type TempleEventType = 'VIGIL' | 'ASH' | 'ABSOLUTION' | 'TRIBUTE' | 'MODAL_OPEN' | 'INTENSITY';
+import { supabase } from '@/lib/supabase-browser';
+
+export type TempleEventType =
+  | 'VIGIL' | 'VIGIL_SPARK' | 'ASH' | 'ABSOLUTION' | 'TRIBUTE'
+  | 'MODAL_OPEN' | 'INTENSITY' | 'CAST' | 'WHISPER' | 'MEDITATION'
+  | 'SILENCE' | 'HEARTANDANGEL';
 
 interface LogParams {
   event_type: TempleEventType;
@@ -19,9 +24,14 @@ export async function logTempleEvent({
     : (author || 'Pilgrim');
 
   try {
+    const { data: { session } } = await supabase.auth.getSession();
     await fetch('/api/temple_logs', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+      },
+      keepalive: true,
       body: JSON.stringify({
         event_type,
         message,

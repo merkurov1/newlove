@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/components/AuthContext';
 import TempleTopBar from './TempleTopBar';
+import { logTempleEvent } from '@/lib/templeLogger';
 
 const ANGEL_WITH_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png';
@@ -59,24 +60,11 @@ export default function LetItGoAngel() {
     return () => {
       const count = clickCountRef.current;
       if (count > 0) {
-        const payload = {
+        void logTempleEvent({
           event_type: 'ASH',
-          message: `Released ${count}${count === 1 ? 'burden' : 'burdens'} into the digital sky.`,
-          author: authorRef.current,
-          token: tokenRef.current
-        };
-
-        if (navigator.sendBeacon) {
-          const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-          navigator.sendBeacon('/api/temple_logs', blob);
-        } else {
-          fetch('/api/temple_logs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            keepalive: true
-          }).catch(() => {});
-        }
+          message: `Released ${count}${count === 1 ? ' burden' : ' burdens'} into the digital sky.`,
+          author: authorRef.current
+        });
       }
     };
   }, []);

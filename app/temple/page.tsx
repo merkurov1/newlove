@@ -180,15 +180,6 @@ export default function TempleClient() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleTelegramStatusClick = () => {
-    if (tgUser) {
-      const name = tgUser.username ? `@${tgUser.username}` : tgUser.first_name;
-      alert(`Telegram connected: ${name}`);
-    } else {
-      alert(isTelegramApp ? 'Telegram WebApp active' : 'Running in browser mode');
-    }
-  };
-
   // Закрытие модалок по клавише Esc
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -286,27 +277,14 @@ export default function TempleClient() {
     >
       {/* Основной хедер скрывается, если открыто через Telegram */}
       {!isTelegramApp && (
-        <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 py-2">
-          <div className="flex items-center gap-2 flex-wrap">
+        <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 pt-24 sm:pt-28 pb-2">
+          <div className="flex items-center">
             <Link 
               href="/heartandangel/world"
               className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
             >
               <span>← Back to World</span>
             </Link>
-
-            <button
-              onClick={handleTelegramStatusClick}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
-              title="Telegram Status"
-            >
-              <Send size={13} className={tgUser ? "text-emerald-500" : "text-sky-500"} />
-              <span>
-                {tgUser?.first_name 
-                  ? `TG: @${tgUser.username || tgUser.first_name}` 
-                  : 'Browser Mode'}
-              </span>
-            </button>
           </div>
 
           <SoundToggle className={`px-3 py-2 border shadow-sm ${actionButtonStyle}`} />
@@ -330,7 +308,7 @@ export default function TempleClient() {
         <div className="relative z-30 max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center">
           
           {/* ЛЕВАЯ КОЛОНКА: Меню ритуалов в столбик */}
-          <div className="flex flex-col items-stretch gap-3 w-full max-w-sm mx-auto md:mx-0 order-2 md:order-1">
+          <div className="flex flex-col items-stretch gap-3 w-full max-w-sm mx-auto md:mx-0 order-2 md:order-2">
             <Link 
               href="/heartandangel/calm" 
               className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
@@ -394,7 +372,7 @@ export default function TempleClient() {
           </div>
 
           {/* ПРАВАЯ КОЛОНКА: Герой / Хранитель */}
-          <div className="flex flex-col items-center justify-center relative pointer-events-none my-auto order-1 md:order-2">
+          <div className="flex flex-col items-center justify-center relative pointer-events-none my-auto order-1 md:order-1">
             <div className="absolute bottom-0 w-24 h-5 bg-black/20 rounded-full blur-[10px]" />
             {heroUrl && (
               <div className="relative w-48 h-64 sm:w-64 sm:h-80 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">

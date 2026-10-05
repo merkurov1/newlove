@@ -112,22 +112,37 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
 
   // 2. Загрузка последних 10 логов из 'temple_log'
   let userLogs: any[] = [];
+  let logsError: string | null = null;
   try {
     const { data: logsData, error } = await supabase
       .from('temple_log')
       .select('*')
       .eq('user_id', profileId)
-      .in('event_type', ['VIGIL', 'VIGIL_SPARK', 'ASH', 'CAST', 'TRIBUTE', 'MEDITATION', 'SILENCE', 'WHISPER'])
+      .in('event_type', ['VIGIL', 'vigil', 'VIGIL_SPARK', 'vigil_spark', 'ASH', 'ash', 'CAST', 'cast', 'TRIBUTE', 'tribute', 'ABSOLUTION', 'absolution', 'HEARTANDANGEL', 'MEDITATION', 'meditation', 'SILENCE', 'silence', 'WHISPER', 'whisper'])
       .order('created_at', { ascending: false })
       .limit(10); // Ограничение: последние 10 записей
 
-    if (!error && Array.isArray(logsData)) {
+    if (error) {
+      logsError = error.message;
+    } else if (Array.isArray(logsData)) {
       userLogs = logsData.filter((item: any) => {
         const type = (item.event_type || '').toLowerCase();
         return type !== 'enter' && type !== 'nav' && type !== 'confess';
       });
     }
+    // Старые записи могли быть созданы до передачи user_id. Показываем их
+    // только если у профиля ещё нет привязанных событий.
+    if (!error && userLogs.length === 0 && profileName) {
+      const { data: legacyLogs } = await supabase
+        .from('temple_log')
+        .select('*')
+        .eq('author', profileName)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (Array.isArray(legacyLogs)) userLogs = legacyLogs;
+    }
   } catch (e) {
+    logsError = e instanceof Error ? e.message : 'Unable to load activity';
     console.warn('temple_log fetch warning:', e);
   }
 
@@ -179,12 +194,18 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
 
         {/* Список Offerings */}
         <div className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
-          <h2 className="font-serif text-2xl font-light border-b border-zinc-200 pb-4 text-zinc-900">
-            Offerings
-          </h2>
+          <div className="flex items-end justify-between gap-4 border-b border-zinc-200 pb-4">
+            <div>
+              <h2 className="font-serif text-2xl font-light text-zinc-900">Offerings</h2>
+              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-400">Temple activity</p>
+            </div>
+            <span className="font-mono text-xs text-zinc-400">{userLogs.length}</span>
+          </div>
 
           <div className="divide-y divide-zinc-100">
-            {userLogs.length === 0 ? (
+            {logsError ? (
+              <p className="py-12 text-center font-mono text-xs uppercase tracking-widest text-zinc-500">Activity is temporarily unavailable.</p>
+            ) : userLogs.length === 0 ? (
               <p className="font-mono text-xs opacity-60 uppercase tracking-widest py-12 text-center text-zinc-500">
                 No offerings recorded for this profile yet.
               </p>
@@ -198,7 +219,7 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
                 return (
                   <div 
                     key={log?.id || index} 
-                    className="py-4 flex items-center justify-between gap-4 text-sm"
+                    className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm"
                   >
                     <div className="flex items-center gap-3.5 shrink-0">
                       <div className={`w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center ${visuals.color}`}>
@@ -209,8 +230,11 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
                       </span>
                     </div>
 
-                    <div className="flex-1 font-serif font-light text-zinc-800 truncate px-2 text-left">
-                      <span className="truncate opacity-90">{message}</span>
+                    <div className="flex-1 min-w-0 font-serif font-light text-zinc-800 px-2 text-left">
+                      <span className="block break-words opacity-90">{message}</span>
+                      {log?.created_at && <time dateTime={log.created_at} className="mt-1 block font-mono text-[10px] uppercase tracking-wider text-zinc-400">
+                        {new Date(log.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                      </time>}
                     </div>
                   </div>
                 );

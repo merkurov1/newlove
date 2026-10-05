@@ -134,21 +134,21 @@ export default function TributePage() {
   const style = getHeartStyle();
 
   return (
-    <div className="min-h-screen bg-[#0c0904] text-[#ffd700] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#ffd700] selection:text-black pt-40 sm:pt-44">
+    <div className="relative flex min-h-[100dvh] flex-col justify-between overflow-x-hidden bg-[#141210] p-6 font-sans text-stone-200 selection:bg-amber-300 selection:text-black sm:p-12">
       <div className="noise-overlay" />
       
       {/* RADIANT WARM GLOW */}
       <div 
         className="absolute inset-0 pointer-events-none transition-opacity duration-1000"
         style={{ 
-            background: 'radial-gradient(circle at center, rgba(255, 215, 0, 0.22) 0%, rgba(12, 9, 4, 0.95) 75%)',
+            background: 'radial-gradient(circle at 50% 40%, rgba(120, 75, 20, 0.30) 0%, rgba(20, 18, 16, 0.98) 75%)',
             opacity: Math.max(Math.min(total24h / 250, 1), 0.5) 
         }} 
       />
 
       <TempleTopBar />
 
-      <div className="z-10 w-full max-w-md mx-auto px-6 flex flex-col items-center justify-center py-6 flex-1">
+      <div className="relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center py-12">
         
         {/* HEADER */}
         <div className="text-center mb-6">
@@ -190,7 +190,7 @@ export default function TributePage() {
         </div>
 
         {/* CONTROLS */}
-        <div className="w-full space-y-5">
+        <div className="w-full space-y-5 rounded-3xl border border-stone-800/80 bg-stone-900/90 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
             <div className="flex gap-3 justify-center">
                 {PRESETS.map(val => (
                     <button 
