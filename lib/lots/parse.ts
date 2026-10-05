@@ -210,7 +210,7 @@ export function parseLotHtml(
     const paragraphs = $('main p, article p, [role="main"] p')
       .toArray()
       .map((element) => cleanText($(element).text(), 1500))
-      .filter((value): value is string => Boolean(value) && value.length > 60)
+      .filter((value): value is string => typeof value === 'string' && value.length > 60)
       .filter((value) => !/^(share|save|view lot|bid|estimate|login|sign in)/i.test(value));
     description = paragraphs.sort((a, b) => b.length - a.length)[0] || null;
     if (description) descriptionEvidence = 'body';

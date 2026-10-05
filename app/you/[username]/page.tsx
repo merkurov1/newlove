@@ -79,12 +79,12 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
   let profileId = '';
   let profileName = decodedParam;
   let profileImage = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png'; // Дефолтный ангелок
+  let userData: any = null;
 
   const isUuid = decodedParam.length === 36 || /^[0-9a-fA-F-]{36}$/.test(decodedParam);
 
   // 1. Поиск профиля / пользователя в базе
   try {
-    let userData = null;
     if (isUuid) {
       profileId = decodedParam;
       const { data } = await supabase.from('users').select('*').eq('id', decodedParam).maybeSingle();

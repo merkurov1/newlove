@@ -172,7 +172,7 @@ async function FullView({ slug }: { slug: string }) {
           <header className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-3">{letter.title}</h1>
             <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Author'}</span>
+              <span>{letterAuthor?.name || 'Author'}</span>
               <span>•</span>
               <time dateTime={letter.publishedAt || letter.createdAt}>
                 {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('en-US', {
@@ -205,17 +205,12 @@ async function FullView({ slug }: { slug: string }) {
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-medium">
-                        {(comment.author_display ||
-                          commentUser?.name ||
-                          commentUser?.email)?.[0]?.toUpperCase() || 'U'}
+                        {(comment.author_display || commentUser?.name)?.[0]?.toUpperCase() || 'U'}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <span className="font-medium text-gray-900">
-                            {comment.author_display ||
-                              commentUser?.name ||
-                              commentUser?.email?.split('@')[0] ||
-                              'User'}
+                            {comment.author_display || commentUser?.name || 'User'}
                           </span>
                           <span className="text-xs text-gray-400">
                             {new Date(comment.created_at).toLocaleDateString('en-US', {
