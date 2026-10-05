@@ -5,14 +5,12 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase-browser';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Защищенный импорт компонентов (предотвращает ошибки вида got: object)
 import * as TempleWrapperMod from '@/components/TempleWrapper';
 const TempleWrapper = (TempleWrapperMod as any).default || (TempleWrapperMod as any).TempleWrapper || TempleWrapperMod;
 
 import * as SoundToggleMod from '@/components/SoundToggle';
-const SoundToggle = (SoundToggleMod as any).default || (SoundToggleMod as any).SoundToggle || (SoundToggleMod as any).SoundButton || (() => null);
+const SoundToggle = (SoundToggleMod as any).default || (SoundToggleMod as any).SoundToggle || (() => null);
 
-// --- CONFIG ---
 const HEART_VIDEO = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-5300087847065473569.mp4'; 
 const PRESETS = [5, 20, 100]; // USD Amounts
 
@@ -24,12 +22,10 @@ export default function TributePage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  // Realtime State
   const [total24h, setTotal24h] = useState(0);
   const [pulse, setPulse] = useState(false);
   const [lastDonor, setLastDonor] = useState<string | null>(null);
 
-  // --- 1. INIT & REALTIME ---
   useEffect(() => {
     fetchTotal();
 
@@ -76,7 +72,6 @@ export default function TributePage() {
     setTimeout(() => setLastDonor(null), 4000);
   };
 
-  // --- 2. PAYMENT LOGIC ---
   const handleTribute = async () => {
     triggerHaptic('medium');
     setLoading(true);
@@ -118,7 +113,6 @@ export default function TributePage() {
     }
   };
 
-  // --- 3. DYNAMIC STYLES ---
   const getHeartStyle = () => {
     let filter = 'grayscale(100%) sepia(80%) brightness(0.6) contrast(1.2)';
     let scale = 1;
@@ -145,7 +139,8 @@ export default function TributePage() {
   const style = getHeartStyle();
 
   return (
-    <div className="min-h-screen bg-black text-[#e5b863] font-mono flex flex-col items-center relative overflow-x-hidden selection:bg-[#e5b863] selection:text-black">
+    <div className="min-h-screen bg-black text-[#e5b863] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#e5b863] selection:text-black">
+      <div className="noise-overlay" />
       <React.Suspense fallback={null}>
         {typeof TempleWrapper === 'function' ? <TempleWrapper /> : null}
       </React.Suspense>
@@ -159,31 +154,31 @@ export default function TributePage() {
         }} 
       />
 
-      {/* TOP BAR: BACK TO TEMPLE & SOUND TOGGLE */}
-      <div className="w-full max-w-md px-6 pt-6 flex justify-between items-center z-20">
+      {/* TOP BAR */}
+      <div className="w-full max-w-md mx-auto px-6 pt-6 flex justify-between items-center z-20">
         <Link 
           href="/temple"
-          className="text-xs tracking-widest text-[#886e36] hover:text-[#e5b863] transition-colors uppercase border border-[#443311] px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-sm cursor-pointer"
+          className="text-xs tracking-widest text-[#886e36] hover:text-[#e5b863] transition-colors uppercase border border-[#443311] px-4 py-2 rounded-full bg-black/60 backdrop-blur-md cursor-pointer"
         >
           ← Temple
         </Link>
         {typeof SoundToggle === 'function' && <SoundToggle />}
       </div>
 
-      <div className="z-10 w-full max-w-md px-6 flex flex-col items-center min-h-[calc(100vh-80px)] justify-center py-10">
+      <div className="z-10 w-full max-w-md mx-auto px-6 flex flex-col items-center justify-center py-10 flex-1">
         
         {/* HEADER */}
-        <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold tracking-[0.3em] text-white drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]">
+        <div className="text-center mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-[0.3em] text-white drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]">
                 TRIBUTE
             </h1>
-            <div className="text-[10px] text-[#886e36] tracking-[0.2em] uppercase mt-2">
+            <div className="text-[10px] text-[#886e36] tracking-[0.2em] uppercase mt-1.5">
                 ENERGY LEVEL: ${total24h.toFixed(0)} / 24H
             </div>
         </div>
 
         {/* THE HEART ARTIFACT */}
-        <div className="relative w-56 h-56 sm:w-64 sm:h-64 mb-10 flex items-center justify-center">
+        <div className="relative w-52 h-52 sm:w-60 sm:h-60 mb-8 flex items-center justify-center">
             <video 
                 src={HEART_VIDEO} 
                 autoPlay loop muted playsInline 
@@ -197,14 +192,13 @@ export default function TributePage() {
                 }}
             />
             
-            {/* DONOR TOAST */}
             <AnimatePresence>
                 {lastDonor && (
                     <motion.div 
                         initial={{ opacity: 0, y: 30 }} 
                         animate={{ opacity: 1, y: 0 }} 
                         exit={{ opacity: 0, y: -20 }}
-                        className="absolute -bottom-10 text-white font-bold text-xs sm:text-sm tracking-widest uppercase drop-shadow-[0_0_5px_gold] text-center w-full"
+                        className="absolute -bottom-10 text-white font-bold text-xs tracking-widest uppercase drop-shadow-[0_0_5px_gold] text-center w-full"
                     >
                         ⚡ {lastDonor}
                     </motion.div>
@@ -213,33 +207,31 @@ export default function TributePage() {
         </div>
 
         {/* CONTROLS */}
-        <div className="w-full space-y-6">
-            {/* PRESETS */}
-            <div className="flex gap-3 sm:gap-4 justify-center">
+        <div className="w-full space-y-5">
+            <div className="flex gap-3 justify-center">
                 {PRESETS.map(val => (
                     <button 
                         key={val} 
-                        className={`flex-1 py-3 border border-[#443311] text-[#886e36] hover:text-[#e5b863] hover:border-[#e5b863] transition-all uppercase tracking-widest text-xs font-bold cursor-pointer ${amount === val && !isCustom ? 'bg-[#e5b863] !text-black border-[#e5b863]' : ''}`}
+                        className={`flex-1 py-3 border border-[#443311] text-[#886e36] hover:text-[#e5b863] hover:border-[#e5b863] transition-all uppercase tracking-widest text-xs font-bold rounded-xl cursor-pointer ${amount === val && !isCustom ? 'bg-[#e5b863] !text-black border-[#e5b863]' : 'bg-black/60'}`}
                         onClick={() => { setAmount(val); setIsCustom(false); triggerHaptic('light'); setErrorMsg(null); }}
                     >
                         ${val}
                     </button>
                 ))}
                 <button 
-                    className={`px-4 border border-[#443311] text-[#886e36] hover:text-[#e5b863] cursor-pointer ${isCustom ? 'bg-[#e5b863] !text-black' : ''}`}
+                    className={`px-4 border border-[#443311] text-[#886e36] hover:text-[#e5b863] rounded-xl cursor-pointer ${isCustom ? 'bg-[#e5b863] !text-black' : 'bg-black/60'}`}
                     onClick={() => { setIsCustom(true); setAmount(0); triggerHaptic('light'); setErrorMsg(null); }}
                 >
                     ...
                 </button>
             </div>
 
-            {/* CUSTOM INPUT */}
             <AnimatePresence>
                 {isCustom && (
                     <motion.input 
                         initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                         type="number" 
-                        className="w-full bg-[#110c05] border border-[#e5b863] text-[#e5b863] p-4 text-center font-mono text-xl outline-none placeholder-[#443311] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-full bg-[#110c05] border border-[#e5b863] text-[#e5b863] p-3.5 text-center font-mono text-lg rounded-xl outline-none placeholder-[#443311] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         placeholder="ENTER AMOUNT"
                         value={amount || ''}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setAmount(Number(e.target.value)); setErrorMsg(null); }}
@@ -248,28 +240,38 @@ export default function TributePage() {
                 )}
             </AnimatePresence>
 
-            {/* ERROR MESSAGE */}
             {errorMsg && (
                 <div className="text-[10px] text-rose-500 text-center uppercase tracking-widest animate-pulse">
                     {errorMsg}
                 </div>
             )}
 
-            {/* PAY BUTTON */}
             <button 
-                className="w-full bg-gradient-to-r from-[#e5b863] to-[#ffeec7] text-black py-4 text-sm font-bold tracking-[0.2em] uppercase hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale shadow-[0_0_20px_rgba(229,184,99,0.3)] cursor-pointer"
+                className="w-full bg-gradient-to-r from-[#e5b863] to-[#ffeec7] text-black py-4 rounded-xl text-xs font-bold tracking-[0.2em] uppercase hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:grayscale shadow-[0_0_20px_rgba(229,184,99,0.3)] cursor-pointer"
                 onClick={handleTribute}
                 disabled={loading || amount <= 0}
             >
                 {loading ? 'INITIATING...' : `OFFER $${amount}`}
             </button>
             
-            <p className="text-[9px] text-[#443311] text-center uppercase tracking-wider leading-relaxed pb-4">
+            <p className="text-[9px] text-[#443311] text-center uppercase tracking-wider leading-relaxed">
                 Funds maintain the Temple servers.<br/>
                 Energy is never lost, only transformed.
             </p>
         </div>
       </div>
+
+      <footer className="w-full text-center font-mono text-[9px] text-[#443311] uppercase tracking-[0.3em] py-6 z-20">
+        Merkurov Private Office &copy; {new Date().getFullYear()}
+      </footer>
+
+      <style jsx global>{`
+        .noise-overlay {
+          position: fixed; inset: 0; pointer-events: none; opacity: 0.04;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+          z-index: 1;
+        }
+      `}</style>
     </div>
   );
 }

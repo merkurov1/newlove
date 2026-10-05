@@ -16,7 +16,8 @@ import {
   Users,
   Activity,
   Clock,
-  Layers
+  Layers,
+  Heart
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -48,6 +49,8 @@ function getEventVisuals(eventType: string) {
       return { icon: Compass, color: 'text-indigo-400', label: 'Cast' };
     case 'ABSOLUTION':
       return { icon: ShieldCheck, color: 'text-emerald-400', label: 'Absolution' };
+    case 'TRIBUTE':
+      return { icon: Heart, color: 'text-amber-300', label: 'Tribute' };
     case 'HEARTANDANGEL':
     case 'MEDITATION':
     case 'SILENCE':
@@ -169,7 +172,7 @@ export default function TempleClient() {
         const formatted: TemplePost[] = rawData
           .filter((item: any) => {
             const type = (item.event_type || '').toLowerCase();
-            return type !== 'enter' && type !== 'nav' && type !== 'confess';
+            return type !== 'enter' && type !== 'nav';
           })
           .map((item: any, index: number) => {
             const type = (item.event_type || 'WHISPER').toUpperCase();
@@ -279,6 +282,18 @@ export default function TempleClient() {
               className={`px-7 py-3 rounded-full backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
             >
               Vigil
+            </Link>
+            <Link 
+              href="/absolution" 
+              className={`px-7 py-3 rounded-full backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
+            >
+              Absolution
+            </Link>
+            <Link 
+              href="/tribute" 
+              className={`px-7 py-3 rounded-full backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
+            >
+              Tribute
             </Link>
           </div>
 

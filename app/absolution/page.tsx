@@ -4,60 +4,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { templeTrack } from '@/components/templeTrack';
 import html2canvas from 'html2canvas';
-import TempleWrapper from '@/components/TempleWrapper';
-import Header from '@/components/Header';
-import { Sparkles, Stamp, RotateCcw, Download, ShieldCheck } from 'lucide-react';
+import { Sparkles, RotateCcw, Download } from 'lucide-react';
 
-// --- CONFIG ---
+import * as TempleWrapperMod from '@/components/TempleWrapper';
+const TempleWrapper = (TempleWrapperMod as any).default || (TempleWrapperMod as any).TempleWrapper || TempleWrapperMod;
+
+import * as SoundToggleMod from '@/components/SoundToggle';
+const SoundToggle = (SoundToggleMod as any).default || (SoundToggleMod as any).SoundToggle || (() => null);
+
 const STAMP_DELAY = 1200;
 
-// --- DYNAMIC LIGHTING (В стиле проекта) ---
-function getTimeLighting() {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 11) {
-    return {
-      bg: 'bg-[#F5F2EB]',
-      text: 'text-stone-900',
-      subText: 'text-stone-600',
-      glow: 'from-amber-200/30 via-orange-100/10 to-transparent',
-      vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 243, 224, 0.6) 0%, rgba(245, 242, 235, 1) 80%)',
-      cardBg: 'bg-white/95 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl',
-      inputBg: 'bg-white/90 border-stone-300 text-stone-900 placeholder-stone-400 focus:border-stone-900'
-    };
-  } else if (hour >= 11 && hour < 17) {
-    return {
-      bg: 'bg-[#FAF8F5]',
-      text: 'text-stone-900',
-      subText: 'text-stone-600',
-      glow: 'from-stone-200/40 via-transparent to-transparent',
-      vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.8) 0%, rgba(250, 248, 245, 1) 85%)',
-      cardBg: 'bg-white/95 border-stone-200 text-stone-900 shadow-2xl backdrop-blur-2xl',
-      inputBg: 'bg-white/90 border-stone-300 text-stone-900 placeholder-stone-400 focus:border-stone-900'
-    };
-  } else if (hour >= 17 && hour < 21) {
-    return {
-      bg: 'bg-[#1f1a18]',
-      text: 'text-stone-100',
-      subText: 'text-stone-300',
-      glow: 'from-orange-900/30 via-rose-950/20 to-transparent',
-      vignette: 'radial-gradient(circle at 50% 40%, rgba(70, 35, 25, 0.4) 0%, rgba(31, 26, 24, 1) 90%)',
-      cardBg: 'bg-stone-900/95 border-stone-800 text-stone-100 shadow-2xl backdrop-blur-2xl',
-      inputBg: 'bg-stone-950/60 border-stone-800 text-stone-100 placeholder-stone-500 focus:border-stone-400'
-    };
-  } else {
-    return {
-      bg: 'bg-[#0b0c10]',
-      text: 'text-stone-200',
-      subText: 'text-stone-400',
-      glow: 'from-indigo-950/50 via-blue-950/20 to-transparent',
-      vignette: 'radial-gradient(circle at 50% 30%, rgba(20, 25, 45, 0.5) 0%, rgba(11, 12, 16, 1) 90%)',
-      cardBg: 'bg-zinc-900/95 border-zinc-800 text-zinc-100 shadow-2xl backdrop-blur-2xl',
-      inputBg: 'bg-zinc-950/60 border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:border-zinc-400'
-    };
-  }
-}
-
-// --- TRANSLATIONS ---
 const TRANSLATIONS = {
   en: {
     title: "CONFESS YOUR SINS",
@@ -75,7 +31,6 @@ const TRANSLATIONS = {
     receipt: { header: "DEPT. OF KARMA", footer: "Silence is the only currency.", signature: "Pierrot, AI Chaplain" },
     btn: "SEEK ABSOLUTION",
     save: "SAVE RECEIPT",
-    share: "SHARE",
     newConfession: "NEW CONFESSION"
   },
   ru: {
@@ -94,7 +49,6 @@ const TRANSLATIONS = {
     receipt: { header: "ДЕПАРТАМЕНТ КАРМЫ", footer: "Тишина — единственная валюта.", signature: "Пьеро, AI Капеллан" },
     btn: "ПОЛУЧИТЬ ОТПУЩЕНИЕ",
     save: "СОХРАНИТЬ ЧЕК",
-    share: "ПОДЕЛИТЬСЯ",
     newConfession: "НОВАЯ ИСПОВЕДЬ"
   }
 };
@@ -105,10 +59,7 @@ export default function AbsolutionPage() {
   const [name, setName] = useState('');
   const [sinKey, setSinKey] = useState<string>('doomscroll');
   const [ticketId, setTicketId] = useState('');
-  const [lighting, setLighting] = useState(getTimeLighting());
   
-  // UI States
-  const [isTelegram, setIsTelegram] = useState(false);
   const [showStamp, setShowStamp] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const receiptRef = useRef<HTMLDivElement | null>(null);
@@ -118,18 +69,9 @@ export default function AbsolutionPage() {
 
   useEffect(() => {
     setTicketId(`#${Math.random().toString(36).substring(2, 9).toUpperCase()}`);
-    setLighting(getTimeLighting());
-
-    const timer = setInterval(() => {
-      setLighting(getTimeLighting());
-    }, 60000);
-    
     if ((window as any).Telegram?.WebApp) {
-        setIsTelegram(true);
         (window as any).Telegram.WebApp.expand();
     }
-
-    return () => clearInterval(timer);
   }, []);
 
   const triggerHaptic = (style: 'light' | 'medium' | 'heavy' | 'error') => {
@@ -211,87 +153,77 @@ export default function AbsolutionPage() {
     }
   };
 
-  const langToggleStyle = lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
-    ? 'bg-white/10 border-white/20 text-stone-200'
-    : 'bg-white/85 border-stone-300 text-stone-800 shadow-sm';
-
-  const primaryBtnStyle = lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
-    ? 'bg-white text-stone-900 hover:bg-stone-200 shadow-lg'
-    : 'bg-stone-900 text-white hover:bg-stone-800 shadow-lg';
-
   return (
-    <div 
-      className={`min-h-screen ${lighting.bg} ${lighting.text} font-sans flex flex-col justify-between selection:bg-stone-900 selection:text-white relative overflow-x-hidden transition-colors duration-1000`}
-      style={{ backgroundImage: lighting.vignette }}
-    >
-      <Header />
-      <React.Suspense fallback={null}><TempleWrapper /></React.Suspense>
+    <div className="min-h-screen bg-black text-[#e5b863] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#e5b863] selection:text-black">
+      <div className="noise-overlay" />
+      <React.Suspense fallback={null}>
+        {typeof TempleWrapper === 'function' ? <TempleWrapper /> : null}
+      </React.Suspense>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col items-center justify-center px-6 pt-32 pb-24 relative z-20">
+      {/* TOP BAR */}
+      <div className="w-full max-w-md mx-auto px-6 pt-6 flex justify-between items-center z-30">
+        <Link 
+          href="/temple"
+          className="text-xs tracking-widest text-[#886e36] hover:text-[#e5b863] transition-colors uppercase border border-[#443311] px-4 py-2 rounded-full bg-black/60 backdrop-blur-md cursor-pointer"
+        >
+          ← Temple
+        </Link>
+        <div className="flex items-center gap-3">
+          {typeof SoundToggle === 'function' && <SoundToggle />}
+          <div className="flex gap-2 text-xs tracking-widest bg-black/60 border border-[#443311] px-3 py-2 rounded-full backdrop-blur-md">
+             <button onClick={() => setLang('en')} className={`${lang === 'en' ? 'font-bold text-[#e5b863] underline' : 'text-[#886e36] opacity-60'} cursor-pointer`}>EN</button>
+             <span className="text-[#443311]">/</span>
+             <button onClick={() => setLang('ru')} className={`${lang === 'ru' ? 'font-bold text-[#e5b863] underline' : 'text-[#886e36] opacity-60'} cursor-pointer`}>RU</button>
+          </div>
+        </div>
+      </div>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-12 relative z-20 w-full max-w-md mx-auto">
         
-        {/* TOP BAR: BACK TO TEMPLE */}
-        <div className="absolute top-28 left-6 lg:left-12 z-30">
-          <Link 
-            href="/temple"
-            className={`text-xs font-mono tracking-widest uppercase border px-4 py-2 rounded-full backdrop-blur-md transition-all cursor-pointer ${langToggleStyle}`}
-          >
-            ← Temple
-          </Link>
-        </div>
-
-        {/* LANGUAGE TOGGLE */}
-        <div className={`absolute top-28 right-6 lg:right-12 flex gap-3 font-mono text-xs tracking-widest backdrop-blur-md px-4 py-2 rounded-full border z-30 transition-all ${langToggleStyle}`}>
-           <button onClick={() => setLang('en')} className={`${lang === 'en' ? 'font-bold underline' : 'opacity-60'} cursor-pointer`}>EN</button>
-           <span className="opacity-40">/</span>
-           <button onClick={() => setLang('ru')} className={`${lang === 'ru' ? 'font-bold underline' : 'opacity-60'} cursor-pointer`}>RU</button>
-        </div>
-
         {/* STAGE 1: CONFESSIONAL */}
         {step === 'confess' && (
-          <div className={`w-full max-w-md p-8 sm:p-10 rounded-3xl ${lighting.cardBg} border animate-in fade-in zoom-in duration-500 space-y-8`}>
+          <div className="w-full p-8 rounded-2xl bg-black/85 border border-[#443311] shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-500 space-y-6">
               <div className="text-center space-y-2">
-                  <div className="w-10 h-10 mx-auto rounded-full bg-stone-500/10 flex items-center justify-center shadow-sm">
-                      <Sparkles size={18} className="opacity-80" />
+                  <div className="w-10 h-10 mx-auto rounded-full bg-[#110c05] border border-[#443311] flex items-center justify-center text-[#e5b863]">
+                      <Sparkles size={18} />
                   </div>
-                  <h1 className="text-2xl sm:text-3xl font-serif font-light tracking-tight uppercase">
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-[0.2em] text-white uppercase">
                       {t.title}
                   </h1>
-                  <p className="text-xs font-serif italic opacity-75">
+                  <p className="text-[10px] text-[#886e36] uppercase tracking-wider">
                       {t.subtitle}
                   </p>
               </div>
 
-              <div className="space-y-6">
-                  {/* SIN SELECTOR */}
-                  <div className="space-y-2">
-                      <label className="text-[10px] font-mono uppercase tracking-widest opacity-60 block">Your Burden</label>
+              <div className="space-y-5">
+                  <div className="space-y-1.5">
+                      <label className="text-[9px] uppercase tracking-[0.2em] text-[#886e36] block">Your Burden</label>
                       <select 
                           value={sinKey}
                           onChange={(e: any) => setSinKey(e.target.value)}
-                          className={`w-full border p-4 text-xs font-mono uppercase rounded-2xl focus:outline-none transition-all shadow-sm cursor-pointer ${lighting.inputBg}`}
+                          className="w-full bg-[#110c05] border border-[#443311] text-[#e5b863] p-3 text-xs uppercase tracking-wider rounded-xl focus:border-[#e5b863] focus:outline-none cursor-pointer"
                       >
                           {Object.entries(t.sins).map(([k, v]) => (
-                              <option key={k} value={k} className="bg-stone-900 text-stone-100">{v}</option>
+                              <option key={k} value={k} className="bg-black text-[#e5b863]">{v}</option>
                           ))}
                       </select>
                   </div>
 
-                  {/* NAME INPUT */}
-                  <div className="space-y-2">
-                      <label className="text-[10px] font-mono uppercase tracking-widest opacity-60 block">Sinner Identity</label>
+                  <div className="space-y-1.5">
+                      <label className="text-[9px] uppercase tracking-[0.2em] text-[#886e36] block">Sinner Identity</label>
                       <input 
                           type="text" 
                           value={name}
                           onChange={(e: any) => setName(e.target.value)}
                           placeholder={t.placeholder}
-                          className={`w-full border py-3.5 px-4 text-sm font-mono focus:outline-none transition-colors uppercase rounded-2xl shadow-sm ${lighting.inputBg}`}
+                          className="w-full bg-[#110c05] border border-[#443311] text-[#e5b863] py-3 px-4 text-xs uppercase tracking-wider rounded-xl focus:border-[#e5b863] focus:outline-none placeholder-[#443311]"
                       />
                   </div>
 
                   <button 
                       onClick={handleConfess}
-                      className={`w-full py-4 rounded-full font-mono text-xs uppercase tracking-[0.2em] transition-all cursor-pointer ${primaryBtnStyle}`}
+                      className="w-full bg-gradient-to-r from-[#e5b863] to-[#ffeec7] text-black py-3.5 rounded-xl font-bold text-xs uppercase tracking-[0.2em] hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer shadow-[0_0_20px_rgba(229,184,99,0.2)]"
                   >
                       {t.btn}
                   </button>
@@ -301,9 +233,9 @@ export default function AbsolutionPage() {
 
         {/* STAGE 2: PROCESSING */}
         {step === 'processing' && (
-          <div className={`text-center p-12 rounded-3xl ${lighting.cardBg} border shadow-xl space-y-4`}>
-              <div className="animate-spin text-3xl">⏳</div>
-              <div className="font-mono text-xs uppercase tracking-[0.3em] opacity-75 animate-pulse">
+          <div className="text-center p-10 rounded-2xl bg-black/85 border border-[#443311] shadow-2xl space-y-4">
+              <div className="animate-spin text-3xl text-[#e5b863]">⏳</div>
+              <div className="text-[10px] text-[#886e36] uppercase tracking-[0.3em] animate-pulse">
                   NEGOTIATING WITH ETERNITY...
               </div>
           </div>
@@ -311,21 +243,19 @@ export default function AbsolutionPage() {
 
         {/* STAGE 3: THE RECEIPT */}
         {step === 'receipt' && (
-          <div className="flex flex-col items-center gap-8 animate-in slide-in-from-bottom-6 duration-700">
+          <div className="flex flex-col items-center gap-6 animate-in slide-in-from-bottom-6 duration-700 w-full">
               
-              {/* PAPER RECEIPT */}
               <div 
                   ref={receiptRef}
-                  className="bg-white text-stone-900 p-8 w-[340px] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.12)] border border-stone-200 relative rotate-1 font-mono"
-                  style={{ filter: 'contrast(1.05)' }}
+                  className="bg-white text-stone-900 p-8 w-[320px] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.4)] border border-stone-200 relative rotate-1 font-mono"
               >
                   <div className="text-center border-b border-stone-900 border-dashed pb-4 mb-4">
-                      <h2 className="text-lg font-black tracking-widest text-stone-900">{t.receipt.header}</h2>
+                      <h2 className="text-base font-black tracking-widest text-stone-900">{t.receipt.header}</h2>
                       <p className="text-[9px] uppercase mt-1 text-stone-500">{new Date().toLocaleString()}</p>
                       <p className="text-[9px] uppercase text-stone-500">ID: {ticketId}</p>
                   </div>
 
-                  <div className="space-y-4 mb-8 text-xs">
+                  <div className="space-y-3 mb-6 text-xs">
                       <div className="flex justify-between border-b border-stone-100 pb-2">
                           <span className="text-stone-400">SINNER:</span>
                           <span className="font-bold uppercase text-stone-900">{name}</span>
@@ -341,53 +271,52 @@ export default function AbsolutionPage() {
                   </div>
 
                   <div className="text-center border-t border-stone-900 border-dashed pt-4">
-                      <p className="text-[9px] italic text-stone-600 mb-3">"{t.receipt.footer}"</p>
-                      <p className="font-serif italic text-sm text-stone-700">{t.receipt.signature}</p>
+                      <p className="text-[9px] italic text-stone-600 mb-2">"{t.receipt.footer}"</p>
+                      <p className="font-serif italic text-xs text-stone-700">{t.receipt.signature}</p>
                   </div>
 
                   {/* STAMP */}
                   <div 
-                      className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-[3px] border-rose-600/90 text-rose-600/90 py-3 px-6 text-2xl font-black uppercase tracking-[0.25em] rotate-[-12deg] transition-all duration-500 pointer-events-none select-none bg-white/95 shadow-sm ${
+                      className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-[3px] border-rose-600 text-rose-600 py-2.5 px-5 text-xl font-black uppercase tracking-[0.2em] rotate-[-12deg] transition-all duration-500 pointer-events-none select-none bg-white/95 shadow-sm ${
                           showStamp ? 'opacity-100 scale-100' : 'opacity-0 scale-150'
                       }`}
-                      style={{
-                          boxShadow: '0 0 0 4px rgba(225, 29, 72, 0.1)',
-                      }}
                   >
                       ABSOLVED
                   </div>
               </div>
 
               {/* ACTIONS */}
-              <div className="flex gap-4 opacity-0 animate-in fade-in delay-700 fill-mode-forwards">
+              <div className="flex gap-3 w-full">
                   <button 
                       onClick={handleSave}
                       disabled={isSaving}
-                      className={`px-6 py-3.5 rounded-full font-mono text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 shadow-md cursor-pointer ${primaryBtnStyle}`}
+                      className="flex-1 bg-gradient-to-r from-[#e5b863] to-[#ffeec7] text-black py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-md cursor-pointer hover:scale-[1.02] transition-all"
                   >
                       <Download size={14} />
                       <span>{isSaving ? 'SAVING...' : t.save}</span>
                   </button>
                   <button 
                       onClick={() => { setStep('confess'); setShowStamp(false); }}
-                      className={`px-6 py-3.5 rounded-full font-mono text-xs font-bold tracking-widest uppercase transition-all flex items-center gap-2 shadow-sm cursor-pointer ${
-                        lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
-                          ? 'bg-stone-800 text-stone-200 border border-stone-700 hover:bg-stone-700'
-                          : 'bg-white text-stone-800 border border-stone-300 hover:bg-stone-50'
-                      }`}
+                      className="px-5 py-3 rounded-xl border border-[#443311] bg-black text-[#e5b863] hover:border-[#e5b863] text-xs uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer transition-all"
                   >
                       <RotateCcw size={14} />
-                      <span>{t.newConfession}</span>
                   </button>
               </div>
           </div>
         )}
       </main>
 
-      {/* Footer */}
-      <footer className={`max-w-4xl mx-auto w-full text-center font-mono text-[10px] opacity-50 uppercase tracking-[0.3em] py-8 z-20`}>
+      <footer className="w-full text-center font-mono text-[9px] text-[#443311] uppercase tracking-[0.3em] py-6 z-20">
         Merkurov Private Office &copy; {new Date().getFullYear()}
       </footer>
+
+      <style jsx global>{`
+        .noise-overlay {
+          position: fixed; inset: 0; pointer-events: none; opacity: 0.04;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+          z-index: 1;
+        }
+      `}</style>
     </div>
   );
 }
