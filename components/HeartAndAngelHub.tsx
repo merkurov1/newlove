@@ -57,46 +57,46 @@ export default function HeartAndAngelHub() {
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-black/40 pointer-events-none" />
         </div>
 
-        {/* --- МОБИЛЬНАЯ ВЕРСИЯ (< md): вертикальный поток без наложений --- */}
-        <div className="block md:hidden pt-28 pb-12 px-6 space-y-8 bg-[#EAF2F8]">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-serif font-light tracking-wider text-zinc-900">
+        {/* --- МОБИЛЬНАЯ ВЕРСИЯ (< md): компактная, все помещается на экран iPhone 11 --- */}
+        <div className="flex md:hidden min-h-[calc(100vh-70px)] pt-20 pb-6 px-5 flex-col justify-between bg-[#EAF2F8]">
+          <div className="text-center space-y-1.5">
+            <h1 className="text-2xl font-serif font-light tracking-wider text-zinc-900">
               Heart &amp; Angel
             </h1>
-            <p className="text-zinc-600 text-sm font-serif font-light leading-relaxed tracking-wide">
+            <p className="text-zinc-600 text-xs font-serif font-light leading-relaxed tracking-wide">
               The universal mythology for a fragmented world.
             </p>
-            <p className="text-zinc-600 text-sm font-serif font-light leading-relaxed tracking-wide italic">
+            <p className="text-zinc-600 text-xs font-serif font-light leading-relaxed tracking-wide italic">
               The Greatest Love Story Ever Told.
             </p>
           </div>
 
-          {/* Иллюстрация в виде аккуратной карточки */}
-          <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden shadow-xl bg-white/60 border border-stone-200/60">
+          {/* Иллюстрация без рамки и фона */}
+          <div className="relative w-full h-44 my-2">
             <Image
               src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
               alt="Heart & Angel World"
               fill
-              className="object-contain p-2"
+              className="object-contain drop-shadow-md"
               priority
               draggable={false}
             />
           </div>
 
-          <div className="text-center space-y-4">
-            <h2 className="text-2xl font-serif font-light tracking-wider text-zinc-900">
+          <div className="text-center space-y-3">
+            <h2 className="text-xl font-serif font-light tracking-wider text-zinc-900">
               Enter the Living World
             </h2>
-            <p className="text-zinc-600 text-sm font-serif font-light leading-relaxed tracking-wide max-w-sm mx-auto">
+            <p className="text-zinc-600 text-xs font-serif font-light leading-relaxed tracking-wide max-w-xs mx-auto">
               Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.
             </p>
-            <div className="pt-2">
+            <div>
               <Link
                 href="/heartandangel/world"
-                className="inline-flex items-center justify-center gap-3 w-full py-4 rounded-full bg-zinc-900 text-white text-xs font-sans font-medium tracking-widest uppercase shadow-lg hover:bg-zinc-800 transition-all duration-300 cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 w-full py-3.5 rounded-full bg-zinc-900 text-white text-xs font-sans font-medium tracking-widest uppercase shadow-md hover:bg-zinc-800 transition-all duration-300 cursor-pointer"
               >
                 <span>Explore World</span>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
               </Link>
@@ -244,7 +244,7 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* 4. Галерея: Swiper горизонтальная прокрутка (увеличенные карточки без заголовка) */}
+        {/* 4. Галерея: Swiper горизонтальная прокрутка */}
         <div className="w-full">
           <Swiper
             modules={[FreeMode, Mousewheel]}

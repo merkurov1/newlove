@@ -197,15 +197,17 @@ export default function AdvisingClient() {
             </p>
           </div>
 
-          <Link 
-            href="mailto:contact@merkurov.love"
+          <a 
+            href="https://wa.me/16467270865"
+            target="_blank"
+            rel="noopener noreferrer"
             className="group inline-flex items-center gap-4 border-b-2 border-zinc-900 pb-2 hover:border-zinc-500 transition-all duration-300 self-start md:self-auto"
           >
             <span className="font-mono text-xs uppercase tracking-[0.25em] font-semibold text-[#111111] group-hover:text-zinc-600 transition-colors">
               Start a Conversation
             </span>
             <ArrowRight size={16} className="group-hover:translate-x-1.5 transition-transform duration-300 text-[#111111] group-hover:text-zinc-600" />
-          </Link>
+          </a>
         </footer>
 
       </div>

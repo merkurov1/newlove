@@ -13,46 +13,16 @@ import Image from 'next/image';
 const ANGEL_GIF = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0966.gif';
 const FLAME_ID = 1;
 
-function getTimeLighting() {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 11) {
-    return {
-      bg: 'bg-[#F5F2EB]',
-      text: 'text-stone-900',
-      subText: 'text-stone-600',
-      glow: 'from-amber-200/40 via-orange-100/20 to-transparent',
-      vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 243, 224, 0.7) 0%, rgba(245, 242, 235, 1) 85%)',
-      cardBg: 'bg-white/80 border-stone-200 text-stone-900 shadow-xl'
-    };
-  } else if (hour >= 11 && hour < 17) {
-    return {
-      bg: 'bg-[#FAF8F5]',
-      text: 'text-stone-900',
-      subText: 'text-stone-600',
-      glow: 'from-stone-200/50 via-transparent to-transparent',
-      vignette: 'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.9) 0%, rgba(250, 248, 245, 1) 90%)',
-      cardBg: 'bg-white/90 border-stone-200 text-stone-900 shadow-xl'
-    };
-  } else if (hour >= 17 && hour < 21) {
-    return {
-      bg: 'bg-[#1f1a18]',
-      text: 'text-stone-100',
-      subText: 'text-stone-300',
-      glow: 'from-orange-900/40 via-rose-950/20 to-transparent',
-      vignette: 'radial-gradient(circle at 50% 40%, rgba(70, 35, 25, 0.5) 0%, rgba(31, 26, 24, 1) 90%)',
-      cardBg: 'bg-stone-900/90 border-stone-800 text-stone-100 shadow-2xl'
-    };
-  } else {
-    return {
-      bg: 'bg-[#0b0c10]',
-      text: 'text-stone-200',
-      subText: 'text-stone-400',
-      glow: 'from-indigo-950/60 via-blue-950/20 to-transparent',
-      vignette: 'radial-gradient(circle at 50% 30%, rgba(20, 25, 45, 0.6) 0%, rgba(11, 12, 16, 1) 90%)',
-      cardBg: 'bg-zinc-900/90 border-zinc-800 text-zinc-100 shadow-2xl'
-    };
-  }
-}
+// Постоянная тема темной комнаты / часовни
+const roomTheme = {
+  bg: 'bg-[#141210]',
+  text: 'text-stone-200',
+  subText: 'text-stone-400',
+  glow: 'from-amber-900/40 via-orange-950/20 to-transparent',
+  vignette: 'radial-gradient(circle at 50% 40%, rgba(55, 40, 32, 0.75) 0%, rgba(20, 18, 16, 1) 90%)',
+  cardBg: 'bg-stone-900/90 border-stone-800/80 text-stone-100 shadow-2xl',
+  buttonClass: 'bg-white/10 border-white/20 text-stone-200 hover:bg-white/20'
+};
 
 export default function VigilPage() {
   const supabase = createClient();
@@ -70,12 +40,10 @@ export default function VigilPage() {
   const [isLighting, setIsLighting] = useState(false);
   const [spark, setSpark] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
-  const [lighting, setLighting] = useState(getTimeLighting());
 
   const userName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || '';
 
   useEffect(() => {
-    setLighting(getTimeLighting());
     refreshData();
 
     const channel = supabase
@@ -95,12 +63,10 @@ export default function VigilPage() {
       .subscribe();
 
     const timer = setInterval(updateTimer, 1000);
-    const lightTimer = setInterval(() => setLighting(getTimeLighting()), 60000);
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(timer);
-      clearInterval(lightTimer);
     };
   }, []);
 
@@ -234,24 +200,20 @@ export default function VigilPage() {
     }, 1200);
   };
 
-  const buttonStyleClass = lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10')
-    ? 'bg-white/10 border-white/20 text-stone-200 hover:bg-white/20'
-    : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white';
-
   return (
     <main 
-      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 sm:p-12 transition-colors duration-1000`}
-      style={{ backgroundImage: lighting.vignette }}
+      className={`relative w-full min-h-[100dvh] ${roomTheme.bg} ${roomTheme.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 sm:p-12 transition-colors duration-1000`}
+      style={{ backgroundImage: roomTheme.vignette }}
     >
       <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-24 sm:pt-28 md:pt-32 px-2 sm:px-4">
         <div className="flex justify-start">
-          <SoundToggle className={`px-3 sm:px-4 py-2 sm:py-2.5 border shadow-sm ${buttonStyleClass}`} />
+          <SoundToggle className={`px-3 sm:px-4 py-2 sm:py-2.5 border shadow-sm ${roomTheme.buttonClass}`} />
         </div>
 
         <div className="flex justify-center">
           <Link 
             href="/temple"
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap ${buttonStyleClass}`}
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-full backdrop-blur-md border shadow-md transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white/20 cursor-pointer whitespace-nowrap ${roomTheme.buttonClass}`}
           >
             <ArrowLeft size={14} />
             <span>← Back</span>
@@ -262,12 +224,14 @@ export default function VigilPage() {
         <div />
       </header>
 
-      <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[120px] pointer-events-none transition-all duration-1000`} />
+      {/* Мягкое внутреннее свечение в темной комнате */}
+      <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr ${roomTheme.glow} blur-[120px] pointer-events-none`} />
 
+      {/* Ангел в темной комнате */}
       <div ref={angelRef} className="absolute left-[8%] bottom-[8%] sm:left-[15%] sm:bottom-[15%] z-30 flex flex-col items-center pointer-events-none">
-        <div className="absolute -bottom-2 w-32 h-6 bg-black/25 rounded-full blur-[8px]" />
-        <div className={`absolute inset-0 bg-amber-500/20 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
-        <div className="relative w-32 h-40 sm:w-44 sm:h-52 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
+        <div className="absolute -bottom-2 w-32 h-6 bg-black/40 rounded-full blur-[10px]" />
+        <div className={`absolute inset-0 bg-amber-600/15 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
+        <div className="relative w-32 h-40 sm:w-44 sm:h-52 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.6)]">
           <Image 
             src={ANGEL_GIF} 
             alt="Guardian Angel" 
@@ -279,20 +243,21 @@ export default function VigilPage() {
         </div>
       </div>
 
+      {/* Живое сердце на стене/в пространстве комнаты */}
       <div ref={heartRef} className="absolute top-[18%] right-[10%] sm:top-[22%] sm:right-[20%] z-30 flex items-center justify-center">
         <div 
           className="relative transition-all duration-700 ease-in-out cursor-pointer"
           style={{ transform: `scale(${0.9 + (intensity / 10) * 0.4})` }}
         >
           <motion.div 
-            animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.85, 0.5] }}
+            animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.75, 0.4] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-            className="w-32 h-32 sm:w-44 sm:h-44 bg-gradient-to-t from-orange-500 via-rose-500 to-transparent rounded-full blur-[45px] opacity-75 mix-blend-screen"
+            className="w-32 h-32 sm:w-44 sm:h-44 bg-gradient-to-t from-orange-600 via-rose-600 to-transparent rounded-full blur-[45px] opacity-75 mix-blend-screen"
           />
           <div className="absolute inset-0 flex items-center justify-center">
             <Heart 
               size={65 + intensity * 3} 
-              className="text-white fill-orange-500/30 drop-shadow-[0_0_35px_rgba(255,140,0,0.8)] stroke-[1.5]" 
+              className="text-stone-100 fill-orange-600/30 drop-shadow-[0_0_35px_rgba(255,140,0,0.8)] stroke-[1.5]" 
             />
           </div>
         </div>
@@ -324,8 +289,9 @@ export default function VigilPage() {
         </AnimatePresence>
       </div>
 
+      {/* Центральный блок управления */}
       <div className="flex-1 max-w-md mx-auto w-full py-12 flex flex-col items-center justify-center relative z-25 my-auto">
-        <div className={`w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl ${lighting.cardBg} flex flex-col items-center gap-6 text-center shadow-2xl transition-colors duration-1000`}>
+        <div className={`w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl ${roomTheme.cardBg} flex flex-col items-center gap-6 text-center shadow-2xl`}>
           
           <div className="w-full space-y-3">
             <div className="font-mono text-xs uppercase tracking-[0.3em] opacity-70">Active Guardians (24h)</div>
@@ -336,7 +302,7 @@ export default function VigilPage() {
                 guardians.map((g, i) => (
                   <div 
                     key={g + i} 
-                    className={`font-serif text-xs sm:text-sm px-3.5 py-1.5 rounded-full border shadow-sm transition-transform hover:scale-105 ${buttonStyleClass}`}
+                    className={`font-serif text-xs sm:text-sm px-3.5 py-1.5 rounded-full border shadow-sm transition-transform hover:scale-105 ${roomTheme.buttonClass}`}
                   >
                     {g}
                   </div>
@@ -345,7 +311,7 @@ export default function VigilPage() {
             </div>
           </div>
 
-          <div className={`w-full h-[1px] ${lighting.bg.includes('1f1a18') || lighting.bg.includes('0b0c10') ? 'bg-white/10' : 'bg-stone-200'}`} />
+          <div className="w-full h-[1px] bg-white/10" />
 
           <div className="w-full space-y-4">
             <div className="text-center space-y-1.5">
@@ -355,7 +321,7 @@ export default function VigilPage() {
                 ) : userName ? (
                   <div className="opacity-90">Connected as <span className="font-semibold">{userName}</span></div>
                 ) : (
-                  <div className="text-amber-500 flex items-center justify-center gap-1.5">
+                  <div className="text-amber-400 flex items-center justify-center gap-1.5">
                     <Sparkles size={14} />
                     <span>Please <Link href="/login" className="underline hover:opacity-80">sign in</Link> to participate</span>
                   </div>
@@ -363,7 +329,7 @@ export default function VigilPage() {
               </div>
 
               <div className="flex items-center justify-center gap-2">
-                <Clock size={13} className="text-amber-500" />
+                <Clock size={13} className="text-amber-400" />
                 <span className="font-mono text-xs uppercase tracking-wider opacity-85">{timeLeft || 'Checking status...'}</span>
               </div>
             </div>
@@ -375,7 +341,7 @@ export default function VigilPage() {
                 group relative w-full h-12 border backdrop-blur-md shadow-md
                 flex items-center justify-center gap-2.5 rounded-full
                 transition-all active:scale-95 disabled:opacity-40 cursor-pointer font-serif text-xs tracking-widest uppercase
-                ${buttonStyleClass}
+                ${roomTheme.buttonClass}
               `}
             >
               <Heart size={14} className={`text-orange-500 fill-orange-500/30 ${isLighting ? 'animate-bounce' : ''}`} />
@@ -385,7 +351,7 @@ export default function VigilPage() {
             </button>
 
             {rateLimitMsg && (
-              <div className="font-mono text-xs text-rose-500 text-center">{rateLimitMsg}</div>
+              <div className="font-mono text-xs text-rose-400 text-center">{rateLimitMsg}</div>
             )}
           </div>
 
