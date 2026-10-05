@@ -6,12 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { logTempleEvent } from '@/lib/templeLogger'; // Укажите ваш путь к логгеру, например '@/utils/templeLogger' или '@/lib/templeLogger'
 import TempleTopBar from '@/components/TempleTopBar';
 
-interface VigilClientProps {
-  initialActiveGuards?: number;
-}
-
-export default function VigilClient({ initialActiveGuards = 12 }: VigilClientProps) {
-  const [activeGuards, setActiveGuards] = useState(initialActiveGuards);
+export default function VigilPage() {
+  const [activeGuards, setActiveGuards] = useState(12);
   const [hasSparked, setHasSparked] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [userName, setUserName] = useState('Pilgrim');
