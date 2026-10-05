@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import SoundToggle from '@/components/SoundToggle';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -136,7 +136,21 @@ export default function TempleClient() {
       setLighting(getTimeLighting());
       setStats(prev => ({ ...prev, sanctuaryHour: new Date().getHours() }));
     }, 60000);
+
     return () => clearInterval(timer);
+  }, []);
+
+  // Закрытие модалок по клавише Esc
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsInfoOpen(false);
+        setIsTracesOpen(false);
+        setIsChroniclesOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   useEffect(() => {
@@ -182,20 +196,20 @@ export default function TempleClient() {
             };
           });
 
-        setPosts(formatted);
+        if (!cancelled) {
+          setPosts(formatted);
+          const authorsSet = new Set(rawData.map((i: any) => i.author).filter(Boolean));
+          const vigils = rawData.filter((i: any) => (i.event_type || '').toUpperCase().includes('VIGIL')).length;
+          const ashes = rawData.filter((i: any) => (i.event_type || '').toUpperCase() === 'ASH').length;
 
-        const authorsSet = new Set(rawData.map((i: any) => i.author).filter(Boolean));
-        const vigils = rawData.filter((i: any) => (i.event_type || '').toUpperCase().includes('VIGIL')).length;
-        const ashes = rawData.filter((i: any) => (i.event_type || '').toUpperCase() === 'ASH').length;
-
-        setStats({
-          totalLogs: rawData.length,
-          uniqueAuthors: authorsSet.size,
-          vigilsCount: vigils,
-          letItGoCount: ashes,
-          sanctuaryHour: new Date().getHours()
-        });
-
+          setStats({
+            totalLogs: rawData.length,
+            uniqueAuthors: authorsSet.size,
+            vigilsCount: vigils,
+            letItGoCount: ashes,
+            sanctuaryHour: new Date().getHours()
+          });
+        }
       } catch (e) {
         console.warn('Failed to fetch temple logs', e);
       } finally {
@@ -204,9 +218,7 @@ export default function TempleClient() {
     }
 
     fetchLogs();
-    const interval = setInterval(() => {
-      fetchLogs();
-    }, 15000);
+    const interval = setInterval(fetchLogs, 15000);
 
     return () => {
       cancelled = true;
