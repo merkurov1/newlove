@@ -252,8 +252,8 @@ export default function TempleClient() {
       className={`relative w-full min-h-screen ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-4 pb-10 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      {/* Кнопка назад и переключатель звука */}
-      <div className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 py-2">
+      {/* Top Bar: Back to World & Sound Toggle */}
+      <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 py-2">
         <Link 
           href="/heartandangel/world"
           className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
@@ -262,26 +262,16 @@ export default function TempleClient() {
         </Link>
 
         <SoundToggle className={`px-3 py-2 border shadow-sm ${actionButtonStyle}`} />
-      </div>
+      </header>
 
-      {/* Основной контент: Хранитель СЛЕВА, Меню СПРАВА */}
+      {/* Main Content: Menu on LEFT, Hero on RIGHT */}
       <div className="relative w-full flex-1 flex items-center justify-center px-2 sm:px-4 my-auto py-6">
         <div className={`absolute w-[280px] h-[280px] sm:w-[450px] sm:h-[450px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
 
         <div className="relative z-30 max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center">
           
-          {/* ЛЕВАЯ КОЛОНКА: Герой / Хранитель */}
-          <div className="flex flex-col items-center justify-center relative pointer-events-none my-auto order-1 md:order-1">
-            <div className="absolute bottom-0 w-24 h-5 bg-black/20 rounded-full blur-[10px]" />
-            {heroUrl && (
-              <div className="relative w-48 h-64 sm:w-64 sm:h-80 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
-                <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
-              </div>
-            )}
-          </div>
-
-          {/* ПРАВАЯ КОЛОНКА: Меню ритуалов в столбик */}
-          <div className="flex flex-col items-stretch gap-3 w-full max-w-sm mx-auto md:mx-0 order-2 md:order-2">
+          {/* LEFT COLUMN: Ritual Menu */}
+          <div className="flex flex-col items-stretch gap-3 w-full max-w-sm mx-auto md:mx-0">
             <Link 
               href="/heartandangel/calm" 
               className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
@@ -313,11 +303,11 @@ export default function TempleClient() {
               Tribute
             </Link>
 
-            {/* Вспомогательные действия (Chronicles, Traces, Sound, ?) */}
-            <div className="flex items-center justify-center gap-2 mt-1 w-full">
+            {/* Utility buttons (Chronicles, Traces, ?) */}
+            <div className="flex items-center justify-center gap-2 mt-2 w-full">
               <button
                 onClick={() => setIsChroniclesOpen(true)}
-                className={`flex-1 py-2 px-2.5 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
+                className={`flex-1 py-2 px-3 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
               >
                 <Activity size={12} className="opacity-80" />
                 <span>Chronicles</span>
@@ -325,13 +315,11 @@ export default function TempleClient() {
 
               <button
                 onClick={() => setIsTracesOpen(true)}
-                className={`flex-1 py-2 px-2.5 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
+                className={`flex-1 py-2 px-3 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
               >
                 <Layers size={12} className="opacity-80" />
                 <span>Traces</span>
               </button>
-
-              <SoundToggle className={`py-2 px-3 rounded-xl border backdrop-blur-sm shadow-sm flex items-center justify-center transition-transform hover:scale-105 cursor-pointer ${actionButtonStyle}`} />
 
               <button
                 onClick={() => setIsInfoOpen(true)}
@@ -343,12 +331,22 @@ export default function TempleClient() {
             </div>
           </div>
 
+          {/* RIGHT COLUMN: Guardian / Hero */}
+          <div className="flex flex-col items-center justify-center relative pointer-events-none my-auto">
+            <div className="absolute bottom-0 w-24 h-5 bg-black/20 rounded-full blur-[10px]" />
+            {heroUrl && (
+              <div className="relative w-48 h-64 sm:w-64 sm:h-80 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
+                <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
       <div className="h-4" />
 
-      {/* Модальное окно: Info */}
+      {/* Info Modal */}
       <AnimatePresence>
         {isInfoOpen && (
           <motion.div 
@@ -380,7 +378,7 @@ export default function TempleClient() {
         )}
       </AnimatePresence>
 
-      {/* Модальное окно: Traces */}
+      {/* Traces Modal */}
       <AnimatePresence>
         {isTracesOpen && (
           <motion.div 
@@ -446,7 +444,7 @@ export default function TempleClient() {
         )}
       </AnimatePresence>
 
-      {/* Модальное окно: Chronicles */}
+      {/* Chronicles Modal */}
       <AnimatePresence>
         {isChroniclesOpen && (
           <motion.div 
