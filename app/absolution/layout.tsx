@@ -1,8 +1,7 @@
-import { Metadata } from 'next';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'Digital Absolution | Confess Your Digital Sins',
   description: 'An interactive conceptual art experience. Confess your digital sins—doomscrolling, social media envy, crypto obsession—and receive absolution from Pierrot, your AI chaplain. Available in English, Russian, and Latin.',
   keywords: ['digital absolution', 'digital sins', 'conceptual art', 'interactive art', 'confession', 'web art', 'doomscrolling', 'AI chaplain', 'redemption', 'modern guilt'],
