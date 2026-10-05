@@ -113,7 +113,7 @@ export default async function LetterPage({ params }: { params: { slug: string } 
           <header className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-3">{letter.title}</h1>
             <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Author'}</span>
+              <span>{letterAuthor?.name || 'Author'}</span>
               <span>•</span>
               <time dateTime={letter.publishedAt || letter.createdAt}>
                 {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('en-US', {
