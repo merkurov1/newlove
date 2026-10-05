@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
 import { useTempleAudio } from '../../components/AudioContext';
 import SoundToggle from '../../components/SoundToggle';
+import Header from '@/components/Header';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Clock, Sparkles, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -205,7 +206,11 @@ export default function VigilPage() {
       className={`relative w-full min-h-[100dvh] ${roomTheme.bg} ${roomTheme.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 sm:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: roomTheme.vignette }}
     >
-      <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-24 sm:pt-28 md:pt-32 px-2 sm:px-4">
+      {/* Главное навигационное меню сайта */}
+      <Header />
+
+      {/* Панель управления страницей (звук и кнопка назад) */}
+      <header className="relative z-20 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-16 sm:pt-20 px-2 sm:px-4">
         <div className="flex justify-start">
           <SoundToggle className={`px-3 sm:px-4 py-2 sm:py-2.5 border shadow-sm ${roomTheme.buttonClass}`} />
         </div>
@@ -243,8 +248,8 @@ export default function VigilPage() {
         </div>
       </div>
 
-      {/* Живое сердце на стене/в пространстве комнаты */}
-      <div ref={heartRef} className="absolute top-[18%] right-[10%] sm:top-[22%] sm:right-[20%] z-30 flex items-center justify-center">
+      {/* Живое сердце */}
+      <div ref={heartRef} className="absolute top-[28%] right-[10%] sm:top-[30%] sm:right-[20%] z-30 flex items-center justify-center">
         <div 
           className="relative transition-all duration-700 ease-in-out cursor-pointer"
           style={{ transform: `scale(${0.9 + (intensity / 10) * 0.4})` }}
@@ -290,7 +295,7 @@ export default function VigilPage() {
       </div>
 
       {/* Центральный блок управления */}
-      <div className="flex-1 max-w-md mx-auto w-full py-12 flex flex-col items-center justify-center relative z-25 my-auto">
+      <div className="flex-1 max-w-md mx-auto w-full py-12 flex flex-col items-center justify-center relative z-20 my-auto">
         <div className={`w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl ${roomTheme.cardBg} flex flex-col items-center gap-6 text-center shadow-2xl`}>
           
           <div className="w-full space-y-3">
