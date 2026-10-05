@@ -66,7 +66,7 @@ export default function TributePage() {
 
   const triggerPulse = (donorName: string) => {
     setPulse(true);
-    setLastDonor(donorName || "ANONYMOUS");
+    setLastDonor(donorName || "PILGRIM");
     triggerHaptic('heavy');
     setTimeout(() => setPulse(false), 800);
     setTimeout(() => setLastDonor(null), 4000);
@@ -114,22 +114,22 @@ export default function TributePage() {
   };
 
   const getHeartStyle = () => {
-    let filter = 'grayscale(100%) sepia(80%) brightness(0.6) contrast(1.2)';
+    let filter = 'grayscale(80%) sepia(60%) brightness(0.8) contrast(1.1)';
     let scale = 1;
-    let opacity = 0.8;
+    let opacity = 0.9;
 
     if (total24h > 50) {
-        filter = 'grayscale(20%) sepia(40%) brightness(1.0) contrast(1.1) saturate(1.2)';
+        filter = 'grayscale(20%) sepia(30%) brightness(1.1) contrast(1.05) saturate(1.3)';
         opacity = 1;
     }
     if (total24h > 200) {
-        filter = 'grayscale(0%) sepia(0%) brightness(1.1) contrast(1.0) saturate(1.5)';
-        scale = 1.05;
+        filter = 'grayscale(0%) sepia(0%) brightness(1.2) contrast(1.0) saturate(1.6)';
+        scale = 1.06;
     }
 
     if (pulse) {
         scale = 1.25;
-        filter = 'brightness(1.5) saturate(2.0)';
+        filter = 'brightness(1.5) saturate(2.2)';
         opacity = 1;
     }
 
@@ -139,41 +139,39 @@ export default function TributePage() {
   const style = getHeartStyle();
 
   return (
-    <div className="min-h-screen bg-black text-[#e5b863] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#e5b863] selection:text-black">
+    <div className="min-h-screen bg-[#0c0904] text-[#ffd700] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#ffd700] selection:text-black pt-24 sm:pt-28">
       <div className="noise-overlay" />
-      <React.Suspense fallback={null}>
-        {typeof TempleWrapper === 'function' ? <TempleWrapper /> : null}
-      </React.Suspense>
+      {typeof TempleWrapper === 'function' ? <TempleWrapper /> : null}
       
-      {/* AMBIENT GLOW */}
+      {/* RADIANT WARM GLOW */}
       <div 
         className="absolute inset-0 pointer-events-none transition-opacity duration-1000"
         style={{ 
-            background: 'radial-gradient(circle at center, rgba(255, 215, 0, 0.15) 0%, black 70%)',
-            opacity: Math.min(total24h / 300, 0.8) 
+            background: 'radial-gradient(circle at center, rgba(255, 215, 0, 0.22) 0%, rgba(12, 9, 4, 0.95) 75%)',
+            opacity: Math.max(Math.min(total24h / 250, 1), 0.5) 
         }} 
       />
 
-      {/* TOP BAR */}
-      <div className="w-full max-w-md mx-auto px-6 pt-6 flex justify-between items-center z-20">
+      {/* TOP BAR FIXED */}
+      <div className="absolute top-6 left-0 right-0 w-full max-w-md mx-auto px-6 flex justify-between items-center z-30">
         <Link 
           href="/temple"
-          className="text-xs tracking-widest text-[#886e36] hover:text-[#e5b863] transition-colors uppercase border border-[#443311] px-4 py-2 rounded-full bg-black/60 backdrop-blur-md cursor-pointer"
+          className="text-xs tracking-widest text-[#e5b863] hover:text-white transition-colors uppercase border border-[#e5b863]/30 px-4 py-2 rounded-full bg-[#1a1205]/70 backdrop-blur-md cursor-pointer shadow-[0_0_15px_rgba(255,215,0,0.15)]"
         >
           ← Temple
         </Link>
         {typeof SoundToggle === 'function' && <SoundToggle />}
       </div>
 
-      <div className="z-10 w-full max-w-md mx-auto px-6 flex flex-col items-center justify-center py-10 flex-1">
+      <div className="z-10 w-full max-w-md mx-auto px-6 flex flex-col items-center justify-center py-6 flex-1">
         
         {/* HEADER */}
         <div className="text-center mb-6">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-[0.3em] text-white drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-[0.35em] text-white drop-shadow-[0_0_20px_rgba(255,215,0,0.6)]">
                 TRIBUTE
             </h1>
-            <div className="text-[10px] text-[#886e36] tracking-[0.2em] uppercase mt-1.5">
-                ENERGY LEVEL: ${total24h.toFixed(0)} / 24H
+            <div className="text-[10px] text-[#e5b863] tracking-[0.25em] uppercase mt-2 font-semibold">
+                ✨ RADIANT ENERGY: ${total24h.toFixed(0)} / 24H
             </div>
         </div>
 
@@ -188,19 +186,19 @@ export default function TributePage() {
                     transform: `scale(${style.scale})`,
                     opacity: style.opacity,
                     transition: 'all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                    boxShadow: total24h > 100 ? '0 0 50px rgba(255,215,0,0.2)' : 'none'
+                    boxShadow: '0 0 60px rgba(255,215,0,0.35)'
                 }}
             />
             
             <AnimatePresence>
                 {lastDonor && (
                     <motion.div 
-                        initial={{ opacity: 0, y: 30 }} 
-                        animate={{ opacity: 1, y: 0 }} 
-                        exit={{ opacity: 0, y: -20 }}
-                        className="absolute -bottom-10 text-white font-bold text-xs tracking-widest uppercase drop-shadow-[0_0_5px_gold] text-center w-full"
+                        initial={{ opacity: 0, y: 30, scale: 0.9 }} 
+                        animate={{ opacity: 1, y: 0, scale: 1 }} 
+                        exit={{ opacity: 0, y: -20, scale: 0.9 }}
+                        className="absolute -bottom-10 text-white font-bold text-xs tracking-widest uppercase drop-shadow-[0_0_8px_gold] text-center w-full bg-[#1a1205]/80 py-1 px-3 rounded-full border border-[#ffd700]/40 backdrop-blur-sm"
                     >
-                        ⚡ {lastDonor}
+                        💛 {lastDonor} OFFERED LIGHT
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -212,14 +210,22 @@ export default function TributePage() {
                 {PRESETS.map(val => (
                     <button 
                         key={val} 
-                        className={`flex-1 py-3 border border-[#443311] text-[#886e36] hover:text-[#e5b863] hover:border-[#e5b863] transition-all uppercase tracking-widest text-xs font-bold rounded-xl cursor-pointer ${amount === val && !isCustom ? 'bg-[#e5b863] !text-black border-[#e5b863]' : 'bg-black/60'}`}
+                        className={`flex-1 py-3 border transition-all uppercase tracking-widest text-xs font-bold rounded-xl cursor-pointer ${
+                          amount === val && !isCustom 
+                            ? 'bg-gradient-to-r from-[#ffd700] to-[#ffea80] !text-black border-[#ffd700] shadow-[0_0_20px_rgba(255,215,0,0.4)] scale-105' 
+                            : 'border-[#e5b863]/30 text-[#e5b863] hover:text-white hover:border-[#ffd700] bg-[#161004]/80'
+                        }`}
                         onClick={() => { setAmount(val); setIsCustom(false); triggerHaptic('light'); setErrorMsg(null); }}
                     >
                         ${val}
                     </button>
                 ))}
                 <button 
-                    className={`px-4 border border-[#443311] text-[#886e36] hover:text-[#e5b863] rounded-xl cursor-pointer ${isCustom ? 'bg-[#e5b863] !text-black' : 'bg-black/60'}`}
+                    className={`px-4 border rounded-xl cursor-pointer transition-all uppercase text-xs font-bold ${
+                      isCustom 
+                        ? 'bg-gradient-to-r from-[#ffd700] to-[#ffea80] !text-black border-[#ffd700] shadow-[0_0_20px_rgba(255,215,0,0.4)]' 
+                        : 'border-[#e5b863]/30 text-[#e5b863] hover:text-white hover:border-[#ffd700] bg-[#161004]/80'
+                    }`}
                     onClick={() => { setIsCustom(true); setAmount(0); triggerHaptic('light'); setErrorMsg(null); }}
                 >
                     ...
@@ -231,7 +237,7 @@ export default function TributePage() {
                     <motion.input 
                         initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                         type="number" 
-                        className="w-full bg-[#110c05] border border-[#e5b863] text-[#e5b863] p-3.5 text-center font-mono text-lg rounded-xl outline-none placeholder-[#443311] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-full bg-[#1a1205] border border-[#ffd700] text-[#ffd700] p-3.5 text-center font-mono text-lg rounded-xl outline-none placeholder-[#886e36] shadow-[0_0_15px_rgba(255,215,0,0.2)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         placeholder="ENTER AMOUNT"
                         value={amount || ''}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setAmount(Number(e.target.value)); setErrorMsg(null); }}
@@ -241,27 +247,27 @@ export default function TributePage() {
             </AnimatePresence>
 
             {errorMsg && (
-                <div className="text-[10px] text-rose-500 text-center uppercase tracking-widest animate-pulse">
+                <div className="text-[10px] text-rose-400 text-center uppercase tracking-widest animate-pulse font-bold">
                     {errorMsg}
                 </div>
             )}
 
             <button 
-                className="w-full bg-gradient-to-r from-[#e5b863] to-[#ffeec7] text-black py-4 rounded-xl text-xs font-bold tracking-[0.2em] uppercase hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:grayscale shadow-[0_0_20px_rgba(229,184,99,0.3)] cursor-pointer"
+                className="w-full bg-gradient-to-r from-[#ffd700] via-[#ffea80] to-[#ffe066] text-black py-4 rounded-xl text-xs font-black tracking-[0.2em] uppercase hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale shadow-[0_0_25px_rgba(255,215,0,0.5)] cursor-pointer"
                 onClick={handleTribute}
                 disabled={loading || amount <= 0}
             >
-                {loading ? 'INITIATING...' : `OFFER $${amount}`}
+                {loading ? 'RADIATING...' : `OFFER $${amount} FOR THE TEMPLE`}
             </button>
             
-            <p className="text-[9px] text-[#443311] text-center uppercase tracking-wider leading-relaxed">
-                Funds maintain the Temple servers.<br/>
-                Energy is never lost, only transformed.
+            <p className="text-[10px] text-[#e5b863]/80 text-center uppercase tracking-wider leading-relaxed">
+                Your tribute nourishes the Sanctuary.<br/>
+                Energy flows, expands, and illuminates all.
             </p>
         </div>
       </div>
 
-      <footer className="w-full text-center font-mono text-[9px] text-[#443311] uppercase tracking-[0.3em] py-6 z-20">
+      <footer className="w-full text-center font-mono text-[9px] text-[#e5b863]/60 uppercase tracking-[0.3em] py-6 z-20">
         Merkurov Private Office &copy; {new Date().getFullYear()}
       </footer>
 

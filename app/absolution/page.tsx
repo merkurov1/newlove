@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { templeTrack } from '@/components/templeTrack';
 import html2canvas from 'html2canvas';
 import { Sparkles, RotateCcw, Download } from 'lucide-react';
@@ -13,12 +14,13 @@ import * as SoundToggleMod from '@/components/SoundToggle';
 const SoundToggle = (SoundToggleMod as any).default || (SoundToggleMod as any).SoundToggle || (() => null);
 
 const STAMP_DELAY = 1200;
+const STAMP_IMAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0947.png';
 
 const TRANSLATIONS = {
   en: {
-    title: "CONFESS YOUR SINS",
-    subtitle: "Submit your digital burden to the Sanctuary chaplain.",
-    placeholder: "Identity / Name",
+    title: "ONLINE ABSOLUTION",
+    subtitle: "Your digital burden is lifted. Lightness restored.",
+    placeholder: "Your Name / Pilgrim",
     sins: {
       doomscroll: "Doomscrolling past 3 AM",
       envy: "Envy: Stalking others' success",
@@ -28,15 +30,15 @@ const TRANSLATIONS = {
       wrath: "Wrath: Internet arguments",
       lust: "Lust: Digital voyeurism"
     },
-    receipt: { header: "DEPT. OF KARMA", footer: "Silence is the only currency.", signature: "Pierrot, AI Chaplain" },
-    btn: "SEEK ABSOLUTION",
-    save: "SAVE RECEIPT",
-    newConfession: "NEW CONFESSION"
+    receipt: { header: "SANCTUARY OF LIGHT", footer: "Pure energy. Absolute freedom.", signature: "Pierrot, AI Chaplain" },
+    btn: "✨ RECEIVE ABSOLUTION",
+    save: "SAVE CERTIFICATE",
+    newConfession: "NEW ABSOLUTION"
   },
   ru: {
-    title: "ИСПОВЕДАЙ ГРЕХИ",
-    subtitle: "Передайте цифровое бремя капеллану Санктуария.",
-    placeholder: "Имя / Личность",
+    title: "ОНЛАЙН-ОТПУЩЕНИЕ",
+    subtitle: "Ваше цифровое бремя снято. Возвращается свет.",
+    placeholder: "Ваше Имя / Пилигрим",
     sins: {
       doomscroll: "Думскроллинг после 3:00",
       envy: "Зависть к чужой 'успешной' жизни",
@@ -46,10 +48,10 @@ const TRANSLATIONS = {
       wrath: "Гнев: Споры в комментариях",
       lust: "Похоть: Цифровой вуайеризм"
     },
-    receipt: { header: "ДЕПАРТАМЕНТ КАРМЫ", footer: "Тишина — единственная валюта.", signature: "Пьеро, AI Капеллан" },
-    btn: "ПОЛУЧИТЬ ОТПУЩЕНИЕ",
-    save: "СОХРАНИТЬ ЧЕК",
-    newConfession: "НОВАЯ ИСПОВЕДЬ"
+    receipt: { header: "САНКТУАРИЙ СВЕТА", footer: "Чистая энергия. Абсолютная свобода.", signature: "Пьеро, AI Капеллан" },
+    btn: "✨ ПОЛУЧИТЬ ОТПУЩЕНИЕ",
+    save: "СОХРАНИТЬ СЕРТИФИКАТ",
+    newConfession: "НОВОЕ ОЧИЩЕНИЕ"
   }
 };
 
@@ -98,7 +100,7 @@ export default function AbsolutionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event_type: 'ABSOLUTION',
-          message: `${name} confessed: "${sinText}" and received absolution.`,
+          message: `${name} confessed: "${sinText}" and received joyous absolution.`,
           author: name
         })
       });
@@ -142,7 +144,7 @@ export default function AbsolutionPage() {
          });
       } else {
         const link = document.createElement('a');
-        link.download = `Merkurov_Absolution_${ticketId}.png`;
+        link.download = `Sanctuary_Absolution_${ticketId}.png`;
         link.href = image;
         link.click();
       }
@@ -154,76 +156,82 @@ export default function AbsolutionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-[#e5b863] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#e5b863] selection:text-black">
+    <div className="min-h-screen bg-[#0c0904] text-[#ffd700] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#ffd700] selection:text-black pt-24 sm:pt-28">
       <div className="noise-overlay" />
-      <React.Suspense fallback={null}>
-        {typeof TempleWrapper === 'function' ? <TempleWrapper /> : null}
-      </React.Suspense>
+      {typeof TempleWrapper === 'function' ? <TempleWrapper /> : null}
 
-      {/* TOP BAR */}
-      <div className="w-full max-w-md mx-auto px-6 pt-6 flex justify-between items-center z-30">
+      {/* RADIANT WARM GLOW */}
+      <div 
+        className="absolute inset-0 pointer-events-none transition-opacity duration-1000"
+        style={{ 
+            background: 'radial-gradient(circle at center, rgba(255, 215, 0, 0.2) 0%, rgba(12, 9, 4, 0.95) 75%)',
+        }} 
+      />
+
+      {/* TOP BAR FIXED */}
+      <div className="absolute top-6 left-0 right-0 w-full max-w-md mx-auto px-6 flex justify-between items-center z-30">
         <Link 
           href="/temple"
-          className="text-xs tracking-widest text-[#886e36] hover:text-[#e5b863] transition-colors uppercase border border-[#443311] px-4 py-2 rounded-full bg-black/60 backdrop-blur-md cursor-pointer"
+          className="text-xs tracking-widest text-[#e5b863] hover:text-white transition-colors uppercase border border-[#e5b863]/30 px-4 py-2 rounded-full bg-[#1a1205]/70 backdrop-blur-md cursor-pointer shadow-[0_0_15px_rgba(255,215,0,0.15)]"
         >
           ← Temple
         </Link>
         <div className="flex items-center gap-3">
           {typeof SoundToggle === 'function' && <SoundToggle />}
-          <div className="flex gap-2 text-xs tracking-widest bg-black/60 border border-[#443311] px-3 py-2 rounded-full backdrop-blur-md">
-             <button onClick={() => setLang('en')} className={`${lang === 'en' ? 'font-bold text-[#e5b863] underline' : 'text-[#886e36] opacity-60'} cursor-pointer`}>EN</button>
-             <span className="text-[#443311]">/</span>
-             <button onClick={() => setLang('ru')} className={`${lang === 'ru' ? 'font-bold text-[#e5b863] underline' : 'text-[#886e36] opacity-60'} cursor-pointer`}>RU</button>
+          <div className="flex gap-2 text-xs tracking-widest bg-[#1a1205]/70 border border-[#e5b863]/30 px-3 py-2 rounded-full backdrop-blur-md shadow-[0_0_15px_rgba(255,215,0,0.15)]">
+             <button onClick={() => setLang('en')} className={`${lang === 'en' ? 'font-bold text-[#ffd700] underline' : 'text-[#886e36] opacity-70'} cursor-pointer`}>EN</button>
+             <span className="text-[#886e36]/40">/</span>
+             <button onClick={() => setLang('ru')} className={`${lang === 'ru' ? 'font-bold text-[#ffd700] underline' : 'text-[#886e36] opacity-70'} cursor-pointer`}>RU</button>
           </div>
         </div>
       </div>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-12 relative z-20 w-full max-w-md mx-auto">
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-6 relative z-25 w-full max-w-md mx-auto">
         
         {/* STAGE 1: CONFESSIONAL */}
         {step === 'confess' && (
-          <div className="w-full p-8 rounded-2xl bg-black/85 border border-[#443311] shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-500 space-y-6">
+          <div className="w-full p-8 rounded-2xl bg-[#161004]/90 border border-[#ffd700]/30 shadow-[0_0_35px_rgba(255,215,0,0.15)] backdrop-blur-xl animate-in fade-in zoom-in duration-500 space-y-6">
               <div className="text-center space-y-2">
-                  <div className="w-10 h-10 mx-auto rounded-full bg-[#110c05] border border-[#443311] flex items-center justify-center text-[#e5b863]">
-                      <Sparkles size={18} />
+                  <div className="w-11 h-11 mx-auto rounded-full bg-[#241908] border border-[#ffd700]/40 flex items-center justify-center text-[#ffd700] shadow-[0_0_15px_rgba(255,215,0,0.3)]">
+                      <Sparkles size={20} />
                   </div>
-                  <h1 className="text-xl sm:text-2xl font-bold tracking-[0.2em] text-white uppercase">
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-[0.2em] text-white uppercase drop-shadow-[0_0_10px_rgba(255,215,0,0.5)]">
                       {t.title}
                   </h1>
-                  <p className="text-[10px] text-[#886e36] uppercase tracking-wider">
+                  <p className="text-[10px] text-[#e5b863] uppercase tracking-wider font-semibold">
                       {t.subtitle}
                   </p>
               </div>
 
               <div className="space-y-5">
                   <div className="space-y-1.5">
-                      <label className="text-[9px] uppercase tracking-[0.2em] text-[#886e36] block">Your Burden</label>
+                      <label className="text-[9px] uppercase tracking-[0.2em] text-[#e5b863] block">Your Burden to Release</label>
                       <select 
                           value={sinKey}
                           onChange={(e: any) => setSinKey(e.target.value)}
-                          className="w-full bg-[#110c05] border border-[#443311] text-[#e5b863] p-3 text-xs uppercase tracking-wider rounded-xl focus:border-[#e5b863] focus:outline-none cursor-pointer"
+                          className="w-full bg-[#1a1205] border border-[#ffd700]/30 text-[#ffd700] p-3.5 text-xs uppercase tracking-wider rounded-xl focus:border-[#ffd700] focus:outline-none cursor-pointer shadow-sm"
                       >
                           {Object.entries(t.sins).map(([k, v]) => (
-                              <option key={k} value={k} className="bg-black text-[#e5b863]">{v}</option>
+                              <option key={k} value={k} className="bg-[#0c0904] text-[#ffd700]">{v}</option>
                           ))}
                       </select>
                   </div>
 
                   <div className="space-y-1.5">
-                      <label className="text-[9px] uppercase tracking-[0.2em] text-[#886e36] block">Sinner Identity</label>
+                      <label className="text-[9px] uppercase tracking-[0.2em] text-[#e5b863] block">Pilgrim Identity</label>
                       <input 
                           type="text" 
                           value={name}
                           onChange={(e: any) => setName(e.target.value)}
                           placeholder={t.placeholder}
-                          className="w-full bg-[#110c05] border border-[#443311] text-[#e5b863] py-3 px-4 text-xs uppercase tracking-wider rounded-xl focus:border-[#e5b863] focus:outline-none placeholder-[#443311]"
+                          className="w-full bg-[#1a1205] border border-[#ffd700]/30 text-[#ffd700] py-3.5 px-4 text-xs uppercase tracking-wider rounded-xl focus:border-[#ffd700] focus:outline-none placeholder-[#886e36] shadow-sm"
                       />
                   </div>
 
                   <button 
                       onClick={handleConfess}
-                      className="w-full bg-gradient-to-r from-[#e5b863] to-[#ffeec7] text-black py-3.5 rounded-xl font-bold text-xs uppercase tracking-[0.2em] hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer shadow-[0_0_20px_rgba(229,184,99,0.2)]"
+                      className="w-full bg-gradient-to-r from-[#ffd700] via-[#ffea80] to-[#ffe066] text-black py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-[0_0_25px_rgba(255,215,0,0.5)]"
                   >
                       {t.btn}
                   </button>
@@ -233,10 +241,10 @@ export default function AbsolutionPage() {
 
         {/* STAGE 2: PROCESSING */}
         {step === 'processing' && (
-          <div className="text-center p-10 rounded-2xl bg-black/85 border border-[#443311] shadow-2xl space-y-4">
-              <div className="animate-spin text-3xl text-[#e5b863]">⏳</div>
-              <div className="text-[10px] text-[#886e36] uppercase tracking-[0.3em] animate-pulse">
-                  NEGOTIATING WITH ETERNITY...
+          <div className="text-center p-10 rounded-2xl bg-[#161004]/90 border border-[#ffd700]/30 shadow-2xl space-y-4">
+              <div className="animate-spin text-3xl text-[#ffd700]">✨</div>
+              <div className="text-[10px] text-[#ffd700] uppercase tracking-[0.3em] animate-pulse font-bold">
+                  DISSOLVING BURDENS INTO LIGHT...
               </div>
           </div>
         )}
@@ -247,7 +255,7 @@ export default function AbsolutionPage() {
               
               <div 
                   ref={receiptRef}
-                  className="bg-white text-stone-900 p-8 w-[320px] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.4)] border border-stone-200 relative rotate-1 font-mono"
+                  className="bg-white text-stone-900 p-8 w-[320px] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] border border-stone-200 relative rotate-1 font-mono"
               >
                   <div className="text-center border-b border-stone-900 border-dashed pb-4 mb-4">
                       <h2 className="text-base font-black tracking-widest text-stone-900">{t.receipt.header}</h2>
@@ -257,16 +265,16 @@ export default function AbsolutionPage() {
 
                   <div className="space-y-3 mb-6 text-xs">
                       <div className="flex justify-between border-b border-stone-100 pb-2">
-                          <span className="text-stone-400">SINNER:</span>
+                          <span className="text-stone-400">PILGRIM:</span>
                           <span className="font-bold uppercase text-stone-900">{name}</span>
                       </div>
                       <div className="flex flex-col border-b border-stone-100 pb-2">
-                          <span className="text-stone-400 mb-1">CONFESSION:</span>
-                          <span className="font-bold uppercase leading-tight text-stone-900">{sinText}</span>
+                          <span className="text-stone-400 mb-1">RELEASED BURDEN:</span>
+                          <span className="font-bold uppercase leading-tight text-emerald-600">{sinText}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                          <span className="text-stone-400">KARMA DEBIT:</span>
-                          <span className="font-bold text-sm text-stone-900">0.00</span>
+                          <span className="text-stone-400">KARMA BALANCE:</span>
+                          <span className="font-bold text-sm text-amber-600">✨ PURE</span>
                       </div>
                   </div>
 
@@ -275,13 +283,19 @@ export default function AbsolutionPage() {
                       <p className="font-serif italic text-xs text-stone-700">{t.receipt.signature}</p>
                   </div>
 
-                  {/* STAMP */}
+                  {/* CUSTOM IMAGE STAMP */}
                   <div 
-                      className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-[3px] border-rose-600 text-rose-600 py-2.5 px-5 text-xl font-black uppercase tracking-[0.2em] rotate-[-12deg] transition-all duration-500 pointer-events-none select-none bg-white/95 shadow-sm ${
-                          showStamp ? 'opacity-100 scale-100' : 'opacity-0 scale-150'
+                      className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-8deg] transition-all duration-700 pointer-events-none select-none ${
+                          showStamp ? 'opacity-95 scale-100' : 'opacity-0 scale-150'
                       }`}
                   >
-                      ABSOLVED
+                      <Image 
+                          src={STAMP_IMAGE} 
+                          alt="Absolution Stamp" 
+                          width={140} 
+                          height={140} 
+                          className="object-contain drop-shadow-[0_5px_15px_rgba(225,29,72,0.3)] filter contrast-125" 
+                      />
                   </div>
               </div>
 
@@ -290,14 +304,14 @@ export default function AbsolutionPage() {
                   <button 
                       onClick={handleSave}
                       disabled={isSaving}
-                      className="flex-1 bg-gradient-to-r from-[#e5b863] to-[#ffeec7] text-black py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-md cursor-pointer hover:scale-[1.02] transition-all"
+                      className="flex-1 bg-gradient-to-r from-[#ffd700] via-[#ffea80] to-[#ffe066] text-black py-3.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,215,0,0.4)] cursor-pointer hover:scale-[1.02] transition-all"
                   >
                       <Download size={14} />
                       <span>{isSaving ? 'SAVING...' : t.save}</span>
                   </button>
                   <button 
                       onClick={() => { setStep('confess'); setShowStamp(false); }}
-                      className="px-5 py-3 rounded-xl border border-[#443311] bg-black text-[#e5b863] hover:border-[#e5b863] text-xs uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer transition-all"
+                      className="px-5 py-3.5 rounded-xl border border-[#ffd700]/30 bg-[#1a1205] text-[#ffd700] hover:border-[#ffd700] text-xs uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer transition-all shadow-md"
                   >
                       <RotateCcw size={14} />
                   </button>
@@ -306,7 +320,7 @@ export default function AbsolutionPage() {
         )}
       </main>
 
-      <footer className="w-full text-center font-mono text-[9px] text-[#443311] uppercase tracking-[0.3em] py-6 z-20">
+      <footer className="w-full text-center font-mono text-[9px] text-[#e5b863]/60 uppercase tracking-[0.3em] py-6 z-20">
         Merkurov Private Office &copy; {new Date().getFullYear()}
       </footer>
 
