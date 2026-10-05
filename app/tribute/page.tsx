@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Suspense from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase-browser';
 import TempleWrapper from '@/components/TempleWrapper';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -140,7 +141,7 @@ export default function TributePage() {
   const style = getHeartStyle();
 
   return (
-    <div className="min-h-screen bg-black text-[#e5b863] font-mono flex flex-col items-center relative overflow-hidden selection:bg-[#e5b863] selection:text-black">
+    <div className="min-h-screen bg-black text-[#e5b863] font-mono flex flex-col items-center relative overflow-x-hidden selection:bg-[#e5b863] selection:text-black">
       <Suspense fallback={null}><TempleWrapper /></Suspense>
       
       {/* AMBIENT GLOW */}
@@ -152,7 +153,17 @@ export default function TributePage() {
         }} 
       />
 
-      <div className="z-10 w-full max-w-md px-6 flex flex-col items-center h-screen justify-center py-10">
+      {/* TOP BAR: BACK TO TEMPLE */}
+      <div className="w-full max-w-md px-6 pt-6 flex justify-between items-center z-20">
+        <Link 
+          href="/temple"
+          className="text-xs tracking-widest text-[#886e36] hover:text-[#e5b863] transition-colors uppercase border border-[#443311] px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-sm cursor-pointer"
+        >
+          ← Temple
+        </Link>
+      </div>
+
+      <div className="z-10 w-full max-w-md px-6 flex flex-col items-center min-h-[calc(100vh-80px)] justify-center py-10">
         
         {/* HEADER */}
         <div className="text-center mb-8">
@@ -165,7 +176,7 @@ export default function TributePage() {
         </div>
 
         {/* THE HEART ARTIFACT */}
-        <div className="relative w-64 h-64 mb-12 flex items-center justify-center">
+        <div className="relative w-56 h-56 sm:w-64 sm:h-64 mb-10 flex items-center justify-center">
             <video 
                 src={HEART_VIDEO} 
                 autoPlay loop muted playsInline 
@@ -186,7 +197,7 @@ export default function TributePage() {
                         initial={{ opacity: 0, y: 30 }} 
                         animate={{ opacity: 1, y: 0 }} 
                         exit={{ opacity: 0, y: -20 }}
-                        className="absolute -bottom-12 text-white font-bold text-sm tracking-widest uppercase drop-shadow-[0_0_5px_gold]"
+                        className="absolute -bottom-10 text-white font-bold text-xs sm:text-sm tracking-widest uppercase drop-shadow-[0_0_5px_gold] text-center w-full"
                     >
                         ⚡ {lastDonor}
                     </motion.div>
@@ -197,7 +208,7 @@ export default function TributePage() {
         {/* CONTROLS */}
         <div className="w-full space-y-6">
             {/* PRESETS */}
-            <div className="flex gap-4 justify-center">
+            <div className="flex gap-3 sm:gap-4 justify-center">
                 {PRESETS.map(val => (
                     <button 
                         key={val} 
@@ -246,7 +257,7 @@ export default function TributePage() {
                 {loading ? 'INITIATING...' : `OFFER $${amount}`}
             </button>
             
-            <p className="text-[9px] text-[#443311] text-center uppercase tracking-wider leading-relaxed">
+            <p className="text-[9px] text-[#443311] text-center uppercase tracking-wider leading-relaxed pb-4">
                 Funds maintain the Temple servers.<br/>
                 Energy is never lost, only transformed.
             </p>

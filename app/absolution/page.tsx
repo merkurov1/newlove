@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import Suspense from 'react';
+import Link from 'next/link';
 import { templeTrack } from '@/components/templeTrack';
 import html2canvas from 'html2canvas';
 import TempleWrapper from '@/components/TempleWrapper';
@@ -225,16 +225,26 @@ export default function AbsolutionPage() {
       style={{ backgroundImage: lighting.vignette }}
     >
       <Header />
-      <Suspense fallback={null}><TempleWrapper /></Suspense>
+      <React.Suspense fallback={null}><TempleWrapper /></React.Suspense>
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 pt-32 pb-24 relative z-20">
         
+        {/* TOP BAR: BACK TO TEMPLE */}
+        <div className="absolute top-28 left-6 lg:left-12 z-30">
+          <Link 
+            href="/temple"
+            className={`text-xs font-mono tracking-widest uppercase border px-4 py-2 rounded-full backdrop-blur-md transition-all cursor-pointer ${langToggleStyle}`}
+          >
+            ← Temple
+          </Link>
+        </div>
+
         {/* LANGUAGE TOGGLE */}
         <div className={`absolute top-28 right-6 lg:right-12 flex gap-3 font-mono text-xs tracking-widest backdrop-blur-md px-4 py-2 rounded-full border z-30 transition-all ${langToggleStyle}`}>
-           <button onClick={() => setLang('en')} className={`${lang === 'en' ? 'font-bold underline' : 'opacity-60'}`}>EN</button>
+           <button onClick={() => setLang('en')} className={`${lang === 'en' ? 'font-bold underline' : 'opacity-60'} cursor-pointer`}>EN</button>
            <span className="opacity-40">/</span>
-           <button onClick={() => setLang('ru')} className={`${lang === 'ru' ? 'font-bold underline' : 'opacity-60'}`}>RU</button>
+           <button onClick={() => setLang('ru')} className={`${lang === 'ru' ? 'font-bold underline' : 'opacity-60'} cursor-pointer`}>RU</button>
         </div>
 
         {/* STAGE 1: CONFESSIONAL */}
