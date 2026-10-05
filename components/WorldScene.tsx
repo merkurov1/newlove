@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import SoundToggle from '@/components/SoundToggle';
 
 const ASSETS = {
   angel: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
@@ -12,7 +13,6 @@ const ASSETS = {
   sun: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Sun1.png',
   clouds: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Clouds.png',
   heartRain: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/HeartRain.png',
-  ambientAudio: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Drift%20of%20Glass.mp3',
 };
 
 interface FallingHeart {
@@ -30,10 +30,8 @@ export default function WorldScene() {
   const [isNight, setIsNight] = useState(false);
   const [cloudOpacity, setCloudOpacity] = useState(0.3);
   const [fallingHearts, setFallingHearts] = useState<FallingHeart[]>([]);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const nextHeartId = useRef(0);
 
   useEffect(() => {
@@ -119,23 +117,6 @@ export default function WorldScene() {
     setMousePos({ x, y });
   };
 
-  // Управление фоновым аудио
-  const toggleAudio = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!audioRef.current) return;
-
-    if (isPlayingAudio) {
-      audioRef.current.pause();
-      setIsPlayingAudio(false);
-    } else {
-      audioRef.current.play().then(() => {
-        setIsPlayingAudio(true);
-      }).catch((err) => {
-        console.log("Audio playback error:", err);
-      });
-    }
-  };
-
   // Дождь из сердец по клику на сердце-воздушный шар
   const triggerHeartRain = (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -180,34 +161,9 @@ export default function WorldScene() {
           <Link href="/temple">Enter the Temple</Link>
         </nav>
       </section>
-      {/* Скрытый аудиоэлемент */}
-      <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
-
-      {/* Кнопка управления звуком (безопасное мобильное позиционирование) */}
+      {/* Единый глобальный звук Heart & Angel / Temple */}
       <div className="absolute top-20 right-4 sm:top-28 sm:right-6 z-50">
-        <button
-          onClick={toggleAudio}
-          className="flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2 rounded-full bg-white/30 backdrop-blur-md border border-white/50 text-white/95 hover:bg-white/45 transition-all shadow-xl group active:scale-95 cursor-pointer"
-          title={isPlayingAudio ? "Turn sound off" : "Turn sound on"}
-          aria-label={isPlayingAudio ? "Turn sound off" : "Turn sound on"}
-        >
-          {isPlayingAudio ? (
-            <>
-              <svg className="w-4 h-4 sm:w-5 sm:h-5 text-pink-200 animate-pulse" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-              </svg>
-              <span className="text-xs font-medium tracking-wide">Sound On</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white/80" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-              </svg>
-              <span className="text-xs font-medium tracking-wide">Sound Off</span>
-            </>
-          )}
-        </button>
+        <SoundToggle showTextOnMobile className="px-3.5 py-2 sm:px-4 sm:py-2 border border-white/50 bg-white/30 text-white/95 hover:bg-white/45 shadow-xl" iconClassName="text-pink-200" />
       </div>
 
       {/* 1. Облака (адаптивная плотность по реальной погоде) */}
