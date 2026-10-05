@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { templeTrack } from '@/components/templeTrack';
 import html2canvas from 'html2canvas';
 import { Sparkles, RotateCcw, Download } from 'lucide-react';
 
@@ -91,8 +90,6 @@ export default function AbsolutionPage() {
 
     triggerHaptic('heavy');
     setStep('processing');
-    
-    templeTrack('confess', `Sin: ${sinKey}`);
 
     try {
       await fetch('/api/temple_logs', {
@@ -156,7 +153,7 @@ export default function AbsolutionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0904] text-[#ffd700] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#ffd700] selection:text-black pt-24 sm:pt-28">
+    <div className="min-h-screen bg-[#0c0904] text-[#ffd700] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#ffd700] selection:text-black pt-28 sm:pt-32">
       <div className="noise-overlay" />
       {typeof TempleWrapper === 'function' ? <TempleWrapper /> : null}
 
@@ -168,8 +165,8 @@ export default function AbsolutionPage() {
         }} 
       />
 
-      {/* TOP BAR FIXED */}
-      <div className="absolute top-6 left-0 right-0 w-full max-w-md mx-auto px-6 flex justify-between items-center z-30">
+      {/* TOP BAR FIXED — Опущено ниже хедера (top-12) */}
+      <div className="absolute top-12 left-0 right-0 w-full max-w-md mx-auto px-6 flex justify-between items-center z-30">
         <Link 
           href="/temple"
           className="text-xs tracking-widest text-[#e5b863] hover:text-white transition-colors uppercase border border-[#e5b863]/30 px-4 py-2 rounded-full bg-[#1a1205]/70 backdrop-blur-md cursor-pointer shadow-[0_0_15px_rgba(255,215,0,0.15)]"
@@ -283,7 +280,7 @@ export default function AbsolutionPage() {
                       <p className="font-serif italic text-xs text-stone-700">{t.receipt.signature}</p>
                   </div>
 
-                  {/* CUSTOM IMAGE STAMP */}
+                  {/* CUSTOM IMAGE STAMP — Увеличен в 1.5 раза (210x210) */}
                   <div 
                       className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-8deg] transition-all duration-700 pointer-events-none select-none ${
                           showStamp ? 'opacity-95 scale-100' : 'opacity-0 scale-150'
@@ -292,8 +289,8 @@ export default function AbsolutionPage() {
                       <Image 
                           src={STAMP_IMAGE} 
                           alt="Absolution Stamp" 
-                          width={140} 
-                          height={140} 
+                          width={210} 
+                          height={210} 
                           className="object-contain drop-shadow-[0_5px_15px_rgba(225,29,72,0.3)] filter contrast-125" 
                       />
                   </div>

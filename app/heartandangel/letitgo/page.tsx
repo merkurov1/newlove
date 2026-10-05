@@ -1,7 +1,6 @@
-import type { Metadata } from 'next';
 import LetItGoAngel from '@/components/LetItGoAngel';
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'Let It Go — Digital Temple',
   description: 'Release your burdens into the digital sky.',
   openGraph: {

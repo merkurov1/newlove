@@ -26,11 +26,14 @@ export async function POST(request: Request) {
     const walletEmail = `${address.toLowerCase()}@wallet.merkur.io`;
     const walletPassword = `pw_${address}_${process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 10)}`;
 
-    let userId: string;
+    let userId = '';
 
     // Проверяем, существует ли пользователь с таким email
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    let user = existingUsers?.users.find((u) => u.email === walletEmail);
+    const { data: existingUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    if (listError) throw listError;
+
+    // Явно указываем тип (u: any) для устранения ошибки 7006
+    let user = existingUsers?.users?.find((u: any) => u.email === walletEmail);
 
     if (!user) {
       // Создаем нового пользователя
@@ -41,17 +44,20 @@ export async function POST(request: Request) {
         user_metadata: { wallet_address: address, role: 'Collector' },
       });
       if (createError) throw createError;
+      if (!newUser?.user) throw new Error('Failed to create user');
       userId = newUser.user.id;
     } else {
       userId = user.id;
     }
 
-    // 3. Создаем запись в таблице profiles (если настроена)
-    await supabaseAdmin.from('profiles').upsert({
+    // 3. Создаем запись в таблице profiles
+    const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
       id: userId,
       wallet_address: address,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id' });
+
+    if (profileError) throw profileError;
 
     // 4. Генерируем сессию через стандартный вход по паролю на стороне сервера
     const { data: signInData, error: signInError } = await supabaseAdmin.auth.signInWithPassword({

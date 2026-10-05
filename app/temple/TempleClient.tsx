@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import SoundToggle from '@/components/SoundToggle';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -131,6 +131,23 @@ export default function TempleClient() {
   });
 
   useEffect(() => {
+    // Инициализация Telegram Mini App и логирование пользователя
+    if (typeof window !== 'undefined') {
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg) {
+        tg.ready();
+        if (tg.initData) {
+          document.body.classList.add('telegram-app');
+          localStorage.setItem('tg_init_data', tg.initData);
+        }
+        if (tg.initDataUnsafe?.user) {
+          localStorage.setItem('tg_user', JSON.stringify(tg.initDataUnsafe.user));
+        }
+      } else if (localStorage.getItem('tg_user')) {
+        document.body.classList.add('telegram-app');
+      }
+    }
+
     setHeroUrl(Math.random() > 0.5 ? ASSETS.angel : ASSETS.daemon);
     setLighting(getTimeLighting());
     setStats(prev => ({ ...prev, sanctuaryHour: new Date().getHours() }));
@@ -235,88 +252,89 @@ export default function TempleClient() {
 
   return (
     <div 
-      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-28 pb-12 transition-colors duration-1000`}
+      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-6 pb-10 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      <header className="relative z-40 flex items-center justify-between w-full max-w-7xl mx-auto px-2 sm:px-4">
+      <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4">
         <Link 
           href="/heartandangel/world"
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
         >
           <span>← Back to World</span>
         </Link>
 
-        <SoundToggle className={`px-4 py-2.5 border shadow-sm ${actionButtonStyle}`} />
+        <SoundToggle className={`px-3 py-2 border shadow-sm ${actionButtonStyle}`} />
       </header>
 
-      <div className="relative w-full flex-1 flex flex-col items-center justify-center text-center px-4 my-auto py-12">
-        <div className={`absolute w-[280px] h-[280px] sm:w-[500px] sm:h-[500px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
+      <div className="relative w-full flex-1 flex flex-col items-center justify-center text-center px-4 my-auto py-6">
+        <div className={`absolute w-[280px] h-[280px] sm:w-[450px] sm:h-[450px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
 
-        {/* Хранитель (Артефакт/Ангел) */}
-        <div className="relative z-20 flex flex-col items-center mb-6 pointer-events-none">
-          <div className="absolute -bottom-2 w-24 h-5 bg-black/20 rounded-full blur-[10px]" />
-          {heroUrl && (
-            <div className="relative w-28 h-36 sm:w-36 sm:h-48 flex items-end justify-center drop-shadow-[0_15px_25px_rgba(0,0,0,0.25)]">
-              <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
-            </div>
-          )}
-        </div>
-
-        {/* Центральный пульт ритуалов */}
-        <div className="relative z-30 flex flex-col items-center gap-5 max-w-lg mx-auto w-full">
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <Link 
-              href="/heartandangel/calm" 
-              className={`px-7 py-3 rounded-full backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
-            >
-              Calm
-            </Link>
-            <Link 
-              href="/heartandangel/letitgo" 
-              className={`px-7 py-3 rounded-full backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
-            >
-              Let It Go
-            </Link>
-            <Link 
-              href="/vigil" 
-              className={`px-7 py-3 rounded-full backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
-            >
-              Vigil
-            </Link>
-            <Link 
-              href="/absolution" 
-              className={`px-7 py-3 rounded-full backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
-            >
-              Absolution
-            </Link>
-            <Link 
-              href="/tribute" 
-              className={`px-7 py-3 rounded-full backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-105 cursor-pointer ${actionButtonStyle}`}
-            >
-              Tribute
-            </Link>
+        {/* Единый блок: Хранитель стоит перед меню */}
+        <div className="relative z-30 flex flex-col items-center gap-3 max-w-xs sm:max-w-sm mx-auto w-full">
+          
+          {/* Хранитель (Артефакт/Ангел) */}
+          <div className="relative z-20 flex flex-col items-center mb-1 pointer-events-none">
+            <div className="absolute -bottom-1 w-20 h-4 bg-black/20 rounded-full blur-[8px]" />
+            {heroUrl && (
+              <div className="relative w-22 h-28 sm:w-28 sm:h-38 flex items-end justify-center drop-shadow-[0_15px_25px_rgba(0,0,0,0.25)]">
+                <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2.5 mt-2">
+          {/* Вертикальное меню ритуалов */}
+          <Link 
+            href="/heartandangel/calm" 
+            className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
+          >
+            Calm
+          </Link>
+          <Link 
+            href="/heartandangel/letitgo" 
+            className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
+          >
+            Let It Go
+          </Link>
+          <Link 
+            href="/vigil" 
+            className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
+          >
+            Vigil
+          </Link>
+          <Link 
+            href="/absolution" 
+            className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
+          >
+            Absolution
+          </Link>
+          <Link 
+            href="/tribute" 
+            className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
+          >
+            Tribute
+          </Link>
+
+          {/* Вспомогательные действия (Chronicles, Traces, ?) */}
+          <div className="flex items-center justify-center gap-2 mt-2 w-full">
             <button
               onClick={() => setIsChroniclesOpen(true)}
-              className={`px-4 py-2 rounded-full backdrop-blur-md border shadow-sm flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-[11px] tracking-wider uppercase ${actionButtonStyle}`}
+              className={`flex-1 py-2 px-3 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
             >
-              <Activity size={13} className="opacity-80" />
+              <Activity size={12} className="opacity-80" />
               <span>Chronicles</span>
             </button>
 
             <button
               onClick={() => setIsTracesOpen(true)}
-              className={`px-4 py-2 rounded-full backdrop-blur-md border shadow-sm flex items-center gap-2 transition-transform hover:scale-105 cursor-pointer font-serif text-[11px] tracking-wider uppercase ${actionButtonStyle}`}
+              className={`flex-1 py-2 px-3 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
             >
-              <Layers size={13} className="opacity-80" />
+              <Layers size={12} className="opacity-80" />
               <span>Traces</span>
             </button>
 
             <button
               onClick={() => setIsInfoOpen(true)}
-              className={`w-9 h-9 rounded-full border backdrop-blur-sm shadow-sm flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic ${actionButtonStyle}`}
+              className={`w-9 h-9 rounded-xl border backdrop-blur-sm shadow-sm flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic shrink-0 ${actionButtonStyle}`}
               title="About Temple"
             >
               ?
@@ -325,9 +343,9 @@ export default function TempleClient() {
         </div>
       </div>
 
-      <div className="h-4" />
+      <div className="h-2" />
 
-      {/* Модальные окна */}
+      {/* Модальное окно: Info */}
       <AnimatePresence>
         {isInfoOpen && (
           <motion.div 
@@ -359,6 +377,7 @@ export default function TempleClient() {
         )}
       </AnimatePresence>
 
+      {/* Модальное окно: Traces */}
       <AnimatePresence>
         {isTracesOpen && (
           <motion.div 
@@ -424,6 +443,7 @@ export default function TempleClient() {
         )}
       </AnimatePresence>
 
+      {/* Модальное окно: Chronicles */}
       <AnimatePresence>
         {isChroniclesOpen && (
           <motion.div 

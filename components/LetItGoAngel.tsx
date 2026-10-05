@@ -32,6 +32,13 @@ export default function LetItGoAngel() {
 
   const heartIdCounter = useRef(0);
 
+  // Инициализация Telegram WebApp (разворачивание на весь экран)
+  useEffect(() => {
+    if ((window as any).Telegram?.WebApp) {
+      (window as any).Telegram.WebApp.expand();
+    }
+  }, []);
+
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour >= 6 && hour < 12) {

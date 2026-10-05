@@ -120,7 +120,7 @@ export default function LobbyClient() {
               <div className="font-mono text-[#111111] text-xs mb-2 uppercase tracking-[0.25em] font-semibold">2026 / Present</div>
               <h3 className="text-2xl font-serif font-normal text-[#111111] mb-2">Cultural Infrastructure &amp; Private Advisory</h3>
               <p className="text-sm text-zinc-600 font-serif leading-relaxed">
-                Management of Sergey Merkurov House-Museum archive in Gyumri, private art dealing, regular dispatches for Novaya Gazeta, and publishing <em>UNFRAMED</em>.
+                Management of Sergey Merkurov House-Museum archive in Gyumri, private art dealing, regular dispatches, and publishing <em>UNFRAMED</em>.
               </p>
             </div>
 
@@ -212,7 +212,7 @@ export default function LobbyClient() {
                 { id: '03', title: 'CURATOR ENGINE', desc: 'Art-market intelligence and noise reduction. Real-time data curation for physical collections.', link: '/art-engine', label: 'Engine' },
                 { id: '04', title: 'ARTWORK', desc: 'The Heart & Angel series. Physical ink, acrylic, and canvas works expressing universal human connection.', link: '/heartandangel', label: 'Works' },
                 { id: '05', title: 'SELECTION', desc: 'Curated inventory of fine art, rare sculpture archives, and verified private provenance items.', link: '/selection', label: 'Inventory' },
-                { id: '06', title: 'JOURNAL', desc: 'Regular dispatches, column archives from Novaya Gazeta and Forbes, and long-form essays.', link: '/journal', label: 'Dispatches' }
+                { id: '06', title: 'JOURNAL', desc: 'Reflections on human consciousness, digital existence, and where art meets evolving technology.', link: '/journal', label: 'Dispatches' }
               ].map((card) => (
                 <Link 
                   key={card.id} 

@@ -383,3 +383,8 @@ select:focus-visible {
   clip: auto;
   white-space: normal;
 }
+
+/* --- Telegram Mini App: Скрытие главного хедера --- */
+body.telegram-app header {
+  display: none !important;
+}

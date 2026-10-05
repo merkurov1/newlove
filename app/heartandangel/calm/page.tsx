@@ -1,7 +1,6 @@
-import type { Metadata } from 'next';
 import HeartPhysics from '@/components/HeartPhysics';
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'Keep Calm — Digital Temple',
   description: 'Find your balance and maintain calm in the digital space.',
   openGraph: {
