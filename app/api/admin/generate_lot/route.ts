@@ -86,7 +86,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { rawData, artist, title, link, specs } = await req.json();
+    const { rawData, artist, title, link, specs, source_description } = await req.json();
 
     // Получаем внешнее обогащение биографии
     const wikiBiography = await fetchWikiBiography(artist);
@@ -107,6 +107,7 @@ export async function POST(req: Request) {
       title,
       link,
       specs,
+      source_description,
       artist_wikipedia_context: wikiBiography,
       rawData: truncatedRawData,
     };
@@ -134,7 +135,12 @@ export async function POST(req: Request) {
     if (!completion) throw lastError || new Error('All AI models failed');
 
     const rawResponse = completion.choices[0]?.message?.content || '{}';
-    const cleaned = rawResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+    const withoutFence = rawResponse.replace(/```(?:json)?/gi, '').trim();
+    const firstObject = withoutFence.indexOf('{');
+    const lastObject = withoutFence.lastIndexOf('}');
+    const cleaned = firstObject >= 0 && lastObject > firstObject
+      ? withoutFence.slice(firstObject, lastObject + 1)
+      : withoutFence;
     const structuredLot = JSON.parse(cleaned);
 
     return NextResponse.json({ lot: structuredLot });

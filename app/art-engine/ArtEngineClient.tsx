@@ -25,10 +25,11 @@ export default function ArtEngineClient() {
   // Ingestion State
   const [input, setInput] = useState({ 
     artist: '', 
-    title: '', 
-    link: '', 
-    raw: '', 
-    image_url: '', 
+    title: '',
+    link: '',
+    raw: '',
+    image_url: '',
+    source_description: '',
     specs: { medium: '', dimensions: '', estimate: '', date: '', provenance: '' }
   });
 
@@ -86,6 +87,7 @@ export default function ArtEngineClient() {
       link: '',
       raw: '',
       image_url: '',
+      source_description: '',
       specs: { medium: '', dimensions: '', estimate: '', date: '', provenance: '' }
     });
     setOutput(null);
@@ -268,6 +270,7 @@ export default function ArtEngineClient() {
         artist: bestArtist || prev.artist,
         title: bestTitle || prev.title,
         image_url: bestImage || prev.image_url,
+        source_description: data.extracted?.description || prev.source_description,
         specs: { ...prev.specs, ...extractedSpecs },
         raw: JSON.stringify(data.extracted || data, null, 2)
       }));
@@ -310,6 +313,7 @@ export default function ArtEngineClient() {
           title: targetTitle,
           link: input.link,
           specs: targetSpecs,
+          source_description: input.source_description,
           rawData: targetRaw
         })
       });
@@ -353,7 +357,10 @@ export default function ArtEngineClient() {
           link: input.link,
           image_url: imageUrlToSend,
           specs: input.specs,
-          ai_content: lotToSave
+          ai_content: {
+            ...lotToSave,
+            source_description: input.source_description || lotToSave.source_description || null,
+          }
         })
       });
 

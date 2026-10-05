@@ -13,6 +13,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+
 /**
  * Скачивает найденную картинку с фоллбеком (сначала через wsrv.nl, при ошибке — напрямую)
  * и сохраняет в Supabase Storage, возвращая постоянную публичную ссылку.
@@ -36,7 +38,10 @@ async function downloadAndStoreImage(externalUrl: string): Promise<string> {
     // 1. Пробуем через wsrv.nl
     try {
       const fetchUrl = `https://wsrv.nl/?url=${encodeURIComponent(externalUrl)}`;
-      const proxyRes = await fetch(fetchUrl, { headers: browserHeaders });
+      const proxyRes = await fetch(fetchUrl, {
+        headers: browserHeaders,
+        signal: AbortSignal.timeout(15_000),
+      });
       if (proxyRes.ok) {
         res = proxyRes;
       }
@@ -47,14 +52,29 @@ async function downloadAndStoreImage(externalUrl: string): Promise<string> {
     // 2. Если wsrv.nl заблокирован (403) или упал — делаем прямой fetch
     if (!res) {
       console.log(`[Parser] Direct fetching image: ${externalUrl}`);
-      const directRes = await fetch(externalUrl, { headers: browserHeaders });
+      const directRes = await fetch(externalUrl, {
+        headers: browserHeaders,
+        signal: AbortSignal.timeout(15_000),
+      });
       if (!directRes.ok) {
         throw new Error(`Direct fetch failed with status ${directRes.status}: ${directRes.statusText}`);
       }
       res = directRes;
     }
 
+    const contentType = res.headers.get('content-type') || '';
+    const contentLength = Number(res.headers.get('content-length') || 0);
+    if (!contentType.toLowerCase().startsWith('image/')) {
+      throw new Error('The mirrored resource is not an image');
+    }
+    if (contentLength > MAX_IMAGE_BYTES) {
+      throw new Error('The source image is larger than 15 MB');
+    }
+
     const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.byteLength > MAX_IMAGE_BYTES) {
+      throw new Error('The source image is larger than 15 MB');
+    }
     const fileName = `parsed/lot-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
 
     const { error: uploadError } = await supabase.storage
@@ -154,8 +174,10 @@ function extractGenericImages(
 
   add($('meta[property="og:image"]').attr('content'), 'og:image');
   add($('meta[property="og:image:url"]').attr('content'), 'og:image');
+  add($('meta[property="og:image:secure_url"]').attr('content'), 'og:image');
   add($('meta[name="twitter:image"]').attr('content'), 'twitter:image');
   add($('meta[name="twitter:image:src"]').attr('content'), 'twitter:image');
+  add($('link[rel="image_src"]').attr('href'), 'link:image');
 
   $('script[type="application/ld+json"]').each((_index: number, element: any) => {
     const text = $(element).html();
@@ -237,6 +259,19 @@ function extractGenericImages(
     extractSrcset(srcset, baseUrl).forEach((imageUrl: string) => {
       candidates.push({ url: imageUrl, source: 'srcset' });
     });
+  });
+
+  $('source[srcset], [data-background-image], [data-bg], [style*="background-image"]').each((_index: number, element: any) => {
+    const node = $(element);
+    const sourceSet = node.attr('srcset');
+    extractSrcset(sourceSet, baseUrl).forEach((imageUrl: string) => {
+      candidates.push({ url: imageUrl, source: 'picture-srcset' });
+    });
+    add(node.attr('data-background-image'), 'dom-background');
+    add(node.attr('data-bg'), 'dom-background');
+    const style = node.attr('style') || '';
+    const backgroundUrl = style.match(/url\(["']?([^"')]+)["']?\)/i)?.[1];
+    add(backgroundUrl, 'dom-background');
   });
 
   return candidates;
@@ -489,8 +524,17 @@ export async function POST(req: Request) {
 
     const foundImage = imageResult.best;
 
-    // Зеркалируем найденную картинку в Supabase Storage (с фоллбеком при блоке wsrv)
-    const permanentImageUrl = await downloadAndStoreImage(foundImage);
+    // Пробуем несколько лучших кандидатов. Один CDN URL может быть заблокирован,
+    // поэтому ошибка конкретной картинки не должна ломать весь лот.
+    let permanentImageUrl = foundImage;
+    for (const candidate of imageResult.candidates.slice(0, 8)) {
+      try {
+        permanentImageUrl = await downloadAndStoreImage(candidate.url);
+        if (permanentImageUrl) break;
+      } catch (imageError) {
+        console.warn(`[Parser] Image candidate failed (${candidate.source}):`, imageError);
+      }
+    }
     structured.imageUrl = permanentImageUrl;
 
     return NextResponse.json({

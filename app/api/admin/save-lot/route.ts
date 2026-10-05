@@ -7,6 +7,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+
 function getAuctionHouseName(url: string, rawHouse?: string): string {
   const lowercaseUrl = (url || '').toLowerCase();
   if (lowercaseUrl.includes('sothebys.com')) return "Sotheby's";
@@ -50,12 +52,15 @@ export async function POST(req: Request) {
         clearTimeout(timeoutId);
 
         if (imgRes.ok) {
+          const contentType = imgRes.headers.get('content-type') || '';
+          if (!contentType.toLowerCase().startsWith('image/')) {
+            throw new Error('The source URL does not return an image');
+          }
           const contentLength = Number(imgRes.headers.get('content-length') || 0);
-          if (contentLength > 15 * 1024 * 1024) throw new Error('Image exceeds the 15 MB limit');
+          if (contentLength > MAX_IMAGE_BYTES) throw new Error('Image exceeds the 15 MB limit');
           const buffer = await imgRes.arrayBuffer();
-          if (buffer.byteLength > 15 * 1024 * 1024) throw new Error('Image exceeds the 15 MB limit');
-          const ext = image_url.split('.').pop()?.split('?')[0].split('#')[0] || 'jpg';
-          const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+          if (buffer.byteLength > MAX_IMAGE_BYTES) throw new Error('Image exceeds the 15 MB limit');
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
 
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from('artifacts')
@@ -79,7 +84,7 @@ export async function POST(req: Request) {
     const lotPayload: any = {
       artist: artist || ai_content?.artist || 'Unknown Artist',
       title: title || ai_content?.title || 'Untitled',
-      year: ai_content?.year || specs?.year || null,
+      year: ai_content?.year || specs?.year || specs?.date || null,
       medium: ai_content?.medium || specs?.medium || null,
       dimensions: ai_content?.dimensions || specs?.dimensions || null,
       estimate: ai_content?.estimate_raw || specs?.estimate || null,

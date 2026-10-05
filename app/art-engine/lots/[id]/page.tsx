@@ -25,6 +25,7 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
 
   // Состояния для внешних открытых данных
   const [wikidataInfo, setWikidataInfo] = useState<any>(null);
+  const [wikidataEntity, setWikidataEntity] = useState<any>(null);
   const [metMuseumArtworks, setMetMuseumArtworks] = useState<any[]>([]);
   const [books, setBooks] = useState<any[]>([]);
   const [externalLoading, setExternalLoading] = useState(false);
@@ -73,6 +74,18 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
           title: summaryData.title,
           extract: summaryData.extract,
           url: summaryData.content_urls?.desktop?.page
+        });
+      }
+
+      const wikidataRes = await fetch(`https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${wikiQuery}&language=en&format=json&origin=*`);
+      const wikidataData = await wikidataRes.json();
+      const entity = wikidataData.search?.[0];
+      if (entity?.id) {
+        setWikidataEntity({
+          id: entity.id,
+          label: entity.label,
+          description: entity.description,
+          url: `https://www.wikidata.org/wiki/${entity.id}`,
         });
       }
 
@@ -287,6 +300,21 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
             )}
 
             {/* CURATORIAL ESSAY */}
+            {ai.source_description && (
+              <div className="space-y-3 pt-6 border-t border-neutral-100">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full"></span>
+                  <h3 className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest font-semibold">
+                    Source Description
+                  </h3>
+                </div>
+                <p className="font-serif text-sm sm:text-base text-neutral-700 leading-relaxed">
+                  {ai.source_description}
+                </p>
+              </div>
+            )}
+
+            {/* CURATORIAL ESSAY */}
             {ai.curatorial_essay && (
               <div className="space-y-4 pt-2">
                 <div className="flex items-center gap-2 border-b border-neutral-200 pb-2">
@@ -335,6 +363,22 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
                 </div>
                 <p className="text-xs text-neutral-700 leading-relaxed font-serif">
                   {wikidataInfo.extract}
+                </p>
+              </div>
+            )}
+
+            {wikidataEntity && (
+              <div className="space-y-2 pt-6 border-t border-neutral-200">
+                <div className="flex justify-between items-center gap-4">
+                  <h3 className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">
+                    Wikidata Entity
+                  </h3>
+                  <a href={wikidataEntity.url} target="_blank" rel="noreferrer" className="text-[10px] font-mono text-neutral-900 underline">
+                    {wikidataEntity.id} ↗
+                  </a>
+                </div>
+                <p className="text-xs text-neutral-700 leading-relaxed">
+                  <strong>{wikidataEntity.label}</strong>{wikidataEntity.description ? ` — ${wikidataEntity.description}` : ''}
                 </p>
               </div>
             )}
