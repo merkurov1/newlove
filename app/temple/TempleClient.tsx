@@ -17,8 +17,7 @@ import {
   Activity,
   Clock,
   Layers,
-  Heart,
-  Send
+  Heart
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -120,8 +119,6 @@ export default function TempleClient() {
   const [isTracesOpen, setIsTracesOpen] = useState(false);
   const [isChroniclesOpen, setIsChroniclesOpen] = useState(false);
   const [lighting, setLighting] = useState(DEFAULT_LIGHTING);
-  const [isTelegramApp, setIsTelegramApp] = useState(false);
-  const [tgUser, setTgUser] = useState<any>(null);
 
   const [posts, setPosts] = useState<TemplePost[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -134,26 +131,19 @@ export default function TempleClient() {
   });
 
   useEffect(() => {
-    // Инициализация Telegram Mini App
     if (typeof window !== 'undefined') {
       const tg = (window as any).Telegram?.WebApp;
       if (tg) {
-        tg.ready();
-        if (tg.initData) {
-          setIsTelegramApp(true);
-          document.body.classList.add('telegram-app');
-          localStorage.setItem('tg_init_data', tg.initData);
-        }
-        if (tg.initDataUnsafe?.user) {
-          setTgUser(tg.initDataUnsafe.user);
-          localStorage.setItem('tg_user', JSON.stringify(tg.initDataUnsafe.user));
-        }
-      } else if (localStorage.getItem('tg_user')) {
-        setIsTelegramApp(true);
         try {
-          setTgUser(JSON.parse(localStorage.getItem('tg_user')!));
-        } catch {}
-      }
+          tg?.ready?.();
+          tg?.expand?.();
+        } catch (e) {}
+
+        if (tg.initDataUnsafe?.user) {
+          const displayName = tg.initDataUnsafe.user.username || tg.initDataUnsafe.user.first_name || 'Pilgrim';
+          localStorage.setItem('temple_user', displayName);
+        }
+      } 
     }
 
     setHeroUrl(Math.random() > 0.5 ? ASSETS.angel : ASSETS.daemon);
@@ -168,16 +158,6 @@ export default function TempleClient() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleTelegramLogin = () => {
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg?.initDataUnsafe?.user) {
-      alert(`Authenticated as @${tg.initDataUnsafe.user.username || tg.initDataUnsafe.user.first_name}`);
-    } else {
-      alert('Telegram WebApp session data active.');
-    }
-  };
-
-  // Закрытие модалок по клавише Esc
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -269,42 +249,39 @@ export default function TempleClient() {
 
   return (
     <div 
-      className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-6 pb-10 transition-colors duration-1000`}
+      className={`relative w-full min-h-screen ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-4 pb-10 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      {/* Шапка сайта: кнопки назад, вход через Telegram (если в ТГ) и звук */}
-      <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4">
-        <div className="flex items-center gap-2">
-          <Link 
-            href="/heartandangel/world"
-            className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
-          >
-            <span>← Back to World</span>
-          </Link>
-
-          {isTelegramApp && (
-            <button
-              onClick={handleTelegramLogin}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
-              title="Signed in via Telegram"
-            >
-              <Send size={13} className="text-sky-500" />
-              <span className="hidden sm:inline">{tgUser?.first_name ? `Telegram (${tgUser.first_name})` : 'Sign in with Telegram'}</span>
-            </button>
-          )}
-        </div>
+      {/* Кнопка назад и переключатель звука */}
+      <div className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 py-2">
+        <Link 
+          href="/heartandangel/world"
+          className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
+        >
+          <span>← Back to World</span>
+        </Link>
 
         <SoundToggle className={`px-3 py-2 border shadow-sm ${actionButtonStyle}`} />
-      </header>
+      </div>
 
-      {/* Основной контент: Меню слева в столбик, Хранитель справа */}
-      <div className="relative w-full flex-1 flex items-center justify-center px-4 my-auto py-6">
+      {/* Основной контент: Хранитель СЛЕВА, Меню СПРАВА */}
+      <div className="relative w-full flex-1 flex items-center justify-center px-2 sm:px-4 my-auto py-6">
         <div className={`absolute w-[280px] h-[280px] sm:w-[450px] sm:h-[450px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
 
         <div className="relative z-30 max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center">
           
-          {/* Левая колонка: Меню ритуалов в столбик */}
-          <div className="flex flex-col items-stretch gap-3 w-full max-w-sm mx-auto md:mx-0">
+          {/* ЛЕВАЯ КОЛОНКА: Герой / Хранитель */}
+          <div className="flex flex-col items-center justify-center relative pointer-events-none my-auto order-1 md:order-1">
+            <div className="absolute bottom-0 w-24 h-5 bg-black/20 rounded-full blur-[10px]" />
+            {heroUrl && (
+              <div className="relative w-48 h-64 sm:w-64 sm:h-80 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
+                <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
+              </div>
+            )}
+          </div>
+
+          {/* ПРАВАЯ КОЛОНКА: Меню ритуалов в столбик */}
+          <div className="flex flex-col items-stretch gap-3 w-full max-w-sm mx-auto md:mx-0 order-2 md:order-2">
             <Link 
               href="/heartandangel/calm" 
               className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
@@ -336,11 +313,11 @@ export default function TempleClient() {
               Tribute
             </Link>
 
-            {/* Вспомогательные действия (Chronicles, Traces, ?) */}
-            <div className="flex items-center justify-center gap-2 mt-2 w-full">
+            {/* Вспомогательные действия (Chronicles, Traces, Sound, ?) */}
+            <div className="flex items-center justify-center gap-2 mt-1 w-full">
               <button
                 onClick={() => setIsChroniclesOpen(true)}
-                className={`flex-1 py-2 px-3 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
+                className={`flex-1 py-2 px-2.5 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
               >
                 <Activity size={12} className="opacity-80" />
                 <span>Chronicles</span>
@@ -348,11 +325,13 @@ export default function TempleClient() {
 
               <button
                 onClick={() => setIsTracesOpen(true)}
-                className={`flex-1 py-2 px-3 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
+                className={`flex-1 py-2 px-2.5 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
               >
                 <Layers size={12} className="opacity-80" />
                 <span>Traces</span>
               </button>
+
+              <SoundToggle className={`py-2 px-3 rounded-xl border backdrop-blur-sm shadow-sm flex items-center justify-center transition-transform hover:scale-105 cursor-pointer ${actionButtonStyle}`} />
 
               <button
                 onClick={() => setIsInfoOpen(true)}
@@ -364,20 +343,10 @@ export default function TempleClient() {
             </div>
           </div>
 
-          {/* Правая колонка: Герой / Хранитель */}
-          <div className="flex flex-col items-center justify-center relative pointer-events-none mt-4 md:mt-0">
-            <div className="absolute bottom-0 w-24 h-5 bg-black/20 rounded-full blur-[10px]" />
-            {heroUrl && (
-              <div className="relative w-48 h-64 sm:w-64 sm:h-80 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
-                <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
-              </div>
-            )}
-          </div>
-
         </div>
       </div>
 
-      <div className="h-2" />
+      <div className="h-4" />
 
       {/* Модальное окно: Info */}
       <AnimatePresence>
