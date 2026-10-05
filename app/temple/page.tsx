@@ -23,6 +23,7 @@ import {
   VolumeX
 } from 'lucide-react';
 import Link from 'next/link';
+import useIsTelegram from '@/components/useIsTelegram';
 
 const ASSETS = {
   angel: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
@@ -122,8 +123,8 @@ export default function TempleClient() {
   const [isTracesOpen, setIsTracesOpen] = useState(false);
   const [isChroniclesOpen, setIsChroniclesOpen] = useState(false);
   const [lighting, setLighting] = useState(DEFAULT_LIGHTING);
-  const [isTelegramApp, setIsTelegramApp] = useState(false);
   const [tgUser, setTgUser] = useState<any>(null);
+  const isTelegramApp = useIsTelegram();
 
   const [posts, setPosts] = useState<TemplePost[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -136,35 +137,21 @@ export default function TempleClient() {
   });
 
   useEffect(() => {
-    // Безопасная инициализация Telegram Mini App
-    if (typeof window !== 'undefined') {
+    // Telegram's script is async; the shared hook waits until real Mini App
+    // data is available before this branch becomes active.
+    if (typeof window !== 'undefined' && isTelegramApp) {
       const tg = (window as any).Telegram?.WebApp;
-      if (tg) {
-        try {
-          tg?.ready?.();
-          tg?.expand?.();
-        } catch (e) {}
+      try {
+        tg?.ready?.();
+        tg?.expand?.();
+      } catch (e) {}
 
-        if (tg.initDataUnsafe?.user) {
-          setIsTelegramApp(true);
-          setTgUser(tg.initDataUnsafe.user);
-          localStorage.setItem('tg_user', JSON.stringify(tg.initDataUnsafe.user));
-          const displayName = tg.initDataUnsafe.user.username || tg.initDataUnsafe.user.first_name || 'Pilgrim';
-          localStorage.setItem('temple_user', displayName);
-        } else if (tg.initData) {
-          setIsTelegramApp(true);
-        }
-      } 
-      
-      if (!tgUser) {
-        const savedUser = localStorage.getItem('tg_user');
-        if (savedUser) {
-          try {
-            const parsed = JSON.parse(savedUser);
-            setTgUser(parsed);
-            setIsTelegramApp(true);
-          } catch (e) {}
-        }
+      const user = tg?.initDataUnsafe?.user;
+      if (user) {
+        setTgUser(user);
+        localStorage.setItem('tg_user', JSON.stringify(user));
+        const displayName = user.username || user.first_name || 'Pilgrim';
+        localStorage.setItem('temple_user', displayName);
       }
     }
 
@@ -178,7 +165,7 @@ export default function TempleClient() {
     }, 60000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [isTelegramApp]);
 
   // Закрытие модалок по клавише Esc
   useEffect(() => {
