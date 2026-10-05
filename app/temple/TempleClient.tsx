@@ -264,13 +264,23 @@ export default function TempleClient() {
         <SoundToggle className={`px-3 py-2 border shadow-sm ${actionButtonStyle}`} />
       </header>
 
-      {/* Main Content: Menu on LEFT, Hero on RIGHT */}
+      {/* Main Content: Hero on LEFT, Menu on RIGHT */}
       <div className="relative w-full flex-1 flex items-center justify-center px-2 sm:px-4 my-auto py-6">
         <div className={`absolute w-[280px] h-[280px] sm:w-[450px] sm:h-[450px] rounded-full bg-gradient-to-tr ${lighting.glow} blur-[90px] pointer-events-none transition-all duration-1000`} />
 
         <div className="relative z-30 max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center">
           
-          {/* LEFT COLUMN: Ritual Menu */}
+          {/* LEFT COLUMN: Guardian / Hero */}
+          <div className="flex flex-col items-center justify-center relative pointer-events-none my-auto">
+            <div className="absolute bottom-0 w-24 h-5 bg-black/20 rounded-full blur-[10px]" />
+            {heroUrl && (
+              <div className="relative w-48 h-64 sm:w-64 sm:h-80 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
+                <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT COLUMN: Ritual Menu */}
           <div className="flex flex-col items-stretch gap-3 w-full max-w-sm mx-auto md:mx-0">
             <Link 
               href="/heartandangel/calm" 
@@ -329,16 +339,6 @@ export default function TempleClient() {
                 ?
               </button>
             </div>
-          </div>
-
-          {/* RIGHT COLUMN: Guardian / Hero */}
-          <div className="flex flex-col items-center justify-center relative pointer-events-none my-auto">
-            <div className="absolute bottom-0 w-24 h-5 bg-black/20 rounded-full blur-[10px]" />
-            {heroUrl && (
-              <div className="relative w-48 h-64 sm:w-64 sm:h-80 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.3)]">
-                <Image src={heroUrl} alt="Temple Guardian" fill className="object-contain" priority draggable={false} />
-              </div>
-            )}
           </div>
 
         </div>
