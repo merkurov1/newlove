@@ -139,7 +139,7 @@ export default function TributePage() {
   const style = getHeartStyle();
 
   return (
-    <div className="min-h-screen bg-[#0c0904] text-[#ffd700] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#ffd700] selection:text-black pt-28 sm:pt-32">
+    <div className="min-h-screen bg-[#0c0904] text-[#ffd700] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#ffd700] selection:text-black pt-40 sm:pt-44">
       <div className="noise-overlay" />
       {typeof TempleWrapper === 'function' ? <TempleWrapper /> : null}
       
@@ -152,8 +152,8 @@ export default function TributePage() {
         }} 
       />
 
-      {/* TOP BAR FIXED - Опущено в 2 раза ниже (top-12) */}
-      <div className="absolute top-12 left-0 right-0 w-full max-w-md mx-auto px-6 flex justify-between items-center z-30">
+      {/* TOP BAR FIXED - Опущено ниже (top-24 / top-28) */}
+      <div className="absolute top-24 sm:top-28 left-0 right-0 w-full max-w-md mx-auto px-6 flex justify-between items-center z-30">
         <Link 
           href="/temple"
           className="text-xs tracking-widest text-[#e5b863] hover:text-white transition-colors uppercase border border-[#e5b863]/30 px-4 py-2 rounded-full bg-[#1a1205]/70 backdrop-blur-md cursor-pointer shadow-[0_0_15px_rgba(255,215,0,0.15)]"
