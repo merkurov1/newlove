@@ -11,21 +11,21 @@ export const ROLE_EMOJIS = {
 } as const;
 
 export const ROLE_NAMES = {
-  [Role.USER]: 'Пользователь',
-  [Role.ADMIN]: 'Администратор',
-  [Role.SUBSCRIBER]: 'Подписчик',
-  [Role.PATRON]: 'Патрон',
-  [Role.PREMIUM]: 'Премиум',
-  [Role.SPONSOR]: 'Спонсор',
+  [Role.USER]: 'User',
+  [Role.ADMIN]: 'Administrator',
+  [Role.SUBSCRIBER]: 'Subscriber',
+  [Role.PATRON]: 'Patron',
+  [Role.PREMIUM]: 'Premium',
+  [Role.SPONSOR]: 'Sponsor',
 } as const;
 
 export const ROLE_DESCRIPTIONS = {
-  [Role.USER]: 'Базовый пользователь',
-  [Role.ADMIN]: 'Полный доступ к управлению',
-  [Role.SUBSCRIBER]: 'Поддерживает проект ❤️',
-  [Role.PATRON]: 'Постоянный спонсор 💖',
-  [Role.PREMIUM]: 'VIP поддержка 💝',
-  [Role.SPONSOR]: 'Главный спонсор ❤️‍🔥',
+  [Role.USER]: 'Standard user',
+  [Role.ADMIN]: 'Full administrative access',
+  [Role.SUBSCRIBER]: 'Supports the project ❤️',
+  [Role.PATRON]: 'Patron supporter 💖',
+  [Role.PREMIUM]: 'Premium support 💝',
+  [Role.SPONSOR]: 'Lead sponsor ❤️‍🔥',
 } as const;
 
 export function getRoleEmoji(role?: Role | string | null): string {
@@ -36,17 +36,17 @@ export function getRoleEmoji(role?: Role | string | null): string {
 }
 
 export function getRoleName(role?: Role | string | null): string {
-  if (!role) return 'Гость';
+  if (!role) return 'Guest';
   // Normalize to lowercase to match enum values
   const normalizedRole = String(role).toLowerCase() as Role;
-  return ROLE_NAMES[normalizedRole] || 'Неизвестная роль';
+  return ROLE_NAMES[normalizedRole] || 'Unknown role';
 }
 
 export function getRoleDescription(role?: Role | string | null): string {
-  if (!role) return 'Не авторизован';
+  if (!role) return 'Not authenticated';
   // Normalize to lowercase to match enum values
   const normalizedRole = String(role).toLowerCase() as Role;
-  return ROLE_DESCRIPTIONS[normalizedRole] || 'Описание недоступно';
+  return ROLE_DESCRIPTIONS[normalizedRole] || 'Description unavailable';
 }
 
 // Проверка иерархии ролей (для будущего использования)

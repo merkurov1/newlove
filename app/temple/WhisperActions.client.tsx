@@ -44,7 +44,7 @@ export default function WhisperActions({ id, url }: { id: string; url: string | 
     setReplyError(null);
     setReplySuccess(false);
     if (!id || !replyMessage) {
-      setReplyError('Введите сообщение');
+      setReplyError('Enter a message');
       return;
     }
     setReplying(true);
@@ -69,7 +69,7 @@ export default function WhisperActions({ id, url }: { id: string; url: string | 
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <button onClick={handleTranscribe} disabled={transcribing || !url} className="px-3 py-1 bg-white/6 rounded">
-          {transcribing ? 'Транскрибируется…' : 'Транскрибировать'}
+          {transcribing ? 'Transcribing…' : 'Transcribe'}
         </button>
         {transcribeError ? <div className="text-xs text-red-400">{transcribeError}</div> : null}
       </div>
@@ -84,13 +84,13 @@ export default function WhisperActions({ id, url }: { id: string; url: string | 
         <input
           value={replyMessage}
           onChange={(e) => setReplyMessage(e.target.value)}
-          placeholder="Ваш ответ"
+          placeholder="Your reply"
           className="flex-1 p-2 bg-black/20 rounded text-sm"
         />
-        <button className="px-3 py-1 bg-white/6 rounded" disabled={replying}>{replying ? 'Отправка…' : 'Отправить'}</button>
+        <button className="px-3 py-1 bg-white/6 rounded" disabled={replying}>{replying ? 'Sending…' : 'Send'}</button>
       </form>
       {replyError ? <div className="text-xs text-red-400">{replyError}</div> : null}
-      {replySuccess ? <div className="text-xs text-green-400">Отправлено</div> : null}
+      {replySuccess ? <div className="text-xs text-green-400">Sent</div> : null}
     </div>
   );
 }

@@ -49,9 +49,9 @@ export default function TempleLogsClient({ initialLogs = [], serverError = null 
     return () => { mounted = false; clearInterval(iv); };
   }, [initialLogs.length]);
 
-  if (error) return <div className="p-4 text-red-400">Ошибка: {error}</div>;
-  if (loading) return <div className="p-4 text-gray-400">Загрузка...</div>;
-  if (!logs || logs.length === 0) return <div className="p-4 text-gray-500">...тишина...</div>;
+  if (error) return <div className="p-4 text-red-400">Error: {error}</div>;
+  if (loading) return <div className="p-4 text-gray-400">Loading...</div>;
+  if (!logs || logs.length === 0) return <div className="p-4 text-gray-500">...silence...</div>;
 
   return (
     <div className="space-y-2 p-4">

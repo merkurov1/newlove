@@ -2,15 +2,11 @@
 
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
-import Header from "@/components/Header";
 
 export default function LobbyClient() {
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] antialiased relative overflow-x-hidden">
       
-      {/* Header */}
-      <Header />
-
       {/* Subtle Paper Grain Texture */}
       <div 
         className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
@@ -23,7 +19,7 @@ export default function LobbyClient() {
       <section className="min-h-screen flex flex-col justify-between px-8 md:px-16 pt-36 md:pt-44 pb-12 border-b border-zinc-200/60 relative z-20">
         
         <div className="max-w-5xl mx-auto w-full text-center my-auto">
-          <h1 className="text-6xl md:text-8xl lg:text-9xl font-serif font-normal tracking-tight leading-[0.92] mb-10 text-[#111111]">
+          <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-serif font-normal tracking-tight leading-[0.98] sm:leading-[0.92] mb-10 text-[#111111] break-words">
             I architect <br/>
             <span className="text-zinc-500 italic hover:text-[#111111] transition-colors duration-700 cursor-default">
               context.

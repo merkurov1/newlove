@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
-import Header from '@/components/Header';
 import { Sparkles, ArrowRight, Terminal, RefreshCw } from 'lucide-react';
 
 const formatQuestionText = (text: string): string => {
@@ -224,8 +223,6 @@ export default function CastPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white font-mono flex flex-col relative selection:bg-orange-500/30 overflow-x-hidden antialiased">
-      <Header />
-
       {/* Шаг 0: Выбор языка */}
       {currentStep === 0 && (
          <div className="flex-1 flex items-center justify-center p-6 relative z-10 mt-16">

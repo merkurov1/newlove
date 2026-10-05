@@ -2,7 +2,6 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import HeroMotion from '@/components/advising/HeroMotion';
 import CenteredHeader from '@/components/CenteredHeader';
 import CaseStudyCard from '@/components/advising/CaseStudyCard';
-import Header from '@/components/Header';
 
 export const metadata = sanitizeMetadata({
   title: 'Love is a Key for All | Anton Merkurov',
@@ -30,9 +29,6 @@ export default function IsAKeyForAllPage() {
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       
-      {/* HEADER */}
-      <Header />
-
       <div className="max-w-3xl mx-auto px-6 pt-36 md:pt-44 pb-24">
         
         {/* Header: The Monument (motion) */}

@@ -1,16 +1,25 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/components/AuthContext';
 
 export default function LotAssetsPage() {
   const params = useParams();
   const lotId = params?.id ? String(params.id) : '';
+  const auth = useAuth() as any;
+  const router = useRouter();
 
   const [loading, setLoading] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!auth?.isLoading && !auth?.user) {
+      router.replace('/art-engine?access=required');
+    }
+  }, [auth?.isLoading, auth?.user, router]);
 
   const handleGenerate = async () => {
     if (!lotId) return;
@@ -23,7 +32,7 @@ export default function LotAssetsPage() {
       });
       const data = await res.json();
 
-      if (!res.ok) throw new Error(data.error || 'Ошибка генерации видео');
+      if (!res.ok) throw new Error(data.error || 'Video generation failed');
 
       setVideoUrl(data.videoUrl);
     } catch (err: any) {
@@ -55,7 +64,7 @@ export default function LotAssetsPage() {
             <div className="text-center space-y-4">
               <div className="space-y-1">
                 <h1 className="font-serif text-2xl text-neutral-900">30-Second Reel Generation</h1>
-                <p className="text-xs font-mono text-neutral-500">Берёт визуальные данные лота, накладывает зум и ключевые титры</p>
+                <p className="text-xs font-mono text-neutral-500">Uses the lot image, cinematic zoom, and key title cards</p>
               </div>
               <button
                 onClick={handleGenerate}
@@ -70,19 +79,19 @@ export default function LotAssetsPage() {
           {loading && (
             <div className="flex flex-col items-center space-y-3 font-mono text-xs text-neutral-500">
               <div className="w-6 h-6 border-2 border-neutral-300 border-t-neutral-900 rounded-full animate-spin"></div>
-              <p>Рендеринг через FFmpeg и загрузка в Supabase...</p>
+              <p>Rendering with FFmpeg and uploading to Supabase...</p>
             </div>
           )}
 
           {/* Блок ошибки */}
           {error && (
             <div className="text-center space-y-3">
-              <p className="text-red-600 font-mono text-xs">Ошибка: {error}</p>
+              <p className="text-red-600 font-mono text-xs">Error: {error}</p>
               <button
                 onClick={handleGenerate}
                 className="px-4 py-2 bg-neutral-100 text-neutral-900 font-mono text-xs hover:bg-neutral-200"
               >
-                Попробовать снова
+                Try again
               </button>
             </div>
           )}

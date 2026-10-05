@@ -19,25 +19,25 @@ export default function UserActionsClient({ userId, currentRole, isSubscribed = 
     try {
       const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateRole', userId, role }) });
       const json = await res.json();
-      if (!res.ok || json.status === 'error') throw new Error(json.message || 'Ошибка');
+      if (!res.ok || json.status === 'error') throw new Error(json.message || 'Request failed');
       // Refresh the current route so server data is re-fetched
       router.refresh();
     } catch (e) {
-      alert('Не удалось изменить роль');
+      alert('Unable to update role');
     } finally { setLoading(false); }
   }
 
   async function deleteUser(): Promise<void> {
-    if (!confirm('Удалить пользователя? Это действие необратимо.')) return;
+    if (!confirm('Delete this user? This action cannot be undone.')) return;
     setLoading(true);
     try {
       const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deleteUser', userId }) });
       const json = await res.json();
-      if (!res.ok || json.status === 'error') throw new Error(json.message || 'Ошибка');
+      if (!res.ok || json.status === 'error') throw new Error(json.message || 'Request failed');
       // Refresh to reflect deleted user
       router.refresh();
     } catch (e) {
-      alert('Не удалось удалить пользователя');
+      alert('Unable to delete user');
     } finally { setLoading(false); }
   }
 
@@ -50,30 +50,26 @@ export default function UserActionsClient({ userId, currentRole, isSubscribed = 
         body: JSON.stringify({ action: 'toggleSubscription', userId, subscribe: !subscribed }) 
       });
       const json = await res.json();
-      if (!res.ok || json.status === 'error') throw new Error(json.message || 'Ошибка');
+      if (!res.ok || json.status === 'error') throw new Error(json.message || 'Request failed');
       setSubscribed(!subscribed);
       router.refresh();
     } catch (e) {
-      alert('Не удалось изменить подписку');
+      alert('Unable to update subscription');
     } finally { setLoading(false); }
   }
 
   return (
     <div className="flex items-center gap-2">
       <select defaultValue={String(currentRole || 'USER')} onChange={(e) => updateRole(e.target.value)} disabled={loading} className="text-sm border rounded px-2 py-1">
-        <option value="USER">Пользователь</option>
-        <option value="SUBSCRIBER">Подписчик</option>
-        <option value="PATRON">Патрон</option>
-        <option value="PREMIUM">Премиум</option>
-        <option value="SPONSOR">Спонсор</option>
-        <option value="ADMIN">Админ</option>
+        <option value="USER">User</option>
+        <option value="ADMIN">Admin</option>
       </select>
       <Button 
         variant={subscribed ? "secondary" : "primary"} 
         size="sm" 
         onClick={toggleSubscription} 
         disabled={loading}
-        title={subscribed ? "Отписать" : "Подписать"}
+        title={subscribed ? "Unsubscribe" : "Subscribe"}
       >
         {subscribed ? '📧✓' : '📧'}
       </Button>

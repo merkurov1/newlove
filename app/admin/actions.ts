@@ -816,7 +816,7 @@ export async function createLetter(formData: any) {
   const published = formData.get('published') === 'on';
 
   if (!title || !slug || !rawContent) {
-    throw new Error('Заполните все обязательные поля.');
+    throw new Error('Complete all required fields.');
   }
 
   let validBlocks;
@@ -825,9 +825,9 @@ export async function createLetter(formData: any) {
     validBlocks = blocks.filter(
       (b: any) => b && typeof b.type === 'string' && typeof b.data === 'object'
     );
-    if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
+    if (validBlocks.length === 0) throw new Error('Content does not contain valid blocks.');
   } catch (e: any) {
-    throw new Error('Контент имеет неверный JSON формат: ' + e.message);
+    throw new Error('Content has an invalid JSON format: ' + e.message);
   }
 
   const letterId = createId();
@@ -842,10 +842,10 @@ export async function createLetter(formData: any) {
 
   if (error) {
     if (error.code === '23505') {
-      throw new Error('Письмо с таким URL уже существует.');
+      throw new Error('A letter with this URL already exists.');
     }
     console.error('Ошибка при создании письма:', error);
-    throw new Error('Ошибка при создании письма: ' + error.message);
+    throw new Error('Unable to create the letter: ' + error.message);
   }
 
   const parsedTags = parseTagNames(tagsString);
@@ -885,7 +885,7 @@ export async function updateLetter(formData: any) {
   const published = formData.get('published') === 'on';
 
   if (!id || !title || !slug || !rawContent) {
-    throw new Error('Заполните все обязательные поля.');
+    throw new Error('Complete all required fields.');
   }
 
   const { data: existingLetter } = await supabase
@@ -893,7 +893,7 @@ export async function updateLetter(formData: any) {
     .select('slug, published')
     .eq('id', id)
     .single();
-  if (!existingLetter) throw new Error('Письмо не найдено.');
+  if (!existingLetter) throw new Error('Letter not found.');
 
   let validBlocks;
   try {
@@ -901,9 +901,9 @@ export async function updateLetter(formData: any) {
     validBlocks = blocks.filter(
       (b: any) => b && typeof b.type === 'string' && typeof b.data === 'object'
     );
-    if (validBlocks.length === 0) throw new Error('Контент не содержит валидных блоков.');
+    if (validBlocks.length === 0) throw new Error('Content does not contain valid blocks.');
   } catch (e: any) {
-    throw new Error('Контент имеет неверный JSON формат: ' + e.message);
+    throw new Error('Content has an invalid JSON format: ' + e.message);
   }
 
   const { error } = await supabase
@@ -918,10 +918,10 @@ export async function updateLetter(formData: any) {
 
   if (error) {
     if (error.code === '23505') {
-      throw new Error('Письмо с таким URL уже существует.');
+      throw new Error('A letter with this URL already exists.');
     }
     console.error('Ошибка при обновлении письма:', error);
-    throw new Error('Ошибка при обновлении письма: ' + error.message);
+    throw new Error('Unable to update the letter: ' + error.message);
   }
 
   const parsedTags = parseTagNames(tagsString);
@@ -1014,7 +1014,7 @@ export async function sendLetter(prevState: any, formData: any) {
   const testEmail = formData.get('testEmail')?.toString()?.trim();
 
   if (!letterId) {
-    return { status: 'error', message: 'Не указан ID письма.' };
+    return { status: 'error', message: 'Letter ID is required.' };
   }
 
   const { data: letter, error: letterErr } = await supabase
@@ -1023,13 +1023,13 @@ export async function sendLetter(prevState: any, formData: any) {
     .eq('id', letterId)
     .maybeSingle();
   if (letterErr || !letter) {
-    return { status: 'error', message: 'Письмо не найдено.' };
+    return { status: 'error', message: 'Letter not found.' };
   }
 
   if (!testEmail && letter.sentAt) {
     return {
       status: 'error',
-      message: `❌ Эта рассылка уже была отправлена ${new Date(letter.sentAt).toLocaleString('ru-RU')}. Повторная отправка запрещена.`,
+      message: `This letter was already sent on ${new Date(letter.sentAt).toLocaleString('en-US')}. Sending again is disabled.`,
     };
   }
 
@@ -1054,13 +1054,13 @@ export async function sendLetter(prevState: any, formData: any) {
     if (res.status === 'sent' || res.status === 'skipped') {
       return {
         status: 'success',
-        message: `Тестовое письмо отправлено на ${testEmail}`,
+        message: `Test email sent to ${testEmail}`,
         providerResponse: res.providerResponse,
       };
     }
     return {
       status: 'error',
-      message: res.error || 'Ошибка при отправке тестового письма',
+      message: res.error || 'Test email could not be sent.',
       details: res,
     };
   }
@@ -1077,7 +1077,7 @@ export async function sendLetter(prevState: any, formData: any) {
     if (!jobErr) {
       return {
         status: 'success',
-        message: 'Письмо поставлено в очередь на отправку. Обработка начнется в течение минуты.',
+        message: 'Letter queued for delivery. Processing will begin shortly.',
         jobId,
       };
     }
@@ -1095,7 +1095,7 @@ export async function sendLetter(prevState: any, formData: any) {
       .limit(SEND_LIMIT);
 
     if (subsErr || !subs || subs.length === 0) {
-      return { status: 'error', message: 'Нет активных подписчиков для отправки.' };
+      return { status: 'error', message: 'There are no active subscribers to receive this letter.' };
     }
 
     let sent = 0;
@@ -1118,14 +1118,14 @@ export async function sendLetter(prevState: any, formData: any) {
 
     const message =
       failed > 0
-        ? `✅ Отправлено ${sent} из ${subs.length} подписчикам. ❌ Ошибок: ${failed}`
-        : `✅ Успешно отправлено ${sent} подписчикам`;
+        ? `Sent to ${sent} of ${subs.length} subscribers. Failed: ${failed}.`
+        : `Successfully sent to ${sent} subscribers.`;
 
     return { status: 'success', message };
   } catch (e: any) {
     return {
       status: 'error',
-      message: 'Не удалось отправить рассылку: ' + (e?.message || String(e)),
+      message: 'The letter could not be sent: ' + (e?.message || String(e)),
     };
   }
 }

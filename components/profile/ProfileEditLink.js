@@ -6,7 +6,7 @@ import React from 'react';
 export default function ProfileEditLink({ className }) {
   return (
     <Link href="/profile" className={className}>
-      Редактировать профиль
+      Edit profile
     </Link>
   );
 }

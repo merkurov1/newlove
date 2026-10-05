@@ -15,7 +15,7 @@ export default function WhisperTestClient() {
         onClick={() => setOpen(v => !v)}
         className="px-3 py-1 bg-white/6 rounded text-sm"
       >
-        {open ? 'Закрыть тест' : 'Тестовая запись'}
+        {open ? 'Close test' : 'Test recording'}
       </button>
       {open ? (
         <div className="ml-3 w-[360px]">

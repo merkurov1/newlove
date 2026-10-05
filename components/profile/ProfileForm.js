@@ -1,7 +1,7 @@
 'use client';
 
 import { useFormStatus, useFormState as useActionState } from 'react-dom';
-import { updateProfile } from '@/app/admin/actions';
+import { updateProfile } from '@/app/profile/actions';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -58,7 +58,7 @@ export default function ProfileForm({ user }) {
         </label>
         <div className="flex rounded-2xl overflow-hidden border border-stone-200 bg-white/50 focus-within:border-stone-900 transition-all">
           <span className="inline-flex items-center px-4 py-3 bg-stone-50 text-stone-400 text-xs font-mono border-r border-stone-200">
-            merkurov.love/you/
+            www.merkurov.love/you/
           </span>
           <input 
             type="text" 

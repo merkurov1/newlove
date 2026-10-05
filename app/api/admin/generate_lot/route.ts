@@ -12,14 +12,14 @@ async function fetchWikiBiography(artistName: string): Promise<string> {
     const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
       artistName
     )}&format=json&origin=*`;
-    const searchRes = await fetch(searchUrl);
+    const searchRes = await fetch(searchUrl, { signal: AbortSignal.timeout(10_000) });
     const searchData = await searchRes.json();
     const pageTitle = searchData?.query?.search?.[0]?.title;
 
     if (!pageTitle) return '';
 
     const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(pageTitle)}`;
-    const summaryRes = await fetch(summaryUrl);
+    const summaryRes = await fetch(summaryUrl, { signal: AbortSignal.timeout(10_000) });
     const summaryData = await summaryRes.json();
 
     return summaryData?.extract || '';
@@ -54,10 +54,18 @@ REQUIRED OUTPUT FORMAT (JSON ONLY):
   "curatorial_essay": "Multi-paragraph deep-dive curatorial analysis on historical context, technique, and artistic iconography.",
   "market_analysis": "A dedicated paragraph analyzing market liquidity, rarity of this period/series, auction record comparisons, and investment thesis.",
   "condition_report": "Summary of condition if available",
-  "tags": ["Tag1", "Tag2"]
+  "tags": ["Tag1", "Tag2"],
+  "source_confidence": "high / medium / low",
+  "verification_notes": ["Short note about missing, ambiguous, or inferred fields"]
 }
 
-Return ONLY raw valid JSON without markdown wrapping.
+Evidence rules:
+- Use only facts present in the supplied lot data, source URL content, and the Wikipedia context.
+- Never invent provenance, exhibitions, literature, dimensions, prices, condition, or auction history.
+- If a field is not supported, use null, an empty array, or "Unknown".
+- Keep factual source data separate from clearly labelled market interpretation.
+- Do not call provenance or condition "verified" unless the source explicitly supports it.
+- Return ONLY raw valid JSON without markdown wrapping.
 `;
 
 const MODELS = [
@@ -132,9 +140,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ lot: structuredLot });
   } catch (error: any) {
     console.error('[generate_lot Error]:', error);
+    const message = error?.message || String(error);
     return NextResponse.json(
-      { error: 'Generation failed', details: error?.message || String(error) },
-      { status: 500 }
+      { error: message.includes('Unauthorized') ? message : 'Generation failed', details: message },
+      { status: message.includes('Unauthorized') ? 401 : 500 }
     );
   }
 }

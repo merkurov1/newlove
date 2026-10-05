@@ -19,7 +19,7 @@ export default async function WhispersPage() {
     <div className="min-h-screen p-6 text-white bg-black">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-serif">Шёпоты в Храм</h1>
+          <h1 className="text-2xl font-serif">Temple Whispers</h1>
           <div className="flex items-center gap-3">
             <WhisperTestClient />
           </div>
@@ -34,7 +34,7 @@ export default async function WhispersPage() {
                 </div>
                 <div className="flex-1">
                   <div className="text-sm text-white/60">{new Date(w.created_at).toLocaleString()}</div>
-                  <div className="mt-2 text-white/90">{w.transcribed_text || <span className="text-white/40">(не транскрибировано)</span>}</div>
+                  <div className="mt-2 text-white/90">{w.transcribed_text || <span className="text-white/40">(not transcribed)</span>}</div>
                   <div className="mt-3">
                     <WhisperActions id={String(w.id)} url={w.telegram_file_id || null} />
                   </div>

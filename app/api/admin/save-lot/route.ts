@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,10 +18,17 @@ function getAuctionHouseName(url: string, rawHouse?: string): string {
 
 export async function POST(req: Request) {
   try {
+    await requireAdminFromRequest(req);
     const { artist, title, link, image_url, ai_content, specs } = await req.json();
 
     if (!link) {
       return NextResponse.json({ error: 'Source link is required' }, { status: 400 });
+    }
+    try {
+      const sourceUrl = new URL(link);
+      if (!['http:', 'https:'].includes(sourceUrl.protocol)) throw new Error('invalid protocol');
+    } catch {
+      return NextResponse.json({ error: 'A valid source URL is required' }, { status: 400 });
     }
 
     let storedImagePath = image_url;
@@ -42,7 +50,10 @@ export async function POST(req: Request) {
         clearTimeout(timeoutId);
 
         if (imgRes.ok) {
+          const contentLength = Number(imgRes.headers.get('content-length') || 0);
+          if (contentLength > 15 * 1024 * 1024) throw new Error('Image exceeds the 15 MB limit');
           const buffer = await imgRes.arrayBuffer();
+          if (buffer.byteLength > 15 * 1024 * 1024) throw new Error('Image exceeds the 15 MB limit');
           const ext = image_url.split('.').pop()?.split('?')[0].split('#')[0] || 'jpg';
           const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
 
@@ -97,6 +108,7 @@ export async function POST(req: Request) {
     });
   } catch (error: any) {
     console.error('Error saving lot:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    const message = error?.message || 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: message.includes('Unauthorized') ? 401 : 500 });
   }
 }

@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
-import SoundToggle from './SoundToggle';
+import TempleTopBar from './TempleTopBar';
 
 const ANGEL_WITH_HEART =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0919.png';
@@ -19,8 +18,9 @@ export default function LetItGoAngel() {
   const [clickCount, setClickCount] = useState(0);
   const [showWithoutHeart, setShowWithoutHeart] = useState(false);
   const [skyGradient, setSkyGradient] = useState('bg-gradient-to-b from-[#87CEEB] via-[#B0E0E6] to-[#E0F6FF]');
+  const [telegramName, setTelegramName] = useState('');
 
-  const currentAuthorName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Visitor';
+  const currentAuthorName = telegramName || profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || (typeof window !== 'undefined' ? localStorage.getItem('temple_user') : null) || 'Visitor';
 
   const clickCountRef = useRef(clickCount);
   clickCountRef.current = clickCount;
@@ -34,8 +34,11 @@ export default function LetItGoAngel() {
 
   // Инициализация Telegram WebApp (разворачивание на весь экран)
   useEffect(() => {
-    if ((window as any).Telegram?.WebApp) {
-      (window as any).Telegram.WebApp.expand();
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) {
+      tg.expand?.();
+      const name = tg.initDataUnsafe?.user?.username || tg.initDataUnsafe?.user?.first_name;
+      if (name) { setTelegramName(name); localStorage.setItem('temple_user', name); }
     }
   }, []);
 
@@ -97,28 +100,15 @@ export default function LetItGoAngel() {
 
   return (
     <main className={`relative w-full min-h-[100dvh] overflow-x-hidden ${skyGradient} select-none flex flex-col justify-between p-4 sm:p-8 md:p-12 animate-fade-in transition-colors duration-1000`}>
+      <section className="sr-only" aria-labelledby="release-ritual-title">
+        <h1 id="release-ritual-title">Let It Go — Heart &amp; Angel ritual</h1>
+        <p>Release a burden into the sky and make room for lightness in the digital sanctuary.</p>
+      </section>
       
-      <header className="relative z-50 grid grid-cols-3 items-center w-full max-w-7xl mx-auto pt-24 sm:pt-28 md:pt-32 px-2 sm:px-4">
-        <div className="flex justify-start">
-          <SoundToggle className="px-3 sm:px-4 py-2 sm:py-2.5 border border-white/30 bg-white/90 text-stone-900 shadow-md" />
-        </div>
-
-        <div className="flex justify-center">
-          <Link 
-            href="/heartandangel/world"
-            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-white/30 bg-white/90 text-stone-900 shadow-md transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap"
-          >
-            <span>← Back</span>
-            <span className="hidden sm:inline">to World</span>
-          </Link>
-        </div>
-
-        <div className="flex justify-end">
-          <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.2em] bg-white/90 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-white/30 shadow-md whitespace-nowrap">
-            ❤️ {clickCount}
-          </div>
-        </div>
-      </header>
+      <TempleTopBar
+        backTo="world"
+        right={<span className="rounded-full border border-amber-300/20 bg-black/40 px-3 py-2 text-[10px] uppercase tracking-[.14em] text-amber-100">❤️ {clickCount}</span>}
+      />
 
       <div className="absolute bottom-0 left-0 w-full h-[22vh] bg-gradient-to-t from-[#4A7c23] to-[#68a434] z-10 shadow-[inset_0_10px_20px_rgba(0,0,0,0.15)] pointer-events-none" />
 

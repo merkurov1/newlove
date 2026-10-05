@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generateAndUploadReel } from '@/lib/video/reelGenerator';
 import { createClient } from '@supabase/supabase-js';
+import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 // Инициализируем серверный клиент Supabase
 const supabase = createClient(
@@ -63,6 +64,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    await requireAdminFromRequest(request);
     const lotId = params.id;
 
     // 1. Достаем лот из базы данных
@@ -73,7 +75,7 @@ export async function POST(
       .single();
 
     if (lotError || !lot) {
-      return NextResponse.json({ error: 'Лот не найден' }, { status: 404 });
+      return NextResponse.json({ error: 'Lot not found' }, { status: 404 });
     }
 
     // 2. Безопасно формируем/зеркалируем картинку для рилса
@@ -103,6 +105,7 @@ export async function POST(
 
   } catch (error: any) {
     console.error('API Error:', error);
-    return NextResponse.json({ error: error.message || 'Ошибка сервера при генерации' }, { status: 500 });
+    const message = error?.message || 'Server error while generating the reel';
+    return NextResponse.json({ error: message }, { status: message.includes('Unauthorized') ? 401 : 500 });
   }
 }

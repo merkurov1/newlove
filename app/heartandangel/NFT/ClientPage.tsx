@@ -706,7 +706,7 @@ export default function NFTLabPageClient() {
             setTimeout(() => window.location.reload(), 1200);
         } catch (err: any) {
             console.error(err);
-            setStatus(err?.message || "Ошибка при получении подписи / минте");
+            setStatus(err?.message || "Could not obtain the signature or complete the mint.");
             pushDebug('claim_error', String(err));
         } finally {
             setProcessing(false);
@@ -739,17 +739,17 @@ export default function NFTLabPageClient() {
         await loadWeb3Dependencies();
         const tokenIdToUse = tokenIdParam || currentId;
         if (!isConnected || !address || !tokenIdToUse) {
-            setStatus('Сначала подключите кошелёк и убедитесь что у вас есть токен');
+            setStatus('Connect your wallet and make sure you own a token first.');
             return;
         }
         if (hasTransformed || hasClaimedOnChain) {
-            setStatus('Этот адрес уже совершил выбор или уже получил токен. Изменение невозможно.');
+            setStatus('This address has already made a choice or claimed a token. It cannot be changed.');
             return;
         }
         // If a pending choice hasn't been confirmed yet, set it and render inline confirmation UI
         if (!pendingVariantChoice || pendingVariantChoice.variant !== variant || pendingVariantChoice.tokenId !== tokenIdToUse) {
             setPendingVariantChoice({ variant, tokenId: tokenIdToUse });
-            setStatus('Подтвердите действие: трансформация необратима — нажмите ещё раз для подтверждения.');
+            setStatus('This transformation is irreversible. Click again to confirm.');
             // Allow user to cancel after 6 seconds
             setTimeout(() => {
                 setPendingVariantChoice((p) => (p && p.variant === variant && p.tokenId === tokenIdToUse ? null : p));
@@ -759,7 +759,7 @@ export default function NFTLabPageClient() {
         // Clear pending choice now that the user confirmed
         setPendingVariantChoice(null);
         setProcessing(true);
-        setStatus('Подключаюсь к кошельку и выполняю трансформацию на цепочке...');
+        setStatus('Connecting to your wallet and transforming the token on-chain...');
         try {
             // prefer onboard wallet provider, fall back to injected
             let rawProvider2: any = null;
@@ -768,7 +768,7 @@ export default function NFTLabPageClient() {
                 else if (onboardWallet && typeof onboardWallet.getProvider === 'function') rawProvider2 = await onboardWallet.getProvider();
             } catch (e) { rawProvider2 = null; }
             if (!rawProvider2) rawProvider2 = (window as any).ethereum;
-            if (!rawProvider2) throw new Error('Не найден провайдер кошелька');
+            if (!rawProvider2) throw new Error('Wallet provider not found.');
             const provider = new (ethers as any).BrowserProvider(rawProvider2 as any, 'any');
             try { await provider.send('eth_requestAccounts', []); } catch (e) { /* ignore */ }
             const signerLocal = await provider.getSigner();
@@ -776,18 +776,18 @@ export default function NFTLabPageClient() {
 
             // map variant string to numeric variant used on-chain: 1 = Angel, 2 = Devil
             const variantNum = variant === 'Angel' ? 1 : 2;
-            setStatus('Подтвердите транзакцию в кошельке...');
+            setStatus('Confirm the transaction in your wallet...');
             const tx = await contract.transform(Number(tokenIdToUse), variantNum);
-            setStatus('Транзакция отправлена, ожидаю подтверждения...');
+            setStatus('Transaction sent. Waiting for confirmation...');
             const receipt = await tx.wait();
             if (!receipt || receipt.status === 0) {
-                setStatus('Транзакция отклонена или не подтверждена.');
+                setStatus('Transaction was rejected or not confirmed.');
                 setProcessing(false);
                 return;
             }
             // mark as transformed
             setHasTransformed(true);
-            setStatus('Трансформация выполнена! Обновляю метаданные...');
+            setStatus('Transformation complete. Updating metadata...');
 
             // refresh tokenURI for the token(s) we own (the transform might burn old token and mint a new one)
             try {
@@ -872,10 +872,10 @@ export default function NFTLabPageClient() {
                 pushDebug('transform_refresh_error', String(e));
             }
 
-            setStatus('Готово — образ обновлён.');
+            setStatus('Done — the image has been updated.');
         } catch (e: any) {
             console.error(e);
-            setStatus(e?.message || 'Ошибка при выполнении трансформации');
+            setStatus(e?.message || 'Transformation failed.');
             pushDebug('transform_error', String(e));
         } finally {
             setProcessing(false);

@@ -3,7 +3,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import './swiper-init';
 import CenteredHeader from '@/components/CenteredHeader';
-import Header from '@/components/Header';
 
 // --- SEO METADATA & CANONICAL ---
 export const metadata: Metadata = {
@@ -122,9 +121,6 @@ export default async function SelectionPage() {
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#111] selection:bg-black selection:text-white relative overflow-x-hidden font-sans">
       
-      {/* HEADER */}
-      <Header />
-
       {/* HEADER (narrow container like /advising) */}
       <div className="max-w-3xl mx-auto px-6 pt-36 md:pt-44 pb-16">
         <CenteredHeader>

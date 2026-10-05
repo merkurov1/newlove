@@ -2,8 +2,14 @@ import { createClient } from '@/lib/supabase/server';
 import ProfileForm from '@/components/profile/ProfileForm';
 import SubscriptionToggle from '@/components/profile/SubscriptionToggle';
 import { UserCircle, Sparkles } from 'lucide-react';
+import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
+export const metadata: Metadata = {
+  title: 'Profile Settings | Anton Merkurov',
+  description: 'Manage your public profile and account preferences.',
+  robots: { index: false, follow: false },
+};
 
 export default async function ProfilePage() {
   const supabase = await createClient();

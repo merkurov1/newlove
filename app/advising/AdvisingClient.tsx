@@ -1,16 +1,12 @@
 'use client';
 
 import React from 'react';
-import Header from '@/components/Header';
 import { ArrowRight } from 'lucide-react';
 
 export default function AdvisingClient() {
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] antialiased relative overflow-x-hidden">
       
-      {/* Header */}
-      <Header />
-
       {/* Subtle Paper Grain Texture */}
       <div 
         className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"

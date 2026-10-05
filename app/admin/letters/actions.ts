@@ -7,8 +7,8 @@ export async function deleteLetter(formData: FormData) {
   if (!id) return;
 
   try {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    // При желании здесь можно добавить проверку сессии/роли администратора перед удалением
+    const { getServerSupabaseClient, requireAdmin } = await import('@/lib/serverAuth');
+    await requireAdmin();
 
     const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
 
@@ -21,6 +21,7 @@ export async function deleteLetter(formData: FormData) {
 
     // Ревалидация вызывается только при успешном удалении
     revalidatePath('/journal');
+    revalidatePath('/letters');
     revalidatePath('/admin/letters');
   } catch (e) {
     console.error('Failed to delete letter server action:', e);

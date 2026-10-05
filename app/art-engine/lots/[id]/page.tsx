@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase-browser';
+import { useAuth } from '@/components/AuthContext';
 
 function getAuctionHouseName(lot: any): string {
   const url = (lot.source_url || '').toLowerCase();
@@ -15,7 +16,8 @@ function getAuctionHouseName(lot: any): string {
 }
 
 export default function LotDetailPage({ params }: { params: { id: string } }) {
-  const supabase = createClientComponentClient();
+  const auth = useAuth() as any;
+  const router = useRouter();
   const [lot, setLot] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -28,7 +30,14 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
   const [externalLoading, setExternalLoading] = useState(false);
 
   useEffect(() => {
+    if (!auth?.isLoading && !auth?.user) {
+      router.replace('/art-engine?access=required');
+    }
+  }, [auth?.isLoading, auth?.user, router]);
+
+  useEffect(() => {
     async function fetchLot() {
+      if (auth?.isLoading || !auth?.user) return;
       const { data, error } = await supabase
         .from('lots')
         .select('*')
@@ -48,7 +57,7 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
       }
     }
     fetchLot();
-  }, [params.id, supabase]);
+  }, [params.id, auth?.isLoading, auth?.user]);
 
   async function fetchExternalData(artistName: string) {
     setExternalLoading(true);
@@ -119,7 +128,16 @@ export default function LotDetailPage({ params }: { params: { id: string } }) {
     );
   }
 
-  if (!lot) return notFound();
+  if (!lot) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-6 text-center">
+        <div className="space-y-4 font-mono text-xs">
+          <p className="uppercase tracking-widest text-neutral-500">Lot not found</p>
+          <Link href="/art-engine" className="underline">Return to Art Engine</Link>
+        </div>
+      </div>
+    );
+  }
 
   const ai = lot.ai_content || {};
   const auctionHouse = getAuctionHouseName(lot);

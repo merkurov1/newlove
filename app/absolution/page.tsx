@@ -1,16 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import Image from 'next/image';
 import html2canvas from 'html2canvas';
 import { Sparkles, RotateCcw, Download } from 'lucide-react';
 
-import * as TempleWrapperMod from '@/components/TempleWrapper';
-const TempleWrapper = (TempleWrapperMod as any).default || (TempleWrapperMod as any).TempleWrapper || TempleWrapperMod;
-
-import * as SoundToggleMod from '@/components/SoundToggle';
-const SoundToggle = (SoundToggleMod as any).default || (SoundToggleMod as any).SoundToggle || (() => null);
+import TempleTopBar from '@/components/TempleTopBar';
+import { useAuth } from '@/components/AuthContext';
 
 const STAMP_DELAY = 1200;
 const STAMP_IMAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0947.png';
@@ -34,28 +30,10 @@ const TRANSLATIONS = {
     save: "SAVE CERTIFICATE",
     newConfession: "NEW ABSOLUTION"
   },
-  ru: {
-    title: "ОНЛАЙН-ОТПУЩЕНИЕ",
-    subtitle: "Ваше цифровое бремя снято. Возвращается свет.",
-    placeholder: "Ваше Имя / Пилигрим",
-    sins: {
-      doomscroll: "Думскроллинг после 3:00",
-      envy: "Зависть к чужой 'успешной' жизни",
-      crypto: "Алчность: Проверка крипты 100 раз в день",
-      ai: "Лень: Использование AI для личного",
-      vanity: "Тщеславие: Гуглинг своего имени",
-      wrath: "Гнев: Споры в комментариях",
-      lust: "Похоть: Цифровой вуайеризм"
-    },
-    receipt: { header: "САНКТУАРИЙ СВЕТА", footer: "Чистая энергия. Абсолютная свобода.", signature: "Пьеро, AI Капеллан" },
-    btn: "✨ ПОЛУЧИТЬ ОТПУЩЕНИЕ",
-    save: "СОХРАНИТЬ СЕРТИФИКАТ",
-    newConfession: "НОВОЕ ОЧИЩЕНИЕ"
-  }
 };
 
 export default function AbsolutionPage() {
-  const [lang, setLang] = useState<'en' | 'ru'>('en');
+  const { user, profile } = useAuth();
   const [step, setStep] = useState<'confess' | 'processing' | 'receipt'>('confess');
   const [name, setName] = useState('');
   const [sinKey, setSinKey] = useState<string>('doomscroll');
@@ -65,15 +43,22 @@ export default function AbsolutionPage() {
   const [isSaving, setIsSaving] = useState(false);
   const receiptRef = useRef<HTMLDivElement | null>(null);
 
-  const t = TRANSLATIONS[lang];
+  const t = TRANSLATIONS.en;
   const sinText = t.sins[sinKey as keyof typeof t.sins];
 
   useEffect(() => {
     setTicketId(`#${Math.random().toString(36).substring(2, 9).toUpperCase()}`);
-    if ((window as any).Telegram?.WebApp) {
-        (window as any).Telegram.WebApp.expand();
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) {
+      tg.expand?.();
+      const telegramName = tg.initDataUnsafe?.user?.username || tg.initDataUnsafe?.user?.first_name;
+      const resolved = telegramName || profile?.name || profile?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || localStorage.getItem('temple_user') || 'Pilgrim';
+      setName(telegramName ? `@${telegramName}` : resolved);
+      localStorage.setItem('temple_user', resolved);
+    } else {
+      setName(profile?.name || profile?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || localStorage.getItem('temple_user') || 'Pilgrim');
     }
-  }, []);
+  }, [profile, user]);
 
   const triggerHaptic = (style: 'light' | 'medium' | 'heavy' | 'error') => {
     const tg = (window as any).Telegram?.WebApp;
@@ -155,7 +140,6 @@ export default function AbsolutionPage() {
   return (
     <div className="min-h-screen bg-[#0c0904] text-[#ffd700] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#ffd700] selection:text-black pt-40 sm:pt-44">
       <div className="noise-overlay" />
-      {typeof TempleWrapper === 'function' ? <TempleWrapper /> : null}
 
       {/* RADIANT WARM GLOW */}
       <div 
@@ -165,23 +149,7 @@ export default function AbsolutionPage() {
         }} 
       />
 
-      {/* TOP BAR FIXED — Опущено ниже хедера (top-24 / top-28) */}
-      <div className="absolute top-24 sm:top-28 left-0 right-0 w-full max-w-md mx-auto px-6 flex justify-between items-center z-30">
-        <Link 
-          href="/temple"
-          className="text-xs tracking-widest text-[#e5b863] hover:text-white transition-colors uppercase border border-[#e5b863]/30 px-4 py-2 rounded-full bg-[#1a1205]/70 backdrop-blur-md cursor-pointer shadow-[0_0_15px_rgba(255,215,0,0.15)]"
-        >
-          ← Temple
-        </Link>
-        <div className="flex items-center gap-3">
-          {typeof SoundToggle === 'function' && <SoundToggle />}
-          <div className="flex gap-2 text-xs tracking-widest bg-[#1a1205]/70 border border-[#e5b863]/30 px-3 py-2 rounded-full backdrop-blur-md shadow-[0_0_15px_rgba(255,215,0,0.15)]">
-             <button onClick={() => setLang('en')} className={`${lang === 'en' ? 'font-bold text-[#ffd700] underline' : 'text-[#886e36] opacity-70'} cursor-pointer`}>EN</button>
-             <span className="text-[#886e36]/40">/</span>
-             <button onClick={() => setLang('ru')} className={`${lang === 'ru' ? 'font-bold text-[#ffd700] underline' : 'text-[#886e36] opacity-70'} cursor-pointer`}>RU</button>
-          </div>
-        </div>
-      </div>
+      <TempleTopBar />
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-6 relative z-25 w-full max-w-md mx-auto">

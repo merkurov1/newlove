@@ -76,11 +76,11 @@ export default function FontanaCaseStudy() {
                   <span className="px-2 py-1 bg-gray-100 text-[10px] font-mono uppercase tracking-widest text-black border border-gray-200">The 'Bianco' Standard</span>
               </div>
               
-              <h1 className="text-6xl md:text-8xl font-serif font-light leading-[0.9] mb-12 tracking-tight opacity-0 animate-fadeIn" style={{animationDelay: '0.4s', animationFillMode: 'forwards'}}>
+              <h1 className="text-4xl sm:text-6xl md:text-8xl font-serif font-light leading-[0.95] sm:leading-[0.9] mb-12 tracking-tight opacity-0 animate-fadeIn break-words" style={{animationDelay: '0.4s', animationFillMode: 'forwards'}}>
                 The White<br/>Absolute.
               </h1>
               
-              <div className="grid grid-cols-2 gap-x-12 gap-y-8 text-sm border-t border-black pt-8 opacity-0 animate-fadeIn" style={{animationDelay: '0.6s', animationFillMode: 'forwards'}}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-8 text-sm border-t border-black pt-8 opacity-0 animate-fadeIn" style={{animationDelay: '0.6s', animationFillMode: 'forwards'}}>
                 <div>
                   <p className="font-mono text-[10px] text-gray-400 mb-2 uppercase tracking-wider">Asset Name</p>
                   <p className="font-serif text-xl italic">Concetto spaziale, Attese</p>

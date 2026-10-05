@@ -53,20 +53,20 @@ export default async function AdminUsersPage() {
     <div className="space-y-8 pb-10">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold text-green-800">Пользователи</h1>
-          <p className="text-gray-500">Управление пользователями и ролями</p>
+          <h1 className="text-3xl font-extrabold text-green-800">Users</h1>
+          <p className="text-gray-500">Manage users and roles</p>
         </div>
-        <Link href="/admin" className="text-sm text-gray-600 hover:underline">← Назад в панель</Link>
+        <Link href="/admin" className="text-sm text-gray-600 hover:underline">← Back to Dashboard</Link>
       </div>
 
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 bg-white rounded-xl shadow-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Пользователь</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Подписка</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Роль</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Действия</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Subscription</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -78,12 +78,12 @@ export default async function AdminUsersPage() {
                       <Image className="rounded-full mr-3" src={user.image} alt={user.name ?? 'User'} width={40} height={40} unoptimized />
                     )}
                     <div>
-                      <div className="text-sm font-semibold">{user.name ?? (user.email || 'Без имени')}</div>
+                      <div className="text-sm font-semibold">{user.name ?? (user.email || 'Unnamed')}</div>
                       <div className="text-sm text-gray-500">{user.email}</div>
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm">{subsByUser[user.id]?.isActive ? 'Да' : 'Нет'}</td>
+                <td className="px-6 py-4 text-sm">{subsByUser[user.id]?.isActive ? 'Yes' : 'No'}</td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
                     <span>{getRoleEmoji(user.role)}</span>

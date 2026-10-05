@@ -34,11 +34,11 @@ export default async function EditSelectionPage({ params }: { params: { id: stri
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Редактирование публикации</h1>
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Edit Publication</h1>
       <ContentForm 
         initialData={article} 
         saveAction={updateArticle} 
-        type="публикацию" 
+        type="article"
       />
     </div>
   );

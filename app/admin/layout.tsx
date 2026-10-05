@@ -1,6 +1,7 @@
 import { metadata as rootMetadata } from '@/app/layout';
 import { requireAdmin } from '@/lib/serverAuth';
 import { redirect } from 'next/navigation';
+import AdminNav from './AdminNav';
 
 export const metadata = {
   title: {
@@ -26,8 +27,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       className="min-h-screen bg-white"
       style={{ fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontSize: 18, lineHeight: 1.7, color: '#222' }}
     >
-      <div className="container mx-auto px-4 py-6">
-        {children}
+      <div className="mx-auto flex max-w-[1600px] gap-6 px-4 pb-8 pt-28 lg:gap-8 lg:px-8">
+        <AdminNav />
+        <main className="min-w-0 flex-1">{children}</main>
       </div>
     </div>
   );

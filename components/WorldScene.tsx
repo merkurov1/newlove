@@ -137,9 +137,8 @@ export default function WorldScene() {
   };
 
   // Дождь из сердец по клику на сердце-воздушный шар
-  const triggerHeartRain = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) return;
-
+  const triggerHeartRain = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const newHearts: FallingHeart[] = Array.from({ length: 12 }).map(() => ({
       id: nextHeartId.current++,
       x: Math.random() * window.innerWidth,
@@ -169,10 +168,18 @@ export default function WorldScene() {
 
   return (
     <main
-      onClick={triggerHeartRain}
       onMouseMove={handleMouseMove}
-      className={`relative w-full h-[100dvh] pt-20 sm:pt-24 overflow-hidden bg-gradient-to-b ${timeGradient} transition-colors duration-1000 select-none cursor-pointer flex flex-col justify-end`}
+      className={`relative w-full h-[100dvh] pt-20 sm:pt-24 overflow-hidden bg-gradient-to-b ${timeGradient} transition-colors duration-1000 select-none flex flex-col justify-end`}
     >
+      <section className="sr-only" aria-labelledby="world-title">
+        <h1 id="world-title">Heart &amp; Angel World</h1>
+        <p>An interactive digital landscape where angels, demons, weather, memory and love coexist.</p>
+        <nav aria-label="World rituals">
+          <Link href="/heartandangel/calm">Keep Calm</Link>
+          <Link href="/heartandangel/letitgo">Let It Go</Link>
+          <Link href="/temple">Enter the Temple</Link>
+        </nav>
+      </section>
       {/* Скрытый аудиоэлемент */}
       <audio ref={audioRef} src={ASSETS.ambientAudio} loop preload="auto" />
 
@@ -181,7 +188,8 @@ export default function WorldScene() {
         <button
           onClick={toggleAudio}
           className="flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2 rounded-full bg-white/30 backdrop-blur-md border border-white/50 text-white/95 hover:bg-white/45 transition-all shadow-xl group active:scale-95 cursor-pointer"
-          title={isPlayingAudio ? "Выключить музыку" : "Включить музыку"}
+          title={isPlayingAudio ? "Turn sound off" : "Turn sound on"}
+          aria-label={isPlayingAudio ? "Turn sound off" : "Turn sound on"}
         >
           {isPlayingAudio ? (
             <>
@@ -249,8 +257,11 @@ export default function WorldScene() {
       </div>
 
       {/* Центральное сердце-шарик (интерактивный триггер дождя) */}
-      <div 
-        className="absolute top-[26%] sm:top-[28%] left-1/2 z-20 pointer-events-none flex flex-col items-center animate-bounce-slow transition-transform duration-300 ease-out"
+      <button
+        type="button"
+        onClick={triggerHeartRain}
+        aria-label="Release a rain of hearts"
+        className="absolute top-[26%] sm:top-[28%] left-1/2 z-20 pointer-events-auto flex flex-col items-center animate-bounce-slow transition-transform duration-300 ease-out cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-full"
         style={{ 
           transform: `translate(calc(-50% + ${mousePos.x * 30}px), calc(-50% + ${mousePos.y * 20}px))` 
         }}
@@ -267,11 +278,12 @@ export default function WorldScene() {
             strokeLinecap="round"
           />
         </svg>
-      </div>
+      </button>
 
       {/* Домик (переход в Temple) */}
       <Link 
         href="/temple"
+        aria-label="Enter the Temple"
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
         className="absolute bottom-[18vh] sm:bottom-[20vh] right-[30%] sm:right-[32%] translate-x-1/2 z-20 flex flex-col items-center cursor-pointer group"
       >
@@ -280,6 +292,14 @@ export default function WorldScene() {
           <Image src={ASSETS.house} alt="" width={200} height={200} className="w-full h-auto object-contain" priority draggable={false} />
           <div className={`absolute bottom-[35%] right-7 w-2.5 h-3.5 bg-amber-300 rounded-sm blur-[0.5px] transition-opacity duration-1000 ${isNight ? 'opacity-100 shadow-[0_0_10px_#fde047]' : 'opacity-0'}`} />
         </div>
+      </Link>
+
+      {/* Explicit Temple entry for visitors who do not discover the house click. */}
+      <Link
+        href="/temple"
+        className="absolute bottom-5 sm:bottom-7 left-1/2 -translate-x-1/2 z-40 rounded-full border border-white/60 bg-black/25 px-5 py-2.5 text-[10px] font-mono uppercase tracking-[0.2em] text-white backdrop-blur-md shadow-lg transition hover:bg-black/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+      >
+        Enter the Temple →
       </Link>
 
       {/* 5. Падающие сердечки (по клику) */}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { GlobalAudioProvider } from '../../components/AudioContext';
+import TemplePageTransition from '@/components/TemplePageTransition';
 
 export default function HeartAndAngelLayout({
   children,
@@ -7,8 +7,6 @@ export default function HeartAndAngelLayout({
   children: React.ReactNode;
 }) {
   return (
-    <GlobalAudioProvider>
-      {children}
-    </GlobalAudioProvider>
+    <TemplePageTransition>{children}</TemplePageTransition>
   );
 }

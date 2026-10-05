@@ -400,12 +400,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return NextResponse.json({ error: 'A valid auction URL is required' }, { status: 400 });
+    }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return NextResponse.json({ error: 'Only HTTP and HTTPS URLs are supported' }, { status: 400 });
+    }
+
     const auctionHouse = detectAuctionHouse(url);
     let html = '';
 
     // 1. Jina Reader
     try {
       const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
+        signal: AbortSignal.timeout(20_000),
         headers: {
           'X-Return-Format': 'html',
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
@@ -424,7 +435,7 @@ export async function POST(req: Request) {
     if (!html && apiKey) {
       try {
         const scrapingAntUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(url)}&browser=true`;
-        const saRes = await fetch(scrapingAntUrl, { headers: { 'x-api-key': apiKey } });
+        const saRes = await fetch(scrapingAntUrl, { signal: AbortSignal.timeout(30_000), headers: { 'x-api-key': apiKey } });
         const responseText = await saRes.text();
         if (responseText.trim().startsWith('<')) {
           if (!responseText.includes('Access Denied') && !responseText.includes('Cloudflare')) {
@@ -447,6 +458,7 @@ export async function POST(req: Request) {
     if (!html) {
       try {
         const res = await fetch(url, {
+          signal: AbortSignal.timeout(20_000),
           headers: {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -497,6 +509,6 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error('[parse-url Error]:', error);
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message.includes('Unauthorized') ? message : 'Failed to parse URL', details: message }, { status: message.includes('Unauthorized') ? 401 : 500 });
   }
 }

@@ -27,10 +27,10 @@ export default function AdminError({
           </div>
           
           <h2 className="text-xl font-bold text-gray-900 mb-2 text-center">
-            Ошибка в админ-панели
+            Admin panel error
           </h2>
           <p className="text-gray-600 mb-6 text-center text-sm">
-            Произошла ошибка при выполнении операции. Проверьте права доступа и попробуйте снова.
+            The operation could not be completed. Check your access and try again.
           </p>
           
           <div className="space-y-2">
@@ -38,13 +38,13 @@ export default function AdminError({
               onClick={reset}
               className="w-full px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors text-sm font-medium"
             >
-              Попробовать снова
+              Try again
             </button>
             <a
               href="/admin"
               className="block w-full px-4 py-2 bg-gray-100 text-gray-900 rounded hover:bg-gray-200 transition-colors text-sm font-medium text-center"
             >
-              Вернуться в админ-панель
+              Return to Admin
             </a>
           </div>
 

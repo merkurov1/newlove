@@ -69,7 +69,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       },
     };
   } catch (e) {
-    return { title: 'Письмо | Anton Merkurov' };
+    return { title: 'Letter | Anton Merkurov' };
   }
 }
 
@@ -91,7 +91,7 @@ export default async function LetterPage({ params }: { params: { slug: string } 
   const { data: letter, error } = await supabasePublic
     .from('letters')
     .select(
-      'id, title, slug, content, published, publishedAt, createdAt, authorId, users(name, email)'
+      'id, title, slug, content, published, publishedAt, createdAt, authorId, users(name)'
     )
     .eq('slug', slug)
     .eq('published', true)
@@ -113,10 +113,10 @@ export default async function LetterPage({ params }: { params: { slug: string } 
           <header className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-3">{letter.title}</h1>
             <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Автор'}</span>
+              <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Author'}</span>
               <span>•</span>
               <time dateTime={letter.publishedAt || letter.createdAt}>
-                {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('ru-RU', {
+                {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',

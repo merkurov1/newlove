@@ -388,3 +388,38 @@ select:focus-visible {
 body.telegram-app header {
   display: none !important;
 }
+
+/* Shared Temple language: safe-area aware, dark gold controls. */
+.temple-topbar {
+  position: absolute;
+  top: max(1rem, env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  width: min(100% - 2rem, 56rem);
+  margin-inline: auto;
+  padding-top: clamp(4.5rem, 8vw, 7rem);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.temple-topbar__back, .temple-topbar__actions > button {
+  min-height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  border: 1px solid rgba(245, 158, 11, .24);
+  border-radius: 999px;
+  padding: .65rem .9rem;
+  background: rgba(12, 9, 4, .62);
+  color: #f8df9a;
+  backdrop-filter: blur(16px);
+  font-size: .7rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  transition: border-color .2s ease, background .2s ease, transform .2s ease;
+}
+.temple-topbar__back:hover, .temple-topbar__actions > button:hover { border-color: rgba(250, 204, 21, .65); background: rgba(30, 20, 7, .8); transform: translateY(-1px); }
+.temple-topbar__actions { display: flex; align-items: center; gap: .5rem; }

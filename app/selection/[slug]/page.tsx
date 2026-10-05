@@ -79,6 +79,7 @@ async function getArticle(slug: string) {
     .from('articles')
     .select('*')
     .eq('slug', slug)
+    .eq('published', true)
     .maybeSingle();
   if (error || !article) return null;
   return article;

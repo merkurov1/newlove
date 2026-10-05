@@ -1,7 +1,14 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import { requireAdmin } from '@/lib/serverAuth';
 
 export const revalidate = 0;
+export const metadata = {
+  title: 'Vault Archive // Art Engine',
+  description: 'Restricted catalog of institutional art dossiers.',
+  robots: { index: false, follow: false },
+};
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,6 +21,12 @@ function getInitials(name?: string) {
 }
 
 export default async function LotsPage() {
+  try {
+    await requireAdmin();
+  } catch {
+    redirect('/art-engine?access=required');
+  }
+
   const { data: lots, error } = await supabase
     .from('lots')
     .select('id, artist, title, year, medium, estimate, image_path, source_url, auction_house, created_at')

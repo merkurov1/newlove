@@ -1,82 +1,55 @@
+'use client';
 
-"use client";
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const navItems = [
-  { href: '/admin', label: 'Панель', icon: '📊' },
-  { href: '/admin/selection', label: 'Selection', icon: '📄' },
-  { href: '/admin/projects', label: 'Проекты', icon: '🚀' },
-  { href: '/admin/letters', label: 'Письма', icon: '💌' },
-  { href: '/admin/postcards', label: 'Открытки', icon: '🖼️' },
-  { href: '/admin/users', label: 'Пользователи', icon: '👥' },
-  { href: '/admin/media', label: 'Медиа', icon: '�️' },
-  { href: '/admin/banners', label: 'Баннеры', icon: '�' },
+  { href: '/admin', label: 'Dashboard', icon: '01' },
+  { href: '/admin/letters', label: 'Letters', icon: '02' },
+  { href: '/admin/users', label: 'Users', icon: '03' },
+  { href: '/admin/selection', label: 'Selection', icon: '04' },
+  { href: '/admin/projects', label: 'Projects', icon: '05' },
+  { href: '/admin/postcards', label: 'Postcards', icon: '06' },
+  { href: '/admin/media', label: 'Media', icon: '07' },
+  { href: '/admin/banners', label: 'Banners', icon: '08' },
 ];
-
 
 export default function AdminNav() {
   const pathname = usePathname();
+  const isActive = (href: string) => href === '/admin' ? pathname === href : Boolean(pathname?.startsWith(href));
+
   return (
-    <nav className="w-full bg-white border-b border-gray-200 shadow-sm">
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
-        <ul className="flex flex-nowrap overflow-x-auto scrollbar-thin scrollbar-thumb-blue-100 items-center justify-start gap-1 md:gap-2 py-3">
-          {navItems.map((item) => {
-            const isActive = item.href === '/admin'
-              ? pathname === item.href
-              : (pathname ? pathname.startsWith(item.href) : false);
-            return (
-              <li key={item.href} className="flex-shrink-0">
-                <Link
-                  href={item.href}
-                  className={`
-                    flex flex-col items-center px-3 py-2 md:px-4 md:py-2.5
-                    rounded-xl text-xs md:text-sm font-semibold transition-all duration-200
-                    hover:scale-105 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-200
-                    ${isActive
-                      ? 'bg-blue-100 text-blue-700 shadow border border-blue-200'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-blue-700'
-                    }
-                  `}
-                  tabIndex={0}
-                >
-                  <span className={`text-2xl md:text-3xl mb-1 transition-all duration-200 ${isActive ? 'scale-110' : ''}`}>
-                    {item.icon}
-                  </span>
-                  <span className="leading-tight tracking-wide md:tracking-normal text-[13px] md:text-sm">
-                    {item.label}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-      {/* Breadcrumb для текущей страницы */}
-      {pathname && pathname !== '/admin' && (
-        <div className="bg-gray-50 border-t border-gray-200 px-4 py-2">
-          <div className="max-w-7xl mx-auto">
-            <nav className="text-sm text-gray-500">
-              <Link href="/admin" className="hover:text-gray-700">Админ</Link>
-              {pathname.split('/').slice(2).map((segment, index, array) => {
-                const href = '/admin/' + array.slice(0, index + 1).join('/');
-                const isLast = index === array.length - 1;
-                const label = segment.charAt(0).toUpperCase() + segment.slice(1);
-                return (
-                  <span key={segment}>
-                    <span className="mx-2">›</span>
-                    {isLast ? (
-                      <span className="text-gray-800 font-medium">{label}</span>
-                    ) : (
-                      <Link href={href} className="hover:text-gray-700">{label}</Link>
-                    )}
-                  </span>
-                );
-              })}
-            </nav>
-          </div>
+    <aside className="w-full lg:w-64 lg:shrink-0">
+      <div className="lg:sticky lg:top-28 space-y-4">
+        <div className="hidden lg:block rounded-3xl border border-zinc-200/80 bg-white/80 p-6 shadow-sm backdrop-blur-xl">
+          <Link href="/" className="block font-serif text-2xl tracking-tight text-zinc-900 hover:opacity-70 transition-opacity">
+            merkurov<span className="text-zinc-400">.love</span>
+          </Link>
+          <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-400">Private workspace</div>
         </div>
-      )}
-    </nav>
+
+        <nav className="rounded-3xl border border-zinc-200/80 bg-white/80 p-2 shadow-sm backdrop-blur-xl">
+          <div className="flex gap-1 overflow-x-auto lg:block lg:space-y-1 scrollbar-none">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`group flex min-w-max items-center gap-3 rounded-2xl px-4 py-3 font-mono text-[11px] uppercase tracking-[0.12em] transition-all lg:w-full ${
+                  isActive(item.href) ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'
+                }`}
+              >
+                <span className={`text-[10px] ${isActive(item.href) ? 'text-zinc-300' : 'text-zinc-400 group-hover:text-zinc-600'}`}>{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            ))}
+          </div>
+        </nav>
+
+        <div className="hidden lg:block rounded-3xl border border-zinc-200/80 bg-zinc-900 p-5 text-white shadow-sm">
+          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Public site</div>
+          <Link href="/" className="mt-3 block font-serif text-lg hover:text-zinc-300 transition-colors">Return to merkurov.love →</Link>
+        </div>
+      </div>
+    </aside>
   );
 }

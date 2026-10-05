@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 
-// Simple stubbed DELETE handler while migrating auth to Supabase/Onboard.
-// This avoids referencing next-auth/prisma during the migration.
+// Delete media files from the protected Supabase media bucket.
 export async function DELETE(req: NextRequest) {
   try {
+    await requireAdminFromRequest(req);
     const body = await req.json().catch(() => ({}));
     const files = body?.fileNames || (body?.fileName ? [body.fileName] : []);
 
@@ -11,10 +12,19 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'No files provided' }, { status: 400 });
     }
 
-    // In the real implementation we'll call Supabase admin storage here.
-    return NextResponse.json({ success: true, deleted: files.length, files });
+    const safeFiles = files
+      .filter((file: unknown): file is string => typeof file === 'string')
+      .map((file: string) => file.replace(/^\/+/, '').replace(/\.\./g, ''))
+      .filter(Boolean);
+    if (!safeFiles.length) return NextResponse.json({ error: 'No valid files provided' }, { status: 400 });
+
+    const { data, error } = await getServerSupabaseClient({ useServiceRole: true })
+      .storage.from('media').remove(safeFiles);
+    if (error) throw error;
+    return NextResponse.json({ success: true, deleted: data?.length || 0, files: safeFiles });
   } catch (err) {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Internal error';
+    return NextResponse.json({ error: message }, { status: message.includes('Unauthorized') ? 401 : 500 });
   }
 }
 

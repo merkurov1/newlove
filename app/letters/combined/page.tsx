@@ -75,7 +75,7 @@ async function PreviewView({ slug }: { slug: string }) {
   const { data: letter, error } = await supabasePublic
     .from('letters')
     .select(
-      'id, title, slug, content, published, publishedAt, createdAt, authorId, users(name, email)'
+      'id, title, slug, content, published, publishedAt, createdAt, authorId, users(name)'
     )
     .eq('slug', slug)
     .eq('published', true)
@@ -98,10 +98,10 @@ async function PreviewView({ slug }: { slug: string }) {
           <header className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-3">{letter.title}</h1>
             <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Автор'}</span>
+              <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Author'}</span>
               <span>•</span>
               <time dateTime={letter.publishedAt || letter.createdAt}>
-                {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('ru-RU', {
+                {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',
@@ -140,7 +140,7 @@ async function FullView({ slug }: { slug: string }) {
   const { data: letter, error } = await supabase
     .from('letters')
     .select(
-      'id, title, slug, content, published, publishedAt, createdAt, authorId, users(name, email)'
+      'id, title, slug, content, published, publishedAt, createdAt, authorId, users(name)'
     )
     .eq('slug', slug)
     .eq('published', true)
@@ -154,7 +154,7 @@ async function FullView({ slug }: { slug: string }) {
   const letterAuthor = Array.isArray(letter.users) ? letter.users[0] : letter.users;
   const { data: comments } = await supabase
     .from('letter_comments')
-    .select('id, content, created_at, user_id, author_display, users(name, email)')
+    .select('id, content, created_at, user_id, author_display, users(name)')
     .eq('letter_id', letter.id)
     .eq('is_public', true)
     .order('created_at', { ascending: true });
@@ -166,16 +166,16 @@ async function FullView({ slug }: { slug: string }) {
           href="/letters"
           className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-6 text-sm"
         >
-          ← Вернуться к архиву
+          ← Back to Archive
         </Link>
         <article className="bg-white rounded-2xl shadow-sm border border-blue-100 p-8 mb-8">
           <header className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-3">{letter.title}</h1>
             <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Автор'}</span>
+              <span>{letterAuthor?.name || letterAuthor?.email?.split('@')[0] || 'Author'}</span>
               <span>•</span>
               <time dateTime={letter.publishedAt || letter.createdAt}>
-                {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('ru-RU', {
+                {new Date(letter.publishedAt || letter.createdAt).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',
@@ -192,7 +192,7 @@ async function FullView({ slug }: { slug: string }) {
 
         <div className="bg-white rounded-2xl shadow-sm border border-blue-100 p-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">
-            Комментарии {comments && comments.length > 0 && `(${comments.length})`}
+            Comments {comments && comments.length > 0 && `(${comments.length})`}
           </h2>
           {comments && comments.length > 0 ? (
             <div className="space-y-6">
@@ -215,10 +215,10 @@ async function FullView({ slug }: { slug: string }) {
                             {comment.author_display ||
                               commentUser?.name ||
                               commentUser?.email?.split('@')[0] ||
-                              'Пользователь'}
+                              'User'}
                           </span>
                           <span className="text-xs text-gray-400">
-                            {new Date(comment.created_at).toLocaleDateString('ru-RU', {
+                            {new Date(comment.created_at).toLocaleDateString('en-US', {
                               year: 'numeric',
                               month: 'short',
                               day: 'numeric',
@@ -233,7 +233,7 @@ async function FullView({ slug }: { slug: string }) {
               })}
             </div>
           ) : (
-            <p className="text-gray-500 text-center py-8">Пока нет комментариев. Будьте первым!</p>
+            <p className="text-gray-500 text-center py-8">No comments yet. Be the first.</p>
           )}
         </div>
       </div>

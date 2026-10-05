@@ -1,12 +1,14 @@
+import type { Metadata } from 'next';
 import LetItGoAngel from '@/components/LetItGoAngel';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Let It Go — Digital Temple',
-  description: 'Release your burdens into the digital sky.',
+  description: 'Let It Go is an interactive ritual for releasing digital burdens into the sky with the Heart & Angel world.',
+  alternates: { canonical: 'https://www.merkurov.love/heartandangel/letitgo' },
   openGraph: {
     title: 'Let It Go — Digital Temple',
     description: 'Release your burdens into the digital sky.',
-    url: 'https://merkurov.love/heartandangel/letitgo',
+    url: 'https://www.merkurov.love/heartandangel/letitgo',
     siteName: 'Merkurov Love',
     images: [
       {

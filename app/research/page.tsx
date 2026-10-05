@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import Link from "next/link";
-import Header from '@/components/Header';
 import { SubmitButton } from "./submit-button";
 import { submitInquiry } from "./actions";
 import { FileText, ArrowRight, ShieldAlert, Sparkles } from 'lucide-react';
@@ -41,9 +40,6 @@ export default function ResearchPage() {
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
       
-      {/* HEADER */}
-      <Header />
-
       <div className="max-w-4xl mx-auto px-6 pt-36 md:pt-44 pb-24">
         
         {/* HEADER */}

@@ -12,7 +12,7 @@ export default function SendLetterForm({ letter }: { letter: any }) {
 
   async function handleSendLetter(formData: FormData) {
     if (isLoading) {
-      console.warn('Отправка уже в процессе, игнорируем повторный клик');
+      console.warn('Delivery is already in progress.');
       return;
     }
     
@@ -28,10 +28,10 @@ export default function SendLetterForm({ letter }: { letter: any }) {
           setJobId(result.jobId);
         }
       } else {
-        setMessage(`✕ ${result?.message || 'Ошибка'}`);
+        setMessage(`✕ ${result?.message || 'Delivery failed.'}`);
       }
     } catch (error) {
-      setMessage('✕ Произошла ошибка при отправке рассылки');
+      setMessage('✕ Delivery failed.');
     } finally {
       setIsLoading(false);
     }
@@ -41,7 +41,7 @@ export default function SendLetterForm({ letter }: { letter: any }) {
     return (
       <div className="font-mono text-xs text-neutral-900 py-2 flex items-center gap-2">
         <span className="inline-block h-1.5 w-1.5 bg-neutral-900" />
-        Рассылка отправлена: {new Date(letter.sentAt).toLocaleString('ru-RU')}
+        Sent: {new Date(letter.sentAt).toLocaleString('en-US')}
       </div>
     );
   }
@@ -49,13 +49,13 @@ export default function SendLetterForm({ letter }: { letter: any }) {
   return (
     <div className="space-y-6 font-sans">
       <div className="border-l-2 border-neutral-900 bg-neutral-50 p-4 font-mono text-xs text-neutral-800 space-y-1">
-        <span className="font-bold uppercase tracking-wider block mb-1">Публикация ≠ Отправка рассылки</span>
-        <p>• Публикация — письмо появляется в публичном архиве на сайте.</p>
-        <p>• Отправка рассылки — диспетчер доставляет письмо на email подписчиков.</p>
+        <span className="font-bold uppercase tracking-wider block mb-1">Publication ≠ Delivery</span>
+        <p>• Publication makes the letter visible in the public archive.</p>
+        <p>• Delivery sends the letter to active subscribers.</p>
       </div>
 
       <p className="font-serif text-sm text-neutral-700 italic">
-        Материал готов к дистрибуции. Убедитесь в корректности содержимого перед запуском.
+        The letter is ready for distribution. Review the content before launching.
       </p>
 
       {message && !jobId && (
@@ -81,7 +81,7 @@ export default function SendLetterForm({ letter }: { letter: any }) {
             name="testEmail"
             value={testEmail}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setTestEmail(e.target.value)}
-            placeholder="Тестовый email (опционально)"
+            placeholder="Test email (optional)"
             className="flex-1 bg-neutral-50/50 border border-neutral-200 px-4 py-3 font-mono text-xs text-neutral-900 focus:bg-white focus:border-neutral-900 focus:outline-none transition rounded-none"
           />
           <button
@@ -92,22 +92,22 @@ export default function SendLetterForm({ letter }: { letter: any }) {
             {isLoading ? (
               <>
                 <div className="animate-spin w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-none" />
-                <span>Трансляция...</span>
+                <span>Sending...</span>
               </>
             ) : (
-              <span>{testEmail ? 'Отправить тест' : 'Запустить рассылку'}</span>
+              <span>{testEmail ? 'Send Test' : 'Send Letter'}</span>
             )}
           </button>
         </div>
       </form>
 
       <div className="border border-neutral-200 bg-neutral-50 p-4 font-mono text-xs text-neutral-500 space-y-2">
-        <p className="font-bold uppercase tracking-wider text-neutral-700">Протокол рассылки:</p>
+        <p className="font-bold uppercase tracking-wider text-neutral-700">Delivery protocol:</p>
         <ul className="list-disc list-inside space-y-1 pl-1">
-          <li>Отмена после запуска невозможна.</li>
-          <li>Адресаты: только подписчики с подтвержденным статусом (<code className="text-neutral-900">isActive=true</code>).</li>
-          <li>Неподтвержденные адреса исключаются автоматически.</li>
-          <li>Повторная отправка идентичного выпуска заблокирована на уровне базы данных.</li>
+          <li>Cancellation is not available after launch.</li>
+          <li>Recipients: active subscribers only (<code className="text-neutral-900">isActive=true</code>).</li>
+          <li>Unconfirmed addresses are excluded automatically.</li>
+          <li>Duplicate delivery is blocked at the database level.</li>
         </ul>
       </div>
     </div>

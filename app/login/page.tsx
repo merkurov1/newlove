@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
 import { createClient } from '@/lib/supabase-browser';
 import { ArrowLeft, KeyRound, Mail, Wallet, CheckCircle2 } from 'lucide-react';
-
 export default function LoginPage() {
   const { user, isLoading, signInWithGoogle, signInWithPasskey } = useAuth();
   const router = useRouter();
@@ -18,10 +17,17 @@ export default function LoginPage() {
   const [emailSent, setEmailSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isRegister, setIsRegister] = useState(false);
+  const requestedReturnTo = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('next') : null;
+  const returnTo = requestedReturnTo && requestedReturnTo.startsWith('/') && !requestedReturnTo.startsWith('//') ? requestedReturnTo : '/art-engine';
 
   useEffect(() => {
-    if (!isLoading && user) {
-      router.push('/art-engine');
+    setIsRegister(new URLSearchParams(window.location.search).get('mode') === 'register');
+  }, []);
+
+  useEffect(() => {
+      if (!isLoading && user) {
+      router.push(returnTo);
     }
   }, [user, isLoading, router]);
 
@@ -36,7 +42,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/art-engine`,
+          emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent(returnTo)}`,
         },
       });
       if (error) throw error;
@@ -65,7 +71,7 @@ export default function LoginPage() {
         type: 'email',
       });
       if (error) throw error;
-      router.push('/art-engine');
+      router.push(returnTo);
     } catch (err: any) {
       setErrorMsg(err.message || 'Invalid verification code');
     } finally {
@@ -79,7 +85,7 @@ export default function LoginPage() {
     setErrorMsg(null);
     try {
       await signInWithPasskey();
-      router.push('/art-engine');
+      router.push(returnTo);
     } catch (err: any) {
       setErrorMsg(err.message || 'Passkey authentication failed');
     } finally {
@@ -128,7 +134,7 @@ export default function LoginPage() {
         });
       }
 
-      router.push('/art-engine');
+      router.push(returnTo);
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err?.message || 'Wallet authentication error');
@@ -165,10 +171,10 @@ export default function LoginPage() {
       <div className="max-w-md w-full mx-auto my-auto z-20 p-8 sm:p-12 rounded-3xl bg-white/80 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_20px_50px_rgba(0,0,0,0.04)] space-y-8 relative">
         <div className="space-y-3 text-center">
           <h1 className="text-3xl font-serif font-light tracking-tight text-zinc-900">
-            Authentication
+            {isRegister ? 'Create your profile' : 'Authentication'}
           </h1>
           <p className="font-serif text-sm text-zinc-600 leading-relaxed max-w-sm mx-auto">
-            Enter the private office ecosystem. Access your profile, psychometric archive, and curated data stream.
+            {isRegister ? 'Create one identity for your public profile, private office and creative ecosystem.' : 'Enter the private office ecosystem. Access your profile, archive and curated data stream.'}
           </p>
         </div>
 
@@ -221,9 +227,18 @@ export default function LoginPage() {
               className="w-full py-4 px-6 rounded-full bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-900 font-mono text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-sm cursor-pointer"
             >
               <Mail size={16} className="text-zinc-700" />
-              <span>Email &amp; 6-Digit Code (OTP)</span>
+                  <span>{isRegister ? 'Create with Email & 6-Digit Code' : 'Email & 6-Digit Code (OTP)'}</span>
             </button>
           </div>
+        )}
+
+        {authMode === 'methods' && (
+          <p className="pt-2 text-center font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+            {isRegister ? 'Already have an account?' : 'New here?'}{' '}
+            <Link href={`${isRegister ? '/login' : '/register'}?next=${encodeURIComponent(returnTo)}`} className="text-zinc-900 underline underline-offset-4">
+              {isRegister ? 'Sign in' : 'Create your profile'}
+            </Link>
+          </p>
         )}
 
         {authMode === 'email' && (

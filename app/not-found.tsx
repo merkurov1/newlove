@@ -7,10 +7,10 @@ export default function NotFound() {
       <div className="max-w-2xl">
         {/* Large 404 */}
         <div className="mb-8">
-          <h1 className="text-9xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+          <h1 className="text-6xl sm:text-8xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
             404
           </h1>
-          <div className="text-6xl mb-4">🔍</div>
+          <div className="text-5xl sm:text-6xl mb-4">🔍</div>
         </div>
 
         {/* Title and description */}

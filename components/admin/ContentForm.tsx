@@ -54,13 +54,14 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
   const [tags, setTags] = useState<string[]>(() => (safeInitial.tags || []).map((t: any) => t.name));
 
   const checkSlugUniqueness = useCallback(async (slugToCheck: string) => {
-    if (!slugToCheck || isEditing) return;
+    if (!slugToCheck) return;
 
     setIsCheckingSlug(true);
     setSlugError('');
 
     try {
-      const response = await fetch(`/api/admin/validate-slug?slug=${encodeURIComponent(slugToCheck)}&type=letter${isEditing ? `&excludeId=${safeInitial.id}` : ''}`);
+      const slugType = /letter/i.test(type) ? 'letter' : /project/i.test(type) ? 'project' : 'article';
+      const response = await fetch(`/api/admin/validate-slug?slug=${encodeURIComponent(slugToCheck)}&type=${slugType}${isEditing ? `&excludeId=${safeInitial.id}` : ''}`);
       const data = await response.json();
       
       if (!data.available) {
@@ -71,7 +72,7 @@ export default function ContentForm({ initialData, saveAction, type }: ContentFo
     } finally {
       setIsCheckingSlug(false);
     }
-  }, [isEditing, safeInitial.id]);
+  }, [isEditing, safeInitial.id, type]);
 
   useEffect(() => {
     if (!slugManuallyEdited && (artist.trim() || title.trim())) {

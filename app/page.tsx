@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
-import Header from '@/components/Header';
 
 interface NavItem {
   label: string;
@@ -76,7 +75,6 @@ export default function Home() {
 
   return (
     <>
-      <Header />
       <main className="min-h-screen w-full bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] flex flex-col justify-between px-5 sm:px-12 pt-32 md:pt-44 pb-12 antialiased relative overflow-x-hidden">
         
         {/* Subtle Paper Grain Overlay */}

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { usePathname } from 'next/navigation';
 
 const ASSETS = {
   ambientAudio: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Drift%20of%20Glass.mp3',
@@ -24,6 +25,15 @@ export function GlobalAudioProvider(props: React.PropsWithChildren<{}>) {
   // Убран дженерик <HTMLAudioElement | null>, используется as
   const audioRef = React.useRef(null) as { current: HTMLAudioElement | null };
   const [isPlaying, setIsPlaying] = React.useState(false);
+  const pathname = usePathname() || '';
+  const inTemple = pathname === '/temple' || pathname === '/vigil' || pathname === '/absolution' || pathname === '/tribute' || pathname === '/heartandangel/calm' || pathname === '/heartandangel/letitgo';
+
+  React.useEffect(() => {
+    if (!inTemple && audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    }
+  }, [inTemple]);
 
   const toggleAudio = () => {
     if (!audioRef.current) return;
@@ -44,7 +54,7 @@ export function GlobalAudioProvider(props: React.PropsWithChildren<{}>) {
   return (
     <AudioContext.Provider value={contextValue}>
       {props.children}
-      <audio ref={audioRef as any} src={ASSETS.ambientAudio} loop preload="auto" />
+      <audio ref={audioRef as any} src={ASSETS.ambientAudio} loop preload="none" />
     </AudioContext.Provider>
   );
 }

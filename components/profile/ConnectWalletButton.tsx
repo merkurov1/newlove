@@ -10,7 +10,7 @@ export default function ConnectWalletButton({ onConnected }: { onConnected?: (ad
     async function connect() {
         setError(null);
         if (!(window as any).ethereum) {
-            setError('Установите и подключите Web3-кошелёк (например MetaMask)');
+            setError('Install and connect a Web3 wallet such as MetaMask.');
             return;
         }
         setLoading(true);
@@ -46,7 +46,7 @@ export default function ConnectWalletButton({ onConnected }: { onConnected?: (ad
     return (
         <div>
             <button onClick={connect} disabled={loading} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-60">
-                {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : (loading ? 'Подключение...' : 'Подключить кошелёк')}
+                {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : (loading ? 'Connecting...' : 'Connect wallet')}
             </button>
             {error && <div className="text-sm text-red-600 mt-2">{error}</div>}
         </div>

@@ -1,30 +1,7 @@
 import Link from 'next/link';
-import { revalidatePath } from 'next/cache';
+import { deleteLetter } from './actions';
 
 export const dynamic = 'force-dynamic';
-
-async function deleteLetter(formData: FormData) {
-  'use server';
-  const id = formData.get('id');
-  if (!id) return;
-
-  try {
-    const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-    const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
-
-    const { error } = await serverSupabase.from('letters').delete().eq('id', id);
-
-    if (error) {
-      console.error('Error deleting letter:', error);
-      throw error;
-    }
-  } catch (e) {
-    console.error('Failed to delete letter server action:', e);
-  }
-
-  revalidatePath('/journal');
-  revalidatePath('/admin/letters');
-}
 
 export default async function AdminLettersPage() {
   let letters: any[] = [];
@@ -50,22 +27,12 @@ export default async function AdminLettersPage() {
     letters = data || [];
   } catch (err) {
     console.error('Error fetching letters:', err);
-    error = 'Database schema requires setup. Please run migration migrate_letters_fix.sql';
-    letters = [
-      {
-        id: 'demo_1',
-        title: 'Demo Letter 1 (Mock Data)',
-        slug: 'demo-letter-1',
-        published: true,
-        sentAt: null,
-        createdAt: new Date(),
-        author: { name: 'Demo Author' }
-      }
-    ];
+    error = 'Unable to load letters from the database.';
+    letters = [];
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-zinc-900 font-sans px-6 md:px-12 py-36 md:py-44 selection:bg-black selection:text-white relative">
+    <div className="min-h-screen bg-[#FAF8F5] text-zinc-900 font-sans px-6 md:px-12 py-8 selection:bg-black selection:text-white relative">
       
       {/* Paper texture overlay */}
       <div 

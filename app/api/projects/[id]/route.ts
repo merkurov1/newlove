@@ -95,8 +95,14 @@ export async function PUT(
       return NextResponse.json({ error: 'content должен быть массивом блоков' }, { status: 400 });
     }
 
-    // TODO: update project in Supabase
-    const project = { id: params.id, title, slug, content: validatedContent, published: published || false, publishedAt: published ? new Date().toISOString() : null };
+    const { data: project, error } = await getServerSupabaseClient({ useServiceRole: true })
+      .from('projects')
+      .update({ title, slug, content: JSON.stringify(validatedContent), published: Boolean(published), publishedAt: published ? new Date().toISOString() : null })
+      .eq('id', params.id)
+      .select('*')
+      .maybeSingle();
+    if (error) throw error;
+    if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     return NextResponse.json(project);
 
   } catch (error) {
@@ -119,8 +125,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Доступ запрещен' }, { status: 403 });
     }
 
-    // TODO: delete project in Supabase
-    return NextResponse.json({ message: 'Проект успешно удален' });
+    const { error } = await getServerSupabaseClient({ useServiceRole: true })
+      .from('projects').delete().eq('id', params.id);
+    if (error) throw error;
+    return NextResponse.json({ message: 'Project deleted' });
 
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {

@@ -8,9 +8,9 @@ type Body = {
 export async function POST(request: Request) {
   try {
     const body: Body = await request.json();
-    const email = body.email?.trim();
+    const email = body.email?.trim().toLowerCase();
 
-    if (!email) {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ ok: false, error: 'email-required' }, { status: 400 });
     }
 
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json({ ok: false, error: 'Missing Server Environment Variables' }, { status: 500 });
+      return NextResponse.json({ ok: false, error: 'Access requests are temporarily unavailable.' }, { status: 500 });
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       if (dbError.code === '23505') {
         return NextResponse.json({ ok: false, error: 'This email has already requested access.' }, { status: 400 });
       }
-      return NextResponse.json({ ok: false, error: `DB Error: ${dbError.message} (Code: ${dbError.code})` }, { status: 500 });
+      return NextResponse.json({ ok: false, error: 'Unable to submit the access request right now.' }, { status: 500 });
     }
 
     // 2. Отправка уведомления в Telegram

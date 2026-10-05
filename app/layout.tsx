@@ -185,6 +185,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <head>
         <link rel="preconnect" href="https://txvkqcitalfbjytmnawq.supabase.co" />
         <link rel="dns-prefetch" href="https://txvkqcitalfbjytmnawq.supabase.co" />
+        <script async src="https://telegram.org/js/telegram-web-app.js" />
         <script
           defer
           src="https://cloud.umami.is/script.js"

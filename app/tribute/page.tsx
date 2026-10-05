@@ -1,15 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase-browser';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import * as TempleWrapperMod from '@/components/TempleWrapper';
-const TempleWrapper = (TempleWrapperMod as any).default || (TempleWrapperMod as any).TempleWrapper || TempleWrapperMod;
-
-import * as SoundToggleMod from '@/components/SoundToggle';
-const SoundToggle = (SoundToggleMod as any).default || (SoundToggleMod as any).SoundToggle || (() => null);
+import TempleTopBar from '@/components/TempleTopBar';
 
 const HEART_VIDEO = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-5300087847065473569.mp4'; 
 const PRESETS = [5, 20, 100]; // USD Amounts
@@ -141,7 +136,6 @@ export default function TributePage() {
   return (
     <div className="min-h-screen bg-[#0c0904] text-[#ffd700] font-mono flex flex-col justify-between relative overflow-x-hidden selection:bg-[#ffd700] selection:text-black pt-40 sm:pt-44">
       <div className="noise-overlay" />
-      {typeof TempleWrapper === 'function' ? <TempleWrapper /> : null}
       
       {/* RADIANT WARM GLOW */}
       <div 
@@ -152,16 +146,7 @@ export default function TributePage() {
         }} 
       />
 
-      {/* TOP BAR FIXED - Опущено ниже (top-24 / top-28) */}
-      <div className="absolute top-24 sm:top-28 left-0 right-0 w-full max-w-md mx-auto px-6 flex justify-between items-center z-30">
-        <Link 
-          href="/temple"
-          className="text-xs tracking-widest text-[#e5b863] hover:text-white transition-colors uppercase border border-[#e5b863]/30 px-4 py-2 rounded-full bg-[#1a1205]/70 backdrop-blur-md cursor-pointer shadow-[0_0_15px_rgba(255,215,0,0.15)]"
-        >
-          ← Temple
-        </Link>
-        {typeof SoundToggle === 'function' && <SoundToggle />}
-      </div>
+      <TempleTopBar />
 
       <div className="z-10 w-full max-w-md mx-auto px-6 flex flex-col items-center justify-center py-6 flex-1">
         

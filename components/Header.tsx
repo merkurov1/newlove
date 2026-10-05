@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
+import useIsTelegram from '@/components/useIsTelegram';
 
 export default function Header() {
   const auth = useAuth() as any;
@@ -17,10 +18,25 @@ export default function Header() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSiteMenuOpen, setIsSiteMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const telegramApp = useIsTelegram();
   
   const pathname = usePathname() || '';
+  const normalizedPath = pathname.replace(/\/$/, '') || '/';
   const profileRef = useRef<HTMLDivElement | null>(null);
   const siteMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const syncIdentity = () => {
+      const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+      const telegramName = tgUser?.username || tgUser?.first_name;
+      const profileName = profile?.name || profile?.full_name || user?.user_metadata?.name;
+      const name = telegramName || profileName;
+      if (name) localStorage.setItem('temple_user', name);
+    };
+    syncIdentity();
+    const timer = window.setInterval(syncIdentity, 1000);
+    return () => window.clearInterval(timer);
+  }, [profile, user]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -28,6 +44,17 @@ export default function Header() {
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsProfileOpen(false);
+        setIsSiteMenuOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   useEffect(() => {
@@ -49,7 +76,7 @@ export default function Header() {
   }, [pathname]);
 
   const userId = user?.id || profile?.id || '';
-  const profileHref = userId ? `/you/${userId}` : '/profile';
+  const profileHref = profile?.username ? `/you/${encodeURIComponent(profile.username)}` : (userId ? `/you/${userId}` : '/profile');
   
   const userImage = profile?.image || profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
   const userName = profile?.name || profile?.full_name || user?.user_metadata?.name || user?.email || 'Guest';
@@ -64,6 +91,8 @@ export default function Header() {
 
   const isOwner = !user || userName.toLowerCase().includes('merkurov') || userName.toLowerCase().includes('антон');
   const brandDisplay = isOwner ? 'Merkurov' : (userName.split(' ').slice(-1)[0] || userName);
+
+  if (telegramApp) return null;
 
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -86,6 +115,9 @@ export default function Header() {
                 onClick={() => { setIsProfileOpen(!isProfileOpen); setIsSiteMenuOpen(false); }}
                 className="w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-stone-900 text-white font-medium text-sm flex items-center justify-center shadow-md ring-2 ring-white/90 hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
                 aria-label="User Menu"
+                aria-expanded={isProfileOpen}
+                aria-controls="profile-menu"
+                aria-haspopup="menu"
               >
                 {userImage ? (
                   <img src={userImage} alt={userName} className="w-full h-full object-cover" />
@@ -110,12 +142,19 @@ export default function Header() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.96, y: 8 }}
                   transition={{ duration: 0.15, ease: 'easeOut' }}
+                  id="profile-menu"
+                  role="menu"
                   className="absolute left-0 mt-4 w-[calc(100vw-3rem)] max-w-[280px] p-4 rounded-3xl bg-white/95 backdrop-blur-3xl border border-stone-200/90 shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-50 space-y-1.5 font-sans"
                 >
+                  <div className="px-4 pb-3 mb-1 border-b border-stone-100">
+                    <p className="truncate text-sm font-semibold text-stone-900">{userName}</p>
+                    {user?.email && <p className="truncate text-[10px] font-mono tracking-wide text-stone-400">{user.email}</p>}
+                  </div>
                   <Link 
                     href={profileHref} 
                     onClick={() => setIsProfileOpen(false)} 
-                    className="block w-full px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-stone-800 hover:bg-stone-100/80 transition-all"
+                    role="menuitem"
+                    className={`block w-full px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs transition-all ${normalizedPath.startsWith('/you/') ? 'bg-stone-100 text-stone-900' : 'text-stone-800 hover:bg-stone-100/80'}`}
                   >
                     Profile
                   </Link>
@@ -123,7 +162,8 @@ export default function Header() {
                   <Link 
                     href="/profile" 
                     onClick={() => setIsProfileOpen(false)} 
-                    className="block w-full px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-stone-800 hover:bg-stone-100/80 transition-all"
+                    role="menuitem"
+                    className={`block w-full px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs transition-all ${normalizedPath === '/profile' ? 'bg-stone-100 text-stone-900' : 'text-stone-800 hover:bg-stone-100/80'}`}
                   >
                     Settings
                   </Link>
@@ -132,6 +172,7 @@ export default function Header() {
                     <Link 
                       href="/admin" 
                       onClick={() => setIsProfileOpen(false)} 
+                      role="menuitem"
                       className="block w-full px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-stone-900 bg-stone-100/80 hover:bg-stone-200/80 transition-all"
                     >
                       admin
@@ -140,6 +181,7 @@ export default function Header() {
 
                   <button 
                     onClick={() => { setIsProfileOpen(false); signOut?.(); }} 
+                    role="menuitem"
                     className="w-full text-left px-4 py-3 rounded-2xl font-bold uppercase tracking-[0.15em] text-xs text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
                   >
                     Sign Out
@@ -155,6 +197,9 @@ export default function Header() {
               type="button"
               onClick={() => { setIsSiteMenuOpen(!isSiteMenuOpen); setIsProfileOpen(false); }}
               className="w-full sm:w-auto bg-white/90 backdrop-blur-md px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl border border-stone-200/90 shadow-sm font-sans font-bold text-base sm:text-lg tracking-[0.15em] sm:tracking-[0.2em] uppercase text-stone-900 hover:border-stone-400 transition-all cursor-pointer flex items-center justify-between sm:justify-start gap-3 truncate"
+              aria-expanded={isSiteMenuOpen}
+              aria-controls="site-menu"
+              aria-haspopup="menu"
             >
               <span className="truncate">{brandDisplay}</span>
               <span className="text-[10px] font-mono text-stone-400 shrink-0">▼</span>
@@ -168,7 +213,9 @@ export default function Header() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.96, y: 8 }}
                   transition={{ duration: 0.15, ease: 'easeOut' }}
-                  className="absolute left-0 mt-4 w-[calc(100vw-3rem)] max-w-sm sm:w-88 p-5 sm:p-6 rounded-3xl bg-white/95 backdrop-blur-3xl border border-stone-200/90 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-5 sm:space-y-6 font-sans max-h-[75vh] overflow-y-auto"
+                  id="site-menu"
+                  role="menu"
+                  className="absolute left-0 mt-4 w-[calc(100vw-3rem)] max-w-sm sm:w-[22rem] p-5 sm:p-6 rounded-3xl bg-white/95 backdrop-blur-3xl border border-stone-200/90 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-50 space-y-5 sm:space-y-6 font-sans max-h-[75vh] overflow-y-auto"
                 >
                   <div>
                     <Link
@@ -184,7 +231,7 @@ export default function Header() {
                     <Link
                       href="/lobby"
                       onClick={() => setIsSiteMenuOpen(false)}
-                      className="block font-bold text-sm sm:text-base uppercase tracking-[0.2em] text-stone-900 hover:text-stone-600 transition-colors"
+                      className={`block font-bold text-sm sm:text-base uppercase tracking-[0.2em] transition-colors ${normalizedPath === '/lobby' ? 'text-stone-500' : 'text-stone-900 hover:text-stone-600'}`}
                     >
                       LOBBY
                     </Link>
@@ -200,7 +247,7 @@ export default function Header() {
                     <Link
                       href="/art-engine"
                       onClick={() => setIsSiteMenuOpen(false)}
-                      className="block font-bold text-sm sm:text-base uppercase tracking-[0.2em] text-stone-900 hover:text-stone-600 transition-colors"
+                      className={`block font-bold text-sm sm:text-base uppercase tracking-[0.2em] transition-colors ${normalizedPath.startsWith('/art-engine') ? 'text-stone-500' : 'text-stone-900 hover:text-stone-600'}`}
                     >
                       CURATORS ENGINE
                     </Link>
@@ -213,7 +260,7 @@ export default function Header() {
                     <Link
                       href="/heartandangel"
                       onClick={() => setIsSiteMenuOpen(false)}
-                      className="block font-bold text-sm sm:text-base uppercase tracking-[0.2em] text-stone-900 hover:text-stone-600 transition-colors"
+                      className={`block font-bold text-sm sm:text-base uppercase tracking-[0.2em] transition-colors ${normalizedPath.startsWith('/heartandangel') || normalizedPath.startsWith('/temple') || normalizedPath === '/vigil' || normalizedPath === '/absolution' || normalizedPath === '/tribute' ? 'text-stone-500' : 'text-stone-900 hover:text-stone-600'}`}
                     >
                       HEART &amp; ANGEL
                     </Link>

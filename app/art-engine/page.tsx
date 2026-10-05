@@ -1,13 +1,14 @@
 import React from 'react';
+import type { Metadata } from 'next';
 import ArtEngineClient from './ArtEngineClient';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Art Engine // Intelligence Terminal — Anton Merkurov',
   description: 'Institutional-grade art acquisition, liquidity analysis, and curatorial dossier synthesis.',
   openGraph: {
     title: 'Art Engine // Intelligence Terminal — Anton Merkurov',
     description: 'Institutional-grade art acquisition, liquidity analysis, and curatorial dossier synthesis.',
-    url: 'https://merkurov.love/art-engine',
+    url: 'https://www.merkurov.love/art-engine',
     siteName: 'Anton Merkurov',
     locale: 'en_US',
     type: 'website',
@@ -17,6 +18,8 @@ export const metadata = {
     title: 'Art Engine // Intelligence Terminal — Anton Merkurov',
     description: 'Institutional-grade art acquisition, liquidity analysis, and curatorial dossier synthesis.',
   },
+  alternates: { canonical: 'https://www.merkurov.love/art-engine' },
+  robots: { index: true, follow: true },
 };
 
 export default function ArtEnginePage() {

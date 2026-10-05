@@ -2,18 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
-import Header from '@/components/Header';
 import { KeyRound, Mail, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export default function ArtEngineClient() {
   const auth = useAuth() as any;
   const user = auth?.user;
-  const session = auth?.session;
   const isLoadingUser = auth?.isLoading;
-  const router = useRouter();
 
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'request'>('signin');
@@ -50,11 +46,18 @@ export default function ArtEngineClient() {
   // Vault Gallery State
   const [lots, setLots] = useState<any[]>([]);
   const [loadingLots, setLoadingLots] = useState(true);
+  const [lotsError, setLotsError] = useState('');
   const [activeTab, setActiveTab] = useState<'parser' | 'vault'>('parser');
 
   // Fetch Lots for Vault
   const fetchLots = useCallback(async () => {
     setLoadingLots(true);
+    setLotsError('');
+    if (!user) {
+      setLots([]);
+      setLoadingLots(false);
+      return;
+    }
     const { data, error } = await supabase
       .from('lots')
       .select('id, artist, title, year, medium, estimate, image_path, source_url, auction_house, created_at')
@@ -63,9 +66,11 @@ export default function ArtEngineClient() {
 
     if (!error && data) {
       setLots(data);
+    } else if (error) {
+      setLotsError('Unable to load the secure vault.');
     }
     setLoadingLots(false);
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     fetchLots();
@@ -104,8 +109,9 @@ export default function ArtEngineClient() {
       headers.set('Content-Type', 'application/json');
     }
 
-    if (session?.access_token) {
-      headers.set('Authorization', `Bearer ${session.access_token}`);
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    if (currentSession?.access_token) {
+      headers.set('Authorization', `Bearer ${currentSession.access_token}`);
     }
 
     return fetch(url, { ...options, headers });
@@ -119,7 +125,7 @@ export default function ArtEngineClient() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/art-engine`,
+          redirectTo: `${window.location.origin}/login?next=%2Fart-engine`,
         },
       });
       if (error) throw error;
@@ -158,7 +164,7 @@ export default function ArtEngineClient() {
       const { error } = await supabase.auth.signInWithOtp({
         email: authEmail,
         options: {
-          emailRedirectTo: `${window.location.origin}/art-engine`,
+          emailRedirectTo: `${window.location.origin}/login?next=%2Fart-engine`,
         }
       });
       if (error) throw error;
@@ -225,6 +231,13 @@ export default function ArtEngineClient() {
   // PIPELINE 1: PARSE URL
   const handleAutoParse = async () => {
     if (!input.link) return;
+    try {
+      const parsed = new URL(input.link);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+    } catch {
+      setStatusText('Error: Enter a valid HTTP or HTTPS auction URL');
+      return;
+    }
     setParsing(true);
     setImgError(false);
     setIsSaved(false);
@@ -384,8 +397,11 @@ export default function ArtEngineClient() {
 
   const handleCopyDossier = () => {
     if (!output) return;
-    const text = `# ${output.artist || input.artist}\n*${output.title || input.title}* (${output.year || ''})\n\n${output.curatorial_essay || ''}\n\nProvenance:\n${(output.provenance || []).map((p: string) => `- ${p}`).join('\n')}`;
-    navigator.clipboard.writeText(text);
+    const provenance = Array.isArray(output.provenance)
+      ? output.provenance.map((item: unknown) => String(item)).join('\n')
+      : String(output.provenance || '');
+    const text = `# ${output.artist || input.artist}\n*${output.title || input.title}* (${output.year || ''})\n\n${output.curatorial_essay || ''}\n\nProvenance:\n${provenance}`;
+    navigator.clipboard?.writeText(text).catch(() => undefined);
     setCopyStatus(true);
     setTimeout(() => setCopyStatus(false), 2000);
   };
@@ -398,9 +414,6 @@ export default function ArtEngineClient() {
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#111] selection:bg-black selection:text-white font-sans antialiased break-words">
       
-      {/* HEADER */}
-      <Header />
-
       {/* UNIFIED AUTHENTICATION / REQUEST ACCESS MODAL */}
       {showAuthModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -996,16 +1009,16 @@ export default function ArtEngineClient() {
                             </div>
                           )}
 
-                          {output.provenance && output.provenance.length > 0 && (
+                          {Array.isArray(output.provenance) && output.provenance.length > 0 && (
                             <div className="space-y-3 pt-2">
                               <h4 className="text-xs font-mono text-gray-400 uppercase tracking-widest border-b border-gray-200 pb-2 font-bold">
-                                Verified Provenance
+                                Reported Provenance
                               </h4>
                               <ul className="space-y-2 text-xs text-gray-600 font-mono">
-                                {output.provenance.map((item: string, idx: number) => (
+                                {output.provenance.map((item: unknown, idx: number) => (
                                   <li key={idx} className="flex gap-2">
                                     <span className="text-gray-400 shrink-0">•</span>
-                                    <span>{item}</span>
+                                    <span>{String(item)}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -1049,6 +1062,8 @@ export default function ArtEngineClient() {
                       </div>
                     ))}
                   </div>
+                ) : lotsError ? (
+                  <div className="py-16 text-center font-mono text-xs text-red-600 bg-white/80 backdrop-blur-xl border border-red-200 p-8 rounded-3xl shadow-sm">{lotsError}</div>
                 ) : lots.length === 0 ? (
                   <div className="py-16 text-center font-mono text-xs text-gray-400 bg-white/80 backdrop-blur-xl border border-gray-200 p-8 rounded-3xl shadow-sm">Vault archive is currently empty.</div>
                 ) : (

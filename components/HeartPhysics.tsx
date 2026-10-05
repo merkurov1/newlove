@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
-import SoundToggle from './SoundToggle';
+import TempleTopBar from './TempleTopBar';
 
 interface Props {
   daemonUrl?: string;
@@ -42,7 +41,7 @@ export default function HeartPhysics({
       const currentSeconds = secondsRef.current;
       if (currentSeconds > 2) {
         const payload = {
-          event_type: 'calm_timer',
+          event_type: 'MEDITATION',
           message: `Spent ${currentSeconds} ${currentSeconds === 1 ? 'second' : 'seconds'} finding calm.`,
           author: authorRef.current,
           token: tokenRef.current
@@ -293,29 +292,10 @@ export default function HeartPhysics({
     >
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       
-      <header className="absolute top-0 left-0 w-full z-30 pt-36 sm:pt-28 md:pt-32 px-4 sm:px-10 pointer-events-none">
-        <div className="grid grid-cols-3 items-center w-full max-w-7xl mx-auto">
-          <div className="flex justify-start pointer-events-auto">
-            <SoundToggle className="px-3 sm:px-4 py-2 sm:py-2.5 border border-stone-400/40 bg-white/95 text-stone-900 shadow-2xl" />
-          </div>
-
-          <div className="flex justify-center pointer-events-auto">
-            <Link 
-              href="/heartandangel/world"
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-stone-400/40 bg-white/95 text-stone-900 shadow-2xl transition-all text-xs sm:text-sm font-serif tracking-wider hover:bg-white cursor-pointer whitespace-nowrap"
-            >
-              <span>← Back</span>
-              <span className="hidden sm:inline">to World</span>
-            </Link>
-          </div>
-
-          <div className="flex justify-end pointer-events-auto">
-            <div className="text-stone-900 font-mono text-xs sm:text-sm tracking-[0.15em] sm:tracking-[0.2em] bg-white/95 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full backdrop-blur-md border border-stone-400/40 shadow-2xl whitespace-nowrap">
-              ⏳ {formatTime(seconds)}
-            </div>
-          </div>
-        </div>
-      </header>
+      <TempleTopBar
+        backTo="world"
+        right={<span className="rounded-full border border-amber-300/20 bg-black/40 px-3 py-2 text-[10px] uppercase tracking-[.14em] text-amber-100">⏳ {formatTime(seconds)}</span>}
+      />
 
       {!permissionGranted && (
         <button

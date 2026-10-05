@@ -1,12 +1,14 @@
+import type { Metadata } from 'next';
 import HeartPhysics from '@/components/HeartPhysics';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Keep Calm — Digital Temple',
-  description: 'Find your balance and maintain calm in the digital space.',
+  description: 'Keep Calm is an interactive digital ritual for slowing down, finding balance and holding a fragile heart in motion.',
+  alternates: { canonical: 'https://www.merkurov.love/heartandangel/calm' },
   openGraph: {
     title: 'Keep Calm — Digital Temple',
     description: 'Find your balance and maintain calm in the digital space.',
-    url: 'https://merkurov.love/heartandangel/calm',
+    url: 'https://www.merkurov.love/heartandangel/calm',
     siteName: 'Merkurov Love',
     images: [
       {
@@ -32,7 +34,11 @@ export default function Page() {
   const heartUrl = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Heart1.png';
 
   return (
-    <main>
+    <main aria-labelledby="calm-title">
+      <section className="sr-only">
+        <h1 id="calm-title">Keep Calm</h1>
+        <p>Hold the heart gently, breathe and find a moment of calm inside the Heart &amp; Angel world.</p>
+      </section>
       <HeartPhysics daemonUrl={daemonUrl} heartUrl={heartUrl} />
     </main>
   );

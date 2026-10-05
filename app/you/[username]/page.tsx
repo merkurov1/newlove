@@ -3,11 +3,41 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { Radio, Flame, Compass, ShieldCheck, Moon, Sparkles, Trash2 } from 'lucide-react';
+import type { Metadata } from 'next';
 
 interface ProfilePageProps {
   params: {
     username?: string;
   };
+}
+
+async function findPublicProfile(username: string) {
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+  const { data } = await supabase
+    .from('users')
+    .select('id, username, name, bio, website, avatar_url, image, avatar, picture, photo')
+    .eq('username', username.toLowerCase())
+    .maybeSingle();
+  return data;
+}
+
+export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
+  let username = '';
+  try { username = decodeURIComponent(params?.username || '').trim(); } catch { return { title: 'Profile', robots: { index: false, follow: false } }; }
+  if (!username) return { title: 'Profile', robots: { index: false, follow: false } };
+  try {
+    const profile = await findPublicProfile(username);
+    if (!profile) return { title: 'Profile not found', robots: { index: false, follow: false } };
+    const name = profile.name || profile.username;
+    return {
+      title: `${name} | Public Profile`,
+      description: profile.bio || `Public profile of ${name} on merkurov.love.`,
+      alternates: { canonical: `https://www.merkurov.love/you/${encodeURIComponent(profile.username)}` },
+      openGraph: { title: `${name} | Public Profile`, description: profile.bio || `Public profile of ${name}.`, type: 'profile' },
+    };
+  } catch {
+    return { title: 'Profile', robots: { index: false, follow: false } };
+  }
 }
 
 function getEventVisuals(eventType: string) {
@@ -34,7 +64,8 @@ function getEventVisuals(eventType: string) {
 
 export default async function UserProfilePage({ params }: ProfilePageProps) {
   const rawParam = params?.username || '';
-  const decodedParam = decodeURIComponent(rawParam).trim();
+  let decodedParam = '';
+  try { decodedParam = decodeURIComponent(rawParam).trim(); } catch { return notFound(); }
 
   if (!decodedParam) {
     return notFound();
@@ -59,7 +90,7 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
       const { data } = await supabase.from('users').select('*').eq('id', decodedParam).maybeSingle();
       userData = data;
     } else {
-      const { data } = await supabase.from('users').select('*').ilike('name', decodedParam).maybeSingle();
+      const { data } = await supabase.from('users').select('*').eq('username', decodedParam.toLowerCase()).maybeSingle();
       userData = data;
     }
 
@@ -77,21 +108,16 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
     console.warn('Profile fetch warning:', e);
   }
 
+  if (!profileId) return notFound();
+
   // 2. Загрузка последних 10 логов из 'temple_log'
   let userLogs: any[] = [];
   try {
-    const conditions: string[] = [`author.ilike.%${decodedParam}%`];
-    if (profileName && profileName !== decodedParam) {
-      conditions.push(`author.ilike.%${profileName}%`);
-    }
-    if (profileId) {
-      conditions.push(`user_id.eq.${profileId}`);
-    }
-
     const { data: logsData, error } = await supabase
       .from('temple_log')
       .select('*')
-      .or(conditions.join(','))
+      .eq('user_id', profileId)
+      .in('event_type', ['VIGIL', 'VIGIL_SPARK', 'ASH', 'CAST', 'TRIBUTE', 'MEDITATION', 'SILENCE', 'WHISPER'])
       .order('created_at', { ascending: false })
       .limit(10); // Ограничение: последние 10 записей
 
@@ -146,6 +172,8 @@ export default async function UserProfilePage({ params }: ProfilePageProps) {
             <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">
               Sanctuary Profile
             </p>
+            {userData?.bio && <p className="mt-3 max-w-xl font-serif text-base leading-relaxed text-zinc-600">{userData.bio}</p>}
+            {userData?.website && <a href={userData.website} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block font-mono text-xs text-zinc-500 underline underline-offset-4">{userData.website}</a>}
           </div>
         </div>
 

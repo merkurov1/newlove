@@ -104,10 +104,14 @@ export function AuthProvider(props: React.PropsWithChildren<{}>) {
 
   const signInWithGoogle = async () => {
     try {
+      const requestedPath = typeof window !== 'undefined'
+        ? (localStorage.getItem('login_redirect_path') || `${window.location.pathname}${window.location.search}`)
+        : '/art-engine';
+      const safePath = requestedPath.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/art-engine';
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/art-engine`,
+          redirectTo: `${window.location.origin}/login?next=${encodeURIComponent(safePath)}`,
         },
       });
       if (error) throw error;
