@@ -311,8 +311,13 @@ function extractBonhamsImages(
   };
 
   // 1. Поиск прямого CDN и стандартных паттернов Bonhams
-  const bonhamsRegex = /(?:https?:)?\/\/(?:images\d?\.bonhams\.com|www\.bonhams\.com)[^\s"']*?\.(?:jpg|jpeg|png|webp)/gi;
+  const bonhamsRegex = /(?:https?:)?\/\/(?:images\d?\.bonhams\.com|www\.bonhams\.com)[^\s"'<>\\]+?(?:\.(?:jpg|jpeg|png|webp)(?:[?#][^\s"'<>\\]*)?|\/image\?[^\s"'<>\\]*)/gi;
   (html.match(bonhamsRegex) || []).forEach((url) => add(url, 'bonhams-regex'));
+
+  // Current Bonhams CDN URLs often have no file extension:
+  // images1.bonhams.com/image?src=...&width=...
+  const bonhamsImageApiRegex = /(?:https?:)?\\?\/\\?\/(?:images\d?\.bonhams\.com)\\?\/image\?[^\s"'<>\\]+/gi;
+  (html.match(bonhamsImageApiRegex) || []).forEach((url) => add(url, 'bonhams-image-api'));
 
   // 2. Разбор NextJS state (__NEXT_DATA__)
   const nextDataScript = $('#__NEXT_DATA__').html();
@@ -325,7 +330,7 @@ function extractBonhamsImages(
         for (const key in obj) {
           const val = obj[key];
           if (typeof val === 'string' && (key.toLowerCase().includes('image') || key.toLowerCase().includes('src') || key.toLowerCase().includes('url'))) {
-            if (val.match(/\.(jpg|jpeg|png|webp)/i) || val.includes('/Image/')) {
+            if (val.match(/\.(jpg|jpeg|png|webp)(?:[?#]|$)/i) || val.includes('/Image/') || /images\d?\.bonhams\.com\/image\?/i.test(val)) {
               add(val, 'bonhams-next-data');
             }
           } else if (typeof val === 'object') {
@@ -340,7 +345,7 @@ function extractBonhamsImages(
   }
 
   // 3. Дополнительные RegEx по всему документу для сырых данных
-  const rawPathRegex = /\/Image\/Live\/[^\s"'\\]+\.(?:jpg|jpeg|png|webp)/gi;
+  const rawPathRegex = /\/Image\/Live\/[^\s"'<>\\]+/gi;
   (html.match(rawPathRegex) || []).forEach((path) => add(path, 'bonhams-raw-path'));
 
   return candidates;
@@ -360,7 +365,8 @@ function scoreImageUrl(url: string, source: string, auctionHouse: string): numbe
 
   if (auctionHouse === 'Bonhams') {
     if (lower.includes('images.bonhams.com') || lower.includes('/image/live/')) score += 300;
-    if (source === 'bonhams-regex' || source === 'bonhams-raw-path') score += 200;
+    if (lower.includes('images1.bonhams.com/image?') || lower.includes('images2.bonhams.com/image?')) score += 350;
+    if (source === 'bonhams-regex' || source === 'bonhams-image-api' || source === 'bonhams-raw-path') score += 200;
   }
 
   if (
@@ -512,6 +518,32 @@ export async function POST(req: Request) {
 
     const $ = cheerio.load(html);
 
+    // Jina is excellent for text but may omit Bonhams' image payload. Fetch the
+    // original document once more for image discovery when no Bonhams CDN URL
+    // survived the reader transformation.
+    let imageHtml = html;
+    let imageDocument = $;
+    const initialBonhamsImages = auctionHouse === 'Bonhams' ? extractBonhamsImages(html, $, url) : [];
+    const hasBonhamsCdnImage = initialBonhamsImages.some((candidate) => /bonhams\.com\/image(?:s\d?)?\//i.test(candidate.url) || candidate.source.startsWith('bonhams-'));
+    if (auctionHouse === 'Bonhams' && !hasBonhamsCdnImage) {
+      try {
+        const sourceRes = await fetch(url, {
+          signal: AbortSignal.timeout(15_000),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122 Safari/537.36',
+            Accept: 'text/html,application/xhtml+xml',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        });
+        if (sourceRes.ok) {
+          imageHtml = await sourceRes.text();
+          imageDocument = cheerio.load(imageHtml);
+        }
+      } catch (error) {
+        console.warn('[Bonhams] Original HTML image fallback failed:', error);
+      }
+    }
+
     const structured = parseLotHtml(html, url, auctionHouse, { debug: true });
 
     const imageResult = extractBestImage(
@@ -521,6 +553,24 @@ export async function POST(req: Request) {
       auctionHouse,
       structured.imageUrl ?? undefined
     );
+
+    if (imageHtml !== html) {
+      imageResult.candidates.push(...extractBonhamsImages(imageHtml, imageDocument, url).map((candidate) => ({
+        ...candidate,
+        score: scoreImageUrl(candidate.url, candidate.source, auctionHouse),
+      })));
+      const unique = new Map<string, string>();
+      imageResult.candidates.forEach((candidate) => {
+        if (candidate.url && !unique.has(candidate.url)) unique.set(candidate.url, candidate.source);
+      });
+      imageResult.candidates = Array.from(unique.entries())
+        .map(([candidateUrl, source]) => ({
+          url: candidateUrl,
+          source,
+          score: scoreImageUrl(candidateUrl, source, auctionHouse),
+        }))
+        .sort((a, b) => b.score - a.score);
+    }
 
     const foundImage = imageResult.best;
 
