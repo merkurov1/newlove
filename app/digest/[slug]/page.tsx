@@ -43,6 +43,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const digest = await getDigestBySlug(params.slug);
   return sanitizeMetadata({
     title: digest?.title || 'Дайджест не найден',
+    alternates: { canonical: `https://www.merkurov.love/digest/${encodeURIComponent(params.slug)}` },
   });
 }
 

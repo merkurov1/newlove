@@ -25,9 +25,6 @@ export const metadata = {
     description: 'UNFRAMED — a memoir by Anton Merkurov.',
     images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Prompt_a_translucent_202512051450.jpeg'],
   },
-  alternates: {
-    canonical: 'https://www.merkurov.love/unframed',
-  },
 };
 
 export default function UnframedLayout({ children }: { children: React.ReactNode }) {

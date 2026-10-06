@@ -59,7 +59,7 @@ async function handleWorker(request: Request) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
   
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     console.warn('Unauthorized newsletter worker attempt');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -91,13 +91,20 @@ async function handleWorker(request: Request) {
     console.info(`[Newsletter Worker] Processing job ${job.id} for letter ${job.letter_id}`);
 
     // Mark job as processing
-    await supabase
+    const { data: claimedJob, error: claimError } = await supabase
       .from('newsletter_jobs')
       .update({ 
         status: 'processing', 
         started_at: new Date().toISOString() 
       })
-      .eq('id', job.id);
+      .eq('id', job.id)
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle();
+
+    if (claimError || !claimedJob) {
+      return NextResponse.json({ message: 'Job was already claimed', processed: 0 }, { status: 409 });
+    }
 
     // Get letter data
     const { data: letter, error: letterError } = await supabase

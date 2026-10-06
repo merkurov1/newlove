@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     follow: true,
   },
   alternates: {
-    canonical: 'https://merkurov.love/vigil',
+    canonical: 'https://www.merkurov.love/vigil',
   },
 };
 

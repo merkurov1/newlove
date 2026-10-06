@@ -75,6 +75,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const meta = {
     title: `Материалы по тегу: ${tag.name}`,
     description: `Все статьи и проекты, отмеченные тегом "${tag.name}"`,
+    alternates: { canonical: `https://www.merkurov.love/tags/${encodeURIComponent(params.slug)}` },
   };
   return sanitizeMetadata(meta);
 }

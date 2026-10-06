@@ -36,7 +36,7 @@ export const metadata = {
     follow: true,
   },
   alternates: {
-    canonical: 'https://merkurov.love/absolution',
+    canonical: 'https://www.merkurov.love/absolution',
   },
 };
 

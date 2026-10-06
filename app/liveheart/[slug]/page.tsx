@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: Props) {
   const title = data.title ?? data?.dna?.name ?? 'LiveHeart Artifact';
   const description = `A LiveHeart artifact — ${title}`;
 
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL && String(process.env.NEXT_PUBLIC_SITE_URL).replace(/\/$/, '')) || 'https://www.merkurov.love';
+  const siteUrl = 'https://www.merkurov.love';
   const svgUrl = `${siteUrl}/api/og/liveheart?slug=${params.slug}`;
   const fallbackPng = `${siteUrl}/api/og/liveheart?slug=${params.slug}&format=png`;
 
@@ -33,6 +33,7 @@ export async function generateMetadata({ params }: Props) {
       ],
       url: `${siteUrl}/liveheart/${params.slug}`,
     },
+    alternates: { canonical: `${siteUrl}/liveheart/${encodeURIComponent(params.slug)}` },
     twitter: {
       card: 'summary_large_image',
       images: [fallbackPng],

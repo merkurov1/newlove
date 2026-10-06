@@ -116,6 +116,53 @@ function detectAuctionHouse(url: string): string {
   return 'Auction House';
 }
 
+function isUsablePageHtml(value: string): boolean {
+  const html = value.trim();
+  if (html.length < 200 || !/<(?:!doctype\s+html|html|head|body)\b/i.test(html)) return false;
+  return !/(access denied|request blocked|checking your browser|just a moment\.\.\.|captcha)/i.test(html.slice(0, 12_000));
+}
+
+async function fetchWithScrapingAnt(url: string, apiKey: string): Promise<string> {
+  const endpoint = new URL('https://api.scrapingant.com/v2/general');
+  endpoint.searchParams.set('url', url);
+  endpoint.searchParams.set('browser', 'true');
+  endpoint.searchParams.set('timeout', '25');
+
+  const response = await fetch(endpoint, {
+    signal: AbortSignal.timeout(30_000),
+    headers: { 'x-api-key': apiKey, Accept: 'text/html' },
+  });
+  const responseText = await response.text();
+
+  if (!response.ok) {
+    let detail = responseText.slice(0, 500);
+    try {
+      const errorBody = JSON.parse(responseText);
+      detail = errorBody?.detail || detail;
+    } catch {
+      // ScrapingAnt errors are normally JSON; preserve a short plain-text body otherwise.
+    }
+    throw new Error(`ScrapingAnt returned HTTP ${response.status}: ${detail}`);
+  }
+
+  // /v2/general returns HTML directly. Accept JSON wrappers for compatibility
+  // with existing accounts/proxies that may return the extended response.
+  let html = responseText;
+  if (!isUsablePageHtml(html)) {
+    try {
+      const payload = JSON.parse(responseText);
+      html = payload?.html || payload?.content || '';
+    } catch {
+      // The body was neither usable HTML nor a JSON wrapper.
+    }
+  }
+
+  if (!isUsablePageHtml(html)) {
+    throw new Error('ScrapingAnt returned an empty page or an anti-bot challenge.');
+  }
+  return html;
+}
+
 function absoluteUrl(value: string, baseUrl: string): string {
   try {
     if (value.startsWith('//')) {
@@ -453,49 +500,58 @@ export async function POST(req: Request) {
 
     const auctionHouse = detectAuctionHouse(url);
     let html = '';
+    let htmlSource = '';
 
-    // 1. Jina Reader
-    try {
-      const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
-        signal: AbortSignal.timeout(20_000),
-        headers: {
-          'X-Return-Format': 'html',
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-        }
-      });
-      if (jinaRes.ok) {
-        const jinaText = await jinaRes.text();
-        if (jinaText && jinaText.length > 200) html = jinaText;
-      }
-    } catch (err) {
-      console.error('[Jina Reader] Error:', err);
+    const apiKey = process.env.SCRAPINGANT_API_KEY;
+    const isKnownAuctionHouse = auctionHouse !== 'Auction House';
+    if (isKnownAuctionHouse && !apiKey) {
+      console.warn('[ScrapingAnt] SCRAPINGANT_API_KEY is not configured; auction parser will use fallbacks.');
     }
 
-    // 2. ScrapingAnt API
-    const apiKey = process.env.SCRAPINGANT_API_KEY;
-    if (!html && apiKey) {
+    // For auction sites, prefer ScrapingAnt's rendered page so parsing sees
+    // the page content loaded by client-side JavaScript.
+    if (apiKey && isKnownAuctionHouse) {
       try {
-        const scrapingAntUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(url)}&browser=true`;
-        const saRes = await fetch(scrapingAntUrl, { signal: AbortSignal.timeout(30_000), headers: { 'x-api-key': apiKey } });
-        const responseText = await saRes.text();
-        if (responseText.trim().startsWith('<')) {
-          if (!responseText.includes('Access Denied') && !responseText.includes('Cloudflare')) {
-            html = responseText;
+        html = await fetchWithScrapingAnt(url, apiKey);
+        htmlSource = 'scrapingant';
+      } catch (err) {
+        console.warn('[ScrapingAnt] Auction page fetch failed; trying fallbacks:', err);
+      }
+    }
+
+    // Jina Reader is a useful fallback and a cheap first option for unknown domains.
+    if (!html) {
+      try {
+        const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
+          signal: AbortSignal.timeout(20_000),
+          headers: {
+            'X-Return-Format': 'html',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
           }
-        } else {
-          try {
-            const data: { content?: string; html?: string } = JSON.parse(responseText);
-            html = data.content || data.html || '';
-          } catch (parseError) {
-            console.error('[ScrapingAnt] Invalid JSON:', parseError);
+        });
+        if (jinaRes.ok) {
+          const jinaText = await jinaRes.text();
+          if (isUsablePageHtml(jinaText)) {
+            html = jinaText;
+            htmlSource = 'jina';
           }
         }
       } catch (err) {
-        console.error('[ScrapingAnt] Error:', err);
+        console.error('[Jina Reader] Error:', err);
       }
     }
 
-    // 3. Direct Fetch
+    // ScrapingAnt fallback for non-auction domains if Jina did not return usable HTML.
+    if (!html && apiKey) {
+      try {
+        html = await fetchWithScrapingAnt(url, apiKey);
+        htmlSource = 'scrapingant';
+      } catch (err) {
+        console.warn('[ScrapingAnt] Fallback fetch failed:', err);
+      }
+    }
+
+    // Direct Fetch fallback
     if (!html) {
       try {
         const res = await fetch(url, {
@@ -506,7 +562,13 @@ export async function POST(req: Request) {
             'Accept-Language': 'en-US,en;q=0.9',
           },
         });
-        if (res.ok) html = await res.text();
+        if (res.ok) {
+          const directHtml = await res.text();
+          if (isUsablePageHtml(directHtml)) {
+            html = directHtml;
+            htmlSource = 'direct';
+          }
+        }
       } catch (err) {
         console.error('[Direct fetch] Error:', err);
       }
@@ -598,6 +660,7 @@ export async function POST(req: Request) {
         imageUrl: permanentImageUrl,
       },
       image_candidates: imageResult.candidates.slice(0, 20),
+      html_source: htmlSource,
       url,
     });
   } catch (error: unknown) {

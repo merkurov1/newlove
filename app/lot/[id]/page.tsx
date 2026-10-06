@@ -7,6 +7,20 @@ import Markdown from 'markdown-to-jsx'
 // Отключаем кеширование, чтобы всегда видеть свежие правки (особенно если ты меняешь статус)
 export const revalidate = 0
 
+export async function generateMetadata({ params }: { params: { id: string } }) {
+  const { data } = await supabase
+    .from('lots')
+    .select('artist, title')
+    .eq('id', params.id)
+    .maybeSingle();
+
+  if (!data) return { title: 'Artwork not found', robots: { index: false, follow: false } };
+  return {
+    title: [data.artist, data.title].filter(Boolean).join(' — '),
+    alternates: { canonical: `https://www.merkurov.love/lot/${encodeURIComponent(params.id)}` },
+  };
+}
+
 // Инициализация Supabase
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,

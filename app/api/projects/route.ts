@@ -20,11 +20,14 @@ export async function GET() {
     }
 
     const out = Array.isArray(projects) ? projects.map(p => ({ id: p.id, slug: p.slug, title: p.title })) : [];
-    return NextResponse.json(out, { status: 200 });
+    return NextResponse.json(out, {
+      status: 200,
+      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
+    });
   } catch (e) {
     console.error('[api/projects] Failed to fetch projects', e);
     return NextResponse.json([], { status: 200 });
   }
 }
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;

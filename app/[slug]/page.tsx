@@ -298,6 +298,7 @@ export async function generateMetadata({
     const meta = {
       title: displayTitle,
       description: description,
+      alternates: { canonical: `${baseUrl}/${encodeURIComponent(content.slug)}` },
       openGraph: {
         title: displayTitle,
         description: description,

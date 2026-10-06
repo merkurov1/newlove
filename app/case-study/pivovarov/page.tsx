@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 // using native <img> to avoid requiring additional Next image domain config
 
 export const metadata: Metadata = {
+  alternates: { canonical: 'https://www.merkurov.love/case-study/pivovarov' },
   title: 'Viktor Pivovarov: The Metaphysical Room (1985) // Merkurov Analysis',
   description:
     "Case Study 003 — Viktor Pivovarov, Untitled (1985). Investment memorandum and curator analysis: provenance, deconstruction, and financial logic.",
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
     title: 'Viktor Pivovarov: The Metaphysical Room (1985)',
     description:
       "Case Study 003 — Viktor Pivovarov, Untitled (1985). Investment memorandum and curator analysis: provenance, deconstruction, and financial logic.",
-    url: 'https://merkurov.love/case-study/pivovarov',
+    url: 'https://www.merkurov.love/case-study/pivovarov',
     siteName: 'Merkurov Curator Engine',
     images: [
       {

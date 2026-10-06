@@ -2,6 +2,7 @@ import TalksClientPage from './TalksClientPage';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
 export const metadata = sanitizeMetadata({
+  alternates: { canonical: 'https://www.merkurov.love/talks' },
   title: 'Talks | Закрытое общение',
   description: 'Закрытый раздел для зарегистрированных пользователей',
 });

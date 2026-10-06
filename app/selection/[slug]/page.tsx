@@ -47,6 +47,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return sanitizeMetadata({
     title: fullTitle || 'Selection',
     description: description.slice(0, 160),
+    alternates: { canonical: `${baseUrl}/selection/${encodeURIComponent(params.slug)}` },
     openGraph: {
       title: fullTitle,
       description: description.slice(0, 160),

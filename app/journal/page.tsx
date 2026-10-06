@@ -8,6 +8,7 @@ import SubscribeFormClient from '@/components/journal/SubscribeFormClient';
 export const dynamic = 'force-dynamic';
 
 export const metadata = sanitizeMetadata({
+  alternates: { canonical: 'https://www.merkurov.love/journal' },
   title: 'Journal | Merkurov',
   description: 'Chronicles of the unframed. Market intelligence and heritage architecture.',
 });

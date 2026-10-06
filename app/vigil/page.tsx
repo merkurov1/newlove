@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { createClient } from '@/lib/supabase-browser';
+import { supabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
 import { useTempleAudio } from '../../components/AudioContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,7 +26,6 @@ const roomTheme = {
 };
 
 export default function VigilPage() {
-  const supabase = createClient();
   const { user, profile, isLoading } = useAuth();
   const { isPlaying } = useTempleAudio();
 
@@ -58,7 +57,6 @@ export default function VigilPage() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'temple_log' }, (payload: any) => {
         if (String(payload?.new?.event_type || '').toUpperCase() === 'VIGIL_SPARK') {
           calculateIntensity();
-          refreshGuardians();
         }
       })
       .subscribe();
@@ -81,7 +79,6 @@ export default function VigilPage() {
       setFlameData(flame);
     }
     await calculateIntensity();
-    await refreshGuardians();
   };
 
   const calculateIntensity = async () => {
@@ -203,7 +200,7 @@ export default function VigilPage() {
 
   return (
     <main
-      className={`relative w-full min-h-[100dvh] ${roomTheme.bg} ${roomTheme.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 sm:p-12 transition-colors duration-1000`}
+      className={`relative w-full min-h-[100dvh] ${roomTheme.bg} ${roomTheme.text} font-sans overflow-x-hidden select-none flex flex-col justify-between p-6 pt-36 sm:px-12 sm:pb-12 sm:pt-36 md:p-12 transition-colors duration-1000`}
       style={{ backgroundImage: roomTheme.vignette }}
     >
       <TempleTopBar />
@@ -212,7 +209,7 @@ export default function VigilPage() {
       <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-tr ${roomTheme.glow} blur-[120px] pointer-events-none`} />
 
       {/* Ангел в темной комнате */}
-      <div ref={angelRef} className="absolute left-[8%] bottom-[8%] sm:left-[15%] sm:bottom-[15%] z-30 flex flex-col items-center pointer-events-none">
+      <div ref={angelRef} className="absolute left-[8%] bottom-[8%] sm:left-[15%] sm:bottom-[15%] z-10 md:z-30 flex flex-col items-center pointer-events-none">
         <div className="absolute -bottom-2 w-32 h-6 bg-black/40 rounded-full blur-[10px]" />
         <div className={`absolute inset-0 bg-amber-600/15 blur-3xl rounded-full transition-all duration-700 ${isLighting ? 'opacity-100 scale-150' : 'opacity-40'}`} />
         <div className="relative w-32 h-40 sm:w-44 sm:h-52 flex items-end justify-center drop-shadow-[0_20px_35px_rgba(0,0,0,0.6)]">
@@ -228,7 +225,7 @@ export default function VigilPage() {
       </div>
 
       {/* Живое сердце */}
-      <div ref={heartRef} className="absolute top-[28%] right-[10%] sm:top-[30%] sm:right-[20%] z-30 flex items-center justify-center">
+      <div ref={heartRef} className="relative z-10 flex h-32 w-full shrink-0 items-center justify-center mb-5 md:absolute md:top-[30%] md:right-[20%] md:h-auto md:w-auto md:mb-0 md:z-30">
         <div
           className="relative transition-all duration-700 ease-in-out cursor-pointer"
           style={{ transform: `scale(${0.9 + (intensity / 10) * 0.4})` }}
@@ -275,8 +272,8 @@ export default function VigilPage() {
       </div>
 
       {/* Центральный блок управления */}
-      <div className="flex-1 max-w-md mx-auto w-full py-12 flex flex-col items-center justify-center relative z-20 my-auto">
-        <div className={`w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl ${roomTheme.cardBg} flex flex-col items-center gap-6 text-center shadow-2xl`}>
+      <div className="flex-1 max-w-md mx-auto w-full py-5 md:py-12 flex flex-col items-center justify-center relative z-20 my-auto">
+        <div className={`w-full p-5 sm:p-8 rounded-3xl border backdrop-blur-xl ${roomTheme.cardBg} flex flex-col items-center gap-5 sm:gap-6 text-center shadow-2xl`}>
 
           <div className="w-full space-y-3">
             <div className="font-mono text-xs uppercase tracking-[0.3em] opacity-70">Active Guardians (24h)</div>

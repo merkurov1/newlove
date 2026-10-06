@@ -1,6 +1,8 @@
 import UsersClient from '@/components/UsersClient';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 
+export const metadata = { robots: { index: false, follow: false } };
+
 interface UserItem {
   id: string;
   name: string;

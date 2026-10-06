@@ -11,7 +11,6 @@ export default function Head() {
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       <meta property="og:type" content="website" />
-      <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/liveheart`} />
     </>
   );
 }

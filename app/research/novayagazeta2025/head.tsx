@@ -4,9 +4,6 @@ import DeepResearchClient from './DeepResearchClient';
 export const metadata = {
   title: 'From Content Censorship to Hardware Hegemony — Merkurov.Report',
   description: 'Analytical report (2025) by Anton Merkurov on the transformation of digital control in Russia — from content censorship to device and infrastructure control.',
-  alternates: {
-    canonical: 'https://www.merkurov.love/research/novayagazeta2025',
-  },
   openGraph: {
     title: 'From Content Censorship to Hardware Hegemony — Merkurov.Report',
     description: 'Analytical report (2025) by Anton Merkurov on the transformation of digital control in Russia.',

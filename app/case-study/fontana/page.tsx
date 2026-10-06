@@ -2,12 +2,13 @@ import React from 'react';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
+  alternates: { canonical: 'https://www.merkurov.love/case-study/fontana' },
   title: 'Lucio Fontana: The White Absolute (1968) // Merkurov Analysis',
   description: 'Investment Memorandum: Asset Class "Post-War Italian". Why \'Bianco\' is the Gold Standard of liquidity. Market Arbitrage & Forensic Analysis. Internal release.',
   openGraph: {
     title: 'Lucio Fontana: The White Absolute (1968) // Private Analysis',
     description: 'Why this 1968 white slashed canvas is the \'Zero Point\' of value. Deep dive into liquidity, purity, and Milan-NY arbitrage.',
-    url: 'https://merkurov.love/case-study/fontana',
+    url: 'https://www.merkurov.love/case-study/fontana',
     siteName: 'Merkurov Curator Engine',
     images: [
       {

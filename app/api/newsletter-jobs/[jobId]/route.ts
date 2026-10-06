@@ -44,7 +44,7 @@ export async function GET(
       created_at: job.created_at,
       started_at: job.started_at,
       completed_at: job.completed_at
-    });
+    }, { headers: { 'Cache-Control': 'private, max-age=2, stale-while-revalidate=5' } });
 
   } catch (error) {
     console.error('[Newsletter Jobs API] Error:', error);

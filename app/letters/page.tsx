@@ -8,6 +8,7 @@ const NewsletterBanner = nextDynamic(() => import('@/components/NewsletterBanner
 export const dynamic = 'force-dynamic';
 
 export const metadata = sanitizeMetadata({
+  alternates: { canonical: 'https://www.merkurov.love/letters' },
   title: 'JOURNAL | Anton Merkurov',
   description: 'Chronicles of the unframed. Notes on art, tech, and the void.',
 });

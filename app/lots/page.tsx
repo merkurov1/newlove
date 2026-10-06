@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 
+export const metadata = {
+  title: 'Curator Vault | Auction Lots',
+  description: 'Archive of artworks and auction lots curated by Anton Merkurov.',
+  alternates: { canonical: 'https://www.merkurov.love/lots' },
+};
+
 export const revalidate = 0; // Всегда свежие данные
 
 const supabase = createClient(

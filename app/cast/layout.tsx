@@ -8,7 +8,8 @@ const OG_IMAGE_URL = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object
 export const metadata: Metadata = {
   title: 'THE CAST // MERKUROV PROTOCOL',
   description: '10 Questions. AI Deconstruction. Are you Noise, Stone, or Void? The Protocol is waiting.',
-  metadataBase: new URL('https://merkurov.love'),
+  metadataBase: new URL('https://www.merkurov.love'),
+  alternates: { canonical: 'https://www.merkurov.love/cast' },
   openGraph: {
     title: 'THE CAST // MERKUROV PROTOCOL',
     description: 'Strict Psychological Protocol. No Flattery. Only Truth.',

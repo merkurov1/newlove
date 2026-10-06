@@ -92,10 +92,8 @@ export default function Header() {
   const isOwner = !user || userName.toLowerCase().includes('merkurov') || userName.toLowerCase().includes('антон');
   const brandDisplay = isOwner ? 'Merkurov' : (userName.split(' ').slice(-1)[0] || userName);
 
-  // Temple has its own navigation. Keep the global header out of this route
-  // even while Telegram's SDK is still initializing.
-  const isTempleRoute = normalizedPath === '/temple' || normalizedPath.startsWith('/temple/');
-  if (telegramApp || isTempleRoute) return null;
+  // Hide the global header only inside Telegram Mini Apps.
+  if (telegramApp) return null;
 
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${

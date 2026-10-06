@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import Head from 'next/head';
 import { useCallback } from "react";
 
 // --- DNA ARCHITECTURE ---
@@ -499,6 +500,11 @@ export default function LiveHeartPage() {
   const cursorClass = phase === "crystallizing" ? "cursor-none" : "cursor-crosshair";
 
   return (
+    <>
+    <Head>
+      <link rel="canonical" href="https://www.merkurov.love/liveheart" />
+      <meta property="og:url" content="https://www.merkurov.love/liveheart" />
+    </Head>
     <div 
         className={`fixed inset-0 bg-black overflow-hidden touch-none select-none ${cursorClass}`}
         onMouseMove={(e) => handleInput(e.clientX, e.clientY)}
@@ -593,5 +599,6 @@ export default function LiveHeartPage() {
              style={{ width: `${progress}%` }} />
       )}
     </div>
+    </>
   );
 }

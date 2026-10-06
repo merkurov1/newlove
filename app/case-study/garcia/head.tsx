@@ -2,9 +2,20 @@ export default function Head() {
   const title = "Aimée García — Untitled (Woman with Globe) | Case Study";
   const description = "Aimée García, 1995 — a cinematic case study exploring provenance, material, and the acquisition protocol for Lot 59.";
   const image = "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_1047.jpeg";
-  const url = "https://www.merkurov.love/case-study/garcia";
   const author = "Anton Merkurov / Merkurov";
   const keywords = "Aimée García, case study, art, provenance, auction, Lot 59, Merkurov";
+  const url = "https://merkurov.love/case-study/garcia";
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: title,
+    description: description,
+    image: [image],
+    author: { '@type': 'Person', name: author },
+    publisher: { '@type': 'Organization', name: 'Merkurov', logo: { '@type': 'ImageObject', url: image } },
+    url,
+  };
 
   return (
     <>
@@ -36,18 +47,10 @@ export default function Head() {
       <link rel="canonical" href={url} />
 
       {/* JSON-LD Article structured data for richer previews */}
-      <script type="application/ld+json">
-        {JSON.stringify({
-          '@context': 'https://schema.org',
-          '@type': 'Article',
-          headline: title,
-          description: description,
-          image: [image],
-          author: { '@type': 'Person', name: author },
-          publisher: { '@type': 'Organization', name: 'Merkurov', logo: { '@type': 'ImageObject', url: image } },
-          url,
-        })}
-      </script>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
     </>
   );
 }

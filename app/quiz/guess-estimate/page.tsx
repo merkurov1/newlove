@@ -3,6 +3,12 @@ import { getServerSupabaseClient } from '@/lib/serverAuth'
 import tagHelpers from '@/lib/tagHelpers'
 import GuessEstimateQuiz from '@/components/GuessEstimateQuiz'
 
+export const metadata = {
+  title: 'Auction Estimate Quiz | Anton Merkurov',
+  description: 'Test your eye for auction estimates in this art market quiz.',
+  alternates: { canonical: 'https://www.merkurov.love/quiz/guess-estimate' },
+};
+
 // Server page: fetch Auction-tag articles, extract numeric estimates from content,
 // pick up to 10 random items that contain a parseable estimate and render the client quiz.
 

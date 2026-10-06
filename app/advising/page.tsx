@@ -3,12 +3,13 @@ import AdvisingClient from './AdvisingClient';
 const OG_IMAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Advising/IMG_1526.jpeg';
 
 export const metadata = {
+  alternates: { canonical: 'https://www.merkurov.love/advising' },
   title: 'Anton Merkurov — Advising & High-Stakes Counsel',
   description: 'Direct peer-to-peer counsel at the intersection of technology, culture, and capital for high-stakes environments.',
   openGraph: {
     title: 'Anton Merkurov — Advising & High-Stakes Counsel',
     description: 'Direct peer-to-peer counsel at the intersection of technology, culture, and capital for high-stakes environments.',
-    url: 'https://merkurov.com/advising',
+    url: 'https://www.merkurov.love/advising',
     siteName: 'Anton Merkurov',
     images: [
       {

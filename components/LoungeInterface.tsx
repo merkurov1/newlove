@@ -2,7 +2,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { createClient as createBrowserClient } from '@/lib/supabase-browser';
+import { supabase } from '@/lib/supabase-browser';
 import Image from 'next/image';
 import SafeImage from '@/components/SafeImage';
 import GlobeAvatar from '@/components/GlobeAvatar';
@@ -21,7 +21,6 @@ type Props = {
 export default function LoungeInterface({ initialMessages, session: propSession }: Props) {
   const { session: hookSession } = useAuth();
   const session = propSession ?? hookSession;
-  const supabase = createBrowserClient();
   const [messages, setMessages] = useState(initialMessages);
   const [newMessage, setNewMessage] = useState('');
   // --- НОВОЕ СОСТОЯНИЕ ДЛЯ ИНДИКАТОРА ПЕЧАТИ ---
@@ -52,6 +51,7 @@ export default function LoungeInterface({ initialMessages, session: propSession 
 
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Плавный скролл к последнему сообщению
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -98,8 +98,13 @@ export default function LoungeInterface({ initialMessages, session: propSession 
       }
     });
 
-    return () => { supabase.removeChannel(channel); };
-  }, [supabase, session]); // Добавили session в зависимости
+    channelRef.current = channel;
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      channelRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
 
   // --- 2. ФУНКЦИЯ УДАЛЕНИЯ СООБЩЕНИЯ ---
   const handleDelete = async (messageId: string) => {
@@ -111,7 +116,8 @@ export default function LoungeInterface({ initialMessages, session: propSession 
 
   // --- 3. ФУНКЦИЯ ИНДИКАТОРА ПЕЧАТИ ---
   const handleTyping = () => {
-    const channel = supabase.channel('realtime-talks');
+    const channel = channelRef.current;
+    if (!channel || !session) return;
     // Сообщаем, что мы начали печатать
     channel.track({ name: session?.user?.name, image: session?.user?.image });
 
@@ -137,13 +143,13 @@ export default function LoungeInterface({ initialMessages, session: propSession 
       user: { name: session.user.name ?? null, image: session.user.image ?? null },
       replyTo: replyTo ? { id: replyTo.id, author: replyTo.author, content: replyTo.content } : undefined,
     };
-    setMessages([...messages, optimisticMessage]);
+    setMessages((currentMessages) => [...currentMessages, optimisticMessage]);
     setNewMessage('');
     setReplyTo(null);
 
     // Сообщаем, что мы закончили печатать
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    supabase.channel('realtime-talks').untrack();
+    channelRef.current?.untrack();
 
     await fetch('/api/messages', {
       method: 'POST',

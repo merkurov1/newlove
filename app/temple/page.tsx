@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Head from 'next/head';
 import Image from 'next/image';
 import SoundToggle from '@/components/SoundToggle';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -193,11 +194,11 @@ export default function TempleClient() {
         if (cancelled || !json || !Array.isArray(json.data)) return;
 
         const rawData = json.data;
-        const formatted: TemplePost[] = rawData
-          .filter((item: any) => {
-            const type = (item.event_type || '').toLowerCase();
-            return type !== 'enter' && type !== 'nav';
-          })
+        const ritualLogs = rawData.filter((item: any) => {
+          const type = String(item.event_type || '').toLowerCase();
+          return type !== 'enter' && type !== 'nav';
+        });
+        const formatted: TemplePost[] = ritualLogs
           .map((item: any, index: number) => {
             const type = (item.event_type || 'WHISPER').toUpperCase();
             const visuals = getEventVisuals(type);
@@ -225,12 +226,12 @@ export default function TempleClient() {
 
         if (!cancelled) {
           setPosts(formatted);
-          const authorsSet = new Set(rawData.map((i: any) => i.author).filter(Boolean));
-          const vigils = rawData.filter((i: any) => (i.event_type || '').toUpperCase().includes('VIGIL')).length;
-          const ashes = rawData.filter((i: any) => (i.event_type || '').toUpperCase() === 'ASH').length;
+          const authorsSet = new Set(ritualLogs.map((i: any) => i.author).filter(Boolean));
+          const vigils = ritualLogs.filter((i: any) => ['VIGIL', 'VIGIL_SPARK'].includes(String(i.event_type || '').toUpperCase())).length;
+          const ashes = ritualLogs.filter((i: any) => String(i.event_type || '').toUpperCase() === 'ASH').length;
 
           setStats({
-            totalLogs: rawData.length,
+            totalLogs: ritualLogs.length,
             uniqueAuthors: authorsSet.size,
             vigilsCount: vigils,
             letItGoCount: ashes,
@@ -258,6 +259,8 @@ export default function TempleClient() {
     : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white';
 
   return (
+    <>
+    <Head><link rel="canonical" href="https://www.merkurov.love/temple" /></Head>
     <div 
       className={`relative w-full min-h-screen ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-4 pb-10 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
@@ -425,7 +428,7 @@ export default function TempleClient() {
               <div className="flex items-center justify-between border-b pb-3 border-stone-500/20">
                 <div>
                   <h3 className="font-serif text-xl sm:text-2xl font-normal">Sanctuary Traces</h3>
-                  <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">Recent actions and offerings</p>
+                  <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">Latest ritual actions · entry and navigation events hidden</p>
                 </div>
                 <button 
                   onClick={() => setIsTracesOpen(false)}
@@ -491,7 +494,7 @@ export default function TempleClient() {
               <div className="flex items-center justify-between border-b pb-4 border-stone-500/20">
                 <div>
                   <h3 className="font-serif text-2xl font-normal">Chronicles</h3>
-                  <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">Sanctuary Analytics</p>
+                  <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mt-0.5">Latest 10 log entries · refreshes every 15 sec</p>
                 </div>
                 <button 
                   onClick={() => setIsChroniclesOpen(false)}
@@ -506,24 +509,28 @@ export default function TempleClient() {
                   <Users size={20} className="opacity-60 mb-1" />
                   <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.uniqueAuthors}</span>
                   <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Unique Seekers</span>
+                  <span className="text-[10px] font-serif opacity-50">Named authors in these rituals</span>
                 </div>
 
                 <div className="flex flex-col items-center justify-center text-center space-y-1">
                   <Activity size={20} className="opacity-60 mb-1" />
                   <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.totalLogs}</span>
-                  <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Total Offerings</span>
+                  <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Recent Rituals</span>
+                  <span className="text-[10px] font-serif opacity-50">Rituals in the latest 10 log entries</span>
                 </div>
 
                 <div className="flex flex-col items-center justify-center text-center space-y-1">
                   <Flame size={20} className="text-amber-500 mb-1" />
                   <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.vigilsCount}</span>
                   <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Vigil Sparks</span>
+                  <span className="text-[10px] font-serif opacity-50">VIGIL events in that same set</span>
                 </div>
 
                 <div className="flex flex-col items-center justify-center text-center space-y-1">
                   <Clock size={20} className="text-indigo-400 mb-1" />
                   <span className="font-mono text-3xl sm:text-4xl font-light tracking-tight">{stats.sanctuaryHour}:00</span>
                   <span className="font-mono text-[10px] uppercase tracking-widest opacity-60">Sanctuary Hour</span>
+                  <span className="text-[10px] font-serif opacity-50">Current device time (local)</span>
                 </div>
               </div>
             </motion.div>
@@ -531,5 +538,6 @@ export default function TempleClient() {
         )}
       </AnimatePresence>
     </div>
+    </>
   );
 }

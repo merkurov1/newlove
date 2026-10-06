@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
     const title = letter.title || 'Letter';
     const description = String(parseRichTextContent(letter.content || '')).slice(0, 160);
-    const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love';
+    const site = 'https://www.merkurov.love';
     const image = `${site}/default-og.png`;
 
     // BreadcrumbList Schema for better SEO
@@ -58,6 +58,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
         images: [image],
         type: 'article',
       },
+      alternates: { canonical: `${site}/letters/${encodeURIComponent(slug)}` },
       twitter: {
         card: 'summary_large_image',
         title,

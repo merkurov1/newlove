@@ -6,6 +6,7 @@ const url = 'https://www.merkurov.love/heartandangel/NFT';
 const image = 'https://bronze-main-tiger-8.mypinata.cloud/ipfs/bafybeihnx7kaue4ehbigi4koydoei43ojjykp2mhhh7xwx4qg3tntm5e5e';
 
 export const metadata = {
+  alternates: { canonical: url },
   title,
   description,
   openGraph: {

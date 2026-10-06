@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: PageProps) {
       imageUrl = null;
     }
 
-    const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love';
+    const site = 'https://www.merkurov.love';
     const canonical = `${site.replace(/\/$/, '')}/journal/${encodeURIComponent(slug)}`;
 
     return sanitizeMetadata({

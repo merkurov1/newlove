@@ -114,6 +114,47 @@ export async function requireAdmin(): Promise<any> {
  * Совместимость для вызовов requireAdminFromRequest
  */
 export async function requireAdminFromRequest(req?: Request | null): Promise<any> {
+  const authorization = req?.headers.get('authorization');
+  const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+
+  if (token) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+
+    if (!supabaseUrl || !anonKey) {
+      throw new Error('Supabase env vars missing');
+    }
+
+    const authClient = createSupabaseClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false },
+    });
+    const { data: { user }, error } = await authClient.auth.getUser(token);
+
+    if (error || !user) {
+      throw new Error('Unauthorized');
+    }
+
+    const serviceClient = getServerSupabaseClient({ useServiceRole: true });
+    const { data: profile } = await serviceClient
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+    const role = (user.user_metadata?.role || profile?.role) === 'ADMIN' ? 'ADMIN' : 'USER';
+
+    if (role !== 'ADMIN') {
+      throw new Error('Unauthorized: Admin access required');
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      role,
+      profile,
+      user,
+    };
+  }
+
   return requireAdmin();
 }
 

@@ -1,3 +1,9 @@
+export const metadata = {
+  title: 'Tags | Anton Merkurov',
+  description: 'Browse essays and projects by topic.',
+  alternates: { canonical: 'https://www.merkurov.love/tags' },
+};
+
 export default function TagsIndexPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-center p-8">

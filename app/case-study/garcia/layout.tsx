@@ -6,6 +6,7 @@ const image = "https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public
 const url = "https://www.merkurov.love/case-study/garcia";
 
 export const metadata = {
+  alternates: { canonical: url },
   title,
   description,
   keywords: ['Aimée García', 'case study', 'art', 'provenance', 'auction', 'Lot 59'],

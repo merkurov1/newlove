@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import AdminNav from './AdminNav';
 
 export const metadata = {
+  robots: { index: false, follow: false },
   title: {
     default: 'Admin — ' + (rootMetadata?.title?.default || 'Site'),
     template: '%s | Admin',

@@ -30,6 +30,7 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
   const displayTitle = [lot.artist, lot.title].filter(Boolean).join(' — ');
   return {
     title: `${displayTitle} | Curator Vault`,
+    alternates: { canonical: `https://www.merkurov.love/lots/${encodeURIComponent(params.id)}` },
   };
 }
 

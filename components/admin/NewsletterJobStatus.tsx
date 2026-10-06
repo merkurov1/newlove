@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 /**
  * NewsletterJobStatus Component
  * 
  * Shows real-time status of newsletter job processing
- * Polls the database every 3 seconds to get updated stats
+ * Polls the database at a bounded interval while the page is visible.
  */
 
 interface NewsletterJobStatusProps {
@@ -28,41 +28,72 @@ export default function NewsletterJobStatus({ jobId, onComplete }: NewsletterJob
   const [stats, setStats] = useState<JobStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const onCompleteRef = useRef<(() => void) | undefined>(onComplete);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
-    const fetchJobStats = async () => {
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+    const POLL_INTERVAL_MS = 10_000;
+
+    const fetchJobStats = async (): Promise<boolean> => {
       try {
-        const res = await fetch(`/api/newsletter-jobs/${jobId}`);
+        const res = await fetch(`/api/newsletter-jobs/${jobId}`, { cache: 'no-store' });
         if (!res.ok) {
           throw new Error('Failed to fetch job status');
         }
         const data = await res.json();
+        if (cancelled) return false;
         setStats(data);
         setLoading(false);
 
         // Stop polling if job is completed or failed
         if (data.status === 'completed' || data.status === 'failed') {
-          if (interval) clearInterval(interval);
-          if (onComplete) onComplete();
+          onCompleteRef.current?.();
+          return false;
         }
+        return true;
       } catch (err) {
+        if (cancelled) return false;
         setError(err instanceof Error ? err.message : 'Unknown error');
         setLoading(false);
+        return true;
       }
     };
 
-    // Initial fetch
-    fetchJobStats();
+    const scheduleNext = () => {
+      if (!cancelled && document.visibilityState === 'visible') {
+        timer = setTimeout(async () => {
+          const shouldContinue = await fetchJobStats();
+          if (shouldContinue) scheduleNext();
+        }, POLL_INTERVAL_MS);
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !cancelled) {
+        if (timer) clearTimeout(timer);
+        void fetchJobStats().then((shouldContinue) => {
+          if (shouldContinue) scheduleNext();
+        });
+      } else if (timer) {
+        clearTimeout(timer);
+      }
+    };
 
-    // Poll every 3 seconds
-    interval = setInterval(fetchJobStats, 3000);
+    void fetchJobStats().then((shouldContinue) => {
+      if (shouldContinue) scheduleNext();
+    });
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
-      if (interval) clearInterval(interval);
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [jobId, onComplete]);
+  }, [jobId]);
 
   if (loading && !stats) {
     return (

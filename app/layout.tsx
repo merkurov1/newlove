@@ -14,6 +14,7 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import NextDynamic from 'next/dynamic';
+import { unstable_cache } from 'next/cache';
 
 const UserSidebar = NextDynamic(() => import('@/components/UserSidebar'), { ssr: false });
 
@@ -115,7 +116,7 @@ export const metadata = sanitizeMetadata({
   },
 });
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 // --- STRUCTURED DATA (JSON-LD) ---
 const jsonLd = {
@@ -135,7 +136,7 @@ const jsonLd = {
   description: 'Great-grandson of Sergey Merkurov. Expert in digital heritage and high-end art investment.',
 };
 
-async function getPublicProjects() {
+const getPublicProjects = unstable_cache(async () => {
   try {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
@@ -159,9 +160,9 @@ async function getPublicProjects() {
     console.error('SSR getPublicProjects fatal error', e);
     return [];
   }
-}
+}, ['public-projects'], { revalidate: 300 });
 
-async function getSubscriberCount() {
+const getSubscriberCount = unstable_cache(async () => {
   try {
     const { getServerSupabaseClient } = await import('@/lib/serverAuth');
     const supabase = getServerSupabaseClient({ useServiceRole: true });
@@ -174,7 +175,7 @@ async function getSubscriberCount() {
   } catch (e) {
     return 0;
   }
-}
+}, ['active-subscriber-count'], { revalidate: 300 });
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const projects = await getPublicProjects();
