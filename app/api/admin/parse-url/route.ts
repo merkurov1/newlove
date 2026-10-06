@@ -25,11 +25,19 @@ async function downloadAndStoreImage(externalUrl: string): Promise<string> {
     return externalUrl; // Уже в Supabase
   }
 
+  let referer = 'https://www.google.com/';
+  try {
+    const urlObj = new URL(externalUrl);
+    referer = `${urlObj.protocol}//${urlObj.hostname}/`;
+  } catch {
+    // Игнорируем ошибку парсинга URL
+  }
+
   const browserHeaders = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
-    'Referer': 'https://www.bonhams.com/',
+    'Referer': referer,
   };
 
   try {
@@ -62,9 +70,10 @@ async function downloadAndStoreImage(externalUrl: string): Promise<string> {
       res = directRes;
     }
 
-    const contentType = res.headers.get('content-type') || '';
+    const rawContentType = res.headers.get('content-type') || '';
     const contentLength = Number(res.headers.get('content-length') || 0);
-    if (!contentType.toLowerCase().startsWith('image/')) {
+
+    if (!rawContentType.toLowerCase().startsWith('image/')) {
       throw new Error('The mirrored resource is not an image');
     }
     if (contentLength > MAX_IMAGE_BYTES) {
@@ -75,12 +84,20 @@ async function downloadAndStoreImage(externalUrl: string): Promise<string> {
     if (buffer.byteLength > MAX_IMAGE_BYTES) {
       throw new Error('The source image is larger than 15 MB');
     }
-    const fileName = `parsed/lot-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
+
+    const mimeType = rawContentType.split(';')[0].trim().toLowerCase() || 'image/jpeg';
+    let ext = 'jpg';
+    if (mimeType.includes('png')) ext = 'png';
+    else if (mimeType.includes('webp')) ext = 'webp';
+    else if (mimeType.includes('avif')) ext = 'avif';
+    else if (mimeType.includes('gif')) ext = 'gif';
+
+    const fileName = `parsed/lot-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from('artifacts')
       .upload(fileName, buffer, {
-        contentType: 'image/jpeg',
+        contentType: mimeType,
         upsert: true,
       });
 
@@ -140,20 +157,19 @@ async function fetchWithScrapingAnt(url: string, apiKey: string): Promise<string
       const errorBody = JSON.parse(responseText);
       detail = errorBody?.detail || detail;
     } catch {
-      // ScrapingAnt errors are normally JSON; preserve a short plain-text body otherwise.
+      // ScrapingAnt errors are normally JSON
     }
     throw new Error(`ScrapingAnt returned HTTP ${response.status}: ${detail}`);
   }
 
-  // /v2/general returns HTML directly. Accept JSON wrappers for compatibility
-  // with existing accounts/proxies that may return the extended response.
   let html = responseText;
-  if (!isUsablePageHtml(html)) {
+  const trimmed = responseText.trim();
+  if (trimmed.startsWith('{')) {
     try {
       const payload = JSON.parse(responseText);
-      html = payload?.html || payload?.content || '';
+      html = payload?.html || payload?.content || html;
     } catch {
-      // The body was neither usable HTML nor a JSON wrapper.
+      // Не JSON, оставляем как есть
     }
   }
 
@@ -184,7 +200,8 @@ function cleanImageUrl(value: string, baseUrl: string): string {
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#x27;/g, "'")
-    .replace(/\\u002F/g, '/');
+    .replace(/\\u002F/g, '/')
+    .replace(/\\u0026/g, '&');
 
   url = url.replace(/^["']|["']$/g, '');
 
@@ -276,7 +293,7 @@ function extractGenericImages(
 
       scan(data);
     } catch {
-      // Ignore invalid JSON-LD
+      // Игнорируем невалидный JSON-LD
     }
   });
 
@@ -357,16 +374,12 @@ function extractBonhamsImages(
     if (url) candidates.push({ url, source });
   };
 
-  // 1. Поиск прямого CDN и стандартных паттернов Bonhams
   const bonhamsRegex = /(?:https?:)?\/\/(?:images\d?\.bonhams\.com|www\.bonhams\.com)[^\s"'<>\\]+?(?:\.(?:jpg|jpeg|png|webp)(?:[?#][^\s"'<>\\]*)?|\/image\?[^\s"'<>\\]*)/gi;
   (html.match(bonhamsRegex) || []).forEach((url) => add(url, 'bonhams-regex'));
 
-  // Current Bonhams CDN URLs often have no file extension:
-  // images1.bonhams.com/image?src=...&width=...
   const bonhamsImageApiRegex = /(?:https?:)?\\?\/\\?\/(?:images\d?\.bonhams\.com)\\?\/image\?[^\s"'<>\\]+/gi;
   (html.match(bonhamsImageApiRegex) || []).forEach((url) => add(url, 'bonhams-image-api'));
 
-  // 2. Разбор NextJS state (__NEXT_DATA__)
   const nextDataScript = $('#__NEXT_DATA__').html();
   if (nextDataScript) {
     try {
@@ -391,7 +404,6 @@ function extractBonhamsImages(
     }
   }
 
-  // 3. Дополнительные RegEx по всему документу для сырых данных
   const rawPathRegex = /\/Image\/Live\/[^\s"'<>\\]+/gi;
   (html.match(rawPathRegex) || []).forEach((path) => add(path, 'bonhams-raw-path'));
 
@@ -508,8 +520,6 @@ export async function POST(req: Request) {
       console.warn('[ScrapingAnt] SCRAPINGANT_API_KEY is not configured; auction parser will use fallbacks.');
     }
 
-    // For auction sites, prefer ScrapingAnt's rendered page so parsing sees
-    // the page content loaded by client-side JavaScript.
     if (apiKey && isKnownAuctionHouse) {
       try {
         html = await fetchWithScrapingAnt(url, apiKey);
@@ -519,7 +529,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Jina Reader is a useful fallback and a cheap first option for unknown domains.
     if (!html) {
       try {
         const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
@@ -541,7 +550,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // ScrapingAnt fallback for non-auction domains if Jina did not return usable HTML.
     if (!html && apiKey) {
       try {
         html = await fetchWithScrapingAnt(url, apiKey);
@@ -551,7 +559,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Direct Fetch fallback
     if (!html) {
       try {
         const res = await fetch(url, {
@@ -580,9 +587,6 @@ export async function POST(req: Request) {
 
     const $ = cheerio.load(html);
 
-    // Jina is excellent for text but may omit Bonhams' image payload. Fetch the
-    // original document once more for image discovery when no Bonhams CDN URL
-    // survived the reader transformation.
     let imageHtml = html;
     let imageDocument = $;
     const initialBonhamsImages = auctionHouse === 'Bonhams' ? extractBonhamsImages(html, $, url) : [];
@@ -632,21 +636,27 @@ export async function POST(req: Request) {
           score: scoreImageUrl(candidateUrl, source, auctionHouse),
         }))
         .sort((a, b) => b.score - a.score);
+
+      imageResult.best = imageResult.candidates[0]?.url || '';
     }
 
-    const foundImage = imageResult.best;
-
-    // Пробуем несколько лучших кандидатов. Один CDN URL может быть заблокирован,
-    // поэтому ошибка конкретной картинки не должна ломать весь лот.
-    let permanentImageUrl = foundImage;
+    let permanentImageUrl = '';
     for (const candidate of imageResult.candidates.slice(0, 8)) {
       try {
-        permanentImageUrl = await downloadAndStoreImage(candidate.url);
-        if (permanentImageUrl) break;
+        const storedUrl = await downloadAndStoreImage(candidate.url);
+        if (storedUrl) {
+          permanentImageUrl = storedUrl;
+          break;
+        }
       } catch (imageError) {
         console.warn(`[Parser] Image candidate failed (${candidate.source}):`, imageError);
       }
     }
+
+    if (!permanentImageUrl) {
+      permanentImageUrl = imageResult.best;
+    }
+
     structured.imageUrl = permanentImageUrl;
 
     return NextResponse.json({
@@ -666,6 +676,9 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error('[parse-url Error]:', error);
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message.includes('Unauthorized') ? message : 'Failed to parse URL', details: message }, { status: message.includes('Unauthorized') ? 401 : 500 });
+    return NextResponse.json(
+      { error: message.includes('Unauthorized') ? message : 'Failed to parse URL', details: message },
+      { status: message.includes('Unauthorized') ? 401 : 500 }
+    );
   }
 }
