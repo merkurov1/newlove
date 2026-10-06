@@ -4,6 +4,8 @@ import Image from 'next/image';
 import './swiper-init';
 import CenteredHeader from '@/components/CenteredHeader';
 
+export const dynamic = 'force-dynamic';
+
 // --- SEO METADATA & CANONICAL ---
 export const metadata: Metadata = {
   title: "Selection & Chronicles | Anton Merkurov",

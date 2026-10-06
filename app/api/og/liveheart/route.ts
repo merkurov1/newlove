@@ -1,5 +1,6 @@
-import React from 'react';
 import { createClient } from '../../../../lib/supabase/server';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
@@ -24,9 +25,9 @@ export async function GET(req: Request) {
     };
 
     const palette = [formatColor(rawPalette[0]), formatColor(rawPalette[1] || rawPalette[0]), formatColor(rawPalette[2] || rawPalette[1] || rawPalette[0])];
+
     // First try to serve a pre-rendered PNG from Supabase Storage, if present.
     try {
-      const supabase = createClient({ useServiceRole: true });
       const bucket = 'liveheart-og';
       const path = `og/${slug}.png`;
       const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path);

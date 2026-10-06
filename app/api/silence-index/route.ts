@@ -1,45 +1,46 @@
 import { NextResponse } from 'next/server';
-import YahooFinance from 'yahoo-finance2';
-import { subDays, format } from 'date-fns';
+import yahooFinance from 'yahoo-finance2';
+import { subDays } from 'date-fns';
+
+export const dynamic = 'force-dynamic';
 
 // КОНФИГУРАЦИЯ АКТИВОВ
-// Silence (Тишина): Золото (GC=F) + Hermes (RMS.PA)
-// Noise (Шум): Биткоин (BTC-USD) + Nvidia (NVDA)
 const ASSETS = {
   gold: 'GC=F',
   hermes: 'RMS.PA',
   btc: 'BTC-USD',
-  nvidia: 'NVDA'
+  nvidia: 'NVDA',
 };
+
+// Хелпер для безопасной загрузки данных по одному тикеру
+async function fetchHistoricalData(symbol: string, period1: Date, period2: Date) {
+  try {
+    const data = await yahooFinance.historical(symbol, {
+      period1,
+      period2,
+      interval: '1d',
+    });
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error(`Error fetching ${symbol}:`, err);
+    return [];
+  }
+}
 
 export async function GET() {
   try {
-    // Инициализируем клиент согласно v3 API
-    const yahooFinance = new YahooFinance();
     const endDate = new Date();
-    const startDate = subDays(endDate, 30); // Берем данные за 30 дней
+    const startDate = subDays(endDate, 30);
 
-    const queryOptions = {
-      period1: startDate,
-      period2: endDate,
-      interval: '1d' as const, // Явное указание типа
-    };
-
-    // 1. Забираем данные параллельно
-    const [goldDataRaw, hermesDataRaw, btcDataRaw, nvidiaDataRaw] = await Promise.all([
-      yahooFinance.historical(ASSETS.gold, queryOptions),
-      yahooFinance.historical(ASSETS.hermes, queryOptions),
-      yahooFinance.historical(ASSETS.btc, queryOptions),
-      yahooFinance.historical(ASSETS.nvidia, queryOptions),
+    // 1. Забираем данные параллельно с помощью безопасного хелпера
+    const [goldData, hermesData, btcData, nvidiaData] = await Promise.all([
+      fetchHistoricalData(ASSETS.gold, startDate, endDate),
+      fetchHistoricalData(ASSETS.hermes, startDate, endDate),
+      fetchHistoricalData(ASSETS.btc, startDate, endDate),
+      fetchHistoricalData(ASSETS.nvidia, startDate, endDate),
     ]);
 
-    // Некоторые endpoints могут вернуть undefined/null — нормализуем в массивы
-    const goldData = Array.isArray(goldDataRaw) ? goldDataRaw : (goldDataRaw ? [goldDataRaw] : []);
-    const hermesData = Array.isArray(hermesDataRaw) ? hermesDataRaw : (hermesDataRaw ? [hermesDataRaw] : []);
-    const btcData = Array.isArray(btcDataRaw) ? btcDataRaw : (btcDataRaw ? [btcDataRaw] : []);
-    const nvidiaData = Array.isArray(nvidiaDataRaw) ? nvidiaDataRaw : (nvidiaDataRaw ? [nvidiaDataRaw] : []);
-
-    // 2. Функция для создания словаря { date: closePrice }
+    // 2. Создаем словарь { date: closePrice }
     const createMap = (data: any[]) => {
       return data.reduce((acc, item) => {
         if (!item) return acc;
@@ -56,43 +57,35 @@ export async function GET() {
     const btcMap = createMap(btcData);
     const nvidiaMap = createMap(nvidiaData);
 
-    // 3. Собираем единый массив дат (исключаем выходные, где нет биржевых данных)
-    // Ориентируемся на Gold (он торгуется 5/7), так как крипта торгуется 24/7, но нам нужно пересечение.
+    // 3. Собираем единый массив дат (ориентируемся на золото)
     const validDates = Object.keys(goldMap).sort();
     if (validDates.length === 0) {
       return NextResponse.json({ data: [], meta: { message: 'No market data available' } }, { status: 204 });
     }
 
-    const chartData = validDates.map(date => {
+    const chartData = validDates.map((date) => {
       const pGold = goldMap[date] || 0;
       const pHermes = hermesMap[date] || 0;
       const pBtc = btcMap[date] || 0;
       const pNvidia = nvidiaMap[date] || 0;
 
-      // Нормализация валют (грубая для MVP): Hermes в EUR, остальные в USD.
-      // Считаем 1 EUR = 1.05 USD (хардкод для скорости, или можно подключить валюту)
+      // Нормализация EUR -> USD для Hermes
       const pHermesUSD = pHermes * 1.05;
 
       // ФОРМУЛА МЕРКУРОВА
-      // Basket Silence: Gold + (Hermes * 5) -> Вес Hermes увеличен, т.к. цена акции ниже золота
       const silenceVal = pGold + (pHermesUSD * 5); 
-      
-      // Basket Noise: (BTC * 0.05) + (Nvidia * 10) -> Уменьшаем вес BTC, чтобы он не ломал график
       const noiseVal = (pBtc * 0.05) + (pNvidia * 10);
 
-      // INDEX VALUE
-      // Множитель 100 для красоты цифры
       const indexValue = noiseVal !== 0 ? (silenceVal / noiseVal) * 100 : 0;
 
       return {
         date,
         value: parseFloat(indexValue.toFixed(2)),
         silence: Math.round(silenceVal),
-        noise: Math.round(noiseVal)
+        noise: Math.round(noiseVal),
       };
     });
 
-    // Получаем текущий тренд (последний vs предпоследний)
     const last = chartData[chartData.length - 1];
     const prev = chartData.length > 1 ? chartData[chartData.length - 2] : null;
     const trend = prev ? (last.value > prev.value ? 'up' : 'down') : 'stable';
@@ -104,8 +97,8 @@ export async function GET() {
         currentValue: last.value,
         trend,
         percentChange: parseFloat(percentChange.toFixed(2)),
-        lastUpdate: new Date().toISOString()
-      }
+        lastUpdate: new Date().toISOString(),
+      },
     });
 
   } catch (error) {

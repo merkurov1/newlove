@@ -2,8 +2,11 @@ import React from 'react';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 import MicrophoneButton from '@/components/MicrophoneButton';
 import WhisperTestClient from '../WhisperTest.client';
-import dynamic from 'next/dynamic';
-const WhisperActions = dynamic(() => import('../WhisperActions.client'), { ssr: false });
+import dynamicImport from 'next/dynamic';
+
+export const dynamic = 'force-dynamic';
+
+const WhisperActions = dynamicImport(() => import('../WhisperActions.client'), { ssr: false });
 
 export default async function WhispersPage() {
   // require admin
