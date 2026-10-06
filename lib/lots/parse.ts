@@ -1,259 +1,199 @@
-import * as cheerio from 'cheerio';
+export interface NormalizedPrice {
+  raw?: string;
+  currency?: string;
+  amountMin?: number;
+  amountMax?: number;
+  realized?: number;
+}
+
+export interface ImageCandidate {
+  url: string;
+  source?: string;
+  width?: number;
+  height?: number;
+}
 
 export interface LotData {
-  title: string | null;
-  artist: string | null;
-  description: string | null;
-  imageUrl: string | null;
-  estimate: string | null;
-  auctionHouse: string;
-  sourceUrl: string;
-  specs?: {
-    medium?: string | null;
-    dimensions?: string | null;
-    date?: string | null;
-    provenance?: string | null;
-  };
-  evidence?: {
-    title: string;
-    artist: string;
-    description: string;
-    image: string;
-  };
-  rawJsonLd?: any;
+  title?: string;
+  artist?: string;
+  estimate?: string;
+  price?: string;
+  normalizedPrice?: NormalizedPrice;
+  description?: string;
+  imageUrl?: string;
+  imageCandidates?: ImageCandidate[];
+  house?: string;
+  medium?: string;
+  dimensions?: string;
+  year?: string;
+  auctionDate?: string;
+  [key: string]: any;
 }
 
-function cleanText(value: unknown, maxLength = 5000): string | null {
-  if (typeof value !== 'string') return null;
-  const text = value
-    .replace(/\s+/g, ' ')
-    .replace(/\u00a0/g, ' ')
-    .trim();
-  return text ? text.slice(0, maxLength) : null;
+/**
+ * Извлекает значение контента из Meta-тегов
+ */
+function getMetaContent(html: string, propertyOrName: string): string | undefined {
+  const metaRegex = new RegExp(
+    `<meta[^>]+(?:property|name)=["']${propertyOrName}["'][^>]+content=["']([^"']+)["']`,
+    'i'
+  );
+  const match = html.match(metaRegex);
+  if (match && match[1]) return match[1].trim();
+
+  // Фоллбек для иного порядка атрибутов
+  const reverseMetaRegex = new RegExp(
+    `<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${propertyOrName}["']`,
+    'i'
+  );
+  const reverseMatch = html.match(reverseMetaRegex);
+  return reverseMatch && reverseMatch[1] ? reverseMatch[1].trim() : undefined;
 }
 
-function firstText($: cheerio.CheerioAPI, selectors: string[], minLength = 20): string | null {
-  for (const selector of selectors) {
-    const value = cleanText($(selector).first().text());
-    if (value && value.length >= minLength) return value;
+/**
+ * Нормализует цены и валюты
+ */
+function parsePriceString(priceStr?: string): NormalizedPrice | undefined {
+  if (!priceStr) return undefined;
+
+  const result: NormalizedPrice = { raw: priceStr };
+
+  // Определение валюты
+  if (priceStr.includes('$') || priceStr.includes('USD')) result.currency = 'USD';
+  else if (priceStr.includes('€') || priceStr.includes('EUR')) result.currency = 'EUR';
+  else if (priceStr.includes('£') || priceStr.includes('GBP')) result.currency = 'GBP';
+  else if (priceStr.includes('CHF')) result.currency = 'CHF';
+
+  // Извлечение всех чисел
+  const numbers = priceStr
+    .replace(/,/g, '')
+    .match(/\d+(?:\.\d+)?/g)
+    ?.map(Number);
+
+  if (numbers && numbers.length > 0) {
+    if (numbers.length === 1) {
+      result.realized = numbers[0];
+    } else if (numbers.length >= 2) {
+      result.amountMin = Math.min(numbers[0], numbers[1]);
+      result.amountMax = Math.max(numbers[0], numbers[1]);
+    }
   }
-  return null;
+
+  return result;
 }
 
+/**
+ * Извлекает JSON-LD блоки из HTML
+ */
+function extractJsonLd(html: string): any[] {
+  const jsonLdBlocks: any[] = [];
+  const regex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+
+  while ((match = regex.exec(html)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (Array.isArray(parsed)) {
+        jsonLdBlocks.push(...parsed);
+      } else if (parsed && typeof parsed === 'object') {
+        if (parsed['@graph'] && Array.isArray(parsed['@graph'])) {
+          jsonLdBlocks.push(...parsed['@graph']);
+        } else {
+          jsonLdBlocks.push(parsed);
+        }
+      }
+    } catch {
+      // Игнорируем невалидный JSON-LD
+    }
+  }
+
+  return jsonLdBlocks;
+}
+
+/**
+ * Парсит HTML страницы лота и возвращает структурированные данные
+ */
 export function parseLotHtml(
   html: string,
   url: string,
-  house: string,
+  house?: string,
   options?: { debug?: boolean }
 ): LotData {
-  const $ = cheerio.load(html);
-
-  let title: string | null = null;
-  let artist: string | null = null;
-  let description: string | null = null;
-  let imageUrl: string | null = null;
-  let estimate: string | null = null;
-  let jsonLdData: any = null;
-  let titleEvidence = 'unknown';
-  let artistEvidence = 'unknown';
-  let descriptionEvidence = 'unknown';
-  let imageEvidence = 'unknown';
-  let medium: string | null = null;
-  let dimensions: string | null = null;
-  let date: string | null = null;
-  let provenance: string | null = null;
-
-  // 1. Извлечение JSON-LD
-  $('script[type="application/ld+json"]').each((_, el) => {
-    try {
-      const content = $(el).html();
-      if (!content) return;
-
-      const parsed: any = JSON.parse(content);
-      const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
-
-      for (const item of items) {
-        if (!item || typeof item !== 'object') continue;
-
-        const type = item['@type'];
-        if (
-          type === 'VisualArtwork' ||
-          type === 'Product' ||
-          type === 'ItemPage' ||
-          type === 'IndividualProduct'
-        ) {
-          jsonLdData = item;
-          break;
-        }
-      }
-    } catch {
-      // Игнорируем ошибки JSON
-    }
-  });
-
-  if (jsonLdData) {
-    // Название
-    if (typeof jsonLdData.name === 'string') {
-      title = jsonLdData.name;
-      titleEvidence = 'json-ld';
-    } else if (typeof jsonLdData.title === 'string') {
-      title = jsonLdData.title;
-      titleEvidence = 'json-ld';
-    }
-
-    // Описание
-    if (typeof jsonLdData.description === 'string') {
-      description = jsonLdData.description;
-      descriptionEvidence = 'json-ld';
-    }
-
-    // Автор / Художник
-    const rawCreator: any = jsonLdData.creator || jsonLdData.artist || jsonLdData.author;
-    if (typeof rawCreator === 'string') {
-      artist = rawCreator;
-    } else if (rawCreator && typeof rawCreator === 'object') {
-      if (typeof rawCreator.name === 'string') {
-        artist = rawCreator.name;
-        artistEvidence = 'json-ld';
-      }
-    }
-
-    // Изображение
-    const rawImg: any = jsonLdData.image;
-    if (typeof rawImg === 'string') {
-      imageUrl = rawImg;
-      imageEvidence = 'json-ld';
-    } else if (Array.isArray(rawImg) && rawImg.length > 0) {
-      const firstImg: any = rawImg[0];
-      if (typeof firstImg === 'string') {
-        imageUrl = firstImg;
-        imageEvidence = 'json-ld';
-      } else if (firstImg && typeof firstImg === 'object' && typeof firstImg.url === 'string') {
-          imageUrl = firstImg.url;
-          imageEvidence = 'json-ld';
-      }
-    } else if (rawImg && typeof rawImg === 'object' && typeof rawImg.url === 'string') {
-      imageUrl = rawImg.url;
-      imageEvidence = 'json-ld';
-    }
-
-    medium = cleanText(jsonLdData.artMedium || jsonLdData.material || jsonLdData.medium, 500);
-    date = cleanText(jsonLdData.dateCreated || jsonLdData.copyrightYear, 100);
-    if (jsonLdData.width || jsonLdData.height) {
-      dimensions = [jsonLdData.height, jsonLdData.width, jsonLdData.depth]
-        .filter(Boolean)
-        .join(' × ');
-    } else if (typeof jsonLdData.size === 'string') {
-      dimensions = cleanText(jsonLdData.size, 300);
-    }
-
-    // Эстимейт / Цена
-    if (jsonLdData.offers) {
-      const offers: any = Array.isArray(jsonLdData.offers) ? jsonLdData.offers[0] : jsonLdData.offers;
-      if (offers && typeof offers === 'object') {
-        const currency = typeof offers.priceCurrency === 'string' ? offers.priceCurrency : '';
-        if (offers.price !== undefined && offers.price !== null) {
-          estimate = `${offers.price} ${currency}`.trim();
-        } else if (offers.lowPrice !== undefined && offers.highPrice !== undefined) {
-          estimate = `${offers.lowPrice} - ${offers.highPrice} ${currency}`.trim();
-        }
-      }
-    }
-  }
-
-  // 2. OpenGraph / Meta Fallbacks
-  if (!imageUrl) {
-    imageUrl =
-      $('meta[property="og:image"]').attr('content') ||
-      $('meta[name="twitter:image"]').attr('content') ||
-      $('link[rel="image_src"]').attr('href') ||
-      null;
-    if (imageUrl) imageEvidence = 'meta';
-  }
-
-  if (!title) {
-    title =
-      $('meta[property="og:title"]').attr('content') ||
-      $('meta[name="twitter:title"]').attr('content') ||
-      $('title').text().trim() ||
-      null;
-    if (title) titleEvidence = 'meta';
-  }
-
-  if (!description) {
-    description =
-      $('meta[property="og:description"]').attr('content') ||
-      $('meta[name="description"]').attr('content') ||
-      null;
-    if (description) descriptionEvidence = 'meta';
-  }
-
-  if (!artist) {
-    artist =
-      cleanText($('meta[name="author"]').attr('content'), 300) ||
-      cleanText($('[itemprop="artist"], [itemprop="creator"], [data-testid*="artist"], [class*="artist"]').first().text(), 300);
-    if (artist) artistEvidence = 'dom';
-  }
-
-  if (!description) {
-    description = firstText($, [
-      '[itemprop="description"]',
-      '[data-testid*="description"]',
-      '[class*="lot-description"]',
-      '[class*="artwork-description"]',
-      '[class*="description"]',
-    ]);
-    if (description) descriptionEvidence = 'dom';
-  }
-
-  if (!description) {
-    const paragraphs = $('main p, article p, [role="main"] p')
-      .toArray()
-      .map((element) => cleanText($(element).text(), 1500))
-      .filter((value): value is string => typeof value === 'string' && value.length > 60)
-      .filter((value) => !/^(share|save|view lot|bid|estimate|login|sign in)/i.test(value));
-    description = paragraphs.sort((a, b) => b.length - a.length)[0] || null;
-    if (description) descriptionEvidence = 'body';
-  }
-
-  if (!medium) {
-    medium = firstText($, ['[itemprop="material"]', '[itemprop="artMedium"]', '[data-testid*="medium"]', '[class*="medium"]'], 2);
-  }
-
-  if (!dimensions) {
-    dimensions = firstText($, ['[itemprop="size"]', '[data-testid*="dimension"]', '[class*="dimension"]'], 2);
-  }
-
-  if (!date) {
-    date = cleanText($('[itemprop="dateCreated"], [data-testid*="year"], [class*="year"]').first().text(), 100);
-  }
-
-  provenance = firstText($, ['[data-testid*="provenance"]', '[class*="provenance"]']);
-
-  // Приводим URL к абсолютному виду
-  if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-    try {
-      imageUrl = new URL(imageUrl, url).href;
-    } catch {
-      // Игнорируем ошибки URL
-    }
-  }
-
-  return {
-    title,
-    artist,
-    description,
-    imageUrl,
-    estimate,
-    auctionHouse: house,
-    sourceUrl: url,
-    specs: { medium, dimensions, date, provenance },
-    evidence: {
-      title: titleEvidence,
-      artist: artistEvidence,
-      description: descriptionEvidence,
-      image: imageEvidence,
-    },
-    ...(options?.debug ? { rawJsonLd: jsonLdData } : {}),
+  const candidates: ImageCandidate[] = [];
+  const result: LotData = {
+    house: house || '',
+    imageCandidates: candidates,
   };
+
+  // 1. Извлечение JSON-LD (Приоритет №1)
+  const jsonLdItems = extractJsonLd(html);
+  const artwork = jsonLdItems.find(
+    (item) =>
+      item['@type'] === 'VisualArtwork' ||
+      item['@type'] === 'Product' ||
+      item['@type'] === 'IndividualProduct' ||
+      item['@type'] === 'ItemPage'
+  );
+
+  if (artwork) {
+    result.title = artwork.name || artwork.title;
+    result.description = artwork.description;
+    
+    if (artwork.artist) {
+      result.artist = typeof artwork.artist === 'string' ? artwork.artist : artwork.artist.name;
+    } else if (artwork.creator) {
+      result.artist = typeof artwork.creator === 'string' ? artwork.creator : artwork.creator.name;
+    }
+
+    if (artwork.image) {
+      const imgUrl = Array.isArray(artwork.image) ? artwork.image[0] : artwork.image;
+      const finalImg = typeof imgUrl === 'string' ? imgUrl : imgUrl.contentUrl || imgUrl.url;
+      if (finalImg) {
+        result.imageUrl = finalImg;
+        candidates.push({ url: finalImg, source: 'json-ld' });
+      }
+    }
+
+    if (artwork.offers) {
+      const offer = Array.isArray(artwork.offers) ? artwork.offers[0] : artwork.offers;
+      const priceVal = offer.price || offer.lowPrice;
+      const curr = offer.priceCurrency || '';
+      if (priceVal) {
+        result.price = `${curr} ${priceVal}`.trim();
+      }
+    }
+  }
+
+  // 2. Извлечение OpenGraph & Meta-тегов (Приоритет №2 / Дополнение)
+  if (!result.title) {
+    result.title = getMetaContent(html, 'og:title') || getMetaContent(html, 'twitter:title');
+  }
+
+  if (!result.description) {
+    result.description = getMetaContent(html, 'og:description') || getMetaContent(html, 'description');
+  }
+
+  const ogImage = getMetaContent(html, 'og:image') || getMetaContent(html, 'twitter:image');
+  if (ogImage && !candidates.some((c) => c.url === ogImage)) {
+    candidates.push({ url: ogImage, source: 'og:image' });
+    if (!result.imageUrl) {
+      result.imageUrl = ogImage;
+    }
+  }
+
+  // 3. Фоллбек заголовка из тега <title>
+  if (!result.title) {
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    if (titleMatch && titleMatch[1]) {
+      result.title = titleMatch[1].replace(/\s+/g, ' ').trim();
+    }
+  }
+
+  // 4. Нормализация цен
+  if (result.price || result.estimate) {
+    result.normalizedPrice = parsePriceString(result.price || result.estimate);
+  }
+
+  result.imageCandidates = candidates;
+  return result;
 }
