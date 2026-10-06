@@ -1,38 +1,7 @@
-export interface NormalizedPrice {
-  raw?: string;
-  currency?: string;
-  amountMin?: number;
-  amountMax?: number;
-  realized?: number;
-}
+import type { LotData, ImageCandidate, NormalizedPrice } from './types';
 
-export interface ImageCandidate {
-  url: string;
-  source?: string;
-  width?: number;
-  height?: number;
-}
+export type { LotData, ImageCandidate, NormalizedPrice };
 
-export interface LotData {
-  title?: string;
-  artist?: string;
-  estimate?: string;
-  price?: string;
-  normalizedPrice?: NormalizedPrice;
-  description?: string;
-  imageUrl?: string;
-  imageCandidates?: ImageCandidate[];
-  house?: string;
-  medium?: string;
-  dimensions?: string;
-  year?: string;
-  auctionDate?: string;
-  [key: string]: any;
-}
-
-/**
- * Извлекает значение контента из Meta-тегов
- */
 function getMetaContent(html: string, propertyOrName: string): string | undefined {
   const metaRegex = new RegExp(
     `<meta[^>]+(?:property|name)=["']${propertyOrName}["'][^>]+content=["']([^"']+)["']`,
@@ -41,7 +10,6 @@ function getMetaContent(html: string, propertyOrName: string): string | undefine
   const match = html.match(metaRegex);
   if (match && match[1]) return match[1].trim();
 
-  // Фоллбек для иного порядка атрибутов
   const reverseMetaRegex = new RegExp(
     `<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${propertyOrName}["']`,
     'i'
@@ -50,21 +18,16 @@ function getMetaContent(html: string, propertyOrName: string): string | undefine
   return reverseMatch && reverseMatch[1] ? reverseMatch[1].trim() : undefined;
 }
 
-/**
- * Нормализует цены и валюты
- */
 function parsePriceString(priceStr?: string): NormalizedPrice | undefined {
   if (!priceStr) return undefined;
 
   const result: NormalizedPrice = { raw: priceStr };
 
-  // Определение валюты
   if (priceStr.includes('$') || priceStr.includes('USD')) result.currency = 'USD';
   else if (priceStr.includes('€') || priceStr.includes('EUR')) result.currency = 'EUR';
   else if (priceStr.includes('£') || priceStr.includes('GBP')) result.currency = 'GBP';
   else if (priceStr.includes('CHF')) result.currency = 'CHF';
 
-  // Извлечение всех чисел
   const numbers = priceStr
     .replace(/,/g, '')
     .match(/\d+(?:\.\d+)?/g)
@@ -82,9 +45,6 @@ function parsePriceString(priceStr?: string): NormalizedPrice | undefined {
   return result;
 }
 
-/**
- * Извлекает JSON-LD блоки из HTML
- */
 function extractJsonLd(html: string): any[] {
   const jsonLdBlocks: any[] = [];
   const regex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
@@ -103,16 +63,13 @@ function extractJsonLd(html: string): any[] {
         }
       }
     } catch {
-      // Игнорируем невалидный JSON-LD
+      // Игнорируем невалидные блоки JSON-LD
     }
   }
 
   return jsonLdBlocks;
 }
 
-/**
- * Парсит HTML страницы лота и возвращает структурированные данные
- */
 export function parseLotHtml(
   html: string,
   url: string,
@@ -125,7 +82,6 @@ export function parseLotHtml(
     imageCandidates: candidates,
   };
 
-  // 1. Извлечение JSON-LD (Приоритет №1)
   const jsonLdItems = extractJsonLd(html);
   const artwork = jsonLdItems.find(
     (item) =>
@@ -138,7 +94,7 @@ export function parseLotHtml(
   if (artwork) {
     result.title = artwork.name || artwork.title;
     result.description = artwork.description;
-    
+
     if (artwork.artist) {
       result.artist = typeof artwork.artist === 'string' ? artwork.artist : artwork.artist.name;
     } else if (artwork.creator) {
@@ -164,7 +120,6 @@ export function parseLotHtml(
     }
   }
 
-  // 2. Извлечение OpenGraph & Meta-тегов (Приоритет №2 / Дополнение)
   if (!result.title) {
     result.title = getMetaContent(html, 'og:title') || getMetaContent(html, 'twitter:title');
   }
@@ -181,7 +136,6 @@ export function parseLotHtml(
     }
   }
 
-  // 3. Фоллбек заголовка из тега <title>
   if (!result.title) {
     const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     if (titleMatch && titleMatch[1]) {
@@ -189,7 +143,6 @@ export function parseLotHtml(
     }
   }
 
-  // 4. Нормализация цен
   if (result.price || result.estimate) {
     result.normalizedPrice = parsePriceString(result.price || result.estimate);
   }
