@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
-import { KeyRound, Mail, Sparkles, CheckCircle2 } from 'lucide-react';
+import { KeyRound, Mail, CheckCircle2 } from 'lucide-react';
 
 export default function ArtEngineClient() {
   const auth = useAuth() as any;
@@ -232,13 +232,13 @@ export default function ArtEngineClient() {
 
   // PIPELINE 1: PARSE URL
   const handleAutoParse = async () => {
-    if (!input.link) return;
+    if (!input.link) return null;
     try {
       const parsed = new URL(input.link);
       if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
     } catch {
       setStatusText('Error: Enter a valid HTTP or HTTPS auction URL');
-      return;
+      return null;
     }
     setParsing(true);
     setImgError(false);
@@ -251,13 +251,21 @@ export default function ArtEngineClient() {
         body: JSON.stringify({ url: input.link })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.details || data.error || `Server returned status ${res.status}`);
+      let data: any = {};
+      const responseText = await res.text();
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(`Server response error (${res.status}): ${responseText.slice(0, 100)}`);
+      }
+
+      if (!res.ok) throw new Error(data.details || data.error || `Server status ${res.status}`);
 
       const bestImage = data.image_url || data.extracted?.imageUrl || '';
       let bestTitle = data.title || data.extracted?.title || '';
       let bestArtist = data.artist || data.extracted?.artist || '';
       const extractedSpecs = data.extracted?.specs || data.specs || {};
+      const sourceDesc = data.extracted?.description || data.description || '';
 
       if (!bestArtist && bestTitle) {
         const knownArtists = ['Banksy', 'Andy Warhol', 'KAWS', 'Damien Hirst', 'Pablo Picasso', 'Jean-Michel Basquiat'];
@@ -265,14 +273,16 @@ export default function ArtEngineClient() {
         if (matched) bestArtist = matched;
       }
 
+      const rawDataObj = data.extracted || data;
+
       setInput(prev => ({
         ...prev,
         artist: bestArtist || prev.artist,
         title: bestTitle || prev.title,
         image_url: bestImage || prev.image_url,
-        source_description: data.extracted?.description || prev.source_description,
+        source_description: sourceDesc || prev.source_description,
         specs: { ...prev.specs, ...extractedSpecs },
-        raw: JSON.stringify(data.extracted || data, null, 2)
+        raw: JSON.stringify(rawDataObj, null, 2)
       }));
 
       setStatusText(`Extracted: ${bestArtist || 'Unknown Work'}`);
@@ -281,8 +291,9 @@ export default function ArtEngineClient() {
         bestArtist, 
         bestTitle, 
         bestImage, 
+        sourceDescription: sourceDesc,
         specs: extractedSpecs,
-        rawData: data.extracted || data 
+        rawData: rawDataObj 
       };
 
     } catch (e: any) { 
@@ -296,14 +307,21 @@ export default function ArtEngineClient() {
   };
 
   // PIPELINE 2: GENERATE ESSAY
-  const generate = async (customContext?: { artist?: string; title?: string; specs?: any; rawData?: any }) => {
+  const generate = async (customContext?: { 
+    artist?: string; 
+    title?: string; 
+    specs?: any; 
+    sourceDescription?: string;
+    rawData?: any 
+  }) => {
     setLoading(true);
     setStatusText('Synthesizing curatorial dossier...');
 
-    const targetArtist = customContext?.artist || input.artist;
-    const targetTitle = customContext?.title || input.title;
-    const targetSpecs = customContext?.specs || input.specs;
-    const targetRaw = customContext?.rawData || input.raw;
+    const targetArtist = customContext?.artist ?? input.artist;
+    const targetTitle = customContext?.title ?? input.title;
+    const targetSpecs = customContext?.specs ?? input.specs;
+    const targetSourceDesc = customContext?.sourceDescription ?? input.source_description;
+    const targetRaw = customContext?.rawData ?? (input.raw ? JSON.parse(input.raw) : null);
 
     try {
       const res = await authFetch('/api/admin/generate_lot', {
@@ -313,13 +331,20 @@ export default function ArtEngineClient() {
           title: targetTitle,
           link: input.link,
           specs: targetSpecs,
-          source_description: input.source_description,
+          source_description: targetSourceDesc,
           rawData: targetRaw
         })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.details || data.error || `Server returned status ${res.status}`);
+      let data: any = {};
+      const responseText = await res.text();
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(`Server response error (${res.status}): ${responseText.slice(0, 100)}`);
+      }
+
+      if (!res.ok) throw new Error(data.details || data.error || `Server status ${res.status}`);
 
       const resultLot = data.lot || data;
       setOutput(resultLot);
@@ -340,31 +365,44 @@ export default function ArtEngineClient() {
   };
 
   // PIPELINE 3: SAVE TO VAULT
-  const saveToVault = async (customOutput?: any, customImage?: string) => {
+  const saveToVault = async (customOutput?: any, customContext?: { artist?: string; title?: string; image_url?: string; specs?: any; sourceDescription?: string }) => {
     const lotToSave = customOutput || output;
     if (!lotToSave || isSaved) return;
     setSaving(true);
     setStatusText('Persisting record to Vault...');
 
-    const imageUrlToSend = customImage || input.image_url || lotToSave.image_url || lotToSave.imageUrl || '';
+    const artistToSend = customContext?.artist || input.artist || lotToSave.artist || '';
+    const titleToSend = customContext?.title || input.title || lotToSave.title || '';
+    const imageUrlToSend = customContext?.image_url || input.image_url || lotToSave.image_url || lotToSave.imageUrl || '';
+    const specsToSend = customContext?.specs || input.specs || {};
+    const sourceDescToSend = customContext?.sourceDescription || input.source_description || lotToSave.source_description || null;
 
     try {
       const res = await authFetch('/api/admin/save-lot', {
         method: 'POST',
         body: JSON.stringify({
-          artist: input.artist || lotToSave.artist,
-          title: input.title || lotToSave.title,
+          artist: artistToSend,
+          title: titleToSend,
           link: input.link,
           image_url: imageUrlToSend,
-          specs: input.specs,
+          specs: specsToSend,
           ai_content: {
             ...lotToSave,
-            source_description: input.source_description || lotToSave.source_description || null,
+            source_description: sourceDescToSend,
           }
         })
       });
 
-      const data = await res.json();
+      let data: any = {};
+      const responseText = await res.text();
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(`Server response error (${res.status}): ${responseText.slice(0, 100)}`);
+      }
+
+      if (!res.ok) throw new Error(data.error || `Server status ${res.status}`);
+
       if (data.success || data.lot_id || data.id) {
         setIsSaved(true);
         setStatusText('Cataloged in Vault');
@@ -387,18 +425,29 @@ export default function ArtEngineClient() {
     setAutoProcessing(true);
     setIsSaved(false);
     
+    // Step 1: Parse
     const parseResult = await handleAutoParse();
     if (!parseResult) return setAutoProcessing(false);
 
+    // Step 2: Generate AI Dossier
     const aiResult = await generate({
       artist: parseResult.bestArtist,
       title: parseResult.bestTitle,
       specs: parseResult.specs,
+      sourceDescription: parseResult.sourceDescription,
       rawData: parseResult.rawData
     });
     if (!aiResult) return setAutoProcessing(false);
 
-    await saveToVault(aiResult, parseResult.bestImage);
+    // Step 3: Save to Vault
+    await saveToVault(aiResult, {
+      artist: parseResult.bestArtist,
+      title: parseResult.bestTitle,
+      image_url: parseResult.bestImage,
+      specs: parseResult.specs,
+      sourceDescription: parseResult.sourceDescription
+    });
+
     setAutoProcessing(false);
   };
 
@@ -470,7 +519,6 @@ export default function ArtEngineClient() {
               <div className="space-y-4">
                 {loginMethod === 'main' ? (
                   <>
-                    {/* GOOGLE OAUTH */}
                     <button
                       type="button"
                       onClick={handleGoogleSignIn}
@@ -486,7 +534,6 @@ export default function ArtEngineClient() {
                       <span>Continue with Google</span>
                     </button>
 
-                    {/* PASSKEY */}
                     <button
                       type="button"
                       onClick={handlePasskeySignIn}
@@ -496,7 +543,6 @@ export default function ArtEngineClient() {
                       <KeyRound size={16} /> Sign in with Passkey
                     </button>
 
-                    {/* EMAIL OTP TOGGLE */}
                     <button
                       type="button"
                       onClick={() => setLoginMethod('email')}
@@ -638,7 +684,6 @@ export default function ArtEngineClient() {
 
         {!isLoadingUser && !user ? (
           <div className="space-y-16 max-w-5xl mx-auto">
-            {/* 1. ART INTELLIGENCE TERMINAL BANNER */}
             <div className="flex flex-col items-center justify-center text-center bg-white/80 backdrop-blur-xl border border-gray-200/80 px-8 py-16 rounded-3xl shadow-sm">
               <div className="space-y-4 max-w-2xl">
                 <span className="font-mono text-xs tracking-[0.3em] uppercase text-gray-400 font-semibold block">
@@ -653,7 +698,6 @@ export default function ArtEngineClient() {
               </div>
             </div>
 
-            {/* 2. THREE INSTITUTIONAL CASE STUDIES */}
             <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-8 md:p-14 space-y-12 shadow-sm rounded-3xl">
               <div className="text-center space-y-3">
                 <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-gray-400 block">
@@ -665,7 +709,6 @@ export default function ArtEngineClient() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {/* Case 1: Fontana */}
                 <Link href="/case-study/fontana" className="group bg-white border border-gray-200/80 p-6 flex flex-col justify-between hover:border-black transition-all duration-300 shadow-sm rounded-2xl">
                   <div>
                     <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
@@ -693,7 +736,6 @@ export default function ArtEngineClient() {
                   </div>
                 </Link>
 
-                {/* Case 2: Garcia */}
                 <Link href="/case-study/garcia" className="group bg-white border border-gray-200/80 p-6 flex flex-col justify-between hover:border-black transition-all duration-300 shadow-sm rounded-2xl">
                   <div>
                     <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
@@ -721,7 +763,6 @@ export default function ArtEngineClient() {
                   </div>
                 </Link>
 
-                {/* Case 3: Pivovarov */}
                 <Link href="/case-study/pivovarov" className="group bg-white border border-gray-200/80 p-6 flex flex-col justify-between hover:border-black transition-all duration-300 shadow-sm rounded-2xl">
                   <div>
                     <div className="aspect-[4/3] bg-gray-50 mb-6 overflow-hidden relative border border-gray-100 rounded-xl">
@@ -751,13 +792,11 @@ export default function ArtEngineClient() {
               </div>
             </div>
 
-            {/* 3. FINE ART BANKING & ADVISORY INFRASTRUCTURE (LOGIN BOX) */}
             <div className="py-16 text-center space-y-8 bg-white/80 backdrop-blur-xl border border-gray-200/80 p-12 shadow-sm rounded-3xl">
               <div className="space-y-4 max-w-xl mx-auto">
                 <h2 className="text-3xl md:text-5xl font-serif font-light text-[#111]">
                   Fine Art Banking & Advisory Infrastructure
                 </h2>
-                
                 <p className="font-serif italic text-gray-600 text-lg md:text-xl leading-relaxed">
                   Generate institutional-quality investment memoranda in seconds with absolute discretion.
                 </p>
@@ -781,7 +820,6 @@ export default function ArtEngineClient() {
           </div>
         ) : (
           <>
-            {/* Navigation Tabs (Authenticated Terminal View) */}
             <nav className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center border-b border-gray-200 bg-white/80 backdrop-blur-xl px-6 py-4 gap-3 rounded-2xl shadow-sm">
               <div className="flex gap-8 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
                 <button
@@ -823,8 +861,6 @@ export default function ArtEngineClient() {
 
             {activeTab === 'parser' && (
               <main className="grid lg:grid-cols-12 gap-8 items-start transition-opacity duration-300">
-                
-                {/* Left Column: Input Panel */}
                 <div className="lg:col-span-5 space-y-6">
                   <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-6 space-y-4 rounded-3xl shadow-sm">
                     <div className="flex justify-between items-center">
@@ -915,10 +951,8 @@ export default function ArtEngineClient() {
                       {loading ? 'Synthesizing...' : 'Synthesize Curatorial Dossier'}
                     </button>
                   </div>
-
                 </div>
 
-                {/* Right Column: Output / Dossier Preview */}
                 <div className="lg:col-span-7">
                   {loading ? (
                     <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-10 space-y-6 animate-pulse rounded-3xl shadow-sm">
@@ -933,7 +967,6 @@ export default function ArtEngineClient() {
                     </div>
                   ) : output ? (
                     <div className="space-y-5">
-                      
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white/80 backdrop-blur-xl border border-gray-200/80 p-4 gap-3 rounded-2xl shadow-sm">
                         <span className="text-xs font-mono text-gray-500 uppercase tracking-widest font-bold">
                           Investment Memorandum
@@ -976,7 +1009,6 @@ export default function ArtEngineClient() {
                         </div>
                       ) : (
                         <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-8 md:p-12 space-y-8 max-h-[750px] overflow-y-auto rounded-3xl shadow-sm">
-                          
                           <div className="border-b border-gray-200 pb-6 space-y-4">
                             <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
                               <div>
@@ -1031,10 +1063,8 @@ export default function ArtEngineClient() {
                               </ul>
                             </div>
                           )}
-
                         </div>
                       )}
-
                     </div>
                   ) : (
                     <div className="h-full min-h-[500px] flex flex-col items-center justify-center border border-dashed border-gray-300 bg-white/50 backdrop-blur-xl p-8 text-center rounded-3xl">
@@ -1046,7 +1076,6 @@ export default function ArtEngineClient() {
                     </div>
                   )}
                 </div>
-
               </main>
             )}
 
