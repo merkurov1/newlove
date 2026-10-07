@@ -22,7 +22,15 @@ function SaveStatus({
   if (error) {
     return (
       <span
-        className="max-w-[220px] truncate text-[9px] uppercase tracking-[0.18em] text-red-400"
+        className="
+          max-w-[260px]
+          truncate
+          text-[11px]
+          font-medium
+          uppercase
+          tracking-[0.14em]
+          text-red-500
+        "
         title={error}
       >
         Error
@@ -34,39 +42,88 @@ function SaveStatus({
     case "creating":
     case "loading":
       return (
-        <span className="text-[9px] uppercase tracking-[0.2em] text-neutral-300">
+        <span
+          className="
+            text-[11px]
+            font-medium
+            uppercase
+            tracking-[0.16em]
+            text-neutral-500
+          "
+        >
           Loading
         </span>
       );
 
     case "saving":
       return (
-        <span className="text-[9px] uppercase tracking-[0.2em] text-neutral-400">
+        <span
+          className="
+            text-[11px]
+            font-medium
+            uppercase
+            tracking-[0.16em]
+            text-neutral-500
+          "
+        >
           Saving
         </span>
       );
 
     case "publishing":
       return (
-        <span className="text-[9px] uppercase tracking-[0.2em] text-neutral-400">
+        <span
+          className="
+            text-[11px]
+            font-medium
+            uppercase
+            tracking-[0.16em]
+            text-neutral-500
+          "
+        >
           Publishing
         </span>
       );
 
     case "clearing":
       return (
-        <span className="text-[9px] uppercase tracking-[0.2em] text-neutral-400">
+        <span
+          className="
+            text-[11px]
+            font-medium
+            uppercase
+            tracking-[0.16em]
+            text-neutral-500
+          "
+        >
           Clearing
         </span>
       );
 
     case "saved":
       return (
-        <span className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] text-neutral-400">
+        <span
+          className="
+            flex
+            items-center
+            gap-2
+            text-[11px]
+            font-medium
+            uppercase
+            tracking-[0.16em]
+            text-neutral-500
+          "
+        >
           SAVED
+
           <span
             aria-hidden="true"
-            className="h-1.5 w-1.5 rounded-full bg-neutral-300"
+            className="
+              h-1.5
+              w-1.5
+              rounded-full
+              bg-neutral-400
+            "
           />
         </span>
       );
@@ -137,7 +194,18 @@ export default function NewPostModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/25 p-3 backdrop-blur-[6px] sm:p-6"
+      className="
+        fixed
+        inset-0
+        z-[100]
+        flex
+        items-center
+        justify-center
+        bg-black/25
+        p-3
+        backdrop-blur-[6px]
+        sm:p-6
+      "
       role="dialog"
       aria-modal="true"
       aria-label={
@@ -165,7 +233,6 @@ export default function NewPostModal({
           overflow-hidden
           rounded-[28px]
           bg-[#fffefa]
-          shadow-[0_30px_90px_rgba(0,0,0,0.18)]
           sm:h-[min(700px,calc(100dvh-48px))]
           sm:max-w-[990px]
           sm:rounded-[34px]
@@ -288,6 +355,7 @@ export default function NewPostModal({
                             linkUrl.trim()
                           ) {
                             event.preventDefault();
+
                             void parseLink(
                               linkUrl,
                             );
@@ -379,7 +447,16 @@ export default function NewPostModal({
 
               {/* Error */}
               {error && (
-                <div className="mt-4 text-[11px] text-red-400">
+                <div
+                  className="
+                    mt-5
+                    text-[11px]
+                    font-medium
+                    leading-relaxed
+                    text-red-500
+                  "
+                  role="alert"
+                >
                   {error}
                 </div>
               )}
@@ -454,7 +531,7 @@ export default function NewPostModal({
               />
             )}
 
-            {/* Clear — only when there is actually something to clear */}
+            {/* Clear */}
             {canClear && hasContent && (
               <button
                 type="button"
@@ -468,19 +545,27 @@ export default function NewPostModal({
                 className="
                   ml-1
                   rounded-full
-                  px-1.5
-                  py-1
-                  text-[9px]
+                  bg-neutral-100
+                  px-3
+                  py-1.5
+                  text-[10px]
+                  font-medium
                   uppercase
-                  tracking-[0.16em]
-                  text-neutral-300
-                  transition-colors
-                  hover:text-neutral-700
+                  tracking-[0.14em]
+                  text-neutral-500
+                  transition-all
+                  hover:bg-neutral-200
+                  hover:text-neutral-900
                   disabled:cursor-not-allowed
                   disabled:opacity-30
+                  sm:px-3.5
+                  sm:py-2
+                  sm:text-[11px]
                 "
               >
-                Clear
+                {isClearing
+                  ? "Clearing…"
+                  : "Clear"}
               </button>
             )}
           </div>
@@ -499,18 +584,19 @@ export default function NewPostModal({
               shrink-0
               rounded-full
               bg-black
-              px-7
-              py-3.5
-              text-[10px]
+              px-5
+              py-2.5
+              text-[9px]
               font-medium
               uppercase
-              tracking-[0.2em]
+              tracking-[0.14em]
               text-white
-              transition-all
-              hover:opacity-85
+              transition-opacity
+              hover:opacity-80
               disabled:cursor-not-allowed
               disabled:opacity-[0.14]
-              sm:px-8
+              sm:px-5.5
+              sm:py-2.5
             "
           >
             {isPublishing
