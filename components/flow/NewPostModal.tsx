@@ -85,6 +85,53 @@ function withFlowMetadata(
   };
 }
 
+function normalizePastedUrl(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed || /\s/.test(trimmed)) {
+    return null;
+  }
+
+  const candidate = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+
+  try {
+    const url = new URL(candidate);
+
+    if (!url.hostname || !url.hostname.includes('.')) {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function getDomain(value: string) {
+  try {
+    return new URL(value).hostname.replace(/^www\./, '');
+  } catch {
+    return value;
+  }
+}
+
+function ShimmerPreview() {
+  return (
+    <div className="overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white">
+      <div className="aspect-[16/8] animate-pulse bg-stone-100" />
+
+      <div className="space-y-4 p-6 sm:p-7">
+        <div className="h-2.5 w-24 animate-pulse rounded-full bg-stone-200" />
+        <div className="h-7 w-4/5 animate-pulse rounded bg-stone-200" />
+        <div className="h-4 w-full animate-pulse rounded bg-stone-100" />
+        <div className="h-4 w-3/4 animate-pulse rounded bg-stone-100" />
+      </div>
+    </div>
+  );
+}
+
 export default function NewPostModal({
   onClose,
   onCreated,
@@ -105,9 +152,7 @@ export default function NewPostModal({
     useState('');
 
   const [linkPreview, setLinkPreview] =
-    useState<Record<string, unknown> | null>(
-      null,
-    );
+    useState<Record<string, unknown> | null>(null);
 
   const [imageName, setImageName] =
     useState<string | null>(null);
@@ -117,6 +162,9 @@ export default function NewPostModal({
 
   const fileRef =
     useRef<HTMLInputElement | null>(null);
+
+  const textareaRef =
+    useRef<HTMLTextAreaElement | null>(null);
 
   const saveTimer =
     useRef<ReturnType<typeof setTimeout> | null>(
@@ -190,9 +238,11 @@ export default function NewPostModal({
 
             if (loaded.type === 'link') {
               setLinkMode(true);
+
               setLinkUrl(
                 loaded.source_url ?? '',
               );
+
               setLinkPreview(
                 loaded.metadata ?? null,
               );
@@ -201,8 +251,8 @@ export default function NewPostModal({
             if (loaded.type === 'photo') {
               const publicUrl =
                 loaded.metadata &&
-                typeof loaded.metadata
-                  .public_url === 'string'
+                typeof loaded.metadata.public_url ===
+                  'string'
                   ? loaded.metadata.public_url
                   : null;
 
@@ -210,14 +260,15 @@ export default function NewPostModal({
 
               setImageName(
                 loaded.metadata &&
-                typeof loaded.metadata
-                  .filename === 'string'
+                typeof loaded.metadata.filename ===
+                  'string'
                   ? loaded.metadata.filename
                   : null,
               );
             }
 
             setSaveState('saved');
+
             return;
           }
 
@@ -271,6 +322,7 @@ export default function NewPostModal({
           json.item as Item;
 
         setItem(created);
+
         setBodyMd(
           created.body_md ?? '',
         );
@@ -286,6 +338,10 @@ export default function NewPostModal({
         );
 
         setSaveState('saved');
+
+        requestAnimationFrame(() => {
+          textareaRef.current?.focus();
+        });
       } catch (err) {
         if (cancelled) {
           return;
@@ -299,7 +355,7 @@ export default function NewPostModal({
         setError(
           err instanceof Error
             ? err.message
-            : 'Failed to initialize Flow.',
+            : 'Failed to initialize.',
         );
 
         setSaveState('error');
@@ -317,7 +373,10 @@ export default function NewPostModal({
         );
       }
 
-      if (imagePreview) {
+      if (
+        imagePreview &&
+        imagePreview.startsWith('blob:')
+      ) {
         URL.revokeObjectURL(
           imagePreview,
         );
@@ -358,7 +417,7 @@ export default function NewPostModal({
           if (!response.ok) {
             throw new Error(
               json.error ??
-                'Failed to save Flow item.',
+                'Failed to save.',
             );
           }
 
@@ -451,6 +510,7 @@ export default function NewPostModal({
         clearTimeout(
           saveTimer.current,
         );
+
         saveTimer.current = null;
       }
 
@@ -464,8 +524,17 @@ export default function NewPostModal({
       });
     }, [item, saveDraft]);
 
-  async function parseLink() {
-    if (!item || !linkUrl.trim()) {
+  async function parseLink(
+    urlOverride?: string,
+  ) {
+    if (!item) {
+      return;
+    }
+
+    const url =
+      (urlOverride ?? linkUrl).trim();
+
+    if (!url) {
       return;
     }
 
@@ -483,7 +552,7 @@ export default function NewPostModal({
           },
           body: JSON.stringify({
             item_id: item.id,
-            url: linkUrl.trim(),
+            url,
           }),
         },
       );
@@ -503,9 +572,10 @@ export default function NewPostModal({
 
       setItem(parsedItem);
 
+      setLinkMode(true);
+
       setLinkUrl(
-        parsedItem.source_url ??
-          linkUrl.trim(),
+        parsedItem.source_url ?? url,
       );
 
       setLinkPreview(
@@ -531,11 +601,39 @@ export default function NewPostModal({
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to parse link.',
+          : 'Could not read this link.',
       );
 
       setSaveState('error');
     }
+  }
+
+  function handlePaste(
+    event: React.ClipboardEvent<HTMLTextAreaElement>,
+  ) {
+    const pasted =
+      event.clipboardData
+        .getData('text')
+        .trim();
+
+    const url =
+      normalizePastedUrl(pasted);
+
+    if (
+      !url ||
+      bodyMd.trim()
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    setError(null);
+    setLinkMode(true);
+    setLinkUrl(url);
+    setLinkPreview(null);
+
+    void parseLink(url);
   }
 
   async function uploadImage(
@@ -548,8 +646,13 @@ export default function NewPostModal({
     try {
       setSaveState('saving');
       setError(null);
+      setLinkMode(false);
+      setLinkPreview(null);
 
-      if (imagePreview) {
+      if (
+        imagePreview &&
+        imagePreview.startsWith('blob:')
+      ) {
         URL.revokeObjectURL(
           imagePreview,
         );
@@ -665,7 +768,7 @@ export default function NewPostModal({
         !freshItem.source_url
       ) {
         throw new Error(
-          'Add a link first.',
+          'The link is not ready yet.',
         );
       }
 
@@ -707,8 +810,8 @@ export default function NewPostModal({
             ? String(
                 (
                   freshItem.metadata &&
-                  typeof freshItem.metadata.alt ===
-                    'string'
+                  typeof freshItem.metadata
+                    .alt === 'string'
                     ? freshItem.metadata.alt
                     : null
                 ) ||
@@ -767,7 +870,7 @@ export default function NewPostModal({
       ) {
         throw new Error(
           json.error ??
-            `Failed to save Flow item (${response.status}).`,
+            `Failed to save (${response.status}).`,
         );
       }
 
@@ -788,7 +891,7 @@ export default function NewPostModal({
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to save Flow item.',
+          : 'Failed to save.',
       );
 
       setSaveState('error');
@@ -818,30 +921,47 @@ export default function NewPostModal({
     onClose();
   }
 
-  function statusLabel() {
-    switch (saveState) {
-      case 'creating':
-        return 'Creating…';
+  useEffect(() => {
+    function handleKeyboard(
+      event: KeyboardEvent,
+    ) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        void handleClose();
+        return;
+      }
 
-      case 'loading':
-        return 'Opening…';
+      const modifier =
+        event.metaKey ||
+        event.ctrlKey;
 
-      case 'saving':
-        return 'Saving…';
+      if (
+        modifier &&
+        event.key === 'Enter'
+      ) {
+        event.preventDefault();
 
-      case 'saved':
-        return 'Saved';
-
-      case 'publishing':
-        return 'Working…';
-
-      case 'error':
-        return 'Save failed';
-
-      default:
-        return '';
+        if (
+          !busy &&
+          saveState !== 'saving'
+        ) {
+          void finish('direct');
+        }
+      }
     }
-  }
+
+    document.addEventListener(
+      'keydown',
+      handleKeyboard,
+    );
+
+    return () => {
+      document.removeEventListener(
+        'keydown',
+        handleKeyboard,
+      );
+    };
+  });
 
   const busy =
     saveState === 'creating' ||
@@ -851,9 +971,33 @@ export default function NewPostModal({
   const isImage =
     item?.type === 'photo';
 
+  const isLink =
+    item?.type === 'link' ||
+    linkMode;
+
+  const isParsing =
+    saveState === 'saving' &&
+    isLink &&
+    !linkPreview;
+
+  const canPost =
+    Boolean(item) &&
+    !busy &&
+    saveState !== 'saving' &&
+    (
+      item?.type === 'link'
+        ? Boolean(item.source_url)
+        : item?.type === 'photo'
+          ? Boolean(
+              item.metadata ||
+              imagePreview,
+            )
+          : Boolean(bodyMd.trim())
+    );
+
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/35 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/35 p-0 backdrop-blur-sm sm:p-4"
       onMouseDown={(event) => {
         if (
           event.target ===
@@ -864,16 +1008,12 @@ export default function NewPostModal({
       }}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-stone-200 bg-[#FAF8F5] shadow-2xl"
+        className="flex h-full max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden bg-[#FAF8F5] shadow-2xl sm:h-auto sm:rounded-[2rem] sm:border sm:border-stone-200"
         role="dialog"
         aria-modal="true"
         aria-labelledby="flow-composer-title"
       >
-        <div className="flex items-center justify-between border-b border-stone-200/80 px-6 py-5 sm:px-8">
-          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-stone-400">
-            Flow
-          </div>
-
+        <div className="flex shrink-0 items-center justify-end px-5 py-4 sm:px-7">
           <button
             type="button"
             onClick={() =>
@@ -890,60 +1030,21 @@ export default function NewPostModal({
           id="flow-composer-title"
           className="sr-only"
         >
-          Flow
+          Create
         </h2>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7 sm:px-8 sm:py-9">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-8 sm:pb-8">
           {error && (
-            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 font-mono text-[11px] leading-5 text-red-700">
+            <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 font-mono text-[11px] leading-5 text-red-700">
               {error}
             </div>
           )}
 
-          {linkMode ? (
-            <div className="space-y-6">
-              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
-                Link
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <input
-                  autoFocus
-                  value={linkUrl}
-                  onChange={(event) =>
-                    setLinkUrl(
-                      event.target.value,
-                    )
-                  }
-                  onKeyDown={(event) => {
-                    if (
-                      event.key === 'Enter'
-                    ) {
-                      void parseLink();
-                    }
-                  }}
-                  placeholder="Paste a URL…"
-                  disabled={!item || busy}
-                  className="min-w-0 flex-1 rounded-2xl border border-stone-200 bg-white px-5 py-4 font-serif text-lg outline-none transition focus:border-stone-500 disabled:bg-stone-100"
-                />
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    void parseLink()
-                  }
-                  disabled={
-                    !item ||
-                    !linkUrl.trim() ||
-                    busy
-                  }
-                  className="rounded-2xl bg-stone-900 px-6 py-4 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700 disabled:bg-stone-300"
-                >
-                  Parse
-                </button>
-              </div>
-
-              {linkPreview && (
+          {isParsing ? (
+            <ShimmerPreview />
+          ) : isLink ? (
+            <div className="space-y-4">
+              {linkPreview ? (
                 <div className="overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white">
                   {typeof linkPreview.image ===
                     'string' && (
@@ -952,7 +1053,7 @@ export default function NewPostModal({
                         linkPreview.image
                       }
                       alt=""
-                      className="max-h-80 w-full object-cover"
+                      className="max-h-[420px] w-full object-cover"
                     />
                   )}
 
@@ -961,11 +1062,11 @@ export default function NewPostModal({
                       {String(
                         linkPreview.site_name ??
                           linkPreview.domain ??
-                          '',
+                          getDomain(linkUrl),
                       )}
                     </div>
 
-                    <div className="mt-3 font-serif text-2xl font-light leading-tight text-stone-900">
+                    <div className="mt-3 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
                       {String(
                         linkPreview.title ??
                           linkUrl,
@@ -974,64 +1075,86 @@ export default function NewPostModal({
 
                     {typeof linkPreview.description ===
                       'string' && (
-                      <p className="mt-3 font-serif text-base leading-7 text-stone-600">
+                      <p className="mt-3 max-w-2xl font-serif text-base leading-7 text-stone-600">
                         {
                           linkPreview.description
                         }
                       </p>
                     )}
+
+                    <a
+                      href={linkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-5 inline-block font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400 transition hover:text-stone-900"
+                    >
+                      Open original ↗
+                    </a>
                   </div>
+                </div>
+              ) : (
+                <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-400">
+                    Link
+                  </div>
+
+                  <div className="mt-3 break-all font-serif text-lg leading-7 text-stone-800">
+                    {linkUrl}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void parseLink()
+                    }
+                    disabled={!item || busy}
+                    className="mt-5 rounded-full bg-stone-900 px-5 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white transition hover:bg-stone-700 disabled:bg-stone-300"
+                  >
+                    Try again
+                  </button>
                 </div>
               )}
             </div>
           ) : isImage ? (
-            <div className="space-y-5">
-              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
-                Image
-              </div>
-
-              <div className="overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white">
-                {imagePreview ? (
-                  <img
-                    src={imagePreview}
-                    alt=""
-                    className="max-h-[65vh] w-full object-contain"
-                  />
-                ) : (
-                  <div className="flex min-h-[420px] items-center justify-center font-serif text-lg text-stone-400">
-                    Select an image below.
-                  </div>
-                )}
-              </div>
-
-              {imageName && (
-                <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400">
-                  {imageName}
+            <div className="overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white">
+              {imagePreview ? (
+                <img
+                  src={imagePreview}
+                  alt=""
+                  className="max-h-[70vh] w-full object-contain"
+                />
+              ) : (
+                <div className="flex min-h-[420px] items-center justify-center font-serif text-lg text-stone-400">
+                  Select an image below.
                 </div>
               )}
             </div>
           ) : (
             <textarea
+              ref={textareaRef}
               value={bodyMd}
               onChange={(event) =>
                 handleBodyChange(
                   event.target.value,
                 )
               }
+              onPaste={handlePaste}
               disabled={!item || busy}
               placeholder="Write something…"
               autoFocus
-              className="min-h-[460px] w-full resize-none border-0 bg-transparent font-serif text-[21px] font-light leading-[1.8] text-stone-800 outline-none placeholder:text-stone-300"
+              className="min-h-[55vh] w-full resize-none border-0 bg-transparent pt-2 font-serif text-[21px] font-light leading-[1.8] text-stone-800 outline-none placeholder:text-stone-300 sm:min-h-[460px]"
             />
+          )}
+
+          {imageName && isImage && (
+            <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400">
+              {imageName}
+            </div>
           )}
         </div>
 
-        <div className="flex flex-col gap-4 border-t border-stone-200/80 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400">
-            {statusLabel()}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-stone-200/80 px-5 py-4 sm:px-7">
+          <div className="flex items-center gap-3">
             <input
               ref={fileRef}
               type="file"
@@ -1042,8 +1165,6 @@ export default function NewPostModal({
                   event.target.files?.[0];
 
                 if (file) {
-                  setLinkMode(false);
-                  setError(null);
                   void uploadImage(file);
                 }
 
@@ -1054,28 +1175,37 @@ export default function NewPostModal({
             <button
               type="button"
               onClick={() => {
-                setLinkMode(false);
                 setError(null);
                 fileRef.current?.click();
               }}
               disabled={!item || busy}
-              className="rounded-full border border-stone-200 bg-white px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-500 disabled:cursor-not-allowed disabled:text-stone-300"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 transition hover:border-stone-400 hover:text-stone-900 disabled:cursor-not-allowed disabled:text-stone-300"
+              aria-label="Add image"
+              title="Add image"
             >
-              + Image
+              +
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setLinkMode(true);
-                setError(null);
-              }}
-              disabled={!item || busy}
-              className="rounded-full border border-stone-200 bg-white px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-500 disabled:cursor-not-allowed disabled:text-stone-300"
-            >
-              + Link
-            </button>
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                saveState === 'error'
+                  ? 'bg-red-400'
+                  : saveState === 'saving' ||
+                      saveState === 'publishing'
+                    ? 'animate-pulse bg-stone-500'
+                    : 'bg-stone-300'
+              }`}
+              aria-label={
+                saveState === 'error'
+                  ? 'Error'
+                  : saveState === 'saving'
+                    ? 'Saving'
+                    : 'Ready'
+              }
+            />
+          </div>
 
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() =>
@@ -1086,7 +1216,7 @@ export default function NewPostModal({
                 busy ||
                 saveState === 'saving'
               }
-              className="rounded-full border border-stone-200 bg-white px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-500 disabled:cursor-not-allowed disabled:text-stone-300"
+              className="rounded-full px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 disabled:text-stone-300 sm:px-4"
             >
               Later
             </button>
@@ -1101,7 +1231,7 @@ export default function NewPostModal({
                 busy ||
                 saveState === 'saving'
               }
-              className="rounded-full border border-stone-200 bg-white px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-500 disabled:cursor-not-allowed disabled:text-stone-300"
+              className="rounded-full px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 disabled:text-stone-300 sm:px-4"
             >
               AI
             </button>
@@ -1111,23 +1241,11 @@ export default function NewPostModal({
               onClick={() =>
                 void finish('direct')
               }
-              disabled={
-                !item ||
-                busy ||
-                saveState === 'saving' ||
-                (item.type === 'link' &&
-                  !item.source_url) ||
-                (item.type === 'photo' &&
-                  !item.metadata &&
-                  !imagePreview) ||
-                (item.type !== 'link' &&
-                  item.type !== 'photo' &&
-                  !bodyMd.trim())
-              }
-              className="rounded-full bg-stone-900 px-6 py-2.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+              disabled={!canPost}
+              className="rounded-full bg-stone-900 px-5 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
               {saveState === 'publishing'
-                ? 'Working…'
+                ? '…'
                 : 'Post'}
             </button>
           </div>
