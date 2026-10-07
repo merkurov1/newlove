@@ -1,53 +1,28 @@
-'use client';
+"use client";
 
 import {
   useCallback,
   useEffect,
   useRef,
   useState,
-} from 'react';
+} from "react";
 
-export type YouTubeMetadata = {
-  video_id?: string;
-  title?: string;
-  author_name?: string | null;
-  author_url?: string | null;
-  thumbnail_url?: string;
-  thumbnail_width?: number | null;
-  thumbnail_height?: number | null;
-  provider_name?: string;
-};
+import type {
+  Item,
+  NewPostModalProps,
+  SaveState,
+  YouTubeMetadata,
+} from "./types";
 
-export type Item = {
-  id: string;
-  title: string | null;
-  slug: string | null;
-  lang: string;
-  type: string;
-  status: string;
-  visibility: string;
-  body_md: string | null;
-  source_url?: string | null;
-  metadata?: Record<string, unknown> | null;
-  published_at?: string | null;
-};
-
-export type SaveState =
-  | 'creating'
-  | 'loading'
-  | 'saving'
-  | 'saved'
-  | 'publishing'
-  | 'error';
-
-export type NewPostModalProps = {
-  onClose: () => void;
-  onCreated?: () => void;
-  itemId?: string | null;
+export type {
+  Item,
+  NewPostModalProps,
+  SaveState,
+  YouTubeMetadata,
 };
 
 export const LAST_DRAFT_KEY =
-  'flow:last-draft-id';
+  "flow:last-draft-id";
 
 export const AUTOSAVE_INTERVAL =
   10_000;
@@ -58,12 +33,12 @@ function firstLine(body: string) {
       .split(/\r?\n/)
       .map((line) =>
         line
-          .replace(/^#{1,6}\s+/, '')
+          .replace(/^#{1,6}\s+/, "")
           .trim(),
       )
       .find(Boolean)
       ?.slice(0, 160) ||
-    'Flow post'
+    "Flow post"
   );
 }
 
@@ -76,11 +51,11 @@ function slugify(
     .trim()
     .replace(
       /[^\p{L}\p{N}\s-]/gu,
-      '',
+      "",
     )
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
     .slice(0, 80);
 
   return (
@@ -108,7 +83,7 @@ function withFlowMetadata(
     flow: {
       ...(metadata &&
       typeof metadata.flow ===
-        'object' &&
+        "object" &&
       metadata.flow !== null
         ? metadata.flow
         : {}),
@@ -144,7 +119,7 @@ export function normalizePastedUrl(
 
     if (
       !url.hostname ||
-      !url.hostname.includes('.')
+      !url.hostname.includes(".")
     ) {
       return null;
     }
@@ -163,7 +138,7 @@ export function getDomain(
       value,
     ).hostname.replace(
       /^www\./,
-      '',
+      "",
     );
   } catch {
     return value;
@@ -179,7 +154,7 @@ export function getYouTubeMetadata(
   if (
     !metadata ||
     typeof metadata.youtube !==
-      'object' ||
+      "object" ||
     metadata.youtube === null
   ) {
     return null;
@@ -192,7 +167,7 @@ export function isYouTubeVideo(
   item: Item | null,
 ) {
   return (
-    item?.type === 'video' &&
+    item?.type === "video" &&
     Boolean(
       getYouTubeMetadata(
         item.metadata,
@@ -204,11 +179,12 @@ export function isYouTubeVideo(
 function isDraft(item: Item | null) {
   return (
     Boolean(item) &&
-    item?.status === 'draft'
+    item?.status === "draft"
   );
 }
 
 export function useNewPostModal({
+  open,
   onClose,
   onCreated,
   itemId,
@@ -221,18 +197,18 @@ export function useNewPostModal({
   const [
     bodyMd,
     setBodyMd,
-  ] = useState('');
+  ] = useState("");
 
   const [
     title,
     setTitle,
-  ] = useState('');
+  ] = useState("");
 
   const [
     saveState,
     setSaveState,
   ] = useState<SaveState>(
-    'creating',
+    "creating",
   );
 
   const [
@@ -250,7 +226,7 @@ export function useNewPostModal({
   const [
     linkUrl,
     setLinkUrl,
-  ] = useState('');
+  ] = useState("");
 
   const [
     linkPreview,
@@ -309,8 +285,8 @@ export function useNewPostModal({
 
   const latestRef =
     useRef({
-      bodyMd: '',
-      title: '',
+      bodyMd: "",
+      title: "",
     });
 
   const closingRef =
@@ -320,9 +296,9 @@ export function useNewPostModal({
     useRef(true);
 
   const busy =
-    saveState === 'creating' ||
-    saveState === 'loading' ||
-    saveState === 'publishing' ||
+    saveState === "creating" ||
+    saveState === "loading" ||
+    saveState === "publishing" ||
     isClearing;
 
   useEffect(() => {
@@ -344,10 +320,10 @@ export function useNewPostModal({
     useCallback(
       (nextItem: Item | null) => {
         const nextBody =
-          nextItem?.body_md ?? '';
+          nextItem?.body_md ?? "";
 
         const nextTitle =
-          nextItem?.title ?? '';
+          nextItem?.title ?? "";
 
         setItem(nextItem);
         setBodyMd(nextBody);
@@ -360,11 +336,11 @@ export function useNewPostModal({
 
         setError(null);
         setLinkMode(false);
-        setLinkUrl('');
+        setLinkUrl("");
         setLinkPreview(null);
         setImageName(null);
         setImagePreview(null);
-        setSaveState('saved');
+        setSaveState("saved");
       },
       [],
     );
@@ -372,26 +348,26 @@ export function useNewPostModal({
   const createFreshDraft =
     useCallback(
       async () => {
-        setSaveState('creating');
+        setSaveState("creating");
         setError(null);
 
         const response =
           await fetch(
-            '/api/admin/items/new',
+            "/api/admin/items/new",
             {
-              method: 'POST',
+              method: "POST",
               headers: {
-                'Content-Type':
-                  'application/json',
+                "Content-Type":
+                  "application/json",
               },
               body: JSON.stringify({
-                type: 'note',
-                title: '',
-                body_md: '',
-                lang: 'ru',
+                type: "note",
+                title: "",
+                body_md: "",
+                lang: "ru",
                 metadata: {
                   flow: {
-                    mode: 'direct',
+                    mode: "direct",
                   },
                 },
               }),
@@ -407,7 +383,7 @@ export function useNewPostModal({
         ) {
           throw new Error(
             json.error ??
-              'Failed to create Flow item.',
+              "Failed to create Flow item.",
           );
         }
 
@@ -444,13 +420,13 @@ export function useNewPostModal({
 
         if (itemId) {
           setIsEditing(true);
-          setSaveState('loading');
+          setSaveState("loading");
 
           const response =
             await fetch(
               `/api/admin/items/${itemId}`,
               {
-                cache: 'no-store',
+                cache: "no-store",
               },
             );
 
@@ -463,7 +439,7 @@ export function useNewPostModal({
           ) {
             throw new Error(
               json.error ??
-                'Failed to load item.',
+                "Failed to load item.",
             );
           }
 
@@ -478,13 +454,13 @@ export function useNewPostModal({
             );
 
           if (existingDraftId) {
-            setSaveState('loading');
+            setSaveState("loading");
 
             const response =
               await fetch(
                 `/api/admin/items/${existingDraftId}`,
                 {
-                  cache: 'no-store',
+                  cache: "no-store",
                 },
               );
 
@@ -495,7 +471,7 @@ export function useNewPostModal({
               response.ok &&
               json.item &&
               json.item.status ===
-                'draft'
+                "draft"
             ) {
               loaded =
                 json.item as Item;
@@ -508,7 +484,6 @@ export function useNewPostModal({
 
           if (!loaded) {
             await createFreshDraft();
-
             return;
           }
         }
@@ -524,39 +499,43 @@ export function useNewPostModal({
         setItem(loaded);
 
         setBodyMd(
-          loaded.body_md ?? '',
+          loaded.body_md ?? "",
         );
 
         setTitle(
-          loaded.title ?? '',
+          loaded.title ?? "",
         );
 
         latestRef.current = {
           bodyMd:
-            loaded.body_md ?? '',
+            loaded.body_md ?? "",
           title:
-            loaded.title ?? '',
+            loaded.title ?? "",
         };
 
         if (
-          loaded.type === 'link' ||
-          loaded.type === 'video'
+          loaded.type === "link" ||
+          loaded.type === "video"
         ) {
           setLinkMode(true);
+
           setLinkUrl(
-            loaded.source_url ?? '',
+            loaded.source_url ?? "",
           );
+
           setLinkPreview(
             loaded.metadata ?? null,
           );
         }
 
-        if (loaded.type === 'photo') {
+        if (
+          loaded.type === "photo"
+        ) {
           const publicUrl =
             loaded.metadata &&
             typeof loaded.metadata
               .public_url ===
-              'string'
+              "string"
               ? loaded.metadata
                   .public_url
               : null;
@@ -569,14 +548,14 @@ export function useNewPostModal({
             loaded.metadata &&
             typeof loaded.metadata
               .filename ===
-              'string'
+              "string"
               ? loaded.metadata
                   .filename
               : null,
           );
         }
 
-        setSaveState('saved');
+        setSaveState("saved");
 
         requestAnimationFrame(
           () => {
@@ -588,6 +567,10 @@ export function useNewPostModal({
     );
 
   useEffect(() => {
+    if (!open) {
+      return;
+    }
+
     let cancelled = false;
 
     async function run() {
@@ -604,17 +587,17 @@ export function useNewPostModal({
         }
 
         console.error(
-          '[flow] initialization failed:',
+          "[flow] initialization failed:",
           err,
         );
 
         setError(
           err instanceof Error
             ? err.message
-            : 'Failed to initialize.',
+            : "Failed to initialize.",
         );
 
-        setSaveState('error');
+        setSaveState("error");
       }
     }
 
@@ -625,7 +608,7 @@ export function useNewPostModal({
 
       if (
         imagePreview?.startsWith(
-          'blob:',
+          "blob:",
         )
       ) {
         URL.revokeObjectURL(
@@ -635,7 +618,7 @@ export function useNewPostModal({
     };
     // initialize intentionally represents one modal session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemId]);
+  }, [open, itemId]);
 
   const saveDraft =
     useCallback(
@@ -651,23 +634,23 @@ export function useNewPostModal({
 
         if (
           isClearing ||
-          item.status !== 'draft'
+          item.status !== "draft"
         ) {
           return false;
         }
 
         try {
-          setSaveState('saving');
+          setSaveState("saving");
           setError(null);
 
           const response =
             await fetch(
               `/api/admin/items/${item.id}`,
               {
-                method: 'PATCH',
+                method: "PATCH",
                 headers: {
-                  'Content-Type':
-                    'application/json',
+                  "Content-Type":
+                    "application/json",
                 },
                 body: JSON.stringify(
                   changes,
@@ -681,7 +664,7 @@ export function useNewPostModal({
           if (!response.ok) {
             throw new Error(
               json.error ??
-                'Failed to save.',
+                "Failed to save.",
             );
           }
 
@@ -695,13 +678,13 @@ export function useNewPostModal({
           }
 
           if (mountedRef.current) {
-            setSaveState('saved');
+            setSaveState("saved");
           }
 
           return true;
         } catch (err) {
           console.error(
-            '[flow] save failed:',
+            "[flow] save failed:",
             err,
           );
 
@@ -709,10 +692,10 @@ export function useNewPostModal({
             setError(
               err instanceof Error
                 ? err.message
-                : 'Failed to save.',
+                : "Failed to save.",
             );
 
-            setSaveState('error');
+            setSaveState("error");
           }
 
           return false;
@@ -724,7 +707,7 @@ export function useNewPostModal({
   useEffect(() => {
     if (
       !item ||
-      item.status !== 'draft'
+      item.status !== "draft"
     ) {
       return;
     }
@@ -734,9 +717,9 @@ export function useNewPostModal({
         isClearing ||
         savePromiseRef.current ||
         operationPromiseRef.current ||
-        saveState === 'publishing' ||
-        saveState === 'creating' ||
-        saveState === 'loading'
+        saveState === "publishing" ||
+        saveState === "creating" ||
+        saveState === "loading"
       ) {
         return;
       }
@@ -824,7 +807,7 @@ export function useNewPostModal({
         }
 
         if (
-          item.status !== 'draft'
+          item.status !== "draft"
         ) {
           return true;
         }
@@ -870,17 +853,17 @@ export function useNewPostModal({
         const operation =
           (async () => {
             try {
-              setSaveState('saving');
+              setSaveState("saving");
               setError(null);
 
               const response =
                 await fetch(
-                  '/api/admin/items/parse-link',
+                  "/api/admin/items/parse-link",
                   {
-                    method: 'POST',
+                    method: "POST",
                     headers: {
-                      'Content-Type':
-                        'application/json',
+                      "Content-Type":
+                        "application/json",
                     },
                     body: JSON.stringify({
                       item_id: item.id,
@@ -897,7 +880,7 @@ export function useNewPostModal({
               if (!response.ok) {
                 throw new Error(
                   json.error ??
-                    'Failed to parse link.',
+                    "Failed to parse link.",
                 );
               }
 
@@ -913,6 +896,7 @@ export function useNewPostModal({
 
               setItem(parsedItem);
               setLinkMode(true);
+
               setLinkUrl(
                 parsedItem.source_url ??
                   url,
@@ -925,29 +909,29 @@ export function useNewPostModal({
               );
 
               setBodyMd(
-                parsedItem.body_md ?? '',
+                parsedItem.body_md ?? "",
               );
 
               setTitle(
-                parsedItem.title ?? '',
+                parsedItem.title ?? "",
               );
 
               latestRef.current = {
                 bodyMd:
                   parsedItem.body_md ??
-                  '',
+                  "",
                 title:
                   parsedItem.title ??
-                  '',
+                  "",
               };
 
-              setSaveState('saved');
+              setSaveState("saved");
 
               requestAnimationFrame(
                 () => {
                   if (
                     parsedItem.type !==
-                    'video'
+                    "video"
                   ) {
                     textareaRef.current?.focus();
                   }
@@ -957,7 +941,7 @@ export function useNewPostModal({
               return true;
             } catch (err) {
               console.error(
-                '[flow] link parsing failed:',
+                "[flow] link parsing failed:",
                 err,
               );
 
@@ -967,10 +951,10 @@ export function useNewPostModal({
                 setError(
                   err instanceof Error
                     ? err.message
-                    : 'Could not read this link.',
+                    : "Could not read this link.",
                 );
 
-                setSaveState('error');
+                setSaveState("error");
               }
 
               return false;
@@ -996,7 +980,7 @@ export function useNewPostModal({
       ) => {
         const pasted =
           event.clipboardData
-            .getData('text')
+            .getData("text")
             .trim();
 
         const url =
@@ -1041,7 +1025,7 @@ export function useNewPostModal({
         const operation =
           (async () => {
             try {
-              setSaveState('saving');
+              setSaveState("saving");
               setError(null);
 
               setLinkMode(false);
@@ -1049,7 +1033,7 @@ export function useNewPostModal({
 
               if (
                 imagePreview?.startsWith(
-                  'blob:',
+                  "blob:",
                 )
               ) {
                 URL.revokeObjectURL(
@@ -1074,20 +1058,20 @@ export function useNewPostModal({
                 new FormData();
 
               form.append(
-                'file',
+                "file",
                 file,
               );
 
               form.append(
-                'item_id',
+                "item_id",
                 item.id,
               );
 
               const response =
                 await fetch(
-                  '/api/admin/items/media',
+                  "/api/admin/items/media",
                   {
-                    method: 'POST',
+                    method: "POST",
                     body: form,
                   },
                 );
@@ -1100,7 +1084,7 @@ export function useNewPostModal({
               if (!response.ok) {
                 throw new Error(
                   json.error ??
-                    'Failed to upload image.',
+                    "Failed to upload image.",
                 );
               }
 
@@ -1118,32 +1102,32 @@ export function useNewPostModal({
 
               setBodyMd(
                 uploadedItem.body_md ??
-                  '',
+                  "",
               );
 
               setTitle(
                 uploadedItem.title ??
-                  '',
+                  "",
               );
 
               latestRef.current = {
                 bodyMd:
                   uploadedItem.body_md ??
-                  '',
+                  "",
                 title:
                   uploadedItem.title ??
-                  '',
+                  "",
               };
 
               const publicUrl =
                 typeof json.url ===
-                'string'
+                "string"
                   ? json.url
                   : uploadedItem.metadata &&
                       typeof uploadedItem
                         .metadata
                         .public_url ===
-                        'string'
+                        "string"
                     ? uploadedItem
                         .metadata
                         .public_url
@@ -1155,12 +1139,12 @@ export function useNewPostModal({
                 );
               }
 
-              setSaveState('saved');
+              setSaveState("saved");
 
               return true;
             } catch (err) {
               console.error(
-                '[flow] image upload failed:',
+                "[flow] image upload failed:",
                 err,
               );
 
@@ -1170,10 +1154,10 @@ export function useNewPostModal({
                 setError(
                   err instanceof Error
                     ? err.message
-                    : 'Failed to upload image.',
+                    : "Failed to upload image.",
                 );
 
-                setSaveState('error');
+                setSaveState("error");
               }
 
               return false;
@@ -1192,6 +1176,25 @@ export function useNewPostModal({
       ],
     );
 
+  const handleImageUpload =
+    useCallback(
+      (
+        event: React.ChangeEvent<HTMLInputElement>,
+      ) => {
+        const file =
+          event.target.files?.[0];
+
+        if (!file) {
+          return;
+        }
+
+        void uploadImage(file);
+
+        event.target.value = "";
+      },
+      [uploadImage],
+    );
+
   const finish =
     useCallback(async () => {
       if (
@@ -1202,14 +1205,14 @@ export function useNewPostModal({
       }
 
       if (
-        saveState === 'publishing'
+        saveState === "publishing"
       ) {
         return;
       }
 
       try {
         setError(null);
-        setSaveState('publishing');
+        setSaveState("publishing");
 
         if (
           operationPromiseRef.current
@@ -1225,7 +1228,7 @@ export function useNewPostModal({
           await flushSave();
 
         if (!saved) {
-          setSaveState('error');
+          setSaveState("error");
           return;
         }
 
@@ -1233,14 +1236,14 @@ export function useNewPostModal({
           latestRef.current;
 
         const isVideo =
-          item.type === 'video';
+          item.type === "video";
 
         if (
-          item.type === 'link' &&
+          item.type === "link" &&
           !item.source_url
         ) {
           throw new Error(
-            'The link is not ready yet.',
+            "The link is not ready yet.",
           );
         }
 
@@ -1249,7 +1252,7 @@ export function useNewPostModal({
           !item.source_url
         ) {
           throw new Error(
-            'The YouTube video is not ready yet.',
+            "The YouTube video is not ready yet.",
           );
         }
 
@@ -1260,28 +1263,28 @@ export function useNewPostModal({
           )
         ) {
           throw new Error(
-            'The YouTube video metadata is not ready yet.',
+            "The YouTube video metadata is not ready yet.",
           );
         }
 
         if (
-          item.type === 'photo' &&
+          item.type === "photo" &&
           !item.metadata &&
           !imagePreview
         ) {
           throw new Error(
-            'Add an image first.',
+            "Add an image first.",
           );
         }
 
         if (
-          item.type !== 'link' &&
-          item.type !== 'video' &&
-          item.type !== 'photo' &&
+          item.type !== "link" &&
+          item.type !== "video" &&
+          item.type !== "photo" &&
           !current.bodyMd.trim()
         ) {
           throw new Error(
-            'Write something first.',
+            "Write something first.",
           );
         }
 
@@ -1291,34 +1294,34 @@ export function useNewPostModal({
           );
 
         const generatedTitle =
-          item.type === 'video'
+          item.type === "video"
             ? String(
                 getYouTubeMetadata(
                   item.metadata,
                 )?.title ||
                   item.title ||
-                  'YouTube video',
+                  "YouTube video",
               ).slice(0, 160)
-            : item.type === 'link'
+            : item.type === "link"
               ? String(
                   linkPreview?.title ||
                     item.title ||
                     item.source_url ||
-                    'Link',
+                    "Link",
                 ).slice(0, 160)
-              : item.type === 'photo'
+              : item.type === "photo"
                 ? String(
                     (
                       item.metadata &&
                       typeof item.metadata
                         .alt ===
-                        'string'
+                        "string"
                         ? item.metadata
                             .alt
                         : null
                     ) ||
                       item.title ||
-                      'Image',
+                      "Image",
                   ).slice(0, 160)
                 : (
                     current.title.trim() ||
@@ -1328,7 +1331,7 @@ export function useNewPostModal({
                   ).slice(0, 160);
 
         const slug =
-          item.status === 'published' &&
+          item.status === "published" &&
           item.slug
             ? item.slug
             : slugify(
@@ -1340,10 +1343,10 @@ export function useNewPostModal({
           await fetch(
             `/api/admin/items/${item.id}`,
             {
-              method: 'PATCH',
+              method: "PATCH",
               headers: {
-                'Content-Type':
-                  'application/json',
+                "Content-Type":
+                  "application/json",
               },
               body: JSON.stringify({
                 title:
@@ -1352,8 +1355,8 @@ export function useNewPostModal({
                   current.bodyMd,
                 slug,
                 metadata,
-                status: 'published',
-                visibility: 'public',
+                status: "published",
+                visibility: "public",
               }),
             },
           );
@@ -1378,22 +1381,25 @@ export function useNewPostModal({
         void fetch(
           `/api/admin/items/${item.id}/ai`,
           {
-            method: 'POST',
+            method: "POST",
           },
         ).catch((aiError) => {
           console.warn(
-            '[flow] AI context request failed:',
+            "[flow] AI context request failed:",
             aiError,
           );
         });
 
-        setSaveState('saved');
+        setSaveState("saved");
 
-        onCreated?.();
+        onCreated?.(
+          json.item as Item,
+        );
+
         onClose();
       } catch (err) {
         console.error(
-          '[flow] publish failed:',
+          "[flow] publish failed:",
           err,
         );
 
@@ -1401,10 +1407,10 @@ export function useNewPostModal({
           setError(
             err instanceof Error
               ? err.message
-              : 'Failed to publish.',
+              : "Failed to publish.",
           );
 
-          setSaveState('error');
+          setSaveState("error");
         }
       }
     }, [
@@ -1429,32 +1435,22 @@ export function useNewPostModal({
       }
 
       setIsClearing(true);
+      setSaveState("clearing");
       setError(null);
 
       try {
-        /*
-         * First wait for a currently running operation.
-         * This prevents DELETE from racing with parse/upload.
-         */
         if (
           operationPromiseRef.current
         ) {
           await operationPromiseRef.current;
         }
 
-        /*
-         * Then wait for an autosave already in flight.
-         */
         if (
           savePromiseRef.current
         ) {
           await savePromiseRef.current;
         }
 
-        /*
-         * Re-check the item after waiting.
-         * The operation may have replaced it.
-         */
         const currentItem =
           item;
 
@@ -1469,7 +1465,7 @@ export function useNewPostModal({
           await fetch(
             `/api/admin/items/${currentItem.id}`,
             {
-              method: 'DELETE',
+              method: "DELETE",
             },
           );
 
@@ -1482,7 +1478,7 @@ export function useNewPostModal({
 
           throw new Error(
             json.error ??
-              'Failed to clear draft.',
+              "Failed to clear draft.",
           );
         }
 
@@ -1492,7 +1488,7 @@ export function useNewPostModal({
 
         if (
           imagePreview?.startsWith(
-            'blob:',
+            "blob:",
           )
         ) {
           URL.revokeObjectURL(
@@ -1500,35 +1496,27 @@ export function useNewPostModal({
           );
         }
 
-        /*
-         * This is a new composer session.
-         * It must NOT inherit itemId editing mode.
-         */
         setIsEditing(false);
 
         setItem(null);
-        setBodyMd('');
-        setTitle('');
+        setBodyMd("");
+        setTitle("");
 
         latestRef.current = {
-          bodyMd: '',
-          title: '',
+          bodyMd: "",
+          title: "",
         };
 
         setLinkMode(false);
-        setLinkUrl('');
+        setLinkUrl("");
         setLinkPreview(null);
         setImageName(null);
         setImagePreview(null);
 
-        /*
-         * Create the new empty draft immediately,
-         * in the same modal.
-         */
         await createFreshDraft();
       } catch (err) {
         console.error(
-          '[flow] clear failed:',
+          "[flow] clear failed:",
           err,
         );
 
@@ -1536,10 +1524,10 @@ export function useNewPostModal({
           setError(
             err instanceof Error
               ? err.message
-              : 'Failed to clear draft.',
+              : "Failed to clear draft.",
           );
 
-          setSaveState('error');
+          setSaveState("error");
         }
       } finally {
         if (mountedRef.current) {
@@ -1566,8 +1554,8 @@ export function useNewPostModal({
       closingRef.current = true;
 
       if (
-        saveState === 'saved' ||
-        saveState === 'error'
+        saveState === "saved" ||
+        saveState === "error"
       ) {
         onClose();
         return;
@@ -1599,7 +1587,11 @@ export function useNewPostModal({
     function handleKeyboard(
       event: KeyboardEvent,
     ) {
-      if (event.key === 'Escape') {
+      if (!open) {
+        return;
+      }
+
+      if (event.key === "Escape") {
         event.preventDefault();
         void handleClose();
         return;
@@ -1608,13 +1600,13 @@ export function useNewPostModal({
       if (
         (event.metaKey ||
           event.ctrlKey) &&
-        event.key === 'Enter'
+        event.key === "Enter"
       ) {
         event.preventDefault();
 
         if (
           !busy &&
-          saveState !== 'saving' &&
+          saveState !== "saving" &&
           !isClearing
         ) {
           void finish();
@@ -1623,13 +1615,13 @@ export function useNewPostModal({
     }
 
     document.addEventListener(
-      'keydown',
+      "keydown",
       handleKeyboard,
     );
 
     return () => {
       document.removeEventListener(
-        'keydown',
+        "keydown",
         handleKeyboard,
       );
     };
@@ -1638,22 +1630,23 @@ export function useNewPostModal({
     finish,
     handleClose,
     isClearing,
+    open,
     saveState,
   ]);
 
   const isImage =
-    item?.type === 'photo';
+    item?.type === "photo";
 
   const isVideo =
     isYouTubeVideo(item);
 
   const isLink =
-    item?.type === 'link' ||
-    item?.type === 'video' ||
+    item?.type === "link" ||
+    item?.type === "video" ||
     linkMode;
 
   const isParsing =
-    saveState === 'saving' &&
+    saveState === "saving" &&
     isLink &&
     !linkPreview;
 
@@ -1663,24 +1656,24 @@ export function useNewPostModal({
     );
 
   const isPublishing =
-    saveState === 'publishing';
+    saveState === "publishing";
 
   const canPost =
     Boolean(item) &&
     !busy &&
-    saveState !== 'saving' &&
+    saveState !== "saving" &&
     !isClearing &&
     (
-      item?.type === 'video'
+      item?.type === "video"
         ? Boolean(
             item.source_url &&
               getYouTubeMetadata(
                 item.metadata,
               ),
           )
-        : item?.type === 'link'
+        : item?.type === "link"
           ? Boolean(item.source_url)
-          : item?.type === 'photo'
+          : item?.type === "photo"
             ? Boolean(
                 item.metadata ||
                   imagePreview,
@@ -1692,11 +1685,25 @@ export function useNewPostModal({
 
   const canClear =
     item !== null &&
-    item.status === 'draft' &&
+    item.status === "draft" &&
     !isClearing &&
-    saveState !== 'creating' &&
-    saveState !== 'loading' &&
-    saveState !== 'publishing';
+    saveState !== "creating" &&
+    saveState !== "loading" &&
+    saveState !== "publishing";
+
+  const mode =
+    item?.type === "photo"
+      ? "photo"
+      : item?.type === "video"
+        ? "video"
+        : item?.type === "link" ||
+            linkMode
+          ? "link"
+          : "text";
+
+  const isInitializing =
+    saveState === "creating" ||
+    saveState === "loading";
 
   return {
     item,
@@ -1712,6 +1719,7 @@ export function useNewPostModal({
 
     linkMode,
     linkUrl,
+    setLinkUrl,
     linkPreview,
 
     imageName,
@@ -1724,6 +1732,9 @@ export function useNewPostModal({
 
     isEditing,
     busy,
+
+    mode,
+    isInitializing,
 
     isImage,
     isVideo,
@@ -1745,8 +1756,7 @@ export function useNewPostModal({
     parseLink,
 
     uploadImage,
-    handleImageUpload:
-      uploadImage,
+    handleImageUpload,
 
     finish,
     clearDraft,

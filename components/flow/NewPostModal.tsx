@@ -227,8 +227,6 @@ export default function NewPostModal({
             "calc(100dvh - 48px)",
         }}
       >
-        {/* Header */}
-
         <div className="flex shrink-0 items-center justify-between border-b border-black/10 px-4 py-3">
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-black/70">
             Flow
@@ -249,8 +247,6 @@ export default function NewPostModal({
           </button>
         </div>
 
-        {/* Content */}
-
         <div className="min-h-0 flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="px-4 py-8">
@@ -258,8 +254,6 @@ export default function NewPostModal({
             </div>
           ) : (
             <div className="px-4 py-4">
-              {/* Title */}
-
               <input
                 type="text"
                 value={title}
@@ -272,8 +266,6 @@ export default function NewPostModal({
                 disabled={busy}
                 className="mb-3 w-full border-0 bg-transparent p-0 text-xl font-medium leading-7 text-black outline-none placeholder:text-black/25 disabled:opacity-50"
               />
-
-              {/* Body */}
 
               <textarea
                 ref={textareaRef}
@@ -289,8 +281,6 @@ export default function NewPostModal({
                 rows={8}
                 className="min-h-[180px] w-full resize-none border-0 bg-transparent p-0 text-[15px] leading-6 text-black outline-none placeholder:text-black/25 disabled:opacity-50"
               />
-
-              {/* Generic link */}
 
               {isGenericLink &&
               linkUrl ? (
@@ -332,8 +322,6 @@ export default function NewPostModal({
                 </div>
               ) : null}
 
-              {/* YouTube */}
-
               {isVideo &&
               linkUrl ? (
                 <>
@@ -352,8 +340,6 @@ export default function NewPostModal({
                 </>
               ) : null}
 
-              {/* Photo */}
-
               {isPhoto &&
               imagePreview ? (
                 <ImagePreview
@@ -368,12 +354,8 @@ export default function NewPostModal({
           )}
         </div>
 
-        {/* Footer */}
-
         <div className="flex shrink-0 items-center justify-between border-t border-black/10 px-4 py-3">
           <div className="flex items-center gap-3">
-            {/* Image */}
-
             <input
               ref={fileInputRef}
               type="file"
@@ -420,8 +402,6 @@ export default function NewPostModal({
                 <path d="m21 15-5-5L5 21" />
               </svg>
             </button>
-
-            {/* CLEAR */}
 
             {canClear ? (
               <button
