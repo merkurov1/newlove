@@ -1,2175 +1,471 @@
-'use client';
+"use client";
+
+import { useEffect, useRef } from "react";
 
 import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+  ImagePreview,
+  LinkPreviewCard,
+  ShimmerPreview,
+  YouTubePreview,
+} from "./new-post/Previews";
 
-type YouTubeMetadata = {
-  video_id?: string;
-  title?: string;
-  author_name?: string | null;
-  author_url?: string | null;
-  thumbnail_url?: string;
-  thumbnail_width?: number | null;
-  thumbnail_height?: number | null;
-  provider_name?: string;
-};
+import { useNewPostModal } from "./new-post/useNewPostModal";
 
-type Item = {
-  id: string;
-  title: string | null;
-  slug: string | null;
-  lang: string;
-  type: string;
-  status: string;
-  visibility: string;
-  body_md: string | null;
-  source_url?: string | null;
-  metadata?: Record<string, unknown> | null;
-  published_at?: string | null;
-};
+import type {
+  NewPostModalProps,
+  SaveState,
+} from "./new-post/types";
 
-type NewPostModalProps = {
-  onClose: () => void;
-  onCreated?: () => void;
-  itemId?: string | null;
-};
-
-type SaveState =
-  | 'creating'
-  | 'loading'
-  | 'saving'
-  | 'saved'
-  | 'publishing'
-  | 'error';
-
-const LAST_DRAFT_KEY =
-  'flow:last-draft-id';
-
-const AUTOSAVE_INTERVAL =
-  10_000;
-
-function firstLine(
-  body: string,
-) {
-  return (
-    body
-      .split(/\r?\n/)
-      .map((line) =>
-        line
-          .replace(
-            /^#{1,6}\s+/,
-            '',
-          )
-          .trim(),
-      )
-      .find(Boolean)
-      ?.slice(0, 160) ||
-    'Flow post'
-  );
-}
-
-function slugify(
-  value: string,
-  id: string,
-) {
-  const slug =
-    value
-      .toLowerCase()
-      .trim()
-      .replace(
-        /[^\p{L}\p{N}\s-]/gu,
-        '',
-      )
-      .replace(
-        /\s+/g,
-        '-',
-      )
-      .replace(
-        /-+/g,
-        '-',
-      )
-      .replace(
-        /^-|-$/g,
-        '',
-      )
-      .slice(0, 80);
-
-  return (
-    slug ||
-    `post-${id.slice(
-      0,
-      8,
-    )}`
-  );
-}
-
-async function readJson(
-  response: Response,
-) {
-  return response
-    .json()
-    .catch(() => ({}));
-}
-
-function withFlowMetadata(
-  metadata:
-    | Record<
-        string,
-        unknown
-      >
-    | null
-    | undefined,
-) {
-  return {
-    ...(metadata ?? {}),
-    flow: {
-      ...(metadata &&
-      typeof metadata.flow ===
-        'object' &&
-      metadata.flow !== null
-        ? metadata.flow
-        : {}),
-      queued_at:
-        new Date().toISOString(),
-    },
-  };
-}
-
-function normalizePastedUrl(
-  value: string,
-) {
-  const trimmed =
-    value.trim();
-
-  if (
-    !trimmed ||
-    /\s/.test(trimmed)
-  ) {
-    return null;
-  }
-
-  const candidate =
-    /^https?:\/\//i.test(
-      trimmed,
-    )
-      ? trimmed
-      : `https://${trimmed}`;
-
-  try {
-    const url =
-      new URL(candidate);
-
-    if (
-      !url.hostname ||
-      !url.hostname.includes(
-        '.',
-      )
-    ) {
-      return null;
-    }
-
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
-function getDomain(
-  value: string,
-) {
-  try {
-    return new URL(
-      value,
-    ).hostname.replace(
-      /^www\./,
-      '',
-    );
-  } catch {
-    return value;
-  }
-}
-
-function getYouTubeMetadata(
-  metadata:
-    | Record<string, unknown>
-    | null
-    | undefined,
-): YouTubeMetadata | null {
-  if (
-    !metadata ||
-    typeof metadata.youtube !==
-      'object' ||
-    metadata.youtube === null
-  ) {
-    return null;
-  }
-
-  return metadata.youtube as YouTubeMetadata;
-}
-
-function isYouTubeVideo(
-  item: Item | null,
-) {
-  return (
-    item?.type ===
-      'video' &&
-    Boolean(
-      getYouTubeMetadata(
-        item.metadata,
-      ),
-    )
-  );
-}
-
-function ShimmerPreview() {
-  return (
-    <div
-      className="
-        animate-[flowFadeIn_180ms_ease-out]
-        space-y-4
-      "
-    >
-      <div className="h-3 w-24 animate-pulse rounded bg-stone-200" />
-      <div className="h-8 w-4/5 animate-pulse rounded bg-stone-200" />
-      <div className="h-4 w-full animate-pulse rounded bg-stone-100" />
-      <div className="h-4 w-3/4 animate-pulse rounded bg-stone-100" />
-    </div>
-  );
-}
-
-function YouTubePreview({
-  metadata,
-  sourceUrl,
+function SaveStatus({
+  state,
 }: {
-  metadata: YouTubeMetadata;
-  sourceUrl: string;
+  state: SaveState;
 }) {
-  const thumbnail =
-    typeof metadata.thumbnail_url ===
-    'string'
-      ? metadata.thumbnail_url
-      : null;
+  if (state === "saving") {
+    return (
+      <span className="text-[10px] uppercase tracking-[0.14em] text-black/40">
+        Saving…
+      </span>
+    );
+  }
 
-  const title =
-    metadata.title ||
-    'YouTube video';
+  if (state === "clearing") {
+    return (
+      <span className="text-[10px] uppercase tracking-[0.14em] text-black/40">
+        Clearing…
+      </span>
+    );
+  }
 
-  const channel =
-    metadata.author_name ||
-    'YouTube';
+  if (state === "saved") {
+    return (
+      <span className="text-[10px] uppercase tracking-[0.14em] text-black/35">
+        Saved
+      </span>
+    );
+  }
 
-  return (
-    <div
-      className="
-        animate-[flowFadeIn_160ms_ease-out]
-      "
-    >
-      <div
-        className="
-          overflow-hidden
-          rounded-[1.5rem]
-          bg-stone-900
-        "
-      >
-        {thumbnail ? (
-          <div className="relative aspect-video w-full">
-            <img
-              src={thumbnail}
-              alt=""
-              className="
-                absolute inset-0
-                h-full w-full
-                object-cover
-              "
-            />
+  if (state === "error") {
+    return (
+      <span className="text-[10px] uppercase tracking-[0.14em] text-red-500/70">
+        Error
+      </span>
+    );
+  }
 
-            <div
-              className="
-                absolute inset-0
-                flex items-center justify-center
-                bg-black/10
-              "
-            >
-              <div
-                className="
-                  flex h-16 w-16
-                  items-center justify-center
-                  rounded-full
-                  bg-white/95
-                  shadow-xl
-                  sm:h-20 sm:w-20
-                "
-              >
-                <span
-                  className="
-                    ml-1
-                    text-2xl
-                    text-stone-900
-                    sm:text-3xl
-                  "
-                  aria-hidden="true"
-                >
-                  ▶
-                </span>
-              </div>
-            </div>
-
-            <div
-              className="
-                absolute bottom-4 left-4
-                rounded-full
-                bg-black/65
-                px-3 py-1.5
-                font-mono text-[9px]
-                uppercase
-                tracking-[0.16em]
-                text-white
-                backdrop-blur-sm
-              "
-            >
-              YouTube
-            </div>
-          </div>
-        ) : (
-          <div
-            className="
-              flex aspect-video
-              items-center justify-center
-              text-white
-            "
-          >
-            <span className="text-3xl">
-              ▶
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-5">
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
-          YouTube
-        </div>
-
-        <div className="mt-3 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
-          {title}
-        </div>
-
-        <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400">
-          {channel}
-        </div>
-
-        <a
-          href={sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="
-            mt-4 inline-block
-            font-mono text-[10px]
-            uppercase
-            tracking-[0.16em]
-            text-stone-400
-            transition-colors
-            hover:text-stone-900
-          "
-        >
-          Open original ↗
-        </a>
-      </div>
-    </div>
-  );
+  return null;
 }
 
 export default function NewPostModal({
+  open,
   onClose,
   onCreated,
   itemId,
 }: NewPostModalProps) {
-  const [
-    item,
-    setItem,
-  ] =
-    useState<Item | null>(
-      null,
-    );
-
-  const [
-    bodyMd,
-    setBodyMd,
-  ] =
-    useState('');
-
-  const [
-    saveState,
-    setSaveState,
-  ] =
-    useState<SaveState>(
-      'creating',
-    );
-
-  const [
-    error,
-    setError,
-  ] =
-    useState<string | null>(
-      null,
-    );
-
-  const [
-    linkMode,
-    setLinkMode,
-  ] =
-    useState(false);
-
-  const [
-    linkUrl,
-    setLinkUrl,
-  ] =
-    useState('');
-
-  const [
-    linkPreview,
-    setLinkPreview,
-  ] =
-    useState<Record<
-      string,
-      unknown
-    > | null>(null);
-
-  const [
-    imageName,
-    setImageName,
-  ] =
-    useState<string | null>(
-      null,
-    );
-
-  const [
-    imagePreview,
-    setImagePreview,
-  ] =
-    useState<string | null>(
-      null,
-    );
-
-  const fileRef =
-    useRef<HTMLInputElement | null>(
-      null,
-    );
+  const fileInputRef =
+    useRef<HTMLInputElement | null>(null);
 
   const textareaRef =
-    useRef<HTMLTextAreaElement | null>(
-      null,
-    );
+    useRef<HTMLTextAreaElement | null>(null);
 
-  const savePromiseRef =
-    useRef<Promise<boolean> | null>(
-      null,
-    );
-
-  const latestRef =
-    useRef({
-      bodyMd: '',
-    });
-
-  const closingRef =
-    useRef(false);
-
-  const mountedRef =
-    useRef(true);
-
-  const isEditing =
-    Boolean(itemId);
-
-  const busy =
-    saveState ===
-      'creating' ||
-    saveState ===
-      'loading' ||
-    saveState ===
-      'publishing';
-
-  useEffect(() => {
-    latestRef.current = {
-      bodyMd,
-    };
-  }, [bodyMd]);
-
-  useEffect(() => {
-    mountedRef.current =
-      true;
-
-    return () => {
-      mountedRef.current =
-        false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function initialize() {
-      try {
-        setError(null);
-
-        let loaded: Item | null =
-          null;
-
-        if (itemId) {
-          setSaveState(
-            'loading',
-          );
-
-          const response =
-            await fetch(
-              `/api/admin/items/${itemId}`,
-              {
-                cache:
-                  'no-store',
-              },
-            );
-
-          const json =
-            await readJson(
-              response,
-            );
-
-          if (
-            !response.ok ||
-            !json.item
-          ) {
-            throw new Error(
-              json.error ??
-                'Failed to load item.',
-            );
-          }
-
-          loaded =
-            json.item as Item;
-        } else {
-          const existingDraftId =
-            window.localStorage.getItem(
-              LAST_DRAFT_KEY,
-            );
-
-          if (
-            existingDraftId
-          ) {
-            setSaveState(
-              'loading',
-            );
-
-            const response =
-              await fetch(
-                `/api/admin/items/${existingDraftId}`,
-                {
-                  cache:
-                    'no-store',
-                },
-              );
-
-            const json =
-              await readJson(
-                response,
-              );
-
-            if (
-              response.ok &&
-              json.item &&
-              json.item.status ===
-                'draft'
-            ) {
-              loaded =
-                json.item as Item;
-            } else {
-              window.localStorage.removeItem(
-                LAST_DRAFT_KEY,
-              );
-            }
-          }
-
-          if (!loaded) {
-            setSaveState(
-              'creating',
-            );
-
-            const response =
-              await fetch(
-                '/api/admin/items/new',
-                {
-                  method:
-                    'POST',
-                  headers: {
-                    'Content-Type':
-                      'application/json',
-                  },
-                  body: JSON.stringify(
-                    {
-                      type: 'note',
-                      title: '',
-                      body_md:
-                        latestRef
-                          .current
-                          .bodyMd,
-                      lang: 'ru',
-                      metadata: {
-                        flow: {
-                          mode: 'direct',
-                        },
-                      },
-                    },
-                  ),
-                },
-              );
-
-            const json =
-              await readJson(
-                response,
-              );
-
-            if (
-              !response.ok ||
-              !json.item
-            ) {
-              throw new Error(
-                json.error ??
-                  'Failed to create Flow item.',
-              );
-            }
-
-            loaded =
-              json.item as Item;
-
-            window.localStorage.setItem(
-              LAST_DRAFT_KEY,
-              loaded.id,
-            );
-          }
-        }
-
-        if (
-          cancelled ||
-          !loaded
-        ) {
-          return;
-        }
-
-        setItem(
-          loaded,
-        );
-
-        if (
-          !latestRef.current
-            .bodyMd
-            .trim()
-        ) {
-          setBodyMd(
-            loaded.body_md ??
-              '',
-          );
-
-          latestRef.current.bodyMd =
-            loaded.body_md ??
-            '';
-        }
-
-        if (
-          loaded.type ===
-          'link'
-        ) {
-          setLinkMode(
-            true,
-          );
-
-          setLinkUrl(
-            loaded.source_url ??
-              '',
-          );
-
-          setLinkPreview(
-            loaded.metadata ??
-              null,
-          );
-        }
-
-        if (
-          loaded.type ===
-          'video'
-        ) {
-          setLinkMode(
-            true,
-          );
-
-          setLinkUrl(
-            loaded.source_url ??
-              '',
-          );
-
-          setLinkPreview(
-            loaded.metadata ??
-              null,
-          );
-        }
-
-        if (
-          loaded.type ===
-          'photo'
-        ) {
-          const publicUrl =
-            loaded.metadata &&
-            typeof loaded
-              .metadata
-              .public_url ===
-              'string'
-              ? loaded.metadata
-                  .public_url
-              : null;
-
-          setImagePreview(
-            publicUrl,
-          );
-
-          setImageName(
-            loaded.metadata &&
-            typeof loaded
-              .metadata
-              .filename ===
-              'string'
-              ? loaded.metadata
-                  .filename
-              : null,
-          );
-        }
-
-        setSaveState(
-          'saved',
-        );
-
-        requestAnimationFrame(
-          () => {
-            textareaRef.current?.focus();
-          },
-        );
-      } catch (err) {
-        if (
-          cancelled
-        ) {
-          return;
-        }
-
-        console.error(
-          '[flow] initialization failed:',
-          err,
-        );
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Failed to initialize.',
-        );
-
-        setSaveState(
-          'error',
-        );
-      }
-    }
-
-    void initialize();
-
-    return () => {
-      cancelled =
-        true;
-
-      if (
-        imagePreview &&
-        imagePreview.startsWith(
-          'blob:',
-        )
-      ) {
-        URL.revokeObjectURL(
-          imagePreview,
-        );
-      }
-    };
-    // Intentionally initialize once per item.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemId]);
-
-  const saveDraft =
-    useCallback(
-      async (
-        changes: Record<
-          string,
-          unknown
-        >,
-      ) => {
-        if (!item) {
-          return true;
-        }
-
-        try {
-          setSaveState(
-            'saving',
-          );
-
-          setError(null);
-
-          const response =
-            await fetch(
-              `/api/admin/items/${item.id}`,
-              {
-                method:
-                  'PATCH',
-                headers: {
-                  'Content-Type':
-                    'application/json',
-                },
-                body: JSON.stringify(
-                  changes,
-                ),
-              },
-            );
-
-          const json =
-            await readJson(
-              response,
-            );
-
-          if (
-            !response.ok
-          ) {
-            throw new Error(
-              json.error ??
-                'Failed to save.',
-            );
-          }
-
-          if (
-            json.item
-          ) {
-            setItem(
-              json.item as Item,
-            );
-          }
-
-          setSaveState(
-            'saved',
-          );
-
-          return true;
-        } catch (err) {
-          console.error(
-            '[flow] save failed:',
-            err,
-          );
-
-          setError(
-            err instanceof Error
-              ? err.message
-              : 'Failed to save.',
-          );
-
-          setSaveState(
-            'error',
-          );
-
-          return false;
-        }
-      },
-      [item],
-    );
-
-  useEffect(() => {
-    if (!item) {
-      return;
-    }
-
-    const autosave =
-      () => {
-        if (
-          savePromiseRef.current ||
-          saveState ===
-            'publishing' ||
-          saveState ===
-            'creating' ||
-          saveState ===
-            'loading'
-        ) {
-          return;
-        }
-
-        const promise =
-          saveDraft({
-            body_md:
-              latestRef.current
-                .bodyMd,
-          });
-
-        savePromiseRef.current =
-          promise;
-
-        void promise.finally(
-          () => {
-            if (
-              savePromiseRef.current ===
-              promise
-            ) {
-              savePromiseRef.current =
-                null;
-            }
-          },
-        );
-      };
-
-    const interval =
-      window.setInterval(
-        autosave,
-        AUTOSAVE_INTERVAL,
-      );
-
-    return () =>
-      window.clearInterval(
-        interval,
-      );
-  }, [
+  const {
     item,
-    saveDraft,
+
+    bodyMd,
+    setBodyMd,
+
+    title,
+    setTitle,
+
+    linkUrl,
+    setLinkUrl,
+
+    linkPreview,
+    youtubeMetadata,
+
+    imagePreview,
+    imageName,
+
+    mode,
     saveState,
-  ]);
 
-  function handleBodyChange(
-    value: string,
-  ) {
-    setBodyMd(
-      value,
-    );
-
-    latestRef.current.bodyMd =
-      value;
-  }
-
-  const flushSave =
-    useCallback(
-      async () => {
-        if (!item) {
-          return true;
-        }
-
-        if (
-          savePromiseRef.current
-        ) {
-          await savePromiseRef.current;
-        }
-
-        return saveDraft({
-          body_md:
-            latestRef.current
-              .bodyMd,
-        });
-      },
-      [item, saveDraft],
-    );
-
-  async function parseLink(
-    urlOverride?: string,
-  ) {
-    if (!item) {
-      return;
-    }
-
-    const url =
-      (
-        urlOverride ??
-        linkUrl
-      ).trim();
-
-    if (!url) {
-      return;
-    }
-
-    try {
-      setSaveState(
-        'saving',
-      );
-
-      setError(null);
-
-      const response =
-        await fetch(
-          '/api/admin/items/parse-link',
-          {
-            method:
-              'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-            body: JSON.stringify(
-              {
-                item_id:
-                  item.id,
-                url,
-              },
-            ),
-          },
-        );
-
-      const json =
-        await readJson(
-          response,
-        );
-
-      if (
-        !response.ok
-      ) {
-        throw new Error(
-          json.error ??
-            'Failed to parse link.',
-        );
-      }
-
-      const parsedItem =
-        json.item as Item;
-
-      setItem(
-        parsedItem,
-      );
-
-      setLinkMode(
-        true,
-      );
-
-      setLinkUrl(
-        parsedItem.source_url ??
-          url,
-      );
-
-      setLinkPreview(
-        json.metadata ??
-          parsedItem.metadata ??
-          null,
-      );
-
-      setBodyMd(
-        parsedItem.body_md ??
-          '',
-      );
-
-      latestRef.current.bodyMd =
-        parsedItem.body_md ??
-        '';
-
-      setSaveState(
-        'saved',
-      );
-
-      requestAnimationFrame(
-        () => {
-          if (
-            parsedItem.type !==
-            'video'
-          ) {
-            textareaRef.current?.focus();
-          }
-        },
-      );
-    } catch (err) {
-      console.error(
-        '[flow] link parsing failed:',
-        err,
-      );
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Could not read this link.',
-      );
-
-      setSaveState(
-        'error',
-      );
-    }
-  }
-
-  function handlePaste(
-    event: React.ClipboardEvent<HTMLTextAreaElement>,
-  ) {
-    const pasted =
-      event.clipboardData
-        .getData('text')
-        .trim();
-
-    const url =
-      normalizePastedUrl(
-        pasted,
-      );
-
-    if (
-      !url ||
-      bodyMd.trim()
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-
-    setError(null);
-    setLinkMode(true);
-    setLinkUrl(url);
-    setLinkPreview(null);
-
-    void parseLink(url);
-  }
-
-  async function uploadImage(
-    file: File,
-  ) {
-    if (!item) {
-      return;
-    }
-
-    try {
-      setSaveState(
-        'saving',
-      );
-
-      setError(null);
-
-      setLinkMode(false);
-      setLinkPreview(null);
-
-      if (
-        imagePreview &&
-        imagePreview.startsWith(
-          'blob:',
-        )
-      ) {
-        URL.revokeObjectURL(
-          imagePreview,
-        );
-      }
-
-      const localPreview =
-        URL.createObjectURL(
-          file,
-        );
-
-      setImagePreview(
-        localPreview,
-      );
-
-      setImageName(
-        file.name,
-      );
-
-      const form =
-        new FormData();
-
-      form.append(
-        'file',
-        file,
-      );
-
-      form.append(
-        'item_id',
-        item.id,
-      );
-
-      const response =
-        await fetch(
-          '/api/admin/items/media',
-          {
-            method:
-              'POST',
-            body: form,
-          },
-        );
-
-      const json =
-        await readJson(
-          response,
-        );
-
-      if (
-        !response.ok
-      ) {
-        throw new Error(
-          json.error ??
-            'Failed to upload image.',
-        );
-      }
-
-      const uploadedItem =
-        json.item as Item;
-
-      setItem(
-        uploadedItem,
-      );
-
-      setBodyMd(
-        uploadedItem.body_md ??
-          '',
-      );
-
-      latestRef.current.bodyMd =
-        uploadedItem.body_md ??
-        '';
-
-      const publicUrl =
-        typeof json.url ===
-        'string'
-          ? json.url
-          : uploadedItem
-                .metadata &&
-            typeof uploadedItem
-              .metadata
-              .public_url ===
-              'string'
-          ? uploadedItem
-              .metadata
-              .public_url
-          : null;
-
-      if (
-        publicUrl
-      ) {
-        setImagePreview(
-          publicUrl,
-        );
-      }
-
-      setSaveState(
-        'saved',
-      );
-    } catch (err) {
-      console.error(
-        '[flow] image upload failed:',
-        err,
-      );
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to upload image.',
-      );
-
-      setSaveState(
-        'error',
-      );
-    }
-  }
-
-  async function finish() {
-    if (!item) {
-      return;
-    }
-
-    if (
-      saveState ===
-      'publishing'
-    ) {
-      return;
-    }
-
-    try {
-      setError(null);
-
-      setSaveState(
-        'publishing',
-      );
-
-      const saved =
-        await flushSave();
-
-      if (!saved) {
-        setSaveState(
-          'error',
-        );
-        return;
-      }
-
-      const current =
-        latestRef.current;
-
-      const isVideo =
-        item.type ===
-        'video';
-
-      if (
-        item.type ===
-          'link' &&
-        !item.source_url
-      ) {
-        throw new Error(
-          'The link is not ready yet.',
-        );
-      }
-
-      if (
-        isVideo &&
-        !item.source_url
-      ) {
-        throw new Error(
-          'The YouTube video is not ready yet.',
-        );
-      }
-
-      if (
-        isVideo &&
-        !getYouTubeMetadata(
-          item.metadata,
-        )
-      ) {
-        throw new Error(
-          'The YouTube video metadata is not ready yet.',
-        );
-      }
-
-      if (
-        item.type ===
-          'photo' &&
-        !item.metadata &&
-        !imagePreview
-      ) {
-        throw new Error(
-          'Add an image first.',
-        );
-      }
-
-      if (
-        item.type !==
-          'link' &&
-        item.type !==
-          'video' &&
-        item.type !==
-          'photo' &&
-        !current.bodyMd.trim()
-      ) {
-        throw new Error(
-          'Write something first.',
-        );
-      }
-
-      const metadata =
-        withFlowMetadata(
-          item.metadata,
-        );
-
-      const title =
-        item.type ===
-        'video'
-          ? String(
-              getYouTubeMetadata(
-                item.metadata,
-              )?.title ||
-                item.title ||
-                'YouTube video',
-            ).slice(0, 160)
-          : item.type ===
-            'link'
-          ? String(
-              linkPreview?.title ||
-                item.title ||
-                item.source_url ||
-                'Link',
-            ).slice(0, 160)
-          : item.type ===
-            'photo'
-          ? String(
-              (
-                item.metadata &&
-                typeof item
-                  .metadata
-                  .alt ===
-                  'string'
-                  ? item
-                      .metadata
-                      .alt
-                  : null
-              ) ||
-                item.title ||
-                'Image',
-            ).slice(0, 160)
-          : firstLine(
-              current.bodyMd,
-            );
-
-      const slug =
-        isEditing &&
-        item.slug
-          ? item.slug
-          : slugify(
-              title,
-              item.id,
-            );
-
-      const response =
-        await fetch(
-          `/api/admin/items/${item.id}`,
-          {
-            method:
-              'PATCH',
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-            body: JSON.stringify(
-              {
-                title,
-                body_md:
-                  current.bodyMd,
-                slug,
-                metadata,
-                status:
-                  'published',
-                visibility:
-                  'public',
-              },
-            ),
-          },
-        );
-
-      const json =
-        await readJson(
-          response,
-        );
-
-      if (
-        !response.ok ||
-        !json.item
-      ) {
-        throw new Error(
-          json.error ??
-            `Failed to publish (${response.status}).`,
-        );
-      }
-
-      window.localStorage.removeItem(
-        LAST_DRAFT_KEY,
-      );
-
-      /*
-       * AI is deliberately independent from publishing.
-       * The post becomes public immediately.
-       */
-      void fetch(
-        `/api/admin/items/${item.id}/ai`,
-        {
-          method:
-            'POST',
-        },
-      ).catch(
-        (aiError) => {
-          console.warn(
-            '[flow] AI context request failed:',
-            aiError,
-          );
-        },
-      );
-
-      setSaveState(
-        'saved',
-      );
-
-      onCreated?.();
-      onClose();
-    } catch (err) {
-      console.error(
-        '[flow] publish failed:',
-        err,
-      );
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to publish.',
-      );
-
-      setSaveState(
-        'error',
-      );
-    }
-  }
-
-  async function handleClose() {
-    if (
-      closingRef.current
-    ) {
-      return;
-    }
-
-    closingRef.current =
-      true;
-
-    if (
-      saveState ===
-        'saved' ||
-      saveState ===
-        'error'
-    ) {
-      onClose();
-      return;
-    }
-
-    if (!item) {
-      onClose();
-      return;
-    }
-
-    const saved =
-      await flushSave();
-
-    if (!saved) {
-      closingRef.current =
-        false;
-      return;
-    }
-
-    onClose();
-  }
+    isInitializing,
+    isParsing,
+    isPublishing,
+    isClearing,
+
+    isEditing,
+    canClear,
+    busy,
+
+    handlePaste,
+    parseLink,
+    handleImageUpload,
+
+    finish,
+    clearDraft,
+    handleClose,
+  } = useNewPostModal({
+    open,
+    onClose,
+    onCreated,
+    itemId,
+  });
 
   useEffect(() => {
-    function handleKeyboard(
+    if (!open) return;
+
+    const handleKeyDown = (
       event: KeyboardEvent,
-    ) {
-      if (
-        event.key ===
-        'Escape'
-      ) {
+    ) => {
+      if (event.key === "Escape") {
         event.preventDefault();
 
-        void handleClose();
+        if (!busy) {
+          void handleClose();
+        }
 
         return;
       }
 
       if (
-        (event.metaKey ||
-          event.ctrlKey) &&
-        event.key ===
-          'Enter'
+        (event.metaKey || event.ctrlKey) &&
+        event.key === "Enter"
       ) {
         event.preventDefault();
 
-        if (
-          !busy &&
-          saveState !==
-            'saving'
-        ) {
+        if (!busy) {
           void finish();
         }
       }
-    }
+    };
 
-    document.addEventListener(
-      'keydown',
-      handleKeyboard,
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
     );
 
     return () => {
-      document.removeEventListener(
-        'keydown',
-        handleKeyboard,
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
       );
     };
-    // Keyboard handler intentionally tracks current state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     busy,
-    saveState,
-    item,
-    bodyMd,
-    linkUrl,
-    linkPreview,
-    imagePreview,
+    finish,
+    handleClose,
+    open,
   ]);
 
-  const isImage =
-    item?.type ===
-    'photo';
+  useEffect(() => {
+    if (!open) return;
+
+    const timer =
+      window.setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 50);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [open]);
+
+  if (!open) {
+    return null;
+  }
+
+  const isLoading =
+    isInitializing || !item;
 
   const isVideo =
-    isYouTubeVideo(item);
+    mode === "video" &&
+    Boolean(linkUrl);
 
   const isLink =
-    item?.type ===
-      'link' ||
-    item?.type ===
-      'video' ||
-    linkMode;
+    mode === "link" &&
+    Boolean(linkUrl);
 
-  const isParsing =
-    saveState ===
-      'saving' &&
-    isLink &&
-    !linkPreview;
+  const isPhoto =
+    mode === "photo" &&
+    Boolean(imagePreview);
 
-  const canPost =
-    Boolean(item) &&
+  const hasBody =
+    bodyMd.trim().length > 0;
+
+  const hasTitle =
+    title.trim().length > 0;
+
+  const canPublish =
     !busy &&
-    saveState !==
-      'saving' &&
+    !isLoading &&
     (
-      item?.type ===
-      'video'
-        ? Boolean(
-            item.source_url &&
-              getYouTubeMetadata(
-                item.metadata,
-              ),
-          )
-        : item?.type ===
-          'link'
-        ? Boolean(
-            item.source_url,
-          )
-        : item?.type ===
-          'photo'
-        ? Boolean(
-            item.metadata ||
-              imagePreview,
-          )
-        : Boolean(
-            bodyMd.trim(),
-          )
+      hasBody ||
+      hasTitle ||
+      Boolean(linkUrl) ||
+      Boolean(imagePreview)
     );
+
+  const primaryLabel = isEditing
+    ? "Save"
+    : "Post";
 
   return (
     <div
-      className="
-        fixed inset-0 z-[100]
-        flex items-center justify-center
-        bg-stone-900/35
-        p-0
-        backdrop-blur-sm
-        animate-[flowOverlayIn_160ms_ease-out]
-        sm:p-4
-      "
-      onMouseDown={(
-        event,
-      ) => {
-        if (
-          event.target ===
-          event.currentTarget
-        ) {
-          void handleClose();
-        }
-      }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 px-4 py-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={
+        isEditing
+          ? "Edit Flow post"
+          : "New Flow post"
+      }
     >
       <div
-        className="
-          flex h-full max-h-[92vh] w-full max-w-4xl
-          flex-col overflow-hidden
-          bg-[#FAF8F5]
-          shadow-2xl
-          animate-[flowModalIn_180ms_cubic-bezier(0.22,1,0.36,1)]
-          sm:h-auto
-          sm:rounded-[2rem]
-        "
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="flow-composer-title"
+        className="relative flex w-full max-w-2xl flex-col overflow-hidden bg-white"
+        style={{
+          maxHeight:
+            "calc(100dvh - 48px)",
+        }}
       >
-        <div
-          className="
-            flex shrink-0 items-center justify-end
-            px-4 py-3
-            sm:px-6
-          "
-        >
+        {/* Header */}
+
+        <div className="flex shrink-0 items-center justify-between border-b border-black/10 px-4 py-3">
+          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-black/70">
+            Flow
+          </div>
+
           <button
             type="button"
-            onClick={() =>
-              void handleClose()
-            }
-            className="
-              flex h-9 w-9 items-center justify-center
-              rounded-full
-              text-2xl font-light
-              text-stone-400
-              transition-all duration-150
-              hover:bg-stone-200/60
-              hover:text-stone-900
-              active:scale-90
-              focus:outline-none
-              focus:ring-2
-              focus:ring-stone-300
-            "
+            onClick={() => {
+              if (!busy) {
+                void handleClose();
+              }
+            }}
+            disabled={busy}
             aria-label="Close"
+            className="flex h-7 w-7 items-center justify-center text-xl leading-none text-black/45 transition-colors hover:text-black disabled:cursor-not-allowed disabled:opacity-30"
           >
             ×
           </button>
         </div>
 
-        <h2
-          id="flow-composer-title"
-          className="sr-only"
-        >
-          {isEditing
-            ? 'Edit'
-            : 'Create'}
-        </h2>
+        {/* Content */}
 
-        <div
-          className="
-            min-h-0 flex-1
-            overflow-y-auto
-            px-5 pb-5
-            sm:px-8 sm:pb-7
-          "
-        >
-          {error && (
-            <div className="mb-5 rounded-xl bg-red-50 px-4 py-3 font-mono text-[11px] leading-5 text-red-700">
-              {error}
-            </div>
-          )}
-
-          {isParsing ? (
-            <ShimmerPreview />
-          ) : isVideo ? (
-            <div>
-              <YouTubePreview
-                metadata={
-                  getYouTubeMetadata(
-                    item?.metadata,
-                  ) ?? {}
-                }
-                sourceUrl={
-                  item?.source_url ??
-                  linkUrl
-                }
-              />
-
-              <textarea
-                ref={
-                  textareaRef
-                }
-                value={
-                  bodyMd
-                }
-                onChange={(
-                  event,
-                ) =>
-                  handleBodyChange(
-                    event.target
-                      .value,
-                  )
-                }
-                disabled={
-                  busy
-                }
-                placeholder="Add your text…"
-                className="
-                  mt-8 min-h-[160px]
-                  w-full resize-none
-                  border-0 bg-transparent
-                  p-0
-                  font-serif text-[19px]
-                  font-light leading-[1.75]
-                  text-stone-800
-                  outline-none ring-0
-                  placeholder:text-stone-300
-                  focus:border-0
-                  focus:outline-none
-                  focus:ring-0
-                "
-              />
-            </div>
-          ) : isLink ? (
-            <div
-              className="
-                animate-[flowFadeIn_160ms_ease-out]
-              "
-            >
-              {linkPreview ? (
-                <div>
-                  {typeof linkPreview.image ===
-                    'string' && (
-                    <img
-                      src={
-                        linkPreview.image
-                      }
-                      alt=""
-                      className="
-                        mb-5 max-h-[420px]
-                        w-full object-cover
-                        rounded-[1.25rem]
-                      "
-                    />
-                  )}
-
-                  <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
-                    {String(
-                      linkPreview.site_name ??
-                        linkPreview.domain ??
-                        getDomain(
-                          linkUrl,
-                        ),
-                    )}
-                  </div>
-
-                  <div className="mt-3 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
-                    {String(
-                      linkPreview.title ??
-                        linkUrl,
-                    )}
-                  </div>
-
-                  {typeof linkPreview.description ===
-                    'string' && (
-                    <p className="mt-3 max-w-2xl font-serif text-base leading-7 text-stone-600">
-                      {
-                        linkPreview.description
-                      }
-                    </p>
-                  )}
-
-                  <a
-                    href={
-                      linkUrl
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="
-                      mt-4 inline-block
-                      font-mono text-[10px]
-                      uppercase
-                      tracking-[0.16em]
-                      text-stone-400
-                      transition-colors
-                      hover:text-stone-900
-                    "
-                  >
-                    Open original ↗
-                  </a>
-
-                  <textarea
-                    ref={
-                      textareaRef
-                    }
-                    value={
-                      bodyMd
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      handleBodyChange(
-                        event.target
-                          .value,
-                      )
-                    }
-                    disabled={
-                      busy
-                    }
-                    placeholder="Add your text…"
-                    className="
-                      mt-8 min-h-[180px]
-                      w-full resize-none
-                      border-0 bg-transparent
-                      p-0
-                      font-serif text-[19px]
-                      font-light leading-[1.75]
-                      text-stone-800
-                      outline-none ring-0
-                      placeholder:text-stone-300
-                      focus:border-0
-                      focus:outline-none
-                      focus:ring-0
-                    "
-                  />
-                </div>
-              ) : (
-                <div>
-                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-400">
-                    Link
-                  </div>
-
-                  <div className="mt-3 break-all font-serif text-lg leading-7 text-stone-800">
-                    {linkUrl}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void parseLink()
-                    }
-                    disabled={
-                      !item ||
-                      busy
-                    }
-                    className="
-                      mt-5 rounded-full
-                      bg-stone-900
-                      px-5 py-2.5
-                      font-mono text-[10px]
-                      uppercase
-                      tracking-[0.16em]
-                      text-white
-                      transition-all
-                      hover:bg-stone-700
-                      active:scale-95
-                      disabled:bg-stone-300
-                    "
-                  >
-                    Try again
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : isImage ? (
-            <div
-              className="
-                animate-[flowFadeIn_160ms_ease-out]
-              "
-            >
-              {imagePreview ? (
-                <img
-                  src={
-                    imagePreview
-                  }
-                  alt=""
-                  className="
-                    max-h-[70vh]
-                    w-full
-                    object-contain
-                  "
-                />
-              ) : (
-                <div className="flex min-h-[420px] items-center justify-center font-serif text-lg text-stone-400">
-                  Select an image below.
-                </div>
-              )}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {isLoading ? (
+            <div className="px-4 py-8">
+              <ShimmerPreview text="Preparing Flow…" />
             </div>
           ) : (
-            <textarea
-              ref={
-                textareaRef
-              }
-              value={
-                bodyMd
-              }
-              onChange={(
-                event,
-              ) =>
-                handleBodyChange(
-                  event.target
-                    .value,
-                )
-              }
-              onPaste={
-                handlePaste
-              }
-              disabled={
-                false
-              }
-              placeholder="Write something…"
-              autoFocus
-              className="
-                min-h-[55vh]
-                w-full resize-none
-                border-0 bg-transparent
-                p-0
-                font-serif text-[21px]
-                font-light leading-[1.8]
-                text-stone-800
-                outline-none ring-0
-                placeholder:text-stone-300
-                focus:border-0
-                focus:outline-none
-                focus:ring-0
-                sm:min-h-[460px]
-              "
-            />
-          )}
+            <div className="px-4 py-4">
+              {/* Title */}
 
-          {imageName &&
-            isImage && (
-              <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400">
-                {imageName}
-              </div>
-            )}
+              <input
+                type="text"
+                value={title}
+                onChange={(event) => {
+                  setTitle(event.target.value);
+                }}
+                placeholder="Title"
+                disabled={busy}
+                className="mb-3 w-full border-0 bg-transparent p-0 text-xl font-medium leading-7 text-black outline-none placeholder:text-black/25 disabled:opacity-50"
+              />
+
+              {/* Body */}
+
+              <textarea
+                ref={textareaRef}
+                value={bodyMd}
+                onChange={(event) => {
+                  setBodyMd(event.target.value);
+                }}
+                onPaste={handlePaste}
+                disabled={busy}
+                placeholder="What do you want to say?"
+                rows={8}
+                className="min-h-[180px] w-full resize-none border-0 bg-transparent p-0 text-[15px] leading-6 text-black outline-none placeholder:text-black/25 disabled:opacity-50"
+              />
+
+              {/* Link URL */}
+
+              {linkUrl &&
+              !isVideo &&
+              !isPhoto ? (
+                <div className="mt-3">
+                  <input
+                    type="url"
+                    value={linkUrl}
+                    onChange={(event) => {
+                      setLinkUrl(
+                        event.target.value,
+                      );
+                    }}
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter"
+                      ) {
+                        event.preventDefault();
+
+                        void parseLink(
+                          linkUrl,
+                        );
+                      }
+                    }}
+                    disabled={busy}
+                    placeholder="URL"
+                    className="w-full border-0 border-b border-black/10 bg-transparent px-0 py-2 text-xs text-black outline-none placeholder:text-black/30 disabled:opacity-50"
+                  />
+
+                  {isParsing ? (
+                    <ShimmerPreview
+                      text="Parsing link…"
+                    />
+                  ) : linkPreview ? (
+                    <LinkPreviewCard
+                      preview={linkPreview}
+                      url={linkUrl}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* YouTube */}
+
+              {isVideo &&
+              linkUrl ? (
+                <>
+                  {isParsing ? (
+                    <ShimmerPreview
+                      text="Parsing YouTube…"
+                    />
+                  ) : youtubeMetadata ? (
+                    <YouTubePreview
+                      metadata={
+                        youtubeMetadata
+                      }
+                      url={linkUrl}
+                    />
+                  ) : null}
+                </>
+              ) : null}
+
+              {/* Generic link preview */}
+
+              {isLink &&
+              linkUrl &&
+              !isParsing &&
+              linkPreview ? (
+                <LinkPreviewCard
+                  preview={linkPreview}
+                  url={linkUrl}
+                />
+              ) : null}
+
+              {/* Photo */}
+
+              {isPhoto &&
+              imagePreview ? (
+                <ImagePreview
+                  src={imagePreview}
+                  alt={
+                    imageName ||
+                    "Flow image"
+                  }
+                />
+              ) : null}
+            </div>
+          )}
         </div>
 
-        <div
-          className="
-            flex shrink-0 items-center
-            justify-between gap-3
-            px-5 py-3
-            sm:px-8
-          "
-        >
-          <div className="flex min-w-0 items-center gap-3">
+        {/* Footer */}
+
+        <div className="flex shrink-0 items-center justify-between border-t border-black/10 px-4 py-3">
+          <div className="flex items-center gap-3">
+            {/* Image */}
+
             <input
-              ref={
-                fileRef
-              }
+              ref={fileInputRef}
               type="file"
               accept="image/*"
+              onChange={
+                handleImageUpload
+              }
               className="hidden"
-              onChange={(
-                event,
-              ) => {
-                const file =
-                  event.target
-                    .files?.[0];
-
-                if (file) {
-                  void uploadImage(
-                    file,
-                  );
-                }
-
-                event.target.value =
-                  '';
-              }}
             />
 
             <button
               type="button"
               onClick={() => {
-                setError(null);
-                fileRef.current?.click();
+                fileInputRef.current?.click();
               }}
               disabled={
-                !item ||
-                busy
+                busy || isLoading
               }
-              className="
-                flex h-9 w-9
-                items-center justify-center
-                rounded-full
-                border border-stone-200
-                bg-white
-                text-stone-600
-                transition-all
-                hover:border-stone-400
-                hover:text-stone-900
-                active:scale-95
-                disabled:cursor-not-allowed
-                disabled:text-stone-300
-              "
               aria-label="Add image"
-              title="Add image"
+              className="flex h-8 w-8 items-center justify-center text-black/45 transition-colors hover:text-black disabled:cursor-not-allowed disabled:opacity-30"
             >
-              +
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="h-[18px] w-[18px]"
+                aria-hidden="true"
+              >
+                <rect
+                  x="3"
+                  y="3"
+                  width="18"
+                  height="18"
+                  rx="2"
+                />
+                <circle
+                  cx="8.5"
+                  cy="8.5"
+                  r="1.5"
+                />
+                <path d="m21 15-5-5L5 21" />
+              </svg>
             </button>
 
-            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-400">
-              {saveState ===
-              'creating'
-                ? 'Preparing'
-                : saveState ===
-                  'loading'
-                ? 'Loading'
-                : saveState ===
-                  'saving'
-                ? 'Saving'
-                : saveState ===
-                  'error'
-                ? 'Error'
-                : 'Saved'}
-            </span>
+            {/* CLEAR */}
 
-            <span
-              className={`
-                h-1.5 w-1.5
-                rounded-full
-                ${
-                  saveState ===
-                  'error'
-                    ? 'bg-red-400'
-                    : saveState ===
-                          'saving' ||
-                      saveState ===
-                          'publishing' ||
-                      saveState ===
-                          'creating' ||
-                      saveState ===
-                          'loading'
-                    ? 'animate-pulse bg-stone-500'
-                    : 'bg-stone-300'
+            {canClear ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void clearDraft();
+                }}
+                disabled={
+                  isClearing ||
+                  busy
                 }
-              `}
-              aria-hidden="true"
+                className="text-[10px] uppercase tracking-[0.14em] text-black/35 transition-colors hover:text-black disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                Clear
+              </button>
+            ) : null}
+
+            <SaveStatus
+              state={saveState}
             />
           </div>
 
           <button
             type="button"
-            onClick={() =>
-              void finish()
-            }
-            disabled={
-              !canPost
-            }
-            className="
-              rounded-full
-              bg-stone-900
-              px-6 py-2.5
-              font-mono text-[10px]
-              uppercase
-              tracking-[0.16em]
-              text-white
-              transition-all
-              hover:bg-stone-700
-              active:scale-[0.97]
-              disabled:cursor-not-allowed
-              disabled:bg-stone-300
-            "
+            onClick={() => {
+              void finish();
+            }}
+            disabled={!canPublish}
+            className="bg-black px-5 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-white transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-25"
           >
-            {saveState ===
-            'publishing'
-              ? '…'
-              : isEditing
-              ? 'Save'
-              : 'Post'}
+            {isPublishing
+              ? "Posting…"
+              : primaryLabel}
           </button>
         </div>
       </div>
-
-      <style jsx global>{`
-        @keyframes flowOverlayIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-
-        @keyframes flowModalIn {
-          from {
-            opacity: 0;
-            transform: translateY(8px) scale(0.992);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-
-        @keyframes flowFadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(4px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          [class*='flowModalIn'],
-          [class*='flowOverlayIn'],
-          [class*='flowFadeIn'] {
-            animation: none !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }

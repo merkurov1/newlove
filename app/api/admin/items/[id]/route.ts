@@ -46,12 +46,9 @@ function getSupabaseAdmin() {
     serviceRoleKey,
     {
       auth: {
-        autoRefreshToken:
-          false,
-        persistSession:
-          false,
-        detectSessionInUrl:
-          false,
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
       },
     },
   );
@@ -114,8 +111,7 @@ function errorMessage(
     typeof error === 'object' &&
     error !== null &&
     'message' in error &&
-    typeof error.message ===
-      'string'
+    typeof error.message === 'string'
   ) {
     return error.message;
   }
@@ -217,12 +213,17 @@ export async function DELETE(
     const supabase =
       getSupabaseAdmin();
 
+    /*
+     * CLEAR is a draft operation.
+     * Published and archived items must never be
+     * deleted through this endpoint.
+     */
     const {
       data: item,
       error: itemError,
     } = await supabase
       .from('items')
-      .select('id')
+      .select('id,status')
       .eq('id', id)
       .maybeSingle();
 
@@ -237,6 +238,16 @@ export async function DELETE(
             'Item not found.',
         },
         { status: 404 },
+      );
+    }
+
+    if (item.status !== 'draft') {
+      return NextResponse.json(
+        {
+          error:
+            'Only draft items can be deleted.',
+        },
+        { status: 409 },
       );
     }
 
@@ -322,6 +333,10 @@ export async function DELETE(
       .eq(
         'id',
         id,
+      )
+      .eq(
+        'status',
+        'draft',
       );
 
     if (deleteError) {
@@ -420,17 +435,15 @@ export async function PATCH(
     }
 
     const nextStatus =
-      payload.status !==
-      undefined
+      payload.status !== undefined
         ? payload.status
         : existing.status;
 
-    const allowedStatuses =
-      [
-        'draft',
-        'published',
-        'archived',
-      ];
+    const allowedStatuses = [
+      'draft',
+      'published',
+      'archived',
+    ];
 
     if (
       !allowedStatuses.includes(
@@ -500,8 +513,16 @@ export async function PATCH(
     }
 
     /*
-     * Important:
-     * Once a public item has a slug, keep it stable.
+     * PUBLIC URL IDENTITY
+     *
+     * Once an item is published and has a slug,
+     * that slug is immutable.
+     *
+     * Draft:
+     *   slug may be created/updated.
+     *
+     * Published:
+     *   existing slug always wins.
      */
     let nextSlug =
       existing.slug ?? '';
@@ -588,6 +609,24 @@ export async function PATCH(
       }
 
       if (collision) {
+        /*
+         * A collision is resolved only when creating
+         * a new public identity. An already-published
+         * item never gets its slug changed here.
+         */
+        if (
+          existing.status ===
+          'published'
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                'Published item slug is immutable.',
+            },
+            { status: 409 },
+          );
+        }
+
         nextSlug =
           `${nextSlug}-${id.slice(
             0,
@@ -654,11 +693,25 @@ export async function PATCH(
         payload.metadata;
     }
 
+    /*
+     * Slug is written:
+     * - when creating/publishing a draft;
+     * - when a draft explicitly changes its slug.
+     *
+     * A published item's existing slug remains untouched.
+     */
+    const shouldWriteSlug =
+      existing.status !==
+        'published' &&
+      (
+        payload.slug !==
+          undefined ||
+        nextStatus ===
+          'published'
+      );
+
     if (
-      payload.slug !==
-        undefined ||
-      nextStatus ===
-        'published'
+      shouldWriteSlug
     ) {
       update.slug =
         nextSlug;
@@ -675,6 +728,19 @@ export async function PATCH(
       update.published_at =
         existing.published_at ??
         new Date().toISOString();
+
+      /*
+       * If this was already published, explicitly
+       * preserve its public slug.
+       */
+      if (
+        existing.status ===
+          'published' &&
+        existing.slug
+      ) {
+        update.slug =
+          existing.slug;
+      }
     }
 
     if (

@@ -1,248 +1,606 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { getServerSupabaseClient } from '@/lib/serverAuth';
-import { Radio, Flame, Compass, ShieldCheck, Moon, Sparkles, Trash2 } from 'lucide-react';
 import type { Metadata } from 'next';
 
-interface ProfilePageProps {
-  params: {
-    username?: string;
-  };
-}
+import { getServerSupabaseClient } from '@/lib/serverAuth';
 
-async function findPublicProfile(username: string) {
-  const supabase = getServerSupabaseClient({ useServiceRole: true });
-  const { data } = await supabase
-    .from('users')
-    .select('id, username, name, bio, website, avatar_url, image, avatar, picture, photo')
-    .eq('username', username.toLowerCase())
-    .maybeSingle();
-  return data;
-}
+export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
-  let username = '';
-  try { username = decodeURIComponent(params?.username || '').trim(); } catch { return { title: 'Profile', robots: { index: false, follow: false } }; }
-  if (!username) return { title: 'Profile', robots: { index: false, follow: false } };
-  try {
-    const profile = await findPublicProfile(username);
-    if (!profile) return { title: 'Profile not found', robots: { index: false, follow: false } };
-    const name = profile.name || profile.username;
-    return {
-      title: `${name} | Public Profile`,
-      description: profile.bio || `Public profile of ${name} on merkurov.love.`,
-      alternates: { canonical: `https://www.merkurov.love/you/${encodeURIComponent(profile.username)}` },
-      openGraph: { title: `${name} | Public Profile`, description: profile.bio || `Public profile of ${name}.`, type: 'profile' },
-    };
-  } catch {
-    return { title: 'Profile', robots: { index: false, follow: false } };
+type PageProps = {
+  params: Promise<{
+    username: string;
+  }>;
+};
+
+type Profile = {
+  id: string;
+  username: string | null;
+  name: string | null;
+  website: string | null;
+  role: string | null;
+};
+
+type FlowItem = {
+  id: string;
+  title: string | null;
+  slug: string | null;
+  published_at: string | null;
+};
+
+type TempleEvent = {
+  id: string;
+  event_type: string | null;
+  message: string | null;
+  created_at: string | null;
+};
+
+function formatDate(value: string | null) {
+  if (!value) return '';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
   }
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+    .format(date)
+    .toUpperCase();
 }
 
-function getEventVisuals(eventType: string) {
-  switch (eventType?.toUpperCase()) {
+function getTempleLabel(eventType: string | null) {
+  switch ((eventType || '').toUpperCase()) {
     case 'VIGIL':
     case 'VIGIL_SPARK':
-      return { icon: Flame, color: 'text-amber-500', label: 'Vigil' };
-    case 'ASH':
-      return { icon: Trash2, color: 'text-rose-500', label: 'Let It Go' };
+      return 'VIGIL';
+
     case 'CAST':
-      return { icon: Compass, color: 'text-indigo-400', label: 'Cast' };
+      return 'CAST';
+
     case 'ABSOLUTION':
-      return { icon: ShieldCheck, color: 'text-emerald-400', label: 'Absolution' };
+      return 'ABSOLUTION';
+
+    case 'ASH':
+      return 'LET IT GO';
+
     case 'HEARTANDANGEL':
     case 'MEDITATION':
     case 'SILENCE':
-      return { icon: Moon, color: 'text-purple-400', label: 'Calm' };
+      return 'CALM';
+
     case 'WHISPER':
-      return { icon: Sparkles, color: 'text-amber-300', label: 'Whisper' };
+      return 'WHISPER';
+
+    case 'TRIBUTE':
+      return 'TRIBUTE';
+
     default:
-      return { icon: Radio, color: 'text-stone-400', label: eventType || 'Log' };
+      return eventType
+        ? eventType.toUpperCase()
+        : 'ACTIVITY';
   }
 }
 
-export default async function UserProfilePage({ params }: ProfilePageProps) {
-  const rawParam = params?.username || '';
-  let decodedParam = '';
-  try { decodedParam = decodeURIComponent(rawParam).trim(); } catch { return notFound(); }
+function normalizeWebsite(value: string | null) {
+  if (!value) return null;
 
-  if (!decodedParam) {
-    return notFound();
-  }
+  const trimmed = value.trim();
 
-  const supabase = getServerSupabaseClient({ useServiceRole: true });
-  if (!supabase) {
-    return notFound();
-  }
+  if (!trimmed) return null;
 
-  let profileId = '';
-  let profileName = decodedParam;
-  let profileImage = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png'; // Дефолтный ангелок
-  let userData: any = null;
-
-  const isUuid = decodedParam.length === 36 || /^[0-9a-fA-F-]{36}$/.test(decodedParam);
-
-  // 1. Поиск профиля / пользователя в базе
   try {
-    if (isUuid) {
-      profileId = decodedParam;
-      const { data } = await supabase.from('users').select('*').eq('id', decodedParam).maybeSingle();
-      userData = data;
-    } else {
-      const { data } = await supabase.from('users').select('*').eq('username', decodedParam.toLowerCase()).maybeSingle();
-      userData = data;
+    return new URL(trimmed).toString();
+  } catch {
+    return null;
+  }
+}
+
+async function findProfile(username: string) {
+  const supabase = getServerSupabaseClient({
+    useServiceRole: true,
+  });
+
+  const { data, error } = await supabase
+    .from('users')
+    .select(
+      'id,username,name,website,role',
+    )
+    .eq('username', username.toLowerCase())
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      '[public-profile] profile lookup failed:',
+      error,
+    );
+
+    return null;
+  }
+
+  return data as Profile | null;
+}
+
+async function getAuthAvatar(userId: string) {
+  try {
+    const supabase = getServerSupabaseClient({
+      useServiceRole: true,
+    });
+
+    const {
+      data: {
+        user,
+      },
+      error,
+    } = await supabase.auth.admin.getUserById(
+      userId,
+    );
+
+    if (error || !user) {
+      return null;
     }
 
-    if (userData) {
-      profileId = userData.id || profileId;
-      profileName = userData.name || userData.full_name || userData.username || decodedParam;
-      
-      // Ищем аватар в возможных полях
-      const resolvedAvatar = userData.avatar_url || userData.image || userData.avatar || userData.picture || userData.photo;
-      if (resolvedAvatar && typeof resolvedAvatar === 'string' && resolvedAvatar.trim() !== '') {
-        profileImage = resolvedAvatar;
+    const metadata = user.user_metadata ?? {};
+
+    const image =
+      metadata.avatar_url ||
+      metadata.picture ||
+      metadata.image ||
+      metadata.avatar ||
+      null;
+
+    return typeof image === 'string'
+      ? image
+      : null;
+  } catch (error) {
+    console.error(
+      '[public-profile] avatar lookup failed:',
+      error,
+    );
+
+    return null;
+  }
+}
+
+async function getFlowItems(userId: string) {
+  const supabase = getServerSupabaseClient({
+    useServiceRole: true,
+  });
+
+  const { data, error } = await supabase
+    .from('items')
+    .select(
+      'id,title,slug,published_at,metadata',
+    )
+    .eq('status', 'published')
+    .eq('visibility', 'public')
+    .order('published_at', {
+      ascending: false,
+    })
+    .limit(50);
+
+  if (error) {
+    console.error(
+      '[public-profile] Flow lookup failed:',
+      error,
+    );
+
+    return [];
+  }
+
+  return ((data ?? []) as Array<
+    FlowItem & {
+      metadata?: unknown;
+    }
+  >)
+    .filter((item) => {
+      const metadata =
+        item.metadata;
+
+      if (
+        !metadata ||
+        typeof metadata !== 'object'
+      ) {
+        return false;
       }
-    }
-  } catch (e) {
-    console.warn('Profile fetch warning:', e);
+
+      const flow =
+        (metadata as Record<string, unknown>)
+          .flow;
+
+      if (
+        !flow ||
+        typeof flow !== 'object'
+      ) {
+        return false;
+      }
+
+      return (
+        (flow as Record<string, unknown>)
+          .author_id === userId
+      );
+    })
+    .slice(0, 5);
+}
+
+async function getTempleEvents(userId: string) {
+  const supabase = getServerSupabaseClient({
+    useServiceRole: true,
+  });
+
+  const eventTypes = [
+    'VIGIL',
+    'vigil',
+    'VIGIL_SPARK',
+    'vigil_spark',
+    'ASH',
+    'ash',
+    'CAST',
+    'cast',
+    'TRIBUTE',
+    'tribute',
+    'ABSOLUTION',
+    'absolution',
+    'HEARTANDANGEL',
+    'MEDITATION',
+    'meditation',
+    'SILENCE',
+    'silence',
+    'WHISPER',
+    'whisper',
+  ];
+
+  const { data, error } = await supabase
+    .from('temple_log')
+    .select(
+      'id,event_type,message,created_at',
+    )
+    .eq('user_id', userId)
+    .in('event_type', eventTypes)
+    .order('created_at', {
+      ascending: false,
+    })
+    .limit(10);
+
+  if (error) {
+    console.error(
+      '[public-profile] Temple lookup failed:',
+      error,
+    );
+
+    return [];
   }
 
-  if (!profileId) return notFound();
+  return (data ?? []) as TempleEvent[];
+}
 
-  // 2. Загрузка последних 10 логов из 'temple_log'
-  let userLogs: any[] = [];
-  let logsError: string | null = null;
-  try {
-    const { data: logsData, error } = await supabase
-      .from('temple_log')
-      .select('*')
-      .eq('user_id', profileId)
-      .in('event_type', ['VIGIL', 'vigil', 'VIGIL_SPARK', 'vigil_spark', 'ASH', 'ash', 'CAST', 'cast', 'TRIBUTE', 'tribute', 'ABSOLUTION', 'absolution', 'HEARTANDANGEL', 'MEDITATION', 'meditation', 'SILENCE', 'silence', 'WHISPER', 'whisper'])
-      .order('created_at', { ascending: false })
-      .limit(10); // Ограничение: последние 10 записей
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { username } = await params;
 
-    if (error) {
-      logsError = error.message;
-    } else if (Array.isArray(logsData)) {
-      userLogs = logsData.filter((item: any) => {
-        const type = (item.event_type || '').toLowerCase();
-        return type !== 'enter' && type !== 'nav' && type !== 'confess';
-      });
-    }
-    // Старые записи могли быть созданы до передачи user_id. Показываем их
-    // только если у профиля ещё нет привязанных событий.
-    if (!error && userLogs.length === 0 && profileName) {
-      const { data: legacyLogs } = await supabase
-        .from('temple_log')
-        .select('*')
-        .eq('author', profileName)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      if (Array.isArray(legacyLogs)) userLogs = legacyLogs;
-    }
-  } catch (e) {
-    logsError = e instanceof Error ? e.message : 'Unable to load activity';
-    console.warn('temple_log fetch warning:', e);
+  const decoded =
+    decodeURIComponent(username || '')
+      .trim();
+
+  if (!decoded) {
+    return {
+      title: 'Profile',
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
   }
+
+  const profile =
+    await findProfile(decoded);
+
+  if (!profile) {
+    return {
+      title: 'Profile not found',
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const name =
+    profile.name ||
+    profile.username ||
+    decoded;
+
+  return {
+    title: `${name} | merkurov.love`,
+    description: `${name} on merkurov.love.`,
+    alternates: {
+      canonical:
+        `https://www.merkurov.love/you/${encodeURIComponent(
+          profile.username || decoded,
+        )}`,
+    },
+    openGraph: {
+      title: `${name} | merkurov.love`,
+      description: `${name} on merkurov.love.`,
+      type: 'profile',
+    },
+  };
+}
+
+export default async function UserProfilePage({
+  params,
+}: PageProps) {
+  const { username } = await params;
+
+  const decoded =
+    decodeURIComponent(username || '')
+      .trim();
+
+  if (!decoded) {
+    notFound();
+  }
+
+  const supabase = getServerSupabaseClient({
+    useServiceRole: true,
+  });
+
+  let profile: Profile | null = null;
+
+  const isUuid =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(
+      decoded,
+    );
+
+  if (isUuid) {
+    const { data } = await supabase
+      .from('users')
+      .select(
+        'id,username,name,website,role',
+      )
+      .eq('id', decoded)
+      .maybeSingle();
+
+    profile = data as Profile | null;
+  } else {
+    profile =
+      await findProfile(decoded);
+  }
+
+  if (!profile) {
+    notFound();
+  }
+
+  const [
+    avatarUrl,
+    flowItems,
+    templeEvents,
+  ] = await Promise.all([
+    getAuthAvatar(profile.id),
+    getFlowItems(profile.id),
+    getTempleEvents(profile.id),
+  ]);
+
+  const displayName =
+    profile.name ||
+    profile.username ||
+    decoded;
+
+  const website =
+    normalizeWebsite(profile.website);
+
+  const role =
+    profile.role?.trim() || null;
+
+  const publicUsername =
+    profile.username || decoded;
 
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans px-6 pt-36 md:pt-44 pb-24 selection:bg-black selection:text-white relative">
-      
-      {/* Текстура бумаги */}
-      <div 
-        className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-        }}
-      />
+    <main className="min-h-screen bg-[#FAF8F5] text-[#111111]">
+      <div className="mx-auto w-full max-w-3xl px-5 pb-24 pt-8 sm:px-8 sm:pt-12">
+        <Link
+          href="/heartandangel/world"
+          className="
+            inline-flex
+            font-mono text-[10px]
+            uppercase
+            tracking-[0.18em]
+            text-stone-400
+            transition-colors
+            hover:text-stone-900
+          "
+        >
+          ← Back to World
+        </Link>
 
-      <div className="max-w-3xl mx-auto space-y-8 relative z-20">
-        
-        {/* Навигация */}
-        <div className="flex items-center justify-between">
-          <Link 
-            href="/heartandangel/world"
-            className="px-5 py-2.5 rounded-full bg-white/80 border border-zinc-200 text-zinc-900 shadow-sm font-mono text-xs uppercase tracking-widest hover:border-black transition-all"
-          >
-            ← Back to World
-          </Link>
-        </div>
-
-        {/* Шапка профайла */}
-        <div className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-8 shadow-sm flex flex-col sm:flex-row items-center gap-6">
-          <div className="relative w-24 h-24 rounded-full overflow-hidden border border-zinc-300 shadow-inner bg-zinc-50 flex items-center justify-center shrink-0">
-            <Image 
-              src={profileImage} 
-              alt={profileName} 
-              fill 
-              className="object-cover w-full h-full"
-              priority
-            />
-          </div>
-          <div className="text-center sm:text-left space-y-1">
-            <h1 className="font-serif text-3xl sm:text-4xl font-light text-zinc-900 tracking-tight">
-              {profileName}
-            </h1>
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">
-              Sanctuary Profile
-            </p>
-            {userData?.bio && <p className="mt-3 max-w-xl font-serif text-base leading-relaxed text-zinc-600">{userData.bio}</p>}
-            {userData?.website && <a href={userData.website} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block font-mono text-xs text-zinc-500 underline underline-offset-4">{userData.website}</a>}
-          </div>
-        </div>
-
-        {/* Список Offerings */}
-        <div className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
-          <div className="flex items-end justify-between gap-4 border-b border-zinc-200 pb-4">
-            <div>
-              <h2 className="font-serif text-2xl font-light text-zinc-900">Offerings</h2>
-              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-400">Temple activity</p>
-            </div>
-            <span className="font-mono text-xs text-zinc-400">{userLogs.length}</span>
-          </div>
-
-          <div className="divide-y divide-zinc-100">
-            {logsError ? (
-              <p className="py-12 text-center font-mono text-xs uppercase tracking-widest text-zinc-500">Activity is temporarily unavailable.</p>
-            ) : userLogs.length === 0 ? (
-              <p className="font-mono text-xs opacity-60 uppercase tracking-widest py-12 text-center text-zinc-500">
-                No offerings recorded for this profile yet.
-              </p>
+        <header className="mt-16">
+          <div className="flex items-start gap-5 sm:gap-7">
+            {avatarUrl ? (
+              <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-stone-200 sm:h-24 sm:w-24">
+                <Image
+                  src={avatarUrl}
+                  alt=""
+                  fill
+                  sizes="96px"
+                  className="object-cover"
+                />
+              </div>
             ) : (
-              userLogs.map((log: any, index: number) => {
-                const eventType = (log?.event_type || 'WHISPER').toUpperCase();
-                const visuals = getEventVisuals(eventType);
-                const IconComponent = visuals.icon;
-                const message = String(log?.message || '—');
-
-                return (
-                  <div 
-                    key={log?.id || index} 
-                    className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm"
-                  >
-                    <div className="flex items-center gap-3.5 shrink-0">
-                      <div className={`w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center ${visuals.color}`}>
-                        <IconComponent size={16} />
-                      </div>
-                      <span className="font-mono text-xs font-bold uppercase tracking-wider text-zinc-800">
-                        {visuals.label}
-                      </span>
-                    </div>
-
-                    <div className="flex-1 min-w-0 font-serif font-light text-zinc-800 px-2 text-left">
-                      <span className="block break-words opacity-90">{message}</span>
-                      {log?.created_at && <time dateTime={log.created_at} className="mt-1 block font-mono text-[10px] uppercase tracking-wider text-zinc-400">
-                        {new Date(log.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                      </time>}
-                    </div>
-                  </div>
-                );
-              })
+              <div
+                className="
+                  h-20 w-20 shrink-0
+                  rounded-full
+                  bg-stone-200
+                  sm:h-24 sm:w-24
+                "
+                aria-hidden="true"
+              />
             )}
-          </div>
-        </div>
 
+            <div className="min-w-0 pt-1">
+              <h1 className="font-serif text-3xl font-light leading-tight tracking-tight sm:text-4xl">
+                {displayName}
+              </h1>
+
+              {role && (
+                <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.18em] text-stone-400">
+                  {role}
+                </div>
+              )}
+
+              {website && (
+                <a
+                  href={website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="
+                    mt-2
+                    block
+                    truncate
+                    font-mono
+                    text-[10px]
+                    uppercase
+                    tracking-[0.14em]
+                    text-stone-500
+                    transition-colors
+                    hover:text-stone-900
+                  "
+                >
+                  {new URL(website).hostname.replace(
+                    /^www\./,
+                    '',
+                  )}
+                </a>
+              )}
+            </div>
+          </div>
+
+          {profile.username && (
+            <div className="mt-5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-300">
+              @{profile.username}
+            </div>
+          )}
+        </header>
+
+        {flowItems.length > 0 && (
+          <section className="mt-20">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+              Flow
+            </h2>
+
+            <div className="mt-5">
+              {flowItems.map((item) => (
+                <Link
+                  key={item.id}
+                  href={
+                    item.slug
+                      ? `/flow/${item.slug}`
+                      : '#'
+                  }
+                  className="
+                    group
+                    grid
+                    grid-cols-[7.5rem_minmax(0,1fr)]
+                    gap-3
+                    py-2
+                    font-serif
+                    text-[17px]
+                    leading-7
+                    text-stone-800
+                    transition-colors
+                    hover:text-stone-400
+                    sm:grid-cols-[9rem_minmax(0,1fr)]
+                  "
+                >
+                  <time
+                    dateTime={
+                      item.published_at ||
+                      undefined
+                    }
+                    className="
+                      pt-0.5
+                      font-mono
+                      text-[10px]
+                      uppercase
+                      tracking-[0.08em]
+                      text-stone-400
+                    "
+                  >
+                    {formatDate(
+                      item.published_at,
+                    )}
+                  </time>
+
+                  <span className="min-w-0 truncate">
+                    {item.title ||
+                      'Untitled'}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {templeEvents.length > 0 && (
+          <section className="mt-16">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+              Temple
+            </h2>
+
+            <div className="mt-5">
+              {templeEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="
+                    grid
+                    grid-cols-[7.5rem_minmax(0,1fr)]
+                    gap-3
+                    py-2
+                    sm:grid-cols-[9rem_minmax(0,1fr)]
+                  "
+                >
+                  <time
+                    dateTime={
+                      event.created_at ||
+                      undefined
+                    }
+                    className="
+                      pt-0.5
+                      font-mono
+                      text-[10px]
+                      uppercase
+                      tracking-[0.08em]
+                      text-stone-400
+                    "
+                  >
+                    {formatDate(
+                      event.created_at,
+                    )}
+                  </time>
+
+                  <div className="min-w-0">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-stone-800">
+                      {getTempleLabel(
+                        event.event_type,
+                      )}
+                    </span>
+
+                    {event.message && (
+                      <span className="ml-3 font-serif text-[16px] text-stone-500">
+                        {event.message}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );

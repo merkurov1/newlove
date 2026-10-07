@@ -1,4 +1,5 @@
 // app/sitemap.ts
+
 import { MetadataRoute } from 'next';
 import { createClient } from '@/lib/supabase/server';
 
@@ -6,141 +7,354 @@ import { createClient } from '@/lib/supabase/server';
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://www.merkurov.love';
-  const supabase = createClient();
+  const baseUrl =
+    'https://www.merkurov.love';
 
-  // 1. STATIC HUBS (Витрины)
-  // Это страницы-списки. Они важны для навигации.
-  const staticPages: MetadataRoute.Sitemap = [
-    { 
-        url: baseUrl, 
-        lastModified: new Date(), 
-        changeFrequency: 'weekly', 
-        priority: 1.0 
+  const supabase =
+    createClient();
+
+  // 1. STATIC HUBS
+
+  const staticPages: MetadataRoute.Sitemap[] = [
+    {
+      url: baseUrl,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 1.0,
     },
-    { 
-        url: `${baseUrl}/selection`, // Галерея картин
-        lastModified: new Date(), 
-        changeFrequency: 'daily', 
-        priority: 0.9 
+    {
+      url: `${baseUrl}/selection`,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.9,
     },
-    { 
-        url: `${baseUrl}/journal`, // Список рассылок
-        lastModified: new Date(), 
-        changeFrequency: 'weekly', 
-        priority: 0.8 
+    {
+      url: `${baseUrl}/journal`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.8,
     },
-    { 
-        url: `${baseUrl}/projects`, // Список проектов
-        lastModified: new Date(), 
-        changeFrequency: 'monthly', 
-        priority: 0.7 
+    {
+      url: `${baseUrl}/projects`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.7,
     },
-    { 
-        url: `${baseUrl}/temple`, // The Temple
-        lastModified: new Date(), 
-        changeFrequency: 'monthly', 
-        priority: 0.6 
+    {
+      url: `${baseUrl}/temple`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
     },
-    { url: `${baseUrl}/heartandangel`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
-    { url: `${baseUrl}/heartandangel/world`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
-    { url: `${baseUrl}/heartandangel/about`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${baseUrl}/heartandangel/calm`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${baseUrl}/heartandangel/letitgo`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${baseUrl}/vigil`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${baseUrl}/absolution`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${baseUrl}/tribute`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.5 },
+    {
+      url: `${baseUrl}/heartandangel`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/heartandangel/world`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/heartandangel/about`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/heartandangel/calm`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/heartandangel/letitgo`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/vigil`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/absolution`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/tribute`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    },
   ];
 
-  // 2. ARTICLES (Картины/Лоты) -> КОРЕНЬ
-  // Ссылка: merkurov.love/burning-heart
-  let articlePages: MetadataRoute.Sitemap = [];
+  // 2. FLOW
+  //
+  // Flow public identity is:
+  //
+  //   /flow/[slug]
+  //
+  // Never use item.id or source_url here.
+
+  let flowPages: MetadataRoute.Sitemap = [];
+
   try {
-    const { data: articles } = await supabase
+    const {
+      data: flowItems,
+      error,
+    } = await supabase
+      .from('items')
+      .select(
+        'slug,updated_at,published_at',
+      )
+      .eq(
+        'status',
+        'published',
+      )
+      .eq(
+        'visibility',
+        'public',
+      )
+      .not(
+        'slug',
+        'is',
+        null,
+      )
+      .order(
+        'published_at',
+        {
+          ascending: false,
+        },
+      )
+      .limit(5000);
+
+    if (error) {
+      throw error;
+    }
+
+    if (flowItems) {
+      flowPages =
+        flowItems
+          .filter(
+            (
+              item,
+            ): item is {
+              slug: string;
+              updated_at: string | null;
+              published_at: string | null;
+            } =>
+              typeof item.slug ===
+                'string' &&
+              item.slug.trim()
+                .length > 0,
+          )
+          .map(
+            (item) => ({
+              url: `${baseUrl}/flow/${encodeURIComponent(
+                item.slug,
+              )}`,
+
+              lastModified:
+                new Date(
+                  item.updated_at ||
+                    item.published_at ||
+                    new Date().toISOString(),
+                ),
+
+              changeFrequency:
+                'weekly',
+
+              priority: 0.8,
+            }),
+          );
+    }
+  } catch (error) {
+    console.error(
+      'Sitemap Error (Flow):',
+      error,
+    );
+  }
+
+  // 3. ARTICLES -> ROOT
+
+  let articlePages: MetadataRoute.Sitemap[] = [];
+
+  try {
+    const {
+      data: articles,
+    } = await supabase
       .from('articles')
-      .select('slug, updatedAt, publishedAt')
-      .eq('published', true)
-      .order('publishedAt', { ascending: false })
+      .select(
+        'slug, updatedAt, publishedAt',
+      )
+      .eq(
+        'published',
+        true,
+      )
+      .order(
+        'publishedAt',
+        {
+          ascending: false,
+        },
+      )
       .limit(1000);
 
     if (articles) {
-      articlePages = articles.map((item) => ({
-        url: `${baseUrl}/${item.slug}`, // ROOT URL
-        lastModified: new Date(item.updatedAt || item.publishedAt),
-        changeFrequency: 'weekly',
-        priority: 0.8, 
-      }));
+      articlePages =
+        articles.map(
+          (item) => ({
+            url: `${baseUrl}/${item.slug}`,
+            lastModified:
+              new Date(
+                item.updatedAt ||
+                  item.publishedAt,
+              ),
+            changeFrequency:
+              'weekly',
+            priority: 0.8,
+          }),
+        );
     }
   } catch (error) {
-    console.error('Sitemap Error (Articles):', error);
+    console.error(
+      'Sitemap Error (Articles):',
+      error,
+    );
   }
 
-  // 3. LETTERS (Рассылка) -> КОРЕНЬ
-  // Ссылка: merkurov.love/letter-slug
-  let letterPages: MetadataRoute.Sitemap = [];
+  // 4. LETTERS -> ROOT
+
+  let letterPages: MetadataRoute.Sitemap[] = [];
+
   try {
-    const { data: letters } = await supabase
+    const {
+      data: letters,
+    } = await supabase
       .from('letters')
-      .select('slug, updatedAt, publishedAt')
-      .eq('published', true)
+      .select(
+        'slug, updatedAt, publishedAt',
+      )
+      .eq(
+        'published',
+        true,
+      )
       .limit(200);
 
     if (letters) {
-      letterPages = letters.map((letter) => ({
-        url: `${baseUrl}/${letter.slug}`, // ROOT URL
-        lastModified: new Date(letter.updatedAt || letter.publishedAt),
-        changeFrequency: 'monthly',
-        priority: 0.7,
-      }));
+      letterPages =
+        letters.map(
+          (letter) => ({
+            url: `${baseUrl}/${letter.slug}`,
+            lastModified:
+              new Date(
+                letter.updatedAt ||
+                  letter.publishedAt,
+              ),
+            changeFrequency:
+              'monthly',
+            priority: 0.7,
+          }),
+        );
     }
   } catch (error) {
-    console.error('Sitemap Error (Letters):', error);
+    console.error(
+      'Sitemap Error (Letters):',
+      error,
+    );
   }
 
-  // 4. PROJECTS (Проекты) -> КОРЕНЬ
-  // Ссылка: merkurov.love/project-slug
-  let projectPages: MetadataRoute.Sitemap = [];
+  // 5. PROJECTS -> ROOT
+
+  let projectPages: MetadataRoute.Sitemap[] = [];
+
   try {
-    const { data: projects } = await supabase
+    const {
+      data: projects,
+    } = await supabase
       .from('projects')
-      .select('slug, updatedAt, createdAt')
-      .eq('published', true)
+      .select(
+        'slug, updatedAt, createdAt',
+      )
+      .eq(
+        'published',
+        true,
+      )
       .limit(100);
 
     if (projects) {
-      projectPages = projects.map((project) => ({
-        url: `${baseUrl}/${project.slug}`, // ROOT URL
-        lastModified: new Date(project.updatedAt || project.createdAt),
-        changeFrequency: 'monthly',
-        priority: 0.6,
-      }));
+      projectPages =
+        projects.map(
+          (project) => ({
+            url: `${baseUrl}/${project.slug}`,
+            lastModified:
+              new Date(
+                project.updatedAt ||
+                  project.createdAt,
+              ),
+            changeFrequency:
+              'monthly',
+            priority: 0.6,
+          }),
+        );
     }
   } catch (error) {
-    console.error('Sitemap Error (Projects):', error);
+    console.error(
+      'Sitemap Error (Projects):',
+      error,
+    );
   }
 
-  // 5. TAGS -> /tags/slug (Теги оставляем в папке, чтобы не мусорить в корне)
-  let tagPages: MetadataRoute.Sitemap = [];
+  // 6. TAGS -> /tags/slug
+
+  let tagPages: MetadataRoute.Sitemap[] = [];
+
   try {
-    const { data: tags } = await supabase.from('Tag').select('slug, name').limit(200);
+    const {
+      data: tags,
+    } = await supabase
+      .from('Tag')
+      .select(
+        'slug, name',
+      )
+      .limit(200);
 
     if (tags) {
-      tagPages = tags.map((tag) => ({
-        url: `${baseUrl}/tags/${tag.slug || tag.name}`,
-        lastModified: new Date(),
-        changeFrequency: 'weekly',
-        priority: 0.5,
-      }));
+      tagPages =
+        tags.map(
+          (tag) => ({
+            url: `${baseUrl}/tags/${
+              tag.slug ||
+              tag.name
+            }`,
+            lastModified:
+              new Date(),
+            changeFrequency:
+              'weekly',
+            priority: 0.5,
+          }),
+        );
     }
   } catch (error) {
-    console.error('Sitemap Error (Tags):', error);
+    console.error(
+      'Sitemap Error (Tags):',
+      error,
+    );
   }
 
   return [
-    ...staticPages, 
-    ...articlePages, 
-    ...letterPages, 
-    ...projectPages, 
-    ...tagPages
+    ...staticPages,
+    ...flowPages,
+    ...articlePages,
+    ...letterPages,
+    ...projectPages,
+    ...tagPages,
   ];
 }
