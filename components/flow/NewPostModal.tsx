@@ -1,7 +1,5 @@
 "use client";
 
-import { useRef } from "react";
-
 import {
   ImagePreview,
   LinkPreviewCard,
@@ -16,56 +14,60 @@ import type {
 
 function SaveStatus({
   state,
+  error,
 }: {
   state: SaveState;
+  error?: string | null;
 }) {
+  if (error) {
+    return (
+      <span
+        className="max-w-[220px] truncate text-[9px] uppercase tracking-[0.18em] text-red-400"
+        title={error}
+      >
+        Error
+      </span>
+    );
+  }
+
   switch (state) {
     case "creating":
-      return (
-        <span className="text-[11px] text-neutral-400">
-          Creating…
-        </span>
-      );
-
     case "loading":
       return (
-        <span className="text-[11px] text-neutral-400">
-          Loading…
+        <span className="text-[9px] uppercase tracking-[0.2em] text-neutral-300">
+          Loading
         </span>
       );
 
     case "saving":
       return (
-        <span className="text-[11px] text-neutral-400">
-          Saving…
+        <span className="text-[9px] uppercase tracking-[0.2em] text-neutral-400">
+          Saving
         </span>
       );
 
     case "publishing":
       return (
-        <span className="text-[11px] text-neutral-400">
-          Publishing…
+        <span className="text-[9px] uppercase tracking-[0.2em] text-neutral-400">
+          Publishing
         </span>
       );
 
     case "clearing":
       return (
-        <span className="text-[11px] text-neutral-400">
-          Clearing…
+        <span className="text-[9px] uppercase tracking-[0.2em] text-neutral-400">
+          Clearing
         </span>
       );
 
     case "saved":
       return (
-        <span className="text-[11px] text-neutral-400">
-          Saved
-        </span>
-      );
-
-    case "error":
-      return (
-        <span className="text-[11px] text-red-500">
-          Error
+        <span className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] text-neutral-400">
+          SAVED
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-1.5 rounded-full bg-neutral-300"
+          />
         </span>
       );
 
@@ -80,9 +82,6 @@ export default function NewPostModal({
   onCreated,
   itemId,
 }: NewPostModalProps) {
-  const fileInputRef =
-    useRef<HTMLInputElement | null>(null);
-
   const {
     item,
     bodyMd,
@@ -95,6 +94,7 @@ export default function NewPostModal({
     imageName,
     mode,
     saveState,
+    error,
     isInitializing,
     isParsing,
     isPublishing,
@@ -103,6 +103,7 @@ export default function NewPostModal({
     canClear,
     canPost,
     busy,
+    fileRef,
     textareaRef,
     handlePaste,
     parseLink,
@@ -121,20 +122,22 @@ export default function NewPostModal({
     return null;
   }
 
-  const loading =
-    isInitializing || !item;
+  const loading = isInitializing || !item;
+
+  const hasContent =
+    Boolean(bodyMd.trim()) ||
+    Boolean(linkUrl) ||
+    Boolean(imagePreview);
 
   const showLink =
-    mode === "link" &&
-    Boolean(linkUrl);
+    mode === "link" && Boolean(linkUrl);
 
   const showVideo =
-    mode === "video" &&
-    Boolean(linkUrl);
+    mode === "video" && Boolean(linkUrl);
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/25 p-0 sm:p-6"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/25 p-3 backdrop-blur-[6px] sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label={
@@ -153,11 +156,25 @@ export default function NewPostModal({
       }}
     >
       <div
-        className="relative flex h-full w-full flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[min(760px,calc(100dvh-48px))] sm:max-w-[680px] sm:rounded-[28px]"
+        className="
+          relative
+          flex
+          h-[calc(100dvh-24px)]
+          w-full
+          flex-col
+          overflow-hidden
+          rounded-[28px]
+          bg-[#fffefa]
+          shadow-[0_30px_90px_rgba(0,0,0,0.18)]
+          sm:h-[min(700px,calc(100dvh-48px))]
+          sm:max-w-[990px]
+          sm:rounded-[34px]
+        "
         onMouseDown={(event) => {
           event.stopPropagation();
         }}
       >
+        {/* Close */}
         <button
           type="button"
           onClick={() => {
@@ -167,89 +184,175 @@ export default function NewPostModal({
           }}
           disabled={busy}
           aria-label="Close"
-          className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-[25px] font-light leading-none text-neutral-400 backdrop-blur-md transition hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:opacity-30"
+          className="
+            absolute
+            right-5
+            top-5
+            z-30
+            flex
+            h-7
+            w-7
+            items-center
+            justify-center
+            text-[22px]
+            font-light
+            leading-none
+            text-neutral-300
+            transition-colors
+            hover:text-neutral-800
+            disabled:cursor-not-allowed
+            disabled:opacity-30
+            sm:right-7
+            sm:top-7
+          "
         >
           ×
         </button>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-5 pt-16 sm:px-8 sm:pb-6 sm:pt-14">
+        {/* Writing area */}
+        <div
+          className="
+            min-h-0
+            flex-1
+            overflow-y-auto
+            overscroll-contain
+            px-8
+            pb-4
+            pt-20
+            sm:px-9
+            sm:pt-[72px]
+          "
+        >
           {loading ? (
-            <div className="py-6">
-              <ShimmerPreview text="Preparing Flow…" />
+            <div className="pt-2">
+              <ShimmerPreview text="Preparing…" />
             </div>
           ) : (
-            <div className="space-y-5">
+            <div className="flex min-h-full flex-col">
               <textarea
                 ref={textareaRef}
                 value={bodyMd}
-                onChange={(event) =>
-                  setBodyMd(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => {
+                  setBodyMd(event.target.value);
+                }}
                 onPaste={handlePaste}
                 placeholder="Write something…"
                 disabled={busy}
                 autoFocus
-                rows={10}
-                className="block min-h-[240px] w-full resize-none border-0 bg-transparent p-0 text-[18px] font-normal leading-[1.65] text-neutral-900 outline-none placeholder:text-neutral-300 sm:min-h-[300px] sm:text-[19px]"
+                rows={1}
+                className="
+                  min-h-[180px]
+                  w-full
+                  flex-1
+                  resize-none
+                  border-0
+                  bg-transparent
+                  p-0
+                  font-serif
+                  text-[25px]
+                  font-light
+                  leading-[1.5]
+                  tracking-[-0.01em]
+                  text-neutral-900
+                  outline-none
+                  placeholder:text-neutral-300
+                  sm:min-h-[360px]
+                  sm:text-[27px]
+                "
               />
 
+              {/* Link preview */}
               {showLink && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="url"
-                      value={linkUrl}
-                      onChange={(event) =>
-                        setLinkUrl(
-                          event.target.value,
-                        )
-                      }
-                      placeholder="URL"
-                      disabled={
-                        busy ||
-                        isParsing
-                      }
-                      className="min-w-0 flex-1 rounded-xl bg-neutral-50 px-3 py-2.5 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:bg-neutral-100"
+                <div className="mt-6 max-w-[720px]">
+                  {isParsing ? (
+                    <ShimmerPreview text="Reading link…" />
+                  ) : linkPreview ? (
+                    <LinkPreviewCard
+                      preview={linkPreview}
+                      url={linkUrl}
                     />
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void parseLink(
-                          linkUrl,
-                        )
-                      }
-                      disabled={
-                        busy ||
-                        isParsing ||
-                        !linkUrl.trim()
-                      }
-                      className="shrink-0 rounded-xl bg-neutral-900 px-3.5 py-2.5 text-xs font-medium text-white transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-30"
-                    >
-                      {isParsing
-                        ? "…"
-                        : "Preview"}
-                    </button>
-                  </div>
-
-                  {!isParsing &&
-                    linkPreview && (
-                      <LinkPreviewCard
-                        preview={
-                          linkPreview
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="url"
+                        value={linkUrl}
+                        onChange={(event) => {
+                          setLinkUrl(
+                            event.target.value,
+                          );
+                        }}
+                        onKeyDown={(event) => {
+                          if (
+                            event.key ===
+                              "Enter" &&
+                            linkUrl.trim()
+                          ) {
+                            event.preventDefault();
+                            void parseLink(
+                              linkUrl,
+                            );
+                          }
+                        }}
+                        placeholder="URL"
+                        disabled={
+                          busy ||
+                          isParsing
                         }
-                        url={linkUrl}
+                        className="
+                          min-w-0
+                          flex-1
+                          border-0
+                          bg-transparent
+                          px-0
+                          py-2
+                          text-sm
+                          text-neutral-800
+                          outline-none
+                          placeholder:text-neutral-300
+                        "
                       />
-                    )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void parseLink(
+                            linkUrl,
+                          );
+                        }}
+                        disabled={
+                          busy ||
+                          isParsing ||
+                          !linkUrl.trim()
+                        }
+                        className="
+                          rounded-full
+                          bg-black
+                          px-4
+                          py-2
+                          text-[10px]
+                          uppercase
+                          tracking-[0.16em]
+                          text-white
+                          transition-opacity
+                          hover:opacity-80
+                          disabled:cursor-not-allowed
+                          disabled:opacity-20
+                        "
+                      >
+                        {isParsing
+                          ? "…"
+                          : "Preview"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
+              {/* YouTube preview */}
               {showVideo && (
-                <>
+                <div className="mt-6 max-w-[720px]">
                   {isParsing ? (
-                    <ShimmerPreview text="Parsing YouTube…" />
+                    <ShimmerPreview text="Reading YouTube…" />
                   ) : youtubeMetadata ? (
                     <YouTubePreview
                       metadata={
@@ -258,83 +361,161 @@ export default function NewPostModal({
                       url={linkUrl}
                     />
                   ) : null}
-                </>
+                </div>
               )}
 
-              {imagePreview ? (
-                <ImagePreview
-                  src={imagePreview}
-                  alt={
-                    imageName ||
-                    "Flow image"
-                  }
-                />
-              ) : null}
+              {/* Image preview */}
+              {imagePreview && (
+                <div className="mt-6 max-w-[720px]">
+                  <ImagePreview
+                    src={imagePreview}
+                    alt={
+                      imageName ||
+                      "Flow image"
+                    }
+                  />
+                </div>
+              )}
+
+              {/* Error */}
+              {error && (
+                <div className="mt-4 text-[11px] text-red-400">
+                  {error}
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-4 px-6 pb-5 pt-3 sm:px-8 sm:pb-6">
+        {/* Bottom controls */}
+        <div
+          className="
+            flex
+            shrink-0
+            items-center
+            justify-between
+            gap-4
+            px-8
+            pb-5
+            pt-3
+            sm:px-9
+            sm:pb-6
+          "
+        >
+          {/* Left side */}
           <div className="flex min-w-0 items-center gap-3">
             <input
-              ref={fileInputRef}
+              ref={fileRef}
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={
-                handleImageUpload
-              }
+              onChange={handleImageUpload}
             />
 
+            {/* Add */}
             <button
               type="button"
-              onClick={() =>
-                fileInputRef.current?.click()
-              }
+              onClick={() => {
+                fileRef.current?.click();
+              }}
               disabled={
                 busy || loading
               }
               aria-label="Add image"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-[22px] font-light text-neutral-400 transition hover:bg-neutral-100 hover:text-black disabled:cursor-not-allowed disabled:opacity-30"
+              className="
+                flex
+                h-12
+                w-12
+                shrink-0
+                items-center
+                justify-center
+                rounded-full
+                bg-white
+                text-[25px]
+                font-light
+                leading-none
+                text-neutral-400
+                shadow-[0_4px_18px_rgba(0,0,0,0.06)]
+                transition-all
+                hover:text-black
+                hover:shadow-[0_5px_22px_rgba(0,0,0,0.10)]
+                disabled:cursor-not-allowed
+                disabled:opacity-30
+              "
             >
               +
             </button>
 
-            {canClear && (
+            {/* Save state */}
+            {!loading && (
+              <SaveStatus
+                state={saveState}
+                error={error}
+              />
+            )}
+
+            {/* Clear — only when there is actually something to clear */}
+            {canClear && hasContent && (
               <button
                 type="button"
-                onClick={() =>
-                  void clearDraft()
-                }
+                onClick={() => {
+                  void clearDraft();
+                }}
                 disabled={
-                  busy || isClearing
+                  busy ||
+                  isClearing
                 }
-                className="rounded-full px-2 py-1 text-[11px] text-neutral-400 transition hover:text-black disabled:opacity-30"
+                className="
+                  ml-1
+                  rounded-full
+                  px-1.5
+                  py-1
+                  text-[9px]
+                  uppercase
+                  tracking-[0.16em]
+                  text-neutral-300
+                  transition-colors
+                  hover:text-neutral-700
+                  disabled:cursor-not-allowed
+                  disabled:opacity-30
+                "
               >
                 Clear
               </button>
             )}
-
-            <SaveStatus
-              state={saveState}
-            />
           </div>
 
+          {/* Post */}
           <button
             type="button"
-            onClick={() =>
-              void finish()
-            }
+            onClick={() => {
+              void finish();
+            }}
             disabled={
-              !canPost || busy
+              !canPost ||
+              busy
             }
-            className="shrink-0 rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-25"
+            className="
+              shrink-0
+              rounded-full
+              bg-black
+              px-7
+              py-3.5
+              text-[10px]
+              font-medium
+              uppercase
+              tracking-[0.2em]
+              text-white
+              transition-all
+              hover:opacity-85
+              disabled:cursor-not-allowed
+              disabled:opacity-[0.14]
+              sm:px-8
+            "
           >
             {isPublishing
               ? "…"
-              : isEditing
-                ? "Save"
-                : "Post"}
+              : "POST"}
           </button>
         </div>
       </div>
