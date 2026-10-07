@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -66,6 +67,272 @@ function getSupabaseAdmin() {
       },
     },
   );
+}
+
+function getMetadataString(
+  metadata:
+    | Record<string, unknown>
+    | null
+    | undefined,
+  key: string,
+): string | null {
+  const value =
+    metadata?.[key];
+
+  return typeof value ===
+    'string' &&
+    value.trim()
+    ? value.trim()
+    : null;
+}
+
+function getMetadataImage(
+  item: FlowItem,
+): string | null {
+  const metadata =
+    item.metadata ?? {};
+
+  const candidates = [
+    metadata.image,
+    metadata.image_url,
+    metadata.og_image,
+    metadata.public_url,
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      typeof candidate ===
+        'string' &&
+      candidate.trim()
+    ) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
+function getDescription(
+  item: FlowItem,
+): string {
+  const metadata =
+    item.metadata ?? {};
+
+  const metadataDescription =
+    getMetadataString(
+      metadata,
+      'description',
+    );
+
+  if (
+    metadataDescription
+  ) {
+    return metadataDescription.slice(
+      0,
+      160,
+    );
+  }
+
+  const body = (
+    item.body_md ?? ''
+  )
+    .replace(
+      /!\[[^\]]*\]\([^)]*\)/g,
+      '',
+    )
+    .replace(
+      /\[([^\]]+)\]\([^)]*\)/g,
+      '$1',
+    )
+    .replace(
+      /[#>*_`~]/g,
+      '',
+    )
+    .replace(
+      /\s+/g,
+      ' ',
+    )
+    .trim();
+
+  return (
+    body ||
+    'A publication from Flow by Anton Merkurov.'
+  ).slice(
+    0,
+    160,
+  );
+}
+
+function getSiteName(
+  item: FlowItem,
+): string {
+  const metadata =
+    item.metadata ?? {};
+
+  const explicit =
+    getMetadataString(
+      metadata,
+      'site_name',
+    );
+
+  if (explicit) {
+    return explicit;
+  }
+
+  if (item.source_url) {
+    try {
+      return new URL(
+        item.source_url,
+      ).hostname.replace(
+        /^www\./,
+        '',
+      );
+    } catch {
+      // Ignore malformed URLs.
+    }
+  }
+
+  return 'Flow';
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { slug } =
+    await params;
+
+  const decodedSlug =
+    decodeURIComponent(slug);
+
+  try {
+    const supabase =
+      getSupabaseAdmin();
+
+    const { data: item } =
+      await supabase
+        .from('items')
+        .select(
+          'id,title,slug,lang,type,status,visibility,body_md,source_url,metadata,published_at',
+        )
+        .eq(
+          'slug',
+          decodedSlug,
+        )
+        .eq(
+          'status',
+          'published',
+        )
+        .eq(
+          'visibility',
+          'public',
+        )
+        .maybeSingle();
+
+    if (!item) {
+      return {
+        title:
+          'Flow | Anton Merkurov',
+      };
+    }
+
+    const flowItem =
+      item as FlowItem;
+
+    const title =
+      flowItem.title?.trim() ||
+      getMetadataString(
+        flowItem.metadata,
+        'title',
+      ) ||
+      getSiteName(flowItem);
+
+    const description =
+      getDescription(
+        flowItem,
+      );
+
+    const site =
+      'https://www.merkurov.love';
+
+    const canonical =
+      `${site}/flow/${encodeURIComponent(
+        decodedSlug,
+      )}`;
+
+    const image =
+      getMetadataImage(
+        flowItem,
+      );
+
+    /*
+     * If the object already has an image,
+     * use it directly.
+     *
+     * Otherwise the route-level
+     * opengraph-image.tsx will generate
+     * the fallback OG image.
+     */
+    const ogImage =
+      image ||
+      `${site}/flow/${encodeURIComponent(
+        decodedSlug,
+      )}/opengraph-image`;
+
+    return {
+      title,
+      description,
+
+      alternates: {
+        canonical,
+      },
+
+      openGraph: {
+        title,
+        description,
+        url: canonical,
+        siteName:
+          'Anton Merkurov',
+        type:
+          flowItem.type ===
+          'article'
+            ? 'article'
+            : 'website',
+        images: [
+          {
+            url: ogImage,
+            width: 1200,
+            height: 630,
+            alt: title,
+          },
+        ],
+      },
+
+      twitter: {
+        card:
+          'summary_large_image',
+        title,
+        description,
+        images: [
+          ogImage,
+        ],
+      },
+
+      robots: {
+        index: true,
+        follow: true,
+      },
+    };
+  } catch (error) {
+    console.error(
+      '[flow/metadata] Failed:',
+      error,
+    );
+
+    return {
+      title:
+        'Flow | Anton Merkurov',
+    };
+  }
 }
 
 function formatDate(

@@ -184,7 +184,12 @@ function getDomain(
 
 function ShimmerPreview() {
   return (
-    <div className="space-y-4">
+    <div
+      className="
+        animate-[flowFadeIn_180ms_ease-out]
+        space-y-4
+      "
+    >
       <div className="h-3 w-24 animate-pulse rounded bg-stone-200" />
       <div className="h-8 w-4/5 animate-pulse rounded bg-stone-200" />
       <div className="h-4 w-full animate-pulse rounded bg-stone-100" />
@@ -288,8 +293,19 @@ export default function NewPostModal({
   const closingRef =
     useRef(false);
 
+  const mountedRef =
+    useRef(true);
+
   const isEditing =
     Boolean(itemId);
+
+  const busy =
+    saveState ===
+      'creating' ||
+    saveState ===
+      'loading' ||
+    saveState ===
+      'publishing';
 
   useEffect(() => {
     latestRef.current = {
@@ -297,6 +313,21 @@ export default function NewPostModal({
     };
   }, [bodyMd]);
 
+  useEffect(() => {
+    mountedRef.current =
+      true;
+
+    return () => {
+      mountedRef.current =
+        false;
+    };
+  }, []);
+
+  /*
+   * The modal itself is rendered immediately.
+   * Draft creation happens in parallel, so the
+   * editor does not feel blocked by the API.
+   */
   useEffect(() => {
     let cancelled = false;
 
@@ -399,7 +430,10 @@ export default function NewPostModal({
                     {
                       type: 'note',
                       title: '',
-                      body_md: '',
+                      body_md:
+                        latestRef
+                          .current
+                          .bodyMd,
                       lang: 'ru',
                       metadata: {
                         flow: {
@@ -443,24 +477,36 @@ export default function NewPostModal({
           return;
         }
 
-        setItem(loaded);
-
-        setBodyMd(
-          loaded.body_md ??
-            '',
+        setItem(
+          loaded,
         );
 
-        latestRef.current = {
-          bodyMd:
+        /*
+         * Do not overwrite text the user has already
+         * started typing while the draft was loading.
+         */
+        if (
+          !latestRef.current
+            .bodyMd
+            .trim()
+        ) {
+          setBodyMd(
             loaded.body_md ??
-            '',
-        };
+              '',
+          );
+
+          latestRef.current.bodyMd =
+            loaded.body_md ??
+            '';
+        }
 
         if (
           loaded.type ===
           'link'
         ) {
-          setLinkMode(true);
+          setLinkMode(
+            true,
+          );
 
           setLinkUrl(
             loaded.source_url ??
@@ -513,7 +559,9 @@ export default function NewPostModal({
           },
         );
       } catch (err) {
-        if (cancelled) {
+        if (
+          cancelled
+        ) {
           return;
         }
 
@@ -537,7 +585,8 @@ export default function NewPostModal({
     void initialize();
 
     return () => {
-      cancelled = true;
+      cancelled =
+        true;
 
       if (
         imagePreview &&
@@ -550,6 +599,8 @@ export default function NewPostModal({
         );
       }
     };
+    // Intentionally initialize once per item.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemId]);
 
   const saveDraft =
@@ -592,14 +643,18 @@ export default function NewPostModal({
               response,
             );
 
-          if (!response.ok) {
+          if (
+            !response.ok
+          ) {
             throw new Error(
               json.error ??
                 'Failed to save.',
             );
           }
 
-          if (json.item) {
+          if (
+            json.item
+          ) {
             setItem(
               json.item as Item,
             );
@@ -693,7 +748,10 @@ export default function NewPostModal({
   function handleBodyChange(
     value: string,
   ) {
-    setBodyMd(value);
+    setBodyMd(
+      value,
+    );
+
     latestRef.current.bodyMd =
       value;
   }
@@ -769,7 +827,9 @@ export default function NewPostModal({
           response,
         );
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           json.error ??
             'Failed to parse link.',
@@ -783,7 +843,9 @@ export default function NewPostModal({
         parsedItem,
       );
 
-      setLinkMode(true);
+      setLinkMode(
+        true,
+      );
 
       setLinkUrl(
         parsedItem.source_url ??
@@ -931,7 +993,9 @@ export default function NewPostModal({
           response,
         );
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           json.error ??
             'Failed to upload image.',
@@ -969,7 +1033,9 @@ export default function NewPostModal({
               .public_url
           : null;
 
-      if (publicUrl) {
+      if (
+        publicUrl
+      ) {
         setImagePreview(
           publicUrl,
         );
@@ -1010,6 +1076,7 @@ export default function NewPostModal({
 
     try {
       setError(null);
+
       setSaveState(
         'publishing',
       );
@@ -1095,10 +1162,6 @@ export default function NewPostModal({
               current.bodyMd,
             );
 
-      /*
-       * New items get a slug once.
-       * Existing published items keep their URL.
-       */
       const slug =
         isEditing &&
         item.slug
@@ -1154,8 +1217,8 @@ export default function NewPostModal({
       );
 
       /*
-       * Publishing must not wait for the model.
-       * The AI request continues independently.
+       * AI is deliberately independent from publishing.
+       * The post becomes public immediately.
        */
       void fetch(
         `/api/admin/items/${item.id}/ai`,
@@ -1163,12 +1226,14 @@ export default function NewPostModal({
           method:
             'POST',
         },
-      ).catch((aiError) => {
-        console.warn(
-          '[flow] AI context request failed:',
-          aiError,
-        );
-      });
+      ).catch(
+        (aiError) => {
+          console.warn(
+            '[flow] AI context request failed:',
+            aiError,
+          );
+        },
+      );
 
       setSaveState(
         'saved',
@@ -1203,6 +1268,21 @@ export default function NewPostModal({
 
     closingRef.current =
       true;
+
+    /*
+     * If nothing is being saved, closing should feel
+     * instantaneous. There is no reason to make the
+     * user wait for an already-saved draft.
+     */
+    if (
+      saveState ===
+        'saved' ||
+      saveState ===
+        'error'
+    ) {
+      onClose();
+      return;
+    }
 
     if (!item) {
       onClose();
@@ -1265,15 +1345,17 @@ export default function NewPostModal({
         handleKeyboard,
       );
     };
-  });
-
-  const busy =
-    saveState ===
-      'creating' ||
-    saveState ===
-      'loading' ||
-    saveState ===
-      'publishing';
+    // Keyboard handler intentionally tracks current state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    busy,
+    saveState,
+    item,
+    bodyMd,
+    linkUrl,
+    linkPreview,
+    imagePreview,
+  ]);
 
   const isImage =
     item?.type ===
@@ -1314,7 +1396,15 @@ export default function NewPostModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/35 p-0 backdrop-blur-sm sm:p-4"
+      className="
+        fixed inset-0 z-[100]
+        flex items-center justify-center
+        bg-stone-900/35
+        p-0
+        backdrop-blur-sm
+        animate-[flowOverlayIn_160ms_ease-out]
+        sm:p-4
+      "
       onMouseDown={(
         event,
       ) => {
@@ -1327,18 +1417,44 @@ export default function NewPostModal({
       }}
     >
       <div
-        className="flex h-full max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden bg-[#FAF8F5] shadow-2xl sm:h-auto sm:rounded-[2rem]"
+        className="
+          flex h-full max-h-[92vh] w-full max-w-4xl
+          flex-col overflow-hidden
+          bg-[#FAF8F5]
+          shadow-2xl
+          animate-[flowModalIn_180ms_cubic-bezier(0.22,1,0.36,1)]
+          sm:h-auto
+          sm:rounded-[2rem]
+        "
         role="dialog"
         aria-modal="true"
         aria-labelledby="flow-composer-title"
       >
-        <div className="flex shrink-0 items-center justify-end px-4 py-3 sm:px-6">
+        <div
+          className="
+            flex shrink-0 items-center justify-end
+            px-4 py-3
+            sm:px-6
+          "
+        >
           <button
             type="button"
             onClick={() =>
               void handleClose()
             }
-            className="flex h-9 w-9 items-center justify-center rounded-full text-2xl font-light text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-900"
+            className="
+              flex h-9 w-9 items-center justify-center
+              rounded-full
+              text-2xl font-light
+              text-stone-400
+              transition-all duration-150
+              hover:bg-stone-200/60
+              hover:text-stone-900
+              active:scale-90
+              focus:outline-none
+              focus:ring-2
+              focus:ring-stone-300
+            "
             aria-label="Close"
           >
             ×
@@ -1354,7 +1470,14 @@ export default function NewPostModal({
             : 'Create'}
         </h2>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 sm:px-6 sm:pb-7">
+        <div
+          className="
+            min-h-0 flex-1
+            overflow-y-auto
+            px-5 pb-5
+            sm:px-8 sm:pb-7
+          "
+        >
           {error && (
             <div className="mb-5 rounded-xl bg-red-50 px-4 py-3 font-mono text-[11px] leading-5 text-red-700">
               {error}
@@ -1364,7 +1487,11 @@ export default function NewPostModal({
           {isParsing ? (
             <ShimmerPreview />
           ) : isLink ? (
-            <div>
+            <div
+              className="
+                animate-[flowFadeIn_160ms_ease-out]
+              "
+            >
               {linkPreview ? (
                 <div>
                   {typeof linkPreview.image ===
@@ -1374,7 +1501,11 @@ export default function NewPostModal({
                         linkPreview.image
                       }
                       alt=""
-                      className="mb-5 max-h-[420px] w-full object-cover"
+                      className="
+                        mb-5 max-h-[420px]
+                        w-full object-cover
+                        rounded-[1.25rem]
+                      "
                     />
                   )}
 
@@ -1410,7 +1541,15 @@ export default function NewPostModal({
                     }
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-4 inline-block font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400 hover:text-stone-900"
+                    className="
+                      mt-4 inline-block
+                      font-mono text-[10px]
+                      uppercase
+                      tracking-[0.16em]
+                      text-stone-400
+                      transition-colors
+                      hover:text-stone-900
+                    "
                   >
                     Open original ↗
                   </a>
@@ -1431,11 +1570,23 @@ export default function NewPostModal({
                       )
                     }
                     disabled={
-                      !item ||
                       busy
                     }
                     placeholder="Add your text…"
-                    className="mt-8 min-h-[180px] w-full resize-none border-0 bg-transparent p-0 font-serif text-[19px] font-light leading-[1.75] text-stone-800 outline-none ring-0 placeholder:text-stone-300 focus:border-0 focus:outline-none focus:ring-0"
+                    className="
+                      mt-8 min-h-[180px]
+                      w-full resize-none
+                      border-0 bg-transparent
+                      p-0
+                      font-serif text-[19px]
+                      font-light leading-[1.75]
+                      text-stone-800
+                      outline-none ring-0
+                      placeholder:text-stone-300
+                      focus:border-0
+                      focus:outline-none
+                      focus:ring-0
+                    "
                   />
                 </div>
               ) : (
@@ -1457,7 +1608,19 @@ export default function NewPostModal({
                       !item ||
                       busy
                     }
-                    className="mt-5 rounded-full bg-stone-900 px-5 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white transition hover:bg-stone-700 disabled:bg-stone-300"
+                    className="
+                      mt-5 rounded-full
+                      bg-stone-900
+                      px-5 py-2.5
+                      font-mono text-[10px]
+                      uppercase
+                      tracking-[0.16em]
+                      text-white
+                      transition-all
+                      hover:bg-stone-700
+                      active:scale-95
+                      disabled:bg-stone-300
+                    "
                   >
                     Try again
                   </button>
@@ -1465,14 +1628,22 @@ export default function NewPostModal({
               )}
             </div>
           ) : isImage ? (
-            <div>
+            <div
+              className="
+                animate-[flowFadeIn_160ms_ease-out]
+              "
+            >
               {imagePreview ? (
                 <img
                   src={
                     imagePreview
                   }
                   alt=""
-                  className="max-h-[70vh] w-full object-contain"
+                  className="
+                    max-h-[70vh]
+                    w-full
+                    object-contain
+                  "
                 />
               ) : (
                 <div className="flex min-h-[420px] items-center justify-center font-serif text-lg text-stone-400">
@@ -1500,12 +1671,25 @@ export default function NewPostModal({
                 handlePaste
               }
               disabled={
-                !item ||
-                busy
+                false
               }
               placeholder="Write something…"
               autoFocus
-              className="min-h-[55vh] w-full resize-none border-0 bg-transparent p-0 font-serif text-[21px] font-light leading-[1.8] text-stone-800 outline-none ring-0 placeholder:text-stone-300 focus:border-0 focus:outline-none focus:ring-0 sm:min-h-[460px]"
+              className="
+                min-h-[55vh]
+                w-full resize-none
+                border-0 bg-transparent
+                p-0
+                font-serif text-[21px]
+                font-light leading-[1.8]
+                text-stone-800
+                outline-none ring-0
+                placeholder:text-stone-300
+                focus:border-0
+                focus:outline-none
+                focus:ring-0
+                sm:min-h-[460px]
+              "
             />
           )}
 
@@ -1517,10 +1701,19 @@ export default function NewPostModal({
             )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3">
+        <div
+          className="
+            flex shrink-0 items-center
+            justify-between gap-3
+            px-5 py-3
+            sm:px-8
+          "
+        >
+          <div className="flex min-w-0 items-center gap-3">
             <input
-              ref={fileRef}
+              ref={
+                fileRef
+              }
               type="file"
               accept="image/*"
               className="hidden"
@@ -1552,7 +1745,20 @@ export default function NewPostModal({
                 !item ||
                 busy
               }
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 transition hover:border-stone-400 hover:text-stone-900 disabled:cursor-not-allowed disabled:text-stone-300"
+              className="
+                flex h-9 w-9
+                items-center justify-center
+                rounded-full
+                border border-stone-200
+                bg-white
+                text-stone-600
+                transition-all
+                hover:border-stone-400
+                hover:text-stone-900
+                active:scale-95
+                disabled:cursor-not-allowed
+                disabled:text-stone-300
+              "
               aria-label="Add image"
               title="Add image"
             >
@@ -1561,26 +1767,40 @@ export default function NewPostModal({
 
             <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-400">
               {saveState ===
-              'saving'
+              'creating'
+                ? 'Preparing'
+                : saveState ===
+                  'loading'
+                ? 'Loading'
+                : saveState ===
+                  'saving'
                 ? 'Saving'
                 : saveState ===
-                    'error'
+                  'error'
                 ? 'Error'
                 : 'Saved'}
             </span>
 
             <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                saveState ===
-                'error'
-                  ? 'bg-red-400'
-                  : saveState ===
-                        'saving' ||
+              className={`
+                h-1.5 w-1.5
+                rounded-full
+                ${
+                  saveState ===
+                  'error'
+                    ? 'bg-red-400'
+                    : saveState ===
+                          'saving' ||
                       saveState ===
-                        'publishing'
-                  ? 'animate-pulse bg-stone-500'
-                  : 'bg-stone-300'
-              }`}
+                          'publishing' ||
+                      saveState ===
+                          'creating' ||
+                      saveState ===
+                          'loading'
+                    ? 'animate-pulse bg-stone-500'
+                    : 'bg-stone-300'
+                }
+              `}
               aria-hidden="true"
             />
           </div>
@@ -1593,7 +1813,20 @@ export default function NewPostModal({
             disabled={
               !canPost
             }
-            className="rounded-full bg-stone-900 px-6 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+            className="
+              rounded-full
+              bg-stone-900
+              px-6 py-2.5
+              font-mono text-[10px]
+              uppercase
+              tracking-[0.16em]
+              text-white
+              transition-all
+              hover:bg-stone-700
+              active:scale-[0.97]
+              disabled:cursor-not-allowed
+              disabled:bg-stone-300
+            "
           >
             {saveState ===
             'publishing'
@@ -1604,6 +1837,47 @@ export default function NewPostModal({
           </button>
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes flowOverlayIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes flowModalIn {
+          from {
+            opacity: 0;
+            transform: translateY(8px) scale(0.992);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes flowFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          [class*='flowModalIn'],
+          [class*='flowOverlayIn'],
+          [class*='flowFadeIn'] {
+            animation: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
