@@ -182,13 +182,13 @@ export default function NewPostModal({
     mode === "video" &&
     Boolean(linkUrl);
 
-  const isLink =
-    mode === "link" &&
-    Boolean(linkUrl);
-
   const isPhoto =
     mode === "photo" &&
     Boolean(imagePreview);
+
+  const isGenericLink =
+    mode === "link" &&
+    Boolean(linkUrl);
 
   const hasBody =
     bodyMd.trim().length > 0;
@@ -206,9 +206,8 @@ export default function NewPostModal({
       Boolean(imagePreview)
     );
 
-  const primaryLabel = isEditing
-    ? "Save"
-    : "Post";
+  const primaryLabel =
+    isEditing ? "Save" : "Post";
 
   return (
     <div
@@ -265,7 +264,9 @@ export default function NewPostModal({
                 type="text"
                 value={title}
                 onChange={(event) => {
-                  setTitle(event.target.value);
+                  setTitle(
+                    event.target.value,
+                  );
                 }}
                 placeholder="Title"
                 disabled={busy}
@@ -278,7 +279,9 @@ export default function NewPostModal({
                 ref={textareaRef}
                 value={bodyMd}
                 onChange={(event) => {
-                  setBodyMd(event.target.value);
+                  setBodyMd(
+                    event.target.value,
+                  );
                 }}
                 onPaste={handlePaste}
                 disabled={busy}
@@ -287,11 +290,10 @@ export default function NewPostModal({
                 className="min-h-[180px] w-full resize-none border-0 bg-transparent p-0 text-[15px] leading-6 text-black outline-none placeholder:text-black/25 disabled:opacity-50"
               />
 
-              {/* Link URL */}
+              {/* Generic link */}
 
-              {linkUrl &&
-              !isVideo &&
-              !isPhoto ? (
+              {isGenericLink &&
+              linkUrl ? (
                 <div className="mt-3">
                   <input
                     type="url"
@@ -348,18 +350,6 @@ export default function NewPostModal({
                     />
                   ) : null}
                 </>
-              ) : null}
-
-              {/* Generic link preview */}
-
-              {isLink &&
-              linkUrl &&
-              !isParsing &&
-              linkPreview ? (
-                <LinkPreviewCard
-                  preview={linkPreview}
-                  url={linkUrl}
-                />
               ) : null}
 
               {/* Photo */}
@@ -420,11 +410,13 @@ export default function NewPostModal({
                   height="18"
                   rx="2"
                 />
+
                 <circle
                   cx="8.5"
                   cy="8.5"
                   r="1.5"
                 />
+
                 <path d="m21 15-5-5L5 21" />
               </svg>
             </button>

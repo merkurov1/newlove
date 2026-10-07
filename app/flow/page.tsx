@@ -676,6 +676,7 @@ export default function FlowPage() {
 
       {editingId && (
         <NewPostModal
+          open={true}
           itemId={editingId}
           onClose={() =>
             setEditingId(

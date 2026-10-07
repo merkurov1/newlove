@@ -60,6 +60,7 @@ export default function ComposerTrigger() {
 
       {open && (
         <NewPostModal
+          open={open}
           onClose={() => setOpen(false)}
           onCreated={handleCreated}
         />

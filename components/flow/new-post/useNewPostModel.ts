@@ -1691,7 +1691,7 @@ export function useNewPostModal({
     );
 
   const canClear =
-    Boolean(item) &&
+    item !== null &&
     item.status === 'draft' &&
     !isClearing &&
     saveState !== 'creating' &&

@@ -1,10 +1,21 @@
-// app/sitemap.ts
-
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from 'next';
 import { createClient } from '@/lib/supabase/server';
 
-// Обновляем раз в час, чтобы не грузить базу
 export const revalidate = 3600;
+
+type SitemapEntry = {
+  url: string;
+  lastModified?: string | Date;
+  changeFrequency?:
+    | 'always'
+    | 'hourly'
+    | 'daily'
+    | 'weekly'
+    | 'monthly'
+    | 'yearly'
+    | 'never';
+  priority?: number;
+};
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl =
@@ -13,84 +24,86 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase =
     createClient();
 
+  const now = new Date();
+
   // 1. STATIC HUBS
 
-  const staticPages: MetadataRoute.Sitemap[] = [
+  const staticPages: SitemapEntry[] = [
     {
       url: baseUrl,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'weekly',
       priority: 1.0,
     },
     {
       url: `${baseUrl}/selection`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'daily',
       priority: 0.9,
     },
     {
       url: `${baseUrl}/journal`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
       url: `${baseUrl}/projects`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.7,
     },
     {
       url: `${baseUrl}/temple`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
       url: `${baseUrl}/heartandangel`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.8,
     },
     {
       url: `${baseUrl}/heartandangel/world`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.8,
     },
     {
       url: `${baseUrl}/heartandangel/about`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
       url: `${baseUrl}/heartandangel/calm`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
       url: `${baseUrl}/heartandangel/letitgo`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
       url: `${baseUrl}/vigil`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
       url: `${baseUrl}/absolution`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
       url: `${baseUrl}/tribute`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.5,
     },
@@ -98,47 +111,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // 2. FLOW
   //
-  // Flow public identity is:
-  //
-  //   /flow/[slug]
-  //
-  // Never use item.id or source_url here.
+  // Public Flow identity is /flow/[slug].
+  // Only published + public items enter the sitemap.
 
-  let flowPages: MetadataRoute.Sitemap = [];
+  let flowPages: SitemapEntry[] = [];
 
   try {
-    const {
-      data: flowItems,
-      error,
-    } = await supabase
-      .from('items')
-      .select(
-        'slug,updated_at,published_at',
-      )
-      .eq(
-        'status',
-        'published',
-      )
-      .eq(
-        'visibility',
-        'public',
-      )
-      .not(
-        'slug',
-        'is',
-        null,
-      )
-      .order(
-        'published_at',
-        {
-          ascending: false,
-        },
-      )
-      .limit(5000);
-
-    if (error) {
-      throw error;
-    }
+    const { data: flowItems } =
+      await supabase
+        .from('items')
+        .select(
+          'slug, updated_at, published_at',
+        )
+        .eq(
+          'status',
+          'published',
+        )
+        .eq(
+          'visibility',
+          'public',
+        )
+        .not(
+          'slug',
+          'is',
+          null,
+        )
+        .order(
+          'published_at',
+          {
+            ascending: false,
+          },
+        )
+        .limit(5000);
 
     if (flowItems) {
       flowPages =
@@ -146,33 +150,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           .filter(
             (
               item,
-            ): item is {
-              slug: string;
-              updated_at: string | null;
-              published_at: string | null;
-            } =>
+            ) =>
               typeof item.slug ===
-                'string' &&
-              item.slug.trim()
-                .length > 0,
+              'string' &&
+              item.slug.length > 0,
           )
           .map(
             (item) => ({
               url: `${baseUrl}/flow/${encodeURIComponent(
-                item.slug,
+                item.slug as string,
               )}`,
-
               lastModified:
-                new Date(
-                  item.updated_at ||
-                    item.published_at ||
-                    new Date().toISOString(),
-                ),
-
+                item.updated_at ||
+                item.published_at ||
+                now,
               changeFrequency:
-                'weekly',
-
-              priority: 0.8,
+                'weekly' as const,
+              priority: 0.7,
             }),
           );
     }
@@ -185,7 +179,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // 3. ARTICLES -> ROOT
 
-  let articlePages: MetadataRoute.Sitemap[] = [];
+  let articlePages: SitemapEntry[] =
+    [];
 
   try {
     const {
@@ -218,7 +213,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
                   item.publishedAt,
               ),
             changeFrequency:
-              'weekly',
+              'weekly' as const,
             priority: 0.8,
           }),
         );
@@ -232,7 +227,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // 4. LETTERS -> ROOT
 
-  let letterPages: MetadataRoute.Sitemap[] = [];
+  let letterPages: SitemapEntry[] =
+    [];
 
   try {
     const {
@@ -259,7 +255,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
                   letter.publishedAt,
               ),
             changeFrequency:
-              'monthly',
+              'monthly' as const,
             priority: 0.7,
           }),
         );
@@ -273,7 +269,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // 5. PROJECTS -> ROOT
 
-  let projectPages: MetadataRoute.Sitemap[] = [];
+  let projectPages: SitemapEntry[] =
+    [];
 
   try {
     const {
@@ -300,7 +297,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
                   project.createdAt,
               ),
             changeFrequency:
-              'monthly',
+              'monthly' as const,
             priority: 0.6,
           }),
         );
@@ -314,7 +311,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // 6. TAGS -> /tags/slug
 
-  let tagPages: MetadataRoute.Sitemap[] = [];
+  let tagPages: SitemapEntry[] =
+    [];
 
   try {
     const {
@@ -334,10 +332,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
               tag.slug ||
               tag.name
             }`,
-            lastModified:
-              new Date(),
+            lastModified: now,
             changeFrequency:
-              'weekly',
+              'weekly' as const,
             priority: 0.5,
           }),
         );
