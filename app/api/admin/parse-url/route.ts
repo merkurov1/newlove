@@ -1,16 +1,15 @@
-import { NextResponse } from 'next/server';
-import { parseLot } from '@/lib/lots';
-import { downloadAndStoreImage, resolveUrl } from '@/lib/lots/images';
+import { NextResponse } from "next/server";
+import { ParserRegistry } from "@/lib/lots/registry";
 
 function isBlockedHtml(html: string): boolean {
   if (!html || html.length < 500) return true;
   const lower = html.toLowerCase();
   return (
-    lower.includes('just a moment...') ||
-    lower.includes('enable javascript and cookies to continue') ||
-    lower.includes('cf-browser-verification') ||
-    lower.includes('challenge-running') ||
-    lower.includes('attention required! | cloudflare')
+    lower.includes("just a moment...") ||
+    lower.includes("enable javascript and cookies to continue") ||
+    lower.includes("cf-browser-verification") ||
+    lower.includes("challenge-running") ||
+    lower.includes("attention required! | cloudflare")
   );
 }
 
@@ -20,20 +19,21 @@ export async function POST(req: Request) {
     const { url } = body;
 
     if (!url) {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+      return NextResponse.json({ error: "URL is required" }, { status: 400 });
     }
 
     const apiKey = process.env.SCRAPINGANT_API_KEY;
-    let html = '';
+    let html = "";
 
-    // 1. Быстрый прямой запрос
+    // 1. Try direct fetch first (fastest)
     try {
       const directRes = await fetch(url, {
         headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
         },
         signal: AbortSignal.timeout(5_000),
       });
@@ -45,18 +45,20 @@ export async function POST(req: Request) {
         }
       }
     } catch {
-      console.warn('[Parser] Direct HTML fetch failed, falling back to ScrapingAnt');
+      console.warn(
+        "[Parser] Direct HTML fetch failed, falling back to ScrapingAnt"
+      );
     }
 
-    // 2. ScrapingAnt
+    // 2. Fall back to ScrapingAnt if needed
     if (!html && apiKey) {
       try {
-        const saEndpoint = new URL('https://api.scrapingant.com/v2/general');
-        saEndpoint.searchParams.set('url', url);
-        saEndpoint.searchParams.set('browser', 'true');
+        const saEndpoint = new URL("https://api.scrapingant.com/v2/general");
+        saEndpoint.searchParams.set("url", url);
+        saEndpoint.searchParams.set("browser", "true");
 
         const saRes = await fetch(saEndpoint, {
-          headers: { 'x-api-key': apiKey },
+          headers: { "x-api-key": apiKey },
           signal: AbortSignal.timeout(25_000),
         });
 
@@ -64,51 +66,45 @@ export async function POST(req: Request) {
           html = await saRes.text();
         }
       } catch (err) {
-        console.warn('[Parser] ScrapingAnt request failed:', err);
+        console.warn("[Parser] ScrapingAnt request failed:", err);
       }
     }
 
     if (!html || isBlockedHtml(html)) {
       return NextResponse.json(
-        { error: 'Failed to retrieve unblocked HTML from the target URL' },
+        { error: "Failed to retrieve unblocked HTML from the target URL" },
         { status: 422 }
       );
     }
 
-    // 3. Парсинг данных лота
-    const lotData = parseLot(html, url);
+    // 3. Use parser registry to select house-specific parser
+    const registry = new ParserRegistry();
+    const parsed = registry.parse(html, url);
 
-    // 4. Обработка изображения через модуль images.ts
-    let permanentImageUrl = '';
-    const candidates =
-      lotData.imageCandidates && lotData.imageCandidates.length > 0
-        ? lotData.imageCandidates
-        : lotData.imageUrl
-        ? [{ url: lotData.imageUrl }]
-        : [];
-
-    for (const candidate of candidates.slice(0, 3)) {
-      try {
-        const storedUrl = await downloadAndStoreImage(candidate.url, url, apiKey);
-        if (storedUrl) {
-          permanentImageUrl = storedUrl;
-          break;
-        }
-      } catch (imageError) {
-        console.warn(`[Parser] Image candidate failed (${candidate.url}):`, imageError);
-      }
-    }
-
-    if (!permanentImageUrl && lotData.imageUrl) {
-      permanentImageUrl = resolveUrl(lotData.imageUrl, url);
+    if (!parsed) {
+      return NextResponse.json(
+        {
+          error: "Unsupported auction house",
+          details: "No parser matched this auction house",
+        },
+        { status: 422 }
+      );
     }
 
     return NextResponse.json({
-      ...lotData,
-      imageUrl: permanentImageUrl,
+      ...parsed,
+      auction_house: parsed.auctionHouse,
+      title: parsed.title,
+      artist: parsed.artist,
+      lot_number: parsed.lotNumber,
+      image_url: parsed.imageUrl,
+      extracted: parsed,
     });
   } catch (error: any) {
-    console.error('[API parse-lot] Error:', error);
-    return NextResponse.json({ error: error?.message || 'Failed to parse lot' }, { status: 500 });
+    console.error("[API parse-url] Error:", error);
+    return NextResponse.json(
+      { error: error?.message || "Failed to parse lot" },
+      { status: 500 }
+    );
   }
 }
