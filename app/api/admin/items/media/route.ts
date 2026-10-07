@@ -14,127 +14,199 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/avif',
 ]);
 
-function getExtension(mime: string, filename: string) {
-  const originalExtension =
-    filename
-      .split('.')
-      .pop()
-      ?.toLowerCase()
-      .replace(/[^a-z0-9]/g, '');
-
-  if (
-    originalExtension &&
-    ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'].includes(
-      originalExtension,
-    )
-  ) {
-    return originalExtension === 'jpeg'
-      ? 'jpg'
-      : originalExtension;
-  }
-
+function extensionFromMime(
+  mime: string,
+) {
   switch (mime) {
     case 'image/jpeg':
       return 'jpg';
+
     case 'image/png':
       return 'png';
+
     case 'image/webp':
       return 'webp';
+
     case 'image/gif':
       return 'gif';
+
     case 'image/avif':
       return 'avif';
+
     default:
       return 'bin';
   }
 }
 
-export async function POST(req: NextRequest) {
+function cleanFilename(
+  filename: string,
+) {
+  return filename
+    .normalize('NFKD')
+    .replace(
+      /[^\p{L}\p{N}._-]+/gu,
+      '-',
+    )
+    .replace(/-+/g, '-')
+    .replace(
+      /^[-.]+|[-.]+$/g,
+      '',
+    )
+    .slice(0, 120);
+}
+
+export async function POST(
+  req: NextRequest,
+) {
   try {
-    await requireAdminFromRequest(req);
+    await requireAdminFromRequest(
+      req,
+    );
 
-    const formData = await req.formData();
+    const form =
+      await req.formData();
 
-    const itemId = formData.get('itemId');
-    const file = formData.get('file');
+    const file =
+      form.get('file');
 
-    if (
-      typeof itemId !== 'string' ||
-      !itemId.trim()
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'itemId is required',
-        },
-        { status: 400 },
-      );
-    }
+    const itemId =
+      form.get('item_id');
+
+    const lang =
+      form.get('lang');
 
     if (!(file instanceof File)) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Image file is required',
+          error:
+            'Image file is required.',
         },
         { status: 400 },
       );
     }
 
-    if (!ALLOWED_MIME_TYPES.has(file.type)) {
+    if (
+      typeof itemId !==
+        'string' ||
+      !itemId.trim()
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Unsupported image type',
+          error:
+            'item_id is required.',
         },
         { status: 400 },
       );
     }
 
-    if (file.size <= 0) {
+    if (
+      !ALLOWED_MIME_TYPES.has(
+        file.type,
+      )
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Image file is empty',
+          error:
+            'Unsupported image type.',
         },
         { status: 400 },
       );
     }
 
-    if (file.size > MAX_FILE_SIZE) {
+    if (
+      file.size >
+      MAX_FILE_SIZE
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Image is too large. Maximum size is 10 MB.',
+          error:
+            'Image is too large. Maximum size is 10 MB.',
         },
         { status: 400 },
       );
     }
 
-    const supabase = createClient({
-      useServiceRole: true,
-    });
+    const supabase =
+      createClient({
+        useServiceRole: true,
+      });
 
-    const extension = getExtension(
-      file.type,
-      file.name,
-    );
+    const {
+      data: existingItem,
+      error: itemError,
+    } = await supabase
+      .from('items')
+      .select(
+        'id,type,status,visibility,lang,metadata',
+      )
+      .eq(
+        'id',
+        itemId.trim(),
+      )
+      .maybeSingle();
+
+    if (itemError) {
+      console.error(
+        '[admin-items-media] item lookup error:',
+        itemError,
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            itemError.message,
+        },
+        { status: 500 },
+      );
+    }
+
+    if (!existingItem) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Item not found.',
+        },
+        { status: 404 },
+      );
+    }
+
+    const extension =
+      extensionFromMime(
+        file.type,
+      );
+
+    const filename =
+      cleanFilename(
+        file.name,
+      ) ||
+      `image.${extension}`;
 
     const storageKey =
       `flow/${itemId}/${crypto.randomUUID()}.${extension}`;
 
-    const buffer = Buffer.from(
-      await file.arrayBuffer(),
-    );
+    const bytes =
+      await file.arrayBuffer();
 
     const { error: uploadError } =
       await supabase.storage
         .from('media')
-        .upload(storageKey, buffer, {
-          contentType: file.type,
-          cacheControl: '31536000',
-          upsert: false,
-        });
+        .upload(
+          storageKey,
+          bytes,
+          {
+            contentType:
+              file.type,
+            cacheControl:
+              '31536000',
+            upsert: false,
+          },
+        );
 
     if (uploadError) {
       console.error(
@@ -145,35 +217,58 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: uploadError.message,
+          error:
+            uploadError.message,
         },
         { status: 500 },
       );
     }
 
     const {
-      data: publicUrlData,
+      data: publicData,
     } = supabase.storage
       .from('media')
-      .getPublicUrl(storageKey);
+      .getPublicUrl(
+        storageKey,
+      );
 
     const publicUrl =
-      publicUrlData.publicUrl;
+      publicData.publicUrl;
 
-    const {
-      data: media,
-      error: mediaError,
-    } = await supabase
-      .from('media')
-      .insert({
-        item_id: itemId,
-        storage_key: storageKey,
-        mime: file.type,
-        width: null,
-        height: null,
-      })
-      .select('*')
-      .single();
+    const metadata = {
+      ...(existingItem.metadata &&
+      typeof existingItem.metadata ===
+        'object'
+        ? existingItem.metadata
+        : {}),
+      public_url:
+        publicUrl,
+      storage_key:
+        storageKey,
+      filename,
+      mime:
+        file.type,
+      size:
+        file.size,
+      alt:
+        filename,
+    };
+
+    const { data: mediaRow, error: mediaError } =
+      await supabase
+        .from('media')
+        .insert({
+          item_id:
+            itemId.trim(),
+          storage_key:
+            storageKey,
+          mime:
+            file.type,
+          alt:
+            filename,
+        })
+        .select('*')
+        .single();
 
     if (mediaError) {
       console.error(
@@ -183,60 +278,75 @@ export async function POST(req: NextRequest) {
 
       await supabase.storage
         .from('media')
-        .remove([storageKey]);
+        .remove([
+          storageKey,
+        ]);
 
       return NextResponse.json(
         {
           success: false,
-          error: mediaError.message,
+          error:
+            mediaError.message,
         },
         { status: 500 },
       );
     }
 
-    const title =
-      file.name
-        .replace(/\.[^/.]+$/, '')
-        .trim() || 'Image';
-
     const {
-      error: itemError,
+      data: updatedItem,
+      error: updateError,
     } = await supabase
       .from('items')
       .update({
         type: 'photo',
-        title,
-        body_md: `![${title}](${publicUrl})`,
-        metadata: {
-          media_id: media.id,
-          storage_key: storageKey,
-          mime: file.type,
-          filename: file.name,
-          size: file.size,
-          public_url: publicUrl,
-        },
+        title:
+          filename.slice(
+            0,
+            160,
+          ),
+        body_md: `![${filename}](${publicUrl})`,
+        source_url:
+          null,
+        metadata,
+        lang:
+          typeof lang ===
+            'string' &&
+          lang.trim()
+            ? lang.trim()
+            : existingItem.lang,
       })
-      .eq('id', itemId);
+      .eq(
+        'id',
+        itemId.trim(),
+      )
+      .select('*')
+      .single();
 
-    if (itemError) {
+    if (updateError) {
       console.error(
         '[admin-items-media] item update error:',
-        itemError,
+        updateError,
       );
 
       await supabase
         .from('media')
         .delete()
-        .eq('id', media.id);
+        .eq(
+          'id',
+          mediaRow.id,
+        );
 
       await supabase.storage
         .from('media')
-        .remove([storageKey]);
+        .remove([
+          storageKey,
+        ]);
 
       return NextResponse.json(
         {
           success: false,
-          error: itemError.message,
+          error:
+            updateError.message,
         },
         { status: 500 },
       );
@@ -245,7 +355,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        media,
+        item: updatedItem,
+        media: mediaRow,
         url: publicUrl,
       },
       { status: 200 },

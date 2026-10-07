@@ -102,13 +102,16 @@ export default function HeartPhysics({
     const daemonHeight = daemonWidth * 1.5;
 
     /*
-     * Lift the entire scene slightly from the bottom.
+     * Lift the entire composition higher from the bottom.
      *
-     * 7% of viewport height gives a natural proportional offset
-     * on mobile and desktop, with a 72px maximum so large screens
-     * do not move the composition too far upward.
+     * The daemon, hand, string and heart all use this same offset,
+     * so the complete scene moves upward together without changing
+     * the physics or relative composition.
+     *
+     * 12% gives a stronger lift on mobile and desktop,
+     * with a 132px maximum on very large screens.
      */
-    const sceneLift = Math.min(height * 0.07, 72);
+    const sceneLift = Math.min(height * 0.12, 132);
 
     let handX = width / 2 + daemonWidth * 0.35;
     let handY = height - daemonHeight * 0.48 - sceneLift;
@@ -137,19 +140,35 @@ export default function HeartPhysics({
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      const offsetX = (e.clientX - width / 2) / (width / 2);
+      const offsetX =
+        (e.clientX - width / 2) /
+        (width / 2);
+
       windX = offsetX * 12;
     };
 
-    window.addEventListener('deviceorientation', handleOrientation);
-    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener(
+      'deviceorientation',
+      handleOrientation
+    );
 
-    const handleTouch = (e: TouchEvent | MouseEvent) => {
+    window.addEventListener(
+      'mousemove',
+      handleMouseMove
+    );
+
+    const handleTouch = (
+      e: TouchEvent | MouseEvent
+    ) => {
       const clientX =
-        'touches' in e ? e.touches[0].clientX : e.clientX;
+        'touches' in e
+          ? e.touches[0].clientX
+          : e.clientX;
 
       const clientY =
-        'touches' in e ? e.touches[0].clientY : e.clientY;
+        'touches' in e
+          ? e.touches[0].clientY
+          : e.clientY;
 
       const dist = Math.hypot(
         clientX - balloonX,
@@ -157,14 +176,17 @@ export default function HeartPhysics({
       );
 
       if (dist < 140) {
-        vx += (Math.random() - 0.5) * 20;
+        vx +=
+          (Math.random() - 0.5) * 20;
+
         vy -= 15;
 
         targetHeartScale = 1.25;
         stringVibration = 15;
 
         if (
-          typeof navigator !== 'undefined' &&
+          typeof navigator !==
+            'undefined' &&
           navigator.vibrate
         ) {
           navigator.vibrate(15);
@@ -172,24 +194,36 @@ export default function HeartPhysics({
       }
     };
 
-    window.addEventListener('touchstart', handleTouch, {
-      passive: true,
-    });
+    window.addEventListener(
+      'touchstart',
+      handleTouch,
+      {
+        passive: true,
+      }
+    );
 
-    window.addEventListener('mousedown', handleTouch);
+    window.addEventListener(
+      'mousedown',
+      handleTouch
+    );
 
     let animationFrameId: number;
-    let isTabVisible = !document.hidden;
+    let isTabVisible =
+      !document.hidden;
 
-    const handleVisibilityChange = () => {
-      isTabVisible = !document.hidden;
+    const handleVisibilityChange =
+      () => {
+        isTabVisible =
+          !document.hidden;
 
-      if (isTabVisible) {
-        render();
-      } else {
-        cancelAnimationFrame(animationFrameId);
-      }
-    };
+        if (isTabVisible) {
+          render();
+        } else {
+          cancelAnimationFrame(
+            animationFrameId
+          );
+        }
+      };
 
     document.addEventListener(
       'visibilitychange',
@@ -199,33 +233,62 @@ export default function HeartPhysics({
     const render = () => {
       if (!isTabVisible) return;
 
-      ctx.clearRect(0, 0, width, height);
+      ctx.clearRect(
+        0,
+        0,
+        width,
+        height
+      );
 
       /*
        * Keep the hand at the lifted position.
        * The heart remains physically attached to this point,
        * so the complete heart/string/daemon composition moves together.
        */
-      handX = width / 2 + daemonWidth * 0.35;
-      handY = height - daemonHeight * 0.48 - sceneLift;
+      handX =
+        width / 2 +
+        daemonWidth * 0.35;
 
-      const dx = balloonX - handX;
-      const dy = balloonY - handY;
-      const currentLength = Math.hypot(dx, dy);
+      handY =
+        height -
+        daemonHeight * 0.48 -
+        sceneLift;
+
+      const dx =
+        balloonX - handX;
+
+      const dy =
+        balloonY - handY;
+
+      const currentLength =
+        Math.hypot(dx, dy);
 
       vy -= 0.4;
 
       vx += windX * 0.05;
       vy += windY * 0.05;
 
-      if (currentLength > restLength) {
+      if (
+        currentLength >
+        restLength
+      ) {
         const tension =
-          (currentLength - restLength) * 0.08;
+          (currentLength -
+            restLength) *
+          0.08;
 
-        const angleSpring = Math.atan2(dy, dx);
+        const angleSpring =
+          Math.atan2(dy, dx);
 
-        vx -= Math.cos(angleSpring) * tension;
-        vy -= Math.sin(angleSpring) * tension;
+        vx -=
+          Math.cos(
+            angleSpring
+          ) * tension;
+
+        vy -=
+          Math.sin(
+            angleSpring
+          ) * tension;
       }
 
       vx *= 0.93;
@@ -237,10 +300,14 @@ export default function HeartPhysics({
       angle = vx * 0.03;
 
       currentHeartScale +=
-        (targetHeartScale - currentHeartScale) * 0.1;
+        (targetHeartScale -
+          currentHeartScale) *
+        0.1;
 
       targetHeartScale +=
-        (1 - targetHeartScale) * 0.1;
+        (1 -
+          targetHeartScale) *
+        0.1;
 
       stringVibration *= 0.88;
 
@@ -248,10 +315,13 @@ export default function HeartPhysics({
        * The daemon is lifted by exactly the same amount as the hand.
        */
       const daemonX =
-        width / 2 - daemonWidth / 2;
+        width / 2 -
+        daemonWidth / 2;
 
       const daemonY =
-        height - daemonHeight - sceneLift;
+        height -
+        daemonHeight -
+        sceneLift;
 
       if (daemonImg.complete) {
         ctx.drawImage(
@@ -264,33 +334,51 @@ export default function HeartPhysics({
       }
 
       const heartSize =
-        Math.min(width * 0.22, 140) *
+        Math.min(
+          width * 0.22,
+          140
+        ) *
         currentHeartScale;
 
       const knotRelativeX = 0;
-      const knotRelativeY = heartSize / 2;
 
-      const cosA = Math.cos(angle);
-      const sinA = Math.sin(angle);
+      const knotRelativeY =
+        heartSize / 2;
+
+      const cosA =
+        Math.cos(angle);
+
+      const sinA =
+        Math.sin(angle);
 
       const knotX =
         balloonX +
-        (knotRelativeX * cosA -
-          knotRelativeY * sinA);
+        (knotRelativeX *
+          cosA -
+          knotRelativeY *
+            sinA);
 
       const knotY =
         balloonY +
-        (knotRelativeX * sinA +
-          knotRelativeY * cosA);
+        (knotRelativeX *
+          sinA +
+          knotRelativeY *
+            cosA);
 
       /*
        * String from daemon's hand to the heart.
        */
       ctx.beginPath();
-      ctx.moveTo(handX, handY);
+
+      ctx.moveTo(
+        handX,
+        handY
+      );
 
       const vibX =
-        Math.sin(Date.now() * 0.05) *
+        Math.sin(
+          Date.now() * 0.05
+        ) *
         stringVibration;
 
       const controlX =
@@ -299,7 +387,8 @@ export default function HeartPhysics({
         vibX;
 
       const controlY =
-        (handY + knotY) / 2 + 15;
+        (handY + knotY) / 2 +
+        15;
 
       ctx.quadraticCurveTo(
         controlX,
@@ -308,8 +397,11 @@ export default function HeartPhysics({
         knotY
       );
 
-      ctx.strokeStyle = '#1a1a1a';
+      ctx.strokeStyle =
+        '#1a1a1a';
+
       ctx.lineWidth = 1.8;
+
       ctx.stroke();
 
       /*
@@ -318,7 +410,11 @@ export default function HeartPhysics({
       if (heartImg.complete) {
         ctx.save();
 
-        ctx.translate(balloonX, balloonY);
+        ctx.translate(
+          balloonX,
+          balloonY
+        );
+
         ctx.rotate(angle);
 
         ctx.drawImage(
@@ -333,7 +429,9 @@ export default function HeartPhysics({
       }
 
       animationFrameId =
-        requestAnimationFrame(render);
+        requestAnimationFrame(
+          render
+        );
     };
 
     render();
@@ -369,50 +467,70 @@ export default function HeartPhysics({
         handleVisibilityChange
       );
 
-      cancelAnimationFrame(animationFrameId);
+      cancelAnimationFrame(
+        animationFrameId
+      );
     };
-  }, [daemonUrl, heartUrl, permissionGranted]);
+  }, [
+    daemonUrl,
+    heartUrl,
+    permissionGranted,
+  ]);
 
-  const requestGyroPermission = async () => {
-    if (
-      typeof DeviceOrientationEvent === 'undefined'
-    ) {
-      setPermissionGranted(true);
-      return;
-    }
-
-    const OrientationEvent =
-      DeviceOrientationEvent as typeof DeviceOrientationEvent & {
-        requestPermission?: () => Promise<
-          'granted' | 'denied'
-        >;
-      };
-
-    if (
-      typeof OrientationEvent.requestPermission ===
-      'function'
-    ) {
-      try {
-        const response =
-          await OrientationEvent.requestPermission();
-
-        if (response === 'granted') {
-          setPermissionGranted(true);
-        }
-      } catch (error) {
-        console.error(error);
+  const requestGyroPermission =
+    async () => {
+      if (
+        typeof DeviceOrientationEvent ===
+        'undefined'
+      ) {
+        setPermissionGranted(true);
+        return;
       }
-    } else {
-      setPermissionGranted(true);
-    }
-  };
 
-  const formatTime = (secs: number) => {
-    const mins = Math.floor(secs / 60);
-    const remainSecs = secs % 60;
+      const OrientationEvent =
+        DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+          requestPermission?: () => Promise<
+            'granted' | 'denied'
+          >;
+        };
+
+      if (
+        typeof OrientationEvent.requestPermission ===
+        'function'
+      ) {
+        try {
+          const response =
+            await OrientationEvent.requestPermission();
+
+          if (
+            response ===
+            'granted'
+          ) {
+            setPermissionGranted(
+              true
+            );
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      } else {
+        setPermissionGranted(true);
+      }
+    };
+
+  const formatTime = (
+    secs: number
+  ) => {
+    const mins =
+      Math.floor(secs / 60);
+
+    const remainSecs =
+      secs % 60;
 
     return `${mins}:${
-      remainSecs < 10 ? '0' : ''
+      remainSecs < 10
+        ? '0'
+        : ''
     }${remainSecs}`;
   };
 
@@ -425,7 +543,8 @@ export default function HeartPhysics({
         width: '100vw',
         height: '100dvh',
         background: bgColor,
-        transition: 'background 1.5s ease',
+        transition:
+          'background 1.5s ease',
         overflow: 'hidden',
         touchAction: 'none',
       }}
@@ -450,21 +569,29 @@ export default function HeartPhysics({
 
       {!permissionGranted && (
         <button
-          onClick={requestGyroPermission}
+          onClick={
+            requestGyroPermission
+          }
           style={{
             position: 'absolute',
             bottom: '32px',
             left: '50%',
-            transform: 'translateX(-50%)',
-            padding: '12px 24px',
+            transform:
+              'translateX(-50%)',
+            padding:
+              '12px 24px',
             borderRadius: '24px',
-            border: '1px solid #1a1a1a',
+            border:
+              '1px solid #1a1a1a',
             background: '#ffffff',
             color: '#1a1a1a',
-            fontFamily: 'sans-serif',
+            fontFamily:
+              'sans-serif',
             fontSize: '12px',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
+            letterSpacing:
+              '0.1em',
+            textTransform:
+              'uppercase',
             fontWeight: 'bold',
             cursor: 'pointer',
             boxShadow:

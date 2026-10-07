@@ -44,7 +44,7 @@ function firstLine(body: string) {
         line.replace(/^#{1,6}\s+/, '').trim(),
       )
       .find(Boolean)
-      ?.slice(0, 160) || 'Untitled post'
+      ?.slice(0, 160) || 'Flow post'
   );
 }
 
@@ -91,6 +91,9 @@ export default function NewPostModal({
   const [imageName, setImageName] =
     useState<string | null>(null);
 
+  const [imagePreview, setImagePreview] =
+    useState<string | null>(null);
+
   const fileRef =
     useRef<HTMLInputElement | null>(null);
 
@@ -98,6 +101,9 @@ export default function NewPostModal({
     useRef<ReturnType<typeof setTimeout> | null>(
       null,
     );
+
+  const savePromiseRef =
+    useRef<Promise<boolean> | null>(null);
 
   const latestRef =
     useRef({
@@ -183,6 +189,29 @@ export default function NewPostModal({
               setLinkPreview(
                 loaded.metadata ??
                   null,
+              );
+            }
+
+            if (
+              loaded.type === 'photo'
+            ) {
+              const publicUrl =
+                loaded.metadata &&
+                typeof loaded.metadata.public_url ===
+                  'string'
+                  ? loaded.metadata.public_url
+                  : null;
+
+              setImagePreview(
+                publicUrl,
+              );
+
+              setImageName(
+                loaded.metadata &&
+                typeof loaded.metadata.filename ===
+                  'string'
+                  ? loaded.metadata.filename
+                  : null,
               );
             }
 
@@ -291,6 +320,12 @@ export default function NewPostModal({
 
         saveTimer.current = null;
       }
+
+      if (imagePreview) {
+        URL.revokeObjectURL(
+          imagePreview,
+        );
+      }
     };
   }, []);
 
@@ -380,9 +415,21 @@ export default function NewPostModal({
           setTimeout(() => {
             saveTimer.current = null;
 
-            void saveDraft(
-              changes,
-            );
+            const promise =
+              saveDraft(changes);
+
+            savePromiseRef.current =
+              promise;
+
+            void promise.finally(() => {
+              if (
+                savePromiseRef.current ===
+                promise
+              ) {
+                savePromiseRef.current =
+                  null;
+              }
+            });
           }, 700);
       },
       [item, saveDraft],
@@ -415,6 +462,10 @@ export default function NewPostModal({
         );
 
         saveTimer.current = null;
+      }
+
+      if (savePromiseRef.current) {
+        await savePromiseRef.current;
       }
 
       return saveDraft({
@@ -464,27 +515,29 @@ export default function NewPostModal({
         );
       }
 
-      setItem(
-        json.item as Item,
-      );
+      const parsedItem =
+        json.item as Item;
+
+      setItem(parsedItem);
 
       setLinkUrl(
-        json.item.source_url ??
+        parsedItem.source_url ??
           linkUrl.trim(),
       );
 
       setLinkPreview(
         json.metadata ??
+          parsedItem.metadata ??
           null,
       );
 
       setBodyMd(
-        json.item.body_md ??
+        parsedItem.body_md ??
           '',
       );
 
       latestRef.current.bodyMd =
-        json.item.body_md ?? '';
+        parsedItem.body_md ?? '';
 
       setSaveState('saved');
     } catch (err) {
@@ -513,6 +566,23 @@ export default function NewPostModal({
     try {
       setSaveState('saving');
       setError(null);
+
+      if (imagePreview) {
+        URL.revokeObjectURL(
+          imagePreview,
+        );
+      }
+
+      const localPreview =
+        URL.createObjectURL(file);
+
+      setImagePreview(
+        localPreview,
+      );
+
+      setImageName(
+        file.name,
+      );
 
       const form =
         new FormData();
@@ -551,21 +621,35 @@ export default function NewPostModal({
         );
       }
 
-      setItem(
-        json.item as Item,
-      );
+      const uploadedItem =
+        json.item as Item;
 
-      setImageName(
-        file.name,
+      setItem(
+        uploadedItem,
       );
 
       setBodyMd(
-        json.item.body_md ??
+        uploadedItem.body_md ??
           '',
       );
 
       latestRef.current.bodyMd =
-        json.item.body_md ?? '';
+        uploadedItem.body_md ?? '';
+
+      const publicUrl =
+        typeof json.url === 'string'
+          ? json.url
+          : uploadedItem.metadata &&
+              typeof uploadedItem.metadata.public_url ===
+                'string'
+            ? uploadedItem.metadata.public_url
+            : null;
+
+      if (publicUrl) {
+        setImagePreview(
+          publicUrl,
+        );
+      }
 
       setSaveState('saved');
     } catch (err) {
@@ -589,66 +673,69 @@ export default function NewPostModal({
       return;
     }
 
-    const current =
-      latestRef.current;
-
-    if (
-      item.type === 'link'
-    ) {
-      if (!item.source_url) {
-        setError(
-          'Add a link first.',
-        );
-
-        return;
-      }
-    } else if (
-      item.type === 'photo'
-    ) {
-      if (!item.metadata) {
-        setError(
-          'Add an image first.',
-        );
-
-        return;
-      }
-    } else if (
-      !current.bodyMd.trim()
-    ) {
-      setError(
-        'Write something before publishing.',
-      );
-
+    if (saveState === 'publishing') {
       return;
     }
 
-    if (saveTimer.current) {
-      clearTimeout(
-        saveTimer.current,
-      );
-
-      saveTimer.current = null;
-    }
-
     try {
-      setSaveState('publishing');
       setError(null);
+      setSaveState('publishing');
+
+      const saved =
+        await flushSave();
+
+      if (!saved) {
+        return;
+      }
+
+      const current =
+        latestRef.current;
+
+      const freshItem =
+        item;
+
+      if (
+        freshItem.type === 'link'
+      ) {
+        if (!freshItem.source_url) {
+          throw new Error(
+            'Add a link first.',
+          );
+        }
+      } else if (
+        freshItem.type === 'photo'
+      ) {
+        if (
+          !freshItem.metadata &&
+          !imagePreview
+        ) {
+          throw new Error(
+            'Add an image first.',
+          );
+        }
+      } else if (
+        !current.bodyMd.trim()
+      ) {
+        throw new Error(
+          'Write something before publishing.',
+        );
+      }
 
       const metadata =
-        item.metadata ?? {};
+        freshItem.metadata ?? {};
 
       const title =
-        item.type === 'link'
+        freshItem.type === 'link'
           ? String(
               linkPreview?.title ||
-                item.title ||
-                item.source_url ||
+                freshItem.title ||
+                freshItem.source_url ||
                 'Link',
             ).slice(0, 160)
-          : item.type === 'photo'
+          : freshItem.type === 'photo'
             ? String(
                 metadata.alt ||
-                  item.title ||
+                  freshItem.title ||
                   'Image',
               ).slice(0, 160)
             : firstLine(
@@ -658,12 +745,12 @@ export default function NewPostModal({
       const slug =
         slugify(
           title,
-          item.id,
+          freshItem.id,
         );
 
       const response =
         await fetch(
-          `/api/admin/items/${item.id}`,
+          `/api/admin/items/${freshItem.id}`,
           {
             method: 'PATCH',
             headers: {
@@ -748,10 +835,10 @@ export default function NewPostModal({
   function statusLabel() {
     switch (saveState) {
       case 'creating':
-        return 'Creating draft…';
+        return 'Creating…';
 
       case 'loading':
-        return 'Opening draft…';
+        return 'Opening…';
 
       case 'saving':
         return 'Saving…';
@@ -780,7 +867,7 @@ export default function NewPostModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/35 p-4 backdrop-blur-sm"
       onMouseDown={(event) => {
         if (
           event.target ===
@@ -791,23 +878,14 @@ export default function NewPostModal({
       }}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-stone-200 bg-[#FAF8F5] shadow-2xl"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="new-post-title"
+        aria-labelledby="flow-composer-title"
       >
-        <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
-          <div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">
-              Flow
-            </div>
-
-            <h2
-              id="new-post-title"
-              className="mt-1 text-xl font-semibold"
-            >
-              New item
-            </h2>
+        <div className="flex items-center justify-between border-b border-stone-200/80 px-6 py-5 sm:px-8">
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-stone-400">
+            Flow
           </div>
 
           <button
@@ -815,27 +893,34 @@ export default function NewPostModal({
             onClick={() =>
               void handleClose()
             }
-            className="flex h-9 w-9 items-center justify-center rounded-full text-2xl text-zinc-400 transition hover:bg-zinc-100 hover:text-black"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-2xl font-light text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-900"
             aria-label="Close"
           >
             ×
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+        <h2
+          id="flow-composer-title"
+          className="sr-only"
+        >
+          Flow composer
+        </h2>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7 sm:px-8 sm:py-9">
           {error && (
-            <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 font-mono text-[11px] leading-5 text-red-700">
               {error}
             </div>
           )}
 
           {linkMode ? (
-            <div className="space-y-4">
-              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-400">
+            <div className="space-y-6">
+              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
                 Link
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <input
                   autoFocus
                   value={linkUrl}
@@ -856,7 +941,7 @@ export default function NewPostModal({
                   disabled={
                     !item || busy
                   }
-                  className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-4 py-3 outline-none focus:border-black disabled:bg-zinc-50"
+                  className="min-w-0 flex-1 rounded-2xl border border-stone-200 bg-white px-5 py-4 font-serif text-lg outline-none transition focus:border-stone-500 disabled:bg-stone-100"
                 />
 
                 <button
@@ -869,61 +954,74 @@ export default function NewPostModal({
                     !linkUrl.trim() ||
                     busy
                   }
-                  className="rounded-xl bg-black px-4 py-3 text-sm text-white disabled:bg-zinc-300"
+                  className="rounded-2xl bg-stone-900 px-6 py-4 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700 disabled:bg-stone-300"
                 >
                   Parse
                 </button>
               </div>
 
               {linkPreview && (
-                <div className="rounded-2xl border border-zinc-200 p-5">
-                  <div className="text-xl font-semibold">
-                    {String(
-                      linkPreview.title ??
-                        linkUrl,
-                    )}
-                  </div>
-
-                  {typeof linkPreview.description ===
-                    'string' && (
-                    <p className="mt-2 text-sm leading-6 text-zinc-500">
-                      {linkPreview.description}
-                    </p>
-                  )}
-
+                <div className="overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white">
                   {typeof linkPreview.image ===
                     'string' && (
                     <img
                       src={linkPreview.image}
                       alt=""
-                      className="mt-4 max-h-72 w-full rounded-xl object-cover"
+                      className="max-h-80 w-full object-cover"
                     />
                   )}
 
-                  <div className="mt-3 font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-400">
-                    {String(
-                      linkPreview.domain ??
-                        '',
+                  <div className="p-6 sm:p-7">
+                    <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+                      {String(
+                        linkPreview.site_name ??
+                          linkPreview.domain ??
+                          '',
+                      )}
+                    </div>
+
+                    <div className="mt-3 font-serif text-2xl font-light leading-tight text-stone-900">
+                      {String(
+                        linkPreview.title ??
+                          linkUrl,
+                      )}
+                    </div>
+
+                    {typeof linkPreview.description ===
+                      'string' && (
+                      <p className="mt-3 font-serif text-base leading-7 text-stone-600">
+                        {
+                          linkPreview.description
+                        }
+                      </p>
                     )}
                   </div>
                 </div>
               )}
             </div>
           ) : isImage ? (
-            <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-dashed border-zinc-200">
-              {imageName ? (
-                <div className="text-center">
-                  <div className="text-lg font-medium">
-                    {imageName}
-                  </div>
+            <div className="space-y-5">
+              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+                Image
+              </div>
 
-                  <div className="mt-2 text-sm text-zinc-400">
-                    Image stored in Flow
+              <div className="overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white">
+                {imagePreview ? (
+                  <img
+                    src={imagePreview}
+                    alt=""
+                    className="max-h-[65vh] w-full object-contain"
+                  />
+                ) : (
+                  <div className="flex min-h-[420px] items-center justify-center font-serif text-lg text-stone-400">
+                    Select an image below.
                   </div>
-                </div>
-              ) : (
-                <div className="text-zinc-400">
-                  Select an image below.
+                )}
+              </div>
+
+              {imageName && (
+                <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400">
+                  {imageName}
                 </div>
               )}
             </div>
@@ -940,17 +1038,17 @@ export default function NewPostModal({
               }
               placeholder="Write something…"
               autoFocus
-              className="min-h-[420px] w-full resize-none border-0 px-0 text-lg leading-8 outline-none placeholder:text-zinc-300"
+              className="min-h-[460px] w-full resize-none border-0 bg-transparent font-serif text-[21px] font-light leading-[1.8] text-stone-800 outline-none placeholder:text-stone-300"
             />
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-zinc-200 px-6 py-4">
-          <div className="text-xs text-zinc-400">
+        <div className="flex flex-col gap-4 border-t border-stone-200/80 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400">
             {statusLabel()}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <input
               ref={fileRef}
               type="file"
@@ -962,6 +1060,7 @@ export default function NewPostModal({
 
                 if (file) {
                   setLinkMode(false);
+                  setError(null);
                   void uploadImage(file);
                 }
 
@@ -979,7 +1078,7 @@ export default function NewPostModal({
               disabled={
                 !item || busy
               }
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm transition hover:border-black disabled:cursor-not-allowed disabled:text-zinc-300"
+              className="rounded-full border border-stone-200 bg-white px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-500 disabled:cursor-not-allowed disabled:text-stone-300"
             >
               + Image
             </button>
@@ -993,7 +1092,7 @@ export default function NewPostModal({
               disabled={
                 !item || busy
               }
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm transition hover:border-black disabled:cursor-not-allowed disabled:text-zinc-300"
+              className="rounded-full border border-stone-200 bg-white px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-500 disabled:cursor-not-allowed disabled:text-stone-300"
             >
               + Link
             </button>
@@ -1001,7 +1100,7 @@ export default function NewPostModal({
             <button
               type="button"
               disabled
-              className="rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-400"
+              className="rounded-full border border-stone-200 bg-stone-100 px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400"
             >
               {lang.toUpperCase()}
             </button>
@@ -1009,7 +1108,7 @@ export default function NewPostModal({
             <button
               type="button"
               disabled
-              className="rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-400"
+              className="rounded-full border border-stone-200 bg-stone-100 px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400"
             >
               Analyse
             </button>
@@ -1026,12 +1125,13 @@ export default function NewPostModal({
                 (item.type === 'link' &&
                   !item.source_url) ||
                 (item.type === 'photo' &&
-                  !item.metadata) ||
+                  !item.metadata &&
+                  !imagePreview) ||
                 (item.type !== 'link' &&
                   item.type !== 'photo' &&
                   !bodyMd.trim())
               }
-              className="rounded-lg bg-black px-5 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+              className="rounded-full bg-stone-900 px-6 py-2.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
               {saveState ===
               'publishing'
