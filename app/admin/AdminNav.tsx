@@ -1,17 +1,14 @@
-'use client';
-
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: '01' },
-  { href: '/admin/letters', label: 'Letters', icon: '02' },
-  { href: '/admin/users', label: 'Users', icon: '03' },
-  { href: '/admin/selection', label: 'Selection', icon: '04' },
-  { href: '/admin/projects', label: 'Projects', icon: '05' },
-  { href: '/admin/postcards', label: 'Postcards', icon: '06' },
-  { href: '/admin/media', label: 'Media', icon: '07' },
-  { href: '/admin/banners', label: 'Banners', icon: '08' },
+  { href: '/admin/items', label: 'Items', icon: '02' },
+  { href: '/admin/items/new', label: 'New Post', icon: '03' },
+  { href: '/flow', label: 'Flow', icon: '04' },
+  { href: '/admin/letters', label: 'Letters', icon: '05' },
+  { href: '/admin/users', label: 'Users', icon: '06' },
+  { href: '/admin/selection', label: 'Selection', icon: '07' },
+  { href: '/admin/projects', label: 'Projects', icon: '08' },
+  { href: '/admin/postcards', label: 'Postcards', icon: '09' },
+  { href: '/admin/media', label: 'Media', icon: '10' },
 ];
 
 export default function AdminNav() {
@@ -47,7 +44,7 @@ export default function AdminNav() {
 
         <div className="hidden lg:block rounded-3xl border border-zinc-200/80 bg-zinc-900 p-5 text-white shadow-sm">
           <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Public site</div>
-          <Link href="/" className="mt-3 block font-serif text-lg hover:text-zinc-300 transition-colors">Return to merkurov.love →</Link>
+          <Link href="/flow" className="mt-3 block font-serif text-lg hover:text-zinc-300 transition-colors">Open flow →</Link>
         </div>
       </div>
     </aside>
