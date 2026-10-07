@@ -5,11 +5,9 @@ export const metadata: Metadata = {
   title: 'Cast — Psychological Protocol | Digital Temple',
   description:
     'A psychological protocol of the Digital Temple. Ten questions, an Agency Index, and a perceptual archetype.',
-
   alternates: {
     canonical: 'https://www.merkurov.love/cast',
   },
-
   openGraph: {
     title: 'Cast — Psychological Protocol | Digital Temple',
     description:
@@ -27,7 +25,6 @@ export const metadata: Metadata = {
     locale: 'en_US',
     type: 'website',
   },
-
   twitter: {
     card: 'summary_large_image',
     title: 'Cast — Psychological Protocol | Digital Temple',
@@ -37,7 +34,6 @@ export const metadata: Metadata = {
       'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
     ],
   },
-
   robots: {
     index: true,
     follow: true,
