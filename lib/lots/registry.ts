@@ -1,31 +1,80 @@
 import { GenericFallbackParser } from "./fallback";
-import type { LotData } from "./types";
-import { ChristiesParser } from "./parsers/christies";
-import { SothebysParser } from "./parsers/sothebys";
-import { PhillipsParser } from "./parsers/phillips";
+import { HouseParser } from "./house-parser";
 import { BonhamsParser } from "./parsers/bonhams";
+import { ChristiesParser } from "./parsers/christies";
+import { PhillipsParser } from "./parsers/phillips";
+import { SothebysParser } from "./parsers/sothebys";
+import type { LotData } from "./types";
 
-export * from "./types";
-export * from "./parse";
-export * from "./cheerio";
-export * from "./fallback";
-export * from "./registry";
-
-export function parseLot(html: string, url: string, house?: string): LotData {
-  const registry = [
+export class ParserRegistry {
+  private parsers: HouseParser[] = [
     new ChristiesParser(),
     new SothebysParser(),
     new PhillipsParser(),
     new BonhamsParser(),
   ];
 
-  const match = registry.find((parser) => parser.supports(url));
-  const result = match ? match.parse(html, url) : new GenericFallbackParser().parse(html, url);
+  detectHouse(url: string): string {
+    const lower = url.toLowerCase();
 
-  return {
-    ...result,
-    house: house || result.auctionHouse || "unknown",
-    source: result.source || (match ? "house-parser" : "fallback"),
-    confidence: result.confidence ?? (match ? 0.8 : 0.25),
-  };
+    if (lower.includes("christies.com")) {
+      return "christies";
+    }
+
+    if (lower.includes("sothebys.com")) {
+      return "sothebys";
+    }
+
+    if (lower.includes("phillips.com")) {
+      return "phillips";
+    }
+
+    if (lower.includes("bonhams.com")) {
+      return "bonhams";
+    }
+
+    return "unknown";
+  }
+
+  parse(
+    html: string,
+    url: string
+  ): LotData {
+    const parser = this.parsers.find(
+      (item) => item.supports(url)
+    );
+
+    if (!parser) {
+      return new GenericFallbackParser().parse(
+        html,
+        url
+      );
+    }
+
+    try {
+      return parser.parse(html, url);
+    } catch (error) {
+      const fallback =
+        new GenericFallbackParser().parse(
+          html,
+          url
+        );
+
+      return {
+        ...fallback,
+        warnings: [
+          ...(fallback.warnings || []),
+          `House parser failed: ${
+            error instanceof Error
+              ? error.message
+              : String(error)
+          }`,
+        ],
+      };
+    }
+  }
+
+  registerParser(parser: HouseParser): void {
+    this.parsers.push(parser);
+  }
 }
