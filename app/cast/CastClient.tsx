@@ -51,16 +51,12 @@ const ARCHETYPES = [
   'UNFRAMED',
 ] as const;
 
-type Archetype =
-  (typeof ARCHETYPES)[number];
+type Archetype = (typeof ARCHETYPES)[number];
 
 interface AnalysisData {
   archetype: Archetype;
   agency_index: number;
-  scores: Record<
-    Archetype,
-    number
-  >;
+  scores: Record<Archetype, number>;
   executive_summary: string;
   structural_weaknesses: string;
   core_assets: string;
@@ -87,36 +83,30 @@ function isValidArchetype(
   );
 }
 
-function renderQuestionText(
-  text: string
-) {
-  const parts = text.split(
-    /(\*\*.*?\*\*)/g
-  );
+function renderQuestionText(text: string) {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
 
-  return parts.map(
-    (part, index) => {
-      if (
-        part.startsWith('**') &&
-        part.endsWith('**')
-      ) {
-        return (
-          <strong
-            key={index}
-            className="font-bold text-white"
-          >
-            {part.slice(2, -2)}
-          </strong>
-        );
-      }
-
+  return parts.map((part, index) => {
+    if (
+      part.startsWith('**') &&
+      part.endsWith('**')
+    ) {
       return (
-        <span key={index}>
-          {part}
-        </span>
+        <strong
+          key={index}
+          className="font-semibold text-stone-100"
+        >
+          {part.slice(2, -2)}
+        </strong>
       );
     }
-  );
+
+    return (
+      <span key={index}>
+        {part}
+      </span>
+    );
+  });
 }
 
 function Stamp({
@@ -124,28 +114,19 @@ function Stamp({
 }: {
   type: string;
 }) {
-  const colors: Record<
-    string,
-    string
-  > = {
-    VOID:
-      'text-zinc-500 border-zinc-500',
-    NOISE:
-      'text-red-500 border-red-500',
-    STONE:
-      'text-stone-400 border-stone-400',
-    UNFRAMED:
-      'text-white border-white',
+  const colors: Record<string, string> = {
+    VOID: 'text-stone-500 border-stone-500',
+    NOISE: 'text-amber-400 border-amber-400',
+    STONE: 'text-stone-300 border-stone-300',
+    UNFRAMED: 'text-stone-100 border-stone-100',
   };
 
-  const style =
-    colors[type] ||
-    colors.VOID;
+  const style = colors[type] || colors.VOID;
 
   return (
-    <div className="absolute top-6 right-6 md:top-10 md:right-10 rotate-6 opacity-0 animate-in fade-in zoom-in duration-500 z-20 pointer-events-none">
+    <div className="pointer-events-none absolute right-5 top-5 z-20 rotate-6 opacity-0 animate-in fade-in zoom-in duration-500 md:right-8 md:top-8">
       <div
-        className={`border-2 md:border-4 ${style} px-4 py-2 font-black text-2xl md:text-4xl uppercase tracking-widest backdrop-blur-sm bg-black/40 shadow-[0_0_30px_rgba(0,0,0,0.8)]`}
+        className={`border-2 ${style} bg-stone-950/50 px-3 py-2 font-mono text-xl font-bold uppercase tracking-[0.16em] backdrop-blur-sm md:px-4 md:py-2 md:text-3xl`}
       >
         [{type}]
       </div>
@@ -153,11 +134,8 @@ function Stamp({
   );
 }
 
-function useProcessing(
-  isLoading: boolean
-) {
-  const [text, setText] =
-    useState('');
+function useProcessing(isLoading: boolean) {
+  const [text, setText] = useState('');
 
   const messages = useMemo(
     () => [
@@ -179,24 +157,16 @@ function useProcessing(
 
     setText(messages[0]);
 
-    const interval =
-      window.setInterval(() => {
-        currentStep += 1;
+    const interval = window.setInterval(() => {
+      currentStep += 1;
 
-        if (
-          currentStep <
-          messages.length
-        ) {
-          setText(
-            messages[currentStep]
-          );
-        }
-      }, 1200);
+      if (currentStep < messages.length) {
+        setText(messages[currentStep]);
+      }
+    }, 1200);
 
     return () =>
-      window.clearInterval(
-        interval
-      );
+      window.clearInterval(interval);
   }, [isLoading, messages]);
 
   return {
@@ -205,13 +175,10 @@ function useProcessing(
 }
 
 export default function CastClient() {
-  const { user } =
-    useAuth();
+  const { user } = useAuth();
 
   const [language, setLanguage] =
-    useState<
-      'en' | 'ru' | null
-    >(null);
+    useState<'en' | 'ru' | null>(null);
 
   const [currentStep, setCurrentStep] =
     useState(0);
@@ -223,17 +190,13 @@ export default function CastClient() {
     useState('');
 
   const [analysisData, setAnalysisData] =
-    useState<AnalysisData | null>(
-      null
-    );
+    useState<AnalysisData | null>(null);
 
   const [displayedText, setDisplayedText] =
     useState('');
 
   const [archetype, setArchetype] =
-    useState<Archetype | ''>(
-      ''
-    );
+    useState<Archetype | ''>('');
 
   const [loading, setLoading] =
     useState(false);
@@ -248,14 +211,10 @@ export default function CastClient() {
     useState('');
 
   const [recordId, setRecordId] =
-    useState<string | null>(
-      null
-    );
+    useState<string | null>(null);
 
   const [captureToken, setCaptureToken] =
-    useState<string | null>(
-      null
-    );
+    useState<string | null>(null);
 
   const [emailSent, setEmailSent] =
     useState(false);
@@ -266,11 +225,8 @@ export default function CastClient() {
   const [emailError, setEmailError] =
     useState('');
 
-  const {
-    processingText,
-  } = useProcessing(
-    loading
-  );
+  const { processingText } =
+    useProcessing(loading);
 
   const supabase = useMemo(
     () => createClient(),
@@ -287,14 +243,11 @@ export default function CastClient() {
   const currentQuestion =
     currentStep >= 1 &&
     currentStep <= 10
-      ? questions[
-          currentStep - 1
-        ]
+      ? questions[currentStep - 1]
       : '';
 
   const isAnswerValid =
-    currentAnswer.trim()
-      .length > 2;
+    currentAnswer.trim().length > 2;
 
   useEffect(() => {
     if (
@@ -311,59 +264,38 @@ export default function CastClient() {
       );
 
     let index = 0;
-    let timeoutId: number | null =
-      null;
+    let timeoutId: number | null = null;
 
     setDisplayedText('');
     setShowStamp(false);
 
-    const interval =
-      window.setInterval(() => {
-        const nextChunk =
-          formatted.slice(
-            index,
-            index + 3
-          );
-
-        index += nextChunk.length;
-
-        setDisplayedText(
-          formatted.slice(
-            0,
-            index
-          )
-        );
-
-        if (
-          index >=
-          formatted.length
-        ) {
-          window.clearInterval(
-            interval
-          );
-
-          timeoutId =
-            window.setTimeout(
-              () =>
-                setShowStamp(
-                  true
-                ),
-              400
-            );
-        }
-      }, 18);
-
-    return () => {
-      window.clearInterval(
-        interval
+    const interval = window.setInterval(() => {
+      const nextChunk = formatted.slice(
+        index,
+        index + 3
       );
 
-      if (
-        timeoutId !== null
-      ) {
-        window.clearTimeout(
-          timeoutId
+      index += nextChunk.length;
+
+      setDisplayedText(
+        formatted.slice(0, index)
+      );
+
+      if (index >= formatted.length) {
+        window.clearInterval(interval);
+
+        timeoutId = window.setTimeout(
+          () => setShowStamp(true),
+          400
         );
+      }
+    }, 18);
+
+    return () => {
+      window.clearInterval(interval);
+
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
       }
     };
   }, [
@@ -398,32 +330,23 @@ export default function CastClient() {
     const labels =
       resultArchetype === 'ru'
         ? {
-            agency:
-              'ИНДЕКС АГЕНТНОСТИ',
-            scores:
-              'БАЛЛЫ АРХЕТИПОВ',
-            summary:
-              'РЕЗЮМЕ',
+            agency: 'ИНДЕКС АГЕНТНОСТИ',
+            scores: 'БАЛЛЫ АРХЕТИПОВ',
+            summary: 'РЕЗЮМЕ',
             weaknesses:
               'СТРУКТУРНЫЕ СЛАБОСТИ',
-            assets:
-              'КЛЮЧЕВЫЕ АКТИВЫ',
+            assets: 'КЛЮЧЕВЫЕ АКТИВЫ',
             directive:
               'СТРАТЕГИЧЕСКАЯ ДИРЕКТИВА',
           }
         : {
-            agency:
-              'AGENCY INDEX',
-            scores:
-              'ARCHETYPE SCORES',
-            summary:
-              'EXECUTIVE SUMMARY',
+            agency: 'AGENCY INDEX',
+            scores: 'ARCHETYPE SCORES',
+            summary: 'EXECUTIVE SUMMARY',
             weaknesses:
               'STRUCTURAL WEAKNESSES',
-            assets:
-              'CORE ASSETS',
-            directive:
-              'STRATEGIC DIRECTIVE',
+            assets: 'CORE ASSETS',
+            directive: 'STRATEGIC DIRECTIVE',
           };
 
     return [
@@ -468,44 +391,37 @@ export default function CastClient() {
 
     try {
       const {
-        data: {
-          session,
-        },
-      } =
-        await supabase.auth.getSession();
+        data: { session },
+      } = await supabase.auth.getSession();
 
       const token =
-        session?.access_token ||
-        '';
+        session?.access_token || '';
 
-      const res =
-        await fetch(
-          '/api/cast',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-              ...(token
-                ? {
-                    Authorization:
-                      `Bearer ${token}`,
-                  }
-                : {}),
-            },
-            body: JSON.stringify({
-              answers:
-                finalAnswers,
-              language,
-            }),
-          }
-        );
+      const res = await fetch(
+        '/api/cast',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json',
+            ...(token
+              ? {
+                  Authorization:
+                    `Bearer ${token}`,
+                }
+              : {}),
+          },
+          body: JSON.stringify({
+            answers: finalAnswers,
+            language,
+          }),
+        }
+      );
 
       let data: CastResponse;
 
       try {
-        data =
-          await res.json();
+        data = await res.json();
       } catch {
         throw new Error(
           'Invalid response from the Core.'
@@ -544,30 +460,19 @@ export default function CastClient() {
       }
 
       if (
-        data.analysis
-          .agency_index <
-          0 ||
-        data.analysis
-          .agency_index >
-          100
+        data.analysis.agency_index < 0 ||
+        data.analysis.agency_index > 100
       ) {
         throw new Error(
           'The Core returned an invalid Agency Index.'
         );
       }
 
-      setAnalysisData(
-        data.analysis
-      );
-
+      setAnalysisData(data.analysis);
       setArchetype(
         normalizedArchetype
       );
-
-      setRecordId(
-        data.recordId
-      );
-
+      setRecordId(data.recordId);
       setCaptureToken(
         data.captureToken
       );
@@ -601,9 +506,7 @@ export default function CastClient() {
       currentAnswer.trim(),
     ];
 
-    setAnswers(
-      newAnswers
-    );
+    setAnswers(newAnswers);
     setCurrentAnswer('');
 
     if (currentStep < 10) {
@@ -615,9 +518,7 @@ export default function CastClient() {
 
     setCurrentStep(11);
 
-    await runAnalysis(
-      newAnswers
-    );
+    await runAnalysis(newAnswers);
   }
 
   async function handleRetry() {
@@ -629,9 +530,7 @@ export default function CastClient() {
       return;
     }
 
-    await runAnalysis(
-      answers
-    );
+    await runAnalysis(answers);
   }
 
   function handleKeyDown(
@@ -666,30 +565,25 @@ export default function CastClient() {
     setEmailError('');
 
     try {
-      const res =
-        await fetch(
-          '/api/cast/capture',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-            body: JSON.stringify({
-              recordId,
-              captureToken,
-              email:
-                email.trim(),
-            }),
-          }
-        );
+      const res = await fetch(
+        '/api/cast/capture',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            recordId,
+            captureToken,
+            email: email.trim(),
+          }),
+        }
+      );
 
-      const data =
-        await res
-          .json()
-          .catch(
-            () => null
-          );
+      const data = await res
+        .json()
+        .catch(() => null);
 
       if (!res.ok) {
         throw new Error(
@@ -699,7 +593,6 @@ export default function CastClient() {
       }
 
       setEmailSent(true);
-
       setCaptureToken(null);
     } catch (err) {
       console.error(
@@ -718,19 +611,26 @@ export default function CastClient() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white font-mono flex flex-col relative selection:bg-orange-500/30 overflow-x-hidden antialiased">
+    <div className="relative flex min-h-[100dvh] w-full flex-col overflow-x-hidden bg-[#141210] font-sans text-stone-200 antialiased selection:bg-amber-500/30">
+      {/* Ambient Temple light */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute left-1/2 top-1/2 h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-900/20 blur-[130px]" />
+
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(120,80,20,0.10),transparent_45%)]" />
+      </div>
+
       <TempleTopBar backTo="temple" />
 
+      {/* LANGUAGE SELECT */}
       {currentStep === 0 && (
-        <div className="flex-1 flex items-center justify-center p-6 relative z-10 pt-28 pb-16">
-          <div className="max-w-4xl w-full grid md:grid-cols-2 gap-8 animate-in fade-in duration-700">
+        <main className="relative z-10 flex min-h-[100dvh] flex-1 items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
+          <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2 md:gap-8 animate-in fade-in duration-700">
             {[
               {
                 lang: 'en' as const,
                 label:
                   '[ START IN ENGLISH ]',
-                title:
-                  'Protocol 01',
+                title: 'Protocol 01',
                 text:
                   'I spent 20 years building a personal myth and 2 years deconstructing it with AI. This Protocol deconstructs your answers and measures your Agency Index.',
               },
@@ -738,24 +638,23 @@ export default function CastClient() {
                 lang: 'ru' as const,
                 label:
                   '[ НАЧАТЬ НА РУССКОМ ]',
-                title:
-                  'Протокол 01',
+                title: 'Протокол 01',
                 text:
                   'Этот Протокол анализирует ваши ответы, вычисляет Индекс Агентности и определяет ваш психологический архетип.',
               },
             ].map(item => (
               <div
                 key={item.lang}
-                className="space-y-6 flex flex-col justify-center bg-zinc-900/40 border border-zinc-800/80 p-8 rounded-2xl backdrop-blur-xl"
+                className="group flex flex-col justify-center space-y-6 rounded-[28px] border border-stone-800/80 bg-stone-900/80 p-7 shadow-2xl backdrop-blur-xl transition-all duration-300 hover:border-amber-300/30 hover:bg-stone-900/90 sm:p-9"
               >
-                <div className="flex items-center gap-2 text-xs text-orange-500 uppercase tracking-widest">
-                  <Terminal
-                    size={14}
-                  />
+                <div className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-amber-300">
+                  <Terminal size={13} />
                   {item.title}
                 </div>
 
-                <p className="text-zinc-300 text-sm md:text-base leading-relaxed tracking-wide">
+                <div className="h-px w-12 bg-amber-300/30 transition-all duration-300 group-hover:w-20" />
+
+                <p className="text-sm leading-relaxed tracking-wide text-stone-300 md:text-base">
                   {item.text}
                 </p>
 
@@ -766,7 +665,7 @@ export default function CastClient() {
                       item.lang
                     )
                   }
-                  className="group flex items-center justify-between text-white text-sm tracking-[0.2em] transition-all bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-6 py-4 rounded-xl cursor-pointer"
+                  className="group/button flex w-full cursor-pointer items-center justify-between rounded-full border border-amber-300/25 bg-white/5 px-6 py-4 font-serif text-xs uppercase tracking-[0.18em] text-stone-100 shadow-md backdrop-blur-md transition-all hover:border-amber-300/60 hover:bg-white/10"
                 >
                   <span>
                     {item.label}
@@ -774,34 +673,32 @@ export default function CastClient() {
 
                   <ArrowRight
                     size={16}
-                    className="group-hover:translate-x-1 transition-transform text-orange-500"
+                    className="text-amber-300 transition-transform group-hover/button:translate-x-1"
                   />
                 </button>
               </div>
             ))}
           </div>
-        </div>
+        </main>
       )}
 
+      {/* QUESTIONS */}
       {currentStep > 0 &&
         currentStep <= 10 &&
         language && (
-          <div className="flex-1 flex flex-col items-center justify-center px-6 py-28 relative z-10 max-w-2xl mx-auto w-full">
-            <div className="w-full flex flex-col justify-center">
-              <div className="flex justify-between items-center text-xs text-zinc-500 mb-6 uppercase tracking-[0.25em]">
-                <span className="flex items-center gap-1.5">
+          <main className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-1 flex-col items-center justify-center px-6 pb-16 pt-32 sm:pt-36">
+            <div className="w-full">
+              <div className="mb-5 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] text-stone-500">
+                <span className="flex items-center gap-2">
                   <Sparkles
                     size={12}
-                    className="text-orange-500"
+                    className="text-amber-300"
                   />
 
                   Query{' '}
                   {String(
                     currentStep
-                  ).padStart(
-                    2,
-                    '0'
-                  )}{' '}
+                  ).padStart(2, '0')}{' '}
                   / 10
                 </span>
 
@@ -810,7 +707,7 @@ export default function CastClient() {
                 </span>
               </div>
 
-              <div className="text-white text-lg md:text-xl leading-relaxed mb-8 min-h-[90px] bg-zinc-950/60 border border-zinc-800 p-6 rounded-2xl backdrop-blur-md">
+              <div className="mb-6 rounded-[28px] border border-stone-800/80 bg-stone-900/80 p-6 text-lg leading-relaxed text-stone-100 shadow-xl backdrop-blur-xl md:p-8 md:text-xl">
                 {renderQuestionText(
                   currentQuestion
                 )}
@@ -818,20 +715,16 @@ export default function CastClient() {
 
               <textarea
                 autoFocus
-                value={
-                  currentAnswer
-                }
+                value={currentAnswer}
                 onChange={e =>
                   setCurrentAnswer(
                     e.target.value
                   )
                 }
-                onKeyDown={
-                  handleKeyDown
-                }
+                onKeyDown={handleKeyDown}
                 disabled={loading}
                 maxLength={4000}
-                className="w-full bg-zinc-900/60 text-zinc-200 text-base border border-zinc-800 focus:border-orange-500 focus:bg-black outline-none p-5 resize-none mb-6 placeholder-zinc-600 transition-all rounded-xl min-h-[130px] shadow-inner"
+                className="mb-6 min-h-[150px] w-full resize-none rounded-2xl border border-stone-800 bg-white/5 p-5 text-base text-stone-200 outline-none shadow-inner transition-all placeholder:text-stone-600 focus:border-amber-400/60 focus:bg-white/10"
                 placeholder={
                   language === 'ru'
                     ? 'Пишите честно...'
@@ -839,10 +732,9 @@ export default function CastClient() {
                 }
               />
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <span className="text-[10px] text-zinc-600 uppercase tracking-widest order-2 sm:order-1">
-                  {language ===
-                  'ru'
+              <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+                <span className="order-2 font-mono text-[9px] uppercase tracking-[0.18em] text-stone-600 sm:order-1">
+                  {language === 'ru'
                     ? '[ PRESS ENTER ДЛЯ ОТПРАВКИ ]'
                     : '[ PRESS ENTER TO TRANSMIT ]'}
                 </span>
@@ -856,62 +748,60 @@ export default function CastClient() {
                     !isAnswerValid ||
                     loading
                   }
-                  className="w-full sm:w-auto text-xs text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-8 py-4 transition-all tracking-[0.2em] disabled:opacity-25 disabled:cursor-not-allowed uppercase font-bold rounded-xl cursor-pointer order-1 sm:order-2 shadow-lg"
+                  className="order-1 w-full cursor-pointer rounded-full border border-amber-300/30 bg-white/10 px-8 py-4 font-serif text-xs font-medium uppercase tracking-[0.18em] text-stone-100 shadow-md backdrop-blur-md transition-all hover:border-amber-300/60 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-25 sm:order-2 sm:w-auto"
                 >
-                  {currentStep ===
-                  10
-                    ? language ===
-                      'ru'
+                  {currentStep === 10
+                    ? language === 'ru'
                       ? 'АНАЛИЗ'
                       : 'ANALYZE'
-                    : language ===
-                        'ru'
+                    : language === 'ru'
                       ? 'ДАЛЕЕ'
                       : 'NEXT'}
                 </button>
               </div>
             </div>
-          </div>
+          </main>
         )}
 
+      {/* RESULT */}
       {currentStep === 11 && (
-        <div className="flex-1 max-w-3xl mx-auto w-full px-6 pt-32 pb-20 relative z-10">
+        <main className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-1 flex-col px-6 pb-20 pt-32 sm:pt-36">
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-[50vh]">
+            <div className="flex min-h-[60vh] flex-col items-center justify-center">
               <div
-                className="animate-pulse text-xs md:text-sm tracking-[0.3em] text-orange-400 flex items-center gap-2 text-center"
+                className="flex items-center gap-2 text-center font-mono text-xs tracking-[0.28em] text-amber-300 md:text-sm"
                 role="status"
                 aria-live="polite"
               >
                 <RefreshCw
-                  className="animate-spin shrink-0"
-                  size={16}
+                  className="animate-spin"
+                  size={15}
                 />
 
                 {processingText ||
                   'INITIATING CORE...'}
               </div>
 
-              <div className="w-64 h-1 bg-zinc-900 mt-8 overflow-hidden rounded-full">
-                <div className="h-full bg-orange-500 animate-progress-indeterminate" />
+              <div className="mt-8 h-px w-64 overflow-hidden bg-stone-800">
+                <div className="h-full w-1/3 animate-progress-indeterminate bg-amber-400" />
               </div>
             </div>
           ) : error ? (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+            <div className="flex min-h-[60vh] items-center justify-center text-center">
               <div
-                className="w-full max-w-lg border border-red-900/60 bg-red-950/20 rounded-3xl p-8 backdrop-blur-xl"
+                className="w-full max-w-lg rounded-[28px] border border-stone-800/80 bg-stone-900/80 p-8 shadow-2xl backdrop-blur-xl"
                 role="alert"
               >
                 <AlertTriangle
                   size={24}
-                  className="text-red-500 mx-auto mb-5"
+                  className="mx-auto mb-5 text-amber-400"
                 />
 
-                <div className="text-xs uppercase tracking-[0.25em] text-red-400 mb-4">
+                <div className="mb-4 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-300">
                   Core Error
                 </div>
 
-                <p className="text-sm leading-relaxed text-zinc-400 mb-7">
+                <p className="mb-7 text-sm leading-relaxed text-stone-400">
                   {error}
                 </p>
 
@@ -922,17 +812,13 @@ export default function CastClient() {
                   }
                   disabled={
                     answers.length !==
-                      10 ||
-                    loading
+                      10 || loading
                   }
-                  className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-6 py-3 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 rounded-full border border-amber-300/25 bg-white/5 px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] text-stone-100 transition-all hover:border-amber-300/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
                 >
-                  <RefreshCw
-                    size={14}
-                  />
+                  <RefreshCw size={14} />
 
-                  {language ===
-                  'ru'
+                  {language === 'ru'
                     ? 'Повторить анализ'
                     : 'Retry Analysis'}
                 </button>
@@ -940,17 +826,15 @@ export default function CastClient() {
             </div>
           ) : analysisData ? (
             <>
-              <div className="border border-zinc-800/80 p-6 md:p-10 bg-zinc-900/40 backdrop-blur-2xl relative shadow-2xl rounded-3xl overflow-hidden mb-8">
+              <div className="relative mb-8 overflow-hidden rounded-[28px] border border-stone-800/80 bg-stone-900/85 p-6 shadow-2xl backdrop-blur-2xl md:p-10">
                 {showStamp &&
                   archetype && (
                     <Stamp
-                      type={
-                        archetype
-                      }
+                      type={archetype}
                     />
                   )}
 
-                <div className="flex flex-col sm:flex-row justify-between gap-2 border-b border-zinc-800 pb-4 mb-6 text-[10px] text-zinc-500 tracking-[0.2em] uppercase">
+                <div className="mb-6 flex flex-col justify-between gap-2 border-b border-stone-800 pb-4 font-mono text-[9px] uppercase tracking-[0.2em] text-stone-500 sm:flex-row">
                   <span>
                     Subject:{' '}
                     {user?.email ||
@@ -968,7 +852,7 @@ export default function CastClient() {
                   </span>
                 </div>
 
-                <pre className="whitespace-pre-wrap text-xs md:text-sm leading-loose text-zinc-300 font-light font-mono">
+                <pre className="whitespace-pre-wrap font-mono text-xs font-light leading-loose text-stone-300 md:text-sm">
                   {displayedText}
 
                   {displayedText.length <
@@ -976,7 +860,7 @@ export default function CastClient() {
                       analysisData,
                       language
                     ).length && (
-                    <span className="animate-pulse bg-orange-500 text-black px-1 ml-1 inline-block w-2">
+                    <span className="ml-1 inline-block w-2 bg-amber-400 px-1 text-stone-950 animate-pulse">
                       {' '}
                     </span>
                   )}
@@ -986,28 +870,25 @@ export default function CastClient() {
               {!user &&
                 recordId &&
                 captureToken && (
-                  <div className="border border-zinc-800 p-6 md:p-8 bg-zinc-950/80 rounded-2xl mb-8 backdrop-blur-xl">
-                    <h3 className="text-sm uppercase tracking-widest text-white mb-2">
-                      {language ===
-                      'ru'
+                  <div className="mb-8 rounded-[28px] border border-stone-800/80 bg-stone-950/80 p-6 backdrop-blur-xl md:p-8">
+                    <h3 className="mb-2 font-serif text-sm uppercase tracking-[0.12em] text-stone-100">
+                      {language === 'ru'
                         ? 'Сохранить результат в Архиве'
                         : 'Persist Result in Archive'}
                     </h3>
 
-                    <p className="text-xs text-zinc-400 mb-4">
-                      {language ===
-                      'ru'
+                    <p className="mb-5 text-xs leading-relaxed text-stone-400">
+                      {language === 'ru'
                         ? 'Введите email, чтобы привязать профиль и получить копию.'
                         : 'Enter email to secure your archetype and receive records.'}
                     </p>
 
                     {emailSent ? (
                       <div
-                        className="text-xs text-orange-400 uppercase tracking-widest py-3"
+                        className="py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-amber-300"
                         role="status"
                       >
-                        {language ===
-                        'ru'
+                        {language === 'ru'
                           ? '✓ Протокол зафиксирован за вашим email'
                           : '✓ Protocol secured to your email'}
                       </div>
@@ -1017,28 +898,23 @@ export default function CastClient() {
                           onSubmit={
                             handleEmailSubmit
                           }
-                          className="flex flex-col sm:flex-row gap-3"
+                          className="flex flex-col gap-3 sm:flex-row"
                         >
                           <input
                             type="email"
                             required
-                            maxLength={
-                              254
-                            }
+                            maxLength={254}
                             placeholder="name@domain.com"
-                            value={
-                              email
-                            }
+                            value={email}
                             onChange={e =>
                               setEmail(
-                                e.target
-                                  .value
+                                e.target.value
                               )
                             }
                             disabled={
                               emailLoading
                             }
-                            className="flex-1 bg-zinc-900 text-zinc-200 text-sm border border-zinc-800 focus:border-orange-500 outline-none px-4 py-3 rounded-xl disabled:opacity-50"
+                            className="flex-1 rounded-full border border-stone-800 bg-white/5 px-5 py-3 text-sm text-stone-200 outline-none transition-all placeholder:text-stone-600 focus:border-amber-400/60 focus:bg-white/10 disabled:opacity-50"
                           />
 
                           <button
@@ -1046,7 +922,7 @@ export default function CastClient() {
                             disabled={
                               emailLoading
                             }
-                            className="text-xs font-bold uppercase tracking-widest bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-6 py-3 rounded-xl transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="rounded-full border border-amber-300/25 bg-white/5 px-6 py-3 font-serif text-xs uppercase tracking-[0.16em] text-stone-100 transition-all hover:border-amber-300/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             {emailLoading
                               ? '...'
@@ -1062,9 +938,7 @@ export default function CastClient() {
                             className="mt-3 text-xs text-red-400"
                             role="alert"
                           >
-                            {
-                              emailError
-                            }
+                            {emailError}
                           </p>
                         )}
                       </>
@@ -1072,17 +946,17 @@ export default function CastClient() {
                   </div>
                 )}
 
-              <div className="text-center mt-8">
+              <div className="mt-8 text-center">
                 <Link
                   href="/temple"
-                  className="text-xs text-zinc-500 hover:text-white transition-colors tracking-[0.3em] uppercase border border-zinc-800 px-6 py-3 rounded-full inline-block bg-zinc-900/50"
+                  className="inline-block rounded-full border border-amber-300/20 bg-white/5 px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] text-stone-400 transition-all hover:border-amber-300/50 hover:bg-white/10 hover:text-stone-100"
                 >
                   [ Return to Temple ]
                 </Link>
               </div>
             </>
           ) : null}
-        </div>
+        </main>
       )}
     </div>
   );

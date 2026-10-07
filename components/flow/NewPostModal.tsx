@@ -40,6 +40,7 @@ type FlowMode =
   | 'later';
 
 const LAST_DRAFT_KEY = 'flow:last-draft-id';
+const AUTOSAVE_INTERVAL = 10_000;
 
 function firstLine(body: string) {
   return (
@@ -166,11 +167,6 @@ export default function NewPostModal({
   const textareaRef =
     useRef<HTMLTextAreaElement | null>(null);
 
-  const saveTimer =
-    useRef<ReturnType<typeof setTimeout> | null>(
-      null,
-    );
-
   const savePromiseRef =
     useRef<Promise<boolean> | null>(null);
 
@@ -227,6 +223,7 @@ export default function NewPostModal({
               json.item as Item;
 
             setItem(loaded);
+
             setBodyMd(
               loaded.body_md ?? '',
             );
@@ -367,12 +364,6 @@ export default function NewPostModal({
     return () => {
       cancelled = true;
 
-      if (saveTimer.current) {
-        clearTimeout(
-          saveTimer.current,
-        );
-      }
-
       if (
         imagePreview &&
         imagePreview.startsWith('blob:')
@@ -450,68 +441,69 @@ export default function NewPostModal({
       [item],
     );
 
-  const scheduleSave =
-    useCallback(
-      (
-        changes: Record<string, unknown>,
-      ) => {
-        if (!item) {
-          return;
+  useEffect(() => {
+    if (!item) {
+      return;
+    }
+
+    const autosave = () => {
+      if (
+        savePromiseRef.current ||
+        saveState === 'publishing' ||
+        saveState === 'creating' ||
+        saveState === 'loading'
+      ) {
+        return;
+      }
+
+      const promise =
+        saveDraft({
+          body_md:
+            latestRef.current.bodyMd,
+        });
+
+      savePromiseRef.current =
+        promise;
+
+      void promise.finally(() => {
+        if (
+          savePromiseRef.current ===
+          promise
+        ) {
+          savePromiseRef.current =
+            null;
         }
+      });
+    };
 
-        if (saveTimer.current) {
-          clearTimeout(
-            saveTimer.current,
-          );
-        }
+    const interval =
+      window.setInterval(
+        autosave,
+        AUTOSAVE_INTERVAL,
+      );
 
-        saveTimer.current =
-          setTimeout(() => {
-            saveTimer.current = null;
-
-            const promise =
-              saveDraft(changes);
-
-            savePromiseRef.current =
-              promise;
-
-            void promise.finally(() => {
-              if (
-                savePromiseRef.current ===
-                promise
-              ) {
-                savePromiseRef.current =
-                  null;
-              }
-            });
-          }, 700);
-      },
-      [item, saveDraft],
-    );
+    return () => {
+      window.clearInterval(
+        interval,
+      );
+    };
+  }, [
+    item,
+    saveDraft,
+    saveState,
+  ]);
 
   function handleBodyChange(
     value: string,
   ) {
     setBodyMd(value);
     latestRef.current.bodyMd = value;
-
-    scheduleSave({
-      body_md: value,
-    });
   }
 
   const flushSave =
     useCallback(async () => {
       if (!item) {
         return true;
-      }
-
-      if (saveTimer.current) {
-        clearTimeout(
-          saveTimer.current,
-        );
-
-        saveTimer.current = null;
       }
 
       if (savePromiseRef.current) {
@@ -592,6 +584,10 @@ export default function NewPostModal({
         parsedItem.body_md ?? '';
 
       setSaveState('saved');
+
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
     } catch (err) {
       console.error(
         '[flow] link parsing failed:',
@@ -740,8 +736,7 @@ export default function NewPostModal({
     }
 
     if (
-      saveState === 'publishing' ||
-      saveState === 'saving'
+      saveState === 'publishing'
     ) {
       return;
     }
@@ -754,6 +749,7 @@ export default function NewPostModal({
         await flushSave();
 
       if (!saved) {
+        setSaveState('error');
         return;
       }
 
@@ -1008,7 +1004,7 @@ export default function NewPostModal({
       }}
     >
       <div
-        className="flex h-full max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden bg-[#FAF8F5] shadow-2xl sm:h-auto sm:rounded-[2rem] sm:border sm:border-stone-200"
+        className="flex h-full max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden bg-[#FAF8F5] shadow-2xl sm:h-auto sm:rounded-[2rem]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="flow-composer-title"
@@ -1090,6 +1086,21 @@ export default function NewPostModal({
                     >
                       Open original ↗
                     </a>
+                  </div>
+
+                  <div className="border-t border-stone-200/80 bg-[#FAF8F5] p-5 sm:p-6">
+                    <textarea
+                      ref={textareaRef}
+                      value={bodyMd}
+                      onChange={(event) =>
+                        handleBodyChange(
+                          event.target.value,
+                        )
+                      }
+                      disabled={!item || busy}
+                      placeholder="Add your text…"
+                      className="min-h-[150px] w-full resize-none border-0 bg-transparent font-serif text-[19px] font-light leading-[1.75] text-stone-800 outline-none placeholder:text-stone-300"
+                    />
                   </div>
                 </div>
               ) : (
@@ -1186,6 +1197,14 @@ export default function NewPostModal({
               +
             </button>
 
+            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-400">
+              {saveState === 'saving'
+                ? 'Saving'
+                : saveState === 'error'
+                  ? 'Error'
+                  : 'Saved'}
+            </span>
+
             <span
               className={`h-1.5 w-1.5 rounded-full ${
                 saveState === 'error'
@@ -1195,13 +1214,7 @@ export default function NewPostModal({
                     ? 'animate-pulse bg-stone-500'
                     : 'bg-stone-300'
               }`}
-              aria-label={
-                saveState === 'error'
-                  ? 'Error'
-                  : saveState === 'saving'
-                    ? 'Saving'
-                    : 'Ready'
-              }
+              aria-hidden="true"
             />
           </div>
 
@@ -1213,8 +1226,7 @@ export default function NewPostModal({
               }
               disabled={
                 !item ||
-                busy ||
-                saveState === 'saving'
+                busy
               }
               className="rounded-full px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 disabled:text-stone-300 sm:px-4"
             >
@@ -1228,8 +1240,7 @@ export default function NewPostModal({
               }
               disabled={
                 !item ||
-                busy ||
-                saveState === 'saving'
+                busy
               }
               className="rounded-full px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 disabled:text-stone-300 sm:px-4"
             >
