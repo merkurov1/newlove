@@ -496,6 +496,23 @@ export default function Header() {
                     >
                       ANTON MERKUROV
                     </Link>
+
+                    <Link
+                      href="/flow"
+                      onClick={() =>
+                        setIsSiteMenuOpen(
+                          false,
+                        )
+                      }
+                      className={`mt-3 block font-bold text-sm sm:text-base uppercase tracking-[0.2em] transition-colors ${
+                        normalizedPath ===
+                        '/flow'
+                          ? 'text-stone-500'
+                          : 'text-stone-900 hover:text-stone-600'
+                      }`}
+                    >
+                      FLOW
+                    </Link>
                   </div>
 
                   <div className="space-y-2 pt-3 border-t border-stone-100">

@@ -32,101 +32,88 @@ function isValidVideoId(
 ): value is string {
   return Boolean(
     value &&
-      VIDEO_ID_PATTERN.test(
-        value,
-      ),
+      VIDEO_ID_PATTERN.test(value),
   );
 }
 
-function getHost(
-  value: string,
-): string | null {
-  try {
-    const url =
-      new URL(value);
+function normalizeHost(
+  hostname: string,
+): string {
+  return hostname
+    .toLowerCase()
+    .replace(/\.$/, '');
+}
 
-    return url.hostname
-      .toLowerCase()
-      .replace(
-        /\.$/,
-        '',
-      );
-  } catch {
+function cleanInput(
+  value: string,
+): string {
+  return value
+    .trim()
+    .replace(/^<|>$/g, '');
+}
+
+function toUrl(
+  value: string,
+): URL | null {
+  const cleaned =
+    cleanInput(value);
+
+  if (!cleaned) {
     return null;
   }
+
+  try {
+    return new URL(cleaned);
+  } catch {
+    try {
+      return new URL(
+        `https://${cleaned}`,
+      );
+    } catch {
+      return null;
+    }
+  }
 }
 
-/**
- * Returns true when the URL belongs to YouTube
- * and looks like a supported video URL.
- */
-export function isYouTubeUrl(
+function getYouTubeHost(
   value: string,
-): boolean {
-  const host =
-    getHost(value);
+): string | null {
+  const url =
+    toUrl(value);
 
-  if (
-    !host ||
-    !YOUTUBE_HOSTS.has(host)
-  ) {
-    return false;
+  if (!url) {
+    return null;
   }
 
-  return Boolean(
-    extractYouTubeVideoId(
-      value,
-    ),
-  );
+  const host =
+    normalizeHost(
+      url.hostname,
+    );
+
+  return YOUTUBE_HOSTS.has(host)
+    ? host
+    : null;
 }
 
-/**
- * Extracts a YouTube video ID from:
- *
- * - https://www.youtube.com/watch?v=VIDEO_ID
- * - https://youtu.be/VIDEO_ID
- * - https://www.youtube.com/shorts/VIDEO_ID
- * - https://www.youtube.com/embed/VIDEO_ID
- * - https://www.youtube.com/live/VIDEO_ID
- * - https://www.youtube.com/v/VIDEO_ID
- */
 export function extractYouTubeVideoId(
   value: string,
 ): string | null {
-  const trimmed =
-    value.trim();
+  const url =
+    toUrl(value);
 
-  if (!trimmed) {
-    return null;
-  }
-
-  let url: URL;
-
-  try {
-    url =
-      new URL(trimmed);
-  } catch {
+  if (!url) {
     return null;
   }
 
   const host =
-    url.hostname
-      .toLowerCase()
-      .replace(
-        /\.$/,
-        '',
-      );
+    normalizeHost(
+      url.hostname,
+    );
 
-  if (
-    !YOUTUBE_HOSTS.has(host)
-  ) {
+  if (!YOUTUBE_HOSTS.has(host)) {
     return null;
   }
 
-  /*
-   * Standard watch URL:
-   * youtube.com/watch?v=...
-   */
   if (
     host === 'youtube.com' ||
     host === 'www.youtube.com' ||
@@ -134,9 +121,7 @@ export function extractYouTubeVideoId(
     host === 'music.youtube.com'
   ) {
     const queryId =
-      url.searchParams.get(
-        'v',
-      );
+      url.searchParams.get('v');
 
     if (
       isValidVideoId(
@@ -146,22 +131,9 @@ export function extractYouTubeVideoId(
       return queryId;
     }
 
-    /*
-     * Shorts:
-     * /shorts/VIDEO_ID
-     *
-     * Embed:
-     * /embed/VIDEO_ID
-     *
-     * Live:
-     * /live/VIDEO_ID
-     *
-     * Legacy:
-     * /v/VIDEO_ID
-     */
     const match =
       url.pathname.match(
-        /^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]{6,20})(?:\/|$)/,
+        /^\/(?:shorts|live|embed|v)\/([A-Za-z0-9_-]{6,20})(?:\/|$)/,
       );
 
     if (
@@ -173,13 +145,32 @@ export function extractYouTubeVideoId(
       return match[1];
     }
 
+    const encodedUrl =
+      url.searchParams.get('u');
+
+    if (encodedUrl) {
+      try {
+        const decoded =
+          decodeURIComponent(
+            encodedUrl,
+          );
+
+        const nestedId =
+          extractYouTubeVideoId(
+            decoded,
+          );
+
+        if (nestedId) {
+          return nestedId;
+        }
+      } catch {
+        // Ignore malformed URL.
+      }
+    }
+
     return null;
   }
 
-  /*
-   * Short URL:
-   * youtu.be/VIDEO_ID
-   */
   if (
     host === 'youtu.be' ||
     host === 'www.youtu.be'
@@ -190,9 +181,7 @@ export function extractYouTubeVideoId(
         .filter(Boolean)[0] ??
       null;
 
-    return isValidVideoId(
-      id,
-    )
+    return isValidVideoId(id)
       ? id
       : null;
   }
@@ -200,10 +189,15 @@ export function extractYouTubeVideoId(
   return null;
 }
 
-/**
- * Converts any supported YouTube URL into
- * the canonical watch URL.
- */
+export function isYouTubeUrl(
+  value: string,
+): boolean {
+  return Boolean(
+    getYouTubeHost(value) &&
+      extractYouTubeVideoId(value),
+  );
+}
+
 export function getYouTubeCanonicalUrl(
   value: string,
 ): string | null {
@@ -235,15 +229,14 @@ type YouTubeOEmbedResponse = {
   html?: string;
 };
 
-function toNullableString(
+function nullableString(
   value:
     | string
     | null
     | undefined,
 ): string | null {
   if (
-    typeof value !==
-      'string' ||
+    typeof value !== 'string' ||
     !value.trim()
   ) {
     return null;
@@ -252,25 +245,18 @@ function toNullableString(
   return value.trim();
 }
 
-function toNullableNumber(
+function nullableNumber(
   value:
     | number
     | null
     | undefined,
 ): number | null {
-  return typeof value ===
-    'number' &&
+  return typeof value === 'number' &&
     Number.isFinite(value)
     ? value
     : null;
 }
 
-/**
- * Fetches public metadata from YouTube's
- * oEmbed endpoint.
- *
- * No API key is required.
- */
 export async function fetchYouTubeMetadata(
   value: string,
   options?: {
@@ -319,13 +305,20 @@ export async function fetchYouTubeMetadata(
       controller.abort();
     }, 8000);
 
-  const signal =
-    options?.signal
-      ? AbortSignal.any([
-          options.signal,
-          controller.signal,
-        ])
-      : controller.signal;
+  const abortFromCaller =
+    () => controller.abort();
+
+  if (options?.signal) {
+    if (options.signal.aborted) {
+      controller.abort();
+    } else {
+      options.signal.addEventListener(
+        'abort',
+        abortFromCaller,
+        { once: true },
+      );
+    }
+  }
 
   try {
     const response =
@@ -337,7 +330,8 @@ export async function fetchYouTubeMetadata(
             Accept:
               'application/json',
           },
-          signal,
+          signal:
+            controller.signal,
           cache: 'no-store',
         },
       );
@@ -356,12 +350,12 @@ export async function fetchYouTubeMetadata(
       data.type !== 'video'
     ) {
       throw new Error(
-        'The YouTube URL did not resolve to a video.',
+        'This YouTube URL is not a video.',
       );
     }
 
     const title =
-      toNullableString(
+      nullableString(
         data.title,
       );
 
@@ -372,44 +366,43 @@ export async function fetchYouTubeMetadata(
     }
 
     const thumbnail =
-      toNullableString(
+      nullableString(
         data.thumbnail_url,
       ) ??
       `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
-    const metadata: YouTubeMetadata =
-      {
-        video_id:
-          videoId,
+    const metadata: YouTubeMetadata = {
+      video_id:
+        videoId,
 
-        title,
+      title,
 
-        author_name:
-          toNullableString(
-            data.author_name,
-          ),
+      author_name:
+        nullableString(
+          data.author_name,
+        ),
 
-        author_url:
-          toNullableString(
-            data.author_url,
-          ),
+      author_url:
+        nullableString(
+          data.author_url,
+        ),
 
-        thumbnail_url:
-          thumbnail,
+      thumbnail_url:
+        thumbnail,
 
-        thumbnail_width:
-          toNullableNumber(
-            data.thumbnail_width,
-          ),
+      thumbnail_width:
+        nullableNumber(
+          data.thumbnail_width,
+        ),
 
-        thumbnail_height:
-          toNullableNumber(
-            data.thumbnail_height,
-          ),
+      thumbnail_height:
+        nullableNumber(
+          data.thumbnail_height,
+        ),
 
-        provider_name:
-          'YouTube',
-      };
+      provider_name:
+        'YouTube',
+    };
 
     return {
       videoId,
@@ -420,16 +413,16 @@ export async function fetchYouTubeMetadata(
     clearTimeout(
       timeout,
     );
+
+    if (options?.signal) {
+      options.signal.removeEventListener(
+        'abort',
+        abortFromCaller,
+      );
+    }
   }
 }
 
-/**
- * Convenience helper for callers that only need
- * to know whether a URL is YouTube and obtain
- * normalized metadata.
- *
- * Returns null for non-YouTube URLs.
- */
 export async function resolveYouTube(
   value: string,
   options?: {

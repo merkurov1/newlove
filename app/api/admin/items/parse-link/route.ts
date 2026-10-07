@@ -1,26 +1,15 @@
-import {
-  NextRequest,
-  NextResponse,
-} from 'next/server';
-
+import { NextRequest, NextResponse } from 'next/server';
+import * as cheerio from 'cheerio';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 
-import * as cheerio from 'cheerio';
-
 import { createClient } from '@/lib/supabase/server';
-import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { requireAdminFromRequest } from '@/lib/auth/admin';
 import {
+  getYouTubeCanonicalUrl,
   isYouTubeUrl,
   resolveYouTube,
 } from '@/lib/flow/youtube';
-
-export const dynamic = 'force-dynamic';
-
-const MAX_HTML_BYTES =
-  2 * 1024 * 1024;
-
-const MAX_REDIRECTS = 5;
 
 type LinkMetadata = {
   url: string;
@@ -35,86 +24,196 @@ type LinkMetadata = {
   type: string | null;
 };
 
-function normalizeInputUrl(
-  value: string,
-) {
-  const trimmed =
-    value.trim();
-
-  if (!trimmed) {
-    throw new Error(
-      'URL is required.',
-    );
-  }
-
-  if (
-    /^https?:\/\//i.test(
-      trimmed,
-    )
-  ) {
-    return trimmed;
-  }
-
-  return `https://${trimmed}`;
-}
-
 function isPrivateIp(
   address: string,
-) {
-  const version =
+): boolean {
+  const family =
     net.isIP(address);
 
-  if (version === 4) {
+  if (family === 4) {
     const parts =
       address
         .split('.')
         .map(Number);
 
+    if (parts.length !== 4) {
+      return true;
+    }
+
     const [
       a,
       b,
+      c,
+      d,
     ] = parts;
 
-    return (
-      a === 10 ||
-      a === 127 ||
-      a === 0 ||
-      (a === 169 &&
-        b === 254) ||
-      (a === 172 &&
-        b >= 16 &&
-        b <= 31) ||
-      (a === 192 &&
-        b === 168)
-    );
+    if (a === 10) {
+      return true;
+    }
+
+    if (
+      a === 127
+    ) {
+      return true;
+    }
+
+    if (
+      a === 169 &&
+      b === 254
+    ) {
+      return true;
+    }
+
+    if (
+      a === 172 &&
+      b >= 16 &&
+      b <= 31
+    ) {
+      return true;
+    }
+
+    if (
+      a === 192 &&
+      b === 168
+    ) {
+      return true;
+    }
+
+    if (
+      a === 100 &&
+      b >= 64 &&
+      b <= 127
+    ) {
+      return true;
+    }
+
+    if (
+      a === 192 &&
+      b === 0 &&
+      c === 0
+    ) {
+      return true;
+    }
+
+    if (
+      a === 198 &&
+      (b === 18 ||
+        b === 19)
+    ) {
+      return true;
+    }
+
+    if (
+      a === 198 &&
+      b === 51 &&
+      c === 100
+    ) {
+      return true;
+    }
+
+    if (
+      a === 203 &&
+      b === 0 &&
+      c === 113
+    ) {
+      return true;
+    }
+
+    if (
+      a >= 224
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
-  if (version === 6) {
+  if (family === 6) {
     const normalized =
-      address.toLowerCase();
+      address
+        .toLowerCase();
 
-    return (
+    if (
       normalized === '::1' ||
-      normalized.startsWith('fc') ||
-      normalized.startsWith('fd') ||
-      normalized.startsWith('fe8') ||
-      normalized.startsWith('fe9') ||
-      normalized.startsWith('fea') ||
-      normalized.startsWith('feb')
-    );
+      normalized === '::'
+    ) {
+      return true;
+    }
+
+    if (
+      normalized.startsWith(
+        'fc',
+      ) ||
+      normalized.startsWith(
+        'fd',
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      normalized.startsWith(
+        'fe8',
+      ) ||
+      normalized.startsWith(
+        'fe9',
+      ) ||
+      normalized.startsWith(
+        'fea',
+      ) ||
+      normalized.startsWith(
+        'feb',
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      normalized.startsWith(
+        'ff',
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      normalized.startsWith(
+        '::ffff:127.',
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      normalized.startsWith(
+        '::ffff:10.',
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      normalized.startsWith(
+        '::ffff:192.168.',
+      )
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   return true;
 }
 
 async function assertSafeUrl(
-  input: string,
-) {
+  rawUrl: string,
+): Promise<URL> {
   let url: URL;
 
   try {
     url = new URL(
-      normalizeInputUrl(input),
+      rawUrl,
     );
   } catch {
     throw new Error(
@@ -123,46 +222,86 @@ async function assertSafeUrl(
   }
 
   if (
-    url.protocol !== 'http:' &&
-    url.protocol !== 'https:'
+    url.protocol !==
+      'http:' &&
+    url.protocol !==
+      'https:'
   ) {
     throw new Error(
-      'Only HTTP and HTTPS links are supported.',
+      'Only HTTP and HTTPS URLs are supported.',
+    );
+  }
+
+  if (
+    url.username ||
+    url.password
+  ) {
+    throw new Error(
+      'URLs with credentials are not allowed.',
     );
   }
 
   const hostname =
-    url.hostname.toLowerCase();
+    url.hostname
+      .toLowerCase();
 
   if (
-    hostname === 'localhost' ||
-    hostname.endsWith('.localhost') ||
     hostname ===
-      'metadata.google.internal'
+      'localhost' ||
+    hostname.endsWith(
+      '.localhost',
+    )
   ) {
     throw new Error(
-      'This URL is not allowed.',
+      'Localhost URLs are not allowed.',
     );
   }
 
-  const addresses =
-    await dns.lookup(
-      hostname,
-      {
-        all: true,
-      },
-    );
-
-  if (!addresses.length) {
-    throw new Error(
-      'Could not resolve host.',
-    );
-  }
-
-  for (const entry of addresses) {
+  if (
+    net.isIP(hostname)
+  ) {
     if (
       isPrivateIp(
-        entry.address,
+        hostname,
+      )
+    ) {
+      throw new Error(
+        'Private network URLs are not allowed.',
+      );
+    }
+
+    return url;
+  }
+
+  let addresses;
+
+  try {
+    addresses =
+      await dns.lookup(
+        hostname,
+        {
+          all: true,
+          verbatim: true,
+        },
+      );
+  } catch {
+    throw new Error(
+      'Could not resolve hostname.',
+    );
+  }
+
+  if (
+    !addresses.length
+  ) {
+    throw new Error(
+      'Could not resolve hostname.',
+    );
+  }
+
+  for (const address of addresses) {
+    if (
+      isPrivateIp(
+        address.address,
       )
     ) {
       throw new Error(
@@ -175,34 +314,34 @@ async function assertSafeUrl(
 }
 
 async function fetchHtml(
-  initialUrl: string,
+  url: string,
 ) {
-  let current =
-    await assertSafeUrl(
-      initialUrl,
-    );
+  let currentUrl =
+    new URL(url);
 
   for (
     let redirect = 0;
-    redirect <= MAX_REDIRECTS;
+    redirect <= 5;
     redirect++
   ) {
+    await assertSafeUrl(
+      currentUrl.toString(),
+    );
+
     const response =
       await fetch(
-        current.toString(),
+        currentUrl.toString(),
         {
           method: 'GET',
-          redirect: 'manual',
           headers: {
             'User-Agent':
-              'MerkurovFlow/1.0 (+https://www.merkurov.love)',
+              'Mozilla/5.0 (compatible; merkurov.love Flow/1.0)',
             Accept:
               'text/html,application/xhtml+xml',
           },
-          signal:
-            AbortSignal.timeout(
-              10000,
-            ),
+          redirect:
+            'manual',
+          cache: 'no-store',
         },
       );
 
@@ -217,25 +356,17 @@ async function fetchHtml(
 
       if (!location) {
         throw new Error(
-          'Redirect without location.',
+          'Redirect response did not provide a location.',
         );
       }
 
-      current =
-        await assertSafeUrl(
-          new URL(
-            location,
-            current,
-          ).toString(),
+      currentUrl =
+        new URL(
+          location,
+          currentUrl,
         );
 
       continue;
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        `Remote server returned HTTP ${response.status}.`,
-      );
     }
 
     const contentType =
@@ -252,43 +383,17 @@ async function fetchHtml(
       )
     ) {
       throw new Error(
-        `URL is not an HTML page (${contentType || 'unknown content type'}).`,
+        'The URL does not point to an HTML page.',
       );
     }
 
-    const contentLength =
-      Number(
-        response.headers.get(
-          'content-length',
-        ) ?? 0,
-      );
-
-    if (
-      contentLength >
-      MAX_HTML_BYTES
-    ) {
-      throw new Error(
-        'Page is too large to parse.',
-      );
-    }
-
-    const buffer =
-      await response.arrayBuffer();
-
-    if (
-      buffer.byteLength >
-      MAX_HTML_BYTES
-    ) {
-      throw new Error(
-        'Page is too large to parse.',
-      );
-    }
+    const html =
+      await response.text();
 
     return {
-      url: current,
-      html: new TextDecoder(
-        'utf-8',
-      ).decode(buffer),
+      url:
+        currentUrl,
+      html,
       status:
         response.status,
     };
@@ -350,7 +455,11 @@ function parseJsonLd(
         const parsed =
           JSON.parse(raw);
 
-        if (Array.isArray(parsed)) {
+        if (
+          Array.isArray(
+            parsed,
+          )
+        ) {
           values.push(
             ...parsed,
           );
@@ -364,7 +473,9 @@ function parseJsonLd(
             ...parsed['@graph'],
           );
         } else {
-          values.push(parsed);
+          values.push(
+            parsed,
+          );
         }
       } catch {
         // Ignore malformed JSON-LD.
@@ -384,7 +495,9 @@ function findJsonLdArticle(
         const type =
           value?.['@type'];
 
-        if (Array.isArray(type)) {
+        if (
+          Array.isArray(type)
+        ) {
           return type.some(
             (entry) =>
               [
@@ -392,7 +505,9 @@ function findJsonLdArticle(
                 'NewsArticle',
                 'BlogPosting',
                 'WebPage',
-              ].includes(entry),
+              ].includes(
+                entry,
+              ),
           );
         }
 
@@ -401,7 +516,9 @@ function findJsonLdArticle(
           'NewsArticle',
           'BlogPosting',
           'WebPage',
-        ].includes(type);
+        ].includes(
+          type,
+        );
       },
     ) ??
     values[0] ??
@@ -524,7 +641,8 @@ function normalizeMetadata(
       : null;
 
   return {
-    url: inputUrl.toString(),
+    url:
+      inputUrl.toString(),
     canonical_url:
       canonicalUrl,
     domain:
@@ -538,10 +656,34 @@ function normalizeMetadata(
     author,
     published_at:
       publishedAt
-        ? String(publishedAt)
+        ? String(
+            publishedAt,
+          )
         : null,
     type,
   };
+}
+
+function normalizeInputUrl(
+  value: string,
+): string {
+  const trimmed =
+    value
+      .trim()
+      .replace(
+        /^<|>$/g,
+        '',
+      );
+
+  if (
+    /^https?:\/\//i.test(
+      trimmed,
+    )
+  ) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
 }
 
 export async function POST(
@@ -559,7 +701,9 @@ export async function POST(
             ? error.message
             : 'Unauthorized',
       },
-      { status: 401 },
+      {
+        status: 401,
+      },
     );
   }
 
@@ -568,12 +712,14 @@ export async function POST(
       await req.json();
 
     const itemId =
-      typeof body.item_id === 'string'
+      typeof body.item_id ===
+      'string'
         ? body.item_id
         : null;
 
     const rawUrl =
-      typeof body.url === 'string'
+      typeof body.url ===
+      'string'
         ? body.url.trim()
         : '';
 
@@ -583,7 +729,9 @@ export async function POST(
           error:
             'item_id is required.',
         },
-        { status: 400 },
+        {
+          status: 400,
+        },
       );
     }
 
@@ -593,23 +741,22 @@ export async function POST(
           error:
             'URL is required.',
         },
-        { status: 400 },
+        {
+          status: 400,
+        },
       );
     }
 
     const supabase =
       createClient({
-        useServiceRole: true,
+        useServiceRole:
+          true,
       });
 
     /*
      * ---------------------------------------------------------
      * YouTube
      * ---------------------------------------------------------
-     *
-     * YouTube is handled separately from the generic HTML
-     * parser. This avoids fetching the YouTube page just to
-     * extract metadata and gives Flow a stable video model.
      */
 
     const normalizedUrl =
@@ -617,14 +764,20 @@ export async function POST(
         rawUrl,
       );
 
-    if (
-      isYouTubeUrl(
+    const youtubeCanonicalUrl =
+      getYouTubeCanonicalUrl(
         normalizedUrl,
+      );
+
+    if (
+      youtubeCanonicalUrl &&
+      isYouTubeUrl(
+        youtubeCanonicalUrl,
       )
     ) {
       const youtube =
         await resolveYouTube(
-          normalizedUrl,
+          youtubeCanonicalUrl,
         );
 
       if (!youtube) {
@@ -634,14 +787,13 @@ export async function POST(
       }
 
       const {
-        data: existingItem,
+        data:
+          existingItem,
         error:
           existingError,
       } = await supabase
         .from('items')
-        .select(
-          'metadata',
-        )
+        .select('metadata')
         .eq('id', itemId)
         .single();
 
@@ -651,20 +803,31 @@ export async function POST(
 
       const existingMetadata =
         existingItem?.metadata &&
-        typeof existingItem.metadata ===
-          'object'
+        typeof existingItem
+          .metadata ===
+          'object' &&
+        !Array.isArray(
+          existingItem.metadata,
+        )
           ? existingItem.metadata
           : {};
 
       const mergedMetadata = {
         ...existingMetadata,
+
         image:
           youtube.metadata
             .thumbnail_url,
+
         site_name:
           'YouTube',
+
         type:
           'video',
+
+        description:
+          youtube.metadata.title,
+
         youtube:
           youtube.metadata,
       };
@@ -677,12 +840,16 @@ export async function POST(
         .from('items')
         .update({
           type: 'video',
+
           source_url:
             youtube.canonicalUrl,
+
           title:
             youtube.metadata.title,
+
           body_md:
             '',
+
           metadata:
             mergedMetadata,
         })
@@ -695,7 +862,8 @@ export async function POST(
       }
 
       return NextResponse.json({
-        success: true,
+        success:
+          true,
         item,
         metadata:
           mergedMetadata,
@@ -710,7 +878,7 @@ export async function POST(
 
     const parsed =
       await assertSafeUrl(
-        rawUrl,
+        normalizedUrl,
       );
 
     const {
@@ -722,7 +890,9 @@ export async function POST(
     );
 
     const $ =
-      cheerio.load(html);
+      cheerio.load(
+        html,
+      );
 
     const metadata =
       normalizeMetadata(
@@ -739,19 +909,20 @@ export async function POST(
           error:
             'Could not extract useful metadata from this page.',
         },
-        { status: 422 },
+        {
+          status: 422,
+        },
       );
     }
 
     const {
-      data: existingItem,
+      data:
+        existingItem,
       error:
         existingError,
     } = await supabase
       .from('items')
-      .select(
-        'metadata',
-      )
+      .select('metadata')
       .eq('id', itemId)
       .single();
 
@@ -761,7 +932,8 @@ export async function POST(
 
     const existingMetadata =
       existingItem?.metadata &&
-      typeof existingItem.metadata ===
+      typeof existingItem
+        .metadata ===
         'object'
         ? existingItem.metadata
         : {};
@@ -785,13 +957,17 @@ export async function POST(
       .from('items')
       .update({
         type: 'link',
+
         source_url:
           metadata.canonical_url,
+
         title:
           metadata.title ??
           metadata.domain,
+
         body_md:
           bodyMd,
+
         metadata:
           mergedMetadata,
       })
@@ -809,11 +985,15 @@ export async function POST(
     } = await supabase
       .from('link_snapshots')
       .insert({
-        item_id: itemId,
+        item_id:
+          itemId,
+
         url:
           metadata.canonical_url,
+
         fetched_at:
           new Date().toISOString(),
+
         http_status:
           status,
       });
@@ -826,7 +1006,8 @@ export async function POST(
     }
 
     return NextResponse.json({
-      success: true,
+      success:
+        true,
       item,
       metadata:
         mergedMetadata,
@@ -844,7 +1025,9 @@ export async function POST(
             ? error.message
             : 'Failed to parse link.',
       },
-      { status: 500 },
+      {
+        status: 500,
+      },
     );
   }
 }
