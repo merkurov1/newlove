@@ -1,61 +1,188 @@
-import * as cheerio from 'cheerio';
-import type { LotData, ImageCandidate } from './types';
+import * as cheerio from "cheerio";
+import type { LotData, ImageCandidate } from "./types";
 
-export function parseLotDom(html: string, url: string, houseName?: string): Partial<LotData> {
+function normalizeText(value?: string | null): string | null {
+  if (!value) return null;
+
+  const result = value
+    .replace(/\s+/g, " ")
+    .replace(/\u00a0/g, " ")
+    .trim();
+
+  return result || null;
+}
+
+function detectCurrency(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  if (/\bUSD\b|\$/i.test(value)) return "USD";
+  if (/\bGBP\b|£/i.test(value)) return "GBP";
+  if (/\bEUR\b|€/i.test(value)) return "EUR";
+  if (/\bCHF\b/i.test(value)) return "CHF";
+  return undefined;
+}
+
+function parseEstimate(value?: string | null) {
+  const raw = normalizeText(value);
+  if (!raw) return null;
+
+  const numbers = raw
+    .replace(/,/g, "")
+    .match(/\d+(?:\.\d+)?/g)
+    ?.map(Number);
+
+  return {
+    raw,
+    currency: detectCurrency(raw),
+    min: numbers?.[0] ?? null,
+    max: numbers?.[1] ?? numbers?.[0] ?? null,
+  };
+}
+
+function parsePrice(value?: string | null) {
+  const raw = normalizeText(value);
+  if (!raw) return null;
+
+  const numbers = raw
+    .replace(/,/g, "")
+    .match(/\d+(?:\.\d+)?/g)
+    ?.map(Number);
+
+  return {
+    raw,
+    currency: detectCurrency(raw),
+    realized: numbers?.[0],
+  };
+}
+
+export function parseLotDom(
+  html: string,
+  url: string,
+  houseName?: string
+): Partial<LotData> {
   const $ = cheerio.load(html);
   const result: Partial<LotData> = {};
   const candidates: ImageCandidate[] = [];
 
   const host = new URL(url).hostname.toLowerCase();
 
-  if (host.includes('sothebys.com')) {
+  if (host.includes("sothebys.com")) {
     result.house = "Sotheby's";
-    result.artist = $('h2[class*="Artist"], .lot-head-artist').first().text().trim();
-    result.title = $('h1[class*="Title"], .lot-head-title').first().text().trim();
-    result.estimate = $('[class*="Estimate"], .lot-estimate').first().text().trim();
-    result.price = $('[class*="PriceRealized"], .price-realized').first().text().trim();
+    result.artist = normalizeText(
+      $('h2[class*="Artist"], .lot-head-artist').first().text()
+    );
+    result.title = normalizeText(
+      $('h1[class*="Title"], .lot-head-title').first().text()
+    );
 
-    $('img[src*="sothebys"]').each((_, el) => {
-      const src = $(el).attr('src') || $(el).attr('data-src');
-      if (src && !candidates.some((c) => c.url === src)) {
-        candidates.push({ url: src, source: 'sothebys-dom' });
+    const estimate = normalizeText(
+      $('[class*="Estimate"], .lot-estimate').first().text()
+    );
+
+    const price = normalizeText(
+      $('[class*="PriceRealized"], .price-realized').first().text()
+    );
+
+    result.estimate = parseEstimate(estimate);
+    result.price = parsePrice(price);
+
+    $("img").each((_, el) => {
+      const src = $(el).attr("src") || $(el).attr("data-src");
+      if (
+        src &&
+        src.startsWith("http") &&
+        !candidates.some((c) => c.url === src)
+      ) {
+        candidates.push({
+          url: src,
+          source: "sothebys-dom",
+        });
       }
     });
-  } else if (host.includes('christies.com')) {
+  } else if (host.includes("christies.com")) {
     result.house = "Christie's";
-    result.artist = $('.chr-lot-header__artist-name, [data-qa="artist_name"]').first().text().trim();
-    result.title = $('.chr-lot-header__title, [data-qa="lot_title"]').first().text().trim();
-    result.estimate = $('.chr-lot-header__estimate, [data-qa="estimate"]').first().text().trim();
-    result.price = $('.chr-lot-header__price, [data-qa="price_realized"]').first().text().trim();
 
-    $('img[src*="christies"]').each((_, el) => {
-      const src = $(el).attr('src') || $(el).attr('data-src');
-      if (src && !candidates.some((c) => c.url === src)) {
-        candidates.push({ url: src, source: 'christies-dom' });
-      }
-    });
-  } else if (host.includes('phillips.com')) {
-    result.house = 'Phillips';
-    result.artist = $('.lot-detail__artist, .artist-name').first().text().trim();
-    result.title = $('.lot-detail__title, .lot-title').first().text().trim();
-    result.estimate = $('.lot-detail__estimate').first().text().trim();
-    result.price = $('.lot-detail__sold-price').first().text().trim();
-  } else if (host.includes('bonhams.com')) {
-    result.house = 'Bonhams';
-    result.artist = $('.lot-artist-name, .artist-title').first().text().trim();
-    result.title = $('.lot-title, .title-text').first().text().trim();
-    result.estimate = $('.lot-estimate').first().text().trim();
-    result.price = $('.lot-price-realised').first().text().trim();
+    result.artist = normalizeText(
+      $('.chr-lot-header__artist-name, [data-qa="artist_name"]')
+        .first()
+        .text()
+    );
+
+    result.title = normalizeText(
+      $('.chr-lot-header__title, [data-qa="lot_title"]')
+        .first()
+        .text()
+    );
+
+    const estimate = normalizeText(
+      $('.chr-lot-header__estimate, [data-qa="estimate"]')
+        .first()
+        .text()
+    );
+
+    const price = normalizeText(
+      $('.chr-lot-header__price, [data-qa="price_realized"]')
+        .first()
+        .text()
+    );
+
+    result.estimate = parseEstimate(estimate);
+    result.price = parsePrice(price);
+  } else if (host.includes("phillips.com")) {
+    result.house = "Phillips";
+
+    result.artist = normalizeText(
+      $(".lot-detail__artist, .artist-name").first().text()
+    );
+
+    result.title = normalizeText(
+      $(".lot-detail__title, .lot-title").first().text()
+    );
+
+    result.estimate = parseEstimate(
+      $(".lot-detail__estimate").first().text()
+    );
+
+    result.price = parsePrice(
+      $(".lot-detail__sold-price").first().text()
+    );
+  } else if (host.includes("bonhams.com")) {
+    result.house = "Bonhams";
+
+    result.artist = normalizeText(
+      $(".lot-artist-name, .artist-title").first().text()
+    );
+
+    result.title = normalizeText(
+      $(".lot-title, .title-text").first().text()
+    );
+
+    result.estimate = parseEstimate(
+      $(".lot-estimate").first().text()
+    );
+
+    result.price = parsePrice(
+      $(".lot-price-realised").first().text()
+    );
   }
 
   if (!result.title) {
-    result.title = $('h1').first().text().trim() || $('h2').first().text().trim();
+    result.title =
+      normalizeText($("h1").first().text()) ||
+      normalizeText($("h2").first().text());
   }
 
-  $('main img, article img, .lot-image img').each((_, el) => {
-    const src = $(el).attr('src') || $(el).attr('data-src');
-    if (src && src.startsWith('http') && !candidates.some((c) => c.url === src)) {
-      candidates.push({ url: src, source: 'generic-dom' });
+  $("main img, article img, .lot-image img").each((_, el) => {
+    const src = $(el).attr("src") || $(el).attr("data-src");
+
+    if (
+      src &&
+      src.startsWith("http") &&
+      !candidates.some((c) => c.url === src)
+    ) {
+      candidates.push({
+        url: src,
+        source: "generic-dom",
+      });
     }
   });
 
@@ -64,5 +191,6 @@ export function parseLotDom(html: string, url: string, houseName?: string): Part
   }
 
   result.imageCandidates = candidates;
+
   return result;
 }
