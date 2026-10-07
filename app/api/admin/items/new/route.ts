@@ -4,6 +4,15 @@ import { requireAdminFromRequest } from '@/lib/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
+const ALLOWED_TYPES = [
+  'note',
+  'article',
+  'link',
+  'photo',
+  'video',
+  'quote',
+];
+
 export async function POST(req: NextRequest) {
   try {
     await requireAdminFromRequest(req);
@@ -14,37 +23,37 @@ export async function POST(req: NextRequest) {
       useServiceRole: true,
     });
 
-    const title =
-      typeof body.title === 'string'
-        ? body.title.trim()
-        : '';
+    const type =
+      typeof body.type === 'string' &&
+      ALLOWED_TYPES.includes(body.type)
+        ? body.type
+        : 'note';
 
-    /*
-     * Drafts need a unique temporary slug.
-     * The final public slug is generated on Publish.
-     */
-    const draftSlug = `draft-${crypto.randomUUID()}`;
+    const lang =
+      typeof body.lang === 'string' &&
+      body.lang.trim()
+        ? body.lang.trim()
+        : 'ru';
 
-    const { data: item, error } = await supabase
+    const draftSlug =
+      `draft-${crypto.randomUUID()}`;
+
+    const {
+      data: item,
+      error,
+    } = await supabase
       .from('items')
       .insert({
-        type:
-          typeof body.type === 'string'
-            ? body.type
-            : 'note',
-
+        type,
         status: 'draft',
-
         visibility: 'private',
-
-        lang:
-          typeof body.lang === 'string'
-            ? body.lang
-            : 'ru',
-
+        lang,
         slug: draftSlug,
 
-        title,
+        title:
+          typeof body.title === 'string'
+            ? body.title.trim()
+            : '',
 
         body_md:
           typeof body.body_md === 'string'
@@ -71,15 +80,32 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
-      throw error;
+      console.error(
+        '[admin-items-new] database error:',
+        error,
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message,
+        },
+        { status: 500 },
+      );
     }
 
-    return NextResponse.json({
-      success: true,
-      item,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        item,
+      },
+      { status: 200 },
+    );
   } catch (error) {
-    console.error('[admin-items-new]', error);
+    console.error(
+      '[admin-items-new]',
+      error,
+    );
 
     return NextResponse.json(
       {
@@ -89,7 +115,7 @@ export async function POST(req: NextRequest) {
             ? error.message
             : 'Unauthorized',
       },
-      { status: 401 }
+      { status: 401 },
     );
   }
 }

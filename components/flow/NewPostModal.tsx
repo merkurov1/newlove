@@ -16,6 +16,8 @@ type Item = {
   status: string;
   visibility: string;
   body_md: string | null;
+  source_url?: string | null;
+  metadata?: Record<string, unknown> | null;
   published_at?: string | null;
 };
 
@@ -34,31 +36,32 @@ type SaveState =
 
 const LAST_DRAFT_KEY = 'flow:last-draft-id';
 
-function makeSlug(
-  title: string,
-  id: string,
-) {
-  const slug = title
+function firstLine(body: string) {
+  return (
+    body
+      .split(/\r?\n/)
+      .map((line) =>
+        line.replace(/^#{1,6}\s+/, '').trim(),
+      )
+      .find(Boolean)
+      ?.slice(0, 160) || 'Untitled post'
+  );
+}
+
+function slugify(value: string, id: string) {
+  const slug = value
     .toLowerCase()
     .trim()
-    .replace(
-      /[^\p{L}\p{N}\s-]/gu,
-      '',
-    )
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 80);
 
-  return (
-    slug ||
-    `post-${id.slice(0, 8)}`
-  );
+  return slug || `post-${id.slice(0, 8)}`;
 }
 
-async function readJson(
-  response: Response,
-) {
+async function readJson(response: Response) {
   return response.json().catch(() => ({}));
 }
 
@@ -66,23 +69,30 @@ export default function NewPostModal({
   onClose,
   onCreated,
 }: NewPostModalProps) {
-  const [item, setItem] =
-    useState<Item | null>(null);
-
-  const [title, setTitle] =
-    useState('');
-
-  const [bodyMd, setBodyMd] =
-    useState('');
-
-  const [lang, setLang] =
-    useState('ru');
+  const [item, setItem] = useState<Item | null>(null);
+  const [bodyMd, setBodyMd] = useState('');
+  const [lang, setLang] = useState('ru');
 
   const [saveState, setSaveState] =
     useState<SaveState>('creating');
 
   const [error, setError] =
     useState<string | null>(null);
+
+  const [linkMode, setLinkMode] =
+    useState(false);
+
+  const [linkUrl, setLinkUrl] =
+    useState('');
+
+  const [linkPreview, setLinkPreview] =
+    useState<Record<string, unknown> | null>(null);
+
+  const [imageName, setImageName] =
+    useState<string | null>(null);
+
+  const fileRef =
+    useRef<HTMLInputElement | null>(null);
 
   const saveTimer =
     useRef<ReturnType<typeof setTimeout> | null>(
@@ -91,7 +101,6 @@ export default function NewPostModal({
 
   const latestRef =
     useRef({
-      title: '',
       bodyMd: '',
       lang: 'ru',
     });
@@ -101,19 +110,11 @@ export default function NewPostModal({
 
   useEffect(() => {
     latestRef.current = {
-      title,
       bodyMd,
       lang,
     };
-  }, [
-    title,
-    bodyMd,
-    lang,
-  ]);
+  }, [bodyMd, lang]);
 
-  /*
-   * Initialize / restore draft.
-   */
   useEffect(() => {
     let cancelled = false;
 
@@ -143,60 +144,58 @@ export default function NewPostModal({
 
           if (
             response.ok &&
-            json.item
+            json.item &&
+            json.item.status === 'draft'
           ) {
+            if (cancelled) {
+              return;
+            }
+
             const loaded =
               json.item as Item;
 
-            /*
-             * Only drafts are restored.
-             * Published/archived items must never
-             * silently become a new draft.
-             */
-            if (
-              loaded.status === 'draft'
-            ) {
-              if (cancelled) {
-                return;
-              }
+            setItem(loaded);
 
-              setItem(loaded);
-              setTitle(
-                loaded.title ?? '',
-              );
-              setBodyMd(
+            setBodyMd(
+              loaded.body_md ?? '',
+            );
+
+            setLang(
+              loaded.lang ?? 'ru',
+            );
+
+            latestRef.current = {
+              bodyMd:
                 loaded.body_md ?? '',
-              );
-              setLang(
+              lang:
                 loaded.lang ?? 'ru',
+            };
+
+            if (
+              loaded.type === 'link'
+            ) {
+              setLinkMode(true);
+
+              setLinkUrl(
+                loaded.source_url ?? '',
               );
 
-              latestRef.current = {
-                title:
-                  loaded.title ?? '',
-                bodyMd:
-                  loaded.body_md ?? '',
-                lang:
-                  loaded.lang ?? 'ru',
-              };
-
-              setSaveState('saved');
-
-              return;
+              setLinkPreview(
+                loaded.metadata ??
+                  null,
+              );
             }
+
+            setSaveState('saved');
+
+            return;
           }
 
-          /*
-           * Stale localStorage ID.
-           */
           window.localStorage.removeItem(
             LAST_DRAFT_KEY,
           );
         }
 
-        /*
-         * Create a fresh draft.
-         */
         setSaveState('creating');
 
         const response =
@@ -209,10 +208,10 @@ export default function NewPostModal({
                   'application/json',
               },
               body: JSON.stringify({
+                type: 'note',
                 title: '',
                 body_md: '',
                 lang: 'ru',
-                type: 'note',
               }),
             },
           );
@@ -239,10 +238,6 @@ export default function NewPostModal({
 
         setItem(created);
 
-        setTitle(
-          created.title ?? '',
-        );
-
         setBodyMd(
           created.body_md ?? '',
         );
@@ -252,8 +247,6 @@ export default function NewPostModal({
         );
 
         latestRef.current = {
-          title:
-            created.title ?? '',
           bodyMd:
             created.body_md ?? '',
           lang:
@@ -301,17 +294,10 @@ export default function NewPostModal({
     };
   }, []);
 
-  /*
-   * Save current draft.
-   */
   const saveDraft =
     useCallback(
       async (
-        changes: {
-          title?: string;
-          body_md?: string;
-          lang?: string;
-        },
+        changes: Record<string, unknown>,
       ) => {
         if (!item) {
           return true;
@@ -375,17 +361,10 @@ export default function NewPostModal({
       [item],
     );
 
-  /*
-   * Debounced autosave.
-   */
   const scheduleSave =
     useCallback(
       (
-        changes: {
-          title?: string;
-          body_md?: string;
-          lang?: string;
-        },
+        changes: Record<string, unknown>,
       ) => {
         if (!item) {
           return;
@@ -404,27 +383,10 @@ export default function NewPostModal({
             void saveDraft(
               changes,
             );
-          }, 800);
+          }, 700);
       },
       [item, saveDraft],
     );
-
-  function handleTitleChange(
-    value: string,
-  ) {
-    setTitle(value);
-
-    latestRef.current.title =
-      value;
-
-    scheduleSave({
-      title: value,
-      body_md:
-        latestRef.current.bodyMd,
-      lang:
-        latestRef.current.lang,
-    });
-  }
 
   function handleBodyChange(
     value: string,
@@ -435,34 +397,12 @@ export default function NewPostModal({
       value;
 
     scheduleSave({
-      title:
-        latestRef.current.title,
       body_md: value,
       lang:
         latestRef.current.lang,
     });
   }
 
-  function handleLangChange(
-    value: string,
-  ) {
-    setLang(value);
-
-    latestRef.current.lang =
-      value;
-
-    scheduleSave({
-      title:
-        latestRef.current.title,
-      body_md:
-        latestRef.current.bodyMd,
-      lang: value,
-    });
-  }
-
-  /*
-   * Flush pending autosave immediately.
-   */
   const flushSave =
     useCallback(async () => {
       if (!item) {
@@ -477,22 +417,173 @@ export default function NewPostModal({
         saveTimer.current = null;
       }
 
-      const current =
-        latestRef.current;
-
       return saveDraft({
-        title:
-          current.title,
         body_md:
-          current.bodyMd,
+          latestRef.current.bodyMd,
         lang:
-          current.lang,
+          latestRef.current.lang,
       });
     }, [item, saveDraft]);
 
-  /*
-   * Publish.
-   */
+  async function parseLink() {
+    if (
+      !item ||
+      !linkUrl.trim()
+    ) {
+      return;
+    }
+
+    try {
+      setSaveState('saving');
+      setError(null);
+
+      const response =
+        await fetch(
+          '/api/admin/items/parse-link',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              item_id: item.id,
+              url: linkUrl.trim(),
+              lang,
+            }),
+          },
+        );
+
+      const json =
+        await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          json.error ??
+            'Failed to parse link.',
+        );
+      }
+
+      setItem(
+        json.item as Item,
+      );
+
+      setLinkUrl(
+        json.item.source_url ??
+          linkUrl.trim(),
+      );
+
+      setLinkPreview(
+        json.metadata ??
+          null,
+      );
+
+      setBodyMd(
+        json.item.body_md ??
+          '',
+      );
+
+      latestRef.current.bodyMd =
+        json.item.body_md ?? '';
+
+      setSaveState('saved');
+    } catch (err) {
+      console.error(
+        '[new-post] link parsing failed:',
+        err,
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to parse link.',
+      );
+
+      setSaveState('error');
+    }
+  }
+
+  async function uploadImage(
+    file: File,
+  ) {
+    if (!item) {
+      return;
+    }
+
+    try {
+      setSaveState('saving');
+      setError(null);
+
+      const form =
+        new FormData();
+
+      form.append(
+        'file',
+        file,
+      );
+
+      form.append(
+        'item_id',
+        item.id,
+      );
+
+      form.append(
+        'lang',
+        lang,
+      );
+
+      const response =
+        await fetch(
+          '/api/admin/items/media',
+          {
+            method: 'POST',
+            body: form,
+          },
+        );
+
+      const json =
+        await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          json.error ??
+            'Failed to upload image.',
+        );
+      }
+
+      setItem(
+        json.item as Item,
+      );
+
+      setImageName(
+        file.name,
+      );
+
+      setBodyMd(
+        json.item.body_md ??
+          '',
+      );
+
+      latestRef.current.bodyMd =
+        json.item.body_md ?? '';
+
+      setSaveState('saved');
+    } catch (err) {
+      console.error(
+        '[new-post] image upload failed:',
+        err,
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to upload image.',
+      );
+
+      setSaveState('error');
+    }
+  }
+
   async function handlePublish() {
     if (!item) {
       return;
@@ -501,12 +592,31 @@ export default function NewPostModal({
     const current =
       latestRef.current;
 
-    const cleanTitle =
-      current.title.trim();
+    if (
+      item.type === 'link'
+    ) {
+      if (!item.source_url) {
+        setError(
+          'Add a link first.',
+        );
 
-    if (!cleanTitle) {
+        return;
+      }
+    } else if (
+      item.type === 'photo'
+    ) {
+      if (!item.metadata) {
+        setError(
+          'Add an image first.',
+        );
+
+        return;
+      }
+    } else if (
+      !current.bodyMd.trim()
+    ) {
       setError(
-        'Title is required before publishing.',
+        'Write something before publishing.',
       );
 
       return;
@@ -524,9 +634,30 @@ export default function NewPostModal({
       setSaveState('publishing');
       setError(null);
 
+      const metadata =
+        item.metadata ?? {};
+
+      const title =
+        item.type === 'link'
+          ? String(
+              linkPreview?.title ||
+                item.title ||
+                item.source_url ||
+                'Link',
+            ).slice(0, 160)
+          : item.type === 'photo'
+            ? String(
+                metadata.alt ||
+                  item.title ||
+                  'Image',
+              ).slice(0, 160)
+            : firstLine(
+                current.bodyMd,
+              );
+
       const slug =
-        makeSlug(
-          cleanTitle,
+        slugify(
+          title,
           item.id,
         );
 
@@ -540,14 +671,16 @@ export default function NewPostModal({
                 'application/json',
             },
             body: JSON.stringify({
-              title: cleanTitle,
+              title,
               body_md:
                 current.bodyMd,
               lang:
                 current.lang,
               slug,
-              status: 'published',
-              visibility: 'public',
+              status:
+                'published',
+              visibility:
+                'public',
             }),
           },
         );
@@ -561,13 +694,9 @@ export default function NewPostModal({
       ) {
         throw new Error(
           json.error ??
-            `Failed to publish post (${response.status}).`,
+            `Failed to publish item (${response.status}).`,
         );
       }
-
-      setItem(
-        json.item as Item,
-      );
 
       window.localStorage.removeItem(
         LAST_DRAFT_KEY,
@@ -586,17 +715,13 @@ export default function NewPostModal({
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to publish post.',
+          : 'Failed to publish.',
       );
 
       setSaveState('error');
     }
   }
 
-  /*
-   * Close only after the latest text has
-   * successfully reached the server.
-   */
   async function handleClose() {
     if (closingRef.current) {
       return;
@@ -650,6 +775,9 @@ export default function NewPostModal({
     saveState === 'loading' ||
     saveState === 'publishing';
 
+  const isImage =
+    item?.type === 'photo';
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
@@ -678,7 +806,7 @@ export default function NewPostModal({
               id="new-post-title"
               className="mt-1 text-xl font-semibold"
             >
-              New post
+              New item
             </h2>
           </div>
 
@@ -701,82 +829,120 @@ export default function NewPostModal({
             </div>
           )}
 
-          <div className="mb-5 flex items-center gap-3">
-            <select
-              value={lang}
+          {linkMode ? (
+            <div className="space-y-4">
+              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-400">
+                Link
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  autoFocus
+                  value={linkUrl}
+                  onChange={(event) =>
+                    setLinkUrl(
+                      event.target.value,
+                    )
+                  }
+                  onKeyDown={(event) => {
+                    if (
+                      event.key ===
+                      'Enter'
+                    ) {
+                      void parseLink();
+                    }
+                  }}
+                  placeholder="https://…"
+                  disabled={
+                    !item || busy
+                  }
+                  className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-4 py-3 outline-none focus:border-black disabled:bg-zinc-50"
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void parseLink()
+                  }
+                  disabled={
+                    !item ||
+                    !linkUrl.trim() ||
+                    busy
+                  }
+                  className="rounded-xl bg-black px-4 py-3 text-sm text-white disabled:bg-zinc-300"
+                >
+                  Parse
+                </button>
+              </div>
+
+              {linkPreview && (
+                <div className="rounded-2xl border border-zinc-200 p-5">
+                  <div className="text-xl font-semibold">
+                    {String(
+                      linkPreview.title ??
+                        linkUrl,
+                    )}
+                  </div>
+
+                  {typeof linkPreview.description ===
+                    'string' && (
+                    <p className="mt-2 text-sm leading-6 text-zinc-500">
+                      {linkPreview.description}
+                    </p>
+                  )}
+
+                  {typeof linkPreview.image ===
+                    'string' && (
+                    <img
+                      src={linkPreview.image}
+                      alt=""
+                      className="mt-4 max-h-72 w-full rounded-xl object-cover"
+                    />
+                  )}
+
+                  <div className="mt-3 font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-400">
+                    {String(
+                      linkPreview.domain ??
+                        '',
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : isImage ? (
+            <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-dashed border-zinc-200">
+              {imageName ? (
+                <div className="text-center">
+                  <div className="text-lg font-medium">
+                    {imageName}
+                  </div>
+
+                  <div className="mt-2 text-sm text-zinc-400">
+                    Image stored in Flow
+                  </div>
+                </div>
+              ) : (
+                <div className="text-zinc-400">
+                  Select an image below.
+                </div>
+              )}
+            </div>
+          ) : (
+            <textarea
+              value={bodyMd}
               onChange={(event) =>
-                handleLangChange(
+                handleBodyChange(
                   event.target.value,
                 )
               }
-              disabled={!item || busy}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-black disabled:cursor-not-allowed disabled:bg-zinc-50"
-            >
-              <option value="ru">
-                RU
-              </option>
-
-              <option value="en">
-                EN
-              </option>
-            </select>
-
-            <div className="rounded-lg bg-zinc-100 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-500">
-              {item?.status ??
-                'draft'}
-            </div>
-          </div>
-
-          <input
-            type="text"
-            value={title}
-            onChange={(event) =>
-              handleTitleChange(
-                event.target.value,
-              )
-            }
-            disabled={!item || busy}
-            placeholder="Title"
-            className="mb-5 w-full border-0 px-0 text-3xl font-semibold tracking-tight outline-none placeholder:text-zinc-300 disabled:cursor-not-allowed"
-          />
-
-          <textarea
-            value={bodyMd}
-            onChange={(event) =>
-              handleBodyChange(
-                event.target.value,
-              )
-            }
-            disabled={!item || busy}
-            placeholder="Write something…"
-            className="min-h-[320px] w-full resize-none border-0 px-0 text-lg leading-8 outline-none placeholder:text-zinc-300 disabled:cursor-not-allowed"
-          />
-
-          <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-4">
-            <button
-              type="button"
-              disabled
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-400"
-            >
-              + Image
-            </button>
-
-            <button
-              type="button"
-              disabled
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-400"
-            >
-              + Link
-            </button>
-
-            <button
-              type="button"
-              disabled
-              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-400"
-            >
-              + File
-            </button>
-          </div>
+              disabled={
+                !item || busy
+              }
+              placeholder="Write something…"
+              autoFocus
+              className="min-h-[420px] w-full resize-none border-0 px-0 text-lg leading-8 outline-none placeholder:text-zinc-300"
+            />
+          )}
         </div>
 
         <div className="flex items-center justify-between border-t border-zinc-200 px-6 py-4">
@@ -784,25 +950,66 @@ export default function NewPostModal({
             {statusLabel()}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                const file =
+                  event.target.files?.[0];
+
+                if (file) {
+                  setLinkMode(false);
+                  void uploadImage(file);
+                }
+
+                event.target.value = '';
+              }}
+            />
+
             <button
               type="button"
-              onClick={() =>
-                void handleClose()
-              }
+              onClick={() => {
+                setLinkMode(false);
+                setError(null);
+                fileRef.current?.click();
+              }}
               disabled={
-                saveState ===
-                'publishing'
+                !item || busy
               }
-              className="rounded-lg px-4 py-2 text-sm text-zinc-600 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm transition hover:border-black disabled:cursor-not-allowed disabled:text-zinc-300"
             >
-              Close
+              + Image
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setLinkMode(true);
+                setError(null);
+              }}
+              disabled={
+                !item || busy
+              }
+              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm transition hover:border-black disabled:cursor-not-allowed disabled:text-zinc-300"
+            >
+              + Link
             </button>
 
             <button
               type="button"
               disabled
-              className="rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-400"
+              className="rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-400"
+            >
+              {lang.toUpperCase()}
+            </button>
+
+            <button
+              type="button"
+              disabled
+              className="rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-400"
             >
               Analyse
             </button>
@@ -814,16 +1021,22 @@ export default function NewPostModal({
               }
               disabled={
                 !item ||
-                !title.trim() ||
                 busy ||
-                saveState === 'saving'
+                saveState === 'saving' ||
+                (item.type === 'link' &&
+                  !item.source_url) ||
+                (item.type === 'photo' &&
+                  !item.metadata) ||
+                (item.type !== 'link' &&
+                  item.type !== 'photo' &&
+                  !bodyMd.trim())
               }
               className="rounded-lg bg-black px-5 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
             >
               {saveState ===
               'publishing'
-                ? 'Publishing…'
-                : 'Publish'}
+                ? 'Posting…'
+                : 'Post'}
             </button>
           </div>
         </div>

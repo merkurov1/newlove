@@ -15,6 +15,9 @@ type UpdatePayload = {
   slug?: string;
   visibility?: string;
   status?: string;
+  type?: string;
+  source_url?: string | null;
+  metadata?: Record<string, unknown>;
 };
 
 function getSupabaseAdmin() {
@@ -55,6 +58,27 @@ function slugify(value: string) {
     .slice(0, 100);
 }
 
+function deriveTitle(
+  body: string,
+  fallback: string,
+) {
+  const first =
+    body
+      .split(/\r?\n/)
+      .map((line) =>
+        line
+          .replace(/^#{1,6}\s+/, '')
+          .trim(),
+      )
+      .find(Boolean);
+
+  return (
+    first?.slice(0, 160) ||
+    fallback.trim().slice(0, 160) ||
+    'Untitled'
+  );
+}
+
 function errorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message;
@@ -79,9 +103,11 @@ export async function GET(
   try {
     await requireAdminFromRequest(req);
 
-    const { id } = await context.params;
+    const { id } =
+      await context.params;
 
-    const supabase = getSupabaseAdmin();
+    const supabase =
+      getSupabaseAdmin();
 
     const {
       data,
@@ -93,15 +119,12 @@ export async function GET(
       .maybeSingle();
 
     if (error) {
-      console.error(
-        '[admin/items/:id] GET database error:',
-        error,
-      );
-
       return NextResponse.json(
         {
-          error: 'Failed to load item.',
-          details: error.message,
+          error:
+            'Failed to load item.',
+          details:
+            error.message,
         },
         { status: 500 },
       );
@@ -110,7 +133,8 @@ export async function GET(
     if (!data) {
       return NextResponse.json(
         {
-          error: 'Item not found.',
+          error:
+            'Item not found.',
         },
         { status: 404 },
       );
@@ -123,25 +147,18 @@ export async function GET(
       {
         status: 200,
         headers: {
-          'Cache-Control': 'no-store',
+          'Cache-Control':
+            'no-store',
         },
       },
     );
   } catch (error) {
-    const message = errorMessage(error);
-
-    console.error(
-      '[admin/items/:id] GET authorization error:',
-      error,
-    );
-
     return NextResponse.json(
       {
-        error: message,
+        error:
+          errorMessage(error),
       },
-      {
-        status: 401,
-      },
+      { status: 401 },
     );
   }
 }
@@ -150,50 +167,39 @@ export async function PATCH(
   req: NextRequest,
   context: RouteContext,
 ) {
-  /*
-   * Authentication is intentionally outside the database
-   * operation so a database error can never be reported as
-   * "Unauthorized".
-   */
   try {
     await requireAdminFromRequest(req);
   } catch (error) {
-    const message = errorMessage(error);
-
-    console.error(
-      '[admin/items/:id] PATCH authorization failed:',
-      error,
-    );
-
     return NextResponse.json(
       {
-        error: message,
+        error:
+          errorMessage(error),
       },
-      {
-        status: 401,
-      },
+      { status: 401 },
     );
   }
 
-  const { id } = await context.params;
+  const { id } =
+    await context.params;
 
   let payload: UpdatePayload;
 
   try {
-    payload = (await req.json()) as UpdatePayload;
+    payload =
+      (await req.json()) as UpdatePayload;
   } catch {
     return NextResponse.json(
       {
-        error: 'Invalid JSON body.',
+        error:
+          'Invalid JSON body.',
       },
-      {
-        status: 400,
-      },
+      { status: 400 },
     );
   }
 
   try {
-    const supabase = getSupabaseAdmin();
+    const supabase =
+      getSupabaseAdmin();
 
     const {
       data: existing,
@@ -205,30 +211,24 @@ export async function PATCH(
       .maybeSingle();
 
     if (existingError) {
-      console.error(
-        '[admin/items/:id] existing item lookup failed:',
-        existingError,
-      );
-
       return NextResponse.json(
         {
-          error: 'Failed to load item.',
-          details: existingError.message,
+          error:
+            'Failed to load item.',
+          details:
+            existingError.message,
         },
-        {
-          status: 500,
-        },
+        { status: 500 },
       );
     }
 
     if (!existing) {
       return NextResponse.json(
         {
-          error: 'Item not found.',
+          error:
+            'Item not found.',
         },
-        {
-          status: 404,
-        },
+        { status: 404 },
       );
     }
 
@@ -243,62 +243,98 @@ export async function PATCH(
       'archived',
     ];
 
-    if (!allowedStatuses.includes(nextStatus)) {
+    if (
+      !allowedStatuses.includes(
+        nextStatus,
+      )
+    ) {
       return NextResponse.json(
         {
-          error: `Invalid status: ${nextStatus}`,
+          error:
+            `Invalid status: ${nextStatus}`,
         },
-        {
-          status: 400,
-        },
+        { status: 400 },
       );
     }
 
     const nextLang =
-      typeof payload.lang === 'string' &&
+      typeof payload.lang ===
+        'string' &&
       payload.lang.trim()
         ? payload.lang.trim()
         : existing.lang;
 
-    if (!nextLang) {
-      return NextResponse.json(
-        {
-          error: 'Language is required.',
-        },
-        {
-          status: 400,
-        },
-      );
+    const nextType =
+      typeof payload.type ===
+        'string'
+        ? payload.type
+        : existing.type;
+
+    const nextBody =
+      payload.body_md !==
+      undefined
+        ? payload.body_md
+        : existing.body_md ?? '';
+
+    let nextTitle =
+      payload.title !==
+      undefined
+        ? payload.title.trim()
+        : existing.title ?? '';
+
+    if (
+      nextStatus ===
+        'published' &&
+      !nextTitle
+    ) {
+      const metadata =
+        payload.metadata ??
+        existing.metadata ??
+        {};
+
+      nextTitle =
+        String(
+          metadata.title ??
+            metadata.alt ??
+            payload.source_url ??
+            existing.source_url ??
+            '',
+        ).trim();
+
+      if (!nextTitle) {
+        nextTitle =
+          deriveTitle(
+            nextBody,
+            '',
+          );
+      }
     }
 
-    const nextTitle =
-      payload.title !== undefined
-        ? payload.title.trim()
-        : (existing.title ?? '');
-
     let nextSlug =
-      payload.slug !== undefined
+      payload.slug !==
+      undefined
         ? slugify(payload.slug)
-        : (existing.slug ?? '');
+        : existing.slug ?? '';
 
-    /*
-     * Publishing always requires a real title and slug.
-     */
-    if (nextStatus === 'published') {
+    if (
+      nextStatus ===
+      'published'
+    ) {
       if (!nextTitle) {
         return NextResponse.json(
           {
             error:
-              'Title is required before publishing.',
+              'Could not derive a title for this item.',
           },
-          {
-            status: 400,
-          },
+          { status: 400 },
         );
       }
 
       if (!nextSlug) {
-        nextSlug = slugify(nextTitle);
+        nextSlug =
+          slugify(
+            nextTitle,
+          );
       }
 
       if (!nextSlug) {
@@ -307,42 +343,41 @@ export async function PATCH(
             error:
               'Could not generate a valid slug.',
           },
-          {
-            status: 400,
-          },
+          { status: 400 },
         );
       }
 
-      /*
-       * Avoid collision with another item.
-       */
       const {
         data: collision,
-        error: collisionError,
+        error:
+          collisionError,
       } = await supabase
         .from('items')
         .select('id')
-        .eq('lang', nextLang)
-        .eq('slug', nextSlug)
-        .neq('id', id)
+        .eq(
+          'lang',
+          nextLang,
+        )
+        .eq(
+          'slug',
+          nextSlug,
+        )
+        .neq(
+          'id',
+          id,
+        )
         .limit(1)
         .maybeSingle();
 
       if (collisionError) {
-        console.error(
-          '[admin/items/:id] slug collision lookup failed:',
-          collisionError,
-        );
-
         return NextResponse.json(
           {
             error:
               'Failed to check slug availability.',
-            details: collisionError.message,
+            details:
+              collisionError.message,
           },
-          {
-            status: 500,
-          },
+          { status: 500 },
         );
       }
 
@@ -352,68 +387,107 @@ export async function PATCH(
       }
     }
 
-    const update: Record<string, unknown> = {
-      status: nextStatus,
+    const update: Record<
+      string,
+      unknown
+    > = {
+      status:
+        nextStatus,
     };
 
-    if (payload.title !== undefined) {
-      update.title = nextTitle;
-    }
-
-    if (payload.body_md !== undefined) {
-      update.body_md = payload.body_md;
-    }
-
-    if (payload.lang !== undefined) {
-      update.lang = nextLang;
+    if (
+      payload.title !==
+        undefined ||
+      nextStatus ===
+        'published'
+    ) {
+      update.title =
+        nextTitle;
     }
 
     if (
-      payload.slug !== undefined ||
-      nextStatus === 'published'
+      payload.body_md !==
+      undefined
     ) {
-      update.slug = nextSlug;
+      update.body_md =
+        nextBody;
     }
 
-    /*
-     * Publish transition.
-     */
-    if (nextStatus === 'published') {
+    if (
+      payload.lang !==
+      undefined
+    ) {
+      update.lang =
+        nextLang;
+    }
+
+    if (
+      payload.type !==
+      undefined
+    ) {
+      update.type =
+        nextType;
+    }
+
+    if (
+      payload.source_url !==
+      undefined
+    ) {
+      update.source_url =
+        payload.source_url;
+    }
+
+    if (
+      payload.metadata !==
+      undefined
+    ) {
+      update.metadata =
+        payload.metadata;
+    }
+
+    if (
+      payload.slug !==
+        undefined ||
+      nextStatus ===
+        'published'
+    ) {
+      update.slug =
+        nextSlug;
+    }
+
+    if (
+      nextStatus ===
+      'published'
+    ) {
       update.visibility =
-        payload.visibility ?? 'public';
+        payload.visibility ??
+        'public';
 
       update.published_at =
         existing.published_at ??
         new Date().toISOString();
     }
 
-    /*
-     * Draft transition.
-     */
-    if (nextStatus === 'draft') {
-      update.published_at = null;
+    if (
+      nextStatus ===
+      'draft'
+    ) {
+      update.published_at =
+        null;
 
       update.visibility =
-        payload.visibility ?? 'private';
+        payload.visibility ??
+        'private';
     }
 
-    /*
-     * Archive transition.
-     */
-    if (nextStatus === 'archived') {
+    if (
+      nextStatus ===
+      'archived'
+    ) {
       update.visibility =
-        payload.visibility ?? 'private';
+        payload.visibility ??
+        'private';
     }
-
-    console.log(
-      '[admin/items/:id] updating item',
-      {
-        id,
-        status: nextStatus,
-        lang: nextLang,
-        slug: nextSlug,
-      },
-    );
 
     const {
       data,
@@ -428,12 +502,7 @@ export async function PATCH(
     if (error) {
       console.error(
         '[admin/items/:id] UPDATE DATABASE ERROR:',
-        {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        },
+        error,
       );
 
       return NextResponse.json(
@@ -441,25 +510,19 @@ export async function PATCH(
           error:
             error.message ||
             'Failed to update item.',
-          details: error.details ?? null,
-          hint: error.hint ?? null,
-          code: error.code ?? null,
+          details:
+            error.details ??
+            null,
+          hint:
+            error.hint ??
+            null,
+          code:
+            error.code ??
+            null,
         },
-        {
-          status: 500,
-        },
+        { status: 500 },
       );
     }
-
-    console.log(
-      '[admin/items/:id] update successful',
-      {
-        id,
-        status: data.status,
-        visibility: data.visibility,
-        slug: data.slug,
-      },
-    );
 
     return NextResponse.json(
       {
@@ -469,7 +532,8 @@ export async function PATCH(
       {
         status: 200,
         headers: {
-          'Cache-Control': 'no-store',
+          'Cache-Control':
+            'no-store',
         },
       },
     );
@@ -481,11 +545,10 @@ export async function PATCH(
 
     return NextResponse.json(
       {
-        error: errorMessage(error),
+        error:
+          errorMessage(error),
       },
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 }

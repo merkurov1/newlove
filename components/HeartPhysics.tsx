@@ -20,10 +20,15 @@ export default function HeartPhysics({
   const [bgColor, setBgColor] = useState('#e8b4b8');
   const [seconds, setSeconds] = useState(0);
 
-  const currentAuthorName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Guardian';
+  const currentAuthorName =
+    profile?.name ||
+    user?.user_metadata?.name ||
+    user?.email?.split('@')[0] ||
+    'Guardian';
 
   const secondsRef = useRef(seconds);
   secondsRef.current = seconds;
+
   const authorRef = useRef(currentAuthorName);
   authorRef.current = currentAuthorName;
 
@@ -34,17 +39,21 @@ export default function HeartPhysics({
     const timer = setInterval(() => {
       setSeconds((prev) => prev + 1);
     }, 1000);
+
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
     return () => {
       const currentSeconds = secondsRef.current;
+
       if (currentSeconds > 2) {
         void logTempleEvent({
           event_type: 'MEDITATION',
-          message: `Spent ${currentSeconds} ${currentSeconds === 1 ? 'second' : 'seconds'} finding calm.`,
-          author: authorRef.current
+          message: `Spent ${currentSeconds} ${
+            currentSeconds === 1 ? 'second' : 'seconds'
+          } finding calm.`,
+          author: authorRef.current,
         });
       }
     };
@@ -52,6 +61,7 @@ export default function HeartPhysics({
 
   useEffect(() => {
     const hour = new Date().getHours();
+
     if (hour >= 6 && hour < 18) {
       setBgColor('#e8b4b8');
     } else if (hour >= 18 && hour < 22) {
@@ -64,6 +74,7 @@ export default function HeartPhysics({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -80,19 +91,31 @@ export default function HeartPhysics({
 
     const handleResize = () => {
       if (!canvas) return;
+
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
     };
+
     window.addEventListener('resize', handleResize);
 
     const daemonWidth = Math.min(width * 0.35, 260);
     const daemonHeight = daemonWidth * 1.5;
 
+    /*
+     * Lift the entire scene slightly from the bottom.
+     *
+     * 7% of viewport height gives a natural proportional offset
+     * on mobile and desktop, with a 72px maximum so large screens
+     * do not move the composition too far upward.
+     */
+    const sceneLift = Math.min(height * 0.07, 72);
+
     let handX = width / 2 + daemonWidth * 0.35;
-    let handY = height - daemonHeight * 0.48;
+    let handY = height - daemonHeight * 0.48 - sceneLift;
 
     let balloonX = width / 2;
     let balloonY = handY - 260;
+
     let vx = 0;
     let vy = 0;
     let angle = 0;
@@ -122,23 +145,37 @@ export default function HeartPhysics({
     window.addEventListener('mousemove', handleMouseMove);
 
     const handleTouch = (e: TouchEvent | MouseEvent) => {
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      const clientX =
+        'touches' in e ? e.touches[0].clientX : e.clientX;
 
-      const dist = Math.hypot(clientX - balloonX, clientY - balloonY);
+      const clientY =
+        'touches' in e ? e.touches[0].clientY : e.clientY;
+
+      const dist = Math.hypot(
+        clientX - balloonX,
+        clientY - balloonY
+      );
+
       if (dist < 140) {
         vx += (Math.random() - 0.5) * 20;
         vy -= 15;
+
         targetHeartScale = 1.25;
         stringVibration = 15;
 
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        if (
+          typeof navigator !== 'undefined' &&
+          navigator.vibrate
+        ) {
           navigator.vibrate(15);
         }
       }
     };
 
-    window.addEventListener('touchstart', handleTouch, { passive: true });
+    window.addEventListener('touchstart', handleTouch, {
+      passive: true,
+    });
+
     window.addEventListener('mousedown', handleTouch);
 
     let animationFrameId: number;
@@ -146,33 +183,47 @@ export default function HeartPhysics({
 
     const handleVisibilityChange = () => {
       isTabVisible = !document.hidden;
+
       if (isTabVisible) {
         render();
       } else {
         cancelAnimationFrame(animationFrameId);
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibilityChange
+    );
 
     const render = () => {
       if (!isTabVisible) return;
 
       ctx.clearRect(0, 0, width, height);
 
+      /*
+       * Keep the hand at the lifted position.
+       * The heart remains physically attached to this point,
+       * so the complete heart/string/daemon composition moves together.
+       */
       handX = width / 2 + daemonWidth * 0.35;
-      handY = height - daemonHeight * 0.48;
+      handY = height - daemonHeight * 0.48 - sceneLift;
 
       const dx = balloonX - handX;
       const dy = balloonY - handY;
       const currentLength = Math.hypot(dx, dy);
 
       vy -= 0.4;
+
       vx += windX * 0.05;
       vy += windY * 0.05;
 
       if (currentLength > restLength) {
-        const tension = (currentLength - restLength) * 0.08;
+        const tension =
+          (currentLength - restLength) * 0.08;
+
         const angleSpring = Math.atan2(dy, dx);
+
         vx -= Math.cos(angleSpring) * tension;
         vy -= Math.sin(angleSpring) * tension;
       }
@@ -182,45 +233,94 @@ export default function HeartPhysics({
 
       balloonX += vx;
       balloonY += vy;
+
       angle = vx * 0.03;
 
-      currentHeartScale += (targetHeartScale - currentHeartScale) * 0.1;
-      targetHeartScale += (1 - targetHeartScale) * 0.1;
+      currentHeartScale +=
+        (targetHeartScale - currentHeartScale) * 0.1;
+
+      targetHeartScale +=
+        (1 - targetHeartScale) * 0.1;
+
       stringVibration *= 0.88;
 
-      const daemonX = width / 2 - daemonWidth / 2;
-      const daemonY = height - daemonHeight;
+      /*
+       * The daemon is lifted by exactly the same amount as the hand.
+       */
+      const daemonX =
+        width / 2 - daemonWidth / 2;
+
+      const daemonY =
+        height - daemonHeight - sceneLift;
 
       if (daemonImg.complete) {
-        ctx.drawImage(daemonImg, daemonX, daemonY, daemonWidth, daemonHeight);
+        ctx.drawImage(
+          daemonImg,
+          daemonX,
+          daemonY,
+          daemonWidth,
+          daemonHeight
+        );
       }
 
-      const heartSize = Math.min(width * 0.22, 140) * currentHeartScale;
+      const heartSize =
+        Math.min(width * 0.22, 140) *
+        currentHeartScale;
+
       const knotRelativeX = 0;
       const knotRelativeY = heartSize / 2;
 
       const cosA = Math.cos(angle);
       const sinA = Math.sin(angle);
 
-      const knotX = balloonX + (knotRelativeX * cosA - knotRelativeY * sinA);
-      const knotY = balloonY + (knotRelativeX * sinA + knotRelativeY * cosA);
+      const knotX =
+        balloonX +
+        (knotRelativeX * cosA -
+          knotRelativeY * sinA);
 
+      const knotY =
+        balloonY +
+        (knotRelativeX * sinA +
+          knotRelativeY * cosA);
+
+      /*
+       * String from daemon's hand to the heart.
+       */
       ctx.beginPath();
       ctx.moveTo(handX, handY);
 
-      const vibX = Math.sin(Date.now() * 0.05) * stringVibration;
-      const controlX = (handX + knotX) / 2 - vx * 4 + vibX;
-      const controlY = (handY + knotY) / 2 + 15;
+      const vibX =
+        Math.sin(Date.now() * 0.05) *
+        stringVibration;
 
-      ctx.quadraticCurveTo(controlX, controlY, knotX, knotY);
+      const controlX =
+        (handX + knotX) / 2 -
+        vx * 4 +
+        vibX;
+
+      const controlY =
+        (handY + knotY) / 2 + 15;
+
+      ctx.quadraticCurveTo(
+        controlX,
+        controlY,
+        knotX,
+        knotY
+      );
+
       ctx.strokeStyle = '#1a1a1a';
       ctx.lineWidth = 1.8;
       ctx.stroke();
 
+      /*
+       * Heart.
+       */
       if (heartImg.complete) {
         ctx.save();
+
         ctx.translate(balloonX, balloonY);
         ctx.rotate(angle);
+
         ctx.drawImage(
           heartImg,
           -heartSize / 2,
@@ -228,39 +328,79 @@ export default function HeartPhysics({
           heartSize,
           heartSize
         );
+
         ctx.restore();
       }
 
-      animationFrameId = requestAnimationFrame(render);
+      animationFrameId =
+        requestAnimationFrame(render);
     };
 
     render();
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('deviceorientation', handleOrientation);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('touchstart', handleTouch);
-      window.removeEventListener('mousedown', handleTouch);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener(
+        'resize',
+        handleResize
+      );
+
+      window.removeEventListener(
+        'deviceorientation',
+        handleOrientation
+      );
+
+      window.removeEventListener(
+        'mousemove',
+        handleMouseMove
+      );
+
+      window.removeEventListener(
+        'touchstart',
+        handleTouch
+      );
+
+      window.removeEventListener(
+        'mousedown',
+        handleTouch
+      );
+
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibilityChange
+      );
+
       cancelAnimationFrame(animationFrameId);
     };
   }, [daemonUrl, heartUrl, permissionGranted]);
 
   const requestGyroPermission = async () => {
     if (
-      typeof DeviceOrientationEvent !== 'undefined' &&
-      // @ts-ignore
-      typeof DeviceOrientationEvent.requestPermission === 'function'
+      typeof DeviceOrientationEvent === 'undefined'
+    ) {
+      setPermissionGranted(true);
+      return;
+    }
+
+    const OrientationEvent =
+      DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+        requestPermission?: () => Promise<
+          'granted' | 'denied'
+        >;
+      };
+
+    if (
+      typeof OrientationEvent.requestPermission ===
+      'function'
     ) {
       try {
-        // @ts-ignore
-        const response = await DeviceOrientationEvent.requestPermission();
+        const response =
+          await OrientationEvent.requestPermission();
+
         if (response === 'granted') {
           setPermissionGranted(true);
         }
-      } catch (e) {
-        console.error(e);
+      } catch (error) {
+        console.error(error);
       }
     } else {
       setPermissionGranted(true);
@@ -270,19 +410,42 @@ export default function HeartPhysics({
   const formatTime = (secs: number) => {
     const mins = Math.floor(secs / 60);
     const remainSecs = secs % 60;
-    return `${mins}:${remainSecs < 10 ? '0' : ''}${remainSecs}`;
+
+    return `${mins}:${
+      remainSecs < 10 ? '0' : ''
+    }${remainSecs}`;
   };
 
   return (
-    <div 
+    <div
       className="animate-fade-in"
-      style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', background: bgColor, transition: 'background 1.5s ease', overflow: 'hidden', touchAction: 'none' }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100dvh',
+        background: bgColor,
+        transition: 'background 1.5s ease',
+        overflow: 'hidden',
+        touchAction: 'none',
+      }}
     >
-      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
-      
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: 'block',
+          width: '100%',
+          height: '100%',
+        }}
+      />
+
       <TempleTopBar
         backTo="world"
-        right={<span className="rounded-full border border-amber-300/20 bg-black/40 px-3 py-2 text-[10px] uppercase tracking-[.14em] text-amber-100">⏳ {formatTime(seconds)}</span>}
+        right={
+          <span className="rounded-full border border-amber-300/20 bg-black/40 px-3 py-2 text-[10px] uppercase tracking-[.14em] text-amber-100">
+            ⏳ {formatTime(seconds)}
+          </span>
+        }
       />
 
       {!permissionGranted && (
@@ -304,7 +467,8 @@ export default function HeartPhysics({
             textTransform: 'uppercase',
             fontWeight: 'bold',
             cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            boxShadow:
+              '0 4px 12px rgba(0,0,0,0.1)',
             zIndex: 30,
           }}
         >
@@ -312,13 +476,26 @@ export default function HeartPhysics({
         </button>
       )}
 
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes fadeIn {
-          from { opacity: 0; transform: scale(0.98); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fade-in { animation: fadeIn 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-      ` }} />
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes fadeIn {
+              from {
+                opacity: 0;
+                transform: scale(0.98);
+              }
+              to {
+                opacity: 1;
+                transform: scale(1);
+              }
+            }
+
+            .animate-fade-in {
+              animation: fadeIn 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+          `,
+        }}
+      />
     </div>
   );
 }
