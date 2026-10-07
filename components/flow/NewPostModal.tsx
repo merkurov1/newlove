@@ -1,16 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 type Item = {
   id: string;
-  title: string;
-  slug: string;
+  title: string | null;
+  slug: string | null;
   lang: string;
   type: string;
   status: string;
   visibility: string;
-  body_md: string;
+  body_md: string | null;
   published_at?: string | null;
 };
 
@@ -29,45 +34,70 @@ type SaveState =
 
 const LAST_DRAFT_KEY = 'flow:last-draft-id';
 
-function makeSlug(title: string, id: string) {
+function makeSlug(
+  title: string,
+  id: string,
+) {
   const slug = title
     .toLowerCase()
     .trim()
-    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(
+      /[^\p{L}\p{N}\s-]/gu,
+      '',
+    )
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 80);
 
-  return slug || `post-${id.slice(0, 8)}`;
+  return (
+    slug ||
+    `post-${id.slice(0, 8)}`
+  );
+}
+
+async function readJson(
+  response: Response,
+) {
+  return response.json().catch(() => ({}));
 }
 
 export default function NewPostModal({
   onClose,
   onCreated,
 }: NewPostModalProps) {
-  const [item, setItem] = useState<Item | null>(null);
+  const [item, setItem] =
+    useState<Item | null>(null);
 
-  const [title, setTitle] = useState('');
-  const [bodyMd, setBodyMd] = useState('');
-  const [lang, setLang] = useState('ru');
+  const [title, setTitle] =
+    useState('');
+
+  const [bodyMd, setBodyMd] =
+    useState('');
+
+  const [lang, setLang] =
+    useState('ru');
 
   const [saveState, setSaveState] =
     useState<SaveState>('creating');
 
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] =
+    useState<string | null>(null);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
+  const saveTimer =
+    useRef<ReturnType<typeof setTimeout> | null>(
+      null,
+    );
 
-  const latestRef = useRef({
-    title: '',
-    bodyMd: '',
-    lang: 'ru',
-  });
+  const latestRef =
+    useRef({
+      title: '',
+      bodyMd: '',
+      lang: 'ru',
+    });
 
-  const closingRef = useRef(false);
+  const closingRef =
+    useRef(false);
 
   useEffect(() => {
     latestRef.current = {
@@ -75,15 +105,14 @@ export default function NewPostModal({
       bodyMd,
       lang,
     };
-  }, [title, bodyMd, lang]);
+  }, [
+    title,
+    bodyMd,
+    lang,
+  ]);
 
   /*
-   * Open the last unfinished draft if one exists.
-   * Otherwise create a new draft immediately.
-   *
-   * IMPORTANT:
-   * This effect intentionally has [] dependencies.
-   * onCreated must never cause draft creation to repeat.
+   * Initialize / restore draft.
    */
   useEffect(() => {
     let cancelled = false;
@@ -93,43 +122,62 @@ export default function NewPostModal({
         setError(null);
 
         const existingDraftId =
-          window.localStorage.getItem(LAST_DRAFT_KEY);
+          window.localStorage.getItem(
+            LAST_DRAFT_KEY,
+          );
 
         if (existingDraftId) {
           setSaveState('loading');
 
-          const res = await fetch(
-            `/api/admin/items/${existingDraftId}`,
-            {
-              method: 'GET',
-              cache: 'no-store',
-            }
-          );
+          const response =
+            await fetch(
+              `/api/admin/items/${existingDraftId}`,
+              {
+                method: 'GET',
+                cache: 'no-store',
+              },
+            );
 
-          const json = await res.json();
+          const json =
+            await readJson(response);
 
-          if (res.ok && json.item) {
-            const loaded: Item = json.item;
+          if (
+            response.ok &&
+            json.item
+          ) {
+            const loaded =
+              json.item as Item;
 
             /*
-             * Only restore an unfinished item.
-             * Published posts should not become the "new draft".
+             * Only drafts are restored.
+             * Published/archived items must never
+             * silently become a new draft.
              */
             if (
-              loaded.status === 'draft' ||
-              loaded.status === 'archived'
+              loaded.status === 'draft'
             ) {
-              if (cancelled) return;
+              if (cancelled) {
+                return;
+              }
 
               setItem(loaded);
-              setTitle(loaded.title ?? '');
-              setBodyMd(loaded.body_md ?? '');
-              setLang(loaded.lang ?? 'ru');
+              setTitle(
+                loaded.title ?? '',
+              );
+              setBodyMd(
+                loaded.body_md ?? '',
+              );
+              setLang(
+                loaded.lang ?? 'ru',
+              );
 
               latestRef.current = {
-                title: loaded.title ?? '',
-                bodyMd: loaded.body_md ?? '',
-                lang: loaded.lang ?? 'ru',
+                title:
+                  loaded.title ?? '',
+                bodyMd:
+                  loaded.body_md ?? '',
+                lang:
+                  loaded.lang ?? 'ru',
               };
 
               setSaveState('saved');
@@ -139,70 +187,99 @@ export default function NewPostModal({
           }
 
           /*
-           * Stale localStorage reference.
+           * Stale localStorage ID.
            */
-          window.localStorage.removeItem(LAST_DRAFT_KEY);
-        }
-
-        /*
-         * No existing draft — create one now.
-         */
-        setSaveState('creating');
-
-        const res = await fetch('/api/admin/items/new', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            title: '',
-            body_md: '',
-            lang: 'ru',
-            type: 'note',
-          }),
-        });
-
-        const json = await res.json();
-
-        if (!res.ok || !json.item) {
-          throw new Error(
-            json.error ?? 'Failed to create draft'
+          window.localStorage.removeItem(
+            LAST_DRAFT_KEY,
           );
         }
 
-        if (cancelled) return;
+        /*
+         * Create a fresh draft.
+         */
+        setSaveState('creating');
 
-        const created: Item = json.item;
+        const response =
+          await fetch(
+            '/api/admin/items/new',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type':
+                  'application/json',
+              },
+              body: JSON.stringify({
+                title: '',
+                body_md: '',
+                lang: 'ru',
+                type: 'note',
+              }),
+            },
+          );
+
+        const json =
+          await readJson(response);
+
+        if (
+          !response.ok ||
+          !json.item
+        ) {
+          throw new Error(
+            json.error ??
+              'Failed to create draft.',
+          );
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        const created =
+          json.item as Item;
 
         setItem(created);
-        setTitle(created.title ?? '');
-        setBodyMd(created.body_md ?? '');
-        setLang(created.lang ?? 'ru');
+
+        setTitle(
+          created.title ?? '',
+        );
+
+        setBodyMd(
+          created.body_md ?? '',
+        );
+
+        setLang(
+          created.lang ?? 'ru',
+        );
 
         latestRef.current = {
-          title: created.title ?? '',
-          bodyMd: created.body_md ?? '',
-          lang: created.lang ?? 'ru',
+          title:
+            created.title ?? '',
+          bodyMd:
+            created.body_md ?? '',
+          lang:
+            created.lang ?? 'ru',
         };
 
         window.localStorage.setItem(
           LAST_DRAFT_KEY,
-          created.id
+          created.id,
         );
 
         setSaveState('saved');
       } catch (err) {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         console.error(
-          '[new-post] draft initialization failed',
-          err
+          '[new-post] initialization failed:',
+          err,
         );
 
         setError(
           err instanceof Error
             ? err.message
-            : 'Failed to initialize draft'
+            : 'Failed to initialize draft.',
         );
 
         setSaveState('error');
@@ -215,160 +292,231 @@ export default function NewPostModal({
       cancelled = true;
 
       if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
+        clearTimeout(
+          saveTimer.current,
+        );
+
         saveTimer.current = null;
       }
     };
   }, []);
 
-  const saveDraft = useCallback(
-    async (
-      changes: {
-        title?: string;
-        body_md?: string;
-        lang?: string;
-      }
-    ) => {
-      if (!item) return false;
+  /*
+   * Save current draft.
+   */
+  const saveDraft =
+    useCallback(
+      async (
+        changes: {
+          title?: string;
+          body_md?: string;
+          lang?: string;
+        },
+      ) => {
+        if (!item) {
+          return true;
+        }
 
-      try {
-        setSaveState('saving');
-        setError(null);
+        try {
+          setSaveState('saving');
+          setError(null);
 
-        const res = await fetch(
-          `/api/admin/items/${item.id}`,
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(changes),
+          const response =
+            await fetch(
+              `/api/admin/items/${item.id}`,
+              {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type':
+                    'application/json',
+                },
+                body: JSON.stringify(
+                  changes,
+                ),
+              },
+            );
+
+          const json =
+            await readJson(response);
+
+          if (!response.ok) {
+            throw new Error(
+              json.error ??
+                'Failed to save draft.',
+            );
           }
-        );
 
-        const json = await res.json();
+          if (json.item) {
+            setItem(
+              json.item as Item,
+            );
+          }
 
-        if (!res.ok) {
-          throw new Error(
-            json.error ?? 'Failed to save draft'
+          setSaveState('saved');
+
+          return true;
+        } catch (err) {
+          console.error(
+            '[new-post] save failed:',
+            err,
+          );
+
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to save draft.',
+          );
+
+          setSaveState('error');
+
+          return false;
+        }
+      },
+      [item],
+    );
+
+  /*
+   * Debounced autosave.
+   */
+  const scheduleSave =
+    useCallback(
+      (
+        changes: {
+          title?: string;
+          body_md?: string;
+          lang?: string;
+        },
+      ) => {
+        if (!item) {
+          return;
+        }
+
+        if (saveTimer.current) {
+          clearTimeout(
+            saveTimer.current,
           );
         }
 
-        if (json.item) {
-          setItem(json.item);
-        }
+        saveTimer.current =
+          setTimeout(() => {
+            saveTimer.current = null;
 
-        setSaveState('saved');
+            void saveDraft(
+              changes,
+            );
+          }, 800);
+      },
+      [item, saveDraft],
+    );
 
-        return true;
-      } catch (err) {
-        console.error(
-          '[new-post] autosave failed',
-          err
-        );
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Failed to save draft'
-        );
-
-        setSaveState('error');
-
-        return false;
-      }
-    },
-    [item]
-  );
-
-  const scheduleSave = useCallback(
-    (
-      changes: {
-        title?: string;
-        body_md?: string;
-        lang?: string;
-      }
-    ) => {
-      if (!item) return;
-
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
-      }
-
-      saveTimer.current = setTimeout(() => {
-        saveTimer.current = null;
-        void saveDraft(changes);
-      }, 800);
-    },
-    [item, saveDraft]
-  );
-
-  function handleTitleChange(value: string) {
+  function handleTitleChange(
+    value: string,
+  ) {
     setTitle(value);
 
-    latestRef.current.title = value;
+    latestRef.current.title =
+      value;
 
     scheduleSave({
       title: value,
-      body_md: latestRef.current.bodyMd,
-      lang: latestRef.current.lang,
+      body_md:
+        latestRef.current.bodyMd,
+      lang:
+        latestRef.current.lang,
     });
   }
 
-  function handleBodyChange(value: string) {
+  function handleBodyChange(
+    value: string,
+  ) {
     setBodyMd(value);
 
-    latestRef.current.bodyMd = value;
+    latestRef.current.bodyMd =
+      value;
 
     scheduleSave({
-      title: latestRef.current.title,
+      title:
+        latestRef.current.title,
       body_md: value,
-      lang: latestRef.current.lang,
+      lang:
+        latestRef.current.lang,
     });
   }
 
-  function handleLangChange(value: string) {
+  function handleLangChange(
+    value: string,
+  ) {
     setLang(value);
 
-    latestRef.current.lang = value;
+    latestRef.current.lang =
+      value;
 
     scheduleSave({
-      title: latestRef.current.title,
-      body_md: latestRef.current.bodyMd,
+      title:
+        latestRef.current.title,
+      body_md:
+        latestRef.current.bodyMd,
       lang: value,
     });
   }
 
-  const flushSave = useCallback(async () => {
-    if (!item) return true;
+  /*
+   * Flush pending autosave immediately.
+   */
+  const flushSave =
+    useCallback(async () => {
+      if (!item) {
+        return true;
+      }
 
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = null;
+      if (saveTimer.current) {
+        clearTimeout(
+          saveTimer.current,
+        );
+
+        saveTimer.current = null;
+      }
+
+      const current =
+        latestRef.current;
+
+      return saveDraft({
+        title:
+          current.title,
+        body_md:
+          current.bodyMd,
+        lang:
+          current.lang,
+      });
+    }, [item, saveDraft]);
+
+  /*
+   * Publish.
+   */
+  async function handlePublish() {
+    if (!item) {
+      return;
     }
 
-    const current = latestRef.current;
+    const current =
+      latestRef.current;
 
-    return saveDraft({
-      title: current.title,
-      body_md: current.bodyMd,
-      lang: current.lang,
-    });
-  }, [item, saveDraft]);
-
-  async function handlePublish() {
-    if (!item) return;
-
-    const current = latestRef.current;
-    const cleanTitle = current.title.trim();
+    const cleanTitle =
+      current.title.trim();
 
     if (!cleanTitle) {
-      setError('Title is required before publishing.');
+      setError(
+        'Title is required before publishing.',
+      );
+
       return;
     }
 
     if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
+      clearTimeout(
+        saveTimer.current,
+      );
+
       saveTimer.current = null;
     }
 
@@ -376,38 +524,53 @@ export default function NewPostModal({
       setSaveState('publishing');
       setError(null);
 
-      const slug = makeSlug(cleanTitle, item.id);
+      const slug =
+        makeSlug(
+          cleanTitle,
+          item.id,
+        );
 
-      const res = await fetch(
-        `/api/admin/items/${item.id}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
+      const response =
+        await fetch(
+          `/api/admin/items/${item.id}`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              title: cleanTitle,
+              body_md:
+                current.bodyMd,
+              lang:
+                current.lang,
+              slug,
+              status: 'published',
+              visibility: 'public',
+            }),
           },
-          body: JSON.stringify({
-            title: cleanTitle,
-            body_md: current.bodyMd,
-            lang: current.lang,
-            slug,
-            status: 'published',
-            visibility: 'public',
-          }),
-        }
-      );
+        );
 
-      const json = await res.json();
+      const json =
+        await readJson(response);
 
-      if (!res.ok || !json.item) {
+      if (
+        !response.ok ||
+        !json.item
+      ) {
         throw new Error(
-          json.error ?? 'Failed to publish post'
+          json.error ??
+            `Failed to publish post (${response.status}).`,
         );
       }
 
-      setItem(json.item);
+      setItem(
+        json.item as Item,
+      );
 
       window.localStorage.removeItem(
-        LAST_DRAFT_KEY
+        LAST_DRAFT_KEY,
       );
 
       setSaveState('saved');
@@ -416,22 +579,28 @@ export default function NewPostModal({
       onClose();
     } catch (err) {
       console.error(
-        '[new-post] publish failed',
-        err
+        '[new-post] publish failed:',
+        err,
       );
 
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to publish post'
+          : 'Failed to publish post.',
       );
 
       setSaveState('error');
     }
   }
 
+  /*
+   * Close only after the latest text has
+   * successfully reached the server.
+   */
   async function handleClose() {
-    if (closingRef.current) return;
+    if (closingRef.current) {
+      return;
+    }
 
     closingRef.current = true;
 
@@ -440,7 +609,13 @@ export default function NewPostModal({
       return;
     }
 
-    await flushSave();
+    const saved =
+      await flushSave();
+
+    if (!saved) {
+      closingRef.current = false;
+      return;
+    }
 
     onClose();
   }
@@ -479,7 +654,10 @@ export default function NewPostModal({
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
+        if (
+          event.target ===
+          event.currentTarget
+        ) {
           void handleClose();
         }
       }}
@@ -506,7 +684,9 @@ export default function NewPostModal({
 
           <button
             type="button"
-            onClick={() => void handleClose()}
+            onClick={() =>
+              void handleClose()
+            }
             className="flex h-9 w-9 items-center justify-center rounded-full text-2xl text-zinc-400 transition hover:bg-zinc-100 hover:text-black"
             aria-label="Close"
           >
@@ -525,17 +705,25 @@ export default function NewPostModal({
             <select
               value={lang}
               onChange={(event) =>
-                handleLangChange(event.target.value)
+                handleLangChange(
+                  event.target.value,
+                )
               }
               disabled={!item || busy}
               className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-black disabled:cursor-not-allowed disabled:bg-zinc-50"
             >
-              <option value="ru">RU</option>
-              <option value="en">EN</option>
+              <option value="ru">
+                RU
+              </option>
+
+              <option value="en">
+                EN
+              </option>
             </select>
 
             <div className="rounded-lg bg-zinc-100 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-zinc-500">
-              {item?.status ?? 'draft'}
+              {item?.status ??
+                'draft'}
             </div>
           </div>
 
@@ -543,7 +731,9 @@ export default function NewPostModal({
             type="text"
             value={title}
             onChange={(event) =>
-              handleTitleChange(event.target.value)
+              handleTitleChange(
+                event.target.value,
+              )
             }
             disabled={!item || busy}
             placeholder="Title"
@@ -553,7 +743,9 @@ export default function NewPostModal({
           <textarea
             value={bodyMd}
             onChange={(event) =>
-              handleBodyChange(event.target.value)
+              handleBodyChange(
+                event.target.value,
+              )
             }
             disabled={!item || busy}
             placeholder="Write something…"
@@ -565,7 +757,6 @@ export default function NewPostModal({
               type="button"
               disabled
               className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-400"
-              title="Image upload will be connected next"
             >
               + Image
             </button>
@@ -596,8 +787,13 @@ export default function NewPostModal({
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => void handleClose()}
-              disabled={saveState === 'publishing'}
+              onClick={() =>
+                void handleClose()
+              }
+              disabled={
+                saveState ===
+                'publishing'
+              }
               className="rounded-lg px-4 py-2 text-sm text-zinc-600 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Close
@@ -607,14 +803,15 @@ export default function NewPostModal({
               type="button"
               disabled
               className="rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-400"
-              title="Analyse will be connected later"
             >
               Analyse
             </button>
 
             <button
               type="button"
-              onClick={() => void handlePublish()}
+              onClick={() =>
+                void handlePublish()
+              }
               disabled={
                 !item ||
                 !title.trim() ||
@@ -623,7 +820,8 @@ export default function NewPostModal({
               }
               className="rounded-lg bg-black px-5 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
             >
-              {saveState === 'publishing'
+              {saveState ===
+              'publishing'
                 ? 'Publishing…'
                 : 'Publish'}
             </button>
