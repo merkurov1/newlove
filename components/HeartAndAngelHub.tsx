@@ -38,19 +38,22 @@ export default function HeartAndAngelHub() {
 
   useEffect(() => {
     if (!isModalOpen) return;
+
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setIsModalOpen(false);
     };
+
     document.addEventListener('keydown', closeOnEscape);
+
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [isModalOpen]);
 
   return (
     <main className="min-h-screen bg-[#FAF8F5] text-[#111] font-sans selection:bg-black selection:text-white relative overflow-x-hidden">
-      {/* Hero-блок: раздельный для мобильных и десктопа */}
+      {/* Hero */}
       <div className="relative w-full bg-[#EAF2F8] md:bg-[#FAF8F5] md:h-[100dvh] md:flex md:flex-col md:justify-between md:overflow-hidden">
-        
-        {/* Desktop background image */}
+
+        {/* Desktop background */}
         <div className="hidden md:block absolute inset-0">
           <Image
             src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
@@ -63,21 +66,22 @@ export default function HeartAndAngelHub() {
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-black/40 pointer-events-none" />
         </div>
 
-        {/* --- МОБИЛЬНАЯ ВЕРСИЯ (< md): компактная, все помещается на экран iPhone 11 --- */}
+        {/* Mobile */}
         <div className="flex md:hidden min-h-[calc(100vh-70px)] pt-20 pb-6 px-5 flex-col justify-between bg-[#EAF2F8]">
           <div className="text-center space-y-1.5">
             <h1 className="text-2xl font-serif font-light tracking-wider text-zinc-900">
               Heart &amp; Angel
             </h1>
+
             <p className="text-zinc-600 text-xs font-serif font-light leading-relaxed tracking-wide">
               The universal mythology for a fragmented world.
             </p>
+
             <p className="text-zinc-600 text-xs font-serif font-light leading-relaxed tracking-wide italic">
               The Greatest Love Story Ever Told.
             </p>
           </div>
 
-          {/* Иллюстрация без рамки и фона */}
           <div className="relative w-full h-44 my-2">
             <Image
               src="https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png"
@@ -93,36 +97,54 @@ export default function HeartAndAngelHub() {
             <h2 className="text-xl font-serif font-light tracking-wider text-zinc-900">
               Enter the Living World
             </h2>
+
             <p className="text-zinc-600 text-xs font-serif font-light leading-relaxed tracking-wide max-w-xs mx-auto">
               Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.
             </p>
+
             <div>
               <Link
                 href="/heartandangel/world"
                 className="inline-flex items-center justify-center gap-2 w-full py-3.5 rounded-full bg-zinc-900 text-white text-xs font-sans font-medium tracking-widest uppercase shadow-md hover:bg-zinc-800 transition-all duration-300 cursor-pointer"
               >
                 <span>Explore World</span>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M14 5l7 7m0 0l-7 7m7-7H3"
+                  />
                 </svg>
               </Link>
-              <Link href="/heartandangel/about" className="mt-3 inline-flex items-center justify-center text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-600 transition hover:text-zinc-900">
+
+              <Link
+                href="/heartandangel/about"
+                className="mt-3 inline-flex items-center justify-center text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-600 transition hover:text-zinc-900"
+              >
                 About the World
               </Link>
             </div>
           </div>
         </div>
 
-        {/* --- ДЕСКТОПНАЯ ВЕРСИЯ (md:): оригинальный полноэкранный дизайн --- */}
+        {/* Desktop */}
         <div className="hidden md:flex flex-col justify-between h-full relative z-10">
           <div className="max-w-7xl w-full mx-auto px-10 pt-36 flex justify-end">
             <div className="text-right space-y-3 max-w-lg text-white drop-shadow-lg">
               <h1 className="text-6xl font-serif font-light tracking-wider text-white">
                 Heart &amp; Angel
               </h1>
+
               <p className="text-stone-100 text-lg font-serif font-light leading-relaxed tracking-wide">
                 The universal mythology for a fragmented world.
               </p>
+
               <p className="text-stone-100 text-lg font-serif font-light leading-relaxed tracking-wide italic pt-0.5">
                 The Greatest Love Story Ever Told.
               </p>
@@ -134,33 +156,48 @@ export default function HeartAndAngelHub() {
               <h2 className="text-6xl font-serif font-light tracking-wider text-white">
                 Enter the Living World
               </h2>
+
               <p className="text-stone-100 text-lg font-serif font-light leading-relaxed max-w-md tracking-wide">
                 Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.
               </p>
+
               <div className="pt-2 flex flex-wrap items-center gap-3">
                 <Link
                   href="/heartandangel/world"
                   className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-white text-stone-900 text-sm font-sans font-medium tracking-widest uppercase shadow-2xl hover:bg-stone-100 transition-all duration-300 cursor-pointer"
                 >
                   <span>Explore World</span>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M14 5l7 7m0 0l-7 7m7-7H3"
+                    />
                   </svg>
                 </Link>
-                <Link href="/heartandangel/about" className="inline-flex items-center rounded-full border border-white/60 px-6 py-3.5 text-sm font-sans tracking-widest uppercase text-white transition hover:bg-white/15">
+
+                <Link
+                  href="/heartandangel/about"
+                  className="inline-flex items-center rounded-full border border-white/60 px-6 py-3.5 text-sm font-sans tracking-widest uppercase text-white transition hover:bg-white/15"
+                >
                   About the World
                 </Link>
               </div>
             </div>
           </div>
         </div>
-
       </div>
 
-      {/* Основной контент страницы */}
+      {/* Main content */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-24 space-y-12 sm:space-y-24">
-        
-        {/* 1. Нарратив и манифест */}
+
+        {/* Manifesto */}
         <article className="prose prose-stone prose-p:font-light prose-p:leading-relaxed prose-headings:font-serif max-w-none w-full space-y-6 sm:space-y-8 bg-white/80 backdrop-blur-md p-6 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm text-sm sm:text-lg">
           <p className="first-letter:text-4xl sm:first-letter:text-5xl first-letter:font-serif first-letter:font-bold first-letter:float-left first-letter:mr-3 first-letter:mt-[-4px]">
             Heart &amp; Angel is an ongoing multidisciplinary art project exploring the Angel, the Devil and the heart
@@ -168,8 +205,8 @@ export default function HeartAndAngelHub() {
           </p>
 
           <p>
-            In an era dominated by noise, algorithmic fragmentation, and cynicism, the project seeks 
-            to reintroduce universal symbols that bypass intellectual defense mechanisms and speak 
+            In an era dominated by noise, algorithmic fragmentation, and cynicism, the project seeks
+            to reintroduce universal symbols that bypass intellectual defense mechanisms and speak
             directly to human intuition.
           </p>
 
@@ -178,14 +215,14 @@ export default function HeartAndAngelHub() {
           </blockquote>
 
           <p>
-            Each piece serves as both a physical artifact and a digital token—anchoring emotional 
+            Each piece serves as both a physical artifact and a digital token—anchoring emotional
             capital onto decentralized ledgers to ensure permanence across mediums.
           </p>
         </article>
 
-        {/* 2. Увеличенный живой видеопортал (YouTube) */}
+        {/* Film */}
         <div className="w-full">
-          <div 
+          <div
             onClick={() => setIsModalOpen(true)}
             role="button"
             tabIndex={0}
@@ -217,20 +254,22 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* 3. Блок The Concept */}
+        {/* The Concept */}
         <div className="w-full bg-white/80 backdrop-blur-md p-6 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 sm:gap-10">
             <div className="md:col-span-7 space-y-4 sm:space-y-6">
               <h2 className="font-serif text-xl sm:text-2xl text-black tracking-tight">
                 The Concept
               </h2>
+
               <p className="font-serif text-base sm:text-lg text-neutral-800 leading-relaxed">
                 Heart &amp; Angel is a transmedia art project about choice, identity and the ways we learn to care.
-                Each image is a digital artifact. We do not stretch them to fit screens; 
+                Each image is a digital artifact. We do not stretch them to fit screens;
                 we build the space around them to honor their scale.
               </p>
+
               <p className="font-serif text-sm sm:text-base text-neutral-600 leading-relaxed">
-                This project explores love not as a romantic category, but as the only viable strategy for survival. 
+                This project explores love not as a romantic category, but as the only viable strategy for survival.
                 It is an investigation into the physics of empathy in a broken world.
               </p>
             </div>
@@ -240,15 +279,18 @@ export default function HeartAndAngelHub() {
                 <h3 className="font-mono text-xs font-bold uppercase tracking-widest text-neutral-400 mb-3">
                   The Medium
                 </h3>
+
                 <ul className="space-y-3 text-xs sm:text-sm font-serif text-neutral-900">
                   <li className="flex items-start">
                     <span className="w-24 font-bold shrink-0">Ink &amp; Paper</span>
                     <span>Grounding the spirit in the physical.</span>
                   </li>
+
                   <li className="flex items-start">
                     <span className="w-24 font-bold shrink-0">Digital / AR</span>
                     <span>Living in the ether.</span>
                   </li>
+
                   <li className="flex items-start">
                     <span className="w-24 font-bold shrink-0">Code</span>
                     <span>Empathy as a ritual.</span>
@@ -265,19 +307,22 @@ export default function HeartAndAngelHub() {
           </div>
         </div>
 
-        {/* 4. Галерея: Swiper горизонтальная прокрутка */}
+        {/* Gallery */}
         <div className="w-full">
           <Swiper
             modules={[FreeMode, Mousewheel]}
             spaceBetween={24}
-            slidesPerView={'auto'}
+            slidesPerView="auto"
             freeMode={true}
             mousewheel={{ forceToAxis: true }}
             grabCursor={true}
             className="w-full !overflow-visible py-2"
           >
             {galleryImages.map((src, idx) => (
-              <SwiperSlide key={idx} className="!w-[360px] sm:!w-[520px] shrink-0">
+              <SwiperSlide
+                key={idx}
+                className="!w-[360px] sm:!w-[520px] shrink-0"
+              >
                 <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden bg-white shadow-sm border border-stone-200/60 flex items-center justify-center p-3 group">
                   <Image
                     src={src}
@@ -292,21 +337,30 @@ export default function HeartAndAngelHub() {
           </Swiper>
         </div>
 
-        {/* 5. Блок социальных сетей */}
+        {/* About */}
         <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm text-center space-y-4">
-          <h3 className="font-serif text-xl sm:text-2xl text-stone-900 tracking-tight">About the World</h3>
+          <h3 className="font-serif text-xl sm:text-2xl text-stone-900 tracking-tight">
+            About the World
+          </h3>
+
           <p className="max-w-2xl mx-auto font-serif text-sm sm:text-base leading-relaxed text-neutral-600">
             Meet the Angel and the Devil, follow the heart, and enter a living mythology built from play, attention and love.
           </p>
-          <Link href="/heartandangel/about" className="inline-flex items-center rounded-full bg-stone-900 px-6 py-3 text-xs font-mono uppercase tracking-widest text-white transition hover:bg-stone-700">
+
+          <Link
+            href="/heartandangel/about"
+            className="inline-flex items-center rounded-full bg-stone-900 px-6 py-3 text-xs font-mono uppercase tracking-widest text-white transition hover:bg-stone-700"
+          >
             Read the story
           </Link>
         </div>
 
+        {/* Social */}
         <div className="w-full bg-white/80 backdrop-blur-md p-8 sm:p-12 rounded-3xl border border-stone-200/60 shadow-sm text-center space-y-6">
           <h3 className="font-serif text-xl sm:text-2xl text-stone-900 tracking-tight">
             Connect &amp; Follow
           </h3>
+
           <div className="flex flex-wrap justify-center gap-3 sm:gap-4 pt-1">
             {SOCIAL_LINKS.map((social, idx) => (
               <a
@@ -321,19 +375,18 @@ export default function HeartAndAngelHub() {
             ))}
           </div>
         </div>
-
       </div>
 
-      {/* Модальное окно для полноэкранного просмотра со звуком */}
+      {/* Fullscreen film modal */}
       {isModalOpen && (
-        <div 
+        <div
           onClick={() => setIsModalOpen(false)}
           role="dialog"
           aria-modal="true"
           aria-label="Heart and Angel film"
           className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-8 animate-fadeIn"
         >
-          <div 
+          <div
             onClick={(e: { stopPropagation: () => void }) => e.stopPropagation()}
             className="relative w-full max-w-5xl aspect-[16/9] bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10"
           >
@@ -344,6 +397,7 @@ export default function HeartAndAngelHub() {
             >
               ✕
             </button>
+
             <iframe
               src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&controls=1&modestbranding=1`}
               title="Heart & Angel Archive Full"
