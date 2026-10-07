@@ -2,49 +2,49 @@ import * as cheerio from "cheerio";
 import { HouseParser } from "../house-parser";
 import type { LotData } from "../types";
 
-export class PhillipsParser extends HouseParser {
-  readonly houseId = "phillips";
-  readonly matches = ["phillips"];
+export class BonhamsParser extends HouseParser {
+  readonly houseId = "bonhams";
+  readonly matches = ["bonhams"];
 
   parse(html: string, url: string): LotData {
     const $ = cheerio.load(html);
     const parseErrors: string[] = [];
 
     const title = this.normalizeText(
-      $(".lot__title").first().text() ||
-        $('[data-test="lot-title"]').first().text() ||
+      $(".lot-title").first().text() ||
+        $('[data-testid="lot-title"]').first().text() ||
         $("h1").first().text() ||
         null
     );
 
     const artist = this.normalizeText(
-      $(".artist__name").first().text() ||
+      $(".artist-name").first().text() ||
         $(".maker-name").first().text() ||
-        $('[data-test="artist"]').first().text() ||
+        $('[data-testid="artist"]').first().text() ||
         null
     );
 
     const lotNumber = this.normalizeText(
-      $(".lot__number").first().text() ||
-        $(".lot-number").first().text() ||
+      $(".lot-number").first().text() ||
+        $('[data-testid="lot-number"]').first().text() ||
         null
     );
 
     const estimateText = this.normalizeText(
       $(".estimate").first().text() ||
-        $('[data-test="estimate"]').first().text() ||
+        $('[data-testid="estimate"]').first().text() ||
         null
     );
 
     const priceText = this.normalizeText(
-      $(".price").first().text() ||
-        $('[data-test="sale-price"]').first().text() ||
+      $(".sale-price").first().text() ||
+        $('[data-testid="sale-price"]').first().text() ||
         null
     );
 
     const soldText = this.normalizeText(
-      $('[data-test="sale-status"]').first().text() ||
-        $(".sale-status").first().text() ||
+      $(".sale-status").first().text() ||
+        $('[data-testid="sale-status"]').first().text() ||
         null
     );
 
@@ -78,7 +78,7 @@ export class PhillipsParser extends HouseParser {
         : null,
       sold: soldText !== null ? /sold|sale/i.test(soldText) : priceText !== null,
       imageUrl,
-      imageCandidates: imageUrl ? [{ url: imageUrl, source: "phillips" }] : [],
+      imageCandidates: imageUrl ? [{ url: imageUrl, source: "bonhams" }] : [],
       url,
       source: "house-parser",
       confidence: 0.8,

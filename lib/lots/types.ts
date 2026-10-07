@@ -7,6 +7,14 @@ export type AuctionHouse =
 
 export type Currency = "USD" | "GBP" | "EUR" | "CHF" | "RUB" | "UNKNOWN";
 
+export const PARSER_SOURCE = {
+  HOUSE: "house-parser",
+  FALLBACK: "fallback",
+  GENERIC_JSON_LD: "generic-json-ld",
+} as const;
+
+export type ParserSource = (typeof PARSER_SOURCE)[keyof typeof PARSER_SOURCE];
+
 export interface NormalizedPrice {
   raw?: string;
   currency?: Currency | string;
@@ -29,10 +37,6 @@ export interface ImageCandidate {
   height?: number;
 }
 
-/**
- * Normalized lot data structure returned by all parsers.
- * Provides a unified interface regardless of source auction house.
- */
 export interface LotData {
   auctionHouse?: AuctionHouse;
   lotNumber?: string | null;
@@ -51,6 +55,9 @@ export interface LotData {
   house?: string;
   auctionDate?: string | null;
   url?: string;
+  source?: ParserSource;
+  confidence?: number;
+  warnings?: string[];
   raw?: Record<string, any>;
   parseErrors?: string[];
 }

@@ -1,110 +1,57 @@
-import { NextResponse } from "next/server";
-import { ParserRegistry } from "@/lib/lots/registry";
+import { ParserRegistry } from "../registry";
 
-function isBlockedHtml(html: string): boolean {
-  if (!html || html.length < 500) return true;
-  const lower = html.toLowerCase();
-  return (
-    lower.includes("just a moment...") ||
-    lower.includes("enable javascript and cookies to continue") ||
-    lower.includes("cf-browser-verification") ||
-    lower.includes("challenge-running") ||
-    lower.includes("attention required! | cloudflare")
-  );
-}
-
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const { url } = body;
-
-    if (!url) {
-      return NextResponse.json({ error: "URL is required" }, { status: 400 });
-    }
-
-    const apiKey = process.env.SCRAPINGANT_API_KEY;
-    let html = "";
-
-    // 1. Try direct fetch first (fastest)
-    try {
-      const directRes = await fetch(url, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-        signal: AbortSignal.timeout(5_000),
-      });
-
-      if (directRes.ok) {
-        const directHtml = await directRes.text();
-        if (!isBlockedHtml(directHtml)) {
-          html = directHtml;
-        }
-      }
-    } catch {
-      console.warn(
-        "[Parser] Direct HTML fetch failed, falling back to ScrapingAnt"
-      );
-    }
-
-    // 2. Fall back to ScrapingAnt if needed
-    if (!html && apiKey) {
-      try {
-        const saEndpoint = new URL("https://api.scrapingant.com/v2/general");
-        saEndpoint.searchParams.set("url", url);
-        saEndpoint.searchParams.set("browser", "true");
-
-        const saRes = await fetch(saEndpoint, {
-          headers: { "x-api-key": apiKey },
-          signal: AbortSignal.timeout(25_000),
-        });
-
-        if (saRes.ok) {
-          html = await saRes.text();
-        }
-      } catch (err) {
-        console.warn("[Parser] ScrapingAnt request failed:", err);
-      }
-    }
-
-    if (!html || isBlockedHtml(html)) {
-      return NextResponse.json(
-        { error: "Failed to retrieve unblocked HTML from the target URL" },
-        { status: 422 }
-      );
-    }
-
-    // 3. Use parser registry to select house-specific parser
+describe("ParserRegistry", () => {
+  it("detects Christies URL", () => {
     const registry = new ParserRegistry();
-    const parsed = registry.parse(html, url);
+    expect(registry.detectHouse("https://www.christies.com/en/lot/lot-1234567")).toBe("christies");
+  });
 
-    if (!parsed) {
-      return NextResponse.json(
-        {
-          error: "Unsupported auction house",
-          details: "No parser matched this auction house",
-        },
-        { status: 422 }
-      );
-    }
+  it("parses Christies HTML using house-specific logic", () => {
+    const registry = new ParserRegistry();
+    const html = `
+      <html>
+        <head>
+          <meta property="og:image" content="https://cdn.example.com/art.jpg" />
+        </head>
+        <body>
+          <div data-testid="lot-title">The Sun</div>
+          <div data-testid="artist-name">Andy Warhol</div>
+          <div data-testid="estimate">USD 100,000 - 150,000</div>
+          <div data-testid="sale-price">$125,000</div>
+        </body>
+      </html>
+    `;
 
-    return NextResponse.json({
-      ...parsed,
-      auction_house: parsed.auctionHouse,
-      title: parsed.title,
-      artist: parsed.artist,
-      lot_number: parsed.lotNumber,
-      image_url: parsed.imageUrl,
-      extracted: parsed,
-    });
-  } catch (error: any) {
-    console.error("[API parse-url] Error:", error);
-    return NextResponse.json(
-      { error: error?.message || "Failed to parse lot" },
-      { status: 500 }
-    );
-  }
-}
+    const result = registry.parse(html, "https://www.christies.com/en/lot/lot-1234567");
+
+    expect(result?.auctionHouse).toBe("christies");
+    expect(result?.title).toBe("The Sun");
+    expect(result?.artist).toBe("Andy Warhol");
+    expect(result?.confidence).toBeGreaterThanOrEqual(0.7);
+    expect(result?.source).toBe("house-parser");
+  });
+
+  it("uses fallback parser for unsupported domains", () => {
+    const registry = new ParserRegistry();
+    const html = `
+      <html>
+        <head>
+          <title>Example Auction Lot</title>
+          <meta property="og:image" content="https://cdn.example.com/fallback.jpg" />
+        </head>
+        <body>
+          <h1>Moonlight</h1>
+          <p>Artist: Jane Doe</p>
+          <p>Estimate: $50,000 - $80,000</p>
+        </body>
+      </html>
+    `;
+
+    const result = registry.parse(html, "https://example.com/auction/lot-1");
+
+    expect(result?.auctionHouse).toBe("unknown");
+    expect(result?.source).toBe("fallback");
+    expect(result?.title).toBe("Moonlight");
+    expect(result?.confidence).toBeGreaterThanOrEqual(0.2);
+  });
+});

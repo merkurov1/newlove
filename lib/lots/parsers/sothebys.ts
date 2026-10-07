@@ -1,82 +1,69 @@
+import * as cheerio from "cheerio";
 import { HouseParser } from "../house-parser";
 import type { LotData } from "../types";
 
-/**
- * Sotheby's auction house parser.
- * Handles sothebys.com auction lot pages.
- */
-export class SothebysParser extends HouseParser {
-  readonly houseId = "sothebys";
-  readonly matches = ["sothebys"];
+export class ChristiesParser extends HouseParser {
+  readonly houseId = "christies";
+  readonly matches = ["christies"];
 
   parse(html: string, url: string): LotData {
-    const doc = new DOMParser().parseFromString(html, "text/html");
+    const $ = cheerio.load(html);
     const parseErrors: string[] = [];
 
     const title = this.normalizeText(
-      this.pickFirst(
-        doc.querySelector(".lot-title")?.textContent,
-        doc.querySelector("[data-testid='lot-title']")?.textContent,
-        doc.querySelector("h1")?.textContent
-      )
+      $('[data-testid="lot-title"]').first().text() ||
+        $(".lot-title").first().text() ||
+        $("h1").first().text() ||
+        null
     );
 
     const artist = this.normalizeText(
-      this.pickFirst(
-        doc.querySelector(".artist-name")?.textContent,
-        doc.querySelector(".maker-name")?.textContent,
-        doc.querySelector("[data-testid='artist']")?.textContent
-      )
+      $('[data-testid="artist-name"]').first().text() ||
+        $(".artist-name").first().text() ||
+        $('[data-testid="artist"]').first().text() ||
+        null
     );
 
     const lotNumber = this.normalizeText(
-      this.pickFirst(
-        doc.querySelector(".lot-number")?.textContent,
-        doc.querySelector("[data-testid='lot-number']")?.textContent
-      )
+      $('[data-testid="lot-number"]').first().text() ||
+        $(".lot-number").first().text() ||
+        null
     );
 
     const estimateText = this.normalizeText(
-      this.pickFirst(
-        doc.querySelector(".estimate")?.textContent,
-        doc.querySelector("[data-testid='estimate']")?.textContent
-      )
+      $('[data-testid="estimate"]').first().text() ||
+        $(".estimate").first().text() ||
+        null
     );
 
     const priceText = this.normalizeText(
-      this.pickFirst(
-        doc.querySelector(".price-realized")?.textContent,
-        doc.querySelector("[data-testid='price-realized']")?.textContent,
-        doc.querySelector(".sale-price")?.textContent
-      )
+      $('[data-testid="sale-price"]').first().text() ||
+        $(".sale-price").first().text() ||
+        null
     );
 
     const soldText = this.normalizeText(
-      this.pickFirst(
-        doc.querySelector(".sale-status")?.textContent,
-        doc.querySelector("[data-testid='sale-status']")?.textContent
-      )
+      $('[data-testid="sold-status"]').first().text() ||
+        $(".sold-status").first().text() ||
+        null
     );
 
     const medium = this.normalizeText(
-      this.pickFirst(
-        doc.querySelector(".medium")?.textContent,
-        doc.querySelector("[data-testid='medium']")?.textContent
-      )
+      $('[data-testid="medium"]').first().text() ||
+        $(".medium").first().text() ||
+        null
     );
 
     const dimensions = this.normalizeText(
-      this.pickFirst(
-        doc.querySelector(".dimensions")?.textContent,
-        doc.querySelector("[data-testid='dimensions']")?.textContent
-      )
+      $('[data-testid="dimensions"]').first().text() ||
+        $(".dimensions").first().text() ||
+        null
     );
 
     const imageUrl =
-      doc.querySelector("img")?.getAttribute("src") ??
-      doc
-        .querySelector("meta[property='og:image']")
-        ?.getAttribute("content") ??
+      $('meta[property="og:image"]').attr("content") ||
+      $('meta[name="twitter:image"]').attr("content") ||
+      $("img").first().attr("src") ||
       null;
 
     if (!title) parseErrors.push("title not found");
@@ -98,13 +85,12 @@ export class SothebysParser extends HouseParser {
             realized: this.parseNumber(priceText) ?? undefined,
           }
         : null,
-      sold:
-        soldText !== null
-          ? /sold|sale/i.test(soldText)
-          : priceText !== null,
+      sold: soldText !== null ? /sold|vendu|vente|成交/i.test(soldText) : priceText !== null,
       imageUrl,
-      imageCandidates: imageUrl ? [{ url: imageUrl, source: "sothebys" }] : [],
+      imageCandidates: imageUrl ? [{ url: imageUrl, source: "christies" }] : [],
       url,
+      source: "house-parser",
+      confidence: 0.8,
       raw: { lotNumber, estimateText, priceText, soldText, medium, dimensions },
       parseErrors,
     };
