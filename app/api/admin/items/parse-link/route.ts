@@ -10,6 +10,10 @@ import * as cheerio from 'cheerio';
 
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import {
+  isYouTubeUrl,
+  resolveYouTube,
+} from '@/lib/flow/youtube';
 
 export const dynamic = 'force-dynamic';
 
@@ -593,6 +597,117 @@ export async function POST(
       );
     }
 
+    const supabase =
+      createClient({
+        useServiceRole: true,
+      });
+
+    /*
+     * ---------------------------------------------------------
+     * YouTube
+     * ---------------------------------------------------------
+     *
+     * YouTube is handled separately from the generic HTML
+     * parser. This avoids fetching the YouTube page just to
+     * extract metadata and gives Flow a stable video model.
+     */
+
+    const normalizedUrl =
+      normalizeInputUrl(
+        rawUrl,
+      );
+
+    if (
+      isYouTubeUrl(
+        normalizedUrl,
+      )
+    ) {
+      const youtube =
+        await resolveYouTube(
+          normalizedUrl,
+        );
+
+      if (!youtube) {
+        throw new Error(
+          'Could not resolve YouTube video.',
+        );
+      }
+
+      const {
+        data: existingItem,
+        error:
+          existingError,
+      } = await supabase
+        .from('items')
+        .select(
+          'metadata',
+        )
+        .eq('id', itemId)
+        .single();
+
+      if (existingError) {
+        throw existingError;
+      }
+
+      const existingMetadata =
+        existingItem?.metadata &&
+        typeof existingItem.metadata ===
+          'object'
+          ? existingItem.metadata
+          : {};
+
+      const mergedMetadata = {
+        ...existingMetadata,
+        image:
+          youtube.metadata
+            .thumbnail_url,
+        site_name:
+          'YouTube',
+        type:
+          'video',
+        youtube:
+          youtube.metadata,
+      };
+
+      const {
+        data: item,
+        error:
+          updateError,
+      } = await supabase
+        .from('items')
+        .update({
+          type: 'video',
+          source_url:
+            youtube.canonicalUrl,
+          title:
+            youtube.metadata.title,
+          body_md:
+            '',
+          metadata:
+            mergedMetadata,
+        })
+        .eq('id', itemId)
+        .select('*')
+        .single();
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      return NextResponse.json({
+        success: true,
+        item,
+        metadata:
+          mergedMetadata,
+      });
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Generic web link
+     * ---------------------------------------------------------
+     */
+
     const parsed =
       await assertSafeUrl(
         rawUrl,
@@ -627,11 +742,6 @@ export async function POST(
         { status: 422 },
       );
     }
-
-    const supabase =
-      createClient({
-        useServiceRole: true,
-      });
 
     const {
       data: existingItem,

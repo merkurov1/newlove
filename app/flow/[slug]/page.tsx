@@ -11,6 +11,17 @@ type PageProps = {
   }>;
 };
 
+type YouTubeMetadata = {
+  video_id?: string;
+  title?: string;
+  author_name?: string | null;
+  author_url?: string | null;
+  thumbnail_url?: string;
+  thumbnail_width?: number | null;
+  thumbnail_height?: number | null;
+  provider_name?: string;
+};
+
 type FlowItem = {
   id: string;
   title: string | null;
@@ -86,13 +97,114 @@ function getMetadataString(
     : null;
 }
 
+function getYouTubeMetadata(
+  item: FlowItem,
+): YouTubeMetadata | null {
+  const value =
+    item.metadata?.youtube;
+
+  if (
+    !value ||
+    typeof value !==
+      'object' ||
+    Array.isArray(value)
+  ) {
+    return null;
+  }
+
+  return value as YouTubeMetadata;
+}
+
+function getYouTubeVideoId(
+  item: FlowItem,
+): string | null {
+  const youtube =
+    getYouTubeMetadata(
+      item,
+    );
+
+  if (
+    youtube?.video_id &&
+    /^[A-Za-z0-9_-]{6,20}$/.test(
+      youtube.video_id,
+    )
+  ) {
+    return youtube.video_id;
+  }
+
+  if (item.source_url) {
+    try {
+      const url =
+        new URL(
+          item.source_url,
+        );
+
+      if (
+        url.hostname ===
+          'youtu.be' ||
+        url.hostname ===
+          'www.youtu.be'
+      ) {
+        const id =
+          url.pathname
+            .split('/')
+            .filter(Boolean)[0];
+
+        if (
+          id &&
+          /^[A-Za-z0-9_-]{6,20}$/.test(
+            id,
+          )
+        ) {
+          return id;
+        }
+      }
+
+      const queryId =
+        url.searchParams.get(
+          'v',
+        );
+
+      if (
+        queryId &&
+        /^[A-Za-z0-9_-]{6,20}$/.test(
+          queryId,
+        )
+      ) {
+        return queryId;
+      }
+
+      const pathMatch =
+        url.pathname.match(
+          /^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]{6,20})/,
+        );
+
+      if (
+        pathMatch?.[1]
+      ) {
+        return pathMatch[1];
+      }
+    } catch {
+      // Ignore malformed URLs.
+    }
+  }
+
+  return null;
+}
+
 function getMetadataImage(
   item: FlowItem,
 ): string | null {
   const metadata =
     item.metadata ?? {};
 
+  const youtube =
+    getYouTubeMetadata(
+      item,
+    );
+
   const candidates = [
+    youtube?.thumbnail_url,
     metadata.image,
     metadata.image_url,
     metadata.og_image,
@@ -264,14 +376,6 @@ export async function generateMetadata({
         flowItem,
       );
 
-    /*
-     * If the object already has an image,
-     * use it directly.
-     *
-     * Otherwise the route-level
-     * opengraph-image.tsx will generate
-     * the fallback OG image.
-     */
     const ogImage =
       image ||
       `${site}/flow/${encodeURIComponent(
@@ -439,6 +543,84 @@ function LinkCard({
         >
           Open original ↗
         </a>
+      </div>
+    </div>
+  );
+}
+
+function YouTubeView({
+  item,
+}: {
+  item: FlowItem;
+}) {
+  const videoId =
+    getYouTubeVideoId(item);
+
+  const youtube =
+    getYouTubeMetadata(
+      item,
+    );
+
+  if (!videoId) {
+    return (
+      <MarkdownBody
+        body={
+          item.body_md ??
+          ''
+        }
+      />
+    );
+  }
+
+  const title =
+    youtube?.title ||
+    item.title ||
+    'YouTube video';
+
+  const channel =
+    youtube?.author_name ||
+    null;
+
+  return (
+    <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
+      <div className="aspect-video w-full bg-black">
+        <iframe
+          src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+          title={title}
+          className="h-full w-full"
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+      </div>
+
+      <div className="p-7 sm:p-9">
+        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
+          YouTube
+        </div>
+
+        <h1 className="mt-3 font-serif text-3xl font-light leading-tight text-stone-900 sm:text-4xl">
+          {title}
+        </h1>
+
+        {channel && (
+          <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-stone-400">
+            {channel}
+          </div>
+        )}
+
+        {item.source_url && (
+          <a
+            href={
+              item.source_url
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-7 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
+          >
+            Open on YouTube ↗
+          </a>
+        )}
       </div>
     </div>
   );
@@ -780,8 +962,13 @@ export default async function FlowItemPage({
 
         <div className="mt-8">
           {item.type ===
-            'link' &&
-          item.source_url ? (
+            'video' ? (
+            <YouTubeView
+              item={item}
+            />
+          ) : item.type ===
+              'link' &&
+            item.source_url ? (
             <LinkCard
               item={item}
             />

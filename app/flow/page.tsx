@@ -4,6 +4,17 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import NewPostModal from '@/components/flow/NewPostModal';
 
+type YouTubeMetadata = {
+  video_id?: string;
+  title?: string;
+  author_name?: string | null;
+  author_url?: string | null;
+  thumbnail_url?: string;
+  thumbnail_width?: number | null;
+  thumbnail_height?: number | null;
+  provider_name?: 'YouTube' | string;
+};
+
 type FlowItem = {
   id: string;
   title: string | null;
@@ -193,6 +204,103 @@ function LinkCard({
               {description}
             </p>
           )}
+        </div>
+      </Link>
+    </div>
+  );
+}
+
+function YouTubeCard({
+  item,
+  admin,
+  onEdit,
+  onDelete,
+}: {
+  item: FlowItem;
+  admin: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const metadata =
+    item.metadata ?? {};
+
+  const youtube =
+    metadata.youtube &&
+    typeof metadata.youtube ===
+      'object' &&
+    metadata.youtube !== null
+      ? (metadata.youtube as YouTubeMetadata)
+      : null;
+
+  const videoId =
+    youtube?.video_id ?? null;
+
+  const thumbnail =
+    youtube?.thumbnail_url ??
+    (videoId
+      ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+      : null);
+
+  const title =
+    youtube?.title ||
+    item.title ||
+    'YouTube video';
+
+  const channel =
+    youtube?.author_name ||
+    null;
+
+  return (
+    <div className="group relative">
+      {admin && (
+        <Controls
+          item={item}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+      )}
+
+      <Link
+        href={itemHref(item)}
+        className="block overflow-hidden rounded-[1.75rem] border border-stone-200/80 bg-white transition hover:border-stone-400"
+      >
+        <div className="relative aspect-video overflow-hidden bg-stone-100">
+          {thumbnail ? (
+            <img
+              src={thumbnail}
+              alt=""
+              className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.015]"
+            />
+          ) : (
+            <div className="h-full w-full bg-stone-100" />
+          )}
+
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition duration-300 group-hover:bg-black/10">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-lg transition duration-300 group-hover:scale-105">
+              <span
+                className="ml-1 text-[22px] text-stone-900"
+                aria-hidden="true"
+              >
+                ▶
+              </span>
+            </div>
+          </div>
+
+          <div className="absolute bottom-4 left-4 font-mono text-[9px] uppercase tracking-[0.2em] text-white drop-shadow-md">
+            YouTube
+          </div>
+        </div>
+
+        <div className="p-6 sm:p-7">
+          {channel && (
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+              {channel}
+            </div>
+          )}
+
+          <div className="mt-2 font-serif text-2xl font-light leading-tight text-stone-900">
+            {title}
+          </div>
         </div>
       </Link>
     </div>
@@ -486,8 +594,26 @@ export default function FlowPage() {
                     key={item.id}
                   >
                     {item.type ===
-                      'link' &&
-                    item.source_url ? (
+                      'video' ? (
+                      <YouTubeCard
+                        item={item}
+                        admin={
+                          isAdmin
+                        }
+                        onEdit={() =>
+                          setEditingId(
+                            item.id,
+                          )
+                        }
+                        onDelete={() =>
+                          void deleteItem(
+                            item,
+                          )
+                        }
+                      />
+                    ) : item.type ===
+                        'link' &&
+                      item.source_url ? (
                       <LinkCard
                         item={item}
                         admin={

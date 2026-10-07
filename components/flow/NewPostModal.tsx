@@ -7,6 +7,17 @@ import {
   useState,
 } from 'react';
 
+type YouTubeMetadata = {
+  video_id?: string;
+  title?: string;
+  author_name?: string | null;
+  author_url?: string | null;
+  thumbnail_url?: string;
+  thumbnail_width?: number | null;
+  thumbnail_height?: number | null;
+  provider_name?: string;
+};
+
 type Item = {
   id: string;
   title: string | null;
@@ -182,6 +193,38 @@ function getDomain(
   }
 }
 
+function getYouTubeMetadata(
+  metadata:
+    | Record<string, unknown>
+    | null
+    | undefined,
+): YouTubeMetadata | null {
+  if (
+    !metadata ||
+    typeof metadata.youtube !==
+      'object' ||
+    metadata.youtube === null
+  ) {
+    return null;
+  }
+
+  return metadata.youtube as YouTubeMetadata;
+}
+
+function isYouTubeVideo(
+  item: Item | null,
+) {
+  return (
+    item?.type ===
+      'video' &&
+    Boolean(
+      getYouTubeMetadata(
+        item.metadata,
+      ),
+    )
+  );
+}
+
 function ShimmerPreview() {
   return (
     <div
@@ -194,6 +237,148 @@ function ShimmerPreview() {
       <div className="h-8 w-4/5 animate-pulse rounded bg-stone-200" />
       <div className="h-4 w-full animate-pulse rounded bg-stone-100" />
       <div className="h-4 w-3/4 animate-pulse rounded bg-stone-100" />
+    </div>
+  );
+}
+
+function YouTubePreview({
+  metadata,
+  sourceUrl,
+}: {
+  metadata: YouTubeMetadata;
+  sourceUrl: string;
+}) {
+  const thumbnail =
+    typeof metadata.thumbnail_url ===
+    'string'
+      ? metadata.thumbnail_url
+      : null;
+
+  const title =
+    metadata.title ||
+    'YouTube video';
+
+  const channel =
+    metadata.author_name ||
+    'YouTube';
+
+  return (
+    <div
+      className="
+        animate-[flowFadeIn_160ms_ease-out]
+      "
+    >
+      <div
+        className="
+          overflow-hidden
+          rounded-[1.5rem]
+          bg-stone-900
+        "
+      >
+        {thumbnail ? (
+          <div className="relative aspect-video w-full">
+            <img
+              src={thumbnail}
+              alt=""
+              className="
+                absolute inset-0
+                h-full w-full
+                object-cover
+              "
+            />
+
+            <div
+              className="
+                absolute inset-0
+                flex items-center justify-center
+                bg-black/10
+              "
+            >
+              <div
+                className="
+                  flex h-16 w-16
+                  items-center justify-center
+                  rounded-full
+                  bg-white/95
+                  shadow-xl
+                  sm:h-20 sm:w-20
+                "
+              >
+                <span
+                  className="
+                    ml-1
+                    text-2xl
+                    text-stone-900
+                    sm:text-3xl
+                  "
+                  aria-hidden="true"
+                >
+                  ▶
+                </span>
+              </div>
+            </div>
+
+            <div
+              className="
+                absolute bottom-4 left-4
+                rounded-full
+                bg-black/65
+                px-3 py-1.5
+                font-mono text-[9px]
+                uppercase
+                tracking-[0.16em]
+                text-white
+                backdrop-blur-sm
+              "
+            >
+              YouTube
+            </div>
+          </div>
+        ) : (
+          <div
+            className="
+              flex aspect-video
+              items-center justify-center
+              text-white
+            "
+          >
+            <span className="text-3xl">
+              ▶
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-5">
+        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+          YouTube
+        </div>
+
+        <div className="mt-3 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
+          {title}
+        </div>
+
+        <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400">
+          {channel}
+        </div>
+
+        <a
+          href={sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="
+            mt-4 inline-block
+            font-mono text-[10px]
+            uppercase
+            tracking-[0.16em]
+            text-stone-400
+            transition-colors
+            hover:text-stone-900
+          "
+        >
+          Open original ↗
+        </a>
+      </div>
     </div>
   );
 }
@@ -323,11 +508,6 @@ export default function NewPostModal({
     };
   }, []);
 
-  /*
-   * The modal itself is rendered immediately.
-   * Draft creation happens in parallel, so the
-   * editor does not feel blocked by the API.
-   */
   useEffect(() => {
     let cancelled = false;
 
@@ -481,10 +661,6 @@ export default function NewPostModal({
           loaded,
         );
 
-        /*
-         * Do not overwrite text the user has already
-         * started typing while the draft was loading.
-         */
         if (
           !latestRef.current
             .bodyMd
@@ -503,6 +679,25 @@ export default function NewPostModal({
         if (
           loaded.type ===
           'link'
+        ) {
+          setLinkMode(
+            true,
+          );
+
+          setLinkUrl(
+            loaded.source_url ??
+              '',
+          );
+
+          setLinkPreview(
+            loaded.metadata ??
+              null,
+          );
+        }
+
+        if (
+          loaded.type ===
+          'video'
         ) {
           setLinkMode(
             true,
@@ -873,7 +1068,12 @@ export default function NewPostModal({
 
       requestAnimationFrame(
         () => {
-          textareaRef.current?.focus();
+          if (
+            parsedItem.type !==
+            'video'
+          ) {
+            textareaRef.current?.focus();
+          }
         },
       );
     } catch (err) {
@@ -1094,6 +1294,10 @@ export default function NewPostModal({
       const current =
         latestRef.current;
 
+      const isVideo =
+        item.type ===
+        'video';
+
       if (
         item.type ===
           'link' &&
@@ -1101,6 +1305,26 @@ export default function NewPostModal({
       ) {
         throw new Error(
           'The link is not ready yet.',
+        );
+      }
+
+      if (
+        isVideo &&
+        !item.source_url
+      ) {
+        throw new Error(
+          'The YouTube video is not ready yet.',
+        );
+      }
+
+      if (
+        isVideo &&
+        !getYouTubeMetadata(
+          item.metadata,
+        )
+      ) {
+        throw new Error(
+          'The YouTube video metadata is not ready yet.',
         );
       }
 
@@ -1119,6 +1343,8 @@ export default function NewPostModal({
         item.type !==
           'link' &&
         item.type !==
+          'video' &&
+        item.type !==
           'photo' &&
         !current.bodyMd.trim()
       ) {
@@ -1134,7 +1360,16 @@ export default function NewPostModal({
 
       const title =
         item.type ===
-        'link'
+        'video'
+          ? String(
+              getYouTubeMetadata(
+                item.metadata,
+              )?.title ||
+                item.title ||
+                'YouTube video',
+            ).slice(0, 160)
+          : item.type ===
+            'link'
           ? String(
               linkPreview?.title ||
                 item.title ||
@@ -1269,11 +1504,6 @@ export default function NewPostModal({
     closingRef.current =
       true;
 
-    /*
-     * If nothing is being saved, closing should feel
-     * instantaneous. There is no reason to make the
-     * user wait for an already-saved draft.
-     */
     if (
       saveState ===
         'saved' ||
@@ -1361,9 +1591,14 @@ export default function NewPostModal({
     item?.type ===
     'photo';
 
+  const isVideo =
+    isYouTubeVideo(item);
+
   const isLink =
     item?.type ===
       'link' ||
+    item?.type ===
+      'video' ||
     linkMode;
 
   const isParsing =
@@ -1379,7 +1614,15 @@ export default function NewPostModal({
       'saving' &&
     (
       item?.type ===
-      'link'
+      'video'
+        ? Boolean(
+            item.source_url &&
+              getYouTubeMetadata(
+                item.metadata,
+              ),
+          )
+        : item?.type ===
+          'link'
         ? Boolean(
             item.source_url,
           )
@@ -1486,6 +1729,55 @@ export default function NewPostModal({
 
           {isParsing ? (
             <ShimmerPreview />
+          ) : isVideo ? (
+            <div>
+              <YouTubePreview
+                metadata={
+                  getYouTubeMetadata(
+                    item?.metadata,
+                  ) ?? {}
+                }
+                sourceUrl={
+                  item?.source_url ??
+                  linkUrl
+                }
+              />
+
+              <textarea
+                ref={
+                  textareaRef
+                }
+                value={
+                  bodyMd
+                }
+                onChange={(
+                  event,
+                ) =>
+                  handleBodyChange(
+                    event.target
+                      .value,
+                  )
+                }
+                disabled={
+                  busy
+                }
+                placeholder="Add your text…"
+                className="
+                  mt-8 min-h-[160px]
+                  w-full resize-none
+                  border-0 bg-transparent
+                  p-0
+                  font-serif text-[19px]
+                  font-light leading-[1.75]
+                  text-stone-800
+                  outline-none ring-0
+                  placeholder:text-stone-300
+                  focus:border-0
+                  focus:outline-none
+                  focus:ring-0
+                "
+              />
+            </div>
           ) : isLink ? (
             <div
               className="
