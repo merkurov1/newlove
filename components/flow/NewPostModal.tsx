@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import {
   ImagePreview,
@@ -8,52 +8,35 @@ import {
   ShimmerPreview,
   YouTubePreview,
 } from "./new-post/Previews";
-
 import { useNewPostModal } from "./new-post/useNewPostModal";
+import type { NewPostModalProps, SaveState } from "./new-post/types";
 
-import type {
-  NewPostModalProps,
-  SaveState,
-} from "./new-post/types";
+function SaveStatus({ state }: { state: SaveState }) {
+  switch (state) {
+    case "creating":
+      return <span className="text-xs text-neutral-400">Creating…</span>;
 
-function SaveStatus({
-  state,
-}: {
-  state: SaveState;
-}) {
-  if (state === "saving") {
-    return (
-      <span className="text-[10px] uppercase tracking-[0.14em] text-black/40">
-        Saving…
-      </span>
-    );
+    case "loading":
+      return <span className="text-xs text-neutral-400">Loading…</span>;
+
+    case "saving":
+      return <span className="text-xs text-neutral-400">Saving…</span>;
+
+    case "publishing":
+      return <span className="text-xs text-neutral-400">Publishing…</span>;
+
+    case "clearing":
+      return <span className="text-xs text-neutral-400">Clearing…</span>;
+
+    case "saved":
+      return <span className="text-xs text-neutral-400">Saved</span>;
+
+    case "error":
+      return <span className="text-xs text-red-500">Error</span>;
+
+    default:
+      return null;
   }
-
-  if (state === "clearing") {
-    return (
-      <span className="text-[10px] uppercase tracking-[0.14em] text-black/40">
-        Clearing…
-      </span>
-    );
-  }
-
-  if (state === "saved") {
-    return (
-      <span className="text-[10px] uppercase tracking-[0.14em] text-black/35">
-        Saved
-      </span>
-    );
-  }
-
-  if (state === "error") {
-    return (
-      <span className="text-[10px] uppercase tracking-[0.14em] text-red-500/70">
-        Error
-      </span>
-    );
-  }
-
-  return null;
 }
 
 export default function NewPostModal({
@@ -62,11 +45,7 @@ export default function NewPostModal({
   onCreated,
   itemId,
 }: NewPostModalProps) {
-  const fileInputRef =
-    useRef<HTMLInputElement | null>(null);
-
-  const textareaRef =
-    useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
     item,
@@ -87,16 +66,20 @@ export default function NewPostModal({
     imageName,
 
     mode,
+
     saveState,
 
     isInitializing,
     isParsing,
     isPublishing,
     isClearing,
-
     isEditing,
+
     canClear,
+    canPost,
     busy,
+
+    textareaRef,
 
     handlePaste,
     parseLink,
@@ -112,329 +95,188 @@ export default function NewPostModal({
     itemId,
   });
 
-  useEffect(() => {
-    if (!open) return;
+  if (!open) return null;
 
-    const handleKeyDown = (
-      event: KeyboardEvent,
-    ) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-
-        if (!busy) {
-          void handleClose();
-        }
-
-        return;
-      }
-
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        event.key === "Enter"
-      ) {
-        event.preventDefault();
-
-        if (!busy) {
-          void finish();
-        }
-      }
-    };
-
-    window.addEventListener(
-      "keydown",
-      handleKeyDown,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown,
-      );
-    };
-  }, [
-    busy,
-    finish,
-    handleClose,
-    open,
-  ]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const timer =
-      window.setTimeout(() => {
-        textareaRef.current?.focus();
-      }, 50);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [open]);
-
-  if (!open) {
-    return null;
-  }
-
-  const isLoading =
-    isInitializing || !item;
-
-  const isVideo =
-    mode === "video" &&
+  const showLinkInput =
+    mode === "link" ||
+    mode === "video" ||
     Boolean(linkUrl);
 
-  const isPhoto =
-    mode === "photo" &&
-    Boolean(imagePreview);
+  const showYouTube =
+    mode === "video" && Boolean(youtubeMetadata);
 
-  const isGenericLink =
-    mode === "link" &&
-    Boolean(linkUrl);
+  const showLinkPreview =
+    mode === "link" && Boolean(linkPreview);
 
-  const hasBody =
-    bodyMd.trim().length > 0;
+  const showImage =
+    mode === "photo" && Boolean(imagePreview);
 
-  const hasTitle =
-    title.trim().length > 0;
+  const loading =
+    isInitializing ||
+    !item;
 
-  const canPublish =
-    !busy &&
-    !isLoading &&
-    (
-      hasBody ||
-      hasTitle ||
-      Boolean(linkUrl) ||
-      Boolean(imagePreview)
-    );
-
-  const primaryLabel =
-    isEditing ? "Save" : "Post";
+  const primaryLabel = isEditing ? "Save" : "Post";
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 px-4 py-6"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label={
-        isEditing
-          ? "Edit Flow post"
-          : "New Flow post"
-      }
+      aria-label={isEditing ? "Edit post" : "New post"}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          handleClose();
+        }
+      }}
     >
       <div
-        className="relative flex w-full max-w-2xl flex-col overflow-hidden bg-white"
+        className="relative flex w-full max-w-[560px] flex-col overflow-hidden bg-white"
         style={{
-          maxHeight:
-            "calc(100dvh - 48px)",
+          maxHeight: "calc(100dvh - 32px)",
         }}
+        onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-black/10 px-4 py-3">
-          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-black/70">
+        {/* Header */}
+        <div className="flex h-12 shrink-0 items-center justify-between px-4">
+          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-neutral-400">
             Flow
           </div>
 
           <button
             type="button"
-            onClick={() => {
-              if (!busy) {
-                void handleClose();
-              }
-            }}
-            disabled={busy}
+            onClick={handleClose}
             aria-label="Close"
-            className="flex h-7 w-7 items-center justify-center text-xl leading-none text-black/45 transition-colors hover:text-black disabled:cursor-not-allowed disabled:opacity-30"
+            className="flex h-8 w-8 items-center justify-center text-2xl leading-none text-neutral-400 transition-colors hover:text-black"
           >
             ×
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {isLoading ? (
-            <div className="px-4 py-8">
-              <ShimmerPreview text="Preparing Flow…" />
+        {/* Content */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+          {loading ? (
+            <div className="space-y-4 py-4">
+              <ShimmerPreview />
+              <div className="h-4 w-2/3 animate-pulse bg-neutral-100" />
+              <div className="h-24 w-full animate-pulse bg-neutral-100" />
             </div>
           ) : (
-            <div className="px-4 py-4">
+            <div className="space-y-4">
+              {/* Title */}
               <input
                 type="text"
                 value={title}
-                onChange={(event) => {
-                  setTitle(
-                    event.target.value,
-                  );
-                }}
+                onChange={(event) => setTitle(event.target.value)}
                 placeholder="Title"
                 disabled={busy}
-                className="mb-3 w-full border-0 bg-transparent p-0 text-xl font-medium leading-7 text-black outline-none placeholder:text-black/25 disabled:opacity-50"
+                className="w-full border-0 bg-transparent px-0 py-1 text-xl font-medium text-black outline-none placeholder:text-neutral-300"
               />
 
+              {/* Body */}
               <textarea
                 ref={textareaRef}
                 value={bodyMd}
-                onChange={(event) => {
-                  setBodyMd(
-                    event.target.value,
-                  );
-                }}
+                onChange={(event) => setBodyMd(event.target.value)}
                 onPaste={handlePaste}
+                placeholder="Write something…"
                 disabled={busy}
-                placeholder="What do you want to say?"
-                rows={8}
-                className="min-h-[180px] w-full resize-none border-0 bg-transparent p-0 text-[15px] leading-6 text-black outline-none placeholder:text-black/25 disabled:opacity-50"
+                rows={7}
+                className="w-full resize-none border-0 bg-transparent px-0 py-1 text-[15px] leading-6 text-black outline-none placeholder:text-neutral-300"
               />
 
-              {isGenericLink &&
-              linkUrl ? (
-                <div className="mt-3">
-                  <input
-                    type="url"
-                    value={linkUrl}
-                    onChange={(event) => {
-                      setLinkUrl(
-                        event.target.value,
-                      );
-                    }}
-                    onKeyDown={(event) => {
-                      if (
-                        event.key === "Enter"
-                      ) {
-                        event.preventDefault();
+              {/* Link / video URL */}
+              {showLinkInput && (
+                <div className="border-t border-neutral-100 pt-3">
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={linkUrl}
+                      onChange={(event) => setLinkUrl(event.target.value)}
+                      placeholder="Paste a URL"
+                      disabled={busy || isParsing}
+                      className="min-w-0 flex-1 border-0 bg-neutral-50 px-3 py-2 text-sm text-black outline-none placeholder:text-neutral-400"
+                    />
 
-                        void parseLink(
-                          linkUrl,
-                        );
+                    <button
+                      type="button"
+                      onClick={parseLink}
+                      disabled={
+                        busy ||
+                        isParsing ||
+                        !linkUrl.trim()
                       }
-                    }}
-                    disabled={busy}
-                    placeholder="URL"
-                    className="w-full border-0 border-b border-black/10 bg-transparent px-0 py-2 text-xs text-black outline-none placeholder:text-black/30 disabled:opacity-50"
-                  />
-
-                  {isParsing ? (
-                    <ShimmerPreview
-                      text="Parsing link…"
-                    />
-                  ) : linkPreview ? (
-                    <LinkPreviewCard
-                      preview={linkPreview}
-                      url={linkUrl}
-                    />
-                  ) : null}
+                      className="shrink-0 bg-black px-3 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      {isParsing ? "…" : "Preview"}
+                    </button>
+                  </div>
                 </div>
-              ) : null}
+              )}
 
-              {isVideo &&
-              linkUrl ? (
-                <>
-                  {isParsing ? (
-                    <ShimmerPreview
-                      text="Parsing YouTube…"
-                    />
-                  ) : youtubeMetadata ? (
-                    <YouTubePreview
-                      metadata={
-                        youtubeMetadata
-                      }
-                      url={linkUrl}
-                    />
-                  ) : null}
-                </>
-              ) : null}
+              {/* YouTube preview */}
+              {showYouTube && youtubeMetadata && (
+                <YouTubePreview metadata={youtubeMetadata} />
+              )}
 
-              {isPhoto &&
-              imagePreview ? (
+              {/* Generic link preview */}
+              {showLinkPreview && linkPreview && (
+                <LinkPreviewCard preview={linkPreview} />
+              )}
+
+              {/* Image preview */}
+              {showImage && imagePreview && (
                 <ImagePreview
                   src={imagePreview}
-                  alt={
-                    imageName ||
-                    "Flow image"
-                  }
+                  name={imageName}
                 />
-              ) : null}
+              )}
             </div>
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between border-t border-black/10 px-4 py-3">
+        {/* Footer */}
+        <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-4">
           <div className="flex items-center gap-3">
+            {/* Image */}
             <input
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              onChange={
-                handleImageUpload
-              }
               className="hidden"
+              onChange={handleImageUpload}
             />
 
             <button
               type="button"
-              onClick={() => {
-                fileInputRef.current?.click();
-              }}
-              disabled={
-                busy || isLoading
-              }
+              onClick={() => fileInputRef.current?.click()}
+              disabled={busy}
               aria-label="Add image"
-              className="flex h-8 w-8 items-center justify-center text-black/45 transition-colors hover:text-black disabled:cursor-not-allowed disabled:opacity-30"
+              className="flex h-9 w-9 items-center justify-center text-lg text-neutral-500 transition-colors hover:text-black disabled:opacity-30"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="h-[18px] w-[18px]"
-                aria-hidden="true"
-              >
-                <rect
-                  x="3"
-                  y="3"
-                  width="18"
-                  height="18"
-                  rx="2"
-                />
-
-                <circle
-                  cx="8.5"
-                  cy="8.5"
-                  r="1.5"
-                />
-
-                <path d="m21 15-5-5L5 21" />
-              </svg>
+              +
             </button>
 
-            {canClear ? (
+            {canClear && (
               <button
                 type="button"
-                onClick={() => {
-                  void clearDraft();
-                }}
-                disabled={
-                  isClearing ||
-                  busy
-                }
-                className="text-[10px] uppercase tracking-[0.14em] text-black/35 transition-colors hover:text-black disabled:cursor-not-allowed disabled:opacity-30"
+                onClick={clearDraft}
+                disabled={busy || isClearing}
+                className="text-xs text-neutral-400 transition-colors hover:text-black disabled:opacity-30"
               >
                 Clear
               </button>
-            ) : null}
+            )}
 
-            <SaveStatus
-              state={saveState}
-            />
+            <SaveStatus state={saveState} />
           </div>
 
           <button
             type="button"
-            onClick={() => {
-              void finish();
-            }}
-            disabled={!canPublish}
-            className="bg-black px-5 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-white transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-25"
+            onClick={finish}
+            disabled={!canPost || busy}
+            className="min-w-[88px] bg-black px-5 py-2.5 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-30"
           >
-            {isPublishing
-              ? "Posting…"
-              : primaryLabel}
+            {isPublishing ? "…" : primaryLabel}
           </button>
         </div>
       </div>
