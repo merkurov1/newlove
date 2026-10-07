@@ -31,6 +31,29 @@ type LinkMetadata = {
   type: string | null;
 };
 
+function normalizeInputUrl(
+  value: string,
+) {
+  const trimmed =
+    value.trim();
+
+  if (!trimmed) {
+    throw new Error(
+      'URL is required.',
+    );
+  }
+
+  if (
+    /^https?:\/\//i.test(
+      trimmed,
+    )
+  ) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
+
 function isPrivateIp(
   address: string,
 ) {
@@ -68,24 +91,12 @@ function isPrivateIp(
 
     return (
       normalized === '::1' ||
-      normalized.startsWith(
-        'fc',
-      ) ||
-      normalized.startsWith(
-        'fd',
-      ) ||
-      normalized.startsWith(
-        'fe8',
-      ) ||
-      normalized.startsWith(
-        'fe9',
-      ) ||
-      normalized.startsWith(
-        'fea',
-      ) ||
-      normalized.startsWith(
-        'feb',
-      )
+      normalized.startsWith('fc') ||
+      normalized.startsWith('fd') ||
+      normalized.startsWith('fe8') ||
+      normalized.startsWith('fe9') ||
+      normalized.startsWith('fea') ||
+      normalized.startsWith('feb')
     );
   }
 
@@ -98,8 +109,9 @@ async function assertSafeUrl(
   let url: URL;
 
   try {
-    url =
-      new URL(input);
+    url = new URL(
+      normalizeInputUrl(input),
+    );
   } catch {
     throw new Error(
       'Invalid URL.',
@@ -107,10 +119,8 @@ async function assertSafeUrl(
   }
 
   if (
-    url.protocol !==
-      'http:' &&
-    url.protocol !==
-      'https:'
+    url.protocol !== 'http:' &&
+    url.protocol !== 'https:'
   ) {
     throw new Error(
       'Only HTTP and HTTPS links are supported.',
@@ -118,15 +128,11 @@ async function assertSafeUrl(
   }
 
   const hostname =
-    url.hostname
-      .toLowerCase();
+    url.hostname.toLowerCase();
 
   if (
-    hostname ===
-      'localhost' ||
-    hostname.endsWith(
-      '.localhost',
-    ) ||
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
     hostname ===
       'metadata.google.internal'
   ) {
@@ -197,10 +203,8 @@ async function fetchHtml(
       );
 
     if (
-      response.status >=
-        300 &&
-      response.status <
-        400
+      response.status >= 300 &&
+      response.status < 400
     ) {
       const location =
         response.headers.get(
@@ -325,7 +329,9 @@ function parseJsonLd(
 ) {
   const values: any[] = [];
 
-  $('script[type="application/ld+json"]').each(
+  $(
+    'script[type="application/ld+json"]',
+  ).each(
     (_, element) => {
       const raw =
         $(element)
@@ -340,11 +346,7 @@ function parseJsonLd(
         const parsed =
           JSON.parse(raw);
 
-        if (
-          Array.isArray(
-            parsed,
-          )
-        ) {
+        if (Array.isArray(parsed)) {
           values.push(
             ...parsed,
           );
@@ -378,9 +380,7 @@ function findJsonLdArticle(
         const type =
           value?.['@type'];
 
-        if (
-          Array.isArray(type)
-        ) {
+        if (Array.isArray(type)) {
           return type.some(
             (entry) =>
               [
@@ -388,9 +388,7 @@ function findJsonLdArticle(
                 'NewsArticle',
                 'BlogPosting',
                 'WebPage',
-              ].includes(
-                entry,
-              ),
+              ].includes(entry),
           );
         }
 
@@ -522,8 +520,7 @@ function normalizeMetadata(
       : null;
 
   return {
-    url:
-      inputUrl.toString(),
+    url: inputUrl.toString(),
     canonical_url:
       canonicalUrl,
     domain:
@@ -537,9 +534,7 @@ function normalizeMetadata(
     author,
     published_at:
       publishedAt
-        ? String(
-            publishedAt,
-          )
+        ? String(publishedAt)
         : null,
     type,
   };
@@ -569,14 +564,12 @@ export async function POST(
       await req.json();
 
     const itemId =
-      typeof body.item_id ===
-      'string'
+      typeof body.item_id === 'string'
         ? body.item_id
         : null;
 
     const rawUrl =
-      typeof body.url ===
-      'string'
+      typeof body.url === 'string'
         ? body.url.trim()
         : '';
 
@@ -640,17 +633,39 @@ export async function POST(
         useServiceRole: true,
       });
 
+    const {
+      data: existingItem,
+      error:
+        existingError,
+    } = await supabase
+      .from('items')
+      .select(
+        'metadata',
+      )
+      .eq('id', itemId)
+      .single();
+
+    if (existingError) {
+      throw existingError;
+    }
+
+    const existingMetadata =
+      existingItem?.metadata &&
+      typeof existingItem.metadata ===
+        'object'
+        ? existingItem.metadata
+        : {};
+
     const bodyMd =
-      [
-        metadata.description
-          ? metadata.description
-          : null,
-        metadata.canonical_url
-          ? `\n[Open link](${metadata.canonical_url})`
-          : null,
-      ]
-        .filter(Boolean)
-        .join('\n');
+      metadata.description ??
+      '';
+
+    const mergedMetadata = {
+      ...existingMetadata,
+      ...metadata,
+      http_status:
+        status,
+    };
 
     const {
       data: item,
@@ -667,17 +682,8 @@ export async function POST(
           metadata.domain,
         body_md:
           bodyMd,
-        metadata: {
-          ...metadata,
-          http_status:
-            status,
-        },
-        lang:
-          typeof body.lang ===
-            'string' &&
-          body.lang.trim()
-            ? body.lang.trim()
-            : 'ru',
+        metadata:
+          mergedMetadata,
       })
       .eq('id', itemId)
       .select('*')
@@ -693,8 +699,7 @@ export async function POST(
     } = await supabase
       .from('link_snapshots')
       .insert({
-        item_id:
-          itemId,
+        item_id: itemId,
         url:
           metadata.canonical_url,
         fetched_at:
@@ -710,13 +715,12 @@ export async function POST(
       );
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        item,
-        metadata,
-      },
-    );
+    return NextResponse.json({
+      success: true,
+      item,
+      metadata:
+        mergedMetadata,
+    });
   } catch (error) {
     console.error(
       '[parse-link]',

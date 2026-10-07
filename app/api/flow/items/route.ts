@@ -51,6 +51,8 @@ export async function GET() {
           'visibility',
           'body_md',
           'published_at',
+          'source_url',
+          'metadata',
         ].join(','),
       )
       .eq('status', 'published')

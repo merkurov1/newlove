@@ -34,6 +34,11 @@ type SaveState =
   | 'publishing'
   | 'error';
 
+type FlowMode =
+  | 'direct'
+  | 'ai'
+  | 'later';
+
 const LAST_DRAFT_KEY = 'flow:last-draft-id';
 
 function firstLine(body: string) {
@@ -41,7 +46,9 @@ function firstLine(body: string) {
     body
       .split(/\r?\n/)
       .map((line) =>
-        line.replace(/^#{1,6}\s+/, '').trim(),
+        line
+          .replace(/^#{1,6}\s+/, '')
+          .trim(),
       )
       .find(Boolean)
       ?.slice(0, 160) || 'Flow post'
@@ -65,13 +72,25 @@ async function readJson(response: Response) {
   return response.json().catch(() => ({}));
 }
 
+function withFlowMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+  mode: FlowMode,
+) {
+  return {
+    ...(metadata ?? {}),
+    flow: {
+      mode,
+      queued_at: new Date().toISOString(),
+    },
+  };
+}
+
 export default function NewPostModal({
   onClose,
   onCreated,
 }: NewPostModalProps) {
   const [item, setItem] = useState<Item | null>(null);
   const [bodyMd, setBodyMd] = useState('');
-  const [lang, setLang] = useState('ru');
 
   const [saveState, setSaveState] =
     useState<SaveState>('creating');
@@ -86,7 +105,9 @@ export default function NewPostModal({
     useState('');
 
   const [linkPreview, setLinkPreview] =
-    useState<Record<string, unknown> | null>(null);
+    useState<Record<string, unknown> | null>(
+      null,
+    );
 
   const [imageName, setImageName] =
     useState<string | null>(null);
@@ -108,7 +129,6 @@ export default function NewPostModal({
   const latestRef =
     useRef({
       bodyMd: '',
-      lang: 'ru',
     });
 
   const closingRef =
@@ -117,9 +137,8 @@ export default function NewPostModal({
   useEffect(() => {
     latestRef.current = {
       bodyMd,
-      lang,
     };
-  }, [bodyMd, lang]);
+  }, [bodyMd]);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,14 +155,13 @@ export default function NewPostModal({
         if (existingDraftId) {
           setSaveState('loading');
 
-          const response =
-            await fetch(
-              `/api/admin/items/${existingDraftId}`,
-              {
-                method: 'GET',
-                cache: 'no-store',
-              },
-            );
+          const response = await fetch(
+            `/api/admin/items/${existingDraftId}`,
+            {
+              method: 'GET',
+              cache: 'no-store',
+            },
+          );
 
           const json =
             await readJson(response);
@@ -161,62 +179,45 @@ export default function NewPostModal({
               json.item as Item;
 
             setItem(loaded);
-
             setBodyMd(
               loaded.body_md ?? '',
-            );
-
-            setLang(
-              loaded.lang ?? 'ru',
             );
 
             latestRef.current = {
               bodyMd:
                 loaded.body_md ?? '',
-              lang:
-                loaded.lang ?? 'ru',
             };
 
-            if (
-              loaded.type === 'link'
-            ) {
+            if (loaded.type === 'link') {
               setLinkMode(true);
-
               setLinkUrl(
                 loaded.source_url ?? '',
               );
-
               setLinkPreview(
-                loaded.metadata ??
-                  null,
+                loaded.metadata ?? null,
               );
             }
 
-            if (
-              loaded.type === 'photo'
-            ) {
+            if (loaded.type === 'photo') {
               const publicUrl =
                 loaded.metadata &&
-                typeof loaded.metadata.public_url ===
-                  'string'
+                typeof loaded.metadata
+                  .public_url === 'string'
                   ? loaded.metadata.public_url
                   : null;
 
-              setImagePreview(
-                publicUrl,
-              );
+              setImagePreview(publicUrl);
 
               setImageName(
                 loaded.metadata &&
-                typeof loaded.metadata.filename ===
-                  'string'
+                typeof loaded.metadata
+                  .filename === 'string'
                   ? loaded.metadata.filename
                   : null,
               );
             }
 
             setSaveState('saved');
-
             return;
           }
 
@@ -227,23 +228,27 @@ export default function NewPostModal({
 
         setSaveState('creating');
 
-        const response =
-          await fetch(
-            '/api/admin/items/new',
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type':
-                  'application/json',
-              },
-              body: JSON.stringify({
-                type: 'note',
-                title: '',
-                body_md: '',
-                lang: 'ru',
-              }),
+        const response = await fetch(
+          '/api/admin/items/new',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
             },
-          );
+            body: JSON.stringify({
+              type: 'note',
+              title: '',
+              body_md: '',
+              lang: 'ru',
+              metadata: {
+                flow: {
+                  mode: 'direct',
+                },
+              },
+            }),
+          },
+        );
 
         const json =
           await readJson(response);
@@ -254,7 +259,7 @@ export default function NewPostModal({
         ) {
           throw new Error(
             json.error ??
-              'Failed to create draft.',
+              'Failed to create Flow item.',
           );
         }
 
@@ -266,20 +271,13 @@ export default function NewPostModal({
           json.item as Item;
 
         setItem(created);
-
         setBodyMd(
           created.body_md ?? '',
-        );
-
-        setLang(
-          created.lang ?? 'ru',
         );
 
         latestRef.current = {
           bodyMd:
             created.body_md ?? '',
-          lang:
-            created.lang ?? 'ru',
         };
 
         window.localStorage.setItem(
@@ -294,14 +292,14 @@ export default function NewPostModal({
         }
 
         console.error(
-          '[new-post] initialization failed:',
+          '[flow] initialization failed:',
           err,
         );
 
         setError(
           err instanceof Error
             ? err.message
-            : 'Failed to initialize draft.',
+            : 'Failed to initialize Flow.',
         );
 
         setSaveState('error');
@@ -317,8 +315,6 @@ export default function NewPostModal({
         clearTimeout(
           saveTimer.current,
         );
-
-        saveTimer.current = null;
       }
 
       if (imagePreview) {
@@ -342,20 +338,19 @@ export default function NewPostModal({
           setSaveState('saving');
           setError(null);
 
-          const response =
-            await fetch(
-              `/api/admin/items/${item.id}`,
-              {
-                method: 'PATCH',
-                headers: {
-                  'Content-Type':
-                    'application/json',
-                },
-                body: JSON.stringify(
-                  changes,
-                ),
+          const response = await fetch(
+            `/api/admin/items/${item.id}`,
+            {
+              method: 'PATCH',
+              headers: {
+                'Content-Type':
+                  'application/json',
               },
-            );
+              body: JSON.stringify(
+                changes,
+              ),
+            },
+          );
 
           const json =
             await readJson(response);
@@ -363,7 +358,7 @@ export default function NewPostModal({
           if (!response.ok) {
             throw new Error(
               json.error ??
-                'Failed to save draft.',
+                'Failed to save Flow item.',
             );
           }
 
@@ -378,14 +373,14 @@ export default function NewPostModal({
           return true;
         } catch (err) {
           console.error(
-            '[new-post] save failed:',
+            '[flow] save failed:',
             err,
           );
 
           setError(
             err instanceof Error
               ? err.message
-              : 'Failed to save draft.',
+              : 'Failed to save.',
           );
 
           setSaveState('error');
@@ -439,14 +434,10 @@ export default function NewPostModal({
     value: string,
   ) {
     setBodyMd(value);
-
-    latestRef.current.bodyMd =
-      value;
+    latestRef.current.bodyMd = value;
 
     scheduleSave({
       body_md: value,
-      lang:
-        latestRef.current.lang,
     });
   }
 
@@ -460,7 +451,6 @@ export default function NewPostModal({
         clearTimeout(
           saveTimer.current,
         );
-
         saveTimer.current = null;
       }
 
@@ -471,16 +461,11 @@ export default function NewPostModal({
       return saveDraft({
         body_md:
           latestRef.current.bodyMd,
-        lang:
-          latestRef.current.lang,
       });
     }, [item, saveDraft]);
 
   async function parseLink() {
-    if (
-      !item ||
-      !linkUrl.trim()
-    ) {
+    if (!item || !linkUrl.trim()) {
       return;
     }
 
@@ -488,22 +473,20 @@ export default function NewPostModal({
       setSaveState('saving');
       setError(null);
 
-      const response =
-        await fetch(
-          '/api/admin/items/parse-link',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-            body: JSON.stringify({
-              item_id: item.id,
-              url: linkUrl.trim(),
-              lang,
-            }),
+      const response = await fetch(
+        '/api/admin/items/parse-link',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json',
           },
-        );
+          body: JSON.stringify({
+            item_id: item.id,
+            url: linkUrl.trim(),
+          }),
+        },
+      );
 
       const json =
         await readJson(response);
@@ -532,8 +515,7 @@ export default function NewPostModal({
       );
 
       setBodyMd(
-        parsedItem.body_md ??
-          '',
+        parsedItem.body_md ?? '',
       );
 
       latestRef.current.bodyMd =
@@ -542,7 +524,7 @@ export default function NewPostModal({
       setSaveState('saved');
     } catch (err) {
       console.error(
-        '[new-post] link parsing failed:',
+        '[flow] link parsing failed:',
         err,
       );
 
@@ -576,40 +558,24 @@ export default function NewPostModal({
       const localPreview =
         URL.createObjectURL(file);
 
-      setImagePreview(
-        localPreview,
-      );
+      setImagePreview(localPreview);
+      setImageName(file.name);
 
-      setImageName(
-        file.name,
-      );
+      const form = new FormData();
 
-      const form =
-        new FormData();
-
-      form.append(
-        'file',
-        file,
-      );
-
+      form.append('file', file);
       form.append(
         'item_id',
         item.id,
       );
 
-      form.append(
-        'lang',
-        lang,
+      const response = await fetch(
+        '/api/admin/items/media',
+        {
+          method: 'POST',
+          body: form,
+        },
       );
-
-      const response =
-        await fetch(
-          '/api/admin/items/media',
-          {
-            method: 'POST',
-            body: form,
-          },
-        );
 
       const json =
         await readJson(response);
@@ -624,13 +590,10 @@ export default function NewPostModal({
       const uploadedItem =
         json.item as Item;
 
-      setItem(
-        uploadedItem,
-      );
+      setItem(uploadedItem);
 
       setBodyMd(
-        uploadedItem.body_md ??
-          '',
+        uploadedItem.body_md ?? '',
       );
 
       latestRef.current.bodyMd =
@@ -640,21 +603,19 @@ export default function NewPostModal({
         typeof json.url === 'string'
           ? json.url
           : uploadedItem.metadata &&
-              typeof uploadedItem.metadata.public_url ===
-                'string'
+              typeof uploadedItem.metadata
+                .public_url === 'string'
             ? uploadedItem.metadata.public_url
             : null;
 
       if (publicUrl) {
-        setImagePreview(
-          publicUrl,
-        );
+        setImagePreview(publicUrl);
       }
 
       setSaveState('saved');
     } catch (err) {
       console.error(
-        '[new-post] image upload failed:',
+        '[flow] image upload failed:',
         err,
       );
 
@@ -668,12 +629,17 @@ export default function NewPostModal({
     }
   }
 
-  async function handlePublish() {
+  async function finish(
+    mode: FlowMode,
+  ) {
     if (!item) {
       return;
     }
 
-    if (saveState === 'publishing') {
+    if (
+      saveState === 'publishing' ||
+      saveState === 'saving'
+    ) {
       return;
     }
 
@@ -695,34 +661,39 @@ export default function NewPostModal({
         item;
 
       if (
-        freshItem.type === 'link'
+        freshItem.type === 'link' &&
+        !freshItem.source_url
       ) {
-        if (!freshItem.source_url) {
-          throw new Error(
-            'Add a link first.',
-          );
-        }
-      } else if (
-        freshItem.type === 'photo'
+        throw new Error(
+          'Add a link first.',
+        );
+      }
+
+      if (
+        freshItem.type === 'photo' &&
+        !freshItem.metadata &&
+        !imagePreview
       ) {
-        if (
-          !freshItem.metadata &&
-          !imagePreview
-        ) {
-          throw new Error(
-            'Add an image first.',
-          );
-        }
-      } else if (
+        throw new Error(
+          'Add an image first.',
+        );
+      }
+
+      if (
+        freshItem.type !== 'link' &&
+        freshItem.type !== 'photo' &&
         !current.bodyMd.trim()
       ) {
         throw new Error(
-          'Write something before publishing.',
+          'Write something first.',
         );
       }
 
       const metadata =
-        freshItem.metadata ?? {};
+        withFlowMetadata(
+          freshItem.metadata,
+          mode,
+        );
 
       const title =
         freshItem.type === 'link'
@@ -734,7 +705,13 @@ export default function NewPostModal({
             ).slice(0, 160)
           : freshItem.type === 'photo'
             ? String(
-                metadata.alt ||
+                (
+                  freshItem.metadata &&
+                  typeof freshItem.metadata.alt ===
+                    'string'
+                    ? freshItem.metadata.alt
+                    : null
+                ) ||
                   freshItem.title ||
                   'Image',
               ).slice(0, 160)
@@ -748,29 +725,38 @@ export default function NewPostModal({
           freshItem.id,
         );
 
-      const response =
-        await fetch(
-          `/api/admin/items/${freshItem.id}`,
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-            body: JSON.stringify({
-              title,
-              body_md:
-                current.bodyMd,
-              lang:
-                current.lang,
-              slug,
-              status:
-                'published',
-              visibility:
-                'public',
-            }),
+      const isDirect =
+        mode === 'direct';
+
+      const response = await fetch(
+        `/api/admin/items/${freshItem.id}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type':
+              'application/json',
           },
-        );
+          body: JSON.stringify({
+            title,
+            body_md:
+              current.bodyMd,
+            slug,
+            metadata,
+            status: isDirect
+              ? 'published'
+              : 'draft',
+            visibility: isDirect
+              ? 'public'
+              : 'private',
+            ...(isDirect
+              ? {
+                  published_at:
+                    new Date().toISOString(),
+                }
+              : {}),
+          }),
+        },
+      );
 
       const json =
         await readJson(response);
@@ -781,7 +767,7 @@ export default function NewPostModal({
       ) {
         throw new Error(
           json.error ??
-            `Failed to publish item (${response.status}).`,
+            `Failed to save Flow item (${response.status}).`,
         );
       }
 
@@ -795,14 +781,14 @@ export default function NewPostModal({
       onClose();
     } catch (err) {
       console.error(
-        '[new-post] publish failed:',
+        '[flow] action failed:',
         err,
       );
 
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to publish.',
+          : 'Failed to save Flow item.',
       );
 
       setSaveState('error');
@@ -847,7 +833,7 @@ export default function NewPostModal({
         return 'Saved';
 
       case 'publishing':
-        return 'Publishing…';
+        return 'Working…';
 
       case 'error':
         return 'Save failed';
@@ -904,7 +890,7 @@ export default function NewPostModal({
           id="flow-composer-title"
           className="sr-only"
         >
-          Flow composer
+          Flow
         </h2>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7 sm:px-8 sm:py-9">
@@ -931,16 +917,13 @@ export default function NewPostModal({
                   }
                   onKeyDown={(event) => {
                     if (
-                      event.key ===
-                      'Enter'
+                      event.key === 'Enter'
                     ) {
                       void parseLink();
                     }
                   }}
-                  placeholder="https://…"
-                  disabled={
-                    !item || busy
-                  }
+                  placeholder="Paste a URL…"
+                  disabled={!item || busy}
                   className="min-w-0 flex-1 rounded-2xl border border-stone-200 bg-white px-5 py-4 font-serif text-lg outline-none transition focus:border-stone-500 disabled:bg-stone-100"
                 />
 
@@ -965,7 +948,9 @@ export default function NewPostModal({
                   {typeof linkPreview.image ===
                     'string' && (
                     <img
-                      src={linkPreview.image}
+                      src={
+                        linkPreview.image
+                      }
                       alt=""
                       className="max-h-80 w-full object-cover"
                     />
@@ -1033,9 +1018,7 @@ export default function NewPostModal({
                   event.target.value,
                 )
               }
-              disabled={
-                !item || busy
-              }
+              disabled={!item || busy}
               placeholder="Write something…"
               autoFocus
               className="min-h-[460px] w-full resize-none border-0 bg-transparent font-serif text-[21px] font-light leading-[1.8] text-stone-800 outline-none placeholder:text-stone-300"
@@ -1075,9 +1058,7 @@ export default function NewPostModal({
                 setError(null);
                 fileRef.current?.click();
               }}
-              disabled={
-                !item || busy
-              }
+              disabled={!item || busy}
               className="rounded-full border border-stone-200 bg-white px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-500 disabled:cursor-not-allowed disabled:text-stone-300"
             >
               + Image
@@ -1089,9 +1070,7 @@ export default function NewPostModal({
                 setLinkMode(true);
                 setError(null);
               }}
-              disabled={
-                !item || busy
-              }
+              disabled={!item || busy}
               className="rounded-full border border-stone-200 bg-white px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-500 disabled:cursor-not-allowed disabled:text-stone-300"
             >
               + Link
@@ -1099,24 +1078,38 @@ export default function NewPostModal({
 
             <button
               type="button"
-              disabled
-              className="rounded-full border border-stone-200 bg-stone-100 px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400"
+              onClick={() =>
+                void finish('later')
+              }
+              disabled={
+                !item ||
+                busy ||
+                saveState === 'saving'
+              }
+              className="rounded-full border border-stone-200 bg-white px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-500 disabled:cursor-not-allowed disabled:text-stone-300"
             >
-              {lang.toUpperCase()}
-            </button>
-
-            <button
-              type="button"
-              disabled
-              className="rounded-full border border-stone-200 bg-stone-100 px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400"
-            >
-              Analyse
+              Later
             </button>
 
             <button
               type="button"
               onClick={() =>
-                void handlePublish()
+                void finish('ai')
+              }
+              disabled={
+                !item ||
+                busy ||
+                saveState === 'saving'
+              }
+              className="rounded-full border border-stone-200 bg-white px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-500 disabled:cursor-not-allowed disabled:text-stone-300"
+            >
+              AI
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                void finish('direct')
               }
               disabled={
                 !item ||
@@ -1133,9 +1126,8 @@ export default function NewPostModal({
               }
               className="rounded-full bg-stone-900 px-6 py-2.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
-              {saveState ===
-              'publishing'
-                ? 'Posting…'
+              {saveState === 'publishing'
+                ? 'Working…'
                 : 'Post'}
             </button>
           </div>
