@@ -1,10 +1,10 @@
 import {
   NextRequest,
   NextResponse,
-} from 'next/server';
+} from "next/server";
 
-import { createClient } from '@supabase/supabase-js';
-import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { createClient } from "@supabase/supabase-js";
+import { requireAdminFromRequest } from "@/lib/serverAuth";
 
 type RouteContext = {
   params: Promise<{
@@ -37,7 +37,7 @@ function getSupabaseAdmin() {
     !serviceRoleKey
   ) {
     throw new Error(
-      'Supabase server environment variables are missing.',
+      "Supabase server environment variables are missing.",
     );
   }
 
@@ -62,16 +62,16 @@ function slugify(
     .trim()
     .replace(
       /[^\p{L}\p{N}\s-]/gu,
-      '',
+      "",
     )
-    .replace(/\s+/g, '-')
+    .replace(/\s+/g, "-")
     .replace(
       /-+/g,
-      '-',
+      "-",
     )
     .replace(
       /^-|-$/g,
-      '',
+      "",
     )
     .slice(0, 100);
 }
@@ -87,7 +87,7 @@ function deriveTitle(
         line
           .replace(
             /^#{1,6}\s+/,
-            '',
+            "",
           )
           .trim(),
       )
@@ -96,7 +96,7 @@ function deriveTitle(
   return (
     first?.slice(0, 160) ||
     fallback.trim().slice(0, 160) ||
-    'Untitled'
+    "Untitled"
   );
 }
 
@@ -108,15 +108,15 @@ function errorMessage(
   }
 
   if (
-    typeof error === 'object' &&
+    typeof error === "object" &&
     error !== null &&
-    'message' in error &&
-    typeof error.message === 'string'
+    "message" in error &&
+    typeof error.message === "string"
   ) {
     return error.message;
   }
 
-  return 'Unknown server error.';
+  return "Unknown server error.";
 }
 
 export async function GET(
@@ -138,16 +138,16 @@ export async function GET(
       data,
       error,
     } = await supabase
-      .from('items')
-      .select('*')
-      .eq('id', id)
+      .from("items")
+      .select("*")
+      .eq("id", id)
       .maybeSingle();
 
     if (error) {
       return NextResponse.json(
         {
           error:
-            'Failed to load item.',
+            "Failed to load item.",
           details:
             error.message,
         },
@@ -159,7 +159,7 @@ export async function GET(
       return NextResponse.json(
         {
           error:
-            'Item not found.',
+            "Item not found.",
         },
         { status: 404 },
       );
@@ -172,8 +172,8 @@ export async function GET(
       {
         status: 200,
         headers: {
-          'Cache-Control':
-            'no-store',
+          "Cache-Control":
+            "no-store",
         },
       },
     );
@@ -214,17 +214,21 @@ export async function DELETE(
       getSupabaseAdmin();
 
     /*
-     * CLEAR is a draft operation.
-     * Published and archived items must never be
-     * deleted through this endpoint.
+     * Load the item first.
+     *
+     * DELETE is an explicit admin operation and is
+     * intentionally allowed for draft, published and
+     * archived items.
      */
     const {
       data: item,
       error: itemError,
     } = await supabase
-      .from('items')
-      .select('id,status')
-      .eq('id', id)
+      .from("items")
+      .select(
+        "id,status,slug",
+      )
+      .eq("id", id)
       .maybeSingle();
 
     if (itemError) {
@@ -235,32 +239,26 @@ export async function DELETE(
       return NextResponse.json(
         {
           error:
-            'Item not found.',
+            "Item not found.",
         },
         { status: 404 },
       );
     }
 
-    if (item.status !== 'draft') {
-      return NextResponse.json(
-        {
-          error:
-            'Only draft items can be deleted.',
-        },
-        { status: 409 },
-      );
-    }
-
+    /*
+     * Find all media belonging to the item before
+     * deleting the item itself.
+     */
     const {
       data: media,
       error: mediaError,
     } = await supabase
-      .from('media')
+      .from("media")
       .select(
-        'id,storage_key',
+        "id,storage_key",
       )
       .eq(
-        'item_id',
+        "item_id",
         id,
       );
 
@@ -279,77 +277,128 @@ export async function DELETE(
             value,
           ): value is string =>
             typeof value ===
-              'string' &&
+              "string" &&
             value.length > 0,
         );
 
+    /*
+     * Remove physical objects from Supabase Storage.
+     *
+     * Storage cleanup is best-effort: a stale object
+     * must not prevent deletion of the CMS record.
+     */
     if (
-      storageKeys.length
+      storageKeys.length > 0
     ) {
       const {
         error:
           storageError,
       } =
         await supabase.storage
-          .from('media')
+          .from("media")
           .remove(
             storageKeys,
           );
 
       if (storageError) {
         console.warn(
-          '[admin/items/:id] Storage cleanup failed:',
+          "[admin/items/:id] Storage cleanup failed:",
           storageError,
         );
       }
     }
 
+    /*
+     * Remove media database rows explicitly.
+     *
+     * This avoids leaving orphaned media records if the
+     * database foreign key is not configured with CASCADE.
+     */
+    if (
+      media &&
+      media.length > 0
+    ) {
+      const {
+        error:
+          mediaDeleteError,
+      } = await supabase
+        .from("media")
+        .delete()
+        .eq(
+          "item_id",
+          id,
+        );
+
+      if (mediaDeleteError) {
+        throw mediaDeleteError;
+      }
+    }
+
+    /*
+     * Remove AI context associated with the item.
+     */
     const {
       error:
         contextError,
     } = await supabase
-      .from(
-        'flow_ai_context',
-      )
+      .from("flow_ai_context")
       .delete()
       .eq(
-        'item_id',
+        "item_id",
         id,
       );
 
     if (contextError) {
+      /*
+       * Keep deletion resilient if the AI context table
+       * or relation is absent for an older installation.
+       */
       console.warn(
-        '[admin/items/:id] AI context cleanup failed:',
+        "[admin/items/:id] AI context cleanup failed:",
         contextError,
       );
     }
 
+    /*
+     * Finally remove the item itself.
+     *
+     * No status restriction here:
+     * draft + published + archived are all deletable
+     * by an authenticated administrator.
+     */
     const {
       error:
         deleteError,
     } = await supabase
-      .from('items')
+      .from("items")
       .delete()
       .eq(
-        'id',
+        "id",
         id,
-      )
-      .eq(
-        'status',
-        'draft',
       );
 
     if (deleteError) {
       throw deleteError;
     }
 
-    return NextResponse.json({
-      success: true,
-      id,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        id,
+        status:
+          item.status,
+      },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
+      },
+    );
   } catch (error) {
     console.error(
-      '[admin/items/:id] DELETE failed:',
+      "[admin/items/:id] DELETE failed:",
       error,
     );
 
@@ -393,7 +442,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error:
-          'Invalid JSON body.',
+          "Invalid JSON body.",
       },
       { status: 400 },
     );
@@ -407,16 +456,16 @@ export async function PATCH(
       data: existing,
       error: existingError,
     } = await supabase
-      .from('items')
-      .select('*')
-      .eq('id', id)
+      .from("items")
+      .select("*")
+      .eq("id", id)
       .maybeSingle();
 
     if (existingError) {
       return NextResponse.json(
         {
           error:
-            'Failed to load item.',
+            "Failed to load item.",
           details:
             existingError.message,
         },
@@ -428,21 +477,22 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            'Item not found.',
+            "Item not found.",
         },
         { status: 404 },
       );
     }
 
     const nextStatus =
-      payload.status !== undefined
+      payload.status !==
+      undefined
         ? payload.status
         : existing.status;
 
     const allowedStatuses = [
-      'draft',
-      'published',
-      'archived',
+      "draft",
+      "published",
+      "archived",
     ];
 
     if (
@@ -461,14 +511,14 @@ export async function PATCH(
 
     const nextLang =
       typeof payload.lang ===
-        'string' &&
+        "string" &&
       payload.lang.trim()
         ? payload.lang.trim()
         : existing.lang;
 
     const nextType =
       typeof payload.type ===
-        'string'
+        "string"
         ? payload.type
         : existing.type;
 
@@ -476,17 +526,17 @@ export async function PATCH(
       payload.body_md !==
       undefined
         ? payload.body_md
-        : existing.body_md ?? '';
+        : existing.body_md ?? "";
 
     let nextTitle =
       payload.title !==
       undefined
         ? payload.title.trim()
-        : existing.title ?? '';
+        : existing.title ?? "";
 
     if (
       nextStatus ===
-        'published' &&
+        "published" &&
       !nextTitle
     ) {
       const metadata =
@@ -500,36 +550,24 @@ export async function PATCH(
             metadata.alt ??
             payload.source_url ??
             existing.source_url ??
-            '',
+            "",
         ).trim();
 
       if (!nextTitle) {
         nextTitle =
           deriveTitle(
             nextBody,
-            '',
+            "",
           );
       }
     }
 
-    /*
-     * PUBLIC URL IDENTITY
-     *
-     * Once an item is published and has a slug,
-     * that slug is immutable.
-     *
-     * Draft:
-     *   slug may be created/updated.
-     *
-     * Published:
-     *   existing slug always wins.
-     */
     let nextSlug =
-      existing.slug ?? '';
+      existing.slug ?? "";
 
     if (
       existing.status !==
-        'published' ||
+        "published" ||
       !nextSlug
     ) {
       nextSlug =
@@ -545,13 +583,13 @@ export async function PATCH(
 
     if (
       nextStatus ===
-      'published'
+      "published"
     ) {
       if (!nextTitle) {
         return NextResponse.json(
           {
             error:
-              'Could not derive a title for this item.',
+              "Could not derive a title for this item.",
           },
           { status: 400 },
         );
@@ -568,7 +606,7 @@ export async function PATCH(
         return NextResponse.json(
           {
             error:
-              'Could not generate a valid slug.',
+              "Could not generate a valid slug.",
           },
           { status: 400 },
         );
@@ -579,18 +617,18 @@ export async function PATCH(
         error:
           collisionError,
       } = await supabase
-        .from('items')
-        .select('id')
+        .from("items")
+        .select("id")
         .eq(
-          'lang',
+          "lang",
           nextLang,
         )
         .eq(
-          'slug',
+          "slug",
           nextSlug,
         )
         .neq(
-          'id',
+          "id",
           id,
         )
         .limit(1)
@@ -600,7 +638,7 @@ export async function PATCH(
         return NextResponse.json(
           {
             error:
-              'Failed to check slug availability.',
+              "Failed to check slug availability.",
             details:
               collisionError.message,
           },
@@ -609,19 +647,14 @@ export async function PATCH(
       }
 
       if (collision) {
-        /*
-         * A collision is resolved only when creating
-         * a new public identity. An already-published
-         * item never gets its slug changed here.
-         */
         if (
           existing.status ===
-          'published'
+          "published"
         ) {
           return NextResponse.json(
             {
               error:
-                'Published item slug is immutable.',
+                "Published item slug is immutable.",
             },
             { status: 409 },
           );
@@ -647,7 +680,7 @@ export async function PATCH(
       payload.title !==
         undefined ||
       nextStatus ===
-        'published'
+        "published"
     ) {
       update.title =
         nextTitle;
@@ -693,21 +726,14 @@ export async function PATCH(
         payload.metadata;
     }
 
-    /*
-     * Slug is written:
-     * - when creating/publishing a draft;
-     * - when a draft explicitly changes its slug.
-     *
-     * A published item's existing slug remains untouched.
-     */
     const shouldWriteSlug =
       existing.status !==
-        'published' &&
+        "published" &&
       (
         payload.slug !==
           undefined ||
         nextStatus ===
-          'published'
+          "published"
       );
 
     if (
@@ -719,23 +745,19 @@ export async function PATCH(
 
     if (
       nextStatus ===
-      'published'
+      "published"
     ) {
       update.visibility =
         payload.visibility ??
-        'public';
+        "public";
 
       update.published_at =
         existing.published_at ??
         new Date().toISOString();
 
-      /*
-       * If this was already published, explicitly
-       * preserve its public slug.
-       */
       if (
         existing.status ===
-          'published' &&
+          "published" &&
         existing.slug
       ) {
         update.slug =
@@ -745,41 +767,41 @@ export async function PATCH(
 
     if (
       nextStatus ===
-      'draft'
+      "draft"
     ) {
       update.published_at =
         null;
 
       update.visibility =
         payload.visibility ??
-        'private';
+        "private";
     }
 
     if (
       nextStatus ===
-      'archived'
+      "archived"
     ) {
       update.visibility =
         payload.visibility ??
-        'private';
+        "private";
     }
 
     const {
       data,
       error,
     } = await supabase
-      .from('items')
+      .from("items")
       .update(update)
       .eq(
-        'id',
+        "id",
         id,
       )
-      .select('*')
+      .select("*")
       .single();
 
     if (error) {
       console.error(
-        '[admin/items/:id] UPDATE DATABASE ERROR:',
+        "[admin/items/:id] UPDATE DATABASE ERROR:",
         error,
       );
 
@@ -787,7 +809,7 @@ export async function PATCH(
         {
           error:
             error.message ||
-            'Failed to update item.',
+            "Failed to update item.",
           details:
             error.details ??
             null,
@@ -810,14 +832,14 @@ export async function PATCH(
       {
         status: 200,
         headers: {
-          'Cache-Control':
-            'no-store',
+          "Cache-Control":
+            "no-store",
         },
       },
     );
   } catch (error) {
     console.error(
-      '[admin/items/:id] PATCH unexpected error:',
+      "[admin/items/:id] PATCH unexpected error:",
       error,
     );
 
