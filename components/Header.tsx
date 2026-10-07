@@ -35,6 +35,22 @@ export default function Header() {
   const normalizedPath =
     pathname.replace(/\/$/, '') || '/';
 
+  /*
+   * Heart & Angel / Temple is an immersive
+   * sub-world of the site. These routes have
+   * their own navigation (TempleTopBar) and
+   * must not receive the global site Header.
+   */
+  const isImmersiveRoute =
+    normalizedPath === '/temple' ||
+    normalizedPath === '/cast' ||
+    normalizedPath === '/vigil' ||
+    normalizedPath === '/absolution' ||
+    normalizedPath === '/tribute' ||
+    normalizedPath === '/heartandangel/world' ||
+    normalizedPath === '/heartandangel/calm' ||
+    normalizedPath === '/heartandangel/letitgo';
+
   const profileRef =
     useRef<HTMLDivElement | null>(null);
 
@@ -238,7 +254,15 @@ export default function Header() {
           .slice(-1)[0] ||
         userName;
 
-  if (telegramApp) {
+  /*
+   * Immersive routes deliberately have no
+   * global Header. Their own navigation lives
+   * inside the experience.
+   */
+  if (
+    telegramApp ||
+    isImmersiveRoute
+  ) {
     return null;
   }
 
@@ -637,7 +661,7 @@ export default function Header() {
           </div>
         </div>
 
-        {isAdmin && (
+        {user && (
           <ComposerTrigger />
         )}
       </div>
