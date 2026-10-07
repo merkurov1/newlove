@@ -1,4 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import {
+  NextRequest,
+  NextResponse,
+} from 'next/server';
+
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
@@ -28,7 +32,10 @@ function getSupabaseAdmin() {
   const serviceRoleKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !serviceRoleKey) {
+  if (
+    !url ||
+    !serviceRoleKey
+  ) {
     throw new Error(
       'Supabase server environment variables are missing.',
     );
@@ -39,22 +46,36 @@ function getSupabaseAdmin() {
     serviceRoleKey,
     {
       auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
+        autoRefreshToken:
+          false,
+        persistSession:
+          false,
+        detectSessionInUrl:
+          false,
       },
     },
   );
 }
 
-function slugify(value: string) {
+function slugify(
+  value: string,
+) {
   return value
     .toLowerCase()
     .trim()
-    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(
+      /[^\p{L}\p{N}\s-]/gu,
+      '',
+    )
     .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(
+      /-+/g,
+      '-',
+    )
+    .replace(
+      /^-|-$/g,
+      '',
+    )
     .slice(0, 100);
 }
 
@@ -67,7 +88,10 @@ function deriveTitle(
       .split(/\r?\n/)
       .map((line) =>
         line
-          .replace(/^#{1,6}\s+/, '')
+          .replace(
+            /^#{1,6}\s+/,
+            '',
+          )
           .trim(),
       )
       .find(Boolean);
@@ -79,7 +103,9 @@ function deriveTitle(
   );
 }
 
-function errorMessage(error: unknown) {
+function errorMessage(
+  error: unknown,
+) {
   if (error instanceof Error) {
     return error.message;
   }
@@ -88,7 +114,8 @@ function errorMessage(error: unknown) {
     typeof error === 'object' &&
     error !== null &&
     'message' in error &&
-    typeof error.message === 'string'
+    typeof error.message ===
+      'string'
   ) {
     return error.message;
   }
@@ -101,7 +128,9 @@ export async function GET(
   context: RouteContext,
 ) {
   try {
-    await requireAdminFromRequest(req);
+    await requireAdminFromRequest(
+      req,
+    );
 
     const { id } =
       await context.params;
@@ -163,12 +192,170 @@ export async function GET(
   }
 }
 
+export async function DELETE(
+  req: NextRequest,
+  context: RouteContext,
+) {
+  try {
+    await requireAdminFromRequest(
+      req,
+    );
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          errorMessage(error),
+      },
+      { status: 401 },
+    );
+  }
+
+  const { id } =
+    await context.params;
+
+  try {
+    const supabase =
+      getSupabaseAdmin();
+
+    const {
+      data: item,
+      error: itemError,
+    } = await supabase
+      .from('items')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (itemError) {
+      throw itemError;
+    }
+
+    if (!item) {
+      return NextResponse.json(
+        {
+          error:
+            'Item not found.',
+        },
+        { status: 404 },
+      );
+    }
+
+    const {
+      data: media,
+      error: mediaError,
+    } = await supabase
+      .from('media')
+      .select(
+        'id,storage_key',
+      )
+      .eq(
+        'item_id',
+        id,
+      );
+
+    if (mediaError) {
+      throw mediaError;
+    }
+
+    const storageKeys =
+      (media ?? [])
+        .map(
+          (row) =>
+            row.storage_key,
+        )
+        .filter(
+          (
+            value,
+          ): value is string =>
+            typeof value ===
+              'string' &&
+            value.length > 0,
+        );
+
+    if (
+      storageKeys.length
+    ) {
+      const {
+        error:
+          storageError,
+      } =
+        await supabase.storage
+          .from('media')
+          .remove(
+            storageKeys,
+          );
+
+      if (storageError) {
+        console.warn(
+          '[admin/items/:id] Storage cleanup failed:',
+          storageError,
+        );
+      }
+    }
+
+    const {
+      error:
+        contextError,
+    } = await supabase
+      .from(
+        'flow_ai_context',
+      )
+      .delete()
+      .eq(
+        'item_id',
+        id,
+      );
+
+    if (contextError) {
+      console.warn(
+        '[admin/items/:id] AI context cleanup failed:',
+        contextError,
+      );
+    }
+
+    const {
+      error:
+        deleteError,
+    } = await supabase
+      .from('items')
+      .delete()
+      .eq(
+        'id',
+        id,
+      );
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    return NextResponse.json({
+      success: true,
+      id,
+    });
+  } catch (error) {
+    console.error(
+      '[admin/items/:id] DELETE failed:',
+      error,
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          errorMessage(error),
+      },
+      { status: 500 },
+    );
+  }
+}
+
 export async function PATCH(
   req: NextRequest,
   context: RouteContext,
 ) {
   try {
-    await requireAdminFromRequest(req);
+    await requireAdminFromRequest(
+      req,
+    );
   } catch (error) {
     return NextResponse.json(
       {
@@ -233,15 +420,17 @@ export async function PATCH(
     }
 
     const nextStatus =
-      payload.status !== undefined
+      payload.status !==
+      undefined
         ? payload.status
         : existing.status;
 
-    const allowedStatuses = [
-      'draft',
-      'published',
-      'archived',
-    ];
+    const allowedStatuses =
+      [
+        'draft',
+        'published',
+        'archived',
+      ];
 
     if (
       !allowedStatuses.includes(
@@ -310,11 +499,28 @@ export async function PATCH(
       }
     }
 
+    /*
+     * Important:
+     * Once a public item has a slug, keep it stable.
+     */
     let nextSlug =
-      payload.slug !==
-      undefined
-        ? slugify(payload.slug)
-        : existing.slug ?? '';
+      existing.slug ?? '';
+
+    if (
+      existing.status !==
+        'published' ||
+      !nextSlug
+    ) {
+      nextSlug =
+        payload.slug !==
+        undefined
+          ? slugify(
+              payload.slug,
+            )
+          : slugify(
+              nextTitle,
+            );
+    }
 
     if (
       nextStatus ===
@@ -383,7 +589,10 @@ export async function PATCH(
 
       if (collision) {
         nextSlug =
-          `${nextSlug}-${id.slice(0, 8)}`;
+          `${nextSlug}-${id.slice(
+            0,
+            8,
+          )}`;
       }
     }
 
@@ -495,7 +704,10 @@ export async function PATCH(
     } = await supabase
       .from('items')
       .update(update)
-      .eq('id', id)
+      .eq(
+        'id',
+        id,
+      )
       .select('*')
       .single();
 

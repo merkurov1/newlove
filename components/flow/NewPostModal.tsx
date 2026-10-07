@@ -24,6 +24,7 @@ type Item = {
 type NewPostModalProps = {
   onClose: () => void;
   onCreated?: () => void;
+  itemId?: string | null;
 };
 
 type SaveState =
@@ -34,73 +35,129 @@ type SaveState =
   | 'publishing'
   | 'error';
 
-type FlowMode =
-  | 'direct'
-  | 'ai'
-  | 'later';
+const LAST_DRAFT_KEY =
+  'flow:last-draft-id';
 
-const LAST_DRAFT_KEY = 'flow:last-draft-id';
-const AUTOSAVE_INTERVAL = 10_000;
+const AUTOSAVE_INTERVAL =
+  10_000;
 
-function firstLine(body: string) {
+function firstLine(
+  body: string,
+) {
   return (
     body
       .split(/\r?\n/)
       .map((line) =>
         line
-          .replace(/^#{1,6}\s+/, '')
+          .replace(
+            /^#{1,6}\s+/,
+            '',
+          )
           .trim(),
       )
       .find(Boolean)
-      ?.slice(0, 160) || 'Flow post'
+      ?.slice(0, 160) ||
+    'Flow post'
   );
 }
 
-function slugify(value: string, id: string) {
-  const slug = value
-    .toLowerCase()
-    .trim()
-    .replace(/[^\p{L}\p{N}\s-]/gu, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80);
+function slugify(
+  value: string,
+  id: string,
+) {
+  const slug =
+    value
+      .toLowerCase()
+      .trim()
+      .replace(
+        /[^\p{L}\p{N}\s-]/gu,
+        '',
+      )
+      .replace(
+        /\s+/g,
+        '-',
+      )
+      .replace(
+        /-+/g,
+        '-',
+      )
+      .replace(
+        /^-|-$/g,
+        '',
+      )
+      .slice(0, 80);
 
-  return slug || `post-${id.slice(0, 8)}`;
+  return (
+    slug ||
+    `post-${id.slice(
+      0,
+      8,
+    )}`
+  );
 }
 
-async function readJson(response: Response) {
-  return response.json().catch(() => ({}));
+async function readJson(
+  response: Response,
+) {
+  return response
+    .json()
+    .catch(() => ({}));
 }
 
 function withFlowMetadata(
-  metadata: Record<string, unknown> | null | undefined,
-  mode: FlowMode,
+  metadata:
+    | Record<
+        string,
+        unknown
+      >
+    | null
+    | undefined,
 ) {
   return {
     ...(metadata ?? {}),
     flow: {
-      mode,
-      queued_at: new Date().toISOString(),
+      ...(metadata &&
+      typeof metadata.flow ===
+        'object' &&
+      metadata.flow !== null
+        ? metadata.flow
+        : {}),
+      queued_at:
+        new Date().toISOString(),
     },
   };
 }
 
-function normalizePastedUrl(value: string) {
-  const trimmed = value.trim();
+function normalizePastedUrl(
+  value: string,
+) {
+  const trimmed =
+    value.trim();
 
-  if (!trimmed || /\s/.test(trimmed)) {
+  if (
+    !trimmed ||
+    /\s/.test(trimmed)
+  ) {
     return null;
   }
 
-  const candidate = /^https?:\/\//i.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`;
+  const candidate =
+    /^https?:\/\//i.test(
+      trimmed,
+    )
+      ? trimmed
+      : `https://${trimmed}`;
 
   try {
-    const url = new URL(candidate);
+    const url =
+      new URL(candidate);
 
-    if (!url.hostname || !url.hostname.includes('.')) {
+    if (
+      !url.hostname ||
+      !url.hostname.includes(
+        '.',
+      )
+    ) {
       return null;
     }
 
@@ -110,9 +167,16 @@ function normalizePastedUrl(value: string) {
   }
 }
 
-function getDomain(value: string) {
+function getDomain(
+  value: string,
+) {
   try {
-    return new URL(value).hostname.replace(/^www\./, '');
+    return new URL(
+      value,
+    ).hostname.replace(
+      /^www\./,
+      '',
+    );
   } catch {
     return value;
   }
@@ -120,15 +184,11 @@ function getDomain(value: string) {
 
 function ShimmerPreview() {
   return (
-    <div className="overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white">
-      <div className="aspect-[16/8] animate-pulse bg-stone-100" />
-
-      <div className="space-y-4 p-6 sm:p-7">
-        <div className="h-2.5 w-24 animate-pulse rounded-full bg-stone-200" />
-        <div className="h-7 w-4/5 animate-pulse rounded bg-stone-200" />
-        <div className="h-4 w-full animate-pulse rounded bg-stone-100" />
-        <div className="h-4 w-3/4 animate-pulse rounded bg-stone-100" />
-      </div>
+    <div className="space-y-4">
+      <div className="h-3 w-24 animate-pulse rounded bg-stone-200" />
+      <div className="h-8 w-4/5 animate-pulse rounded bg-stone-200" />
+      <div className="h-4 w-full animate-pulse rounded bg-stone-100" />
+      <div className="h-4 w-3/4 animate-pulse rounded bg-stone-100" />
     </div>
   );
 }
@@ -136,39 +196,89 @@ function ShimmerPreview() {
 export default function NewPostModal({
   onClose,
   onCreated,
+  itemId,
 }: NewPostModalProps) {
-  const [item, setItem] = useState<Item | null>(null);
-  const [bodyMd, setBodyMd] = useState('');
+  const [
+    item,
+    setItem,
+  ] =
+    useState<Item | null>(
+      null,
+    );
 
-  const [saveState, setSaveState] =
-    useState<SaveState>('creating');
-
-  const [error, setError] =
-    useState<string | null>(null);
-
-  const [linkMode, setLinkMode] =
-    useState(false);
-
-  const [linkUrl, setLinkUrl] =
+  const [
+    bodyMd,
+    setBodyMd,
+  ] =
     useState('');
 
-  const [linkPreview, setLinkPreview] =
-    useState<Record<string, unknown> | null>(null);
+  const [
+    saveState,
+    setSaveState,
+  ] =
+    useState<SaveState>(
+      'creating',
+    );
 
-  const [imageName, setImageName] =
-    useState<string | null>(null);
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null,
+    );
 
-  const [imagePreview, setImagePreview] =
-    useState<string | null>(null);
+  const [
+    linkMode,
+    setLinkMode,
+  ] =
+    useState(false);
+
+  const [
+    linkUrl,
+    setLinkUrl,
+  ] =
+    useState('');
+
+  const [
+    linkPreview,
+    setLinkPreview,
+  ] =
+    useState<Record<
+      string,
+      unknown
+    > | null>(null);
+
+  const [
+    imageName,
+    setImageName,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
+  const [
+    imagePreview,
+    setImagePreview,
+  ] =
+    useState<string | null>(
+      null,
+    );
 
   const fileRef =
-    useRef<HTMLInputElement | null>(null);
+    useRef<HTMLInputElement | null>(
+      null,
+    );
 
   const textareaRef =
-    useRef<HTMLTextAreaElement | null>(null);
+    useRef<HTMLTextAreaElement | null>(
+      null,
+    );
 
   const savePromiseRef =
-    useRef<Promise<boolean> | null>(null);
+    useRef<Promise<boolean> | null>(
+      null,
+    );
 
   const latestRef =
     useRef({
@@ -177,6 +287,9 @@ export default function NewPostModal({
 
   const closingRef =
     useRef(false);
+
+  const isEditing =
+    Boolean(itemId);
 
   useEffect(() => {
     latestRef.current = {
@@ -187,158 +300,218 @@ export default function NewPostModal({
   useEffect(() => {
     let cancelled = false;
 
-    async function initializeDraft() {
+    async function initialize() {
       try {
         setError(null);
 
-        const existingDraftId =
-          window.localStorage.getItem(
-            LAST_DRAFT_KEY,
+        let loaded: Item | null =
+          null;
+
+        if (itemId) {
+          setSaveState(
+            'loading',
           );
 
-        if (existingDraftId) {
-          setSaveState('loading');
-
-          const response = await fetch(
-            `/api/admin/items/${existingDraftId}`,
-            {
-              method: 'GET',
-              cache: 'no-store',
-            },
-          );
-
-          const json =
-            await readJson(response);
-
-          if (
-            response.ok &&
-            json.item &&
-            json.item.status === 'draft'
-          ) {
-            if (cancelled) {
-              return;
-            }
-
-            const loaded =
-              json.item as Item;
-
-            setItem(loaded);
-
-            setBodyMd(
-              loaded.body_md ?? '',
+          const response =
+            await fetch(
+              `/api/admin/items/${itemId}`,
+              {
+                cache:
+                  'no-store',
+              },
             );
 
-            latestRef.current = {
-              bodyMd:
-                loaded.body_md ?? '',
-            };
+          const json =
+            await readJson(
+              response,
+            );
 
-            if (loaded.type === 'link') {
-              setLinkMode(true);
-
-              setLinkUrl(
-                loaded.source_url ?? '',
-              );
-
-              setLinkPreview(
-                loaded.metadata ?? null,
-              );
-            }
-
-            if (loaded.type === 'photo') {
-              const publicUrl =
-                loaded.metadata &&
-                typeof loaded.metadata.public_url ===
-                  'string'
-                  ? loaded.metadata.public_url
-                  : null;
-
-              setImagePreview(publicUrl);
-
-              setImageName(
-                loaded.metadata &&
-                typeof loaded.metadata.filename ===
-                  'string'
-                  ? loaded.metadata.filename
-                  : null,
-              );
-            }
-
-            setSaveState('saved');
-
-            return;
+          if (
+            !response.ok ||
+            !json.item
+          ) {
+            throw new Error(
+              json.error ??
+                'Failed to load item.',
+            );
           }
 
-          window.localStorage.removeItem(
-            LAST_DRAFT_KEY,
-          );
-        }
+          loaded =
+            json.item as Item;
+        } else {
+          const existingDraftId =
+            window.localStorage.getItem(
+              LAST_DRAFT_KEY,
+            );
 
-        setSaveState('creating');
+          if (
+            existingDraftId
+          ) {
+            setSaveState(
+              'loading',
+            );
 
-        const response = await fetch(
-          '/api/admin/items/new',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-            body: JSON.stringify({
-              type: 'note',
-              title: '',
-              body_md: '',
-              lang: 'ru',
-              metadata: {
-                flow: {
-                  mode: 'direct',
+            const response =
+              await fetch(
+                `/api/admin/items/${existingDraftId}`,
+                {
+                  cache:
+                    'no-store',
                 },
-              },
-            }),
-          },
-        );
+              );
 
-        const json =
-          await readJson(response);
+            const json =
+              await readJson(
+                response,
+              );
+
+            if (
+              response.ok &&
+              json.item &&
+              json.item.status ===
+                'draft'
+            ) {
+              loaded =
+                json.item as Item;
+            } else {
+              window.localStorage.removeItem(
+                LAST_DRAFT_KEY,
+              );
+            }
+          }
+
+          if (!loaded) {
+            setSaveState(
+              'creating',
+            );
+
+            const response =
+              await fetch(
+                '/api/admin/items/new',
+                {
+                  method:
+                    'POST',
+                  headers: {
+                    'Content-Type':
+                      'application/json',
+                  },
+                  body: JSON.stringify(
+                    {
+                      type: 'note',
+                      title: '',
+                      body_md: '',
+                      lang: 'ru',
+                      metadata: {
+                        flow: {
+                          mode: 'direct',
+                        },
+                      },
+                    },
+                  ),
+                },
+              );
+
+            const json =
+              await readJson(
+                response,
+              );
+
+            if (
+              !response.ok ||
+              !json.item
+            ) {
+              throw new Error(
+                json.error ??
+                  'Failed to create Flow item.',
+              );
+            }
+
+            loaded =
+              json.item as Item;
+
+            window.localStorage.setItem(
+              LAST_DRAFT_KEY,
+              loaded.id,
+            );
+          }
+        }
 
         if (
-          !response.ok ||
-          !json.item
+          cancelled ||
+          !loaded
         ) {
-          throw new Error(
-            json.error ??
-              'Failed to create Flow item.',
-          );
-        }
-
-        if (cancelled) {
           return;
         }
 
-        const created =
-          json.item as Item;
-
-        setItem(created);
+        setItem(loaded);
 
         setBodyMd(
-          created.body_md ?? '',
+          loaded.body_md ??
+            '',
         );
 
         latestRef.current = {
           bodyMd:
-            created.body_md ?? '',
+            loaded.body_md ??
+            '',
         };
 
-        window.localStorage.setItem(
-          LAST_DRAFT_KEY,
-          created.id,
+        if (
+          loaded.type ===
+          'link'
+        ) {
+          setLinkMode(true);
+
+          setLinkUrl(
+            loaded.source_url ??
+              '',
+          );
+
+          setLinkPreview(
+            loaded.metadata ??
+              null,
+          );
+        }
+
+        if (
+          loaded.type ===
+          'photo'
+        ) {
+          const publicUrl =
+            loaded.metadata &&
+            typeof loaded
+              .metadata
+              .public_url ===
+              'string'
+              ? loaded.metadata
+                  .public_url
+              : null;
+
+          setImagePreview(
+            publicUrl,
+          );
+
+          setImageName(
+            loaded.metadata &&
+            typeof loaded
+              .metadata
+              .filename ===
+              'string'
+              ? loaded.metadata
+                  .filename
+              : null,
+          );
+        }
+
+        setSaveState(
+          'saved',
         );
 
-        setSaveState('saved');
-
-        requestAnimationFrame(() => {
-          textareaRef.current?.focus();
-        });
+        requestAnimationFrame(
+          () => {
+            textareaRef.current?.focus();
+          },
+        );
       } catch (err) {
         if (cancelled) {
           return;
@@ -355,55 +528,69 @@ export default function NewPostModal({
             : 'Failed to initialize.',
         );
 
-        setSaveState('error');
+        setSaveState(
+          'error',
+        );
       }
     }
 
-    void initializeDraft();
+    void initialize();
 
     return () => {
       cancelled = true;
 
       if (
         imagePreview &&
-        imagePreview.startsWith('blob:')
+        imagePreview.startsWith(
+          'blob:',
+        )
       ) {
         URL.revokeObjectURL(
           imagePreview,
         );
       }
     };
-  }, []);
+  }, [itemId]);
 
   const saveDraft =
     useCallback(
       async (
-        changes: Record<string, unknown>,
+        changes: Record<
+          string,
+          unknown
+        >,
       ) => {
         if (!item) {
           return true;
         }
 
         try {
-          setSaveState('saving');
-          setError(null);
-
-          const response = await fetch(
-            `/api/admin/items/${item.id}`,
-            {
-              method: 'PATCH',
-              headers: {
-                'Content-Type':
-                  'application/json',
-              },
-              body: JSON.stringify(
-                changes,
-              ),
-            },
+          setSaveState(
+            'saving',
           );
 
+          setError(null);
+
+          const response =
+            await fetch(
+              `/api/admin/items/${item.id}`,
+              {
+                method:
+                  'PATCH',
+                headers: {
+                  'Content-Type':
+                    'application/json',
+                },
+                body: JSON.stringify(
+                  changes,
+                ),
+              },
+            );
+
           const json =
-            await readJson(response);
+            await readJson(
+              response,
+            );
 
           if (!response.ok) {
             throw new Error(
@@ -418,7 +605,9 @@ export default function NewPostModal({
             );
           }
 
-          setSaveState('saved');
+          setSaveState(
+            'saved',
+          );
 
           return true;
         } catch (err) {
@@ -433,7 +622,9 @@ export default function NewPostModal({
               : 'Failed to save.',
           );
 
-          setSaveState('error');
+          setSaveState(
+            'error',
+          );
 
           return false;
         }
@@ -446,35 +637,42 @@ export default function NewPostModal({
       return;
     }
 
-    const autosave = () => {
-      if (
-        savePromiseRef.current ||
-        saveState === 'publishing' ||
-        saveState === 'creating' ||
-        saveState === 'loading'
-      ) {
-        return;
-      }
-
-      const promise =
-        saveDraft({
-          body_md:
-            latestRef.current.bodyMd,
-        });
-
-      savePromiseRef.current =
-        promise;
-
-      void promise.finally(() => {
+    const autosave =
+      () => {
         if (
-          savePromiseRef.current ===
-          promise
+          savePromiseRef.current ||
+          saveState ===
+            'publishing' ||
+          saveState ===
+            'creating' ||
+          saveState ===
+            'loading'
         ) {
-          savePromiseRef.current =
-            null;
+          return;
         }
-      });
-    };
+
+        const promise =
+          saveDraft({
+            body_md:
+              latestRef.current
+                .bodyMd,
+          });
+
+        savePromiseRef.current =
+          promise;
+
+        void promise.finally(
+          () => {
+            if (
+              savePromiseRef.current ===
+              promise
+            ) {
+              savePromiseRef.current =
+                null;
+            }
+          },
+        );
+      };
 
     const interval =
       window.setInterval(
@@ -482,11 +680,10 @@ export default function NewPostModal({
         AUTOSAVE_INTERVAL,
       );
 
-    return () => {
+    return () =>
       window.clearInterval(
         interval,
       );
-    };
   }, [
     item,
     saveDraft,
@@ -497,24 +694,31 @@ export default function NewPostModal({
     value: string,
   ) {
     setBodyMd(value);
-    latestRef.current.bodyMd = value;
+    latestRef.current.bodyMd =
+      value;
   }
 
   const flushSave =
-    useCallback(async () => {
-      if (!item) {
-        return true;
-      }
+    useCallback(
+      async () => {
+        if (!item) {
+          return true;
+        }
 
-      if (savePromiseRef.current) {
-        await savePromiseRef.current;
-      }
+        if (
+          savePromiseRef.current
+        ) {
+          await savePromiseRef.current;
+        }
 
-      return saveDraft({
-        body_md:
-          latestRef.current.bodyMd,
-      });
-    }, [item, saveDraft]);
+        return saveDraft({
+          body_md:
+            latestRef.current
+              .bodyMd,
+        });
+      },
+      [item, saveDraft],
+    );
 
   async function parseLink(
     urlOverride?: string,
@@ -524,33 +728,46 @@ export default function NewPostModal({
     }
 
     const url =
-      (urlOverride ?? linkUrl).trim();
+      (
+        urlOverride ??
+        linkUrl
+      ).trim();
 
     if (!url) {
       return;
     }
 
     try {
-      setSaveState('saving');
-      setError(null);
-
-      const response = await fetch(
-        '/api/admin/items/parse-link',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':
-              'application/json',
-          },
-          body: JSON.stringify({
-            item_id: item.id,
-            url,
-          }),
-        },
+      setSaveState(
+        'saving',
       );
 
+      setError(null);
+
+      const response =
+        await fetch(
+          '/api/admin/items/parse-link',
+          {
+            method:
+              'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify(
+              {
+                item_id:
+                  item.id,
+                url,
+              },
+            ),
+          },
+        );
+
       const json =
-        await readJson(response);
+        await readJson(
+          response,
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -562,12 +779,15 @@ export default function NewPostModal({
       const parsedItem =
         json.item as Item;
 
-      setItem(parsedItem);
+      setItem(
+        parsedItem,
+      );
 
       setLinkMode(true);
 
       setLinkUrl(
-        parsedItem.source_url ?? url,
+        parsedItem.source_url ??
+          url,
       );
 
       setLinkPreview(
@@ -577,17 +797,23 @@ export default function NewPostModal({
       );
 
       setBodyMd(
-        parsedItem.body_md ?? '',
+        parsedItem.body_md ??
+          '',
       );
 
       latestRef.current.bodyMd =
-        parsedItem.body_md ?? '';
+        parsedItem.body_md ??
+        '';
 
-      setSaveState('saved');
+      setSaveState(
+        'saved',
+      );
 
-      requestAnimationFrame(() => {
-        textareaRef.current?.focus();
-      });
+      requestAnimationFrame(
+        () => {
+          textareaRef.current?.focus();
+        },
+      );
     } catch (err) {
       console.error(
         '[flow] link parsing failed:',
@@ -600,7 +826,9 @@ export default function NewPostModal({
           : 'Could not read this link.',
       );
 
-      setSaveState('error');
+      setSaveState(
+        'error',
+      );
     }
   }
 
@@ -613,7 +841,9 @@ export default function NewPostModal({
         .trim();
 
     const url =
-      normalizePastedUrl(pasted);
+      normalizePastedUrl(
+        pasted,
+      );
 
     if (
       !url ||
@@ -640,14 +870,20 @@ export default function NewPostModal({
     }
 
     try {
-      setSaveState('saving');
+      setSaveState(
+        'saving',
+      );
+
       setError(null);
+
       setLinkMode(false);
       setLinkPreview(null);
 
       if (
         imagePreview &&
-        imagePreview.startsWith('blob:')
+        imagePreview.startsWith(
+          'blob:',
+        )
       ) {
         URL.revokeObjectURL(
           imagePreview,
@@ -655,29 +891,45 @@ export default function NewPostModal({
       }
 
       const localPreview =
-        URL.createObjectURL(file);
+        URL.createObjectURL(
+          file,
+        );
 
-      setImagePreview(localPreview);
-      setImageName(file.name);
+      setImagePreview(
+        localPreview,
+      );
 
-      const form = new FormData();
+      setImageName(
+        file.name,
+      );
 
-      form.append('file', file);
+      const form =
+        new FormData();
+
+      form.append(
+        'file',
+        file,
+      );
+
       form.append(
         'item_id',
         item.id,
       );
 
-      const response = await fetch(
-        '/api/admin/items/media',
-        {
-          method: 'POST',
-          body: form,
-        },
-      );
+      const response =
+        await fetch(
+          '/api/admin/items/media',
+          {
+            method:
+              'POST',
+            body: form,
+          },
+        );
 
       const json =
-        await readJson(response);
+        await readJson(
+          response,
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -689,29 +941,43 @@ export default function NewPostModal({
       const uploadedItem =
         json.item as Item;
 
-      setItem(uploadedItem);
+      setItem(
+        uploadedItem,
+      );
 
       setBodyMd(
-        uploadedItem.body_md ?? '',
+        uploadedItem.body_md ??
+          '',
       );
 
       latestRef.current.bodyMd =
-        uploadedItem.body_md ?? '';
+        uploadedItem.body_md ??
+        '';
 
       const publicUrl =
-        typeof json.url === 'string'
+        typeof json.url ===
+        'string'
           ? json.url
-          : uploadedItem.metadata &&
-              typeof uploadedItem.metadata
-                .public_url === 'string'
-            ? uploadedItem.metadata.public_url
-            : null;
+          : uploadedItem
+                .metadata &&
+            typeof uploadedItem
+              .metadata
+              .public_url ===
+              'string'
+          ? uploadedItem
+              .metadata
+              .public_url
+          : null;
 
       if (publicUrl) {
-        setImagePreview(publicUrl);
+        setImagePreview(
+          publicUrl,
+        );
       }
 
-      setSaveState('saved');
+      setSaveState(
+        'saved',
+      );
     } catch (err) {
       console.error(
         '[flow] image upload failed:',
@@ -724,44 +990,47 @@ export default function NewPostModal({
           : 'Failed to upload image.',
       );
 
-      setSaveState('error');
+      setSaveState(
+        'error',
+      );
     }
   }
 
-  async function finish(
-    mode: FlowMode,
-  ) {
+  async function finish() {
     if (!item) {
       return;
     }
 
     if (
-      saveState === 'publishing'
+      saveState ===
+      'publishing'
     ) {
       return;
     }
 
     try {
       setError(null);
-      setSaveState('publishing');
+      setSaveState(
+        'publishing',
+      );
 
       const saved =
         await flushSave();
 
       if (!saved) {
-        setSaveState('error');
+        setSaveState(
+          'error',
+        );
         return;
       }
 
       const current =
         latestRef.current;
 
-      const freshItem =
-        item;
-
       if (
-        freshItem.type === 'link' &&
-        !freshItem.source_url
+        item.type ===
+          'link' &&
+        !item.source_url
       ) {
         throw new Error(
           'The link is not ready yet.',
@@ -769,8 +1038,9 @@ export default function NewPostModal({
       }
 
       if (
-        freshItem.type === 'photo' &&
-        !freshItem.metadata &&
+        item.type ===
+          'photo' &&
+        !item.metadata &&
         !imagePreview
       ) {
         throw new Error(
@@ -779,8 +1049,10 @@ export default function NewPostModal({
       }
 
       if (
-        freshItem.type !== 'link' &&
-        freshItem.type !== 'photo' &&
+        item.type !==
+          'link' &&
+        item.type !==
+          'photo' &&
         !current.bodyMd.trim()
       ) {
         throw new Error(
@@ -790,75 +1062,82 @@ export default function NewPostModal({
 
       const metadata =
         withFlowMetadata(
-          freshItem.metadata,
-          mode,
+          item.metadata,
         );
 
       const title =
-        freshItem.type === 'link'
+        item.type ===
+        'link'
           ? String(
               linkPreview?.title ||
-                freshItem.title ||
-                freshItem.source_url ||
+                item.title ||
+                item.source_url ||
                 'Link',
             ).slice(0, 160)
-          : freshItem.type === 'photo'
-            ? String(
-                (
-                  freshItem.metadata &&
-                  typeof freshItem.metadata
-                    .alt === 'string'
-                    ? freshItem.metadata.alt
-                    : null
-                ) ||
-                  freshItem.title ||
-                  'Image',
-              ).slice(0, 160)
-            : firstLine(
-                current.bodyMd,
-              );
+          : item.type ===
+            'photo'
+          ? String(
+              (
+                item.metadata &&
+                typeof item
+                  .metadata
+                  .alt ===
+                  'string'
+                  ? item
+                      .metadata
+                      .alt
+                  : null
+              ) ||
+                item.title ||
+                'Image',
+            ).slice(0, 160)
+          : firstLine(
+              current.bodyMd,
+            );
 
+      /*
+       * New items get a slug once.
+       * Existing published items keep their URL.
+       */
       const slug =
-        slugify(
-          title,
-          freshItem.id,
+        isEditing &&
+        item.slug
+          ? item.slug
+          : slugify(
+              title,
+              item.id,
+            );
+
+      const response =
+        await fetch(
+          `/api/admin/items/${item.id}`,
+          {
+            method:
+              'PATCH',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify(
+              {
+                title,
+                body_md:
+                  current.bodyMd,
+                slug,
+                metadata,
+                status:
+                  'published',
+                visibility:
+                  'public',
+              },
+            ),
+          },
         );
 
-      const isDirect =
-        mode === 'direct';
-
-      const response = await fetch(
-        `/api/admin/items/${freshItem.id}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type':
-              'application/json',
-          },
-          body: JSON.stringify({
-            title,
-            body_md:
-              current.bodyMd,
-            slug,
-            metadata,
-            status: isDirect
-              ? 'published'
-              : 'draft',
-            visibility: isDirect
-              ? 'public'
-              : 'private',
-            ...(isDirect
-              ? {
-                  published_at:
-                    new Date().toISOString(),
-                }
-              : {}),
-          }),
-        },
-      );
-
       const json =
-        await readJson(response);
+        await readJson(
+          response,
+        );
 
       if (
         !response.ok ||
@@ -866,7 +1145,7 @@ export default function NewPostModal({
       ) {
         throw new Error(
           json.error ??
-            `Failed to save (${response.status}).`,
+            `Failed to publish (${response.status}).`,
         );
       }
 
@@ -874,32 +1153,56 @@ export default function NewPostModal({
         LAST_DRAFT_KEY,
       );
 
-      setSaveState('saved');
+      /*
+       * Publishing must not wait for the model.
+       * The AI request continues independently.
+       */
+      void fetch(
+        `/api/admin/items/${item.id}/ai`,
+        {
+          method:
+            'POST',
+        },
+      ).catch((aiError) => {
+        console.warn(
+          '[flow] AI context request failed:',
+          aiError,
+        );
+      });
+
+      setSaveState(
+        'saved',
+      );
 
       onCreated?.();
       onClose();
     } catch (err) {
       console.error(
-        '[flow] action failed:',
+        '[flow] publish failed:',
         err,
       );
 
       setError(
         err instanceof Error
           ? err.message
-          : 'Failed to save.',
+          : 'Failed to publish.',
       );
 
-      setSaveState('error');
+      setSaveState(
+        'error',
+      );
     }
   }
 
   async function handleClose() {
-    if (closingRef.current) {
+    if (
+      closingRef.current
+    ) {
       return;
     }
 
-    closingRef.current = true;
+    closingRef.current =
+      true;
 
     if (!item) {
       onClose();
@@ -910,7 +1213,8 @@ export default function NewPostModal({
       await flushSave();
 
     if (!saved) {
-      closingRef.current = false;
+      closingRef.current =
+        false;
       return;
     }
 
@@ -921,27 +1225,31 @@ export default function NewPostModal({
     function handleKeyboard(
       event: KeyboardEvent,
     ) {
-      if (event.key === 'Escape') {
+      if (
+        event.key ===
+        'Escape'
+      ) {
         event.preventDefault();
+
         void handleClose();
+
         return;
       }
 
-      const modifier =
-        event.metaKey ||
-        event.ctrlKey;
-
       if (
-        modifier &&
-        event.key === 'Enter'
+        (event.metaKey ||
+          event.ctrlKey) &&
+        event.key ===
+          'Enter'
       ) {
         event.preventDefault();
 
         if (
           !busy &&
-          saveState !== 'saving'
+          saveState !==
+            'saving'
         ) {
-          void finish('direct');
+          void finish();
         }
       }
     }
@@ -960,41 +1268,56 @@ export default function NewPostModal({
   });
 
   const busy =
-    saveState === 'creating' ||
-    saveState === 'loading' ||
-    saveState === 'publishing';
+    saveState ===
+      'creating' ||
+    saveState ===
+      'loading' ||
+    saveState ===
+      'publishing';
 
   const isImage =
-    item?.type === 'photo';
+    item?.type ===
+    'photo';
 
   const isLink =
-    item?.type === 'link' ||
+    item?.type ===
+      'link' ||
     linkMode;
 
   const isParsing =
-    saveState === 'saving' &&
+    saveState ===
+      'saving' &&
     isLink &&
     !linkPreview;
 
   const canPost =
     Boolean(item) &&
     !busy &&
-    saveState !== 'saving' &&
+    saveState !==
+      'saving' &&
     (
-      item?.type === 'link'
-        ? Boolean(item.source_url)
-        : item?.type === 'photo'
-          ? Boolean(
-              item.metadata ||
+      item?.type ===
+      'link'
+        ? Boolean(
+            item.source_url,
+          )
+        : item?.type ===
+          'photo'
+        ? Boolean(
+            item.metadata ||
               imagePreview,
-            )
-          : Boolean(bodyMd.trim())
+          )
+        : Boolean(
+            bodyMd.trim(),
+          )
     );
 
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/35 p-0 backdrop-blur-sm sm:p-4"
-      onMouseDown={(event) => {
+      onMouseDown={(
+        event,
+      ) => {
         if (
           event.target ===
           event.currentTarget
@@ -1009,7 +1332,7 @@ export default function NewPostModal({
         aria-modal="true"
         aria-labelledby="flow-composer-title"
       >
-        <div className="flex shrink-0 items-center justify-end px-5 py-4 sm:px-7">
+        <div className="flex shrink-0 items-center justify-end px-4 py-3 sm:px-6">
           <button
             type="button"
             onClick={() =>
@@ -1026,12 +1349,14 @@ export default function NewPostModal({
           id="flow-composer-title"
           className="sr-only"
         >
-          Create
+          {isEditing
+            ? 'Edit'
+            : 'Create'}
         </h2>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-8 sm:pb-8">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 sm:px-6 sm:pb-7">
           {error && (
-            <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 font-mono text-[11px] leading-5 text-red-700">
+            <div className="mb-5 rounded-xl bg-red-50 px-4 py-3 font-mono text-[11px] leading-5 text-red-700">
               {error}
             </div>
           )}
@@ -1039,9 +1364,9 @@ export default function NewPostModal({
           {isParsing ? (
             <ShimmerPreview />
           ) : isLink ? (
-            <div className="space-y-4">
+            <div>
               {linkPreview ? (
-                <div className="overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white">
+                <div>
                   {typeof linkPreview.image ===
                     'string' && (
                     <img
@@ -1049,62 +1374,72 @@ export default function NewPostModal({
                         linkPreview.image
                       }
                       alt=""
-                      className="max-h-[420px] w-full object-cover"
+                      className="mb-5 max-h-[420px] w-full object-cover"
                     />
                   )}
 
-                  <div className="p-6 sm:p-7">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
-                      {String(
-                        linkPreview.site_name ??
-                          linkPreview.domain ??
-                          getDomain(linkUrl),
-                      )}
-                    </div>
-
-                    <div className="mt-3 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
-                      {String(
-                        linkPreview.title ??
+                  <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+                    {String(
+                      linkPreview.site_name ??
+                        linkPreview.domain ??
+                        getDomain(
                           linkUrl,
-                      )}
-                    </div>
-
-                    {typeof linkPreview.description ===
-                      'string' && (
-                      <p className="mt-3 max-w-2xl font-serif text-base leading-7 text-stone-600">
-                        {
-                          linkPreview.description
-                        }
-                      </p>
+                        ),
                     )}
-
-                    <a
-                      href={linkUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-5 inline-block font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400 transition hover:text-stone-900"
-                    >
-                      Open original ↗
-                    </a>
                   </div>
 
-                  <div className="border-t border-stone-200/80 bg-[#FAF8F5] p-5 sm:p-6">
-                    <textarea
-                      ref={textareaRef}
-                      value={bodyMd}
-                      onChange={(event) =>
-                        handleBodyChange(
-                          event.target.value,
-                        )
+                  <div className="mt-3 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
+                    {String(
+                      linkPreview.title ??
+                        linkUrl,
+                    )}
+                  </div>
+
+                  {typeof linkPreview.description ===
+                    'string' && (
+                    <p className="mt-3 max-w-2xl font-serif text-base leading-7 text-stone-600">
+                      {
+                        linkPreview.description
                       }
-                      disabled={!item || busy}
-                      placeholder="Add your text…"
-                      className="min-h-[150px] w-full resize-none border-0 bg-transparent font-serif text-[19px] font-light leading-[1.75] text-stone-800 outline-none placeholder:text-stone-300"
-                    />
-                  </div>
+                    </p>
+                  )}
+
+                  <a
+                    href={
+                      linkUrl
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 inline-block font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400 hover:text-stone-900"
+                  >
+                    Open original ↗
+                  </a>
+
+                  <textarea
+                    ref={
+                      textareaRef
+                    }
+                    value={
+                      bodyMd
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      handleBodyChange(
+                        event.target
+                          .value,
+                      )
+                    }
+                    disabled={
+                      !item ||
+                      busy
+                    }
+                    placeholder="Add your text…"
+                    className="mt-8 min-h-[180px] w-full resize-none border-0 bg-transparent p-0 font-serif text-[19px] font-light leading-[1.75] text-stone-800 outline-none ring-0 placeholder:text-stone-300 focus:border-0 focus:outline-none focus:ring-0"
+                  />
                 </div>
               ) : (
-                <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6">
+                <div>
                   <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-stone-400">
                     Link
                   </div>
@@ -1118,7 +1453,10 @@ export default function NewPostModal({
                     onClick={() =>
                       void parseLink()
                     }
-                    disabled={!item || busy}
+                    disabled={
+                      !item ||
+                      busy
+                    }
                     className="mt-5 rounded-full bg-stone-900 px-5 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white transition hover:bg-stone-700 disabled:bg-stone-300"
                   >
                     Try again
@@ -1127,10 +1465,12 @@ export default function NewPostModal({
               )}
             </div>
           ) : isImage ? (
-            <div className="overflow-hidden rounded-[1.75rem] border border-stone-200 bg-white">
+            <div>
               {imagePreview ? (
                 <img
-                  src={imagePreview}
+                  src={
+                    imagePreview
+                  }
                   alt=""
                   className="max-h-[70vh] w-full object-contain"
                 />
@@ -1142,44 +1482,63 @@ export default function NewPostModal({
             </div>
           ) : (
             <textarea
-              ref={textareaRef}
-              value={bodyMd}
-              onChange={(event) =>
+              ref={
+                textareaRef
+              }
+              value={
+                bodyMd
+              }
+              onChange={(
+                event,
+              ) =>
                 handleBodyChange(
-                  event.target.value,
+                  event.target
+                    .value,
                 )
               }
-              onPaste={handlePaste}
-              disabled={!item || busy}
+              onPaste={
+                handlePaste
+              }
+              disabled={
+                !item ||
+                busy
+              }
               placeholder="Write something…"
               autoFocus
-              className="min-h-[55vh] w-full resize-none border-0 bg-transparent pt-2 font-serif text-[21px] font-light leading-[1.8] text-stone-800 outline-none placeholder:text-stone-300 sm:min-h-[460px]"
+              className="min-h-[55vh] w-full resize-none border-0 bg-transparent p-0 font-serif text-[21px] font-light leading-[1.8] text-stone-800 outline-none ring-0 placeholder:text-stone-300 focus:border-0 focus:outline-none focus:ring-0 sm:min-h-[460px]"
             />
           )}
 
-          {imageName && isImage && (
-            <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400">
-              {imageName}
-            </div>
-          )}
+          {imageName &&
+            isImage && (
+              <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-400">
+                {imageName}
+              </div>
+            )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-stone-200/80 px-5 py-4 sm:px-7">
+        <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
             <input
               ref={fileRef}
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(event) => {
+              onChange={(
+                event,
+              ) => {
                 const file =
-                  event.target.files?.[0];
+                  event.target
+                    .files?.[0];
 
                 if (file) {
-                  void uploadImage(file);
+                  void uploadImage(
+                    file,
+                  );
                 }
 
-                event.target.value = '';
+                event.target.value =
+                  '';
               }}
             />
 
@@ -1189,7 +1548,10 @@ export default function NewPostModal({
                 setError(null);
                 fileRef.current?.click();
               }}
-              disabled={!item || busy}
+              disabled={
+                !item ||
+                busy
+              }
               className="flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 transition hover:border-stone-400 hover:text-stone-900 disabled:cursor-not-allowed disabled:text-stone-300"
               aria-label="Add image"
               title="Add image"
@@ -1198,68 +1560,48 @@ export default function NewPostModal({
             </button>
 
             <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-400">
-              {saveState === 'saving'
+              {saveState ===
+              'saving'
                 ? 'Saving'
-                : saveState === 'error'
-                  ? 'Error'
-                  : 'Saved'}
+                : saveState ===
+                    'error'
+                ? 'Error'
+                : 'Saved'}
             </span>
 
             <span
               className={`h-1.5 w-1.5 rounded-full ${
-                saveState === 'error'
+                saveState ===
+                'error'
                   ? 'bg-red-400'
-                  : saveState === 'saving' ||
-                      saveState === 'publishing'
-                    ? 'animate-pulse bg-stone-500'
-                    : 'bg-stone-300'
+                  : saveState ===
+                        'saving' ||
+                      saveState ===
+                        'publishing'
+                  ? 'animate-pulse bg-stone-500'
+                  : 'bg-stone-300'
               }`}
               aria-hidden="true"
             />
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                void finish('later')
-              }
-              disabled={
-                !item ||
-                busy
-              }
-              className="rounded-full px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 disabled:text-stone-300 sm:px-4"
-            >
-              Later
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                void finish('ai')
-              }
-              disabled={
-                !item ||
-                busy
-              }
-              className="rounded-full px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 disabled:text-stone-300 sm:px-4"
-            >
-              AI
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                void finish('direct')
-              }
-              disabled={!canPost}
-              className="rounded-full bg-stone-900 px-5 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
-            >
-              {saveState === 'publishing'
-                ? '…'
-                : 'Post'}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() =>
+              void finish()
+            }
+            disabled={
+              !canPost
+            }
+            className="rounded-full bg-stone-900 px-6 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+          >
+            {saveState ===
+            'publishing'
+              ? '…'
+              : isEditing
+              ? 'Save'
+              : 'Post'}
+          </button>
         </div>
       </div>
     </div>

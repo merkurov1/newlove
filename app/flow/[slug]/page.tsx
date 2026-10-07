@@ -20,18 +20,35 @@ type FlowItem = {
   visibility: string;
   body_md: string | null;
   source_url: string | null;
-  metadata: Record<string, unknown> | null;
+  metadata:
+    | Record<string, unknown>
+    | null;
   published_at: string | null;
+};
+
+type AIContext = {
+  id: string;
+  item_id: string;
+  content: string | null;
+  model: string | null;
+  provider: string;
+  status: string;
+  generated_at: string | null;
 };
 
 function getSupabaseAdmin() {
   const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env
+      .NEXT_PUBLIC_SUPABASE_URL;
 
   const serviceRoleKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !serviceRoleKey) {
+  if (
+    !url ||
+    !serviceRoleKey
+  ) {
     throw new Error(
       'Supabase server environment variables are missing.',
     );
@@ -42,8 +59,10 @@ function getSupabaseAdmin() {
     serviceRoleKey,
     {
       auth: {
-        autoRefreshToken: false,
-        persistSession: false,
+        autoRefreshToken:
+          false,
+        persistSession:
+          false,
       },
     },
   );
@@ -93,23 +112,24 @@ function LinkCard({
     'string'
       ? metadata.site_name
       : item.source_url
-        ? (() => {
-            try {
-              return new URL(
-                item.source_url!,
-              ).hostname;
-            } catch {
-              return item.source_url;
-            }
-          })()
-        : '';
+      ? (() => {
+          try {
+            return new URL(
+              item.source_url!,
+            ).hostname;
+          } catch {
+            return item.source_url;
+          }
+        })()
+      : '';
 
   return (
     <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
       {image && (
         <a
           href={
-            item.source_url ?? '#'
+            item.source_url ??
+            '#'
           }
           target="_blank"
           rel="noopener noreferrer"
@@ -143,7 +163,8 @@ function LinkCard({
 
         <a
           href={
-            item.source_url ?? '#'
+            item.source_url ??
+            '#'
           }
           target="_blank"
           rel="noopener noreferrer"
@@ -219,7 +240,7 @@ function MarkdownBody({
           blockquote: ({
             children,
           }) => (
-            <blockquote className="my-9 border-l-2 border-stone-900 pl-6 font-serif text-xl font-light italic leading-relaxed text-stone-600 sm:text-2xl">
+            <blockquote className="my-9 border-l-2 border-stone-900 pl-6 font-serif text-xl font-light leading-relaxed text-stone-600 sm:text-2xl">
               {children}
             </blockquote>
           ),
@@ -284,12 +305,107 @@ function MarkdownBody({
   );
 }
 
+function PhotoView({
+  item,
+}: {
+  item: FlowItem;
+}) {
+  const publicUrl =
+    item.metadata &&
+    typeof item.metadata
+      .public_url ===
+      'string'
+      ? item.metadata
+          .public_url
+      : null;
+
+  if (!publicUrl) {
+    return (
+      <MarkdownBody
+        body={
+          item.body_md ??
+          ''
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-3 shadow-sm">
+      <img
+        src={publicUrl}
+        alt={
+          item.metadata &&
+          typeof item.metadata
+            .alt ===
+            'string'
+            ? item.metadata.alt
+            : ''
+        }
+        className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
+      />
+    </div>
+  );
+}
+
+function AIContextBlock({
+  context,
+}: {
+  context: AIContext | null;
+}) {
+  if (
+    !context ||
+    context.status !==
+      'ready' ||
+    !context.content
+  ) {
+    return null;
+  }
+
+  return (
+    <section className="mt-14 border-t border-stone-200 pt-8">
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
+          Context
+        </div>
+
+        {context.model && (
+          <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-300">
+            {context.provider}
+          </div>
+        )}
+      </div>
+
+      <div className="font-serif text-[18px] font-light leading-[1.85] text-stone-600 sm:text-[20px]">
+        {context.content
+          .split(/\n\s*\n/)
+          .map(
+            (
+              paragraph,
+              index,
+            ) => (
+              <p
+                key={index}
+                className={
+                  index > 0
+                    ? 'mt-5'
+                    : ''
+                }
+              >
+                {paragraph}
+              </p>
+            ),
+          )}
+      </div>
+    </section>
+  );
+}
+
 export default async function FlowItemPage({
   params,
 }: PageProps) {
-  const {
-    slug,
-  } = await params;
+  const { slug } =
+    await params;
 
   const decodedSlug =
     decodeURIComponent(slug);
@@ -335,6 +451,38 @@ export default async function FlowItemPage({
     notFound();
   }
 
+  const {
+    data: contextData,
+    error:
+      contextError,
+  } = await supabase
+    .from(
+      'flow_ai_context',
+    )
+    .select(
+      'id,item_id,content,model,provider,status,generated_at',
+    )
+    .eq(
+      'item_id',
+      item.id,
+    )
+    .eq(
+      'status',
+      'ready',
+    )
+    .maybeSingle();
+
+  if (contextError) {
+    console.warn(
+      '[flow/item] AI context unavailable:',
+      contextError,
+    );
+  }
+
+  const context =
+    (contextData as AIContext | null) ??
+    null;
+
   return (
     <main className="min-h-screen bg-[#FAF8F5] px-5 pb-24 pt-28 text-stone-900 sm:px-8 sm:pt-36">
       <article className="mx-auto max-w-3xl">
@@ -372,44 +520,22 @@ export default async function FlowItemPage({
             />
           ) : item.type ===
             'photo' ? (
-            <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-3 shadow-sm">
-              {typeof item
-                .metadata
-                ?.public_url ===
-              'string' ? (
-                <img
-                  src={
-                    item.metadata
-                      .public_url
-                  }
-                  alt={
-                    typeof item
-                      .metadata
-                      ?.alt ===
-                    'string'
-                      ? item.metadata
-                          .alt
-                      : ''
-                  }
-                  className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
-                />
-              ) : (
-                <MarkdownBody
-                  body={
-                    item.body_md ??
-                    ''
-                  }
-                />
-              )}
-            </div>
+            <PhotoView
+              item={item}
+            />
           ) : (
             <MarkdownBody
               body={
-                item.body_md ?? ''
+                item.body_md ??
+                ''
               }
             />
           )}
         </div>
+
+        <AIContextBlock
+          context={context}
+        />
       </article>
     </main>
   );
