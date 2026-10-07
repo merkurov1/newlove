@@ -1,4 +1,4 @@
-// app/temple/TempleClient.tsx
+// app/temple/page.tsx
 
 'use client';
 
@@ -19,13 +19,17 @@ import {
   Activity,
   Clock,
   Layers,
-  Heart
+  Heart,
+  Send
 } from 'lucide-react';
 import Link from 'next/link';
+import useIsTelegram from '@/components/useIsTelegram';
 
 const ASSETS = {
-  angel: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
-  daemon: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Daemon1.png',
+  angel:
+    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Angel1.png',
+  daemon:
+    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/Daemon1.png',
 };
 
 interface TemplePost {
@@ -44,28 +48,68 @@ function getEventVisuals(eventType: string) {
   switch (eventType?.toUpperCase()) {
     case 'VIGIL':
     case 'VIGIL_SPARK':
-      return { icon: Flame, color: 'text-amber-500', label: 'Vigil' };
+      return {
+        icon: Flame,
+        color: 'text-amber-500',
+        label: 'Vigil'
+      };
+
     case 'ASH':
-      return { icon: Trash2, color: 'text-rose-500', label: 'Let It Go' };
+      return {
+        icon: Trash2,
+        color: 'text-rose-500',
+        label: 'Let It Go'
+      };
+
     case 'CAST':
-      return { icon: Compass, color: 'text-indigo-400', label: 'Cast' };
+      return {
+        icon: Compass,
+        color: 'text-indigo-400',
+        label: 'Cast'
+      };
+
     case 'ABSOLUTION':
-      return { icon: ShieldCheck, color: 'text-emerald-400', label: 'Absolution' };
+      return {
+        icon: ShieldCheck,
+        color: 'text-emerald-400',
+        label: 'Absolution'
+      };
+
     case 'TRIBUTE':
-      return { icon: Heart, color: 'text-amber-300', label: 'Tribute' };
+      return {
+        icon: Heart,
+        color: 'text-amber-300',
+        label: 'Tribute'
+      };
+
     case 'HEARTANDANGEL':
     case 'MEDITATION':
     case 'SILENCE':
-      return { icon: Moon, color: 'text-purple-400', label: 'Calm' };
+      return {
+        icon: Moon,
+        color: 'text-purple-400',
+        label: 'Calm'
+      };
+
     case 'WHISPER':
-      return { icon: Sparkles, color: 'text-amber-300', label: 'Whisper' };
+      return {
+        icon: Sparkles,
+        color: 'text-amber-300',
+        label: 'Whisper'
+      };
+
     default:
-      return { icon: Radio, color: 'text-stone-400', label: eventType || 'Log' };
+      return {
+        icon: Radio,
+        color: 'text-stone-400',
+        label: eventType || 'Log'
+      };
   }
 }
 
 function formatTime(iso?: string) {
   const d = iso ? new Date(iso) : new Date();
+
   if (isNaN(d.getTime())) return '';
 
   const time = d.toLocaleTimeString([], {
@@ -73,7 +117,9 @@ function formatTime(iso?: string) {
     minute: '2-digit'
   });
 
-  if (d.toDateString() === new Date().toDateString()) return time;
+  if (d.toDateString() === new Date().toDateString()) {
+    return time;
+  }
 
   return `${d.toLocaleDateString([], {
     day: 'numeric',
@@ -143,6 +189,8 @@ export default function TempleClient() {
   const [isTracesOpen, setIsTracesOpen] = useState(false);
   const [isChroniclesOpen, setIsChroniclesOpen] = useState(false);
   const [lighting, setLighting] = useState(DEFAULT_LIGHTING);
+  const [tgUser, setTgUser] = useState<any>(null);
+  const isTelegramApp = useIsTelegram();
 
   const [posts, setPosts] = useState<TemplePost[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -156,27 +204,30 @@ export default function TempleClient() {
   });
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && isTelegramApp) {
       const tg = (window as any).Telegram?.WebApp;
 
-      if (tg) {
-        try {
-          tg?.ready?.();
-          tg?.expand?.();
-        } catch (e) {}
+      try {
+        tg?.ready?.();
+        tg?.expand?.();
+      } catch (e) {}
 
-        if (tg.initDataUnsafe?.user) {
-          const displayName =
-            tg.initDataUnsafe.user.username ||
-            tg.initDataUnsafe.user.first_name ||
-            'Pilgrim';
+      const user = tg?.initDataUnsafe?.user;
 
-          localStorage.setItem('temple_user', displayName);
-        }
+      if (user) {
+        setTgUser(user);
+        localStorage.setItem('tg_user', JSON.stringify(user));
+
+        const displayName =
+          user.username || user.first_name || 'Pilgrim';
+
+        localStorage.setItem('temple_user', displayName);
       }
     }
 
+    // Deliberately preserved: Angel / Daemon is random.
     setHeroUrl(Math.random() > 0.5 ? ASSETS.angel : ASSETS.daemon);
+
     setLighting(getTimeLighting());
 
     setStats(prev => ({
@@ -194,7 +245,7 @@ export default function TempleClient() {
     }, 60000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [isTelegramApp]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -238,6 +289,7 @@ export default function TempleClient() {
 
         const ritualLogs = rawData.filter((item: any) => {
           const type = String(item.event_type || '').toLowerCase();
+
           return type !== 'enter' && type !== 'nav';
         });
 
@@ -283,9 +335,7 @@ export default function TempleClient() {
           setPosts(formatted);
 
           const authorsSet = new Set(
-            ritualLogs
-              .map((i: any) => i.author)
-              .filter(Boolean)
+            ritualLogs.map((i: any) => i.author).filter(Boolean)
           );
 
           const vigils = ritualLogs.filter((i: any) =>
@@ -332,23 +382,40 @@ export default function TempleClient() {
       ? 'bg-white/10 border-white/20 text-stone-200 hover:bg-white/20'
       : 'bg-white/80 border-stone-300 text-stone-900 hover:bg-white';
 
+  const ritualButtonStyle = `w-full min-h-[54px] px-4 py-3 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center flex items-center justify-center ${actionButtonStyle}`;
+
   return (
     <div
       className={`relative w-full min-h-[100dvh] ${lighting.bg} ${lighting.text} font-sans overflow-x-hidden select-none flex flex-col justify-between px-4 sm:px-8 md:px-12 pt-4 pb-10 transition-colors duration-1000`}
       style={{ backgroundImage: lighting.vignette }}
     >
-      <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 py-2">
-        <Link
-          href="/heartandangel/world"
-          className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
-        >
-          <span>← Back to World</span>
-        </Link>
+      {!isTelegramApp && (
+        <header className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 pt-24 sm:pt-28 pb-2">
+          <div className="flex items-center">
+            <Link
+              href="/heartandangel/world"
+              className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border shadow-sm transition-all text-xs font-serif tracking-wider cursor-pointer ${actionButtonStyle}`}
+            >
+              <span>← Back to World</span>
+            </Link>
+          </div>
 
-        <SoundToggle
-          className={`px-3 py-2 border shadow-sm ${actionButtonStyle}`}
-        />
-      </header>
+          <SoundToggle
+            className={`px-3 py-2 border shadow-sm ${actionButtonStyle}`}
+          />
+        </header>
+      )}
+
+      {isTelegramApp && tgUser && (
+        <div className="relative z-40 flex items-center justify-between w-full max-w-5xl mx-auto px-2 sm:px-4 py-1">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-xs font-serif">
+            <Send size={12} className="text-emerald-500" />
+            <span className="opacity-80">
+              @{tgUser.username || tgUser.first_name}
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="relative w-full flex-1 flex items-center justify-center px-2 sm:px-4 my-auto py-6">
         <div
@@ -356,7 +423,8 @@ export default function TempleClient() {
         />
 
         <div className="relative z-30 max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center">
-          <div className="flex flex-col items-center justify-center relative pointer-events-none my-auto">
+          {/* Guardian */}
+          <div className="flex flex-col items-center justify-center relative pointer-events-none my-auto order-1 md:order-1">
             <div className="absolute bottom-0 w-24 h-5 bg-black/20 rounded-full blur-[10px]" />
 
             {heroUrl && (
@@ -373,46 +441,57 @@ export default function TempleClient() {
             )}
           </div>
 
-          <div className="flex flex-col items-stretch gap-3 w-full max-w-sm mx-auto md:mx-0">
-            <Link
-              href="/heartandangel/calm"
-              className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
-            >
-              Calm
-            </Link>
+          {/* Six rituals */}
+          <div className="w-full max-w-sm mx-auto md:mx-0 order-2 md:order-2">
+            <div className="grid grid-cols-2 gap-3">
+              <Link
+                href="/heartandangel/calm"
+                className={ritualButtonStyle}
+              >
+                Calm
+              </Link>
 
-            <Link
-              href="/heartandangel/letitgo"
-              className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
-            >
-              Let It Go
-            </Link>
+              <Link
+                href="/heartandangel/letitgo"
+                className={ritualButtonStyle}
+              >
+                Let It Go
+              </Link>
 
-            <Link
-              href="/vigil"
-              className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
-            >
-              Vigil
-            </Link>
+              <Link
+                href="/vigil"
+                className={ritualButtonStyle}
+              >
+                Vigil
+              </Link>
 
-            <Link
-              href="/absolution"
-              className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
-            >
-              Absolution
-            </Link>
+              <Link
+                href="/absolution"
+                className={ritualButtonStyle}
+              >
+                Absolution
+              </Link>
 
-            <Link
-              href="/tribute"
-              className={`w-full py-3 px-6 rounded-2xl backdrop-blur-md border shadow-sm font-serif text-sm tracking-wider transition-all hover:scale-[1.02] active:scale-95 cursor-pointer text-center ${actionButtonStyle}`}
-            >
-              Tribute
-            </Link>
+              <Link
+                href="/cast"
+                className={ritualButtonStyle}
+              >
+                Cast
+              </Link>
 
-            <div className="flex items-center justify-center gap-2 mt-2 w-full">
+              <Link
+                href="/tribute"
+                className={ritualButtonStyle}
+              >
+                Tribute
+              </Link>
+            </div>
+
+            {/* Temple utilities */}
+            <div className="flex items-center justify-center gap-2 mt-3 w-full">
               <button
                 onClick={() => setIsChroniclesOpen(true)}
-                className={`flex-1 py-2 px-3 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
+                className={`flex-1 py-2.5 px-2.5 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
               >
                 <Activity size={12} className="opacity-80" />
                 <span>Chronicles</span>
@@ -420,7 +499,7 @@ export default function TempleClient() {
 
               <button
                 onClick={() => setIsTracesOpen(true)}
-                className={`flex-1 py-2 px-3 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
+                className={`flex-1 py-2.5 px-2.5 rounded-xl backdrop-blur-md border shadow-sm flex items-center justify-center gap-1.5 transition-transform hover:scale-105 cursor-pointer font-serif text-[10px] tracking-widest uppercase ${actionButtonStyle}`}
               >
                 <Layers size={12} className="opacity-80" />
                 <span>Traces</span>
@@ -428,7 +507,7 @@ export default function TempleClient() {
 
               <button
                 onClick={() => setIsInfoOpen(true)}
-                className={`w-9 h-9 rounded-xl border backdrop-blur-sm shadow-sm flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic shrink-0 ${actionButtonStyle}`}
+                className={`w-10 h-10 rounded-xl border backdrop-blur-sm shadow-sm flex items-center justify-center transition-transform hover:scale-105 cursor-pointer font-serif text-sm italic shrink-0 ${actionButtonStyle}`}
                 title="About Temple"
                 aria-label="Open Sanctuary information"
               >
@@ -550,7 +629,9 @@ export default function TempleClient() {
                       >
                         <div className="flex items-center gap-2.5 shrink-0">
                           <div
-                            className={`w-7 h-7 rounded-full bg-stone-500/10 flex items-center justify-center ${post.color || 'text-stone-400'}`}
+                            className={`w-7 h-7 rounded-full bg-stone-500/10 flex items-center justify-center ${
+                              post.color || 'text-stone-400'
+                            }`}
                           >
                             <IconComponent size={15} />
                           </div>
@@ -567,7 +648,9 @@ export default function TempleClient() {
 
                           <span className="opacity-40">•</span>
 
-                          <span className="truncate">{post.content}</span>
+                          <span className="truncate">
+                            {post.content}
+                          </span>
                         </div>
 
                         <div className="font-mono text-[10px] opacity-50 shrink-0 text-right">

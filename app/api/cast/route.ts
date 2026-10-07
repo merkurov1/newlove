@@ -6,6 +6,7 @@ export const runtime = 'nodejs';
 
 const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
 const supabase = createClient(sbUrl, sbKey);
 
 const FREE_MODELS = [
@@ -16,28 +17,40 @@ const FREE_MODELS = [
   'google/gemma-2-9b-it:free'
 ];
 
-function buildSystemPrompt(language: 'en' | 'ru') {
-  const langNote = language === 'ru' ? 'OUTPUT MUST BE IN RUSSIAN.' : 'OUTPUT MUST BE IN ENGLISH.'
+const ALLOWED_ARCHETYPES = [
+  'VOID',
+  'NOISE',
+  'STONE',
+  'UNFRAMED'
+] as const;
 
-  const AGENCY_RULES = language === 'ru' ? 
-  `
-  [ ПРИОРИТЕТНАЯ ДИРЕКТИВА: AGENCY_INDEX ]
-  1. Вычисли 'Индекс Агентности' (воля к действию vs фатализм).
-  2. Если пользователь ссылается на внешние силы (карма, судьба, 'так вышло'), авторитетов (гуру) или позицию жертвы — это НИЗКИЙ индекс.
-  3. ПРИ НИЗКОМ ИНДЕКСЕ: Присвой статус VOID или STONE, даже если ответы кажутся умными.
-  `
-  : 
-  `
-  [ PRIORITY DIRECTIVE: AGENCY_INDEX ]
-  1. Calculate 'Index of Agency' (will to act vs fatalism).
-  2. If user refers to external forces (karma, fate, 'it happened'), authorities (gurus), or victimhood — this is LOW index.
-  3. IF INDEX IS LOW: Force status VOID or STONE.
-  `
+type Language = 'en' | 'ru';
+
+function buildSystemPrompt(language: Language) {
+  const langNote =
+    language === 'ru'
+      ? 'OUTPUT MUST BE IN RUSSIAN.'
+      : 'OUTPUT MUST BE IN ENGLISH.';
+
+  const agencyRules =
+    language === 'ru'
+      ? `
+[ ПРИОРИТЕТНАЯ ДИРЕКТИВА: AGENCY_INDEX ]
+1. Вычисли 'Индекс Агентности' (воля к действию vs фатализм).
+2. Если пользователь ссылается на внешние силы (карма, судьба, 'так вышло'), авторитетов (гуру) или позицию жертвы — это НИЗКИЙ индекс.
+3. ПРИ НИЗКОМ ИНДЕКСЕ: Присвой статус VOID или STONE, даже если ответы кажутся умными.
+`
+      : `
+[ PRIORITY DIRECTIVE: AGENCY_INDEX ]
+1. Calculate 'Index of Agency' (will to act vs fatalism).
+2. If user refers to external forces (karma, fate, 'it happened'), authorities (gurus), or victimhood — this is LOW index.
+3. IF INDEX IS LOW: Force status VOID or STONE.
+`;
 
   return `You are THE MERKUROV ANALYZER. Tone: cold, clinical, brutally honest.
 Task: Analyze 10 answers. Assign ONE archetype.
 
-${AGENCY_RULES}
+${agencyRules}
 
 ARCHETYPE DEFINITIONS:
 - VOID: Apathy, short answers, "normalcy", emptiness, lack of detail, hiding behind "I don't know".
@@ -53,7 +66,12 @@ PROCESS:
 OUTPUT FORMAT (JSON ONLY):
 {
   "archetype": "VOID",
-  "scores": { "VOID": 10, "STONE": 2, "NOISE": 1, "UNFRAMED": 0 }, 
+  "scores": {
+    "VOID": 10,
+    "STONE": 2,
+    "NOISE": 1,
+    "UNFRAMED": 0
+  },
   "executive_summary": "Two sentences. Mention the Agency Index explicitly.",
   "structural_weaknesses": "Short paragraph. Brutal critique.",
   "core_assets": "Short paragraph. What can be monetized.",
@@ -61,157 +79,369 @@ OUTPUT FORMAT (JSON ONLY):
 }
 
 ${langNote}
-`
+`;
 }
 
 function extractJSON(text: string) {
-  let clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
-  const jsonMatch = clean.match(/\{[\s\S]*\}/m)
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[0])
-    } catch (e) {
-      console.error("JSON Parse Error:", e)
-      return null
-    }
+  const clean = text
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim();
+
+  const jsonMatch = clean.match(/\{[\s\S]*\}/m);
+
+  if (!jsonMatch) {
+    return null;
   }
-  return null
+
+  try {
+    return JSON.parse(jsonMatch[0]);
+  } catch (error) {
+    console.error('[Cast] JSON parse error:', error);
+    return null;
+  }
+}
+
+function normalizeArchetype(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toUpperCase();
+
+  return ALLOWED_ARCHETYPES.includes(
+    normalized as (typeof ALLOWED_ARCHETYPES)[number]
+  )
+    ? normalized
+    : null;
+}
+
+function normalizeAnalysis(parsed: any) {
+  if (!parsed || typeof parsed !== 'object') {
+    return null;
+  }
+
+  const archetype = normalizeArchetype(parsed.archetype);
+
+  if (!archetype) {
+    return null;
+  }
+
+  return {
+    archetype,
+    scores:
+      parsed.scores && typeof parsed.scores === 'object'
+        ? parsed.scores
+        : {},
+    executive_summary:
+      typeof parsed.executive_summary === 'string'
+        ? parsed.executive_summary
+        : '',
+    structural_weaknesses:
+      typeof parsed.structural_weaknesses === 'string'
+        ? parsed.structural_weaknesses
+        : '',
+    core_assets:
+      typeof parsed.core_assets === 'string'
+        ? parsed.core_assets
+        : '',
+    strategic_directive:
+      typeof parsed.strategic_directive === 'string'
+        ? parsed.strategic_directive
+        : ''
+  };
+}
+
+async function resolveUser(req: Request) {
+  const authHeader = req.headers.get('authorization');
+
+  if (!authHeader) {
+    return {
+      userId: null as string | null,
+      userEmail: null as string | null,
+      userName: 'Visitor'
+    };
+  }
+
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+  if (!token) {
+    return {
+      userId: null,
+      userEmail: null,
+      userName: 'Visitor'
+    };
+  }
+
+  try {
+    const {
+      data: { user }
+    } = await supabase.auth.getUser(token);
+
+    if (!user) {
+      return {
+        userId: null,
+        userEmail: null,
+        userName: 'Visitor'
+      };
+    }
+
+    let userName = 'Visitor';
+
+    const { data: profile } = await supabase
+      .from('users')
+      .select('name, username')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profile?.name) {
+      userName = profile.name;
+    } else if (profile?.username) {
+      userName = profile.username;
+    } else if (user.user_metadata?.name) {
+      userName = user.user_metadata.name;
+    } else if (user.email) {
+      userName = user.email.split('@')[0];
+    }
+
+    return {
+      userId: user.id,
+      userEmail: user.email || null,
+      userName
+    };
+  } catch (error) {
+    console.warn('[Cast] Could not resolve auth user:', error);
+
+    return {
+      userId: null,
+      userEmail: null,
+      userName: 'Visitor'
+    };
+  }
 }
 
 export async function POST(req: Request) {
   try {
-    const apiKey = (process.env.OPENROUTER_API_KEY || "").trim();
+    const apiKey = (process.env.OPENROUTER_API_KEY || '').trim();
+
     if (!apiKey) {
-      return NextResponse.json({ error: 'API Key missing.' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'API Key missing.' },
+        { status: 500 }
+      );
     }
 
-    const { answers, language } = await req.json()
-    const lang: 'en' | 'ru' = language === 'ru' ? 'ru' : 'en'
+    let body: any;
 
-    if (!answers || !Array.isArray(answers)) {
-      return NextResponse.json({ error: 'Answers required' }, { status: 400 })
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: 'Invalid request body.' },
+        { status: 400 }
+      );
     }
 
-    // Извлекаем пользователя из заголовка авторизации Supabase
-    const authHeader = req.headers.get('authorization')
-    let userId: string | null = null
-    let userEmail: string | null = null
-    let userName = 'Visitor'
+    const { answers, language } = body;
 
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '')
-      const { data: { user } } = await supabase.auth.getUser(token)
-      if (user) {
-        userId = user.id
-        userEmail = user.email || null
-        
-        // Достаем актуальный профиль из таблицы users
-        const { data: profile } = await supabase
-          .from('users')
-          .select('name, username')
-          .eq('id', userId)
-          .maybeSingle()
-        
-        if (profile?.name) userName = profile.name
-        else if (user.user_metadata?.name) userName = user.user_metadata.name
-        else if (user.email) userName = user.email.split('@')[0]
-      }
+    const lang: Language = language === 'ru' ? 'ru' : 'en';
+
+    if (!Array.isArray(answers)) {
+      return NextResponse.json(
+        { error: 'Answers required.' },
+        { status: 400 }
+      );
     }
+
+    if (answers.length !== 10) {
+      return NextResponse.json(
+        { error: 'Exactly 10 answers are required.' },
+        { status: 400 }
+      );
+    }
+
+    const normalizedAnswers = answers.map((answer: unknown) =>
+      typeof answer === 'string' ? answer.trim() : ''
+    );
+
+    if (
+      normalizedAnswers.some(answer => answer.length < 3)
+    ) {
+      return NextResponse.json(
+        { error: 'All answers must contain meaningful text.' },
+        { status: 400 }
+      );
+    }
+
+    const {
+      userId,
+      userEmail,
+      userName
+    } = await resolveUser(req);
 
     const openai = new OpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: apiKey,
+      apiKey,
       defaultHeaders: {
         'HTTP-Referer': 'https://merkurov.love',
-        'X-Title': 'Digital Temple Cast Protocol',
-      },
+        'X-Title': 'Digital Temple Cast Protocol'
+      }
     });
 
-    const systemPrompt = buildSystemPrompt(lang)
-    const userText = `USER ANSWERS:\n${answers.map((a: string, i: number) => `${i + 1}.${a}`).join('\n')}`
+    const systemPrompt = buildSystemPrompt(lang);
 
-    let completion = null;
-    let lastError = null;
+    const userText = `USER ANSWERS:\n${normalizedAnswers
+      .map(
+        (answer: string, index: number) =>
+          `${index + 1}. ${answer}`
+      )
+      .join('\n')}`;
+
+    let completion: any = null;
+    let lastError: unknown = null;
 
     for (const model of FREE_MODELS) {
       try {
         completion = await openai.chat.completions.create({
-          model: model,
+          model,
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userText }
+            {
+              role: 'system',
+              content: systemPrompt
+            },
+            {
+              role: 'user',
+              content: userText
+            }
           ],
           temperature: 0.7,
-          response_format: { type: 'json_object' }
+          response_format: {
+            type: 'json_object'
+          }
         });
-        if (completion?.choices[0]?.message?.content) {
+
+        if (
+          completion?.choices?.[0]?.message?.content
+        ) {
           break;
         }
-      } catch (err: any) {
-        console.warn(`[Cast] Model ${model} failed:`, err?.message || err);
-        lastError = err;
+      } catch (error: any) {
+        console.warn(
+          `[Cast] Model ${model} failed:`,
+          error?.message || error
+        );
+
+        lastError = error;
       }
     }
 
     if (!completion) {
-      throw lastError || new Error('All free models are currently unavailable.');
+      throw (
+        lastError ||
+        new Error(
+          'All free models are currently unavailable.'
+        )
+      );
     }
 
-    const rawText = completion.choices[0]?.message?.content || '{}';
+    const rawText =
+      completion?.choices?.[0]?.message?.content || '';
 
-    let parsed = extractJSON(rawText)
-    let archetype = 'VOID'
-    
-    if (parsed && parsed.archetype) {
-      archetype = String(parsed.archetype).toUpperCase()
-    } else {
-      const match = rawText.match(/\"?ARCHETYPE\"?:?\s*\"?([A-Z]+)\"?/i)
-      if (match) archetype = String(match[1] || 'VOID').toUpperCase()
-      
-      parsed = {
-        archetype: archetype,
-        executive_summary: "Analysis corrupted. Core reset required.",
-        structural_weaknesses: "Data stream interrupted.",
-        core_assets: "Unknown.",
-        strategic_directive: "Retry Protocol.",
-        scores: { VOID: 1, STONE: 0, NOISE: 0, UNFRAMED: 0 }
+    if (!rawText) {
+      throw new Error('The Core returned an empty response.');
+    }
+
+    let parsed = extractJSON(rawText);
+
+    if (!parsed) {
+      const match = rawText.match(
+        /"?ARCHETYPE"?\s*:?\s*"?(VOID|NOISE|STONE|UNFRAMED)"?/i
+      );
+
+      if (match) {
+        parsed = {
+          archetype: match[1],
+          scores: {},
+          executive_summary: '',
+          structural_weaknesses: '',
+          core_assets: '',
+          strategic_directive: 'Retry Protocol.'
+        };
       }
     }
 
-    // Сохраняем в таблицу casts
-    const { data: record, error } = await supabase
-      .from('casts')
-      .insert({ 
+    const normalized = normalizeAnalysis(parsed);
+
+    if (!normalized) {
+      throw new Error(
+        'The Core returned an invalid analysis structure.'
+      );
+    }
+
+    const archetype = normalized.archetype;
+
+    const { data: record, error: recordError } =
+      await supabase
+        .from('casts')
+        .insert({
           user_id: userId,
           email: userEmail,
-          answers, 
-          language: lang, 
-          analysis: parsed, 
+          answers: normalizedAnswers,
+          language: lang,
+          analysis: normalized,
           archetype,
           created_at: new Date().toISOString()
-      })
-      .select()
-      .maybeSingle()
+        })
+        .select('id')
+        .maybeSingle();
 
-    if (error) console.error('Supabase DB Error:', error)
+    if (recordError) {
+      console.error(
+        '[Cast] Supabase casts insert error:',
+        recordError
+      );
 
-    // Дублируем событие в общую ленту храма с реальным user_id и именем автора
-    await supabase.from('temple_log').insert({
-      user_id: userId,
-      author: userName,
-      event_type: 'CAST',
-      message: `Perceptual archetype manifested: ${archetype}`,
-      created_at: new Date().toISOString()
-    })
+      throw new Error(
+        'Analysis completed, but the protocol record could not be secured.'
+      );
+    }
 
-    return NextResponse.json({ 
-        analysis: parsed, 
-        archetype, 
-        recordId: record?.id 
-    })
+    if (record?.id) {
+      const { error: templeError } = await supabase
+        .from('temple_log')
+        .insert({
+          user_id: userId,
+          author: userName,
+          event_type: 'CAST',
+          message: `Perceptual archetype manifested: ${archetype}`,
+          created_at: new Date().toISOString()
+        });
 
-  } catch (err: any) {
-    console.error('Cast route fatal error:', err)
-    return NextResponse.json({ error: 'Internal Core Error', details: err?.message || String(err) }, { status: 500 })
+      if (templeError) {
+        // The Cast itself remains successful if the public trace fails.
+        console.error(
+          '[Cast] Temple trace insert error:',
+          templeError
+        );
+      }
+    }
+
+    return NextResponse.json({
+      analysis: normalized,
+      archetype,
+      recordId: record?.id || null
+    });
+  } catch (error: any) {
+    console.error('[Cast] Fatal error:', error);
+
+    return NextResponse.json(
+      {
+        error:
+          error?.message || 'Internal Core Error'
+      },
+      {
+        status: 500
+      }
+    );
   }
 }

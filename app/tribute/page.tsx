@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -10,6 +10,11 @@ const HEART_VIDEO =
   'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/-5300087847065473569.mp4';
 
 const PRESETS = [5, 20, 100];
+
+type TributeRow = {
+  status: string | null;
+  donor_name: string | null;
+};
 
 const supabase = createClient();
 
@@ -23,8 +28,79 @@ export default function TributePage() {
   const [pulse, setPulse] = useState(false);
   const [lastDonor, setLastDonor] = useState<string | null>(null);
 
+  const pulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const donorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchTotal = useCallback(async () => {
+    const yesterday = new Date(
+      Date.now() - 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    const { data, error } = await supabase
+      .from('tributes')
+      .select('amount_cents')
+      .eq('status', 'succeeded')
+      .gte('created_at', yesterday);
+
+    if (error) {
+      console.error('Tribute total error:', error);
+      return;
+    }
+
+    const sumCents = (data ?? []).reduce(
+      (acc: number, curr: { amount_cents: number | null }) =>
+        acc + Number(curr.amount_cents || 0),
+      0
+    );
+
+    setTotal24h(sumCents / 100);
+  }, []);
+
+  const triggerHaptic = useCallback(
+    (style: 'light' | 'medium' | 'heavy') => {
+      try {
+        const tg = (window as any)?.Telegram?.WebApp;
+
+        if (tg?.HapticFeedback?.impactOccurred) {
+          tg.HapticFeedback.impactOccurred(style);
+        }
+      } catch {
+        // Telegram haptics are optional.
+      }
+    },
+    []
+  );
+
+  const triggerPulse = useCallback(
+    (donorName: string | null) => {
+      setPulse(true);
+      setLastDonor(donorName?.trim() || 'PILGRIM');
+
+      triggerHaptic('heavy');
+
+      if (pulseTimeoutRef.current) {
+        clearTimeout(pulseTimeoutRef.current);
+      }
+
+      if (donorTimeoutRef.current) {
+        clearTimeout(donorTimeoutRef.current);
+      }
+
+      pulseTimeoutRef.current = setTimeout(() => {
+        setPulse(false);
+        pulseTimeoutRef.current = null;
+      }, 800);
+
+      donorTimeoutRef.current = setTimeout(() => {
+        setLastDonor(null);
+        donorTimeoutRef.current = null;
+      }, 4000);
+    },
+    [triggerHaptic]
+  );
+
   useEffect(() => {
-    fetchTotal();
+    void fetchTotal();
 
     const channel = supabase
       .channel('tribute-live')
@@ -35,104 +111,101 @@ export default function TributePage() {
           schema: 'public',
           table: 'tributes',
         },
-        (payload: any) => {
-          const newDonation = payload.new;
+        (payload) => {
+          const newDonation = payload.new as TributeRow;
 
           if (newDonation?.status === 'succeeded') {
             triggerPulse(newDonation.donor_name);
-            fetchTotal();
+            void fetchTotal();
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.error('Tribute realtime channel error');
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
+
+      if (pulseTimeoutRef.current) {
+        clearTimeout(pulseTimeoutRef.current);
+        pulseTimeoutRef.current = null;
+      }
+
+      if (donorTimeoutRef.current) {
+        clearTimeout(donorTimeoutRef.current);
+        donorTimeoutRef.current = null;
+      }
     };
-  }, []);
-
-  const fetchTotal = async () => {
-    const yesterday = new Date(
-      Date.now() - 24 * 60 * 60 * 1000
-    ).toISOString();
-
-    const { data } = await supabase
-      .from('tributes')
-      .select('amount_cents')
-      .eq('status', 'succeeded')
-      .gte('created_at', yesterday);
-
-    if (data) {
-      const sumCents = data.reduce(
-        (acc: number, curr: { amount_cents: number }) =>
-          acc + curr.amount_cents,
-        0
-      );
-
-      setTotal24h(sumCents / 100);
-    }
-  };
-
-  const triggerHaptic = (style: 'light' | 'medium' | 'heavy') => {
-    const tg = (window as any).Telegram?.WebApp;
-
-    if (tg?.HapticFeedback) {
-      tg.HapticFeedback.impactOccurred(style);
-    }
-  };
-
-  const triggerPulse = (donorName: string) => {
-    setPulse(true);
-    setLastDonor(donorName || 'PILGRIM');
-
-    triggerHaptic('heavy');
-
-    setTimeout(() => setPulse(false), 800);
-    setTimeout(() => setLastDonor(null), 4000);
-  };
+  }, [fetchTotal, triggerPulse]);
 
   const handleTribute = async () => {
+    if (loading || !Number.isFinite(amount) || amount < 1) {
+      return;
+    }
+
     triggerHaptic('medium');
     setLoading(true);
     setErrorMsg(null);
 
     try {
+      const donorName =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('temple_user') || 'Pilgrim'
+          : 'Pilgrim';
+
       const res = await fetch('/api/tribute/checkout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount,
+          amount: Math.round(amount * 100) / 100,
           currency: 'usd',
-          donor_name:
-            typeof window !== 'undefined'
-              ? localStorage.getItem('temple_user') || 'Pilgrim'
-              : 'Pilgrim',
+          donor_name: donorName,
           message: 'Fuel for the Temple',
         }),
       });
 
-      if (!res.ok) {
-        throw new Error('Payment gateway busy. Try again.');
+      let data: { url?: string; error?: string } = {};
+
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
       }
 
-      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          data.error || 'Payment gateway busy. Try again.'
+        );
+      }
 
-      if (data.url) {
-        const tg = (window as any).Telegram?.WebApp;
+      if (!data.url) {
+        throw new Error('Payment link generation failed.');
+      }
 
-        if (tg && tg.openLink) {
+      try {
+        const tg = (window as any)?.Telegram?.WebApp;
+
+        if (tg?.openLink) {
           tg.openLink(data.url);
         } else {
-          window.location.href = data.url;
+          window.location.assign(data.url);
         }
-      } else {
-        setErrorMsg('Payment link generation failed.');
+      } catch {
+        window.location.assign(data.url);
       }
-    } catch (e: any) {
-      console.error(e);
-      setErrorMsg(e.message || 'Connection failed.');
+    } catch (error) {
+      console.error('Tribute checkout error:', error);
+
+      setErrorMsg(
+        error instanceof Error
+          ? error.message
+          : 'Connection failed.'
+      );
     } finally {
       setLoading(false);
     }
@@ -191,7 +264,10 @@ export default function TributePage() {
             TRIBUTE
           </h1>
 
-          <div className="mt-2 font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-stone-400">
+          <div
+            className="mt-2 font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-stone-400"
+            aria-live="polite"
+          >
             Radiant Energy: ${total24h.toFixed(0)} / 24H
           </div>
         </header>
@@ -210,7 +286,9 @@ export default function TributePage() {
             loop
             muted
             playsInline
-            className="relative h-full w-full rounded-full object-cover border border-white/10"
+            preload="metadata"
+            aria-label="Radiant Heart"
+            className="relative h-full w-full rounded-full border border-white/10 object-cover"
             style={{
               filter: style.filter,
               transform: `scale(${style.scale})`,
@@ -241,6 +319,7 @@ export default function TributePage() {
                   y: -15,
                   scale: 0.9,
                 }}
+                role="status"
                 className="absolute -bottom-9 w-full rounded-full border border-amber-300/25 bg-stone-950/75 px-3 py-1.5 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-stone-200 shadow-lg backdrop-blur-md"
               >
                 <span className="text-amber-400">♥</span>{' '}
@@ -258,6 +337,7 @@ export default function TributePage() {
               return (
                 <button
                   key={value}
+                  type="button"
                   onClick={() => {
                     setAmount(value);
                     setIsCustom(false);
@@ -276,6 +356,7 @@ export default function TributePage() {
             })}
 
             <button
+              type="button"
               onClick={() => {
                 setIsCustom(true);
                 setAmount(0);
@@ -310,11 +391,21 @@ export default function TributePage() {
                 }}
                 type="number"
                 min="1"
+                step="0.01"
+                inputMode="decimal"
+                aria-label="Custom tribute amount"
                 className="mt-4 w-full rounded-xl border border-white/15 bg-white/5 p-3.5 text-center font-mono text-lg text-amber-200 outline-none transition-colors placeholder:text-stone-600 focus:border-amber-400/60 focus:bg-white/10 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 placeholder="ENTER AMOUNT"
                 value={amount || ''}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  setAmount(Number(e.target.value));
+                  const value = Number(e.target.value);
+
+                  setAmount(
+                    Number.isFinite(value)
+                      ? Math.round(value * 100) / 100
+                      : 0
+                  );
+
                   setErrorMsg(null);
                 }}
                 autoFocus
@@ -323,14 +414,18 @@ export default function TributePage() {
           </AnimatePresence>
 
           {errorMsg && (
-            <div className="mt-4 text-center font-mono text-[10px] uppercase tracking-widest text-rose-400">
+            <div
+              className="mt-4 text-center font-mono text-[10px] uppercase tracking-widest text-rose-400"
+              role="alert"
+            >
               {errorMsg}
             </div>
           )}
 
           <button
+            type="button"
             onClick={handleTribute}
-            disabled={loading || amount <= 0}
+            disabled={loading || !Number.isFinite(amount) || amount < 1}
             className="mt-5 flex h-12 w-full items-center justify-center rounded-full border border-amber-300/30 bg-white/10 px-5 font-serif text-xs uppercase tracking-[0.18em] text-stone-100 shadow-md backdrop-blur-md transition-all hover:border-amber-300/60 hover:bg-white/15 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {loading
@@ -352,7 +447,7 @@ export default function TributePage() {
           inset: 0;
           pointer-events: none;
           opacity: 0.04;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' fill='white'/%3E%3C/svg%3E");
           z-index: 1;
         }
       `}</style>
