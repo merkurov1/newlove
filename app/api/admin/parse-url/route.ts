@@ -1,114 +1,57 @@
-import { NextResponse } from 'next/server';
-import { parseLot } from '@/lib/lots';
-import { downloadAndStoreImage, resolveUrl } from '@/lib/lots/images';
+import { ParserRegistry } from "../registry";
 
-function isBlockedHtml(html: string): boolean {
-  if (!html || html.length < 500) return true;
-  const lower = html.toLowerCase();
-  return (
-    lower.includes('just a moment...') ||
-    lower.includes('enable javascript and cookies to continue') ||
-    lower.includes('cf-browser-verification') ||
-    lower.includes('challenge-running') ||
-    lower.includes('attention required! | cloudflare')
-  );
-}
+describe("ParserRegistry", () => {
+  it("detects Christies URL", () => {
+    const registry = new ParserRegistry();
+    expect(registry.detectHouse("https://www.christies.com/en/lot/lot-1234567")).toBe("christies");
+  });
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const { url } = body;
+  it("parses Christies HTML using house-specific logic", () => {
+    const registry = new ParserRegistry();
+    const html = `
+      <html>
+        <head>
+          <meta property="og:image" content="https://cdn.example.com/art.jpg" />
+        </head>
+        <body>
+          <div data-testid="lot-title">The Sun</div>
+          <div data-testid="artist-name">Andy Warhol</div>
+          <div data-testid="estimate">USD 100,000 - 150,000</div>
+          <div data-testid="sale-price">$125,000</div>
+        </body>
+      </html>
+    `;
 
-    if (!url) {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
-    }
+    const result = registry.parse(html, "https://www.christies.com/en/lot/lot-1234567");
 
-    const apiKey = process.env.SCRAPINGANT_API_KEY;
-    let html = '';
+    expect(result?.auctionHouse).toBe("christies");
+    expect(result?.title).toBe("The Sun");
+    expect(result?.artist).toBe("Andy Warhol");
+    expect(result?.confidence).toBeGreaterThanOrEqual(0.7);
+    expect(result?.source).toBe("house-parser");
+  });
 
-    // 1. Быстрый прямой запрос
-    try {
-      const directRes = await fetch(url, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-        },
-        signal: AbortSignal.timeout(5_000),
-      });
+  it("uses fallback parser for unsupported domains", () => {
+    const registry = new ParserRegistry();
+    const html = `
+      <html>
+        <head>
+          <title>Example Auction Lot</title>
+          <meta property="og:image" content="https://cdn.example.com/fallback.jpg" />
+        </head>
+        <body>
+          <h1>Moonlight</h1>
+          <p>Artist: Jane Doe</p>
+          <p>Estimate: $50,000 - $80,000</p>
+        </body>
+      </html>
+    `;
 
-      if (directRes.ok) {
-        const directHtml = await directRes.text();
-        if (!isBlockedHtml(directHtml)) {
-          html = directHtml;
-        }
-      }
-    } catch {
-      console.warn('[Parser] Direct HTML fetch failed, falling back to ScrapingAnt');
-    }
+    const result = registry.parse(html, "https://example.com/auction/lot-1");
 
-    // 2. ScrapingAnt
-    if (!html && apiKey) {
-      try {
-        const saEndpoint = new URL('https://api.scrapingant.com/v2/general');
-        saEndpoint.searchParams.set('url', url);
-        saEndpoint.searchParams.set('browser', 'true');
-
-        const saRes = await fetch(saEndpoint, {
-          headers: { 'x-api-key': apiKey },
-          signal: AbortSignal.timeout(25_000),
-        });
-
-        if (saRes.ok) {
-          html = await saRes.text();
-        }
-      } catch (err) {
-        console.warn('[Parser] ScrapingAnt request failed:', err);
-      }
-    }
-
-    if (!html || isBlockedHtml(html)) {
-      return NextResponse.json(
-        { error: 'Failed to retrieve unblocked HTML from the target URL' },
-        { status: 422 }
-      );
-    }
-
-    // 3. Парсинг данных лота
-    const lotData = parseLot(html, url);
-
-    // 4. Обработка изображения через модуль images.ts
-    let permanentImageUrl = '';
-    const candidates =
-      lotData.imageCandidates && lotData.imageCandidates.length > 0
-        ? lotData.imageCandidates
-        : lotData.imageUrl
-        ? [{ url: lotData.imageUrl }]
-        : [];
-
-    for (const candidate of candidates.slice(0, 3)) {
-      try {
-        const storedUrl = await downloadAndStoreImage(candidate.url, url, apiKey);
-        if (storedUrl) {
-          permanentImageUrl = storedUrl;
-          break;
-        }
-      } catch (imageError) {
-        console.warn(`[Parser] Image candidate failed (${candidate.url}):`, imageError);
-      }
-    }
-
-    if (!permanentImageUrl && lotData.imageUrl) {
-      permanentImageUrl = resolveUrl(lotData.imageUrl, url);
-    }
-
-    return NextResponse.json({
-      ...lotData,
-      imageUrl: permanentImageUrl,
-    });
-  } catch (error: any) {
-    console.error('[API parse-lot] Error:', error);
-    return NextResponse.json({ error: error?.message || 'Failed to parse lot' }, { status: 500 });
-  }
-}
+    expect(result?.auctionHouse).toBe("unknown");
+    expect(result?.source).toBe("fallback");
+    expect(result?.title).toBe("Moonlight");
+    expect(result?.confidence).toBeGreaterThanOrEqual(0.2);
+  });
+});
