@@ -1,53 +1,131 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-// Используем ту же инициализацию, что у тебя в проекте
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-08-27.basil' as any, // Подстраиваемся под твою версию
-});
+const stripe = new Stripe(
+  process.env.STRIPE_SECRET_KEY || '',
+  {
+    apiVersion: '2025-08-27.basil' as any,
+  }
+);
 
 export const dynamic = 'force-dynamic';
 
+const SITE_URL = (
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  'https://merkurov.love'
+).replace(/\/+$/, '');
+
+function cleanMetadataValue(
+  value: unknown,
+  fallback: string,
+  maxLength: number
+) {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  return value.trim().slice(0, maxLength) || fallback;
+}
+
 export async function POST(req: Request) {
   try {
-    const { amount, currency = 'usd', donor_name, message } = await req.json();
+    const body = await req.json();
 
-    if (!amount || amount < 1) {
-      return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+    const amount = Number(body?.amount);
+    const currency =
+      typeof body?.currency === 'string'
+        ? body.currency.toLowerCase()
+        : 'usd';
+
+    const donorName = cleanMetadataValue(
+      body?.donor_name,
+      'Anonymous',
+      120
+    );
+
+    const message = cleanMetadataValue(
+      body?.message,
+      '',
+      500
+    );
+
+    if (!Number.isFinite(amount) || amount < 1) {
+      return NextResponse.json(
+        { error: 'Invalid amount' },
+        { status: 400 }
+      );
     }
 
-    // Определяем URL возврата
-    const origin = req.headers.get('origin') || 'https://merkurov.love';
+    // Tribute currently exists as a USD flow.
+    if (currency !== 'usd') {
+      return NextResponse.json(
+        { error: 'Tribute currency must be USD' },
+        { status: 400 }
+      );
+    }
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency,
-            product_data: {
-              name: 'Temple Tribute',
-              description: 'Fuel for the Digital Altar',
+    const amountCents = Math.round(amount * 100);
+
+    if (
+      !Number.isInteger(amountCents) ||
+      amountCents < 100
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid amount' },
+        { status: 400 }
+      );
+    }
+
+    const session =
+      await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: 'Temple Tribute',
+                description:
+                  'Fuel for the Digital Altar',
+              },
+              unit_amount: amountCents,
             },
-            unit_amount: amount * 100, // Stripe принимает центы
+            quantity: 1,
           },
-          quantity: 1,
-        },
-      ],
-      mode: 'payment',
-      success_url: `${origin}/tribute?status=success`,
-      cancel_url: `${origin}/tribute?status=cancel`,
-      // ВАЖНО: Метаданные нужны для Webhook и записи в базу
-      metadata: {
-        donor_name: donor_name || 'Anonymous',
-        message: message || '',
-        type: 'tribute_v1' // Маркер, чтобы отличить от других платежей
-      },
-    });
+        ],
 
-    return NextResponse.json({ url: session.url });
-  } catch (err: any) {
-    console.error('Stripe error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+        mode: 'payment',
+
+        success_url:
+          `${SITE_URL}/tribute?status=success`,
+
+        cancel_url:
+          `${SITE_URL}/tribute?status=cancel`,
+
+        metadata: {
+          type: 'tribute_v1',
+          donor_name: donorName,
+          message,
+        },
+      });
+
+    return NextResponse.json({
+      url: session.url,
+    });
+  } catch (error: any) {
+    console.error(
+      'Tribute Stripe checkout error:',
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          error?.message ||
+          'Unable to create payment session',
+      },
+      { status: 500 }
+    );
   }
 }
