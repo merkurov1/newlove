@@ -49,42 +49,30 @@ export default function NewPostModal({
 
   const {
     item,
-
     bodyMd,
     setBodyMd,
-
     title,
     setTitle,
-
     linkUrl,
     setLinkUrl,
-
     linkPreview,
     youtubeMetadata,
-
     imagePreview,
     imageName,
-
     mode,
-
     saveState,
-
     isInitializing,
     isParsing,
     isPublishing,
     isClearing,
     isEditing,
-
     canClear,
     canPost,
     busy,
-
     textareaRef,
-
     handlePaste,
     parseLink,
     handleImageUpload,
-
     finish,
     clearDraft,
     handleClose,
@@ -97,25 +85,13 @@ export default function NewPostModal({
 
   if (!open) return null;
 
-  const showLinkInput =
-    mode === "link" ||
-    mode === "video" ||
-    Boolean(linkUrl);
+  const loading = isInitializing || !item;
 
-  const showYouTube =
-    mode === "video" && Boolean(youtubeMetadata);
+  const showLink =
+    mode === "link" && Boolean(linkUrl);
 
-  const showLinkPreview =
-    mode === "link" && Boolean(linkPreview);
-
-  const showImage =
-    mode === "photo" && Boolean(imagePreview);
-
-  const loading =
-    isInitializing ||
-    !item;
-
-  const primaryLabel = isEditing ? "Save" : "Post";
+  const showVideo =
+    mode === "video" && Boolean(linkUrl);
 
   return (
     <div
@@ -124,16 +100,14 @@ export default function NewPostModal({
       aria-modal="true"
       aria-label={isEditing ? "Edit post" : "New post"}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          handleClose();
+        if (event.target === event.currentTarget && !busy) {
+          void handleClose();
         }
       }}
     >
       <div
         className="relative flex w-full max-w-[560px] flex-col overflow-hidden bg-white"
-        style={{
-          maxHeight: "calc(100dvh - 32px)",
-        }}
+        style={{ maxHeight: "calc(100dvh - 32px)" }}
         onMouseDown={(event) => event.stopPropagation()}
       >
         {/* Header */}
@@ -144,9 +118,14 @@ export default function NewPostModal({
 
           <button
             type="button"
-            onClick={handleClose}
+            onClick={() => {
+              if (!busy) {
+                void handleClose();
+              }
+            }}
+            disabled={busy}
             aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center text-2xl leading-none text-neutral-400 transition-colors hover:text-black"
+            className="flex h-8 w-8 items-center justify-center text-2xl leading-none text-neutral-400 transition-colors hover:text-black disabled:cursor-not-allowed disabled:opacity-30"
           >
             ×
           </button>
@@ -156,13 +135,10 @@ export default function NewPostModal({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
           {loading ? (
             <div className="space-y-4 py-4">
-              <ShimmerPreview />
-              <div className="h-4 w-2/3 animate-pulse bg-neutral-100" />
-              <div className="h-24 w-full animate-pulse bg-neutral-100" />
+              <ShimmerPreview text="Preparing Flow…" />
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Title */}
               <input
                 type="text"
                 value={title}
@@ -172,7 +148,6 @@ export default function NewPostModal({
                 className="w-full border-0 bg-transparent px-0 py-1 text-xl font-medium text-black outline-none placeholder:text-neutral-300"
               />
 
-              {/* Body */}
               <textarea
                 ref={textareaRef}
                 value={bodyMd}
@@ -184,22 +159,22 @@ export default function NewPostModal({
                 className="w-full resize-none border-0 bg-transparent px-0 py-1 text-[15px] leading-6 text-black outline-none placeholder:text-neutral-300"
               />
 
-              {/* Link / video URL */}
-              {showLinkInput && (
+              {/* Link */}
+              {showLink && (
                 <div className="border-t border-neutral-100 pt-3">
                   <div className="flex gap-2">
                     <input
                       type="url"
                       value={linkUrl}
                       onChange={(event) => setLinkUrl(event.target.value)}
-                      placeholder="Paste a URL"
+                      placeholder="URL"
                       disabled={busy || isParsing}
                       className="min-w-0 flex-1 border-0 bg-neutral-50 px-3 py-2 text-sm text-black outline-none placeholder:text-neutral-400"
                     />
 
                     <button
                       type="button"
-                      onClick={parseLink}
+                      onClick={() => void parseLink(linkUrl)}
                       disabled={
                         busy ||
                         isParsing ||
@@ -210,26 +185,37 @@ export default function NewPostModal({
                       {isParsing ? "…" : "Preview"}
                     </button>
                   </div>
+
+                  {!isParsing && linkPreview && (
+                    <LinkPreviewCard
+                      preview={linkPreview}
+                      url={linkUrl}
+                    />
+                  )}
                 </div>
               )}
 
-              {/* YouTube preview */}
-              {showYouTube && youtubeMetadata && (
-                <YouTubePreview metadata={youtubeMetadata} />
+              {/* YouTube */}
+              {showVideo && (
+                <>
+                  {isParsing ? (
+                    <ShimmerPreview text="Parsing YouTube…" />
+                  ) : youtubeMetadata ? (
+                    <YouTubePreview
+                      metadata={youtubeMetadata}
+                      url={linkUrl}
+                    />
+                  ) : null}
+                </>
               )}
 
-              {/* Generic link preview */}
-              {showLinkPreview && linkPreview && (
-                <LinkPreviewCard preview={linkPreview} />
-              )}
-
-              {/* Image preview */}
-              {showImage && imagePreview && (
+              {/* Image */}
+              {imagePreview ? (
                 <ImagePreview
                   src={imagePreview}
-                  name={imageName}
+                  alt={imageName || "Flow image"}
                 />
-              )}
+              ) : null}
             </div>
           )}
         </div>
@@ -237,7 +223,6 @@ export default function NewPostModal({
         {/* Footer */}
         <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-4">
           <div className="flex items-center gap-3">
-            {/* Image */}
             <input
               ref={fileInputRef}
               type="file"
@@ -249,7 +234,7 @@ export default function NewPostModal({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={busy}
+              disabled={busy || loading}
               aria-label="Add image"
               className="flex h-9 w-9 items-center justify-center text-lg text-neutral-500 transition-colors hover:text-black disabled:opacity-30"
             >
@@ -259,7 +244,7 @@ export default function NewPostModal({
             {canClear && (
               <button
                 type="button"
-                onClick={clearDraft}
+                onClick={() => void clearDraft()}
                 disabled={busy || isClearing}
                 className="text-xs text-neutral-400 transition-colors hover:text-black disabled:opacity-30"
               >
@@ -272,11 +257,11 @@ export default function NewPostModal({
 
           <button
             type="button"
-            onClick={finish}
+            onClick={() => void finish()}
             disabled={!canPost || busy}
             className="min-w-[88px] bg-black px-5 py-2.5 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-30"
           >
-            {isPublishing ? "…" : primaryLabel}
+            {isPublishing ? "…" : isEditing ? "Save" : "Post"}
           </button>
         </div>
       </div>
