@@ -1,17 +1,20 @@
 /* Brutalist/High-End Global Styles */
-/* Load web fonts for reader: Inter (ui) + Merriweather (serif text) */
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=Merriweather:wght@300;400;700&display=swap');
+
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Prevent text size adjustment on orientation change on mobile */
+
   -webkit-text-size-adjust: 100%;
   -ms-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+
 body {
   background: #fff;
   color: #333;
+
   font-family:
     Inter,
     system-ui,
@@ -21,22 +24,39 @@ body {
     'Helvetica Neue',
     Arial,
     sans-serif;
-  --site-font-sans: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
-  --site-font-serif: Merriweather, Georgia, 'Times New Roman', Times, serif;
-  /* Safe area insets for notched devices */
+
+  --site-font-sans:
+    Inter,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    Arial,
+    sans-serif;
+
+  --site-font-serif:
+    Merriweather,
+    Georgia,
+    'Times New Roman',
+    Times,
+    serif;
+
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
+
 a {
   color: #111;
   text-decoration: none;
   transition: opacity 0.2s;
 }
+
 a:hover,
 a:focus {
   opacity: 0.6;
   text-decoration: none;
 }
+
 button {
   background: none;
   border: none;
@@ -46,15 +66,16 @@ button {
   padding: 0;
   cursor: pointer;
   transition: opacity 0.2s;
-  /* Minimum touch target size on mobile */
+
   min-height: 44px;
   min-width: 44px;
 }
+
 button:hover,
 button:focus {
   opacity: 0.6;
 }
-/* Better touch feedback on mobile */
+
 @media (hover: none) and (pointer: coarse) {
   button:active,
   a:active {
@@ -62,7 +83,9 @@ button:focus {
     transition: opacity 0s;
   }
 }
-/* --- Мобильная адаптивность карточек статей на главной --- */
+
+/* --- Article cards --- */
+
 .article-card {
   min-width: 0;
   max-width: 100%;
@@ -74,20 +97,22 @@ button:focus {
     padding: 0.75rem !important;
     font-size: 0.95rem;
   }
+
   .article-card h3 {
     font-size: 1rem;
     line-height: 1.3;
     margin-bottom: 0.25rem;
   }
+
   .article-card .object-cover {
     border-radius: 0.5rem;
   }
-  /* Improve mobile typography */
+
   body {
     font-size: 15px;
     line-height: 1.5;
   }
-  /* Better mobile spacing */
+
   h1,
   h2,
   h3,
@@ -97,60 +122,65 @@ button:focus {
     word-break: break-word;
     hyphens: auto;
   }
-  /* Prevent horizontal scroll on small screens */
+
   * {
     max-width: 100%;
   }
+
   img,
   video,
   iframe {
     height: auto;
   }
-  /* Mobile-optimized prose */
+
   .prose {
     font-size: 0.95rem !important;
   }
+
   .prose h1 {
     font-size: 1.75rem !important;
     margin-bottom: 0.75rem !important;
   }
+
   .prose h2 {
     font-size: 1.5rem !important;
     margin-bottom: 0.5rem !important;
   }
+
   .prose h3 {
     font-size: 1.25rem !important;
   }
+
   .prose p {
     margin-bottom: 0.875rem !important;
   }
 
-  /* Ensure prose uses serif font for long-form reading by default */
   .prose {
     font-family: var(--site-font-serif) !important;
   }
 
-  /* Keep UI controls and system text in Inter */
   .ui-sans {
     font-family: var(--site-font-sans) !important;
   }
+
   .prose ul,
   .prose ol {
     padding-left: 1.25rem !important;
   }
 }
-/* src/styles/main.css (или ваш глобальный CSS файл) */
 
-/* stylelint-disable */
+/* --- Tailwind --- */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-/* stylelint-enable */
 
-/* Галерея изображений: grid всегда, даже вне .prose */
+/* --- Gallery --- */
+
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns:
+    repeat(auto-fit, minmax(220px, 1fr));
   gap: 1.5rem;
   margin: 2rem 0;
 }
@@ -165,10 +195,11 @@ button:focus {
 
 .gallery-grid img {
   width: 100%;
-  aspect-ratio: 4/3;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
   border-radius: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06);
   background: #f8fafc;
   display: block;
   cursor: pointer;
@@ -179,9 +210,8 @@ button:focus {
   transform: scale(1.05);
 }
 
-/* --- Остальные ваши рабочие стили --- */
+/* --- Prose tables --- */
 
-/* Галерея проектов: таблицы с изображениями */
 .prose table {
   width: 100%;
   table-layout: fixed;
@@ -203,7 +233,8 @@ button:focus {
   height: auto;
   margin: 0 auto;
   border-radius: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06);
   background: #f8fafc;
 }
 
@@ -214,12 +245,14 @@ button:focus {
     display: block;
     width: 100%;
   }
+
   .prose table td {
     margin-bottom: 1rem;
   }
 }
 
-/* Анимация появления (fade-in) */
+/* --- Fade animation --- */
+
 .animate-fade-in {
   animation: fadeIn 0.25s ease;
 }
@@ -229,53 +262,60 @@ button:focus {
     opacity: 0;
     transform: translateY(16px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-/* Marquee animation used on Lobby page */
+/* --- Marquee --- */
+
 @keyframes marquee {
   0% {
     transform: translateX(0);
   }
+
   100% {
     transform: translateX(-50%);
   }
 }
+
 .animate-marquee {
   animation: marquee 30s linear infinite;
 }
 
-/* Исправление для columns блоков внутри prose */
+/* --- Prose grids --- */
+
 .prose .grid {
   display: grid !important;
 }
 
 .prose .grid-cols-1 {
-  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  grid-template-columns:
+    repeat(1, minmax(0, 1fr)) !important;
 }
 
 @media (min-width: 768px) {
-  .prose .md\:grid-cols-2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  .prose .md\\:grid-cols-2 {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
   }
 
-  .prose .md\:grid-cols-3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  .prose .md\\:grid-cols-3 {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr)) !important;
   }
 }
 
-/* Site background: light pink in day, slightly darker in dark mode */
+/* --- Site background --- */
+
 :root {
-  --site-bg-day: #fff1f5; /* very light pink */
-  --site-bg-night: #ffd6e0; /* slightly deeper pink for dark mode */
-  /* Mobile viewport height fix for iOS Safari */
+  --site-bg-day: #fff1f5;
+  --site-bg-night: #ffd6e0;
   --vh: 1vh;
 }
 
-/* Fix for iOS Safari and mobile browsers viewport height */
 @supports (-webkit-touch-callout: none) {
   .min-h-screen {
     min-height: -webkit-fill-available;
@@ -284,7 +324,6 @@ button:focus {
 
 body {
   background-color: var(--site-bg-day);
-  /* Prevent horizontal scroll on mobile */
   overflow-x: hidden;
 }
 
@@ -294,7 +333,8 @@ body {
   }
 }
 
-/* Стили для полноэкранного Swiper слайдера */
+/* --- Auction slider --- */
+
 .auction-slider-single .swiper {
   width: 100%;
   height: 100%;
@@ -327,29 +367,31 @@ body {
   background: white;
 }
 
-/* Mobile-optimized Swiper navigation */
 @media (max-width: 640px) {
   .swiper-button-next,
   .swiper-button-prev {
     width: 40px !important;
     height: 40px !important;
   }
+
   .swiper-button-next:after,
   .swiper-button-prev:after {
     font-size: 18px !important;
   }
+
   .swiper-pagination-bullet {
     width: 8px !important;
     height: 8px !important;
     margin: 0 3px !important;
   }
-  /* Better touch area for pagination */
+
   .swiper-pagination {
     padding: 12px 0 !important;
   }
 }
 
-/* Accessibility: Enhanced focus states for better keyboard navigation */
+/* --- Accessibility --- */
+
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
@@ -360,7 +402,8 @@ select:focus-visible {
   border-radius: 4px;
 }
 
-/* Skip to content link - hidden by default, visible on focus */
+/* --- Skip link --- */
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -373,7 +416,7 @@ select:focus-visible {
   border-width: 0;
 }
 
-.focus\:not-sr-only:focus {
+.focus\\:not-sr-only:focus {
   position: static;
   width: auto;
   height: auto;
@@ -384,42 +427,174 @@ select:focus-visible {
   white-space: normal;
 }
 
-/* --- Telegram Mini App: Скрытие главного хедера --- */
+/* =========================================================
+   TELEGRAM MINI APP / RITUAL SHELL
+   ========================================================= */
+
 body.telegram-app header {
   display: none !important;
 }
 
-/* Shared Temple language: safe-area aware, dark gold controls. */
+body.telegram-app footer {
+  display: none !important;
+}
+
+/*
+ * Ritual pages are immersive compositions.
+ * The global site shell must not compete with them.
+ */
+
+body.ritual-route > footer {
+  display: none !important;
+}
+
+/*
+ * Header is fixed and rendered outside #main-content,
+ * therefore hiding it through the body route state is explicit.
+ */
+
+body.ritual-route > header {
+  display: none !important;
+}
+
+/* =========================================================
+   TEMPLE TOP BAR
+   ========================================================= */
+
 .temple-topbar {
   position: absolute;
-  top: max(1rem, env(safe-area-inset-top));
+
+  top: 0;
   left: 0;
   right: 0;
+
   z-index: 40;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: .75rem;
-  width: min(100% - 2rem, 56rem);
+
+  gap: 0.75rem;
+
+  width: min(calc(100% - 2rem), 56rem);
+
   margin-inline: auto;
-  padding-top: clamp(5.75rem, 8vw, 7.5rem);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  padding-top:
+    max(0.75rem, env(safe-area-inset-top));
+
+  padding-bottom: 0.5rem;
+
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
 }
-.temple-topbar__back, .temple-topbar__actions > button {
-  min-height: 2.5rem;
+
+.temple-topbar__back,
+.temple-topbar__actions > button {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+
   display: inline-flex;
   align-items: center;
-  gap: .5rem;
-  border: 1px solid rgba(245, 158, 11, .24);
+  justify-content: center;
+
+  gap: 0.5rem;
+
+  border:
+    1px solid rgba(245, 158, 11, 0.24);
+
   border-radius: 999px;
-  padding: .65rem .9rem;
-  background: rgba(12, 9, 4, .62);
+
+  padding:
+    0.65rem 0.9rem;
+
+  background:
+    rgba(12, 9, 4, 0.62);
+
   color: #f8df9a;
+
   backdrop-filter: blur(16px);
-  font-size: .7rem;
-  letter-spacing: .14em;
+
+  font-size: 0.7rem;
+
+  letter-spacing: 0.14em;
+
   text-transform: uppercase;
-  transition: border-color .2s ease, background .2s ease, transform .2s ease;
+
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease,
+    opacity 0.2s ease;
+
+  opacity: 1;
 }
-.temple-topbar__back:hover, .temple-topbar__actions > button:hover { border-color: rgba(250, 204, 21, .65); background: rgba(30, 20, 7, .8); transform: translateY(-1px); }
-.temple-topbar__actions { display: flex; align-items: center; gap: .5rem; }
+
+.temple-topbar__back:hover,
+.temple-topbar__actions > button:hover {
+  border-color:
+    rgba(250, 204, 21, 0.65);
+
+  background:
+    rgba(30, 20, 7, 0.8);
+
+  transform:
+    translateY(-1px);
+
+  opacity: 1;
+}
+
+.temple-topbar__back:focus,
+.temple-topbar__actions > button:focus,
+.temple-topbar__back:focus-visible,
+.temple-topbar__actions > button:focus-visible {
+  opacity: 1;
+
+  outline:
+    2px solid rgba(250, 204, 21, 0.65);
+
+  outline-offset: 2px;
+}
+
+.temple-topbar__actions {
+  display: flex;
+  align-items: center;
+
+  gap: 0.5rem;
+
+  min-width: 0;
+
+  flex-shrink: 0;
+}
+
+.temple-topbar__back {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.temple-topbar__back span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .temple-topbar {
+    width:
+      min(calc(100% - 1rem), 56rem);
+  }
+
+  .temple-topbar__back,
+  .temple-topbar__actions > button {
+    min-height: 2.75rem;
+  }
+
+  .temple-topbar__back {
+    padding-inline: 0.75rem;
+  }
+}

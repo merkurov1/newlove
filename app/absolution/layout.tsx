@@ -1,42 +1,59 @@
-import { Analytics } from '@vercel/analytics/react';
-import { SpeedInsights } from '@vercel/speed-insights/next';
+import type { Metadata } from 'next';
 
-export const metadata = {
-  title: 'Digital Absolution | Confess Your Digital Sins',
-  description: 'An interactive conceptual art experience. Confess your digital sins—doomscrolling, social media envy, crypto obsession—and receive absolution from Pierrot, your AI chaplain. Available in English, Russian, and Latin.',
-  keywords: ['digital absolution', 'digital sins', 'conceptual art', 'interactive art', 'confession', 'web art', 'doomscrolling', 'AI chaplain', 'redemption', 'modern guilt'],
-  authors: [{ name: 'Anton Merkurov', url: 'https://merkurov.love' }],
+const ABSOLUTION_URL =
+  'https://www.merkurov.love/absolution';
+
+const ABSOLUTION_IMAGE =
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0947.png';
+
+export const metadata: Metadata = {
+  title: 'Online Absolution — Digital Temple',
+
+  description:
+    'Receive digital absolution, release a burden and leave it behind in the Sanctuary.',
+
+  alternates: {
+    canonical: ABSOLUTION_URL,
+  },
+
   openGraph: {
-    title: 'Digital Absolution - Confess Your Digital Sins',
-    description: 'An interactive art project exploring modern guilt. Confess your digital sins and receive your receipt of absolution.',
-    url: 'https://merkurov.love/absolution',
-    siteName: 'Anton Merkurov',
+    title: 'Online Absolution — Digital Temple',
+
+    description:
+      'Release a burden and receive digital absolution in the Sanctuary.',
+
+    url: ABSOLUTION_URL,
+
+    siteName: 'Merkurov Love',
+
     images: [
       {
-        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0947.png',
-        width: 1200,
-        height: 630,
-        alt: 'Digital Absolution - Heart stamp with ABSOLVO',
-        type: 'image/png',
+        url: ABSOLUTION_IMAGE,
+        width: 800,
+        height: 800,
+        alt: 'Online Absolution — Digital Temple',
       },
     ],
+
     locale: 'en_US',
+
     type: 'website',
   },
+
   twitter: {
     card: 'summary_large_image',
-    title: 'Digital Absolution',
-    description: 'Confess your digital sins and receive absolution. An interactive conceptual art experience.',
-    images: ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/IMG_0947.png'],
-    creator: '@merkurov',
-    site: '@merkurov',
+
+    title: 'Online Absolution — Digital Temple',
+
+    description:
+      'Release a burden and receive digital absolution in the Sanctuary.',
+
+    images: [ABSOLUTION_IMAGE],
   },
+
   robots: {
     index: true,
     follow: true,
-  },
-  alternates: {
-    canonical: 'https://www.merkurov.love/absolution',
   },
 };
 
@@ -45,16 +62,5 @@ export default function AbsolutionLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <>
-      <script
-        defer
-        src="https://cloud.umami.is/script.js"
-        data-website-id="87795d47-f53d-4ef8-8e82-3ee195ea997b"
-      ></script>
-      <Analytics />
-      <SpeedInsights />
-      {children}
-    </>
-  );
+  return children;
 }
