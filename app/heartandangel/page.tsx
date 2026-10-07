@@ -1,34 +1,34 @@
 import type { Metadata } from 'next';
-import WorldScene from '@/components/WorldScene';
+import HeartAndAngelHub from '@/components/HeartAndAngelHub';
 
 export const metadata: Metadata = {
-  title: 'World | Heart & Angel | Anton Merkurov',
+  title: 'Heart & Angel | Anton Merkurov',
   description:
-    'Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.',
+    'Heart & Angel is an ongoing multidisciplinary art project exploring the Angel, the Devil and the heart through painting, digital graphics, augmented reality and code.',
   alternates: {
-    canonical: 'https://www.merkurov.love/heartandangel/world',
+    canonical: 'https://www.merkurov.love/heartandangel',
   },
   openGraph: {
-    title: 'World | Heart & Angel | Anton Merkurov',
+    title: 'Heart & Angel | Anton Merkurov',
     description:
-      'Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.',
-    url: 'https://www.merkurov.love/heartandangel/world',
+      'Heart & Angel is an ongoing multidisciplinary art project exploring the Angel, the Devil and the heart through painting, digital graphics, augmented reality and code.',
+    url: 'https://www.merkurov.love/heartandangel',
     siteName: 'Anton Merkurov',
     images: [
       {
         url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png',
         width: 1200,
         height: 630,
-        alt: 'World | Heart & Angel',
+        alt: 'Heart & Angel',
       },
     ],
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'World | Heart & Angel | Anton Merkurov',
+    title: 'Heart & Angel | Anton Merkurov',
     description:
-      'Step into the eternal landscape where time flows, angels and demons coexist, and ambient music fills the air.',
+      'Heart & Angel is an ongoing multidisciplinary art project exploring the Angel, the Devil and the heart through painting, digital graphics, augmented reality and code.',
     creator: '@merkurov',
     site: '@merkurov',
     images: [
@@ -37,6 +37,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function WorldPage() {
-  return <WorldScene />;
+export default function HeartAndAngelPage() {
+  return <HeartAndAngelHub />;
 }
