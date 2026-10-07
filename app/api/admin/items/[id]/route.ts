@@ -1,206 +1,284 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
-export const dynamic = 'force-dynamic';
-
 type RouteContext = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
+
+type UpdatePayload = {
+  title?: string;
+  body_md?: string;
+  lang?: string;
+  slug?: string;
+  visibility?: string;
+  status?: string;
+};
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRoleKey) {
+    throw new Error('Supabase server environment variables are missing.');
+  }
+
+  return createClient(url, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9а-яё\s-]/gi, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 100);
+}
 
 export async function GET(
   req: NextRequest,
-  { params }: RouteContext
+  context: RouteContext,
 ) {
   try {
     await requireAdminFromRequest(req);
 
-    const supabase = createClient({
-      useServiceRole: true,
-    });
+    const { id } = await context.params;
 
-    const { data: item, error } = await supabase
+    const supabase = getSupabaseAdmin();
+
+    const { data, error } = await supabase
       .from('items')
       .select('*')
-      .eq('id', params.id)
-      .single();
+      .eq('id', id)
+      .maybeSingle();
 
     if (error) {
-      throw error;
+      console.error('[admin/items/:id] GET error:', error);
+
+      return NextResponse.json(
+        { error: 'Failed to load item.' },
+        { status: 500 },
+      );
     }
 
-    return NextResponse.json({
-      success: true,
-      item,
-    });
-  } catch (error) {
-    console.error('[admin-item-get]', error);
+    if (!data) {
+      return NextResponse.json(
+        { error: 'Item not found.' },
+        { status: 404 },
+      );
+    }
 
     return NextResponse.json(
+      { item: data },
       {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Unauthorized',
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store',
+        },
       },
-      { status: 401 }
+    );
+  } catch (error) {
+    console.error('[admin/items/:id] GET auth/error:', error);
+
+    return NextResponse.json(
+      { error: 'Unauthorized.' },
+      { status: 401 },
     );
   }
 }
 
 export async function PATCH(
   req: NextRequest,
-  { params }: RouteContext
+  context: RouteContext,
 ) {
   try {
     await requireAdminFromRequest(req);
 
-    const body = await req.json();
+    const { id } = await context.params;
 
-    const supabase = createClient({
-      useServiceRole: true,
-    });
+    const payload = (await req.json()) as UpdatePayload;
 
-    const { data: currentItem, error: currentError } =
-      await supabase
+    const supabase = getSupabaseAdmin();
+
+    const { data: existing, error: existingError } = await supabase
+      .from('items')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error(
+        '[admin/items/:id] existing item error:',
+        existingError,
+      );
+
+      return NextResponse.json(
+        { error: 'Failed to load item.' },
+        { status: 500 },
+      );
+    }
+
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'Item not found.' },
+        { status: 404 },
+      );
+    }
+
+    const nextStatus =
+      payload.status !== undefined
+        ? payload.status
+        : existing.status;
+
+    if (
+      nextStatus !== 'draft' &&
+      nextStatus !== 'published' &&
+      nextStatus !== 'archived'
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'Invalid status. Allowed values: draft, published, archived.',
+        },
+        { status: 400 },
+      );
+    }
+
+    const nextLang = payload.lang?.trim() || existing.lang;
+
+    if (!nextLang) {
+      return NextResponse.json(
+        { error: 'Language is required.' },
+        { status: 400 },
+      );
+    }
+
+    let nextSlug =
+      payload.slug !== undefined
+        ? slugify(payload.slug)
+        : existing.slug;
+
+    const nextTitle =
+      payload.title !== undefined
+        ? payload.title.trim()
+        : existing.title;
+
+    if (nextStatus === 'published') {
+      if (!nextTitle) {
+        return NextResponse.json(
+          { error: 'Title is required before publishing.' },
+          { status: 400 },
+        );
+      }
+
+      if (!nextSlug) {
+        nextSlug = slugify(nextTitle);
+      }
+
+      if (!nextSlug) {
+        return NextResponse.json(
+          { error: 'Could not generate a valid slug.' },
+          { status: 400 },
+        );
+      }
+
+      const { data: collision } = await supabase
         .from('items')
-        .select('*')
-        .eq('id', params.id)
-        .single();
-
-    if (currentError || !currentItem) {
-      throw currentError ?? new Error('Item not found');
-    }
-
-    const update: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
-    };
-
-    /*
-     * Only update fields that were actually supplied.
-     * This makes PATCH safe for autosave.
-     */
-
-    if (typeof body.title === 'string') {
-      update.title = body.title;
-    }
-
-    if (typeof body.body_md === 'string') {
-      update.body_md = body.body_md;
-    }
-
-    if (typeof body.lang === 'string') {
-      update.lang = body.lang;
-    }
-
-    if (typeof body.slug === 'string') {
-      update.slug = body.slug;
-    }
-
-    if (
-      body.visibility === 'private' ||
-      body.visibility === 'public'
-    ) {
-      update.visibility = body.visibility;
-    }
-
-    if (
-      body.status === 'draft' ||
-      body.status === 'published' ||
-      body.status === 'archived'
-    ) {
-      update.status = body.status;
-    }
-
-    /*
-     * Publishing:
-     *
-     * - preserve the original publication date if the
-     *   item was already published
-     * - otherwise create it now
-     */
-    if (body.status === 'published') {
-      update.published_at =
-        currentItem.published_at ??
-        new Date().toISOString();
-
-      /*
-       * A published post must be public.
-       */
-      if (body.visibility === undefined) {
-        update.visibility = 'public';
-      }
-    }
-
-    /*
-     * If explicitly moved back to draft, remove
-     * published_at so the next publication gets a
-     * fresh publication timestamp.
-     */
-    if (body.status === 'draft') {
-      update.published_at = null;
-    }
-
-    /*
-     * Avoid duplicate public slugs.
-     *
-     * We only need to check when a slug is being supplied.
-     */
-    if (typeof update.slug === 'string') {
-      const requestedSlug = update.slug as string;
-
-      const { data: collision, error: collisionError } =
-        await supabase
-          .from('items')
-          .select('id')
-          .eq('lang', (update.lang as string) ?? currentItem.lang)
-          .eq('slug', requestedSlug)
-          .neq('id', params.id)
-          .maybeSingle();
-
-      if (collisionError) {
-        throw collisionError;
-      }
+        .select('id')
+        .eq('lang', nextLang)
+        .eq('slug', nextSlug)
+        .neq('id', id)
+        .limit(1)
+        .maybeSingle();
 
       if (collision) {
-        update.slug = `${requestedSlug}-${params.id.slice(
-          0,
-          8
-        )}`;
+        nextSlug = `${nextSlug}-${id.slice(0, 8)}`;
       }
     }
 
-    const { data: updated, error: updateError } =
-      await supabase
-        .from('items')
-        .update(update)
-        .eq('id', params.id)
-        .select('*')
-        .single();
+    const update: Record<string, unknown> = {};
 
-    if (updateError) {
-      throw updateError;
+    if (payload.title !== undefined) {
+      update.title = payload.title.trim();
     }
 
-    return NextResponse.json({
-      success: true,
-      item: updated,
-    });
-  } catch (error) {
-    console.error('[admin-item-patch]', error);
+    if (payload.body_md !== undefined) {
+      update.body_md = payload.body_md;
+    }
+
+    if (payload.lang !== undefined) {
+      update.lang = nextLang;
+    }
+
+    if (payload.slug !== undefined || nextStatus === 'published') {
+      update.slug = nextSlug;
+    }
+
+    if (payload.visibility !== undefined) {
+      update.visibility = payload.visibility;
+    }
+
+    update.status = nextStatus;
+
+    if (nextStatus === 'published') {
+      update.visibility = payload.visibility ?? 'public';
+      update.published_at = existing.published_at ?? new Date().toISOString();
+    }
+
+    if (nextStatus === 'draft') {
+      update.published_at = null;
+
+      if (payload.visibility === undefined) {
+        update.visibility = 'private';
+      }
+    }
+
+    if (nextStatus === 'archived') {
+      if (payload.visibility === undefined) {
+        update.visibility = 'private';
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('items')
+      .update(update)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('[admin/items/:id] PATCH error:', error);
+
+      return NextResponse.json(
+        { error: 'Failed to update item.' },
+        { status: 500 },
+      );
+    }
 
     return NextResponse.json(
+      { item: data },
       {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Unauthorized',
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store',
+        },
       },
-      { status: 401 }
+    );
+  } catch (error) {
+    console.error('[admin/items/:id] PATCH auth/error:', error);
+
+    return NextResponse.json(
+      { error: 'Unauthorized.' },
+      { status: 401 },
     );
   }
 }

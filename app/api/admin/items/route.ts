@@ -1,15 +1,30 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRoleKey) {
+    throw new Error('Supabase server environment variables are missing.');
+  }
+
+  return createClient(url, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
 
 export async function GET() {
   try {
-    const supabase = createClient({
-      useServiceRole: true,
-    });
+    const supabase = getSupabaseAdmin();
 
-    const { data: items, error } = await supabase
+    const { data, error } = await supabase
       .from('items')
       .select(
         [
@@ -22,9 +37,7 @@ export async function GET() {
           'visibility',
           'body_md',
           'published_at',
-          'created_at',
-          'updated_at',
-        ].join(',')
+        ].join(','),
       )
       .eq('status', 'published')
       .eq('visibility', 'public')
@@ -35,25 +48,39 @@ export async function GET() {
       .limit(100);
 
     if (error) {
-      throw error;
-    }
+      console.error('[api/flow/items] Supabase error:', error);
 
-    return NextResponse.json({
-      success: true,
-      items: items ?? [],
-    });
-  } catch (error) {
-    console.error('[flow-items]', error);
+      return NextResponse.json(
+        {
+          error: 'Failed to load Flow items.',
+        },
+        {
+          status: 500,
+        },
+      );
+    }
 
     return NextResponse.json(
       {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to load flow',
+        items: data ?? [],
       },
-      { status: 500 }
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      },
+    );
+  } catch (error) {
+    console.error('[api/flow/items] Unexpected error:', error);
+
+    return NextResponse.json(
+      {
+        error: 'Failed to load Flow items.',
+      },
+      {
+        status: 500,
+      },
     );
   }
 }
