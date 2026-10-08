@@ -23,12 +23,11 @@ function SaveStatus({
     return (
       <span
         className="
-          max-w-[260px]
+          max-w-[280px]
           truncate
-          text-[11px]
+          text-[12px]
           font-medium
-          uppercase
-          tracking-[0.14em]
+          leading-none
           text-red-500
         "
         title={error}
@@ -44,10 +43,9 @@ function SaveStatus({
       return (
         <span
           className="
-            text-[11px]
+            text-[12px]
             font-medium
-            uppercase
-            tracking-[0.16em]
+            leading-none
             text-neutral-500
           "
         >
@@ -59,10 +57,9 @@ function SaveStatus({
       return (
         <span
           className="
-            text-[11px]
+            text-[12px]
             font-medium
-            uppercase
-            tracking-[0.16em]
+            leading-none
             text-neutral-500
           "
         >
@@ -74,10 +71,9 @@ function SaveStatus({
       return (
         <span
           className="
-            text-[11px]
+            text-[12px]
             font-medium
-            uppercase
-            tracking-[0.16em]
+            leading-none
             text-neutral-500
           "
         >
@@ -89,10 +85,9 @@ function SaveStatus({
       return (
         <span
           className="
-            text-[11px]
+            text-[12px]
             font-medium
-            uppercase
-            tracking-[0.16em]
+            leading-none
             text-neutral-500
           "
         >
@@ -107,20 +102,20 @@ function SaveStatus({
             flex
             items-center
             gap-2
-            text-[11px]
+            text-[12px]
             font-medium
-            uppercase
-            tracking-[0.16em]
+            leading-none
             text-neutral-500
           "
         >
-          SAVED
+          <span>SAVED</span>
 
           <span
             aria-hidden="true"
             className="
               h-1.5
               w-1.5
+              shrink-0
               rounded-full
               bg-neutral-400
             "
@@ -215,8 +210,7 @@ export default function NewPostModal({
       }
       onMouseDown={(event) => {
         if (
-          event.target ===
-            event.currentTarget &&
+          event.target === event.currentTarget &&
           !busy
         ) {
           void handleClose();
@@ -257,11 +251,11 @@ export default function NewPostModal({
             top-5
             z-30
             flex
-            h-7
-            w-7
+            h-8
+            w-8
             items-center
             justify-center
-            text-[22px]
+            text-[21px]
             font-light
             leading-none
             text-neutral-300
@@ -344,27 +338,21 @@ export default function NewPostModal({
                         type="url"
                         value={linkUrl}
                         onChange={(event) => {
-                          setLinkUrl(
-                            event.target.value,
-                          );
+                          setLinkUrl(event.target.value);
                         }}
                         onKeyDown={(event) => {
                           if (
-                            event.key ===
-                              "Enter" &&
+                            event.key === "Enter" &&
                             linkUrl.trim()
                           ) {
                             event.preventDefault();
 
-                            void parseLink(
-                              linkUrl,
-                            );
+                            void parseLink(linkUrl);
                           }
                         }}
                         placeholder="URL"
                         disabled={
-                          busy ||
-                          isParsing
+                          busy || isParsing
                         }
                         className="
                           min-w-0
@@ -383,9 +371,7 @@ export default function NewPostModal({
                       <button
                         type="button"
                         onClick={() => {
-                          void parseLink(
-                            linkUrl,
-                          );
+                          void parseLink(linkUrl);
                         }}
                         disabled={
                           busy ||
@@ -395,11 +381,12 @@ export default function NewPostModal({
                         className="
                           rounded-full
                           bg-black
-                          px-4
-                          py-2
-                          text-[10px]
+                          px-3
+                          py-1.5
+                          text-[9px]
+                          font-medium
                           uppercase
-                          tracking-[0.16em]
+                          tracking-[0.12em]
                           text-white
                           transition-opacity
                           hover:opacity-80
@@ -423,9 +410,7 @@ export default function NewPostModal({
                     <ShimmerPreview text="Reading YouTube…" />
                   ) : youtubeMetadata ? (
                     <YouTubePreview
-                      metadata={
-                        youtubeMetadata
-                      }
+                      metadata={youtubeMetadata}
                       url={linkUrl}
                     />
                   ) : null}
@@ -438,8 +423,7 @@ export default function NewPostModal({
                   <ImagePreview
                     src={imagePreview}
                     alt={
-                      imageName ||
-                      "Flow image"
+                      imageName || "Flow image"
                     }
                   />
                 </div>
@@ -450,7 +434,7 @@ export default function NewPostModal({
                 <div
                   className="
                     mt-5
-                    text-[11px]
+                    text-[12px]
                     font-medium
                     leading-relaxed
                     text-red-500
@@ -479,7 +463,7 @@ export default function NewPostModal({
             sm:pb-6
           "
         >
-          {/* Left side */}
+          {/* Left controls */}
           <div className="flex min-w-0 items-center gap-3">
             <input
               ref={fileRef}
@@ -495,9 +479,7 @@ export default function NewPostModal({
               onClick={() => {
                 fileRef.current?.click();
               }}
-              disabled={
-                busy || loading
-              }
+              disabled={busy || loading}
               aria-label="Add image"
               className="
                 flex
@@ -523,7 +505,7 @@ export default function NewPostModal({
               +
             </button>
 
-            {/* Save state */}
+            {/* Save status */}
             {!loading && (
               <SaveStatus
                 state={saveState}
@@ -539,28 +521,28 @@ export default function NewPostModal({
                   void clearDraft();
                 }}
                 disabled={
-                  busy ||
-                  isClearing
+                  busy || isClearing
                 }
                 className="
                   ml-1
                   rounded-full
                   bg-neutral-100
-                  px-3
-                  py-1.5
-                  text-[10px]
+                  px-4
+                  py-2
+                  text-[11px]
                   font-medium
+                  leading-none
                   uppercase
-                  tracking-[0.14em]
-                  text-neutral-500
+                  tracking-[0.12em]
+                  text-neutral-600
                   transition-all
                   hover:bg-neutral-200
-                  hover:text-neutral-900
+                  hover:text-neutral-950
                   disabled:cursor-not-allowed
                   disabled:opacity-30
-                  sm:px-3.5
-                  sm:py-2
-                  sm:text-[11px]
+                  sm:px-4.5
+                  sm:py-2.5
+                  sm:text-[12px]
                 "
               >
                 {isClearing
@@ -576,32 +558,27 @@ export default function NewPostModal({
             onClick={() => {
               void finish();
             }}
-            disabled={
-              !canPost ||
-              busy
-            }
+            disabled={!canPost || busy}
             className="
               shrink-0
               rounded-full
               bg-black
-              px-5
-              py-2.5
-              text-[9px]
+              px-4
+              py-2
+              text-[8px]
               font-medium
               uppercase
-              tracking-[0.14em]
+              tracking-[0.10em]
               text-white
               transition-opacity
               hover:opacity-80
               disabled:cursor-not-allowed
               disabled:opacity-[0.14]
-              sm:px-5.5
-              sm:py-2.5
+              sm:px-4.5
+              sm:py-2
             "
           >
-            {isPublishing
-              ? "…"
-              : "POST"}
+            {isPublishing ? "…" : "POST"}
           </button>
         </div>
       </div>
