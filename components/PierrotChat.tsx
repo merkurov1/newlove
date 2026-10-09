@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight } from 'lucide-react';
 
 export default function PierrotChat() {
   const [isOpen, setIsOpen] = useState(false);
@@ -19,7 +18,6 @@ export default function PierrotChat() {
     scrollToBottom();
   }, [messages]);
 
-  // Закрытие модального окна по клавише Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -35,18 +33,14 @@ export default function PierrotChat() {
 
     const userMessage = input.trim();
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
     try {
       const response = await fetch('/api/pierrot-web', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: userMessage
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMessage }),
       });
 
       if (!response.ok) {
@@ -54,15 +48,18 @@ export default function PierrotChat() {
       }
 
       const data = await response.json();
-      const assistantMessage = data.reply || "Silence.";
+      const assistantMessage = data.reply || 'Silence.';
       
-      setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: assistantMessage }]);
     } catch (error) {
       console.error('Chat error:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: "[ CONNECTION LOST. THE ETHER IS UNSTABLE. ]"
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        { 
+          role: 'assistant', 
+          content: '[ CONNECTION LOST. THE ETHER IS UNSTABLE. ]'
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -77,78 +74,81 @@ export default function PierrotChat() {
 
   return (
     <>
-      {/* Compact Horizontal Terminal Tab */}
+      {/* Лаконичный триггер-таб */}
       <button
         onClick={() => setIsOpen(true)}
-        className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/60 hover:bg-white border border-zinc-200 text-xs font-mono tracking-widest text-zinc-700 hover:text-[#111111] shadow-sm backdrop-blur-md transition-all"
+        className="group inline-flex items-center gap-2 px-3 py-1.5 bg-[#FAF8F5]/80 hover:bg-[#FAF8F5] border border-stone-300/80 text-[11px] font-mono tracking-[0.2em] text-stone-800 hover:text-stone-950 backdrop-blur-md transition-all cursor-pointer uppercase"
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-        <span className="uppercase">Pierrot</span>
+        <span className="w-1.5 h-1.5 bg-stone-900 animate-pulse"></span>
+        <span>Pierrot</span>
       </button>
 
-      {/* Modal Overlay with Liquid Glass */}
+      {/* Оверлей и Модалка */}
       <AnimatePresence>
         {isOpen && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-10"
             style={{ 
-              background: 'rgba(15, 15, 15, 0.4)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)'
+              background: 'rgba(10, 10, 10, 0.45)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)'
             }}
             onClick={() => setIsOpen(false)}
           >
-            {/* Modal Box */}
             <motion.div 
-              initial={{ scale: 0.95, opacity: 0, y: 10 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="relative w-full max-w-2xl h-[75vh] bg-[#FAF8F5]/90 backdrop-blur-2xl border border-zinc-300/80 text-[#111111] shadow-[0_24px_64px_rgba(0,0,0,0.15)] flex flex-col rounded-3xl overflow-hidden"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="relative w-full max-w-2xl h-[70vh] bg-[#FAF8F5] border border-stone-300 text-stone-900 shadow-2xl flex flex-col font-sans overflow-hidden"
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-200 bg-white/50">
+              {/* Шапка */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-stone-300/80 bg-[#FAF8F5]">
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-[11px] tracking-[0.25em] text-zinc-500 uppercase">
-                    Pierrot // Advisor
+                  <span className="font-mono text-[10px] tracking-[0.25em] text-stone-500 uppercase">
+                    PIERROT // ADVISOR
                   </span>
-                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                  <span className="inline-block w-1.5 h-1.5 bg-stone-900 animate-pulse"></span>
                 </div>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="group font-mono text-xs uppercase tracking-widest text-zinc-500 hover:text-[#111111] transition-colors flex items-center gap-1.5"
+                  className="font-mono text-[11px] uppercase tracking-[0.2em] text-stone-400 hover:text-stone-900 transition-colors cursor-pointer"
                 >
-                  <span>[ Close ]</span>
+                  [ CLOSE ]
                 </button>
               </div>
 
-              {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto px-6 py-8 space-y-6">
+              {/* Сообщения */}
+              <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 font-sans">
                 {messages.length === 0 && (
-                  <div className="text-zinc-400 font-serif text-sm text-center my-auto pt-16 space-y-2">
-                    <p className="text-zinc-600 font-mono text-xs uppercase tracking-widest">The advisor is listening</p>
-                    <p className="italic">Ask about art, silence, or digital architecture.</p>
+                  <div className="text-center my-auto pt-20 space-y-2">
+                    <p className="font-mono text-xs uppercase tracking-[0.25em] text-stone-400">
+                      THE ADVISOR IS LISTENING
+                    </p>
+                    <p className="font-serif italic text-sm text-stone-500">
+                      Ask about art, silence, or digital architecture.
+                    </p>
                   </div>
                 )}
                 
                 {messages.map((msg, idx) => (
                   <motion.div 
-                    initial={{ opacity: 0, y: 6 }}
+                    initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     key={idx} 
                     className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                   >
-                    <div className="font-mono text-[10px] text-zinc-400 mb-1.5 uppercase tracking-wider">
-                      {msg.role === 'user' ? 'You' : 'Pierrot'}
+                    <div className="font-mono text-[9px] text-stone-400 mb-1 uppercase tracking-widest">
+                      {msg.role === 'user' ? 'YOU' : 'PIERROT'}
                     </div>
-                    <div className={`max-w-[85%] leading-relaxed ${
+                    <div className={`max-w-[85%] text-sm leading-relaxed ${
                       msg.role === 'user' 
-                        ? 'bg-[#111111] text-[#FAF8F5] p-4 rounded-2xl rounded-tr-sm font-sans text-sm shadow-sm' 
-                        : 'bg-white/80 border border-zinc-200/80 p-5 rounded-2xl rounded-tl-sm font-serif text-zinc-800 text-base shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
+                        ? 'bg-stone-900 text-stone-50 p-3.5 tracking-wide' 
+                        : 'bg-white border border-stone-200 p-4 text-stone-800 tracking-wide font-serif text-base'
                     }`}>
                       {msg.content}
                     </div>
@@ -156,34 +156,33 @@ export default function PierrotChat() {
                 ))}
 
                 {isLoading && (
-                  <div className="flex items-center gap-2 font-mono text-xs text-zinc-400 animate-pulse pl-2">
-                    <span>Thinking</span>
-                    <span className="tracking-widest">...</span>
+                  <div className="font-mono text-xs text-stone-400 animate-pulse tracking-widest uppercase">
+                    THINKING...
                   </div>
                 )}
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Input Area */}
-              <div className="border-t border-zinc-200 p-4 md:p-5 bg-white/70 backdrop-blur-md">
-                <div className="flex items-center gap-3 bg-white border border-zinc-200 rounded-2xl px-4 py-3 shadow-sm focus-within:border-zinc-400 transition-colors">
-                  <span className="text-zinc-400 font-mono text-sm">›</span>
+              {/* Ввод */}
+              <div className="border-t border-stone-300 p-4 bg-[#FAF8F5]">
+                <div className="flex items-center gap-3 bg-white border border-stone-300 px-4 py-3">
+                  <span className="text-stone-400 font-mono text-xs">›</span>
                   <input
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDownInput}
-                    placeholder="Type your message..."
+                    placeholder="TYPE YOUR MESSAGE..."
                     disabled={isLoading}
-                    className="flex-1 bg-transparent border-none outline-none text-[#111111] font-serif text-base placeholder-zinc-400"
+                    className="flex-1 bg-transparent border-none outline-none text-stone-900 font-mono text-xs tracking-wider placeholder-stone-400 uppercase"
                     autoFocus
                   />
                   <button
                     onClick={sendMessage}
                     disabled={!input.trim() || isLoading}
-                    className="p-2 rounded-xl bg-[#111111] text-white hover:bg-zinc-800 disabled:opacity-30 transition-all"
+                    className="font-mono text-xs uppercase tracking-[0.2em] px-3 py-1 bg-stone-900 text-stone-50 hover:bg-stone-800 disabled:opacity-20 transition-all cursor-pointer"
                   >
-                    <ArrowRight size={16} />
+                    SEND
                   </button>
                 </div>
               </div>

@@ -17,47 +17,67 @@ export default function TodoManager({ initialTodos }: TodoManagerProps) {
   const toggleComplete = async (id: string, currentStatus: boolean) => {
     const updatedStatus = !currentStatus;
     
+    // Оптимистичный UI
     setTodos((prev) =>
       prev.map((t) => (t.id === id ? { ...t, is_completed: updatedStatus } : t))
     );
 
-    await fetch('/api/piero/todo', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, is_completed: updatedStatus }),
-    });
+    try {
+      await fetch('/api/piero/todo', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, is_completed: updatedStatus }),
+      });
+    } catch (e) {
+      console.error('Failed to patch todo status', e);
+    }
   };
 
   const handleDelete = async (id: string) => {
     setTodos((prev) => prev.filter((t) => t.id !== id));
 
-    await fetch(`/api/piero/todo?id=${id}`, {
-      method: 'DELETE',
-    });
+    try {
+      await fetch(`/api/piero/todo?id=${id}`, {
+        method: 'DELETE',
+      });
+    } catch (e) {
+      console.error('Failed to delete todo', e);
+    }
   };
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
+    // Генерируем UUID, если проект не выбран из существующих
+    const targetProject = (selectedProject === 'all' || !selectedProject)
+      ? crypto.randomUUID()
+      : selectedProject;
+
     const newTaskPayload = {
-      project_id: selectedProject === 'all' ? 'p1' : selectedProject,
+      project_id: targetProject,
       title: newTitle.trim(),
-      start_date: '2026-10-09',
+      start_date: new Date().toISOString().split('T')[0],
       is_completed: false,
       order_index: todos.length,
     };
 
-    const res = await fetch('/api/piero/todo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newTaskPayload),
-    });
+    try {
+      const res = await fetch('/api/piero/todo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTaskPayload),
+      });
 
-    const data = await res.json();
-    if (data.data && data.data[0]) {
-      setTodos((prev) => [...prev, data.data[0]]);
-      setNewTitle('');
+      const data = await res.json();
+      if (res.ok && data.data && data.data[0]) {
+        setTodos((prev) => [...prev, data.data[0]]);
+        setNewTitle('');
+      } else {
+        console.error('API Error:', data.error);
+      }
+    } catch (err) {
+      console.error('Failed to add task', err);
     }
   };
 
@@ -67,10 +87,10 @@ export default function TodoManager({ initialTodos }: TodoManagerProps) {
 
   return (
     <div className="w-full max-w-[1200px] mx-auto pt-32 pb-24 px-6 lg:px-10 font-sans text-stone-900">
-      {/* Шапка */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between pb-8 border-b border-stone-300 gap-4">
+      {/* Шапка раздела */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between pb-8 border-b border-stone-300/80 gap-6">
         <div>
-          <span className="font-mono text-[10px] tracking-widest text-stone-400 uppercase block mb-1">
+          <span className="font-mono text-[10px] tracking-[0.25em] text-stone-400 uppercase block mb-1">
             Task Engine
           </span>
           <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-[0.2em] text-stone-900">
@@ -78,37 +98,37 @@ export default function TodoManager({ initialTodos }: TodoManagerProps) {
           </h1>
         </div>
 
-        {/* Фильтр проектов */}
-        <div className="flex items-center gap-3 overflow-x-auto pb-1 sm:pb-0 font-mono text-xs">
+        {/* Проекты */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 font-mono text-xs">
           <button
             type="button"
             onClick={() => setSelectedProject('all')}
-            className={`px-3 py-1 uppercase tracking-wider transition-colors cursor-pointer ${
+            className={`px-3 py-1 uppercase tracking-wider transition-colors cursor-pointer border ${
               selectedProject === 'all'
-                ? 'bg-stone-900 text-white'
-                : 'text-stone-500 hover:text-stone-900 border border-stone-200'
+                ? 'bg-stone-900 text-stone-50 border-stone-900'
+                : 'text-stone-500 hover:text-stone-900 border-stone-200'
             }`}
           >
-            All
+            ALL
           </button>
           {projects.map((proj) => (
             <button
               key={proj}
               type="button"
               onClick={() => setSelectedProject(proj)}
-              className={`px-3 py-1 uppercase tracking-wider transition-colors cursor-pointer ${
+              className={`px-3 py-1 uppercase tracking-wider transition-colors cursor-pointer border ${
                 selectedProject === proj
-                  ? 'bg-stone-900 text-white'
-                  : 'text-stone-500 hover:text-stone-900 border border-stone-200'
+                  ? 'bg-stone-900 text-stone-50 border-stone-900'
+                  : 'text-stone-500 hover:text-stone-900 border-stone-200'
               }`}
             >
-              {proj}
+              {proj.slice(0, 8)}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Форма быстрых задач */}
+      {/* Форма ввода новой задачи */}
       <form onSubmit={handleAddTask} className="py-6 border-b border-stone-200">
         <div className="flex items-center gap-4">
           <input
@@ -120,25 +140,25 @@ export default function TodoManager({ initialTodos }: TodoManagerProps) {
           />
           <button
             type="submit"
-            className="font-mono text-xs uppercase tracking-[0.15em] px-4 py-2 bg-stone-900 text-white hover:bg-stone-800 transition-colors cursor-pointer"
+            className="font-mono text-xs uppercase tracking-[0.2em] px-4 py-2 bg-stone-900 text-stone-50 hover:bg-stone-800 transition-colors cursor-pointer"
           >
-            + Add
+            + ADD
           </button>
         </div>
       </form>
 
-      {/* Список */}
+      {/* Список задач */}
       <div className="divide-y divide-stone-200/70">
         {filteredTodos.map((item) => (
           <div
             key={item.id}
-            className="group flex items-center justify-between py-4 transition-colors hover:bg-stone-100/50 px-2 -mx-2"
+            className="group flex items-center justify-between py-4 transition-colors hover:bg-stone-100/40 px-2 -mx-2"
           >
             <div className="flex items-center gap-4 min-w-0 flex-1 pr-4">
               <button
                 type="button"
                 onClick={() => toggleComplete(item.id, item.is_completed)}
-                className={`w-4 h-4 shrink-0 rounded-none border border-stone-900 flex items-center justify-center transition-all cursor-pointer ${
+                className={`w-4 h-4 shrink-0 border border-stone-900 flex items-center justify-center transition-all cursor-pointer ${
                   item.is_completed ? 'bg-stone-900' : 'bg-transparent'
                 }`}
               >
@@ -163,7 +183,6 @@ export default function TodoManager({ initialTodos }: TodoManagerProps) {
                 {item.start_date}
               </span>
 
-              {/* Появление крестика удаления при hover */}
               <button
                 type="button"
                 onClick={() => handleDelete(item.id)}
@@ -178,7 +197,7 @@ export default function TodoManager({ initialTodos }: TodoManagerProps) {
 
         {filteredTodos.length === 0 && (
           <div className="py-12 text-center font-mono text-xs text-stone-400 uppercase tracking-widest">
-            No tasks found
+            NO TASKS FOUND
           </div>
         )}
       </div>
