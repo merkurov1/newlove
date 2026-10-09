@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -21,104 +22,70 @@ export type {
   YouTubeMetadata,
 };
 
-export const LAST_DRAFT_KEY =
-  "flow:last-draft-id";
+export const LAST_DRAFT_KEY = "flow:last-draft-id";
+export const AUTOSAVE_INTERVAL = 10_000;
 
-export const AUTOSAVE_INTERVAL =
-  10_000;
+function readJson(response: Response): Promise<Record<string, any>> {
+  return response.json().catch(() => ({}));
+}
 
-function firstLine(body: string) {
+function firstLine(value: string): string {
   return (
-    body
+    value
       .split(/\r?\n/)
-      .map((line) =>
-        line
-          .replace(/^#{1,6}\s+/, "")
-          .trim(),
-      )
+      .map((line) => line.replace(/^#{1,6}\s+/, "").trim())
       .find(Boolean)
-      ?.slice(0, 160) ||
-    "Flow post"
+      ?.slice(0, 160) || "Flow post"
   );
 }
 
-function slugify(
-  value: string,
-  id: string,
-) {
+function slugify(value: string, id: string): string {
   const slug = value
     .toLowerCase()
     .trim()
-    .replace(
-      /[^\p{L}\p{N}\s-]/gu,
-      "",
-    )
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 80);
 
-  return (
-    slug ||
-    `post-${id.slice(0, 8)}`
-  );
-}
-
-async function readJson(
-  response: Response,
-) {
-  return response
-    .json()
-    .catch(() => ({}));
+  return slug || `post-${id.slice(0, 8)}`;
 }
 
 function withFlowMetadata(
-  metadata:
-    | Record<string, unknown>
-    | null
-    | undefined,
-) {
+  metadata?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const current =
+    metadata && typeof metadata === "object" ? metadata : {};
+
+  const flow =
+    current.flow && typeof current.flow === "object"
+      ? current.flow as Record<string, unknown>
+      : {};
+
   return {
-    ...(metadata ?? {}),
+    ...current,
     flow: {
-      ...(metadata &&
-      typeof metadata.flow ===
-        "object" &&
-      metadata.flow !== null
-        ? metadata.flow
-        : {}),
-      queued_at:
-        new Date().toISOString(),
+      ...flow,
+      queued_at: new Date().toISOString(),
     },
   };
 }
 
-export function normalizePastedUrl(
-  value: string,
-) {
-  const trimmed =
-    value.trim();
+export function normalizePastedUrl(value: string): string | null {
+  const trimmed = value.trim();
 
-  if (
-    !trimmed ||
-    /\s/.test(trimmed)
-  ) {
-    return null;
-  }
+  if (!trimmed || /\s/.test(trimmed)) return null;
 
-  const candidate =
-    /^https?:\/\//i.test(
-      trimmed,
-    )
-      ? trimmed
-      : `https://${trimmed}`;
+  const candidate = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
 
   try {
-    const url =
-      new URL(candidate);
+    const url = new URL(candidate);
 
     if (
-      !url.hostname ||
+      !["http:", "https:"].includes(url.protocol) ||
       !url.hostname.includes(".")
     ) {
       return null;
@@ -130,57 +97,46 @@ export function normalizePastedUrl(
   }
 }
 
-export function getDomain(
-  value: string,
-) {
+export function getDomain(value: string): string {
   try {
-    return new URL(
-      value,
-    ).hostname.replace(
-      /^www\./,
-      "",
-    );
+    return new URL(value).hostname.replace(/^www\./, "");
   } catch {
     return value;
   }
 }
 
 export function getYouTubeMetadata(
-  metadata:
-    | Record<string, unknown>
-    | null
-    | undefined,
+  metadata?: Record<string, unknown> | null,
 ): YouTubeMetadata | null {
-  if (
-    !metadata ||
-    typeof metadata.youtube !==
-      "object" ||
-    metadata.youtube === null
-  ) {
-    return null;
-  }
+  const youtube = metadata?.youtube;
 
-  return metadata.youtube as YouTubeMetadata;
+  if (!youtube || typeof youtube !== "object") return null;
+
+  return youtube as YouTubeMetadata;
 }
 
-export function isYouTubeVideo(
-  item: Item | null,
-) {
+export function isYouTubeVideo(item: Item | null): boolean {
   return (
     item?.type === "video" &&
-    Boolean(
-      getYouTubeMetadata(
-        item.metadata,
-      ),
-    )
+    Boolean(getYouTubeMetadata(item.metadata))
   );
 }
 
-function isDraft(item: Item | null) {
-  return (
-    Boolean(item) &&
-    item?.status === "draft"
+function isDraft(item: Item | null): boolean {
+  return item?.status === "draft";
+}
+
+function extractUrlFromText(value: string): string | null {
+  const match = value.match(
+    /(?:https?:\/\/|www\.)[^\s<>"']+/i,
   );
+
+  if (!match) return null;
+
+  // Remove common punctuation accidentally included at the end.
+  const candidate = match[0].replace(/[),.;!?]+$/, "");
+
+  return normalizePastedUrl(candidate);
 }
 
 export function useNewPostModal({
@@ -189,124 +145,54 @@ export function useNewPostModal({
   onCreated,
   itemId,
 }: NewPostModalProps) {
-  const [
-    item,
-    setItem,
-  ] = useState<Item | null>(null);
+  const [item, setItem] = useState<Item | null>(null);
+  const [bodyMd, setBodyMdState] = useState("");
+  const [title, setTitleState] = useState("");
+  const [saveState, setSaveState] = useState<SaveState>("creating");
+  const [error, setError] = useState<string | null>(null);
 
-  const [
-    bodyMd,
-    setBodyMd,
-  ] = useState("");
+  const [linkMode, setLinkMode] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkPreview, setLinkPreview] =
+    useState<Record<string, unknown> | null>(null);
 
-  const [
-    title,
-    setTitle,
-  ] = useState("");
+  const [imageName, setImageName] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(Boolean(itemId));
+  const [isClearing, setIsClearing] = useState(false);
 
-  const [
-    saveState,
-    setSaveState,
-  ] = useState<SaveState>(
-    "creating",
-  );
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const [
-    error,
-    setError,
-  ] = useState<string | null>(
-    null,
-  );
+  const latestRef = useRef({ bodyMd: "", title: "" });
+  const itemRef = useRef<Item | null>(null);
+  const mountedRef = useRef(false);
+  const closingRef = useRef(false);
+  const initializingRef = useRef(false);
+  const savePromiseRef = useRef<Promise<boolean> | null>(null);
+  const operationPromiseRef = useRef<Promise<boolean> | null>(null);
+  const lastSavedRef = useRef({ bodyMd: "", title: "" });
 
-  const [
-    linkMode,
-    setLinkMode,
-  ] = useState(false);
+  const setCurrentItem = useCallback((next: Item | null) => {
+    itemRef.current = next;
+    setItem(next);
+  }, []);
 
-  const [
-    linkUrl,
-    setLinkUrl,
-  ] = useState("");
+  const setBodyMd = useCallback((value: string) => {
+    latestRef.current.bodyMd = value;
+    setBodyMdState(value);
+  }, []);
 
-  const [
-    linkPreview,
-    setLinkPreview,
-  ] =
-    useState<Record<
-      string,
-      unknown
-    > | null>(null);
-
-  const [
-    imageName,
-    setImageName,
-  ] = useState<string | null>(
-    null,
-  );
-
-  const [
-    imagePreview,
-    setImagePreview,
-  ] = useState<string | null>(
-    null,
-  );
-
-  const [
-    isEditing,
-    setIsEditing,
-  ] = useState(
-    Boolean(itemId),
-  );
-
-  const [
-    isClearing,
-    setIsClearing,
-  ] = useState(false);
-
-  const fileRef =
-    useRef<HTMLInputElement | null>(
-      null,
-    );
-
-  const textareaRef =
-    useRef<HTMLTextAreaElement | null>(
-      null,
-    );
-
-  const savePromiseRef =
-    useRef<Promise<boolean> | null>(
-      null,
-    );
-
-  const operationPromiseRef =
-    useRef<Promise<boolean> | null>(
-      null,
-    );
-
-  const latestRef =
-    useRef({
-      bodyMd: "",
-      title: "",
-    });
-
-  const closingRef =
-    useRef(false);
-
-  const mountedRef =
-    useRef(true);
+  const setTitle = useCallback((value: string) => {
+    latestRef.current.title = value;
+    setTitleState(value);
+  }, []);
 
   const busy =
     saveState === "creating" ||
     saveState === "loading" ||
     saveState === "publishing" ||
     isClearing;
-
-  useEffect(() => {
-    latestRef.current = {
-      bodyMd,
-      title,
-    };
-  }, [bodyMd, title]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -316,403 +202,269 @@ export function useNewPostModal({
     };
   }, []);
 
-  const resetLocalState =
-    useCallback(
-      (nextItem: Item | null) => {
-        const nextBody =
-          nextItem?.body_md ?? "";
+  const resetLocalState = useCallback(
+    (next: Item | null) => {
+      const nextBody = next?.body_md ?? "";
+      const nextTitle = next?.title ?? "";
 
-        const nextTitle =
-          nextItem?.title ?? "";
+      setCurrentItem(next);
+      setBodyMdState(nextBody);
+      setTitleState(nextTitle);
 
-        setItem(nextItem);
-        setBodyMd(nextBody);
-        setTitle(nextTitle);
+      latestRef.current = {
+        bodyMd: nextBody,
+        title: nextTitle,
+      };
 
-        latestRef.current = {
-          bodyMd: nextBody,
-          title: nextTitle,
-        };
+      lastSavedRef.current = {
+        bodyMd: nextBody,
+        title: nextTitle,
+      };
 
-        setError(null);
-        setLinkMode(false);
-        setLinkUrl("");
-        setLinkPreview(null);
-        setImageName(null);
-        setImagePreview(null);
-        setSaveState("saved");
-      },
-      [],
-    );
+      setError(null);
+      setLinkMode(false);
+      setLinkUrl("");
+      setLinkPreview(null);
+      setImageName(null);
+      setImagePreview(null);
+      setSaveState("saved");
+    },
+    [setCurrentItem],
+  );
 
-  const createFreshDraft =
-    useCallback(
-      async () => {
-        setSaveState("creating");
-        setError(null);
+  const createFreshDraft = useCallback(async (): Promise<boolean> => {
+    setSaveState("creating");
+    setError(null);
 
-        const response =
-          await fetch(
-            "/api/admin/items/new",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-              body: JSON.stringify({
-                type: "note",
-                title: "",
-                body_md: "",
-                lang: "ru",
-                metadata: {
-                  flow: {
-                    mode: "direct",
-                  },
-                },
-              }),
-            },
-          );
+    const response = await fetch("/api/admin/items/new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "note",
+        title: "",
+        body_md: "",
+        lang: "ru",
+        metadata: { flow: { mode: "direct" } },
+      }),
+    });
 
-        const json =
-          await readJson(response);
+    const json = await readJson(response);
 
-        if (
-          !response.ok ||
-          !json.item
-        ) {
-          throw new Error(
-            json.error ??
-              "Failed to create Flow item.",
-          );
+    if (!response.ok || !json.item) {
+      throw new Error(json.error || "Could not create draft.");
+    }
+
+    const fresh = json.item as Item;
+
+    window.localStorage.setItem(LAST_DRAFT_KEY, fresh.id);
+
+    if (!mountedRef.current) return false;
+
+    resetLocalState(fresh);
+
+    requestAnimationFrame(() => textareaRef.current?.focus());
+
+    return true;
+  }, [resetLocalState]);
+
+  const initialize = useCallback(async () => {
+    if (initializingRef.current) return;
+    initializingRef.current = true;
+
+    try {
+      let loaded: Item | null = null;
+
+      if (itemId) {
+        setIsEditing(true);
+        setSaveState("loading");
+
+        const response = await fetch(`/api/admin/items/${itemId}`, {
+          cache: "no-store",
+        });
+
+        const json = await readJson(response);
+
+        if (!response.ok || !json.item) {
+          throw new Error(json.error || "Could not load item.");
         }
 
-        const fresh =
-          json.item as Item;
+        loaded = json.item as Item;
+      } else {
+        setIsEditing(false);
 
-        window.localStorage.setItem(
-          LAST_DRAFT_KEY,
-          fresh.id,
-        );
+        const draftId = window.localStorage.getItem(LAST_DRAFT_KEY);
 
-        if (!mountedRef.current) {
-          return false;
-        }
-
-        resetLocalState(fresh);
-
-        requestAnimationFrame(
-          () => {
-            textareaRef.current?.focus();
-          },
-        );
-
-        return true;
-      },
-      [resetLocalState],
-    );
-
-  const initialize =
-    useCallback(
-      async () => {
-        let loaded: Item | null =
-          null;
-
-        if (itemId) {
-          setIsEditing(true);
+        if (draftId) {
           setSaveState("loading");
 
-          const response =
-            await fetch(
-              `/api/admin/items/${itemId}`,
-              {
-                cache: "no-store",
-              },
-            );
+          const response = await fetch(`/api/admin/items/${draftId}`, {
+            cache: "no-store",
+          });
 
-          const json =
-            await readJson(response);
+          const json = await readJson(response);
 
-          if (
-            !response.ok ||
-            !json.item
-          ) {
-            throw new Error(
-              json.error ??
-                "Failed to load item.",
-            );
-          }
-
-          loaded =
-            json.item as Item;
-        } else {
-          setIsEditing(false);
-
-          const existingDraftId =
-            window.localStorage.getItem(
-              LAST_DRAFT_KEY,
-            );
-
-          if (existingDraftId) {
-            setSaveState("loading");
-
-            const response =
-              await fetch(
-                `/api/admin/items/${existingDraftId}`,
-                {
-                  cache: "no-store",
-                },
-              );
-
-            const json =
-              await readJson(response);
-
-            if (
-              response.ok &&
-              json.item &&
-              json.item.status ===
-                "draft"
-            ) {
-              loaded =
-                json.item as Item;
-            } else {
-              window.localStorage.removeItem(
-                LAST_DRAFT_KEY,
-              );
-            }
-          }
-
-          if (!loaded) {
-            await createFreshDraft();
-            return;
+          if (response.ok && json.item?.status === "draft") {
+            loaded = json.item as Item;
+          } else {
+            window.localStorage.removeItem(LAST_DRAFT_KEY);
           }
         }
 
         if (!loaded) {
+          await createFreshDraft();
           return;
         }
+      }
 
-        if (!mountedRef.current) {
-          return;
-        }
+      if (!loaded || !mountedRef.current) return;
 
-        setItem(loaded);
+      resetLocalState(loaded);
 
-        setBodyMd(
-          loaded.body_md ?? "",
+      if (loaded.type === "link" || loaded.type === "video") {
+        setLinkMode(true);
+        setLinkUrl(loaded.source_url ?? "");
+        setLinkPreview(loaded.metadata ?? null);
+      }
+
+      if (loaded.type === "photo") {
+        const metadata = loaded.metadata ?? {};
+
+        setImagePreview(
+          typeof metadata.public_url === "string"
+            ? metadata.public_url
+            : null,
         );
 
-        setTitle(
-          loaded.title ?? "",
+        setImageName(
+          typeof metadata.filename === "string"
+            ? metadata.filename
+            : null,
         );
+      }
 
-        latestRef.current = {
-          bodyMd:
-            loaded.body_md ?? "",
-          title:
-            loaded.title ?? "",
-        };
-
-        if (
-          loaded.type === "link" ||
-          loaded.type === "video"
-        ) {
-          setLinkMode(true);
-
-          setLinkUrl(
-            loaded.source_url ?? "",
-          );
-
-          setLinkPreview(
-            loaded.metadata ?? null,
-          );
-        }
-
-        if (
-          loaded.type === "photo"
-        ) {
-          const publicUrl =
-            loaded.metadata &&
-            typeof loaded.metadata
-              .public_url ===
-              "string"
-              ? loaded.metadata
-                  .public_url
-              : null;
-
-          setImagePreview(
-            publicUrl,
-          );
-
-          setImageName(
-            loaded.metadata &&
-            typeof loaded.metadata
-              .filename ===
-              "string"
-              ? loaded.metadata
-                  .filename
-              : null,
-          );
-        }
-
-        setSaveState("saved");
-
-        requestAnimationFrame(
-          () => {
-            textareaRef.current?.focus();
-          },
-        );
-      },
-      [createFreshDraft, itemId],
-    );
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    } finally {
+      initializingRef.current = false;
+    }
+  }, [createFreshDraft, itemId, resetLocalState]);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
+    if (!open) return;
 
     let cancelled = false;
 
-    async function run() {
-      try {
-        setError(null);
+    void initialize().catch((cause: unknown) => {
+      if (cancelled || !mountedRef.current) return;
 
-        await initialize();
-      } catch (err) {
-        if (
-          cancelled ||
-          !mountedRef.current
-        ) {
-          return;
-        }
-
-        console.error(
-          "[flow] initialization failed:",
-          err,
-        );
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to initialize.",
-        );
-
-        setSaveState("error");
-      }
-    }
-
-    void run();
+      setError(
+        cause instanceof Error ? cause.message : "Initialization failed.",
+      );
+      setSaveState("error");
+    });
 
     return () => {
       cancelled = true;
 
-      if (
-        imagePreview?.startsWith(
-          "blob:",
-        )
-      ) {
-        URL.revokeObjectURL(
-          imagePreview,
-        );
+      if (imagePreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
       }
     };
-    // initialize intentionally represents one modal session.
+    // One initialization per modal opening/item.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, itemId]);
 
-  const saveDraft =
-    useCallback(
-      async (
-        changes: Record<
-          string,
-          unknown
-        >,
-      ) => {
-        if (!item) {
-          return true;
+  const saveDraft = useCallback(
+    async (changes: Record<string, unknown>): Promise<boolean> => {
+      const current = itemRef.current;
+
+      if (!current) return false;
+      if (current.status !== "draft" || isClearing) return false;
+
+      try {
+        const response = await fetch(`/api/admin/items/${current.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(changes),
+        });
+
+        const json = await readJson(response);
+
+        if (!response.ok) {
+          throw new Error(json.error || "Could not save draft.");
         }
 
-        if (
-          isClearing ||
-          item.status !== "draft"
-        ) {
-          return false;
-        }
+        if (!mountedRef.current) return true;
 
-        try {
-          setSaveState("saving");
-          setError(null);
+        if (json.item) setCurrentItem(json.item as Item);
 
-          const response =
-            await fetch(
-              `/api/admin/items/${item.id}`,
-              {
-                method: "PATCH",
-                headers: {
-                  "Content-Type":
-                    "application/json",
-                },
-                body: JSON.stringify(
-                  changes,
-                ),
-              },
-            );
+        lastSavedRef.current = {
+          bodyMd:
+            typeof changes.body_md === "string"
+              ? changes.body_md
+              : latestRef.current.bodyMd,
+          title:
+            typeof changes.title === "string"
+              ? changes.title
+              : latestRef.current.title,
+        };
 
-          const json =
-            await readJson(response);
-
-          if (!response.ok) {
-            throw new Error(
-              json.error ??
-                "Failed to save.",
-            );
-          }
-
-          if (
-            json.item &&
-            mountedRef.current
-          ) {
-            setItem(
-              json.item as Item,
-            );
-          }
-
-          if (mountedRef.current) {
-            setSaveState("saved");
-          }
-
-          return true;
-        } catch (err) {
-          console.error(
-            "[flow] save failed:",
-            err,
+        setSaveState("saved");
+        setError(null);
+        return true;
+      } catch (cause) {
+        if (mountedRef.current) {
+          setError(
+            cause instanceof Error ? cause.message : "Could not save draft.",
           );
-
-          if (mountedRef.current) {
-            setError(
-              err instanceof Error
-                ? err.message
-                : "Failed to save.",
-            );
-
-            setSaveState("error");
-          }
-
-          return false;
+          setSaveState("error");
         }
-      },
-      [isClearing, item],
-    );
 
-  useEffect(() => {
-    if (
-      !item ||
-      item.status !== "draft"
-    ) {
-      return;
+        return false;
+      }
+    },
+    [isClearing, setCurrentItem],
+  );
+
+  const flushSave = useCallback(async (): Promise<boolean> => {
+    const current = itemRef.current;
+
+    if (!current || current.status !== "draft") return true;
+    if (isClearing) return false;
+
+    if (savePromiseRef.current) {
+      await savePromiseRef.current;
     }
 
-    const autosave = () => {
+    const latest = latestRef.current;
+    const saved = lastSavedRef.current;
+
+    if (
+      latest.bodyMd === saved.bodyMd &&
+      latest.title === saved.title
+    ) {
+      return true;
+    }
+
+    const promise = saveDraft({
+      body_md: latest.bodyMd,
+      title: latest.title,
+    });
+
+    savePromiseRef.current = promise;
+
+    try {
+      return await promise;
+    } finally {
+      if (savePromiseRef.current === promise) {
+        savePromiseRef.current = null;
+      }
+    }
+  }, [isClearing, saveDraft]);
+
+  useEffect(() => {
+    if (!open || !item || item.status !== "draft") return;
+
+    const timer = window.setInterval(() => {
       if (
         isClearing ||
         savePromiseRef.current ||
@@ -724,850 +476,464 @@ export function useNewPostModal({
         return;
       }
 
-      const promise =
-        saveDraft({
-          body_md:
-            latestRef.current.bodyMd,
-          title:
-            latestRef.current.title,
-        });
+      const latest = latestRef.current;
+      const saved = lastSavedRef.current;
 
-      savePromiseRef.current =
-        promise;
+      if (
+        latest.bodyMd === saved.bodyMd &&
+        latest.title === saved.title
+      ) {
+        return;
+      }
+
+      const promise = saveDraft({
+        body_md: latest.bodyMd,
+        title: latest.title,
+      });
+
+      savePromiseRef.current = promise;
 
       void promise.finally(() => {
-        if (
-          savePromiseRef.current ===
-          promise
-        ) {
-          savePromiseRef.current =
-            null;
+        if (savePromiseRef.current === promise) {
+          savePromiseRef.current = null;
         }
       });
-    };
+    }, AUTOSAVE_INTERVAL);
 
-    const interval =
-      window.setInterval(
-        autosave,
-        AUTOSAVE_INTERVAL,
-      );
+    return () => window.clearInterval(timer);
+  }, [item, isClearing, open, saveDraft, saveState]);
 
-    return () =>
-      window.clearInterval(
-        interval,
-      );
+  const trackOperation = useCallback(
+    async (operation: Promise<boolean>): Promise<boolean> => {
+      operationPromiseRef.current = operation;
+
+      try {
+        return await operation;
+      } finally {
+        if (operationPromiseRef.current === operation) {
+          operationPromiseRef.current = null;
+        }
+      }
+    },
+    [],
+  );
+
+  const parseLink = useCallback(
+    async (urlOverride?: string): Promise<boolean> => {
+      const current = itemRef.current;
+      const url = normalizePastedUrl(urlOverride ?? linkUrl);
+
+      if (!current || !url || isClearing) return false;
+
+      setLinkMode(true);
+      setLinkUrl(url);
+      setError(null);
+
+      const operation = (async (): Promise<boolean> => {
+        try {
+          setSaveState("saving");
+
+          const response = await fetch("/api/admin/items/parse-link", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              item_id: current.id,
+              url,
+            }),
+          });
+
+          const json = await readJson(response);
+
+          if (!response.ok || !json.item) {
+            throw new Error(json.error || "Could not read link preview.");
+          }
+
+          if (!mountedRef.current) return false;
+
+          const parsed = json.item as Item;
+          const oldBody = latestRef.current.bodyMd;
+
+          setCurrentItem(parsed);
+          setLinkUrl(parsed.source_url ?? url);
+          setLinkPreview(json.metadata ?? parsed.metadata ?? null);
+
+          // Preserve the author's existing text if the parser returns
+          // metadata or a generated description for the linked page.
+          const nextBody =
+            oldBody.trim() || parsed.body_md || "";
+
+          setBodyMdState(nextBody);
+          setTitleState(parsed.title ?? latestRef.current.title);
+
+          latestRef.current = {
+            bodyMd: nextBody,
+            title: parsed.title ?? latestRef.current.title,
+          };
+
+          setSaveState("saved");
+          return true;
+        } catch (cause) {
+          // Preview is optional. Keep the URL and allow publication.
+          if (mountedRef.current) {
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "Preview unavailable. The link can still be posted.",
+            );
+            setSaveState("error");
+          }
+
+          return false;
+        }
+      })();
+
+      return trackOperation(operation);
+    },
+    [isClearing, linkUrl, setBodyMd, setCurrentItem, trackOperation],
+  );
+
+  const handlePaste = useCallback(
+    (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const pasted = event.clipboardData.getData("text");
+      const exactUrl = normalizePastedUrl(pasted);
+
+      if (!exactUrl || isClearing) {
+        // If the paste includes prose and a URL, keep the entire text
+        // in the editor and discover the URL without replacing the prose.
+        const embeddedUrl = extractUrlFromText(pasted);
+
+        if (embeddedUrl) {
+          setLinkMode(true);
+          setLinkUrl(embeddedUrl);
+          setLinkPreview(null);
+          setError(null);
+
+          window.setTimeout(() => {
+            void parseLink(embeddedUrl);
+          }, 0);
+        }
+
+        return;
+      }
+
+      event.preventDefault();
+
+      setLinkMode(true);
+      setLinkUrl(exactUrl);
+      setLinkPreview(null);
+      setError(null);
+
+      void parseLink(exactUrl);
+    },
+    [isClearing, parseLink],
+  );
+
+  const uploadImage = useCallback(
+    async (file: File): Promise<boolean> => {
+      const current = itemRef.current;
+
+      if (!current || isClearing) return false;
+
+      const operation = (async (): Promise<boolean> => {
+        let localPreview: string | null = null;
+
+        try {
+          setSaveState("saving");
+          setError(null);
+
+          localPreview = URL.createObjectURL(file);
+          setImagePreview(localPreview);
+          setImageName(file.name);
+
+          const form = new FormData();
+          form.append("file", file);
+          form.append("item_id", current.id);
+
+          const response = await fetch("/api/admin/items/media", {
+            method: "POST",
+            body: form,
+          });
+
+          const json = await readJson(response);
+
+          if (!response.ok || !json.item) {
+            throw new Error(json.error || "Image upload failed.");
+          }
+
+          if (!mountedRef.current) return false;
+
+          const uploaded = json.item as Item;
+          setCurrentItem(uploaded);
+
+          const publicUrl =
+            typeof json.url === "string"
+              ? json.url
+              : typeof uploaded.metadata?.public_url === "string"
+                ? uploaded.metadata.public_url
+                : null;
+
+          if (publicUrl) {
+            setImagePreview(publicUrl);
+            URL.revokeObjectURL(localPreview);
+          }
+
+          setBodyMdState(uploaded.body_md ?? latestRef.current.bodyMd);
+          setTitleState(uploaded.title ?? latestRef.current.title);
+
+          latestRef.current = {
+            bodyMd: uploaded.body_md ?? latestRef.current.bodyMd,
+            title: uploaded.title ?? latestRef.current.title,
+          };
+
+          setSaveState("saved");
+          return true;
+        } catch (cause) {
+          if (mountedRef.current) {
+            setError(
+              cause instanceof Error ? cause.message : "Image upload failed.",
+            );
+            setSaveState("error");
+          }
+
+          return false;
+        }
+      })();
+
+      return trackOperation(operation);
+    },
+    [isClearing, setCurrentItem, trackOperation],
+  );
+
+  const handleImageUpload = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (file) void uploadImage(file);
+      event.target.value = "";
+    },
+    [uploadImage],
+  );
+
+  const finish = useCallback(async () => {
+    let current = itemRef.current;
+
+    if (
+      !current ||
+      isClearing ||
+      saveState === "publishing"
+    ) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setSaveState("publishing");
+
+      if (operationPromiseRef.current) {
+        await operationPromiseRef.current;
+      }
+
+      current = itemRef.current;
+
+      if (!current || isClearing) return;
+
+      // Saving text is required; parsing a URL preview is not.
+      if (current.status === "draft") {
+        const saved = await flushSave();
+
+        if (!saved) {
+          throw new Error("Draft could not be saved.");
+        }
+      }
+
+      const body = latestRef.current.bodyMd;
+      const isVideo = current.type === "video";
+      const isPhoto = current.type === "photo";
+      const isLink = current.type === "link";
+
+      const youtube = getYouTubeMetadata(current.metadata);
+      const sourceUrl =
+        current.source_url ||
+        normalizePastedUrl(linkUrl) ||
+        extractUrlFromText(body);
+
+      if (isPhoto && !current.metadata && !imagePreview) {
+        throw new Error("Add an image first.");
+      }
+
+      if (
+        !isPhoto &&
+        !isVideo &&
+        !isLink &&
+        !body.trim() &&
+        !sourceUrl
+      ) {
+        throw new Error("Write something first.");
+      }
+
+      // If the user pasted a URL but metadata lookup failed, still publish
+      // the URL as a link rather than making preview availability mandatory.
+      const resolvedType =
+        isVideo
+          ? "video"
+          : isPhoto
+            ? "photo"
+            : isLink || (sourceUrl && !body.trim())
+              ? "link"
+              : current.type || "note";
+
+      const generatedTitle =
+        isVideo
+          ? String(youtube?.title || current.title || "YouTube video").slice(0, 160)
+          : isPhoto
+            ? String(
+                (typeof current.metadata?.alt === "string"
+                  ? current.metadata.alt
+                  : null) ||
+                  current.title ||
+                  "Image",
+              ).slice(0, 160)
+            : isLink || (sourceUrl && !body.trim())
+              ? String(
+                  linkPreview?.title ||
+                    current.title ||
+                    getDomain(sourceUrl || linkUrl) ||
+                    "Link",
+                ).slice(0, 160)
+              : (current.title?.trim() || firstLine(body)).slice(0, 160);
+
+      const slug =
+        current.status === "published" && current.slug
+          ? current.slug
+          : slugify(generatedTitle || body, current.id);
+
+      const metadata = withFlowMetadata(current.metadata);
+
+      const payload: Record<string, unknown> = {
+        title: generatedTitle,
+        body_md: body,
+        slug,
+        metadata,
+        status: "published",
+        visibility: "public",
+      };
+
+      if (sourceUrl) payload.source_url = sourceUrl;
+      if (resolvedType) payload.type = resolvedType;
+
+      const response = await fetch(`/api/admin/items/${current.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await readJson(response);
+
+      if (!response.ok || !json.item) {
+        throw new Error(
+          json.error || `Publishing failed (${response.status}).`,
+        );
+      }
+
+      window.localStorage.removeItem(LAST_DRAFT_KEY);
+
+      // AI runs after publishing and never blocks the POST flow.
+      void fetch(`/api/admin/items/${current.id}/ai`, {
+        method: "POST",
+      }).catch((cause) => {
+        console.warn("[flow] AI context request failed:", cause);
+      });
+
+      if (mountedRef.current) setSaveState("saved");
+
+      onCreated?.(json.item as Item);
+      onClose();
+    } catch (cause) {
+      if (mountedRef.current) {
+        setError(
+          cause instanceof Error ? cause.message : "Publishing failed.",
+        );
+        setSaveState("error");
+      }
+    }
   }, [
+    flushSave,
     isClearing,
-    item,
-    saveDraft,
+    linkPreview,
+    linkUrl,
+    onClose,
+    onCreated,
     saveState,
   ]);
 
-  const trackOperation =
-    useCallback(
-      (
-        operation: Promise<boolean>,
-      ) => {
-        operationPromiseRef.current =
-          operation;
+  const clearDraft = useCallback(async () => {
+    const current = itemRef.current;
 
-        void operation.finally(
-          () => {
-            if (
-              operationPromiseRef.current ===
-              operation
-            ) {
-              operationPromiseRef.current =
-                null;
-            }
-          },
-        );
+    if (!current || !isDraft(current) || isClearing) return;
 
-        return operation;
-      },
-      [],
-    );
+    setIsClearing(true);
+    setSaveState("clearing");
+    setError(null);
 
-  const handleBodyChange =
-    useCallback(
-      (value: string) => {
-        setBodyMd(value);
-
-        latestRef.current.bodyMd =
-          value;
-      },
-      [],
-    );
-
-  const flushSave =
-    useCallback(
-      async () => {
-        if (!item) {
-          return true;
-        }
-
-        if (
-          item.status !== "draft"
-        ) {
-          return true;
-        }
-
-        if (
-          savePromiseRef.current
-        ) {
-          await savePromiseRef.current;
-        }
-
-        if (isClearing) {
-          return false;
-        }
-
-        return saveDraft({
-          body_md:
-            latestRef.current.bodyMd,
-          title:
-            latestRef.current.title,
-        });
-      },
-      [isClearing, item, saveDraft],
-    );
-
-  const parseLink =
-    useCallback(
-      async (urlOverride?: string) => {
-        if (
-          !item ||
-          isClearing
-        ) {
-          return;
-        }
-
-        const url = (
-          urlOverride ?? linkUrl
-        ).trim();
-
-        if (!url) {
-          return;
-        }
-
-        const operation =
-          (async () => {
-            try {
-              setSaveState("saving");
-              setError(null);
-
-              const response =
-                await fetch(
-                  "/api/admin/items/parse-link",
-                  {
-                    method: "POST",
-                    headers: {
-                      "Content-Type":
-                        "application/json",
-                    },
-                    body: JSON.stringify({
-                      item_id: item.id,
-                      url,
-                    }),
-                  },
-                );
-
-              const json =
-                await readJson(
-                  response,
-                );
-
-              if (!response.ok) {
-                throw new Error(
-                  json.error ??
-                    "Failed to parse link.",
-                );
-              }
-
-              const parsedItem =
-                json.item as Item;
-
-              if (
-                !mountedRef.current ||
-                isClearing
-              ) {
-                return false;
-              }
-
-              setItem(parsedItem);
-              setLinkMode(true);
-
-              setLinkUrl(
-                parsedItem.source_url ??
-                  url,
-              );
-
-              setLinkPreview(
-                json.metadata ??
-                  parsedItem.metadata ??
-                  null,
-              );
-
-              setBodyMd(
-                parsedItem.body_md ?? "",
-              );
-
-              setTitle(
-                parsedItem.title ?? "",
-              );
-
-              latestRef.current = {
-                bodyMd:
-                  parsedItem.body_md ??
-                  "",
-                title:
-                  parsedItem.title ??
-                  "",
-              };
-
-              setSaveState("saved");
-
-              requestAnimationFrame(
-                () => {
-                  if (
-                    parsedItem.type !==
-                    "video"
-                  ) {
-                    textareaRef.current?.focus();
-                  }
-                },
-              );
-
-              return true;
-            } catch (err) {
-              console.error(
-                "[flow] link parsing failed:",
-                err,
-              );
-
-              if (
-                mountedRef.current
-              ) {
-                setError(
-                  err instanceof Error
-                    ? err.message
-                    : "Could not read this link.",
-                );
-
-                setSaveState("error");
-              }
-
-              return false;
-            }
-          })();
-
-        return trackOperation(
-          operation,
-        );
-      },
-      [
-        isClearing,
-        item,
-        linkUrl,
-        trackOperation,
-      ],
-    );
-
-  const handlePaste =
-    useCallback(
-      (
-        event: React.ClipboardEvent<HTMLTextAreaElement>,
-      ) => {
-        const pasted =
-          event.clipboardData
-            .getData("text")
-            .trim();
-
-        const url =
-          normalizePastedUrl(
-            pasted,
-          );
-
-        if (
-          !url ||
-          bodyMd.trim() ||
-          isClearing
-        ) {
-          return;
-        }
-
-        event.preventDefault();
-
-        setError(null);
-        setLinkMode(true);
-        setLinkUrl(url);
-        setLinkPreview(null);
-
-        void parseLink(url);
-      },
-      [
-        bodyMd,
-        isClearing,
-        parseLink,
-      ],
-    );
-
-  const uploadImage =
-    useCallback(
-      async (file: File) => {
-        if (
-          !item ||
-          isClearing
-        ) {
-          return;
-        }
-
-        const operation =
-          (async () => {
-            try {
-              setSaveState("saving");
-              setError(null);
-
-              setLinkMode(false);
-              setLinkPreview(null);
-
-              if (
-                imagePreview?.startsWith(
-                  "blob:",
-                )
-              ) {
-                URL.revokeObjectURL(
-                  imagePreview,
-                );
-              }
-
-              const localPreview =
-                URL.createObjectURL(
-                  file,
-                );
-
-              setImagePreview(
-                localPreview,
-              );
-
-              setImageName(
-                file.name,
-              );
-
-              const form =
-                new FormData();
-
-              form.append(
-                "file",
-                file,
-              );
-
-              form.append(
-                "item_id",
-                item.id,
-              );
-
-              const response =
-                await fetch(
-                  "/api/admin/items/media",
-                  {
-                    method: "POST",
-                    body: form,
-                  },
-                );
-
-              const json =
-                await readJson(
-                  response,
-                );
-
-              if (!response.ok) {
-                throw new Error(
-                  json.error ??
-                    "Failed to upload image.",
-                );
-              }
-
-              const uploadedItem =
-                json.item as Item;
-
-              if (
-                !mountedRef.current ||
-                isClearing
-              ) {
-                return false;
-              }
-
-              setItem(uploadedItem);
-
-              setBodyMd(
-                uploadedItem.body_md ??
-                  "",
-              );
-
-              setTitle(
-                uploadedItem.title ??
-                  "",
-              );
-
-              latestRef.current = {
-                bodyMd:
-                  uploadedItem.body_md ??
-                  "",
-                title:
-                  uploadedItem.title ??
-                  "",
-              };
-
-              const publicUrl =
-                typeof json.url ===
-                "string"
-                  ? json.url
-                  : uploadedItem.metadata &&
-                      typeof uploadedItem
-                        .metadata
-                        .public_url ===
-                        "string"
-                    ? uploadedItem
-                        .metadata
-                        .public_url
-                    : null;
-
-              if (publicUrl) {
-                setImagePreview(
-                  publicUrl,
-                );
-              }
-
-              setSaveState("saved");
-
-              return true;
-            } catch (err) {
-              console.error(
-                "[flow] image upload failed:",
-                err,
-              );
-
-              if (
-                mountedRef.current
-              ) {
-                setError(
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to upload image.",
-                );
-
-                setSaveState("error");
-              }
-
-              return false;
-            }
-          })();
-
-        return trackOperation(
-          operation,
-        );
-      },
-      [
-        imagePreview,
-        isClearing,
-        item,
-        trackOperation,
-      ],
-    );
-
-  const handleImageUpload =
-    useCallback(
-      (
-        event: React.ChangeEvent<HTMLInputElement>,
-      ) => {
-        const file =
-          event.target.files?.[0];
-
-        if (!file) {
-          return;
-        }
-
-        void uploadImage(file);
-
-        event.target.value = "";
-      },
-      [uploadImage],
-    );
-
-  const finish =
-    useCallback(async () => {
-      if (
-        !item ||
-        isClearing
-      ) {
-        return;
+    try {
+      if (operationPromiseRef.current) {
+        await operationPromiseRef.current;
       }
 
-      if (
-        saveState === "publishing"
-      ) {
-        return;
+      if (savePromiseRef.current) {
+        await savePromiseRef.current;
       }
 
-      try {
-        setError(null);
-        setSaveState("publishing");
+      const response = await fetch(`/api/admin/items/${current.id}`, {
+        method: "DELETE",
+      });
 
-        if (
-          operationPromiseRef.current
-        ) {
-          await operationPromiseRef.current;
-        }
-
-        if (isClearing) {
-          return;
-        }
-
-        const saved =
-          await flushSave();
-
-        if (!saved) {
-          setSaveState("error");
-          return;
-        }
-
-        const current =
-          latestRef.current;
-
-        const isVideo =
-          item.type === "video";
-
-        if (
-          item.type === "link" &&
-          !item.source_url
-        ) {
-          throw new Error(
-            "The link is not ready yet.",
-          );
-        }
-
-        if (
-          isVideo &&
-          !item.source_url
-        ) {
-          throw new Error(
-            "The YouTube video is not ready yet.",
-          );
-        }
-
-        if (
-          isVideo &&
-          !getYouTubeMetadata(
-            item.metadata,
-          )
-        ) {
-          throw new Error(
-            "The YouTube video metadata is not ready yet.",
-          );
-        }
-
-        if (
-          item.type === "photo" &&
-          !item.metadata &&
-          !imagePreview
-        ) {
-          throw new Error(
-            "Add an image first.",
-          );
-        }
-
-        if (
-          item.type !== "link" &&
-          item.type !== "video" &&
-          item.type !== "photo" &&
-          !current.bodyMd.trim()
-        ) {
-          throw new Error(
-            "Write something first.",
-          );
-        }
-
-        const metadata =
-          withFlowMetadata(
-            item.metadata,
-          );
-
-        const generatedTitle =
-          item.type === "video"
-            ? String(
-                getYouTubeMetadata(
-                  item.metadata,
-                )?.title ||
-                  item.title ||
-                  "YouTube video",
-              ).slice(0, 160)
-            : item.type === "link"
-              ? String(
-                  linkPreview?.title ||
-                    item.title ||
-                    item.source_url ||
-                    "Link",
-                ).slice(0, 160)
-              : item.type === "photo"
-                ? String(
-                    (
-                      item.metadata &&
-                      typeof item.metadata
-                        .alt ===
-                        "string"
-                        ? item.metadata
-                            .alt
-                        : null
-                    ) ||
-                      item.title ||
-                      "Image",
-                  ).slice(0, 160)
-                : (
-                    current.title.trim() ||
-                    firstLine(
-                      current.bodyMd,
-                    )
-                  ).slice(0, 160);
-
-        const slug =
-          item.status === "published" &&
-          item.slug
-            ? item.slug
-            : slugify(
-                generatedTitle,
-                item.id,
-              );
-
-        const response =
-          await fetch(
-            `/api/admin/items/${item.id}`,
-            {
-              method: "PATCH",
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-              body: JSON.stringify({
-                title:
-                  generatedTitle,
-                body_md:
-                  current.bodyMd,
-                slug,
-                metadata,
-                status: "published",
-                visibility: "public",
-              }),
-            },
-          );
-
-        const json =
-          await readJson(response);
-
-        if (
-          !response.ok ||
-          !json.item
-        ) {
-          throw new Error(
-            json.error ??
-              `Failed to publish (${response.status}).`,
-          );
-        }
-
-        window.localStorage.removeItem(
-          LAST_DRAFT_KEY,
-        );
-
-        void fetch(
-          `/api/admin/items/${item.id}/ai`,
-          {
-            method: "POST",
-          },
-        ).catch((aiError) => {
-          console.warn(
-            "[flow] AI context request failed:",
-            aiError,
-          );
-        });
-
-        setSaveState("saved");
-
-        onCreated?.(
-          json.item as Item,
-        );
-
-        onClose();
-      } catch (err) {
-        console.error(
-          "[flow] publish failed:",
-          err,
-        );
-
-        if (mountedRef.current) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to publish.",
-          );
-
-          setSaveState("error");
-        }
-      }
-    }, [
-      flushSave,
-      imagePreview,
-      isClearing,
-      item,
-      linkPreview,
-      onClose,
-      onCreated,
-      saveState,
-    ]);
-
-  const clearDraft =
-    useCallback(async () => {
-      if (
-        !item ||
-        !isDraft(item) ||
-        isClearing
-      ) {
-        return;
+      if (!response.ok && response.status !== 404) {
+        const json = await readJson(response);
+        throw new Error(json.error || "Could not clear draft.");
       }
 
-      setIsClearing(true);
-      setSaveState("clearing");
-      setError(null);
+      window.localStorage.removeItem(LAST_DRAFT_KEY);
 
-      try {
-        if (
-          operationPromiseRef.current
-        ) {
-          await operationPromiseRef.current;
-        }
-
-        if (
-          savePromiseRef.current
-        ) {
-          await savePromiseRef.current;
-        }
-
-        const currentItem =
-          item;
-
-        if (
-          !currentItem ||
-          !isDraft(currentItem)
-        ) {
-          return;
-        }
-
-        const response =
-          await fetch(
-            `/api/admin/items/${currentItem.id}`,
-            {
-              method: "DELETE",
-            },
-          );
-
-        if (
-          !response.ok &&
-          response.status !== 404
-        ) {
-          const json =
-            await readJson(response);
-
-          throw new Error(
-            json.error ??
-              "Failed to clear draft.",
-          );
-        }
-
-        window.localStorage.removeItem(
-          LAST_DRAFT_KEY,
-        );
-
-        if (
-          imagePreview?.startsWith(
-            "blob:",
-          )
-        ) {
-          URL.revokeObjectURL(
-            imagePreview,
-          );
-        }
-
-        setIsEditing(false);
-
-        setItem(null);
-        setBodyMd("");
-        setTitle("");
-
-        latestRef.current = {
-          bodyMd: "",
-          title: "",
-        };
-
-        setLinkMode(false);
-        setLinkUrl("");
-        setLinkPreview(null);
-        setImageName(null);
-        setImagePreview(null);
-
-        await createFreshDraft();
-      } catch (err) {
-        console.error(
-          "[flow] clear failed:",
-          err,
-        );
-
-        if (mountedRef.current) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to clear draft.",
-          );
-
-          setSaveState("error");
-        }
-      } finally {
-        if (mountedRef.current) {
-          setIsClearing(false);
-        }
-      }
-    }, [
-      createFreshDraft,
-      imagePreview,
-      isClearing,
-      item,
-    ]);
-
-  const handleClose =
-    useCallback(async () => {
-      if (closingRef.current) {
-        return;
+      if (imagePreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
       }
 
-      if (isClearing) {
-        return;
-      }
+      setCurrentItem(null);
+      setBodyMdState("");
+      setTitleState("");
+      latestRef.current = { bodyMd: "", title: "" };
+      lastSavedRef.current = { bodyMd: "", title: "" };
 
-      closingRef.current = true;
+      setLinkMode(false);
+      setLinkUrl("");
+      setLinkPreview(null);
+      setImageName(null);
+      setImagePreview(null);
+      setIsEditing(false);
 
-      if (
-        saveState === "saved" ||
-        saveState === "error"
-      ) {
-        onClose();
-        return;
-      }
+      await createFreshDraft();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not clear draft.",
+      );
+      setSaveState("error");
+    } finally {
+      setIsClearing(false);
+    }
+  }, [
+    createFreshDraft,
+    imagePreview,
+    isClearing,
+    setCurrentItem,
+  ]);
 
-      if (!item) {
-        onClose();
-        return;
-      }
+  const handleClose = useCallback(async () => {
+    if (closingRef.current || isClearing) return;
 
-      const saved =
-        await flushSave();
+    closingRef.current = true;
+
+    try {
+      const saved = await flushSave();
 
       if (!saved) {
         closingRef.current = false;
@@ -1575,22 +941,15 @@ export function useNewPostModal({
       }
 
       onClose();
-    }, [
-      flushSave,
-      isClearing,
-      item,
-      onClose,
-      saveState,
-    ]);
+    } finally {
+      closingRef.current = false;
+    }
+  }, [flushSave, isClearing, onClose]);
 
   useEffect(() => {
-    function handleKeyboard(
-      event: KeyboardEvent,
-    ) {
-      if (!open) {
-        return;
-      }
+    if (!open) return;
 
+    const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
         void handleClose();
@@ -1598,48 +957,28 @@ export function useNewPostModal({
       }
 
       if (
-        (event.metaKey ||
-          event.ctrlKey) &&
+        (event.metaKey || event.ctrlKey) &&
         event.key === "Enter"
       ) {
         event.preventDefault();
 
-        if (
-          !busy &&
-          saveState !== "saving" &&
-          !isClearing
-        ) {
+        if (!busy && saveState !== "saving" && !isClearing) {
           void finish();
         }
       }
-    }
+    };
 
-    document.addEventListener(
-      "keydown",
-      handleKeyboard,
-    );
+    document.addEventListener("keydown", onKeyDown);
 
     return () => {
-      document.removeEventListener(
-        "keydown",
-        handleKeyboard,
-      );
+      document.removeEventListener("keydown", onKeyDown);
     };
-  }, [
-    busy,
-    finish,
-    handleClose,
-    isClearing,
-    open,
-    saveState,
-  ]);
+  }, [busy, finish, handleClose, isClearing, open, saveState]);
 
-  const isImage =
-    item?.type === "photo";
+  const youtubeMetadata = getYouTubeMetadata(item?.metadata);
 
-  const isVideo =
-    isYouTubeVideo(item);
-
+  const isImage = item?.type === "photo";
+  const isVideo = item?.type === "video";
   const isLink =
     item?.type === "link" ||
     item?.type === "video" ||
@@ -1650,13 +989,7 @@ export function useNewPostModal({
     isLink &&
     !linkPreview;
 
-  const youtubeMetadata =
-    getYouTubeMetadata(
-      item?.metadata,
-    );
-
-  const isPublishing =
-    saveState === "publishing";
+  const isPublishing = saveState === "publishing";
 
   const canPost =
     Boolean(item) &&
@@ -1664,28 +997,18 @@ export function useNewPostModal({
     saveState !== "saving" &&
     !isClearing &&
     (
-      item?.type === "video"
-        ? Boolean(
-            item.source_url &&
-              getYouTubeMetadata(
-                item.metadata,
-              ),
-          )
-        : item?.type === "link"
-          ? Boolean(item.source_url)
-          : item?.type === "photo"
-            ? Boolean(
-                item.metadata ||
-                  imagePreview,
-              )
-            : Boolean(
-                bodyMd.trim(),
-              )
+      item?.type === "photo"
+        ? Boolean(item.metadata || imagePreview)
+        : item?.type === "video"
+          ? Boolean(item.source_url || linkUrl)
+          : item?.type === "link"
+            ? Boolean(item.source_url || linkUrl)
+            : Boolean(bodyMd.trim() || extractUrlFromText(bodyMd))
     );
 
   const canClear =
-    item !== null &&
-    item.status === "draft" &&
+    Boolean(item) &&
+    item?.status === "draft" &&
     !isClearing &&
     saveState !== "creating" &&
     saveState !== "loading" &&
@@ -1696,20 +1019,18 @@ export function useNewPostModal({
       ? "photo"
       : item?.type === "video"
         ? "video"
-        : item?.type === "link" ||
-            linkMode
+        : item?.type === "link" || linkMode
           ? "link"
           : "text";
 
   const isInitializing =
-    saveState === "creating" ||
-    saveState === "loading";
+    saveState === "creating" || saveState === "loading";
 
   return {
     item,
 
     bodyMd,
-    setBodyMd: handleBodyChange,
+    setBodyMd,
 
     title,
     setTitle,
@@ -1750,7 +1071,7 @@ export function useNewPostModal({
 
     setError,
 
-    handleBodyChange,
+    handleBodyChange: setBodyMd,
     handlePaste,
 
     parseLink,
