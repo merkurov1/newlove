@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -133,7 +132,6 @@ function extractUrlFromText(value: string): string | null {
 
   if (!match) return null;
 
-  // Remove common punctuation accidentally included at the end.
   const candidate = match[0].replace(/[),.;!?]+$/, "");
 
   return normalizePastedUrl(candidate);
@@ -166,6 +164,7 @@ export function useNewPostModal({
 
   const latestRef = useRef({ bodyMd: "", title: "" });
   const itemRef = useRef<Item | null>(null);
+  const userEditedRef = useRef(false);
   const mountedRef = useRef(false);
   const closingRef = useRef(false);
   const initializingRef = useRef(false);
@@ -179,6 +178,7 @@ export function useNewPostModal({
   }, []);
 
   const setBodyMd = useCallback((value: string) => {
+    userEditedRef.current = true;
     latestRef.current.bodyMd = value;
     setBodyMdState(value);
   }, []);
@@ -189,8 +189,6 @@ export function useNewPostModal({
   }, []);
 
   const busy =
-    saveState === "creating" ||
-    saveState === "loading" ||
     saveState === "publishing" ||
     isClearing;
 
@@ -207,13 +205,20 @@ export function useNewPostModal({
       const nextBody = next?.body_md ?? "";
       const nextTitle = next?.title ?? "";
 
+      const bodyToShow = userEditedRef.current
+        ? latestRef.current.bodyMd
+        : nextBody;
+      const titleToShow = userEditedRef.current
+        ? latestRef.current.title
+        : nextTitle;
+
       setCurrentItem(next);
-      setBodyMdState(nextBody);
-      setTitleState(nextTitle);
+      setBodyMdState(bodyToShow);
+      setTitleState(titleToShow);
 
       latestRef.current = {
-        bodyMd: nextBody,
-        title: nextTitle,
+        bodyMd: bodyToShow,
+        title: titleToShow,
       };
 
       lastSavedRef.current = {
@@ -270,6 +275,7 @@ export function useNewPostModal({
   const initialize = useCallback(async () => {
     if (initializingRef.current) return;
     initializingRef.current = true;
+    userEditedRef.current = false;
 
     try {
       let loaded: Item | null = null;
@@ -557,8 +563,6 @@ export function useNewPostModal({
           setLinkUrl(parsed.source_url ?? url);
           setLinkPreview(json.metadata ?? parsed.metadata ?? null);
 
-          // Preserve the author's existing text if the parser returns
-          // metadata or a generated description for the linked page.
           const nextBody =
             oldBody.trim() || parsed.body_md || "";
 
@@ -573,7 +577,6 @@ export function useNewPostModal({
           setSaveState("saved");
           return true;
         } catch (cause) {
-          // Preview is optional. Keep the URL and allow publication.
           if (mountedRef.current) {
             setError(
               cause instanceof Error
@@ -598,8 +601,6 @@ export function useNewPostModal({
       const exactUrl = normalizePastedUrl(pasted);
 
       if (!exactUrl || isClearing) {
-        // If the paste includes prose and a URL, keep the entire text
-        // in the editor and discover the URL without replacing the prose.
         const embeddedUrl = extractUrlFromText(pasted);
 
         if (embeddedUrl) {
@@ -677,13 +678,8 @@ export function useNewPostModal({
             URL.revokeObjectURL(localPreview);
           }
 
-          setBodyMdState(uploaded.body_md ?? latestRef.current.bodyMd);
-          setTitleState(uploaded.title ?? latestRef.current.title);
-
-          latestRef.current = {
-            bodyMd: uploaded.body_md ?? latestRef.current.bodyMd,
-            title: uploaded.title ?? latestRef.current.title,
-          };
+          setBodyMdState(latestRef.current.bodyMd);
+          setTitleState(latestRef.current.title);
 
           setSaveState("saved");
           return true;
@@ -736,7 +732,6 @@ export function useNewPostModal({
 
       if (!current || isClearing) return;
 
-      // Saving text is required; parsing a URL preview is not.
       if (current.status === "draft") {
         const saved = await flushSave();
 
@@ -770,8 +765,6 @@ export function useNewPostModal({
         throw new Error("Write something first.");
       }
 
-      // If the user pasted a URL but metadata lookup failed, still publish
-      // the URL as a link rather than making preview availability mandatory.
       const resolvedType =
         isVideo
           ? "video"
@@ -836,7 +829,6 @@ export function useNewPostModal({
 
       window.localStorage.removeItem(LAST_DRAFT_KEY);
 
-      // AI runs after publishing and never blocks the POST flow.
       void fetch(`/api/admin/items/${current.id}/ai`, {
         method: "POST",
       }).catch((cause) => {

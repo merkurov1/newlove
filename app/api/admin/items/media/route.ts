@@ -14,139 +14,92 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/avif',
 ]);
 
-function extensionFromMime(
-  mime: string,
-) {
+function extensionFromMime(mime: string) {
   switch (mime) {
     case 'image/jpeg':
       return 'jpg';
-
     case 'image/png':
       return 'png';
-
     case 'image/webp':
       return 'webp';
-
     case 'image/gif':
       return 'gif';
-
     case 'image/avif':
       return 'avif';
-
     default:
       return 'bin';
   }
 }
 
-function cleanFilename(
-  filename: string,
-) {
+function cleanFilename(filename: string) {
   return filename
     .normalize('NFKD')
-    .replace(
-      /[^\p{L}\p{N}._-]+/gu,
-      '-',
-    )
+    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
     .replace(/-+/g, '-')
-    .replace(
-      /^[-.]+|[-.]+$/g,
-      '',
-    )
+    .replace(/^[-.]+|[-.]+$/g, '')
     .slice(0, 120);
 }
 
-export async function POST(
-  req: NextRequest,
-) {
+export async function POST(req: NextRequest) {
   try {
-    await requireAdminFromRequest(
-      req,
-    );
+    await requireAdminFromRequest(req);
 
-    const form =
-      await req.formData();
-
-    const file =
-      form.get('file');
-
-    const itemId =
-      form.get('item_id');
-
-    const lang =
-      form.get('lang');
+    const form = await req.formData();
+    const file = form.get('file');
+    const itemId = form.get('item_id');
+    const lang = form.get('lang');
 
     if (!(file instanceof File)) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            'Image file is required.',
+          error: 'Image file is required.',
         },
         { status: 400 },
       );
     }
 
-    if (
-      typeof itemId !==
-        'string' ||
-      !itemId.trim()
-    ) {
+    if (typeof itemId !== 'string' || !itemId.trim()) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            'item_id is required.',
+          error: 'item_id is required.',
         },
         { status: 400 },
       );
     }
 
-    if (
-      !ALLOWED_MIME_TYPES.has(
-        file.type,
-      )
-    ) {
+    if (!ALLOWED_MIME_TYPES.has(file.type)) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            'Unsupported image type.',
+          error: 'Unsupported image type.',
         },
         { status: 400 },
       );
     }
 
-    if (
-      file.size >
-      MAX_FILE_SIZE
-    ) {
+    if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            'Image is too large. Maximum size is 10 MB.',
+          error: 'Image is too large. Maximum size is 10 MB.',
         },
         { status: 400 },
       );
     }
 
-    const supabase =
-      createClient({
-        useServiceRole: true,
-      });
+    const supabase = createClient({
+      useServiceRole: true,
+    });
 
     const {
       data: existingItem,
       error: itemError,
     } = await supabase
       .from('items')
-      .select(
-        'id,type,status,visibility,lang,metadata',
-      )
-      .eq(
-        'id',
-        itemId.trim(),
-      )
+      .select('id,type,status,visibility,lang,metadata')
+      .eq('id', itemId.trim())
       .maybeSingle();
 
     if (itemError) {
@@ -158,8 +111,7 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error:
-            itemError.message,
+          error: itemError.message,
         },
         { status: 500 },
       );
@@ -169,44 +121,29 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error:
-            'Item not found.',
+          error: 'Item not found.',
         },
         { status: 404 },
       );
     }
 
-    const extension =
-      extensionFromMime(
-        file.type,
-      );
+    const extension = extensionFromMime(file.type);
 
     const filename =
-      cleanFilename(
-        file.name,
-      ) ||
-      `image.${extension}`;
+      cleanFilename(file.name) || `image.${extension}`;
 
     const storageKey =
       `flow/${itemId}/${crypto.randomUUID()}.${extension}`;
 
-    const bytes =
-      await file.arrayBuffer();
+    const bytes = await file.arrayBuffer();
 
-    const { error: uploadError } =
-      await supabase.storage
-        .from('media')
-        .upload(
-          storageKey,
-          bytes,
-          {
-            contentType:
-              file.type,
-            cacheControl:
-              '31536000',
-            upsert: false,
-          },
-        );
+    const { error: uploadError } = await supabase.storage
+      .from('media')
+      .upload(storageKey, bytes, {
+        contentType: file.type,
+        cacheControl: '31536000',
+        upsert: false,
+      });
 
     if (uploadError) {
       console.error(
@@ -217,58 +154,44 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error:
-            uploadError.message,
+          error: uploadError.message,
         },
         { status: 500 },
       );
     }
 
-    const {
-      data: publicData,
-    } = supabase.storage
+    const { data: publicData } = supabase.storage
       .from('media')
-      .getPublicUrl(
-        storageKey,
-      );
+      .getPublicUrl(storageKey);
 
-    const publicUrl =
-      publicData.publicUrl;
+    const publicUrl = publicData.publicUrl;
 
     const metadata = {
       ...(existingItem.metadata &&
-      typeof existingItem.metadata ===
-        'object'
+      typeof existingItem.metadata === 'object'
         ? existingItem.metadata
         : {}),
-      public_url:
-        publicUrl,
-      storage_key:
-        storageKey,
+      public_url: publicUrl,
+      storage_key: storageKey,
       filename,
-      mime:
-        file.type,
-      size:
-        file.size,
-      alt:
-        filename,
+      mime: file.type,
+      size: file.size,
+      alt: filename,
     };
 
-    const { data: mediaRow, error: mediaError } =
-      await supabase
-        .from('media')
-        .insert({
-          item_id:
-            itemId.trim(),
-          storage_key:
-            storageKey,
-          mime:
-            file.type,
-          alt:
-            filename,
-        })
-        .select('*')
-        .single();
+    const {
+      data: mediaRow,
+      error: mediaError,
+    } = await supabase
+      .from('media')
+      .insert({
+        item_id: itemId.trim(),
+        storage_key: storageKey,
+        mime: file.type,
+        alt: filename,
+      })
+      .select('*')
+      .single();
 
     if (mediaError) {
       console.error(
@@ -278,15 +201,12 @@ export async function POST(
 
       await supabase.storage
         .from('media')
-        .remove([
-          storageKey,
-        ]);
+        .remove([storageKey]);
 
       return NextResponse.json(
         {
           success: false,
-          error:
-            mediaError.message,
+          error: mediaError.message,
         },
         { status: 500 },
       );
@@ -299,26 +219,15 @@ export async function POST(
       .from('items')
       .update({
         type: 'photo',
-        title:
-          filename.slice(
-            0,
-            160,
-          ),
-        body_md: `![${filename}](${publicUrl})`,
-        source_url:
-          null,
+        title: filename.slice(0, 160),
+        source_url: null,
         metadata,
         lang:
-          typeof lang ===
-            'string' &&
-          lang.trim()
+          typeof lang === 'string' && lang.trim()
             ? lang.trim()
             : existingItem.lang,
       })
-      .eq(
-        'id',
-        itemId.trim(),
-      )
+      .eq('id', itemId.trim())
       .select('*')
       .single();
 
@@ -331,22 +240,16 @@ export async function POST(
       await supabase
         .from('media')
         .delete()
-        .eq(
-          'id',
-          mediaRow.id,
-        );
+        .eq('id', mediaRow.id);
 
       await supabase.storage
         .from('media')
-        .remove([
-          storageKey,
-        ]);
+        .remove([storageKey]);
 
       return NextResponse.json(
         {
           success: false,
-          error:
-            updateError.message,
+          error: updateError.message,
         },
         { status: 500 },
       );
@@ -362,10 +265,7 @@ export async function POST(
       { status: 200 },
     );
   } catch (error) {
-    console.error(
-      '[admin-items-media]',
-      error,
-    );
+    console.error('[admin-items-media]', error);
 
     return NextResponse.json(
       {

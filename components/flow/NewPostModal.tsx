@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -162,108 +161,102 @@ export default function NewPostModal({
         </button>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-4 pt-20 sm:px-12 sm:pt-[76px] md:px-[max(48px,calc((100vw-850px)/2))]">
-          {loading ? (
-            <div className="pt-2">
-              <ShimmerPreview text="Preparing…" />
-            </div>
-          ) : (
-            <div className="flex min-h-full flex-col">
-              <textarea
-                ref={textareaRef}
-                value={bodyMd}
-                onChange={(event) => {
-                  setBodyMd(event.target.value);
-                }}
-                onPaste={handlePaste}
-                placeholder="Write something…"
-                disabled={busy}
-                autoFocus
-                rows={1}
-                className="min-h-[180px] w-full flex-1 resize-none border-0 bg-transparent p-0 font-serif text-[25px] font-light leading-[1.5] tracking-[-0.01em] text-neutral-900 outline-none ring-0 placeholder:text-neutral-300 focus:border-0 focus:outline-none focus:ring-0 sm:min-h-[360px] sm:text-[27px]"
-              />
+          <div className="flex min-h-full flex-col">
+            <textarea
+              ref={textareaRef}
+              value={bodyMd}
+              onChange={(event) => {
+                setBodyMd(event.target.value);
+              }}
+              onPaste={handlePaste}
+              placeholder="Write something…"
+              disabled={busy}
+              autoFocus
+              rows={1}
+              className="min-h-[180px] w-full flex-1 resize-none border-0 bg-transparent p-0 font-serif text-[25px] font-light leading-[1.5] tracking-[-0.01em] text-neutral-900 outline-none ring-0 placeholder:text-neutral-300 focus:border-0 focus:outline-none focus:ring-0 sm:min-h-[360px] sm:text-[27px]"
+            />
 
-              {showLink && (
-                <div className="mt-6 max-w-[720px]">
-                  {isParsing ? (
-                    <ShimmerPreview text="Reading link…" />
-                  ) : linkPreview ? (
-                    <LinkPreviewCard
-                      preview={linkPreview}
-                      url={linkUrl}
-                    />
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="url"
-                        value={linkUrl}
-                        onChange={(event) => {
-                          setLinkUrl(event.target.value);
-                        }}
-                        onKeyDown={(event) => {
-                          if (
-                            event.key === "Enter" &&
-                            linkUrl.trim()
-                          ) {
-                            event.preventDefault();
-                            void parseLink(linkUrl);
-                          }
-                        }}
-                        placeholder="URL"
-                        disabled={busy || isParsing}
-                        className="min-w-0 flex-1 border-0 bg-transparent px-0 py-2 text-sm text-neutral-800 outline-none ring-0 placeholder:text-neutral-300 focus:border-0 focus:outline-none focus:ring-0"
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void parseLink(linkUrl);
-                        }}
-                        disabled={
-                          busy ||
-                          isParsing ||
-                          !linkUrl.trim()
-                        }
-                        className="min-h-0 min-w-0 rounded-full border-0 bg-black px-4 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-white outline-none transition-opacity hover:bg-black hover:opacity-80 focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-20"
-                      >
-                        {isParsing ? "…" : "Preview"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {showVideo && (
-                <div className="mt-6 max-w-[720px]">
-                  {isParsing ? (
-                    <ShimmerPreview text="Reading YouTube…" />
-                  ) : youtubeMetadata ? (
-                    <YouTubePreview
-                      metadata={youtubeMetadata}
-                      url={linkUrl}
-                    />
-                  ) : null}
-                </div>
-              )}
-
-              {imagePreview && (
-                <div className="mt-6 max-w-[720px]">
-                  <ImagePreview
-                    src={imagePreview}
-                    alt={imageName || "Flow image"}
+            {showLink && (
+              <div className="mt-6 max-w-[720px]">
+                {isParsing ? (
+                  <ShimmerPreview text="Reading link…" />
+                ) : linkPreview ? (
+                  <LinkPreviewCard
+                    preview={linkPreview}
+                    url={linkUrl}
                   />
-                </div>
-              )}
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="url"
+                      value={linkUrl}
+                      onChange={(event) => {
+                        setLinkUrl(event.target.value);
+                      }}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "Enter" &&
+                          linkUrl.trim()
+                        ) {
+                          event.preventDefault();
+                          void parseLink(linkUrl);
+                        }
+                      }}
+                      placeholder="URL"
+                      disabled={busy || isParsing}
+                      className="min-w-0 flex-1 border-0 bg-transparent px-0 py-2 text-sm text-neutral-800 outline-none ring-0 placeholder:text-neutral-300 focus:border-0 focus:outline-none focus:ring-0"
+                    />
 
-              {error && (
-                <div
-                  className="mt-5 text-[12px] font-medium leading-relaxed text-red-500"
-                  role="alert"
-                >
-                  {error}
-                </div>
-              )}
-            </div>
-          )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void parseLink(linkUrl);
+                      }}
+                      disabled={
+                        busy ||
+                        isParsing ||
+                        !linkUrl.trim()
+                      }
+                      className="min-h-0 min-w-0 rounded-full border-0 bg-black px-4 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-white outline-none transition-opacity hover:bg-black hover:opacity-80 focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-20"
+                    >
+                      {isParsing ? "…" : "Preview"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {showVideo && (
+              <div className="mt-6 max-w-[720px]">
+                {isParsing ? (
+                  <ShimmerPreview text="Reading YouTube…" />
+                ) : youtubeMetadata ? (
+                  <YouTubePreview
+                    metadata={youtubeMetadata}
+                    url={linkUrl}
+                  />
+                ) : null}
+              </div>
+            )}
+
+            {imagePreview && (
+              <div className="mt-6 max-w-[720px]">
+                <ImagePreview
+                  src={imagePreview}
+                  alt={imageName || "Flow image"}
+                />
+              </div>
+            )}
+
+            {error && (
+              <div
+                className="mt-5 text-[12px] font-medium leading-relaxed text-red-500"
+                role="alert"
+              >
+                {error}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-4 px-6 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 sm:px-12 sm:pb-7">
