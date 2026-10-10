@@ -8,9 +8,7 @@ export default function Footer() {
   return (
     <>
       {/* Плавающий ассистент Пьеро в правом нижнем углу */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <PierrotChat />
-      </div>
+    
 
       {/* Лаконичный футер */}
       <footer className="w-full bg-[#FAF8F5] border-t border-zinc-200/60 py-8 px-6 text-center font-mono text-[11px] text-zinc-500 uppercase tracking-[0.2em]">

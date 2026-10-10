@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/components/AuthContext';
 import useIsTelegram from '@/components/useIsTelegram';
 import ComposerTrigger from '@/components/flow/ComposerTrigger';
+import PierrotChat from '@/components/PierrotChat';
 
 export default function Header() {
   const auth = useAuth() as any;
@@ -678,9 +679,10 @@ export default function Header() {
           </div>
         </div>
 
-        {user && (
-          <ComposerTrigger />
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {user && <ComposerTrigger />}
+          <PierrotChat compact />
+        </div>
       </div>
     </header>
   );
