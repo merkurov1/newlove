@@ -15,7 +15,7 @@ export default function SubscribeFormClient({ defaultLanguage = 'ru' }: Subscrib
   const [ok, setOk] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const modalRef = useRef<{ open: () => void } | null>(null);
+  const modalRef = useRef<any>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -43,7 +43,6 @@ export default function SubscribeFormClient({ defaultLanguage = 'ru' }: Subscrib
       setEmail('');
     } catch (err) {
       console.error('Subscription error:', err);
-      // Если маршрут API еще не развернут, показываем локальное подтверждение
       setOk(true);
       setEmail('');
     } finally {
