@@ -11,24 +11,44 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const email = (body?.email || '').toString().trim().toLowerCase();
+    
+    // Получаем переданные из клиента language/locale и userId
+    const language = (body?.language || body?.locale || 'ru').toString().trim().toLowerCase();
+    const locale = language === 'en' ? 'en' : 'ru';
+    const userId = body?.userId || null;
+
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
     }
 
     const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-    const { supabase } = await getUserAndSupabaseForRequest((globalThis && (globalThis as any).request) || new Request('http://localhost')) || {};
+    const { supabase } = await getUserAndSupabaseForRequest(req) || {};
     if (!supabase) return NextResponse.json({ error: 'DB unavailable' }, { status: 500 });
 
-    // Upsert subscriber (create if not exists). New subscribers are inactive until confirmed.
+    // Проверяем существующего подписчика
     const { data: existing } = await supabase.from('subscribers').select('*').ilike('email', email).maybeSingle();
     let subscriberId = existing?.id;
+
     if (!subscriberId) {
-      const insert = await supabase.from('subscribers').insert({ email, isActive: false }).select('id').maybeSingle();
+      // Создаем нового с учетом локали и userId (если пользователь авторизован)
+      const insertData: any = { 
+        email, 
+        isActive: false, 
+        locale: locale 
+      };
+      if (userId) {
+        insertData.userId = userId;
+      }
+
+      const insert = await supabase.from('subscribers').insert(insertData).select('id').maybeSingle();
       if (insert.error) {
         console.error('Error inserting subscriber', insert.error);
         return NextResponse.json({ error: 'DB insert failed' }, { status: 500 });
       }
       subscriberId = insert.data?.id;
+    } else {
+      // Если подписчик уже был, можно обновить его язык, если он его сменил
+      await supabase.from('subscribers').update({ locale: locale, ...(userId ? { userId } : {}) }).eq('id', subscriberId);
     }
 
     // Generate confirmation token and store
@@ -42,7 +62,7 @@ export async function POST(req: NextRequest) {
     }
 
     // In production we'd send a confirmation email with the token; here we return token for testing
-    return NextResponse.json({ success: true, subscriberId, token: process.env.NODE_ENV === 'development' ? token : undefined });
+    return NextResponse.json({ success: true, subscriberId, locale, token: process.env.NODE_ENV === 'development' ? token : undefined });
   } catch (e) {
     console.error('Subscribe error', e);
     return NextResponse.json({ error: 'Subscribe failed' }, { status: 500 });
