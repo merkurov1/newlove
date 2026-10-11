@@ -1,0 +1,24 @@
+===monitor===
+  34813   31017 /vscode/bin/linux-x64/03c26 23.7  7.1
+  31017     299 /vscode/bin/linux-x64/03c26 23.1 12.2
+  34812   31017 /vscode/bin/linux-x64/03c26  2.3  0.8
+  31232   31017 /vscode/bin/linux-x64/03c26  1.9  0.5
+    339     299 /vscode/bin/linux-x64/03c26  1.4  0.8
+    299     290 /vscode/bin/linux-x64/03c26  1.3  0.9
+  31714   31017 /vscode/bin/linux-x64/03c26  1.1  0.0
+  34833   34813 /vscode/bin/linux-x64/03c26  0.9  0.1
+  31088   31017 /vscode/bin/linux-x64/03c26  0.8  0.0
+    743     299 /vscode/bin/linux-x64/03c26  0.6  0.1
+  31163   31017 /vscode/bin/linux-x64/03c26  0.5  0.0
+  31082   31017 /vscode/bin/linux-x64/03c26  0.4  0.0
+  31118   31017 /vscode/bin/linux-x64/03c26  0.3  0.0
+  38997     743 /bin/bash --init-file /vsco  0.0  0.0
+  39286     743 /bin/bash --init-file /vsco  0.0  0.0
+    995     743 /bin/bash --init-file /vsco  0.0  0.0
+  35258       1 /bin/bash --init-file /vsco  0.0  0.0
+  36056       1 bash -c while true; do date  0.0  0.0
+  40454   35258 ps -eo pid,ppid,cmd,%mem,%c  0.0  0.0
+---
+===pkgsripts===
+{"dev":"next dev","build":"next build","start":"next start","lint":"next lint","lint:css":"stylelint \"app/**/*.css\"","test":"jest","test:watch":"jest --watch","test:coverage":"jest --coverage","prepare":"if [ -d .git ]; then husky install 2>/dev/null || true; fi","format":"prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"","format:check":"prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"","vercel:login":"vercel login","vercel:deploy":"vercel --prod","vercel:install":"npm install --force && npm install framer-motion clsx tailwind-merge --no-save","vercel:logs":"vercel logs --since 60m","vercel:logs:grep":"vercel logs --since 60m | grep -E 'SANITIZE DIAG|Unsupported Server Component type|2153716801' -n -C 5","render:logs":"echo 'Check logs at https://dashboard.render.com'","render:shell":"echo 'Use Render Dashboard → Shell to access container'","check:metadata":"node scripts/check_metadata.js","test:attach-tags":"node scripts/test_attach_tags.js","compile:contracts":"npx hardhat compile","deploy:hardhat":"npx hardhat run --network polygon scripts/deploy_hardhat.js","mint:transfer":"npx hardhat run --network polygon scripts/mint_and_transfer.js","deploy:local":"node scripts/deploy_hardhat.js","mint:local":"node scripts/mint_and_transfer.js","db:diag":"tsc db_diagnostics.ts && node db_diagnostics.js"}
+===done===
