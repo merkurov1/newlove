@@ -46,7 +46,7 @@ export default function SubscribeFormClient({ defaultLanguage = 'ru' }: Subscrib
       // Если маршрут API еще не развернут, показываем локальное подтверждение
       setOk(true);
       setEmail('');
-    } font-mono {
+    } finally {
       setLoading(false);
     }
   }

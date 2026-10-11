@@ -4,82 +4,60 @@ import { useState } from 'react';
 import { TodoItem } from '@/types/todo';
 
 interface TodoManagerProps {
-  initialTodos?: TodoItem[];
+  initialTodos: TodoItem[];
 }
 
-export default function TodoManager({ initialTodos = [] }: TodoManagerProps) {
+export default function TodoManager({ initialTodos }: TodoManagerProps) {
   const [todos, setTodos] = useState<TodoItem[]>(initialTodos);
   const [newTitle, setNewTitle] = useState('');
   const [selectedProject, setSelectedProject] = useState<string>('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Получение списка всех существующих проектов
   const projects = Array.from(
     new Set(todos.map((t) => t.project_id).filter(Boolean))
   );
 
-  // Переключение статуса задачи
   const toggleComplete = async (id: string, currentStatus: boolean) => {
     const nextStatus = !currentStatus;
 
-    // Оптимистичное обновление UI
     setTodos((prev) =>
       prev.map((t) => (t.id === id ? { ...t, is_completed: nextStatus } : t))
     );
 
     try {
-      const res = await fetch('/api/todo', {
+      await fetch('/api/todo', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, is_completed: nextStatus }),
       });
-
-      if (!res.ok) {
-        // Откат при ошибке
-        setTodos((prev) =>
-          prev.map((t) => (t.id === id ? { ...t, is_completed: currentStatus } : t))
-        );
-      }
     } catch (err) {
       console.error('Failed to update task:', err);
-      // Откат при сетевой ошибке
-      setTodos((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, is_completed: currentStatus } : t))
-      );
     }
   };
 
-  // Удаление задачи
   const handleDelete = async (id: string) => {
-    const previousTodos = [...todos];
     setTodos((prev) => prev.filter((t) => t.id !== id));
 
     try {
-      const res = await fetch(`/api/todo?id=${id}`, {
+      await fetch(`/api/todo?id=${id}`, {
         method: 'DELETE',
       });
-
-      if (!res.ok) {
-        setTodos(previousTodos);
-      }
     } catch (err) {
       console.error('Failed to delete task:', err);
-      setTodos(previousTodos);
     }
   };
 
-  // Добавление новой задачи
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
 
+    // Валидная дата YYYY-MM-DD для поля типа date в Postgres
     const todayIso = new Date().toISOString().split('T')[0];
-    const targetProject = selectedProject === 'all' ? 'general' : selectedProject;
 
     const payload = {
-      project_id: targetProject,
+      project_id: selectedProject === 'all' ? 'general' : selectedProject,
       title: newTitle.trim(),
       start_date: todayIso,
       is_completed: false,
@@ -93,49 +71,32 @@ export default function TodoManager({ initialTodos = [] }: TodoManagerProps) {
         body: JSON.stringify(payload),
       });
 
-      const responseData = await res.json();
+      const data = await res.json();
 
-      if (res.ok) {
-        // Поддержка разных структур ответа от сервера: data[0], data, или созданный объект
-        const createdTask: TodoItem = 
-          Array.isArray(responseData.data) ? responseData.data[0] :
-          responseData.data ? responseData.data :
-          responseData.id ? responseData : null;
-
-        if (createdTask) {
-          setTodos((prev) => [createdTask, ...prev]);
-        } else {
-          // Если сервер вернул 200/201, но не отдал ID, создаем локальный объект
-          const fallbackTask: TodoItem = {
-            id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-            ...payload,
-          } as TodoItem;
-          setTodos((prev) => [fallbackTask, ...prev]);
-        }
-
+      if (res.ok && data.data && data.data[0]) {
+        setTodos((prev) => [data.data[0], ...prev]);
         setNewTitle('');
       } else {
-        alert(`Ошибка добавления задачи: ${responseData.error || responseData.message || 'Ошибка сервера'}`);
+        alert(`Error adding task: ${data.error || 'Server error'}`);
       }
     } catch (err) {
       console.error('Request failed:', err);
-      alert('Сетевая ошибка при сохранении задачи.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Форматирование даты
+  // Форматирование даты из YYYY-MM-DD в DD.MM
   const formatDateDisplay = (dateStr?: string) => {
-    if (!dateStr) return '';
+    if (!dateStr) return '09.10';
     try {
-      const parts = dateStr.split('T')[0].split('-');
+      const parts = dateStr.split('-');
       if (parts.length === 3) {
         return `${parts[2]}.${parts[1]}`;
       }
       return dateStr;
     } catch {
-      return '';
+      return '09.10';
     }
   };
 
@@ -174,7 +135,7 @@ export default function TodoManager({ initialTodos = [] }: TodoManagerProps) {
             <button
               key={proj}
               type="button"
-              onClick={() => setSelectedProject(proj as string)}
+              onClick={() => setSelectedProject(proj)}
               className={`px-3 py-1 transition-colors cursor-pointer ${
                 selectedProject === proj
                   ? 'bg-stone-900 text-stone-50'
@@ -187,7 +148,7 @@ export default function TodoManager({ initialTodos = [] }: TodoManagerProps) {
         </div>
       </header>
 
-      {/* Input form */}
+      {/* Input row */}
       <form onSubmit={handleAddTask} className="mb-10">
         <div className="flex items-center gap-4 border-b border-stone-900 pb-3">
           <span className="font-mono text-xs text-stone-400">+</span>
@@ -209,7 +170,7 @@ export default function TodoManager({ initialTodos = [] }: TodoManagerProps) {
         </div>
       </form>
 
-      {/* Task List */}
+      {/* List */}
       <div className="space-y-0 divide-y divide-stone-100">
         {filteredTodos.map((item) => (
           <div
