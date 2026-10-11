@@ -1,12 +1,21 @@
-# Anton Merkurov
-> Media expert, publicist, artist, and art dealer. Regular columnist for Novaya Gazeta. Great-grandson of Soviet sculptor Sergey Merkurov.
+# Anton Merkurov — Official Platform & Archive
+
+> Media expert, publicist, artist, and art dealer. Regular columnist for Novaya Gazeta ("Virtual Merkurov"). Great-grandson of Soviet sculptor Sergey Merkurov. Operating at the intersection of high-tech, digital heritage, and context architecture.
 
 ## Core Ecosystem & Projects
-- UNFRAMED: Digital memoir and manuscript reader on digital legacy and network autonomy (/unframed/book).
-- The Private Office / Advising: Heritage architecture, art advisory, and digital sovereignty for private clients (/advising).
-- Heart & Angel: Multidisciplinary art project exploring archetypal figures through painting, digital graphics, and Web3 smart contracts (/heartandangel).
-- The Temple: Sanctuary stream, live whispers, and verified thoughts (/temple).
-- Pierrot: AI advisor and conversational RAG system reflecting personal archives and published columns (/absolution).
+- [UNFRAMED](https://www.merkurov.love/unframed/book): Memoir and essays on digital legacy, network autonomy, and personal sovereignty.
+- [Flow](https://www.merkurov.love/flow): Custom publishing feed, stream of columns, and curated notes.
+- [Heart & Angel](https://www.merkurov.love/heartandangel): Multidisciplinary art project exploring archetypal figures through painting, augmented reality, and Web3 smart contracts.
+- [Digital Temple](https://www.merkurov.love/temple): Immersive digital sanctuary, live whispers, absolution rituals, and verified thoughts (/temple, /vigil, /absolution, /tribute).
+- [The Private Office / Advisory](https://www.merkurov.love/advising): Heritage architecture, art advisory, and digital sovereignty for private clients.
+- [Curators Engine](https://www.merkurov.love/curators): Fine art auction parser and market analytics engine.
 
-## Technical Stack
-Next.js, Supabase, Tailwind CSS, TypeScript, Vercel, Markdown.
+## Identity & Background
+- Media expert, columnist, and former vice president of the Association of Internet Publishers.
+- Preserving and promoting the cultural heritage of monumental sculptor Sergey Merkurov and the Sergey Merkurov Museum-House in Gyumri.
+
+## Technical Architecture
+- Framework: Next.js (App Router), React, TypeScript
+- Database & Auth: Supabase, PostgreSQL, Prisma
+- Styling: Tailwind CSS
+- Infrastructure: Vercel, Hostinger, GitHub Codespaces
