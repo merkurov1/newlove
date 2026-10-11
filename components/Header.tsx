@@ -570,18 +570,6 @@ export default function Header() {
                       >
                         UNFRAMED
                       </Link>
-
-                      <Link
-                        href="/journal"
-                        onClick={() =>
-                          setIsSiteMenuOpen(
-                            false,
-                          )
-                        }
-                        className="block hover:text-stone-900 py-0.5 transition-colors"
-                      >
-                        JOURNAL
-                      </Link>
                     </div>
                   </div>
 
@@ -601,7 +589,7 @@ export default function Header() {
                           : 'text-stone-900 hover:text-stone-600'
                       }`}
                     >
-                      CURATORS ENGINE
+                      ART ENGINE
                     </Link>
 
                     <div className="pl-4 space-y-1.5 border-l border-stone-200 font-bold uppercase tracking-[0.15em] text-xs text-stone-500">
