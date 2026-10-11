@@ -2,38 +2,45 @@ import type { Metadata } from 'next';
 import FlowJoinClient from './FlowJoinClient';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love';
+const imageUrl =
+  'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/artifacts/IMG_1542.jpeg';
 
 export const metadata: Metadata = {
-  title: 'FLOW | Private Dispatch by Anton Merkurov',
+  title: 'FLOW | Anton Merkurov',
   description:
-    'Еженедельный журнал Антона Меркурова о медиа, искусстве, ИИ и цифровой культуре. Без алгоритмического шума.',
+    'Я ничего не пишу, я только отбираю. Раз в неделю из этого собирается выпуск без редакции, только вкус одного человека, умноженный на код.',
   keywords: [
     'Anton Merkurov',
     'Антон Меркуров',
-    'Flow',
-    'Рассылка',
+    'FLOW',
+    'Flow Feed',
     'Digital Art',
-    'Media Analysis',
+    'Media',
     'AI',
+    'Art Engine',
   ],
   authors: [{ name: 'Anton Merkurov', url: siteUrl }],
   creator: 'Anton Merkurov',
   metadataBase: new URL(siteUrl),
   alternates: {
     canonical: '/flow/join',
+    languages: {
+      'ru-RU': '/flow/join?lang=ru',
+      'en-US': '/flow/join?lang=en',
+    },
   },
   openGraph: {
-    title: 'THE FLOW | Anton Merkurov',
+    title: 'FLOW | Anton Merkurov',
     description:
-      'Прямой поток мыслей о медиа, искусстве, ИИ и цифровой культуре. Подписаться на рассылку.',
+      'Я ничего не пишу, я только отбираю. Раз в неделю из этого собирается выпуск без редакции, только вкус одного человека, умноженный на код.',
     url: `${siteUrl}/flow/join`,
     siteName: 'Merkurov.love',
     images: [
       {
-        url: `${siteUrl}/og-flow.png`, // Убедитесь, что файл с превью находится в public/og-flow.png
+        url: imageUrl,
         width: 1200,
         height: 630,
-        alt: 'FLOW Newsletter by Anton Merkurov',
+        alt: 'FLOW — I don’t write. I select. By Anton Merkurov',
       },
     ],
     locale: 'ru_RU',
@@ -41,11 +48,21 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'THE FLOW | Anton Merkurov',
+    title: 'FLOW | Anton Merkurov',
     description:
-      'Прямой поток мыслей о медиа, искусстве, ИИ и цифровой культуре.',
+      "I don't write. I select. Once a week it becomes an issue with no newsroom, one person's taste multiplied by code.",
     creator: '@merkurov',
-    images: [`${siteUrl}/og-flow.png`],
+    images: [imageUrl],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
 };
 
