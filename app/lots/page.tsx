@@ -1,11 +1,24 @@
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Curator Vault | Auction Lots',
   description: 'Archive of artworks and auction lots curated by Anton Merkurov.',
   alternates: { canonical: 'https://www.merkurov.love/lots' },
-};
+  openGraph: {
+    title: 'Curator Vault | Auction Lots',
+    description: 'Archive of artworks and auction lots curated by Anton Merkurov.',
+    url: 'https://www.merkurov.love/lots',
+    siteName: 'Anton Merkurov',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Curator Vault | Auction Lots',
+    description: 'Archive of artworks and auction lots curated by Anton Merkurov.',
+  },
+});
 
 export const revalidate = 0; // Всегда свежие данные
 

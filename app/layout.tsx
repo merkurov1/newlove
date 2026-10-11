@@ -1,3 +1,5 @@
+
+import type { Metadata, Viewport } from 'next';
 import AuthProvider from '@/components/AuthProvider';
 import { GlobalAudioProvider } from '@/components/AudioContext';
 
@@ -43,7 +45,15 @@ const cormorant = Cormorant_Garamond({
 
 // --- STRATEGIC SEO: GLOBAL POSITIONING ---
 
-export const metadata = sanitizeMetadata({
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  themeColor: '#ffffff',
+};
+
+export const metadata: Metadata = sanitizeMetadata({
   metadataBase: new URL('https://www.merkurov.love'),
 
   title: {
@@ -56,6 +66,7 @@ export const metadata = sanitizeMetadata({
 
   keywords: [
     'Anton Merkurov',
+    'Антон Меркуров',
     'Art Dealer',
     'Digital Heritage',
     'Investment Art',
@@ -63,6 +74,7 @@ export const metadata = sanitizeMetadata({
     'Merkurov Legacy',
     'Global Nomad',
     'Digital Strategy',
+    'Context Architecture',
   ],
 
   authors: [
@@ -96,8 +108,8 @@ export const metadata = sanitizeMetadata({
 
   twitter: {
     card: 'summary_large_image',
-    title: 'Anton Merkurov | Unframed',
-    description: 'Art Dealer & System Architect.',
+    title: 'Anton Merkurov | Art x Love x Money',
+    description: 'Digital Strategist, Art Dealer, and Heritage Architect.',
     images: [
       'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
     ],
@@ -117,26 +129,33 @@ export const metadata = sanitizeMetadata({
     },
   },
 
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 5,
-    userScalable: true,
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-icon', sizes: '180x180', type: 'image/png' },
+    ],
   },
 
-  icons: {
-    icon: '/favicon.ico',
-    apple: '/apple-touch-icon.png',
-  },
+  manifest: '/manifest.webmanifest',
 
   alternates: {
+    canonical: '/',
     languages: {
       'en-US': 'https://www.merkurov.love',
+      'ru-RU': 'https://www.merkurov.love',
+      'x-default': 'https://www.merkurov.love',
     },
     types: {
       'application/rss+xml':
         'https://www.merkurov.love/rss.xml',
     },
+  },
+
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
   },
 
   other: {
@@ -147,37 +166,114 @@ export const metadata = sanitizeMetadata({
 
 export const revalidate = 300;
 
-// --- STRUCTURED DATA ---
+// --- STRUCTURED DATA: GOOGLE SEARCH CARD & KNOWLEDGE GRAPH ---
 
-const jsonLd = {
+const googleSearchCardSchema = {
   '@context': 'https://schema.org',
-  '@type': 'Person',
-
-  name: 'Anton Merkurov',
-
-  url: 'https://www.merkurov.love',
-
-  image:
-    'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
-
-  sameAs: [
-    'https://twitter.com/merkurov',
-    'https://www.facebook.com/merkurov',
-    'https://www.linkedin.com/in/merkurov',
-    'https://en.wikipedia.org/wiki/Sergey_Merkurov',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': 'https://www.merkurov.love/#website',
+      url: 'https://www.merkurov.love',
+      name: 'Anton Merkurov',
+      alternateName: [
+        'Антон Меркуров',
+        'Anton Merkurov | Art x Love x Money',
+        'Merkurov Love',
+        'merkurov.love',
+      ],
+      description:
+        'Digital Strategist, Art Dealer, and Heritage Architect. The intersection of High-Tech and Old Money.',
+      publisher: {
+        '@id': 'https://www.merkurov.love/#person',
+      },
+      inLanguage: ['en-US', 'ru-RU'],
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: {
+          '@type': 'EntryPoint',
+          urlTemplate: 'https://www.merkurov.love/flow?q={search_term_string}',
+        },
+        'query-input': 'required name=search_term_string',
+      },
+    },
+    {
+      '@type': 'Person',
+      '@id': 'https://www.merkurov.love/#person',
+      name: 'Anton Merkurov',
+      alternateName: ['Антон Меркуров', 'Merkurov'],
+      url: 'https://www.merkurov.love',
+      image: {
+        '@type': 'ImageObject',
+        '@id': 'https://www.merkurov.love/#person-image',
+        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
+        caption: 'Anton Merkurov',
+      },
+      jobTitle: 'Digital Strategist, Art Dealer & Heritage Architect',
+      description:
+        'Great-grandson of Sergey Merkurov. Expert in digital heritage, high-end art investment, and context architecture.',
+      sameAs: [
+        'https://twitter.com/merkurov',
+        'https://x.com/merkurov',
+        'https://t.me/merkurov',
+        'https://bsky.app/profile/merkurov.love',
+        'https://www.linkedin.com/in/merkurov',
+        'https://www.facebook.com/merkurov',
+        'https://en.wikipedia.org/wiki/Sergey_Merkurov',
+        'https://github.com/merkurov1',
+      ],
+      knowsAbout: [
+        'Art Market',
+        'Digital Heritage',
+        'Soviet Monumentalism',
+        'Contemporary Art',
+        'Blockchain Technology',
+        'Digital Strategy',
+        'Context Architecture',
+      ],
+      worksFor: {
+        '@type': 'Organization',
+        '@id': 'https://www.merkurov.love/#organization',
+      },
+      mainEntityOfPage: 'https://www.merkurov.love',
+    },
+    {
+      '@type': 'Organization',
+      '@id': 'https://www.merkurov.love/#organization',
+      name: 'Anton Merkurov Studio',
+      alternateName: ['Merkurov Studio', 'merkurov.love'],
+      url: 'https://www.merkurov.love',
+      logo: {
+        '@type': 'ImageObject',
+        url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
+        width: 512,
+        height: 512,
+      },
+      founder: {
+        '@id': 'https://www.merkurov.love/#person',
+      },
+      sameAs: [
+        'https://twitter.com/merkurov',
+        'https://t.me/merkurov',
+      ],
+    },
+    {
+      '@type': 'ProfilePage',
+      '@id': 'https://www.merkurov.love/#profilepage',
+      url: 'https://www.merkurov.love',
+      name: 'Anton Merkurov — Official Website & Archive',
+      isPartOf: {
+        '@id': 'https://www.merkurov.love/#website',
+      },
+      about: {
+        '@id': 'https://www.merkurov.love/#person',
+      },
+      mainEntity: {
+        '@id': 'https://www.merkurov.love/#person',
+      },
+      inLanguage: 'en-US',
+    },
   ],
-
-  jobTitle: 'Art Dealer & Digital Strategist',
-
-  knowsAbout: [
-    'Art Market',
-    'Digital Heritage',
-    'Soviet Monumentalism',
-    'Blockchain Technology',
-  ],
-
-  description:
-    'Great-grandson of Sergey Merkurov. Expert in digital heritage and high-end art investment.',
 };
 
 const getPublicProjects = unstable_cache(
@@ -311,7 +407,7 @@ export default async function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(jsonLd),
+            __html: JSON.stringify(googleSearchCardSchema),
           }}
         />
       </head>

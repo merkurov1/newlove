@@ -1,7 +1,8 @@
 import React from 'react';
 import DeepResearchClient from './DeepResearchClient';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'From Content Censorship to Hardware Hegemony — Merkurov.Report',
   description: 'Analytical report (2025) by Anton Merkurov on the transformation of digital control in Russia — from content censorship to device and infrastructure control.',
   openGraph: {
@@ -26,7 +27,7 @@ export const metadata = {
     creator: '@merkurov',
     site: '@merkurov',
   },
-};
+});
 
 export default function Page() {
   return <DeepResearchClient />;

@@ -1,8 +1,17 @@
-export const metadata = {
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
+
+export const metadata = sanitizeMetadata({
   title: 'Tags | Anton Merkurov',
   description: 'Browse essays and projects by topic.',
   alternates: { canonical: 'https://www.merkurov.love/tags' },
-};
+  openGraph: {
+    title: 'Tags | Anton Merkurov',
+    description: 'Browse essays and projects by topic.',
+    url: 'https://www.merkurov.love/tags',
+    siteName: 'Anton Merkurov',
+    type: 'website',
+  },
+});
 
 export default function TagsIndexPage() {
   return (

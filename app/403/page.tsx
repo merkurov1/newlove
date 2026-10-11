@@ -1,8 +1,12 @@
 import Link from 'next/link';
 import PasskeyAuth from '@/components/PasskeyAuth';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { robots: { index: false, follow: false } };
+export const metadata = sanitizeMetadata({
+  title: '403 — Forbidden',
+  robots: { index: false, follow: false },
+});
 
 export default function Page403() {
   return (

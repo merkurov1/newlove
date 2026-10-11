@@ -165,7 +165,7 @@ export async function POST(
             model:
               result.model,
             provider:
-              'openrouter',
+              result.provider || 'deepseek',
             status:
               'ready',
             error: null,

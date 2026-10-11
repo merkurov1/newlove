@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 
@@ -289,26 +290,26 @@ export async function generateMetadata({
       .trim();
 
   if (!decoded) {
-    return {
+    return sanitizeMetadata({
       title: 'Profile',
       robots: {
         index: false,
         follow: false,
       },
-    };
+    });
   }
 
   const profile =
     await findProfile(decoded);
 
   if (!profile) {
-    return {
+    return sanitizeMetadata({
       title: 'Profile not found',
       robots: {
         index: false,
         follow: false,
       },
-    };
+    });
   }
 
   const name =
@@ -316,7 +317,7 @@ export async function generateMetadata({
     profile.username ||
     decoded;
 
-  return {
+  return sanitizeMetadata({
     title: `${name} | merkurov.love`,
     description: `${name} on merkurov.love.`,
     alternates: {
@@ -330,7 +331,7 @@ export async function generateMetadata({
       description: `${name} on merkurov.love.`,
       type: 'profile',
     },
-  };
+  });
 }
 
 export default async function UserProfilePage({

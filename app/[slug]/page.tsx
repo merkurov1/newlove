@@ -104,6 +104,163 @@ async function getContent(slug: string): Promise<ContentResult> {
   }
 }
 
+function getStructuredData(
+  type: string,
+  content: any,
+  previewImage: string | null,
+  description: string
+) {
+  const baseUrl = 'https://www.merkurov.love';
+  let jsonLd: any = null;
+  let breadcrumbSchema: any = null;
+
+  if (type === 'article') {
+    const artist = content.artist || '';
+    const articleTitle = content.title || '';
+    const fullTitle = [artist, articleTitle].filter(Boolean).join(' — ');
+
+    jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: fullTitle || content.title,
+      author: {
+        '@type': 'Person',
+        name: content.author?.name || 'Anton Merkurov',
+        url: baseUrl,
+      },
+      datePublished: content.publishedAt,
+      dateModified: content.updatedAt || content.publishedAt,
+      image: previewImage ? [previewImage] : ['https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png'],
+      description: description,
+      mainEntityOfPage: {
+        '@type': 'WebPage',
+        '@id': `${baseUrl}/${content.slug}`,
+      },
+      publisher: {
+        '@type': 'Person',
+        name: 'Anton Merkurov',
+        logo: {
+          '@type': 'ImageObject',
+          url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
+          width: 512,
+          height: 512,
+        },
+      },
+      articleSection: content.tags?.[0]?.name || 'Editorial',
+      keywords: content.tags?.map((t: any) => t.name).join(', ') || '',
+      inLanguage: 'ru-RU',
+    };
+
+    breadcrumbSchema = {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Главная',
+          item: baseUrl,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'Статьи',
+          item: `${baseUrl}/selection`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: content.title,
+          item: `${baseUrl}/${content.slug}`,
+        },
+      ],
+    };
+  } else if (type === 'project') {
+    const isServicePage = content.slug === 'advising';
+    const isAboutPage = content.slug === 'isakeyforall';
+
+    if (isServicePage) {
+      jsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'Service',
+        name: content.title,
+        description: description,
+        provider: {
+          '@type': 'Person',
+          name: 'Anton Merkurov',
+          url: baseUrl,
+        },
+        image: previewImage || 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
+        url: `${baseUrl}/${content.slug}`,
+        serviceType: 'Art & Heritage Consulting',
+        areaServed: {
+          '@type': 'Place',
+          name: 'Worldwide',
+        },
+      };
+    } else if (isAboutPage) {
+      jsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'AboutPage',
+        name: content.title,
+        description: description,
+        url: `${baseUrl}/${content.slug}`,
+        mainEntity: {
+          '@type': 'Person',
+          name: 'Anton Merkurov',
+          url: baseUrl,
+          description: description,
+          image: previewImage || 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
+        },
+      };
+    } else {
+      jsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'WebPage',
+        name: content.title,
+        description: description,
+        url: `${baseUrl}/${content.slug}`,
+        image: previewImage ? [previewImage] : [],
+        author: {
+          '@type': 'Person',
+          name: 'Anton Merkurov',
+          url: baseUrl,
+        },
+        datePublished: content.publishedAt,
+        dateModified: content.updatedAt || content.publishedAt,
+        inLanguage: 'ru-RU',
+      };
+    }
+
+    breadcrumbSchema = {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Главная',
+          item: baseUrl,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'Проекты',
+          item: `${baseUrl}/projects`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: content.title,
+          item: `${baseUrl}/${content.slug}`,
+        },
+      ],
+    };
+  }
+
+  return { jsonLd, breadcrumbSchema };
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -121,162 +278,6 @@ export async function generateMetadata({
       : content.title || 'Описание недоступно';
     const baseUrl = 'https://www.merkurov.love';
 
-    // JSON-LD для Article и Project
-    let jsonLd = null;
-    let breadcrumbSchema = null;
-
-    if (type === 'article') {
-      // Build full title from artist and title
-      const artist = content.artist || '';
-      const articleTitle = content.title || '';
-      const fullTitle = [artist, articleTitle].filter(Boolean).join(' - ');
-      
-      // Enhanced Article Schema
-      jsonLd = {
-        '@context': 'https://schema.org',
-        '@type': 'Article',
-        headline: fullTitle || content.title,
-        author: {
-          '@type': 'Person',
-          name: content.author?.name || 'Anton Merkurov',
-          url: baseUrl,
-        },
-        datePublished: content.publishedAt,
-        dateModified: content.updatedAt || content.publishedAt,
-        image: previewImage ? [previewImage] : [],
-        description: description,
-        mainEntityOfPage: {
-          '@type': 'WebPage',
-          '@id': `${baseUrl}/${content.slug}`,
-        },
-        publisher: {
-          '@type': 'Person',
-          name: 'Anton Merkurov',
-          logo: {
-            '@type': 'ImageObject',
-            url: 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/logo.png',
-            width: 64,
-            height: 64,
-          },
-        },
-        articleSection: content.tags?.[0]?.name || 'Blog',
-        keywords: content.tags?.map((t: any) => t.name).join(', ') || '',
-        inLanguage: 'ru-RU',
-      };
-
-      // BreadcrumbList Schema for better Google display
-      breadcrumbSchema = {
-        '@context': 'https://schema.org',
-        '@type': 'BreadcrumbList',
-        itemListElement: [
-          {
-            '@type': 'ListItem',
-            position: 1,
-            name: 'Главная',
-            item: baseUrl,
-          },
-          {
-            '@type': 'ListItem',
-            position: 2,
-            name: 'Статьи',
-            item: `${baseUrl}/selection`,
-          },
-          {
-            '@type': 'ListItem',
-            position: 3,
-            name: content.title,
-            item: `${baseUrl}/${content.slug}`,
-          },
-        ],
-      };
-    } else if (type === 'project') {
-      // WebPage/Service Schema for projects (about, services pages)
-      const isServicePage = content.slug === 'advising';
-      const isAboutPage = content.slug === 'isakeyforall';
-
-      if (isServicePage) {
-        // Service/Offer Schema for advising page
-        jsonLd = {
-          '@context': 'https://schema.org',
-          '@type': 'Service',
-          name: content.title,
-          description: description,
-          provider: {
-            '@type': 'Person',
-            name: 'Anton Merkurov',
-            url: baseUrl,
-          },
-          image: previewImage || `${baseUrl}/default-og.png`,
-          url: `${baseUrl}/${content.slug}`,
-          serviceType: 'Consulting',
-          areaServed: {
-            '@type': 'Place',
-            name: 'Worldwide',
-          },
-        };
-      } else if (isAboutPage) {
-        // AboutPage Schema
-        jsonLd = {
-          '@context': 'https://schema.org',
-          '@type': 'AboutPage',
-          name: content.title,
-          description: description,
-          url: `${baseUrl}/${content.slug}`,
-          mainEntity: {
-            '@type': 'Person',
-            name: 'Anton Merkurov',
-            url: baseUrl,
-            description: description,
-            image: previewImage || `${baseUrl}/default-og.png`,
-          },
-        };
-      } else {
-        // Generic WebPage for other projects
-        jsonLd = {
-          '@context': 'https://schema.org',
-          '@type': 'WebPage',
-          name: content.title,
-          description: description,
-          url: `${baseUrl}/${content.slug}`,
-          image: previewImage ? [previewImage] : [],
-          author: {
-            '@type': 'Person',
-            name: 'Anton Merkurov',
-            url: baseUrl,
-          },
-          datePublished: content.publishedAt,
-          dateModified: content.updatedAt || content.publishedAt,
-          inLanguage: 'ru-RU',
-        };
-      }
-
-      // BreadcrumbList for projects
-      breadcrumbSchema = {
-        '@context': 'https://schema.org',
-        '@type': 'BreadcrumbList',
-        itemListElement: [
-          {
-            '@type': 'ListItem',
-            position: 1,
-            name: 'Главная',
-            item: baseUrl,
-          },
-          {
-            '@type': 'ListItem',
-            position: 2,
-            name: 'Проекты',
-            item: `${baseUrl}/projects`,
-          },
-          {
-            '@type': 'ListItem',
-            position: 3,
-            name: content.title,
-            item: `${baseUrl}/${content.slug}`,
-          },
-        ],
-      };
-    }
-
     // Normalize preview image URL to avoid double-slashes which may confuse some crawlers
     let normalizedPreview = previewImage || null;
     try {
@@ -292,7 +293,7 @@ export async function generateMetadata({
 
     // Build full title for articles
     const displayTitle = type === 'article' && content.artist
-      ? [content.artist, content.title].filter(Boolean).join(' - ')
+      ? [content.artist, content.title].filter(Boolean).join(' — ')
       : content.title;
 
     const meta = {
@@ -312,13 +313,8 @@ export async function generateMetadata({
         description: description,
         images: normalizedPreview ? [normalizedPreview] : [],
       },
-      other: {
-        ...(jsonLd && { 'script:ld+json:content': JSON.stringify(jsonLd) }),
-        ...(breadcrumbSchema && { 'script:ld+json:breadcrumb': JSON.stringify(breadcrumbSchema) }),
-      },
     };
 
-    // Ensure metadata contains only serializable values (no React elements/functions)
     return sanitizeMetadata(meta);
   } catch (error) {
     return {
@@ -332,8 +328,34 @@ export default async function ContentPage({ params }: { params: { slug: string }
   const result = await getContent(params.slug);
   if (!result) notFound();
   const { type, content } = result;
-  if (type !== 'article') return <ProjectComponent project={content} />;
-  return <ArticleComponent article={content} />;
+
+  const previewImage = content.content ? await getFirstImage(content.content) : null;
+  const description = content.content
+    ? generateDescription(content.content)
+    : content.title || 'Anton Merkurov';
+  const { jsonLd, breadcrumbSchema } = getStructuredData(type, content, previewImage, description);
+
+  return (
+    <>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
+      {breadcrumbSchema && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+        />
+      )}
+      {type !== 'article' ? (
+        <ProjectComponent project={content} />
+      ) : (
+        <ArticleComponent article={content} />
+      )}
+    </>
+  );
 }
 
 function ArticleComponent({ article }: { article: any }) {

@@ -2,12 +2,25 @@ import React from 'react'
 import { getServerSupabaseClient } from '@/lib/serverAuth'
 import tagHelpers from '@/lib/tagHelpers'
 import GuessEstimateQuiz from '@/components/GuessEstimateQuiz'
+import { sanitizeMetadata } from '@/lib/metadataSanitize'
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Auction Estimate Quiz | Anton Merkurov',
   description: 'Test your eye for auction estimates in this art market quiz.',
   alternates: { canonical: 'https://www.merkurov.love/quiz/guess-estimate' },
-};
+  openGraph: {
+    title: 'Auction Estimate Quiz | Anton Merkurov',
+    description: 'Test your eye for auction estimates in this art market quiz.',
+    url: 'https://www.merkurov.love/quiz/guess-estimate',
+    siteName: 'Anton Merkurov',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Auction Estimate Quiz | Anton Merkurov',
+    description: 'Test your eye for auction estimates in this art market quiz.',
+  },
+});
 
 // Server page: fetch Auction-tag articles, extract numeric estimates from content,
 // pick up to 10 random items that contain a parseable estimate and render the client quiz.

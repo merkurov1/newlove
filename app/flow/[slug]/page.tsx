@@ -4,6 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { notFound } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { generateFlowContext } from '@/lib/flow/ai';
 
 type PageProps = {
   params: Promise<{
@@ -382,7 +384,7 @@ export async function generateMetadata({
         decodedSlug,
       )}/opengraph-image`;
 
-    return {
+    return sanitizeMetadata({
       title,
       description,
 
@@ -425,17 +427,17 @@ export async function generateMetadata({
         index: true,
         follow: true,
       },
-    };
+    });
   } catch (error) {
     console.error(
       '[flow/metadata] Failed:',
       error,
     );
 
-    return {
+    return sanitizeMetadata({
       title:
         'Flow | Anton Merkurov',
-    };
+    });
   }
 }
 
@@ -804,47 +806,37 @@ function AIContextBlock({
 }) {
   if (
     !context ||
-    context.status !==
-      'ready' ||
+    context.status !== 'ready' ||
     !context.content
   ) {
     return null;
   }
 
   return (
-    <section className="mt-14 border-t border-stone-200 pt-8">
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
-          Context
+    <section className="mt-14 border-t border-stone-200/90 pt-8 sm:mt-16 sm:pt-10">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/90 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-stone-500">
+            Deep Analysis
+          </span>
         </div>
 
         {context.model && (
-          <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-stone-300">
-            {context.provider}
+          <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-stone-400">
+            {context.provider ? `${context.provider} · ` : ''}{context.model}
           </div>
         )}
       </div>
 
-      <div className="font-serif text-[18px] font-light leading-[1.85] text-stone-600 sm:text-[20px]">
+      <div className="space-y-5 font-serif text-[18px] font-light leading-[1.85] text-stone-700 sm:text-[20px]">
         {context.content
           .split(/\n\s*\n/)
-          .map(
-            (
-              paragraph,
-              index,
-            ) => (
-              <p
-                key={index}
-                className={
-                  index > 0
-                    ? 'mt-5'
-                    : ''
-                }
-              >
-                {paragraph}
-              </p>
-            ),
-          )}
+          .map((paragraph, index) => (
+            <p key={index}>
+              {paragraph}
+            </p>
+          ))}
       </div>
     </section>
   );
@@ -928,12 +920,126 @@ export default async function FlowItemPage({
     );
   }
 
-  const context =
+  let context =
     (contextData as AIContext | null) ??
     null;
 
+  // On-demand DeepSeek context generation if not yet generated
+  if (!context && item.status === 'published' && item.visibility === 'public') {
+    try {
+      const generated = await generateFlowContext({
+        id: item.id,
+        type: item.type,
+        title: item.title,
+        body_md: item.body_md,
+        source_url: item.source_url,
+        metadata: item.metadata,
+        lang: item.lang || 'ru',
+      });
+
+      if (generated?.content) {
+        const { data: savedContext } = await supabase
+          .from('flow_ai_context')
+          .upsert(
+            {
+              item_id: item.id,
+              content: generated.content,
+              model: generated.model,
+              provider: generated.provider || 'deepseek',
+              status: 'ready',
+              generated_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'item_id' },
+          )
+          .select('id,item_id,content,model,provider,status,generated_at')
+          .maybeSingle();
+
+        if (savedContext) {
+          context = savedContext as AIContext;
+        } else {
+          context = {
+            id: 'generated',
+            item_id: item.id,
+            content: generated.content,
+            model: generated.model,
+            provider: generated.provider || 'deepseek',
+            status: 'ready',
+            generated_at: new Date().toISOString(),
+          };
+        }
+      }
+    } catch (genError) {
+      console.warn('[flow/item] On-demand DeepSeek context generation failed:', genError);
+    }
+  }
+
+  const siteUrl = 'https://www.merkurov.love';
+  const itemUrl = `${siteUrl}/flow/${encodeURIComponent(decodedSlug)}`;
+  const itemTitle = item.title?.trim() || 'Flow';
+  const itemDescription = getDescription(item);
+  const itemImage = getMetadataImage(item) || `${itemUrl}/opengraph-image`;
+
+  const flowArticleSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: itemTitle,
+    description: itemDescription,
+    image: [itemImage],
+    datePublished: item.published_at || new Date().toISOString(),
+    url: itemUrl,
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': itemUrl,
+    },
+    author: {
+      '@type': 'Person',
+      name: 'Anton Merkurov',
+      url: siteUrl,
+    },
+    publisher: {
+      '@type': 'Person',
+      name: 'Anton Merkurov',
+      url: siteUrl,
+    },
+  };
+
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: siteUrl,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Flow',
+        item: `${siteUrl}/flow`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: itemTitle,
+        item: itemUrl,
+      },
+    ],
+  };
+
   return (
-    <main className="min-h-screen bg-[#FAF8F5] px-5 pb-24 pt-28 text-stone-900 sm:px-8 sm:pt-36">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(flowArticleSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <main className="min-h-screen bg-[#FAF8F5] px-5 pb-24 pt-28 text-stone-900 sm:px-8 sm:pt-36">
       <article className="mx-auto max-w-3xl">
         <Link
           href="/flow"
@@ -992,5 +1098,6 @@ export default async function FlowItemPage({
         />
       </article>
     </main>
+    </>
   );
 }

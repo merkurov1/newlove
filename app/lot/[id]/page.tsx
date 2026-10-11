@@ -7,18 +7,46 @@ import Markdown from 'markdown-to-jsx'
 // Отключаем кеширование, чтобы всегда видеть свежие правки (особенно если ты меняешь статус)
 export const revalidate = 0
 
+import { sanitizeMetadata } from '@/lib/metadataSanitize'
+
 export async function generateMetadata({ params }: { params: { id: string } }) {
   const { data } = await supabase
     .from('lots')
-    .select('artist, title')
+    .select('artist, title, image_path, ai_content')
     .eq('id', params.id)
     .maybeSingle();
 
-  if (!data) return { title: 'Artwork not found', robots: { index: false, follow: false } };
-  return {
-    title: [data.artist, data.title].filter(Boolean).join(' — '),
-    alternates: { canonical: `https://www.merkurov.love/lot/${encodeURIComponent(params.id)}` },
-  };
+  if (!data) return sanitizeMetadata({ title: 'Artwork not found', robots: { index: false, follow: false } });
+
+  const displayTitle = [data.artist, data.title].filter(Boolean).join(' — ');
+  const description =
+    data.ai_content?.summary ||
+    `Artwork record: ${displayTitle}. Archival analysis and provenance by Anton Merkurov.`;
+  const url = `https://www.merkurov.love/lot/${encodeURIComponent(params.id)}`;
+  const publicImg = data.image_path
+    ? data.image_path.startsWith('http')
+      ? data.image_path
+      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/artifacts/${data.image_path}`
+    : 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png';
+
+  return sanitizeMetadata({
+    title: displayTitle,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title: displayTitle,
+      description,
+      url,
+      images: [{ url: publicImg }],
+      type: 'article',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: displayTitle,
+      description,
+      images: [publicImg],
+    },
+  });
 }
 
 // Инициализация Supabase
@@ -76,8 +104,26 @@ export default async function LotPage({ params }: { params: { id: string } }) {
   const aiData = lot.ai_content || {}
   const mainText = aiData.website_formatted || lot.raw_description || "Description confidential."
 
+  const artworkSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'VisualArtwork',
+    name: lot.title || [lot.artist, 'Untitled'].filter(Boolean).join(' — '),
+    artist: {
+      '@type': 'Person',
+      name: lot.artist || 'Unknown Artist',
+    },
+    image: imageUrl || 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png',
+    description: aiData.summary || `Artwork record for ${[lot.artist, lot.title].filter(Boolean).join(' — ')}`,
+    url: `https://www.merkurov.love/lot/${encodeURIComponent(id)}`,
+  };
+
   return (
-    <div className="min-h-screen bg-[#050505] text-[#e0e0e0] font-sans selection:bg-white selection:text-black">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(artworkSchema) }}
+      />
+      <div className="min-h-screen bg-[#050505] text-[#e0e0e0] font-sans selection:bg-white selection:text-black">
       
       {/* NAVIGATION */}
       <nav className="fixed top-0 w-full p-6 flex justify-between items-center z-50 mix-blend-difference opacity-80 hover:opacity-100 transition-opacity">
@@ -170,5 +216,6 @@ export default async function LotPage({ params }: { params: { id: string } }) {
          Merkurov Digital Estate © 2025
       </footer>
     </div>
+    </>
   )
 }

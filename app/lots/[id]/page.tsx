@@ -18,20 +18,46 @@ function getAuctionHouseName(lot: any): string {
   return lot.auction_house || "Auction House";
 }
 
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
+
 export async function generateMetadata({ params }: { params: { id: string } }) {
   const { data: lot } = await supabase
     .from('lots')
-    .select('artist, title')
+    .select('artist, title, image_path, ai_content')
     .eq('id', params.id)
     .maybeSingle();
 
-  if (!lot) return { title: 'Lot Not Found' };
+  if (!lot) return sanitizeMetadata({ title: 'Lot Not Found' });
 
   const displayTitle = [lot.artist, lot.title].filter(Boolean).join(' — ');
-  return {
+  const description =
+    lot.ai_content?.summary ||
+    `Artwork dossier for ${displayTitle}. Provenance, verification, and auction analysis on Curator Vault.`;
+  const url = `https://www.merkurov.love/lots/${encodeURIComponent(params.id)}`;
+  const publicImg = lot.image_path
+    ? lot.image_path.startsWith('http')
+      ? lot.image_path
+      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/artifacts/${lot.image_path}`
+    : 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/og-image.png';
+
+  return sanitizeMetadata({
     title: `${displayTitle} | Curator Vault`,
-    alternates: { canonical: `https://www.merkurov.love/lots/${encodeURIComponent(params.id)}` },
-  };
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title: `${displayTitle} | Curator Vault`,
+      description,
+      url,
+      images: [{ url: publicImg }],
+      type: 'article',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${displayTitle} | Curator Vault`,
+      description,
+      images: [publicImg],
+    },
+  });
 }
 
 export default async function LotDetailPage({ params }: { params: { id: string } }) {
@@ -49,8 +75,26 @@ export default async function LotDetailPage({ params }: { params: { id: string }
     ? lot.image_path
     : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/artifacts/${lot.image_path}`;
 
+  const artworkSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'VisualArtwork',
+    name: lot.title || [lot.artist, 'Untitled'].filter(Boolean).join(' — '),
+    artist: {
+      '@type': 'Person',
+      name: lot.artist || 'Unknown Artist',
+    },
+    image: publicImg,
+    description: ai.summary || `Artwork dossier for ${[lot.artist, lot.title].filter(Boolean).join(' — ')}`,
+    url: `https://www.merkurov.love/lots/${encodeURIComponent(params.id)}`,
+  };
+
   return (
-    <div className="min-h-screen bg-black text-white font-sans pt-24 sm:pt-32 pb-24 px-4 sm:px-8">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(artworkSchema) }}
+      />
+      <div className="min-h-screen bg-black text-white font-sans pt-24 sm:pt-32 pb-24 px-4 sm:px-8">
       <div className="max-w-6xl mx-auto space-y-12">
         
         {/* NAV & AUCTION BADGE */}
@@ -188,5 +232,6 @@ export default async function LotDetailPage({ params }: { params: { id: string }
 
       </div>
     </div>
+    </>
   );
 }

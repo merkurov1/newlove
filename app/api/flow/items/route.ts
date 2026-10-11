@@ -31,13 +31,25 @@ function getSupabaseAdmin() {
   );
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const limitParam = searchParams.get('limit');
+    const offsetParam = searchParams.get('offset');
+
+    // Default to 10 items for lightning-fast initial load
+    const limit = Math.min(
+      Math.max(parseInt(limitParam || '10', 10) || 10, 1),
+      50,
+    );
+    const offset = Math.max(parseInt(offsetParam || '0', 10) || 0, 0);
+
     const supabase = getSupabaseAdmin();
 
     const {
       data,
       error,
+      count,
     } = await supabase
       .from('items')
       .select(
@@ -54,6 +66,7 @@ export async function GET() {
           'source_url',
           'metadata',
         ].join(','),
+        { count: 'exact' },
       )
       .eq('status', 'published')
       .eq('visibility', 'public')
@@ -64,7 +77,7 @@ export async function GET() {
           nullsFirst: false,
         },
       )
-      .limit(100);
+      .range(offset, offset + limit - 1);
 
     if (error) {
       console.error(
@@ -83,9 +96,16 @@ export async function GET() {
       );
     }
 
+    const items = data ?? [];
+    const totalCount = count ?? 0;
+    const hasMore = totalCount > offset + items.length;
+
     return NextResponse.json(
       {
-        items: data ?? [],
+        items,
+        hasMore,
+        total: totalCount,
+        nextOffset: offset + items.length,
       },
       {
         status: 200,
@@ -103,10 +123,7 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to load Flow items.',
+        error: 'Internal server error while loading Flow items.',
       },
       {
         status: 500,

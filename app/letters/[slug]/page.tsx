@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       ],
     };
 
-    return {
+    return sanitizeMetadata({
       title,
       description,
       openGraph: {
@@ -65,12 +65,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
         description,
         images: [image],
       },
-      other: {
-        'script:ld+json:breadcrumb': JSON.stringify(breadcrumbSchema),
-      },
-    };
+    });
   } catch (e) {
-    return { title: 'Letter | Anton Merkurov' };
+    return sanitizeMetadata({ title: 'Letter | Anton Merkurov' });
   }
 }
 
@@ -106,9 +103,66 @@ export default async function LetterPage({ params }: { params: { slug: string } 
   const plainContent = parseRichTextContent(letter.content || '');
   const previewContent = plainContent.slice(0, 300);
   const hasMore = plainContent.length > 300;
+  const site = 'https://www.merkurov.love';
+
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: site,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Letters',
+        item: `${site}/letters`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: letter.title,
+        item: `${site}/letters/${slug}`,
+      },
+    ],
+  };
+
+  const letterArticleSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: letter.title,
+    description: previewContent,
+    datePublished: letter.publishedAt || letter.createdAt,
+    author: {
+      '@type': 'Person',
+      name: letterAuthor?.name || 'Anton Merkurov',
+      url: site,
+    },
+    publisher: {
+      '@type': 'Person',
+      name: 'Anton Merkurov',
+      url: site,
+    },
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': `${site}/letters/${slug}`,
+    },
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(letterArticleSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <div className="max-w-3xl mx-auto px-4 py-12">
         <article className="bg-white rounded-2xl shadow-sm border border-blue-100 p-8">
           <header className="mb-8">
@@ -139,5 +193,6 @@ export default async function LetterPage({ params }: { params: { slug: string } 
         </article>
       </div>
     </div>
+    </>
   );
 }

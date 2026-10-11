@@ -1,8 +1,9 @@
 import AdvisingClient from './AdvisingClient';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
 const OG_IMAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/media/Advising/IMG_1526.jpeg';
 
-export const metadata = {
+export const metadata = sanitizeMetadata({
   alternates: { canonical: 'https://www.merkurov.love/advising' },
   title: 'Anton Merkurov — Advising & High-Stakes Counsel',
   description: 'Direct peer-to-peer counsel at the intersection of technology, culture, and capital for high-stakes environments.',
@@ -28,7 +29,7 @@ export const metadata = {
     description: 'Direct peer-to-peer counsel at the intersection of technology, culture, and capital for high-stakes environments.',
     images: [OG_IMAGE],
   },
-};
+});
 
 export default function Page() {
   return <AdvisingClient />;

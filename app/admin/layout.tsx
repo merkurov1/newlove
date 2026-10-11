@@ -2,14 +2,22 @@ import { metadata as rootMetadata } from '@/app/layout';
 import { requireAdmin } from '@/lib/serverAuth';
 import { redirect } from 'next/navigation';
 import AdminNav from './AdminNav';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = {
+const rootTitleDefault =
+  typeof rootMetadata?.title === 'object' && rootMetadata?.title && 'default' in rootMetadata.title
+    ? String((rootMetadata.title as any).default || 'Anton Merkurov')
+    : typeof rootMetadata?.title === 'string'
+      ? rootMetadata.title
+      : 'Site';
+
+export const metadata = sanitizeMetadata({
   robots: { index: false, follow: false },
   title: {
-    default: 'Admin — ' + (rootMetadata?.title?.default || 'Site'),
+    default: `Admin — ${rootTitleDefault}`,
     template: '%s | Admin',
   },
-};
+});
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   // Protect every admin page before it can query or render privileged data.

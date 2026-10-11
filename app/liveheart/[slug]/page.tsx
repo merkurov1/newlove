@@ -1,6 +1,7 @@
 import React from 'react';
 import { createClient } from '../../../lib/supabase/server';
 import SharedArtifact from '../SharedArtifactClient';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
 type Props = { params: { slug: string } };
 
@@ -9,7 +10,7 @@ export async function generateMetadata({ params }: Props) {
   const { data } = await supabase.from('liveheart_shares').select('*').eq('slug', params.slug).single();
 
   if (!data) {
-    return { title: 'LiveHeart' };
+    return sanitizeMetadata({ title: 'LiveHeart' });
   }
 
   const title = data.title ?? data?.dna?.name ?? 'LiveHeart Artifact';
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: Props) {
   const svgUrl = `${siteUrl}/api/og/liveheart?slug=${params.slug}`;
   const fallbackPng = `${siteUrl}/api/og/liveheart?slug=${params.slug}&format=png`;
 
-  return {
+  return sanitizeMetadata({
     title,
     description,
     openGraph: {
@@ -38,7 +39,7 @@ export async function generateMetadata({ params }: Props) {
       card: 'summary_large_image',
       images: [fallbackPng],
     },
-  };
+  });
 }
 
 export default async function Page({ params }: Props) {

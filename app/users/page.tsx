@@ -1,7 +1,11 @@
 import UsersClient from '@/components/UsersClient';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
-export const metadata = { robots: { index: false, follow: false } };
+export const metadata = sanitizeMetadata({
+  title: 'Users Directory',
+  robots: { index: false, follow: false },
+});
 
 interface UserItem {
   id: string;

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { X, Plus, Image as ImageIcon } from "lucide-react";
 import {
   ImagePreview,
   LinkPreviewCard,
@@ -22,10 +24,10 @@ function SaveStatus({
   if (error) {
     return (
       <span
-        className="max-w-[280px] truncate text-[12px] font-medium leading-none text-red-500"
+        className="max-w-[280px] truncate text-[11px] font-mono uppercase tracking-wider text-red-500"
         title={error}
       >
-        Error
+        {error}
       </span>
     );
   }
@@ -34,39 +36,39 @@ function SaveStatus({
     case "creating":
     case "loading":
       return (
-        <span className="text-[12px] font-medium leading-none text-neutral-500">
-          Loading
+        <span className="text-[11px] font-mono uppercase tracking-widest text-stone-400">
+          Loading…
         </span>
       );
 
     case "saving":
       return (
-        <span className="text-[12px] font-medium leading-none text-neutral-500">
-          Saving
+        <span className="text-[11px] font-mono uppercase tracking-widest text-stone-400">
+          Saving…
         </span>
       );
 
     case "publishing":
       return (
-        <span className="text-[12px] font-medium leading-none text-neutral-500">
-          Publishing
+        <span className="text-[11px] font-mono uppercase tracking-widest text-stone-700 animate-pulse">
+          Publishing…
         </span>
       );
 
     case "clearing":
       return (
-        <span className="text-[12px] font-medium leading-none text-neutral-500">
-          Clearing
+        <span className="text-[11px] font-mono uppercase tracking-widest text-stone-400">
+          Clearing…
         </span>
       );
 
     case "saved":
       return (
-        <span className="flex items-center gap-2 text-[12px] font-medium leading-none text-neutral-500">
-          <span>SAVED</span>
+        <span className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-stone-400">
+          <span>Saved</span>
           <span
             aria-hidden="true"
-            className="h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-400"
+            className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500/80"
           />
         </span>
       );
@@ -118,6 +120,41 @@ export default function NewPostModal({
     itemId,
   });
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (!open) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouchAction;
+    };
+  }, [open]);
+
+  // Keyboard shortcut: Escape to close, Cmd/Ctrl+Enter to post
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) {
+        void handleClose();
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && canPost && !busy) {
+        event.preventDefault();
+        void finish();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, busy, canPost, handleClose, finish]);
+
   if (!open) return null;
 
   const loading = isInitializing || !item;
@@ -132,7 +169,7 @@ export default function NewPostModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/30 p-0 backdrop-blur-[8px]"
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/60 p-3 sm:p-6 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-label={isEditing ? "Edit post" : "New post"}
@@ -143,24 +180,36 @@ export default function NewPostModal({
       }}
     >
       <div
-        className="relative flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border-0 bg-[#fffefa]/95 shadow-none outline-none backdrop-blur-2xl sm:h-[100dvh] sm:max-w-none sm:rounded-none"
+        className="relative flex h-[88dvh] max-h-[780px] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-stone-200/90 bg-[#FAF8F5]/98 text-stone-900 shadow-2xl backdrop-blur-2xl"
         onMouseDown={(event) => {
           event.stopPropagation();
         }}
       >
-        <button
-          type="button"
-          onClick={() => {
-            if (!busy) void handleClose();
-          }}
-          disabled={busy}
-          aria-label="Close"
-          className="absolute right-5 top-5 z-30 flex h-10 w-10 items-center justify-center rounded-full border-0 bg-transparent text-[21px] font-light leading-none text-neutral-400 outline-none transition-colors hover:bg-transparent hover:text-neutral-900 focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-30 sm:right-8 sm:top-7"
-        >
-          ×
-        </button>
+        {/* TOP STATUS BAR */}
+        <header className="flex shrink-0 items-center justify-between border-b border-stone-200/60 px-6 py-4 sm:px-8">
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-500">
+              {isEditing ? "Edit Post" : "Compose Thought"}
+            </span>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-4 pt-20 sm:px-12 sm:pt-[76px] md:px-[max(48px,calc((100vw-850px)/2))]">
+            {!loading && <SaveStatus state={saveState} error={error} />}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!busy) void handleClose();
+            }}
+            disabled={busy}
+            aria-label="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-200/60 hover:text-stone-900 disabled:opacity-30"
+          >
+            <X size={18} />
+          </button>
+        </header>
+
+        {/* MAIN EDITING AREA */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-6 sm:px-10 sm:py-8">
           <div className="flex min-h-full flex-col">
             <textarea
               ref={textareaRef}
@@ -169,11 +218,11 @@ export default function NewPostModal({
                 setBodyMd(event.target.value);
               }}
               onPaste={handlePaste}
-              placeholder="Write something…"
+              placeholder="Write a thought, insight, or drop a link…"
               disabled={busy}
               autoFocus
-              rows={1}
-              className="min-h-[180px] w-full flex-1 resize-none border-0 bg-transparent p-0 font-serif text-[25px] font-light leading-[1.5] tracking-[-0.01em] text-neutral-900 outline-none ring-0 placeholder:text-neutral-300 focus:border-0 focus:outline-none focus:ring-0 sm:min-h-[360px] sm:text-[27px]"
+              rows={4}
+              className="w-full flex-1 resize-none border-0 bg-transparent p-0 font-serif text-[22px] sm:text-[25px] font-light leading-[1.6] tracking-[-0.01em] text-stone-900 outline-none ring-0 placeholder:text-stone-300 focus:border-0 focus:outline-none focus:ring-0"
             />
 
             {showLink && (
@@ -202,9 +251,9 @@ export default function NewPostModal({
                           void parseLink(linkUrl);
                         }
                       }}
-                      placeholder="URL"
+                      placeholder="Paste URL and press Enter"
                       disabled={busy || isParsing}
-                      className="min-w-0 flex-1 border-0 bg-transparent px-0 py-2 text-sm text-neutral-800 outline-none ring-0 placeholder:text-neutral-300 focus:border-0 focus:outline-none focus:ring-0"
+                      className="min-w-0 flex-1 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none ring-0 placeholder:text-neutral-400 focus:border-stone-400"
                     />
 
                     <button
@@ -217,7 +266,7 @@ export default function NewPostModal({
                         isParsing ||
                         !linkUrl.trim()
                       }
-                      className="min-h-0 min-w-0 rounded-full border-0 bg-black px-4 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-white outline-none transition-opacity hover:bg-black hover:opacity-80 focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-20"
+                      className="rounded-full bg-stone-900 px-4 py-2 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-stone-700 disabled:opacity-20"
                     >
                       {isParsing ? "…" : "Preview"}
                     </button>
@@ -250,7 +299,7 @@ export default function NewPostModal({
 
             {error && (
               <div
-                className="mt-5 text-[12px] font-medium leading-relaxed text-red-500"
+                className="mt-5 rounded-xl border border-red-200 bg-red-50/80 p-3 font-mono text-[12px] text-red-600"
                 role="alert"
               >
                 {error}
@@ -259,8 +308,9 @@ export default function NewPostModal({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-4 px-6 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 sm:px-12 sm:pb-7">
-          <div className="flex min-w-0 items-center gap-3">
+        {/* BOTTOM ACTION BAR */}
+        <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-stone-200/60 bg-[#FAF8F5] px-6 py-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:px-8">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <input
               ref={fileRef}
               type="file"
@@ -276,14 +326,11 @@ export default function NewPostModal({
               }}
               disabled={busy || loading}
               aria-label="Add image"
-              className="flex h-12 w-12 min-h-0 min-w-0 shrink-0 items-center justify-center rounded-full border-0 bg-white/80 text-[25px] font-light leading-none text-neutral-400 outline-none transition-colors hover:bg-white hover:text-black focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-30"
+              title="Attach image"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200/80 bg-white text-stone-600 transition hover:border-stone-400 hover:text-stone-950 disabled:opacity-30 shadow-sm"
             >
-              +
+              <ImageIcon size={17} />
             </button>
-
-            {!loading && (
-              <SaveStatus state={saveState} error={error} />
-            )}
 
             {canClear && hasContent && (
               <button
@@ -292,24 +339,30 @@ export default function NewPostModal({
                   void clearDraft();
                 }}
                 disabled={busy || isClearing}
-                className="ml-1 min-h-0 min-w-0 rounded-full border-0 bg-neutral-100 px-4 py-2 text-[11px] font-medium leading-none uppercase tracking-[0.12em] text-neutral-600 outline-none transition-colors hover:bg-neutral-200 hover:text-neutral-950 focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-30 sm:px-4.5 sm:py-2.5 sm:text-[12px]"
+                className="rounded-full border border-stone-200 bg-white px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-stone-600 transition hover:border-stone-400 hover:text-stone-900 disabled:opacity-30"
               >
-                {isClearing ? "Clearing…" : "Clear"}
+                {isClearing ? "Clearing…" : "Clear Draft"}
               </button>
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              void finish();
-            }}
-            disabled={!canPost || busy}
-            className="min-h-0 min-w-0 shrink-0 rounded-full border-0 bg-black px-5 py-3 text-[10px] font-medium uppercase tracking-[0.12em] text-white outline-none transition-opacity hover:bg-black hover:opacity-80 focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-[0.14] sm:px-6"
-          >
-            {isPublishing ? "…" : "POST"}
-          </button>
-        </div>
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:inline font-mono text-[9px] uppercase tracking-widest text-stone-400">
+              Cmd + Enter to post
+            </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                void finish();
+              }}
+              disabled={!canPost || busy}
+              className="rounded-full bg-stone-900 px-6 py-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-white shadow-sm transition hover:bg-stone-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-20"
+            >
+              {isPublishing ? "Publishing…" : "POST"}
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
   );

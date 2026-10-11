@@ -2,13 +2,14 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdmin } from '@/lib/serverAuth';
+import { sanitizeMetadata } from '@/lib/metadataSanitize';
 
 export const revalidate = 0;
-export const metadata = {
+export const metadata = sanitizeMetadata({
   title: 'Vault Archive // Art Engine',
   description: 'Restricted catalog of institutional art dossiers.',
   robots: { index: false, follow: false },
-};
+});
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
