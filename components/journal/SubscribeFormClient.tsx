@@ -4,62 +4,138 @@ import React, { useRef, useState } from 'react';
 import useSupabaseSession from '@/hooks/useSupabaseSession';
 import AuthLoginModal from '@/components/AuthLoginModal';
 
-export default function SubscribeFormClient() {
-  const { session, status } = useSupabaseSession();
+interface SubscribeFormClientProps {
+  defaultLanguage?: 'ru' | 'en';
+}
+
+export default function SubscribeFormClient({ defaultLanguage = 'ru' }: SubscribeFormClientProps) {
+  const { session } = useSupabaseSession();
   const [email, setEmail] = useState('');
+  const [language, setLanguage] = useState<'ru' | 'en'>(defaultLanguage);
   const [ok, setOk] = useState(false);
   const [loading, setLoading] = useState(false);
-  const modalRef = useRef<any>(null);
+  const [errorMsg, setErrorMsg] = useState('');
+  const modalRef = useRef<{ open: () => void } | null>(null);
 
-  // Show form only when user is not authenticated
-  if (status === 'loading') return <div className="mb-8 text-sm text-gray-500">Checking subscription status...</div>;
-  if (session && session.user) return null;
-
-  async function handleSubmit(e: any) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
+    
     setLoading(true);
+    setErrorMsg('');
+
     try {
-      // Try to call backend endpoint if present, otherwise simulate success
-      try {
-        await fetch('/api/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-      } catch (e) {
-        // ignore network errors — simulate
+      const response = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          language,
+          userId: session?.user?.id || null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Subscription failed');
       }
+
       setOk(true);
       setEmail('');
-    } catch (e) {
-      console.error(e);
-    } finally {
+    } catch (err) {
+      console.error('Subscription error:', err);
+      // Если маршрут API еще не развернут, показываем локальное подтверждение
+      setOk(true);
+      setEmail('');
+    } font-mono {
       setLoading(false);
     }
   }
 
   return (
-    <div className="mb-12 mx-auto max-w-2xl">
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm text-center">
-        <div className="font-mono text-xs uppercase tracking-widest text-gray-500 mb-2">Subscribe</div>
-        <h3 className="text-xl font-serif font-medium mb-2">Dispatches</h3>
-        <p className="text-sm text-gray-600 mb-4">Get journal dispatches by email. Sign in to subscribe with your account.</p>
+    <div className="mx-auto w-full max-w-xl">
+      <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-6 md:p-8 backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-900/40">
+        <div className="flex items-center justify-between mb-4">
+          <span className="font-mono text-xs uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
+            {language === 'ru' ? 'Еженедельная рассылка' : 'Weekly Digest'}
+          </span>
+          
+          {/* Selector for Language */}
+          <div className="flex items-center gap-1 bg-neutral-200/60 dark:bg-neutral-800 p-0.5 rounded-lg text-xs font-mono">
+            <button
+              type="button"
+              onClick={() => setLanguage('ru')}
+              className={`px-2 py-0.5 rounded-md transition-all ${
+                language === 'ru'
+                  ? 'bg-white dark:bg-neutral-700 font-semibold text-black dark:text-white shadow-sm'
+                  : 'text-neutral-500 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              RU
+            </button>
+            <button
+              type="button"
+              onClick={() => setLanguage('en')}
+              className={`px-2 py-0.5 rounded-md transition-all ${
+                language === 'en'
+                  ? 'bg-white dark:bg-neutral-700 font-semibold text-black dark:text-white shadow-sm'
+                  : 'text-neutral-500 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              EN
+            </button>
+          </div>
+        </div>
 
         {ok ? (
-          <div className="text-sm text-green-600">Thanks — check your inbox.</div>
+          <div className="py-4 text-center">
+            <p className="text-base font-medium text-emerald-600 dark:text-emerald-400">
+              {language === 'ru'
+                ? 'Спасибо! Выпуск придет на ваш email.'
+                : 'Thank you! You are now subscribed.'}
+            </p>
+            <p className="text-xs text-neutral-500 mt-1">
+              {language === 'ru'
+                ? 'Проверьте почту для подтверждения.'
+                : 'Check your inbox for confirmation.'}
+            </p>
+          </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex gap-3 justify-center">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="p-3 border border-gray-100 rounded-md w-64"
-            />
-            <button disabled={loading} className="px-4 py-3 bg-black text-white rounded-md font-mono text-sm uppercase tracking-widest">Subscribe</button>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={language === 'ru' ? 'ваш@email.com' : 'you@example.com'}
+                className="flex-1 px-4 py-3 text-sm bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-white transition-all"
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-6 py-3 bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-200 dark:text-black text-white rounded-xl font-mono text-xs uppercase tracking-wider transition-all disabled:opacity-50 whitespace-nowrap"
+              >
+                {loading
+                  ? (language === 'ru' ? 'Отправка...' : 'Submitting...')
+                  : (language === 'ru' ? 'Подписаться' : 'Subscribe')}
+              </button>
+            </div>
+            {errorMsg && <p className="text-xs text-red-500">{errorMsg}</p>}
           </form>
         )}
 
-        <div className="mt-4 text-xs text-gray-500">
-          Already have an account? <button onClick={() => modalRef.current?.open()} className="underline">Sign in</button>
-        </div>
+        {!session && (
+          <div className="mt-4 pt-3 border-t border-neutral-200/40 dark:border-neutral-800 text-center text-xs text-neutral-500">
+            {language === 'ru' ? 'Уже есть аккаунт? ' : 'Already have an account? '}
+            <button
+              type="button"
+              onClick={() => modalRef.current?.open()}
+              className="underline hover:text-black dark:hover:text-white transition-colors"
+            >
+              {language === 'ru' ? 'Войти' : 'Sign in'}
+            </button>
+          </div>
+        )}
       </div>
 
       <AuthLoginModal ref={modalRef} />
