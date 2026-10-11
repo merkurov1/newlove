@@ -1,4 +1,8 @@
 // next.config.js
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async redirects() {
@@ -26,6 +30,16 @@ const nextConfig = {
   // Vercel doesn't need this, but Render does
   output: 'standalone',
 
+  // Автоматический Tree-Shaking для утилит и иконок
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'date-fns', '@tiptap/react'],
+    ...(process.env.DISABLE_OPTIMIZE_CSS === '1'
+      ? {}
+      : {
+          optimizeCss: process.env.ENABLE_OPTIMIZE_CSS === '1' ? true : false,
+        }),
+  },
+
   // Webpack configuration
   webpack: (config, { isServer }) => {
     // Disable webpack cache warnings in production
@@ -38,19 +52,6 @@ const nextConfig = {
     return config;
   },
 
-  // Allow disabling heavy build features locally via env to reduce memory use during builds
-  experimental:
-    process.env.DISABLE_OPTIMIZE_CSS === '1'
-      ? {}
-      : {
-          // Оптимизация для production
-          // NOTE: `next` may require `critters` when `optimizeCss` is enabled which can
-          // cause runtime MODULE_NOT_FOUND errors in some deployment environments where
-          // node_modules are pruned. Keep this feature opt-in via ENABLE_OPTIMIZE_CSS to
-          // avoid runtime failures (set ENABLE_OPTIMIZE_CSS=1 in your build environment
-          // to enable it if you also ensure `critters` is installed).
-          optimizeCss: process.env.ENABLE_OPTIMIZE_CSS === '1' ? true : false,
-        },
   // Конфигурация изображений
   images: {
     remotePatterns: [
@@ -130,4 +131,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withBundleAnalyzer(nextConfig);

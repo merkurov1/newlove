@@ -1,10 +1,12 @@
-
 import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
 import AuthProvider from '@/components/AuthProvider';
 import { GlobalAudioProvider } from '@/components/AudioContext';
 
 import './main.css';
 
+// ПРИМЕЧАНИЕ: Импорты Swiper рекомендовано перенести в сам компонент слайдера, 
+// чтобы не раздувать глобальный CSS для всех страниц.
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
@@ -23,25 +25,6 @@ const UserSidebar = NextDynamic(
   () => import('@/components/UserSidebar'),
   { ssr: false }
 );
-
-import {
-  Inter,
-  Cormorant_Garamond,
-} from 'next/font/google';
-
-const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  weight: ['300', '400'],
-  variable: '--font-inter',
-});
-
-const cormorant = Cormorant_Garamond({
-  subsets: ['latin'],
-  display: 'swap',
-  weight: ['400', '600'],
-  variable: '--font-cormorant',
-});
 
 // --- STRATEGIC SEO: GLOBAL POSITIONING ---
 
@@ -279,9 +262,7 @@ const googleSearchCardSchema = {
 const getPublicProjects = unstable_cache(
   async () => {
     try {
-      const {
-        getServerSupabaseClient,
-      } = await import('@/lib/serverAuth');
+      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
 
       const supabase = getServerSupabaseClient({
         useServiceRole: true,
@@ -299,10 +280,7 @@ const getPublicProjects = unstable_cache(
           })
           .limit(10);
 
-        projects =
-          res && res.data
-            ? res.data
-            : [];
+        projects = res && res.data ? res.data : [];
       }
 
       if (!Array.isArray(projects)) {
@@ -315,26 +293,18 @@ const getPublicProjects = unstable_cache(
         title: p.title,
       }));
     } catch (e) {
-      console.error(
-        'SSR getPublicProjects fatal error',
-        e
-      );
-
+      console.error('SSR getPublicProjects fatal error', e);
       return [];
     }
   },
   ['public-projects'],
-  {
-    revalidate: 300,
-  }
+  { revalidate: 300 }
 );
 
 const getSubscriberCount = unstable_cache(
   async () => {
     try {
-      const {
-        getServerSupabaseClient,
-      } = await import('@/lib/serverAuth');
+      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
 
       const supabase = getServerSupabaseClient({
         useServiceRole: true,
@@ -352,8 +322,7 @@ const getSubscriberCount = unstable_cache(
         })
         .eq('isActive', true);
 
-      return res &&
-        typeof res.count === 'number'
+      return res && typeof res.count === 'number'
         ? Number(res.count)
         : 0;
     } catch {
@@ -361,47 +330,31 @@ const getSubscriberCount = unstable_cache(
     }
   },
   ['active-subscriber-count'],
-  {
-    revalidate: 300,
-  }
+  { revalidate: 300 }
 );
+
+// Определение системных стеков вместо сетевых шрифтов
+const systemSans = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
+const systemSerif = 'Garamond, Georgia, "Baskerville", "Times New Roman", serif';
 
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const projects =
-    await getPublicProjects();
-
-  const subscriberCount =
-    await getSubscriberCount();
+  const projects = await getPublicProjects();
+  const subscriberCount = await getSubscriberCount();
 
   return (
-    <html
-      lang="en"
-      className={inter.variable}
-    >
+    <html lang="en">
       <head>
         <link
           rel="preconnect"
           href="https://txvkqcitalfbjytmnawq.supabase.co"
         />
-
         <link
           rel="dns-prefetch"
           href="https://txvkqcitalfbjytmnawq.supabase.co"
-        />
-
-        <script
-          async
-          src="https://telegram.org/js/telegram-web-app.js"
-        />
-
-        <script
-          defer
-          src="https://cloud.umami.is/script.js"
-          data-website-id="87795d47-f53d-4ef8-8e82-3ee195ea997b"
         />
 
         <script
@@ -413,19 +366,17 @@ export default async function RootLayout({
       </head>
 
       <body
-        className={
-          inter.className +
-          ' ' +
-          cormorant.className
-        }
         style={{
           background: '#fff',
           color: '#333',
+          fontFamily: systemSans,
+          // Пробрасываем системные фоллбеки в переменные, которые используются в стилях проекта
+          ['--font-inter' as any]: systemSans,
+          ['--font-cormorant' as any]: systemSerif,
         }}
       >
         <AuthProvider>
           <GlobalAudioProvider>
-
             <TelegramMiniApp />
 
             <a
@@ -439,18 +390,27 @@ export default async function RootLayout({
 
             <UserSidebar />
 
-            <main id="main-content">
-              {children}
-            </main>
+            <main id="main-content">{children}</main>
 
             <Footer />
-
           </GlobalAudioProvider>
         </AuthProvider>
 
         <Analytics />
-
         <SpeedInsights />
+
+        {/* Загружаем Telegram Web App асинхронно, чтобы исключить Forced Reflow при первой загрузке */}
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="lazyOnload"
+        />
+
+        {/* Аналитика Umami без блокировки основного потока */}
+        <Script
+          src="https://cloud.umami.is/script.js"
+          data-website-id="87795d47-f53d-4ef8-8e82-3ee195ea997b"
+          strategy="lazyOnload"
+        />
       </body>
     </html>
   );
