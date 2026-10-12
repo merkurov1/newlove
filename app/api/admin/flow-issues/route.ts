@@ -1,150 +1,43 @@
 
 import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
 import {
   getServerSupabaseClient,
   requireAdminFromRequest,
 } from "@/lib/serverAuth";
 import {
-  buildIssuePayload,
-  resolveIssueWindow,
-} from "@/lib/flow-issue/build";
-import { renderIssue } from "@/lib/flow-issue/render";
-import type { IssueLang } from "@/lib/flow-issue/types";
+  DEFAULT_ISSUE_TEMPLATE,
+  normalizeIssueTemplate,
+} from "@/lib/flow-issue/template";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
-function validLang(value: unknown): value is IssueLang {
-  return value === "ru" || value === "en";
-}
-
-function slugify(value: string) {
-  return value
-    .normalize("NFKD")
-    .toLowerCase()
-    .replace(/[^a-z0-9а-яё]+/gi, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   try {
-    const admin = await requireAdminFromRequest(request);
-    const body = await request.json();
+    await requireAdminFromRequest(request);
 
-    if (!validLang(body.lang)) {
-      return NextResponse.json(
-        { error: "lang должен быть ru или en" },
-        { status: 400 },
-      );
-    }
-
-    const lang: IssueLang = body.lang;
     const supabase = getServerSupabaseClient({
       useServiceRole: true,
     });
 
-    const { start, end } = await resolveIssueWindow(
-      supabase,
-      lang,
-      body.periodStart ?? null,
-      body.periodEnd ?? null,
-    );
+    const { data, error } = await supabase
+      .from("flow_issue_template_versions")
+      .select("version,config,created_at")
+      .eq("is_active", true)
+      .maybeSingle();
 
-    if (start >= end) {
-      return NextResponse.json(
-        { error: "Начало периода должно быть раньше окончания" },
-        { status: 400 },
-      );
-    }
+    if (error) throw error;
 
-    const payload = await buildIssuePayload(
-      supabase,
-      lang,
-      start,
-      end,
-    );
-
-    const { data: previous, error: previousError } =
-      await supabase
-        .from("letters")
-        .select("number")
-        .eq("kind", "issue")
-        .eq("lang", lang)
-        .order("number", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-    if (previousError) throw previousError;
-
-    const number = (previous?.number ?? 0) + 1;
-    const periodLabel = end.toISOString().slice(0, 10);
-    const title =
-      lang === "ru"
-        ? `Выпуск ${number} · ${periodLabel}`
-        : `Issue ${number} · ${periodLabel}`;
-
-    const baseSlug = slugify(
-      `${lang}-issue-${number}-${periodLabel}`,
-    );
-    const slug = `${baseSlug}-${randomUUID().slice(0, 8)}`;
-
-    const rendered = renderIssue(payload, {
-      title,
-      slug,
-      siteUrl: "https://www.merkurov.love",
+    return NextResponse.json({
+      version: data?.version ?? 0,
+      config: normalizeIssueTemplate(
+        data?.config ?? DEFAULT_ISSUE_TEMPLATE,
+      ),
+      updatedAt: data?.created_at ?? null,
     });
-
-    const now = new Date().toISOString();
-
-    const { data: issue, error: insertError } = await supabase
-      .from("letters")
-      .insert({
-        id: randomUUID(),
-        title,
-        slug,
-        content: rendered.htmlWeb,
-        published: false,
-        publishedAt: null,
-        createdAt: now,
-        updatedAt: now,
-        authorId: admin.id,
-        kind: "issue",
-        lang,
-        number,
-        period_start: start.toISOString(),
-        period_end: end.toISOString(),
-        status: "draft",
-        payload,
-        html_web: rendered.htmlWeb,
-        html_email: rendered.htmlEmail,
-        text_email: rendered.textEmail,
-      })
-      .select(
-        "id,title,slug,kind,lang,number,period_start,period_end,status,payload,html_web,html_email,text_email",
-      )
-      .single();
-
-    if (insertError) {
-      // Concurrent generation may claim the same number.
-      // The unique index prevents duplicate issue numbers.
-      if (insertError.code === "23505") {
-        return NextResponse.json(
-          {
-            error:
-              "Номер выпуска уже занят параллельной операцией. Обновите страницу и повторите сборку.",
-          },
-          { status: 409 },
-        );
-      }
-      throw insertError;
-    }
-
-    return NextResponse.json({ issue }, { status: 201 });
   } catch (error) {
-    console.error("[flow-issues] build failed", error);
     const message =
-      error instanceof Error ? error.message : "Ошибка сборки выпуска";
+      error instanceof Error ? error.message : "Ошибка загрузки настроек";
+
     const unauthorized =
       /unauthorized|admin access required/i.test(message);
 
@@ -155,85 +48,71 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PATCH(request: Request) {
+export async function PUT(request: Request) {
   try {
-    await requireAdminFromRequest(request);
+    const admin = await requireAdminFromRequest(request);
     const body = await request.json();
 
-    if (
-      typeof body.id !== "string" ||
-      !body.id.trim() ||
-      body.action !== "publish"
-    ) {
+    if (!body || typeof body !== "object" || !body.config) {
       return NextResponse.json(
-        { error: "Ожидаются id и action: publish" },
+        { error: "Не передана конфигурация шаблона" },
         { status: 400 },
       );
     }
+
+    const config = normalizeIssueTemplate(body.config);
 
     const supabase = getServerSupabaseClient({
       useServiceRole: true,
     });
 
-    const { data: issue, error: fetchError } = await supabase
-      .from("letters")
-      .select("id,kind,status")
-      .eq("id", body.id)
-      .eq("kind", "issue")
-      .maybeSingle();
-
-    if (fetchError) throw fetchError;
-    if (!issue) {
-      return NextResponse.json(
-        { error: "Выпуск не найден" },
-        { status: 404 },
-      );
-    }
-
-    if (issue.status === "published") {
-      return NextResponse.json({ ok: true, alreadyPublished: true });
-    }
-
-    const now = new Date().toISOString();
-
-    const { data: updated, error: updateError } = await supabase
-      .from("letters")
-      .update({
-        published: true,
-        status: "published",
-        publishedAt: now,
-        updatedAt: now,
+    // Insert the new version first. If insertion fails, the active
+    // version remains intact.
+    const { data: inserted, error: insertError } = await supabase
+      .from("flow_issue_template_versions")
+      .insert({
+        config,
+        is_active: false,
+        created_by: admin.id,
       })
-      .eq("id", body.id)
-      .eq("kind", "issue")
-      .eq("status", "draft")
-      .select("id,title,slug,lang,number,status,publishedAt")
-      .maybeSingle();
+      .select("id,version,created_at")
+      .single();
 
-    if (updateError) throw updateError;
-    if (!updated) {
-      return NextResponse.json(
-        { error: "Выпуск изменён другим запросом. Обновите страницу." },
-        { status: 409 },
-      );
-    }
+    if (insertError) throw insertError;
+
+    const { error: deactivateError } = await supabase
+      .from("flow_issue_template_versions")
+      .update({ is_active: false })
+      .eq("is_active", true);
+
+    if (deactivateError) throw deactivateError;
+
+    const { data: activated, error: activateError } = await supabase
+      .from("flow_issue_template_versions")
+      .update({ is_active: true })
+      .eq("id", inserted.id)
+      .select("id,version,created_at")
+      .single();
+
+    if (activateError) throw activateError;
 
     return NextResponse.json({
       ok: true,
-      issue: updated,
-      url: `/letters/${updated.slug}`,
+      version: activated.version,
+      updatedAt: activated.created_at,
+      config,
     });
   } catch (error) {
-    console.error("[flow-issues] publish failed", error);
+    console.error("[flow-issue-template] save failed", error);
+
     const message =
-      error instanceof Error ? error.message : "Ошибка публикации";
+      error instanceof Error ? error.message : "Ошибка сохранения настроек";
+
     const unauthorized =
       /unauthorized|admin access required/i.test(message);
 
     return NextResponse.json(
-      {
-        error: unauthorized ? "Доступ запрещён" : message,
-      },
+      { error: unauthorized ? "Доступ запрещён" : message },
       { status: unauthorized ? 401 : 500 },
     );
   }

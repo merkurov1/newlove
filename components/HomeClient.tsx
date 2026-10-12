@@ -113,13 +113,26 @@ export default function HomeClient() {
           ))}
         </nav>
 
-        <div>
+        <div className="flex flex-col items-center gap-4">
           <Link
             href="/lobby"
             className="group inline-flex items-center gap-3 border border-zinc-900/20 bg-white/80 hover:bg-[#111111] text-[#111111] hover:text-[#FAF8F5] px-7 py-3.5 sm:px-8 sm:py-4 transition-all duration-300 ease-out backdrop-blur-sm shadow-sm rounded-full"
           >
             <span className="font-serif text-base sm:text-lg italic font-normal tracking-wide px-1">
               Enter The Lobby
+            </span>
+            <ArrowUpRight
+              size={18}
+              className="text-zinc-600 group-hover:text-[#FAF8F5] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-300"
+            />
+          </Link>
+
+          <Link
+            href="/flow/join/"
+            className="group inline-flex items-center gap-3 border border-zinc-900/20 bg-white/80 hover:bg-[#111111] text-[#111111] hover:text-[#FAF8F5] px-7 py-3.5 sm:px-8 sm:py-4 transition-all duration-300 ease-out backdrop-blur-sm shadow-sm rounded-full"
+          >
+            <span className="font-serif text-base sm:text-lg italic font-normal tracking-wide px-1">
+              Join Flow
             </span>
             <ArrowUpRight
               size={18}

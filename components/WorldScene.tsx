@@ -252,14 +252,29 @@ export default function WorldScene() {
           <Link href="/temple">
             Enter the Temple
           </Link>
+
+          <Link href="/">
+            Back to merkurov.love
+          </Link>
         </nav>
       </section>
+
+      {/* Top Left Navigation: Back to Home */}
+      <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-50">
+        <Link
+          href="/"
+          className="group inline-flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2 border border-white/50 bg-white/30 text-white/95 hover:bg-white/45 backdrop-blur-md rounded-full text-xs sm:text-sm font-mono uppercase tracking-[0.15em] shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+        >
+          <span className="transition-transform duration-300 group-hover:-translate-x-0.5">←</span>
+          <span>merkurov.love</span>
+        </Link>
+      </div>
 
       {/* Global Heart & Angel / Temple sound */}
       <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-50">
         <SoundToggle
           showTextOnMobile
-          className="px-3.5 py-2 sm:px-4 sm:py-2 border border-white/50 bg-white/30 text-white/95 hover:bg-white/45 shadow-xl"
+          className="px-3.5 py-2 sm:px-4 sm:py-2 border border-white/50 bg-white/30 text-white/95 hover:bg-white/45 backdrop-blur-md rounded-full text-xs sm:text-sm shadow-xl"
           iconClassName="text-pink-200"
         />
       </div>

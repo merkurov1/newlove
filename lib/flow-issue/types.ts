@@ -42,8 +42,56 @@ export type IssueEntry = {
   own: boolean;
 };
 
+export type IssueSectionKey =
+  | "lead"
+  | "latest"
+  | "links"
+  | "videos"
+  | "photos"
+  | "metrics"
+  | "sources"
+  | "subscribe";
+
+export type IssueTemplateSettings = {
+  theme: {
+    accent: string;
+    paper: string;
+    ink: string;
+    muted: string;
+    rule: string;
+    maxWidth: number;
+    serifFont: string;
+    sansFont: string;
+  };
+  limits: {
+    latest: number;
+    links: number;
+    videos: number;
+    photos: number;
+  };
+  sections: {
+    order: IssueSectionKey[];
+    enabled: Record<IssueSectionKey, boolean>;
+  };
+  labels: Record<
+    IssueLang,
+    {
+      masthead: string;
+      lead: string;
+      latest: string;
+      links: string;
+      videos: string;
+      photos: string;
+      metrics: string;
+      sources: string;
+      subscribe: string;
+      subscribeCopy: string;
+    }
+  >;
+};
+
 export type IssuePayload = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   lang: IssueLang;
   period: {
     start: string;
@@ -96,8 +144,13 @@ export type IssuePayload = {
     originalDate: string | null;
     addedAt: string;
   }[];
-  // Reserved for a future, explicitly opt-in model annotation.
   modelAnnotation?: string | null;
+
+  /** Immutable snapshot of the template used to build this issue. */
+  templateVersion: number;
+  template: IssueTemplateSettings;
+
+  /** Kept for compatibility with the previous renderer and stored payloads. */
   design: {
     template: "classic" | "spread" | "data";
     tokens: {
