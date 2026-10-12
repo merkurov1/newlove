@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthContext';
-import { KeyRound, Mail, CheckCircle2 } from 'lucide-react';
+import { KeyRound, Mail, CheckCircle2, Clipboard } from 'lucide-react';
 
 export default function ArtEngineClient() {
   const auth = useAuth() as any;
@@ -671,17 +671,6 @@ export default function ArtEngineClient() {
       {/* Main Layout Container */}
       <div className="max-w-7xl mx-auto pt-36 md:pt-44 pb-24 px-6 md:px-12 space-y-12">
         
-        {/* Terminal Header Info / Admin status if logged in */}
-        {user && (
-          <div className="flex flex-col items-center justify-center text-center border-b border-gray-200 pb-6 bg-white/80 backdrop-blur-xl px-8 py-6 rounded-3xl shadow-sm">
-            <div className="flex flex-wrap items-center justify-center gap-3 bg-white border border-gray-200 px-4 py-2 text-xs font-mono rounded-full">
-              <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
-              <span className="text-black">{user.email} (Admin Session Active)</span>
-              <button onClick={() => auth?.signOut?.()} className="text-gray-400 hover:text-black underline ml-2 font-bold uppercase text-[10px]">Exit</button>
-            </div>
-          </div>
-        )}
-
         {!isLoadingUser && !user ? (
           <div className="space-y-16 max-w-5xl mx-auto">
             <div className="flex flex-col items-center justify-center text-center bg-white/80 backdrop-blur-xl border border-gray-200/80 px-8 py-16 rounded-3xl shadow-sm">
@@ -862,48 +851,54 @@ export default function ArtEngineClient() {
             {activeTab === 'parser' && (
               <main className="grid lg:grid-cols-12 gap-8 items-start transition-opacity duration-300">
                 <div className="lg:col-span-5 space-y-6">
+                  
+                  {/* Unified Input Section */}
                   <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-6 space-y-4 rounded-3xl shadow-sm">
                     <div className="flex justify-between items-center">
                       <label className="text-[10px] font-mono text-gray-400 uppercase tracking-widest block">
                         Auction Lot URL Target
                       </label>
-                      <button 
-                        onClick={handlePasteClipboard}
-                        className="text-[10px] font-mono text-gray-500 hover:text-black transition underline py-1"
-                      >
-                        Paste Clipboard
-                      </button>
                     </div>
                     
-                    <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex items-center">
                       <input 
                         type="url"
                         placeholder="https://www.sothebys.com/en/buy/..." 
-                        className="flex-1 bg-white border border-gray-300 px-3.5 py-3 text-xs text-black focus:outline-none focus:border-black transition font-mono placeholder:text-gray-400 break-all rounded-xl"
+                        className="w-full bg-white border border-gray-300 pl-3.5 pr-10 py-3 text-xs text-black focus:outline-none focus:border-black transition font-mono placeholder:text-gray-400 break-all rounded-xl"
                         value={input.link}
                         onChange={(e: any) => setInput({...input, link: e.target.value})}
                       />
                       <button 
-                        onClick={handleAutoParse} 
-                        disabled={parsing || autoProcessing || !input.link} 
-                        className="bg-gray-100 hover:bg-gray-200 text-black px-4 py-3 text-xs font-mono uppercase tracking-wider transition disabled:opacity-40 border border-gray-300 shrink-0 font-bold rounded-xl"
+                        onClick={handlePasteClipboard}
+                        title="Paste from clipboard"
+                        className="absolute right-3 text-gray-400 hover:text-black transition p-1"
                       >
-                        {parsing ? 'Parsing...' : 'Parse'}
+                        <Clipboard size={15} />
                       </button>
                     </div>
 
-                    <button
-                      onClick={handleOneClickPipeline}
-                      disabled={parsing || loading || saving || autoProcessing || !input.link}
-                      className="w-full bg-black hover:bg-gray-800 text-white py-3.5 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40 shadow-sm font-bold rounded-xl"
-                    >
-                      {autoProcessing ? 'Executing Pipeline...' : '⚡ One-Click Full Ingestion'}
-                    </button>
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button 
+                        onClick={handleAutoParse} 
+                        disabled={parsing || autoProcessing || !input.link} 
+                        className="bg-gray-100 hover:bg-gray-200 text-black py-3 text-xs font-mono uppercase tracking-wider transition disabled:opacity-40 border border-gray-300 font-bold rounded-xl"
+                      >
+                        {parsing ? 'Parsing...' : 'Parse'}
+                      </button>
+                      <button
+                        onClick={handleOneClickPipeline}
+                        disabled={parsing || loading || saving || autoProcessing || !input.link}
+                        className="bg-black hover:bg-gray-800 text-white py-3 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40 shadow-sm font-bold rounded-xl"
+                      >
+                        {autoProcessing ? 'Executing...' : '⚡ Full Pipeline'}
+                      </button>
+                    </div>
                   </div>
 
+                  {/* Visual Asset Verification Section */}
                   <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-6 space-y-5 rounded-3xl shadow-sm">
                     <div className="flex justify-between items-center border-b border-gray-200 pb-3">
-                      <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Asset Visual Verification</span>
+                      <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">ASSET VISUAL VERIFICATION</span>
                       {input.image_url && <span className="text-[10px] font-mono bg-emerald-50 text-emerald-800 px-2.5 py-0.5 border border-emerald-200 uppercase rounded-full">Resolved</span>}
                     </div>
 
@@ -953,6 +948,7 @@ export default function ArtEngineClient() {
                   </div>
                 </div>
 
+                {/* Right Column: Execution Terminal & Output Dossier */}
                 <div className="lg:col-span-7">
                   {loading ? (
                     <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-10 space-y-6 animate-pulse rounded-3xl shadow-sm">
@@ -1067,12 +1063,21 @@ export default function ArtEngineClient() {
                       )}
                     </div>
                   ) : (
-                    <div className="h-full min-h-[500px] flex flex-col items-center justify-center border border-dashed border-gray-300 bg-white/50 backdrop-blur-xl p-8 text-center rounded-3xl">
-                      <div className="text-3xl font-serif text-gray-300 mb-2">†</div>
-                      <h3 className="text-[#111] font-serif text-xl mb-1">Awaiting Lot Ingestion</h3>
-                      <p className="text-gray-400 text-xs font-mono max-w-sm leading-relaxed">
-                        Enter a valid auction lot URL on the left panel to trigger automated parsing and memo synthesis.
-                      </p>
+                    <div className="h-full min-h-[500px] flex flex-col justify-between border border-dashed border-gray-300 bg-white/50 backdrop-blur-xl p-8 rounded-3xl">
+                      <div className="text-center my-auto space-y-2">
+                        <div className="text-3xl font-serif text-gray-300 mb-2">†</div>
+                        <h3 className="text-[#111] font-serif text-xl">Terminal Execution Log</h3>
+                        <p className="text-gray-400 text-xs font-mono max-w-sm mx-auto leading-relaxed">
+                          Enter an auction lot URL in the left column to run automated extraction, vision verification, and curatorial memorandum generation.
+                        </p>
+                      </div>
+
+                      <div className="border-t border-gray-200/80 pt-4 font-mono text-[11px] text-gray-500 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                          <span>Pipeline Terminal Status: {statusText}</span>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
