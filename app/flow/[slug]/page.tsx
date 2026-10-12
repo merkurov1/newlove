@@ -624,7 +624,8 @@ export default async function FlowItemPage({ params }: PageProps) {
         lang: item.lang || 'ru',
       });
 
-      if (generated?.content) {
+      // Безопасная проверка с учетом того, что generated может быть null
+      if (generated && generated.content) {
         const { data: savedContext } = await supabase
           .from('flow_ai_context')
           .upsert(
