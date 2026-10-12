@@ -1,135 +1,216 @@
+
 import { Resend } from 'resend';
 import { createId } from '@paralleldrive/cuid2';
-// Note: getUserAndSupabaseFromRequest is not used here; avoid importing to prevent build errors
 import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 
-/**
- * Отправляет письмо рассылки с уникальной ссылкой для отписки
- * @param {object} subscriber - объект подписчика (id, email)
- * @param {object} letter - объект письма (title, ...)
- */
-/**
- * Send a newsletter email to a single subscriber.
- * This function is safe to call in a server action; it uses the server role Supabase client
- * to insert unsubscribe tokens. If RESEND API key is missing, it will perform a dry-run.
- *
- * @param {{id: string, email: string}} subscriber
- * @param {{id?: string, title: string, html?: string, content?: any}} letter
- * @returns {Promise<{status: string, unsubscribeUrl?: string, error?: string}>}
- */
-export async function sendNewsletterToSubscriber(subscriber: any, letter: any, opts: any = {}) {
-  if (!subscriber || !subscriber.email || !subscriber.id) {
+type Subscriber = {
+  id: string;
+  email: string;
+};
+
+type SendOptions = {
+  token?: string;
+  skipTokenInsert?: boolean;
+  resendApiKey?: string;
+};
+
+type Letter = {
+  id?: string;
+  title: string;
+  content?: unknown;
+  html?: string;
+  text?: string;
+  kind?: string;
+};
+
+export async function sendNewsletterToSubscriber(
+  subscriber: Subscriber,
+  letter: Letter,
+  opts: SendOptions = {},
+) {
+  if (!subscriber?.email || !subscriber?.id) {
     return { status: 'error', error: 'Invalid subscriber' };
   }
-  if (!letter || !letter.title) {
+
+  if (!letter?.title) {
     return { status: 'error', error: 'Invalid letter' };
   }
 
-  // Allow caller to pass a pre-generated token to avoid duplicate inserts
   const unsubscribeToken = opts.token || createId();
-  const unsubscribeUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://merkurov.love'}/api/newsletter-unsubscribe?token=${unsubscribeToken}`;
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || 'https://www.merkurov.love';
 
-  // Insert token via server client but don't fail send if token insert fails.
-  // If opts.skipTokenInsert === true, caller provided and already inserted the token.
+  const unsubscribeUrl =
+    `${siteUrl}/api/newsletter-unsubscribe?token=` +
+    encodeURIComponent(unsubscribeToken);
+
   if (!opts.skipTokenInsert) {
     try {
-      const serverSupabase = getServerSupabaseClient({ useServiceRole: true });
-      if (serverSupabase) {
-        const now = new Date();
-        const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
-        const tokenRow = { 
-          subscriber_id: subscriber.id, 
-          type: 'unsubscribe', 
-          token: unsubscribeToken, 
+      const supabase = getServerSupabaseClient({
+        useServiceRole: true,
+      });
+
+      const now = new Date();
+      const expiresAt = new Date(
+        now.getTime() + 7 * 24 * 60 * 60 * 1000,
+      );
+
+      const { error } = await supabase
+        .from('subscriber_tokens')
+        .insert({
+          subscriber_id: subscriber.id,
+          type: 'unsubscribe',
+          token: unsubscribeToken,
           created_at: now.toISOString(),
-          expires_at: expiresAt.toISOString()
-        };
-        const { error: tokenErr } = await serverSupabase.from('subscriber_tokens').insert(tokenRow);
-        if (tokenErr) {
-          console.warn('subscriber_tokens insert warning:', tokenErr.message || String(tokenErr));
-        } else {
-          console.info('Inserted unsubscribe token for', subscriber.email);
-        }
+          expires_at: expiresAt.toISOString(),
+        });
+
+      if (error) {
+        console.warn(
+          '[Newsletter] Unsubscribe token insert warning:',
+          error.message,
+        );
       }
-    } catch (e: any) {
-      console.warn('Failed to insert unsubscribe token (non-fatal):', (e && e.message) || String(e));
+    } catch (error) {
+      console.warn(
+        '[Newsletter] Could not create unsubscribe token:',
+        error,
+      );
     }
   }
 
-  // Render email HTML (if renderNewsletterEmail returns string or accepts unsubscribeUrl)
   let emailHtml = '';
+  let emailText = letter.text || '';
+
   try {
-    // Normalize letter content to plain JSON/string to avoid passing
-    // objects with custom prototypes into the react-email renderer.
-    const safeLetter = { ...letter };
-    try {
-      safeLetter.content = typeof letter.content === 'string' ? letter.content : JSON.parse(JSON.stringify(letter.content));
-    } catch (e) {
-      // fallback: coerce to string
-      safeLetter.content = typeof letter.content === 'string' ? letter.content : String(letter.content || '');
+    if (letter.html) {
+      // Newspaper issues use the immutable HTML snapshot saved at build time.
+      emailHtml = letter.html;
+
+      const unsubscribeBlock = `
+        <div style="margin-top:24px;padding-top:12px;border-top:1px solid #ded9da;font:11px/1.5 Arial,sans-serif;color:#6b6668;">
+          <a href="${unsubscribeUrl}" style="color:#990f3d;">Unsubscribe</a>
+        </div>`;
+
+      if (/<\/body>/i.test(emailHtml)) {
+        emailHtml = emailHtml.replace(
+          /<\/body>/i,
+          `${unsubscribeBlock}</body>`,
+        );
+      } else {
+        emailHtml += unsubscribeBlock;
+      }
+
+      if (!emailText) {
+        emailText = `${letter.title}\n\n${siteUrl}/letters`;
+      }
+
+      emailText += `\n\nUnsubscribe: ${unsubscribeUrl}`;
+    } else {
+      // Existing ordinary-letter pipeline remains unchanged.
+      let safeContent: unknown = letter.content;
+
+      try {
+        safeContent =
+          typeof letter.content === 'string'
+            ? letter.content
+            : JSON.parse(JSON.stringify(letter.content));
+      } catch {
+        safeContent = String(letter.content || '');
+      }
+
+      emailHtml =
+        renderNewsletterEmail(
+          {
+            ...letter,
+            content: safeContent,
+          },
+          unsubscribeUrl,
+        ) || '';
     }
-    emailHtml = renderNewsletterEmail(safeLetter, unsubscribeUrl) || '';
-  } catch (e: any) {
-    console.warn('Newsletter render failed, falling back to basic layout:', e?.message || e);
-    emailHtml = `<p>${letter.title}</p><p>To unsubscribe click <a href="${unsubscribeUrl}">here</a></p>`;
+  } catch (error) {
+    console.error('[Newsletter] Rendering failed:', error);
+
+    const safeTitle = String(letter.title)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    emailHtml = `
+      <!doctype html>
+      <html>
+        <body>
+          <h1>${safeTitle}</h1>
+          <p><a href="${unsubscribeUrl}">Unsubscribe</a></p>
+        </body>
+      </html>`;
   }
 
-  // If RESEND key is missing, treat as dry-run
-  // Determine API key (allow override via opts.resendApiKey)
   const apiKey = opts.resendApiKey || process.env.RESEND_API_KEY;
+
   if (!apiKey) {
-    console.info('Dry-run: RESEND API key not configured. Email not sent.');
-    return { status: 'skipped', unsubscribeUrl };
+    console.info(
+      '[Newsletter] Dry run: RESEND_API_KEY is not configured.',
+    );
+    return {
+      status: 'skipped',
+      unsubscribeUrl,
+      reason: 'missing_resend_api_key',
+    };
   }
 
-  // Build from header (display name + email) with safe defaults
-  // so it's available when we call the provider below.
-  const fromEmail = process.env.NOREPLY_EMAIL || 'noreply@merkurov.love';
-  const fromDisplay = process.env.NOREPLY_DISPLAY || 'Anton Merkurov';
-  const fromHeader = `${fromDisplay} <${fromEmail}>`;
-  // Log presence of key (masked) for debugging; keep logging in try
-  // to avoid crashing when e.g. apiKey is not a string-like value.
-  try {
-    const maskedKey = `${String(apiKey).slice(0, 4)}...${String(apiKey).slice(-4)}`;
-    console.info('Resend send: using API key', maskedKey, 'from', fromHeader);
-  } catch (e) { /* ignore logging errors */ }
+  const fromEmail =
+    process.env.NOREPLY_EMAIL || 'noreply@merkurov.love';
+  const fromDisplay =
+    process.env.NOREPLY_DISPLAY || 'Anton Merkurov';
+  const from = `${fromDisplay} <${fromEmail}>`;
 
   try {
-    console.info('Sending newsletter', { to: subscriber.email, letterId: letter.id || null });
     const resend = new Resend(apiKey);
-    const resp = await resend.emails.send({
-      from: fromHeader,
+
+    const response = await resend.emails.send({
+      from,
       to: subscriber.email,
       subject: letter.title,
       html: emailHtml,
+      ...(emailText ? { text: emailText } : {}),
     });
-    // The Resend SDK may return different shapes depending on version:
-    // - { id, status, ... }
-    // - { data: { id, ... }, error: ... }
-    // Normalize common fields when present.
-    // Normalize id and status from different SDK shapes
-    const extractedId = (resp as any)?.id ?? resp?.data?.id ?? ((resp as any)?.raw?.data?.id) ?? ((resp as any)?.raw?.id) ?? null;
-    const extractedStatus = (resp as any)?.status ?? ((resp as any)?.data?.status) ?? ((resp as any)?.raw?.data?.status) ?? ((resp as any)?.raw?.status) ?? null;
-    // If we have an id but status is missing, default to 'unknown' to avoid returning null
-    const finalStatus = extractedStatus ?? (extractedId ? 'unknown' : null);
-    const providerResponse = { id: extractedId, status: finalStatus, raw: resp };
-    console.info('Resend provider response', { to: subscriber.email, providerResponse });
-    return { status: 'sent', unsubscribeUrl, providerResponse };
-  } catch (sendErr: any) {
-    console.error('Failed to send newsletter email:', (sendErr && sendErr.message) || String(sendErr));
-    let providerDetails = undefined;
-    try {
-      if (sendErr && sendErr.response) providerDetails = sendErr.response;
-      else if (sendErr && sendErr.body) providerDetails = sendErr.body;
-      else if (sendErr && sendErr.rawError) providerDetails = sendErr.rawError;
-      if (sendErr && sendErr.status) providerDetails = { ...(providerDetails || {}), status: sendErr.status };
-      if (sendErr && sendErr.code) providerDetails = { ...(providerDetails || {}), code: sendErr.code };
-    } catch (ex) {
-      // ignore
+
+    const result = response as any;
+    const providerId =
+      result?.id ??
+      result?.data?.id ??
+      result?.raw?.data?.id ??
+      result?.raw?.id ??
+      null;
+
+    if (result?.error) {
+      return {
+        status: 'error',
+        error: result.error.message || 'Resend returned an error.',
+        providerDetails: result.error,
+      };
     }
 
-    const errMsg = (sendErr && (sendErr.message || sendErr.toString())) || 'Unknown send error';
-    return { status: 'error', error: errMsg, providerDetails, raw: sendErr, apiKeyUsed: `${String(apiKey).slice(0, 4)}...${String(apiKey).slice(-4)}` };
+    return {
+      status: 'sent',
+      unsubscribeUrl,
+      providerResponse: {
+        id: providerId,
+        status: result?.status ?? 'unknown',
+      },
+    };
+  } catch (error: any) {
+    console.error(
+      '[Newsletter] Send failed:',
+      error?.message || String(error),
+    );
+
+    return {
+      status: 'error',
+      error: error?.message || 'Unknown send error',
+      providerDetails: error?.response || error?.body || undefined,
+    };
   }
 }
