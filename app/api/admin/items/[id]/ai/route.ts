@@ -150,6 +150,20 @@ export async function POST(
           lang: item.lang,
         });
 
+      if (!result) {
+        await supabase
+          .from('flow_ai_context')
+          .delete()
+          .eq('item_id', id);
+
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          message:
+            'AI context generation was skipped for this item type.',
+        });
+      }
+
       const {
         data: contextRow,
         error: saveError,
