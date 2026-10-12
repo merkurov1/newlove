@@ -714,11 +714,18 @@ function MarkdownBody({
             src,
             alt,
           }) => (
-            <img
-              src={src}
-              alt={alt ?? ''}
-              className="my-9 max-h-[75vh] w-full rounded-[1.5rem] object-contain"
-            />
+            <figure className="my-9">
+              <img
+                src={src}
+                alt={alt ?? ''}
+                className="max-h-[75vh] w-full rounded-[1.5rem] object-contain"
+              />
+              {alt && (
+                <figcaption className="mt-3 text-center font-serif text-sm italic text-stone-500">
+                  {alt}
+                </figcaption>
+              )}
+            </figure>
           ),
 
           ul: ({

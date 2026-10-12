@@ -188,43 +188,17 @@ export default function AbsolutionClient() {
 
     try {
       const canvas = await html2canvas(element, {
-        scale:
-          typeof window !== 'undefined' &&
-          window.devicePixelRatio > 1
-            ? 2
-            : 2,
-
+        scale: 2,
         backgroundColor: '#ffffff',
-
         logging: false,
-
         useCORS: true,
-
-        allowTaint: false,
+        allowTaint: true,
       });
 
       const image = canvas.toDataURL(
         'image/png',
         1
       );
-
-      const tg =
-        (window as any).Telegram?.WebApp;
-
-      if (tg?.showPopup) {
-        tg.showPopup({
-          title: 'Saved',
-          message:
-            'Long press the image to save it to your gallery.',
-          buttons: [
-            {
-              type: 'ok',
-            },
-          ],
-        });
-
-        return;
-      }
 
       const link =
         document.createElement('a');
@@ -441,9 +415,10 @@ export default function AbsolutionClient() {
                 <Image
                   src={STAMP_IMAGE}
                   alt="Absolution Stamp"
-                  width={210}
-                  height={210}
-                  className="object-contain drop-shadow-[0_5px_15px_rgba(225,29,72,0.3)] filter contrast-125"
+                  width={420}
+                  height={420}
+                  crossOrigin="anonymous"
+                  className="w-[210px] h-auto object-contain drop-shadow-[0_5px_15px_rgba(225,29,72,0.3)] filter contrast-125"
                 />
               </div>
             </div>

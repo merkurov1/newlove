@@ -169,17 +169,19 @@ export default function TributePage() {
         }),
       });
 
-      let data: { url?: string; error?: string } = {};
+      let data: any = {};
+      const contentType = res.headers.get('content-type');
 
-      try {
-        data = await res.json();
-      } catch {
-        data = {};
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json().catch(() => ({}));
+      } else {
+        const text = await res.text().catch(() => '');
+        data = { error: text || 'Invalid server response.' };
       }
 
       if (!res.ok) {
         throw new Error(
-          data.error || 'Payment gateway busy. Try again.'
+          data.error || data.message || `Payment gateway busy (${res.status}). Try again.`
         );
       }
 
@@ -206,7 +208,6 @@ export default function TributePage() {
           ? error.message
           : 'Connection failed.'
       );
-    } finally {
       setLoading(false);
     }
   };
