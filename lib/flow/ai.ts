@@ -17,9 +17,32 @@ export type FlowAIResult = {
   provider: string;
 };
 
-function cleanText(value: unknown, max = 8000): string {
+function cleanText(value: unknown, max = 4000): string {
   if (typeof value !== 'string') return '';
   return value.replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function sanitizeAiOutput(text: string): string {
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .trim();
+}
+
+function buildTypeSpecificInstructions(type: string): string {
+  switch (type) {
+    case 'link':
+      return `TYPE ANGLE (LINK/CURATION):
+Focus on media architecture: why this link matters right now, the non-obvious shift behind the source, and its impact on the digital/cultural landscape.`;
+
+    case 'video':
+      return `TYPE ANGLE (VIDEO/MEDIA):
+Focus on narrative and visual rhetoric: what this moving image/stream signals about contemporary culture, digital framing, or human attention.`;
+
+    case 'article':
+    default:
+      return `TYPE ANGLE (ESSAY/TEXT):
+Focus on subtext and structural tension: extract the underlying paradox, philosophical consequence, or hidden trajectory.`;
+  }
 }
 
 function buildEnhancedAnalysisPrompt(item: FlowAIItem): string {
@@ -28,47 +51,53 @@ function buildEnhancedAnalysisPrompt(item: FlowAIItem): string {
   const siteName = cleanText(metadata.site_name, 300);
   const author = cleanText(metadata.author, 300);
 
-  const sections: string[] = [
-    `TYPE: ${item.type}`,
-    `LANGUAGE: ${item.lang || 'ru'}`,
-    `TITLE: ${cleanText(item.title, 500)}`,
-    `BODY: ${cleanText(item.body_md)}`,
-    `SOURCE URL: ${cleanText(item.source_url, 1000)}`,
-  ];
-
-  if (description) sections.push(`SOURCE DESCRIPTION: ${description}`);
-  if (siteName) sections.push(`SOURCE SITE: ${siteName}`);
-  if (author) sections.push(`SOURCE AUTHOR: ${author}`);
-
-  if (item.type === 'photo') {
-    sections.push(
-      'IMAGE NOTE: The visual artifact itself is an anchor for reflection. Build context from the title, concept, and metadata without fabricating visual details.',
-    );
-  }
+  const effectiveBody =
+    cleanText(item.body_md) ||
+    description ||
+    cleanText(item.title, 500) ||
+    'External link artifact.';
 
   const isRu = (item.lang || 'ru').toLowerCase().startsWith('ru');
 
-  return `ROLE & ARCHITECTURE:
-You are the deep analytical context engine of Merkurov Flow (merkurov.love) — the intersection of High-Tech, Old Money, Art, and Context Architecture.
+  const contextPayload = [
+    `TYPE: ${item.type}`,
+    `PRIMARY LANGUAGE: ${item.lang || 'ru'}`,
+    `TITLE: ${cleanText(item.title, 500)}`,
+    `BODY/CONTENT: ${effectiveBody}`,
+    `SOURCE URL: ${cleanText(item.source_url, 1000)}`,
+  ];
 
-OBJECT TO ANALYZE:
-${sections.join('\n')}
+  if (description) contextPayload.push(`DESCRIPTION: ${description}`);
+  if (siteName) contextPayload.push(`SOURCE SITE: ${siteName}`);
+  if (author) contextPayload.push(`AUTHOR: ${author}`);
 
-MISSION:
-Produce a profound, intellectual editorial analysis (Context) for this item.
+  return `ROLE & STYLE:
+You are the editorial context engine of Merkurov Flow (merkurov.love) — intersecting High-Tech, Old Money, Art, and Context Architecture.
 
-ANALYTICAL DIMENSIONS:
-1. Subtext & Structural Tension: What is the underlying shift, paradox, or non-obvious question opened up by this artifact?
-2. Context Architecture: How does this connect to broader historical, technological, cultural, or financial landscapes?
-3. Strategic Insight: What does this signify for human agency, digital permanence, or cultural capital?
+OBJECT:
+${contextPayload.join('\n')}
 
-STRICT EDITORIAL RULES:
-- This is NOT a summary. Never retell what the item already states.
-- Be concise, dense, and piercing. 2–3 paragraphs of high-signal thought (140–280 words).
-- Zero robotic filler, zero academic fluff, zero clichés (e.g. "в современном мире", "является важным", "стоит отметить").
-- Do not mention that you are an AI or language model.
-- Write in ${isRu ? 'Russian (русский язык, элегантный, точный авторский слог)' : 'English (discerning, intellectual, sharp)'}.
-- Return clean plain text only (paragraphs separated by blank lines).`;
+${buildTypeSpecificInstructions(item.type)}
+
+BILINGUAL DUAL-LAYER RULE:
+Produce a tight, two-part bilingual insight (Primary Language + English translation/adaptation if Primary is RU, or Primary English + Russian if Primary is EN).
+
+FORMAT & STRUCTURE:
+${
+  isRu
+    ? `[RU] 1 dense, high-signal paragraph in Russian (40–60 words).
+---
+[EN] 1 sharp, elegant paragraph in English (40–60 words).`
+    : `[EN] 1 dense, high-signal paragraph in English (40–60 words).
+---
+[RU] 1 sharp, elegant paragraph in Russian (40–60 words).`
+}
+
+CRITICAL CONSTRAINTS:
+- Total length MUST NOT exceed 110 words across both languages.
+- NO introductory fluff ("In this article...", "It is important to note...", "Данный материал...").
+- NO summary or retelling. Provide PURE SUBTEXT AND INSIGHT.
+- Do NOT mention that you are an AI or language model.`;
 }
 
 // 1. Direct DeepSeek API Call
@@ -83,30 +112,30 @@ async function callDeepSeekDirect(prompt: string): Promise<FlowAIResult> {
     apiKey,
   });
 
-  const model = 'deepseek-chat'; // DeepSeek-V3
   const completion = await client.chat.completions.create({
-    model,
+    model: 'deepseek-chat',
     messages: [
       {
         role: 'system',
         content:
-          'You are a high-level strategic analyst and philosopher for an elite art and tech publication. Output plain text paragraphs.',
+          'You are a high-level strategic analyst for an elite media and tech publication. Output bilingual micro-insights.',
       },
       {
         role: 'user',
         content: prompt,
       },
     ],
-    temperature: 0.5,
+    temperature: 0.4,
   });
 
-  const content = completion.choices?.[0]?.message?.content;
-  if (!content || !content.trim()) {
+  const content = sanitizeAiOutput(completion.choices?.[0]?.message?.content || '');
+
+  if (!content) {
     throw new Error('DeepSeek returned empty content.');
   }
 
   return {
-    content: content.trim(),
+    content,
     model: 'deepseek-chat',
     provider: 'deepseek',
   };
@@ -142,20 +171,20 @@ async function callOpenRouterDeepSeek(prompt: string): Promise<FlowAIResult> {
       const completion = await client.chat.completions.create({
         model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.5,
+        temperature: 0.4,
       });
 
-      const content = completion.choices?.[0]?.message?.content;
-      if (typeof content === 'string' && content.trim()) {
+      const content = sanitizeAiOutput(completion.choices?.[0]?.message?.content || '');
+
+      if (content) {
         return {
-          content: content.trim(),
+          content,
           model,
           provider: 'openrouter',
         };
       }
     } catch (err) {
       lastError = err;
-      console.warn(`[flow-ai] OpenRouter model ${model} failed:`, err);
     }
   }
 
@@ -184,10 +213,11 @@ async function callGeminiFallback(prompt: string): Promise<FlowAIResult> {
     try {
       const model = genAI.getGenerativeModel({ model: modelName });
       const res = await model.generateContent(prompt);
-      const text = res.response.text();
-      if (text && text.trim()) {
+      const text = sanitizeAiOutput(res.response.text() || '');
+
+      if (text) {
         return {
-          content: text.trim(),
+          content: text,
           model: modelName,
           provider: 'gemini',
         };
@@ -200,28 +230,30 @@ async function callGeminiFallback(prompt: string): Promise<FlowAIResult> {
   throw lastError || new Error('Gemini fallback failed.');
 }
 
-export async function generateFlowContext(item: FlowAIItem): Promise<FlowAIResult> {
+export async function generateFlowContext(item: FlowAIItem): Promise<FlowAIResult | null> {
+  // Фотки не обрабатываем вообще
+  if (item.type === 'photo') {
+    return null;
+  }
+
   const prompt = buildEnhancedAnalysisPrompt(item);
 
-  // 1. Try DeepSeek direct first
   try {
     return await callDeepSeekDirect(prompt);
   } catch (dsError: any) {
     console.warn('[flow-ai] DeepSeek direct unavailable, trying fallbacks:', dsError?.message || dsError);
   }
 
-  // 2. Try OpenRouter DeepSeek / models
   try {
     return await callOpenRouterDeepSeek(prompt);
   } catch (orError: any) {
     console.warn('[flow-ai] OpenRouter fallback failed, trying Gemini:', orError?.message || orError);
   }
 
-  // 3. Try Gemini
   try {
     return await callGeminiFallback(prompt);
   } catch (gemError: any) {
     console.error('[flow-ai] All AI providers failed:', gemError?.message || gemError);
-    throw new Error('Failed to generate Flow analysis across all providers.');
+    return null;
   }
 }

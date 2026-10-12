@@ -34,9 +34,7 @@ type FlowItem = {
   visibility: string;
   body_md: string | null;
   source_url: string | null;
-  metadata:
-    | Record<string, unknown>
-    | null;
+  metadata: Record<string, unknown> | null;
   published_at: string | null;
 };
 
@@ -51,139 +49,65 @@ type AIContext = {
 };
 
 function getSupabaseAdmin() {
-  const url =
-    process.env
-      .NEXT_PUBLIC_SUPABASE_URL;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  const serviceRoleKey =
-    process.env
-      .SUPABASE_SERVICE_ROLE_KEY;
-
-  if (
-    !url ||
-    !serviceRoleKey
-  ) {
-    throw new Error(
-      'Supabase server environment variables are missing.',
-    );
+  if (!url || !serviceRoleKey) {
+    throw new Error('Supabase server environment variables are missing.');
   }
 
-  return createClient(
-    url,
-    serviceRoleKey,
-    {
-      auth: {
-        autoRefreshToken:
-          false,
-        persistSession:
-          false,
-      },
+  return createClient(url, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
     },
-  );
+  });
 }
 
 function getMetadataString(
-  metadata:
-    | Record<string, unknown>
-    | null
-    | undefined,
+  metadata: Record<string, unknown> | null | undefined,
   key: string,
 ): string | null {
-  const value =
-    metadata?.[key];
-
-  return typeof value ===
-    'string' &&
-    value.trim()
-    ? value.trim()
-    : null;
+  const value = metadata?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function getYouTubeMetadata(
-  item: FlowItem,
-): YouTubeMetadata | null {
-  const value =
-    item.metadata?.youtube;
-
-  if (
-    !value ||
-    typeof value !==
-      'object' ||
-    Array.isArray(value)
-  ) {
+function getYouTubeMetadata(item: FlowItem): YouTubeMetadata | null {
+  const value = item.metadata?.youtube;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
-
   return value as YouTubeMetadata;
 }
 
-function getYouTubeVideoId(
-  item: FlowItem,
-): string | null {
-  const youtube =
-    getYouTubeMetadata(
-      item,
-    );
+function getYouTubeVideoId(item: FlowItem): string | null {
+  const youtube = getYouTubeMetadata(item);
 
-  if (
-    youtube?.video_id &&
-    /^[A-Za-z0-9_-]{6,20}$/.test(
-      youtube.video_id,
-    )
-  ) {
+  if (youtube?.video_id && /^[A-Za-z0-9_-]{6,20}$/.test(youtube.video_id)) {
     return youtube.video_id;
   }
 
   if (item.source_url) {
     try {
-      const url =
-        new URL(
-          item.source_url,
-        );
+      const url = new URL(item.source_url);
 
-      if (
-        url.hostname ===
-          'youtu.be' ||
-        url.hostname ===
-          'www.youtu.be'
-      ) {
-        const id =
-          url.pathname
-            .split('/')
-            .filter(Boolean)[0];
-
-        if (
-          id &&
-          /^[A-Za-z0-9_-]{6,20}$/.test(
-            id,
-          )
-        ) {
+      if (url.hostname === 'youtu.be' || url.hostname === 'www.youtu.be') {
+        const id = url.pathname.split('/').filter(Boolean)[0];
+        if (id && /^[A-Za-z0-9_-]{6,20}$/.test(id)) {
           return id;
         }
       }
 
-      const queryId =
-        url.searchParams.get(
-          'v',
-        );
-
-      if (
-        queryId &&
-        /^[A-Za-z0-9_-]{6,20}$/.test(
-          queryId,
-        )
-      ) {
+      const queryId = url.searchParams.get('v');
+      if (queryId && /^[A-Za-z0-9_-]{6,20}$/.test(queryId)) {
         return queryId;
       }
 
-      const pathMatch =
-        url.pathname.match(
-          /^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]{6,20})/,
-        );
+      const pathMatch = url.pathname.match(
+        /^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]{6,20})/,
+      );
 
-      if (
-        pathMatch?.[1]
-      ) {
+      if (pathMatch?.[1]) {
         return pathMatch[1];
       }
     } catch {
@@ -194,16 +118,9 @@ function getYouTubeVideoId(
   return null;
 }
 
-function getMetadataImage(
-  item: FlowItem,
-): string | null {
-  const metadata =
-    item.metadata ?? {};
-
-  const youtube =
-    getYouTubeMetadata(
-      item,
-    );
+function getMetadataImage(item: FlowItem): string | null {
+  const metadata = item.metadata ?? {};
+  const youtube = getYouTubeMetadata(item);
 
   const candidates = [
     youtube?.thumbnail_url,
@@ -214,11 +131,7 @@ function getMetadataImage(
   ];
 
   for (const candidate of candidates) {
-    if (
-      typeof candidate ===
-        'string' &&
-      candidate.trim()
-    ) {
+    if (typeof candidate === 'string' && candidate.trim()) {
       return candidate.trim();
     }
   }
@@ -226,68 +139,27 @@ function getMetadataImage(
   return null;
 }
 
-function getDescription(
-  item: FlowItem,
-): string {
-  const metadata =
-    item.metadata ?? {};
+function getDescription(item: FlowItem): string {
+  const metadata = item.metadata ?? {};
+  const metadataDescription = getMetadataString(metadata, 'description');
 
-  const metadataDescription =
-    getMetadataString(
-      metadata,
-      'description',
-    );
-
-  if (
-    metadataDescription
-  ) {
-    return metadataDescription.slice(
-      0,
-      160,
-    );
+  if (metadataDescription) {
+    return metadataDescription.slice(0, 160);
   }
 
-  const body = (
-    item.body_md ?? ''
-  )
-    .replace(
-      /!\[[^\]]*\]\([^)]*\)/g,
-      '',
-    )
-    .replace(
-      /\[([^\]]+)\]\([^)]*\)/g,
-      '$1',
-    )
-    .replace(
-      /[#>*_`~]/g,
-      '',
-    )
-    .replace(
-      /\s+/g,
-      ' ',
-    )
+  const body = (item.body_md ?? '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[#>*_`~]/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 
-  return (
-    body ||
-    'A publication from Flow by Anton Merkurov.'
-  ).slice(
-    0,
-    160,
-  );
+  return (body || 'A publication from Flow by Anton Merkurov.').slice(0, 160);
 }
 
-function getSiteName(
-  item: FlowItem,
-): string {
-  const metadata =
-    item.metadata ?? {};
-
-  const explicit =
-    getMetadataString(
-      metadata,
-      'site_name',
-    );
+function getSiteName(item: FlowItem): string {
+  const metadata = item.metadata ?? {};
+  const explicit = getMetadataString(metadata, 'site_name');
 
   if (explicit) {
     return explicit;
@@ -295,12 +167,7 @@ function getSiteName(
 
   if (item.source_url) {
     try {
-      return new URL(
-        item.source_url,
-      ).hostname.replace(
-        /^www\./,
-        '',
-      );
+      return new URL(item.source_url).hostname.replace(/^www\./, '');
     } catch {
       // Ignore malformed URLs.
     }
@@ -312,97 +179,53 @@ function getSiteName(
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
-  const { slug } =
-    await params;
-
-  const decodedSlug =
-    decodeURIComponent(slug);
+  const { slug } = await params;
+  const decodedSlug = decodeURIComponent(slug);
 
   try {
-    const supabase =
-      getSupabaseAdmin();
+    const supabase = getSupabaseAdmin();
 
-    const { data: item } =
-      await supabase
-        .from('items')
-        .select(
-          'id,title,slug,lang,type,status,visibility,body_md,source_url,metadata,published_at',
-        )
-        .eq(
-          'slug',
-          decodedSlug,
-        )
-        .eq(
-          'status',
-          'published',
-        )
-        .eq(
-          'visibility',
-          'public',
-        )
-        .maybeSingle();
+    const { data: item } = await supabase
+      .from('items')
+      .select(
+        'id,title,slug,lang,type,status,visibility,body_md,source_url,metadata,published_at',
+      )
+      .eq('slug', decodedSlug)
+      .eq('status', 'published')
+      .eq('visibility', 'public')
+      .maybeSingle();
 
     if (!item) {
       return {
-        title:
-          'Flow | Anton Merkurov',
+        title: 'Flow | Anton Merkurov',
       };
     }
 
-    const flowItem =
-      item as FlowItem;
-
+    const flowItem = item as FlowItem;
     const title =
       flowItem.title?.trim() ||
-      getMetadataString(
-        flowItem.metadata,
-        'title',
-      ) ||
+      getMetadataString(flowItem.metadata, 'title') ||
       getSiteName(flowItem);
 
-    const description =
-      getDescription(
-        flowItem,
-      );
-
-    const site =
-      'https://www.merkurov.love';
-
-    const canonical =
-      `${site}/flow/${encodeURIComponent(
-        decodedSlug,
-      )}`;
-
-    const image =
-      getMetadataImage(
-        flowItem,
-      );
-
+    const description = getDescription(flowItem);
+    const site = 'https://www.merkurov.love';
+    const canonical = `${site}/flow/${encodeURIComponent(decodedSlug)}`;
+    const image = getMetadataImage(flowItem);
     const ogImage =
-      image ||
-      `${site}/flow/${encodeURIComponent(
-        decodedSlug,
-      )}/opengraph-image`;
+      image || `${site}/flow/${encodeURIComponent(decodedSlug)}/opengraph-image`;
 
     return sanitizeMetadata({
       title,
       description,
-
       alternates: {
         canonical,
       },
-
       openGraph: {
         title,
         description,
         url: canonical,
-        siteName:
-          'Anton Merkurov',
-        type:
-          flowItem.type ===
-          'article'
-            ? 'article'
-            : 'website',
+        siteName: 'Anton Merkurov',
+        type: flowItem.type === 'article' ? 'article' : 'website',
         images: [
           {
             url: ogImage,
@@ -412,84 +235,56 @@ export async function generateMetadata({
           },
         ],
       },
-
       twitter: {
-        card:
-          'summary_large_image',
+        card: 'summary_large_image',
         title,
         description,
-        images: [
-          ogImage,
-        ],
+        images: [ogImage],
       },
-
       robots: {
         index: true,
         follow: true,
       },
     });
   } catch (error) {
-    console.error(
-      '[flow/metadata] Failed:',
-      error,
-    );
+    console.error('[flow/metadata] Failed:', error);
 
     return sanitizeMetadata({
-      title:
-        'Flow | Anton Merkurov',
+      title: 'Flow | Anton Merkurov',
     });
   }
 }
 
-function formatDate(
-  value: string | null,
-) {
+function formatDate(value: string | null) {
   if (!value) {
     return '';
   }
 
-  return new Date(
-    value,
-  ).toLocaleDateString(
-    'en-GB',
-    {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    },
-  );
+  return new Date(value).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
-function LinkCard({
-  item,
-}: {
-  item: FlowItem;
-}) {
-  const metadata =
-    item.metadata ?? {};
+function LinkCard({ item }: { item: FlowItem }) {
+  const metadata = item.metadata ?? {};
 
   const image =
-    typeof metadata.image ===
-    'string'
-      ? metadata.image
-      : null;
+    typeof metadata.image === 'string' ? metadata.image : null;
 
   const description =
-    typeof metadata.description ===
-    'string'
+    typeof metadata.description === 'string'
       ? metadata.description
       : null;
 
   const siteName =
-    typeof metadata.site_name ===
-    'string'
+    typeof metadata.site_name === 'string'
       ? metadata.site_name
       : item.source_url
       ? (() => {
           try {
-            return new URL(
-              item.source_url!,
-            ).hostname;
+            return new URL(item.source_url!).hostname;
           } catch {
             return item.source_url;
           }
@@ -500,10 +295,7 @@ function LinkCard({
     <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
       {image && (
         <a
-          href={
-            item.source_url ??
-            '#'
-          }
+          href={item.source_url ?? '#'}
           target="_blank"
           rel="noopener noreferrer"
           className="group block aspect-[16/9] overflow-hidden bg-stone-100"
@@ -524,8 +316,7 @@ function LinkCard({
         )}
 
         <div className="mt-4 font-serif text-3xl font-light leading-tight text-stone-900 sm:text-5xl">
-          {item.title ||
-            item.source_url}
+          {item.title || item.source_url}
         </div>
 
         {description && (
@@ -535,10 +326,7 @@ function LinkCard({
         )}
 
         <a
-          href={
-            item.source_url ??
-            '#'
-          }
+          href={item.source_url ?? '#'}
           target="_blank"
           rel="noopener noreferrer"
           className="mt-8 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
@@ -550,38 +338,16 @@ function LinkCard({
   );
 }
 
-function YouTubeView({
-  item,
-}: {
-  item: FlowItem;
-}) {
-  const videoId =
-    getYouTubeVideoId(item);
-
-  const youtube =
-    getYouTubeMetadata(
-      item,
-    );
+function YouTubeView({ item }: { item: FlowItem }) {
+  const videoId = getYouTubeVideoId(item);
+  const youtube = getYouTubeMetadata(item);
 
   if (!videoId) {
-    return (
-      <MarkdownBody
-        body={
-          item.body_md ??
-          ''
-        }
-      />
-    );
+    return <MarkdownBody body={item.body_md ?? ''} />;
   }
 
-  const title =
-    youtube?.title ||
-    item.title ||
-    'YouTube video';
-
-  const channel =
-    youtube?.author_name ||
-    null;
+  const title = youtube?.title || item.title || 'YouTube video';
+  const channel = youtube?.author_name || null;
 
   return (
     <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
@@ -613,9 +379,7 @@ function YouTubeView({
 
         {item.source_url && (
           <a
-            href={
-              item.source_url
-            }
+            href={item.source_url}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-7 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
@@ -628,92 +392,68 @@ function YouTubeView({
   );
 }
 
-function MarkdownBody({
-  body,
-}: {
-  body: string;
-}) {
+function MarkdownBody({ body }: { body: string }) {
   return (
     <div className="rounded-[2rem] border border-stone-200/80 bg-white/80 p-7 shadow-sm sm:p-10">
       <ReactMarkdown
-        remarkPlugins={[
-          remarkGfm,
-        ]}
+        remarkPlugins={[remarkGfm]}
         components={{
-          h1: ({
-            children,
-          }) => (
+          h1: ({ children }) => (
             <h2 className="mb-7 mt-10 font-serif text-3xl font-light leading-tight text-stone-900 first:mt-0 sm:text-4xl">
               {children}
             </h2>
           ),
-
-          h2: ({
-            children,
-          }) => (
+          h2: ({ children }) => (
             <h2 className="mb-5 mt-10 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
               {children}
             </h2>
           ),
-
-          h3: ({
-            children,
-          }) => (
+          h3: ({ children }) => (
             <h3 className="mb-4 mt-8 font-serif text-xl font-light leading-tight text-stone-900 sm:text-2xl">
               {children}
             </h3>
           ),
-
-          p: ({
-            children,
-          }) => (
+          p: ({ children }) => (
             <p className="mb-6 font-serif text-[19px] font-light leading-[1.85] text-stone-800 sm:text-[21px]">
               {children}
             </p>
           ),
-
-          strong: ({
-            children,
-          }) => (
-            <strong className="font-medium text-stone-950">
-              {children}
-            </strong>
+          strong: ({ children }) => (
+            <strong className="font-medium text-stone-950">{children}</strong>
           ),
-
-          em: ({
-            children,
-          }) => (
-            <em className="italic">
-              {children}
-            </em>
-          ),
-
-          blockquote: ({
-            children,
-          }) => (
+          em: ({ children }) => <em className="italic">{children}</em>,
+          blockquote: ({ children }) => (
             <blockquote className="my-9 border-l-2 border-stone-900 pl-6 font-serif text-xl font-light leading-relaxed text-stone-600 sm:text-2xl">
               {children}
             </blockquote>
           ),
+          a: ({ href, children }) => {
+            const isInternal =
+              href?.startsWith('/') || href?.includes('merkurov.love');
 
-          a: ({
-            href,
-            children,
-          }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
-            >
-              {children}
-            </a>
-          ),
+            if (isInternal && href) {
+              return (
+                <Link
+                  href={href}
+                  className="underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
+                >
+                  {children}
+                </Link>
+              );
+            }
 
-          img: ({
-            src,
-            alt,
-          }) => (
+            return (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
+              >
+                {children}
+              </a>
+            );
+          },
+          img: ({ src, alt }) => (
             <figure className="my-9">
               <img
                 src={src}
@@ -727,30 +467,18 @@ function MarkdownBody({
               )}
             </figure>
           ),
-
-          ul: ({
-            children,
-          }) => (
+          ul: ({ children }) => (
             <ul className="mb-7 list-disc space-y-2 pl-7 font-serif text-[19px] leading-8 text-stone-800 sm:text-[21px]">
               {children}
             </ul>
           ),
-
-          ol: ({
-            children,
-          }) => (
+          ol: ({ children }) => (
             <ol className="mb-7 list-decimal space-y-2 pl-7 font-serif text-[19px] leading-8 text-stone-800 sm:text-[21px]">
               {children}
             </ol>
           ),
-
-          hr: () => (
-            <hr className="my-12 border-0 border-t border-stone-200" />
-          ),
-
-          code: ({
-            children,
-          }) => (
+          hr: () => <hr className="my-12 border-0 border-t border-stone-200" />,
+          code: ({ children }) => (
             <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[0.85em]">
               {children}
             </code>
@@ -763,176 +491,128 @@ function MarkdownBody({
   );
 }
 
-function PhotoView({
-  item,
-}: {
-  item: FlowItem;
-}) {
+function PhotoView({ item }: { item: FlowItem }) {
   const publicUrl =
-    item.metadata &&
-    typeof item.metadata
-      .public_url ===
-      'string'
-      ? item.metadata
-          .public_url
+    item.metadata && typeof item.metadata.public_url === 'string'
+      ? item.metadata.public_url
       : null;
 
+  const caption =
+    item.metadata && typeof item.metadata.alt === 'string'
+      ? item.metadata.alt
+      : item.title ?? '';
+
   if (!publicUrl) {
-    return (
-      <MarkdownBody
-        body={
-          item.body_md ??
-          ''
-        }
-      />
-    );
+    return <MarkdownBody body={item.body_md ?? ''} />;
   }
 
   return (
-    <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-3 shadow-sm">
-      <img
-        src={publicUrl}
-        alt={
-          item.metadata &&
-          typeof item.metadata
-            .alt ===
-            'string'
-            ? item.metadata.alt
-            : ''
-        }
-        className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
-      />
+    <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-4 shadow-sm">
+      <figure>
+        <img
+          src={publicUrl}
+          alt={caption}
+          className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
+        />
+        {caption && (
+          <figcaption className="mt-4 text-center font-serif text-sm italic text-stone-600 sm:text-base">
+            {caption}
+          </figcaption>
+        )}
+      </figure>
     </div>
   );
 }
 
-function AIContextBlock({
-  context,
-}: {
-  context: AIContext | null;
-}) {
-  if (
-    !context ||
-    context.status !== 'ready' ||
-    !context.content
-  ) {
+function AIContextBlock({ context }: { context: AIContext | null }) {
+  if (!context || context.status !== 'ready' || !context.content) {
     return null;
   }
 
   return (
-    <section className="mt-14 border-t border-stone-200/90 pt-8 sm:mt-16 sm:pt-10">
-      <div className="mb-6 flex items-center justify-between gap-4">
+    <section className="mt-12 border-t border-stone-200/90 pt-7 sm:mt-14 sm:pt-8">
+      <div className="mb-5 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/90 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
           <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-stone-500">
-            Deep Analysis
+            Context Architecture
           </span>
         </div>
 
         {context.model && (
           <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-stone-400">
-            {context.provider ? `${context.provider} · ` : ''}{context.model}
+            {context.provider ? `${context.provider} · ` : ''}
+            {context.model}
           </div>
         )}
       </div>
 
-      <div className="space-y-5 font-serif text-[18px] font-light leading-[1.85] text-stone-700 sm:text-[20px]">
-        {context.content
-          .split(/\n\s*\n/)
-          .map((paragraph, index) => (
-            <p key={index}>
-              {paragraph}
-            </p>
-          ))}
+      <div className="font-serif text-[16px] font-light leading-[1.8] text-stone-700 sm:text-[18px]">
+        <ReactMarkdown
+          components={{
+            p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+            hr: () => <hr className="my-5 border-stone-200/80" />,
+            strong: ({ children }) => (
+              <strong className="font-mono text-[11px] font-normal uppercase tracking-widest text-stone-500">
+                {children}
+              </strong>
+            ),
+          }}
+        >
+          {context.content}
+        </ReactMarkdown>
       </div>
     </section>
   );
 }
 
-export default async function FlowItemPage({
-  params,
-}: PageProps) {
-  const { slug } =
-    await params;
+export default async function FlowItemPage({ params }: PageProps) {
+  const { slug } = await params;
+  const decodedSlug = decodeURIComponent(slug);
 
-  const decodedSlug =
-    decodeURIComponent(slug);
+  const supabase = getSupabaseAdmin();
 
-  const supabase =
-    getSupabaseAdmin();
-
-  const {
-    data,
-    error,
-  } = await supabase
+  const { data, error } = await supabase
     .from('items')
     .select(
       'id,title,slug,lang,type,status,visibility,body_md,source_url,metadata,published_at',
     )
-    .eq(
-      'slug',
-      decodedSlug,
-    )
-    .eq(
-      'status',
-      'published',
-    )
-    .eq(
-      'visibility',
-      'public',
-    )
+    .eq('slug', decodedSlug)
+    .eq('status', 'published')
+    .eq('visibility', 'public')
     .maybeSingle();
 
   if (error) {
-    console.error(
-      '[flow/item] Supabase error:',
-      error,
-    );
-
+    console.error('[flow/item] Supabase error:', error);
     notFound();
   }
 
-  const item =
-    data as FlowItem | null;
+  const item = data as FlowItem | null;
 
   if (!item) {
     notFound();
   }
 
-  const {
-    data: contextData,
-    error:
-      contextError,
-  } = await supabase
-    .from(
-      'flow_ai_context',
-    )
-    .select(
-      'id,item_id,content,model,provider,status,generated_at',
-    )
-    .eq(
-      'item_id',
-      item.id,
-    )
-    .eq(
-      'status',
-      'ready',
-    )
+  const { data: contextData, error: contextError } = await supabase
+    .from('flow_ai_context')
+    .select('id,item_id,content,model,provider,status,generated_at')
+    .eq('item_id', item.id)
+    .eq('status', 'ready')
     .maybeSingle();
 
   if (contextError) {
-    console.warn(
-      '[flow/item] AI context unavailable:',
-      contextError,
-    );
+    console.warn('[flow/item] AI context unavailable:', contextError);
   }
 
-  let context =
-    (contextData as AIContext | null) ??
-    null;
+  let context = (contextData as AIContext | null) ?? null;
 
-  // On-demand DeepSeek context generation if not yet generated
-  if (!context && item.status === 'published' && item.visibility === 'public') {
+  // On-demand context generation (исключаем картинки 'photo')
+  if (
+    !context &&
+    item.type !== 'photo' &&
+    item.status === 'published' &&
+    item.visibility === 'public'
+  ) {
     try {
       const generated = await generateFlowContext({
         id: item.id,
@@ -977,7 +657,10 @@ export default async function FlowItemPage({
         }
       }
     } catch (genError) {
-      console.warn('[flow/item] On-demand DeepSeek context generation failed:', genError);
+      console.warn(
+        '[flow/item] On-demand DeepSeek context generation failed:',
+        genError,
+      );
     }
   }
 
@@ -1047,64 +730,40 @@ export default async function FlowItemPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
       <main className="min-h-screen bg-[#FAF8F5] px-5 pb-24 pt-28 text-stone-900 sm:px-8 sm:pt-36">
-      <article className="mx-auto max-w-3xl">
-        <Link
-          href="/flow"
-          className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400 transition hover:text-stone-900"
-        >
-          ← Flow
-        </Link>
+        <article className="mx-auto max-w-3xl">
+          <Link
+            href="/flow"
+            className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400 transition hover:text-stone-900"
+          >
+            ← Flow
+          </Link>
 
-        <div className="mt-10 flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
-          <span>
-            {item.type}
-          </span>
+          <div className="mt-10 flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+            <span>{item.type}</span>
 
-          {item.published_at && (
-            <>
-              <span>·</span>
+            {item.published_at && (
+              <>
+                <span>·</span>
+                <span>{formatDate(item.published_at)}</span>
+              </>
+            )}
+          </div>
 
-              <span>
-                {formatDate(
-                  item.published_at,
-                )}
-              </span>
-            </>
-          )}
-        </div>
+          <div className="mt-8">
+            {item.type === 'video' ? (
+              <YouTubeView item={item} />
+            ) : item.type === 'link' && item.source_url ? (
+              <LinkCard item={item} />
+            ) : item.type === 'photo' ? (
+              <PhotoView item={item} />
+            ) : (
+              <MarkdownBody body={item.body_md ?? ''} />
+            )}
+          </div>
 
-        <div className="mt-8">
-          {item.type ===
-            'video' ? (
-            <YouTubeView
-              item={item}
-            />
-          ) : item.type ===
-              'link' &&
-            item.source_url ? (
-            <LinkCard
-              item={item}
-            />
-          ) : item.type ===
-            'photo' ? (
-            <PhotoView
-              item={item}
-            />
-          ) : (
-            <MarkdownBody
-              body={
-                item.body_md ??
-                ''
-              }
-            />
-          )}
-        </div>
-
-        <AIContextBlock
-          context={context}
-        />
-      </article>
-    </main>
+          {item.type !== 'photo' && <AIContextBlock context={context} />}
+        </article>
+      </main>
     </>
   );
 }
