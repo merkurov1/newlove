@@ -1,44 +1,49 @@
-import { metadata as rootMetadata } from '@/app/layout';
-import { requireAdmin } from '@/lib/serverAuth';
-import { redirect } from 'next/navigation';
-import AdminNav from './AdminNav';
-import { sanitizeMetadata } from '@/lib/metadataSanitize';
+import { metadata as rootMetadata } from "@/app/layout";
+import { requireAdmin } from "@/lib/serverAuth";
+import { redirect } from "next/navigation";
+import AdminNav from "./AdminNav";
+import { sanitizeMetadata } from "@/lib/metadataSanitize";
 
 const rootTitleDefault =
-  typeof rootMetadata?.title === 'object' && rootMetadata?.title && 'default' in rootMetadata.title
-    ? String((rootMetadata.title as any).default || 'Anton Merkurov')
-    : typeof rootMetadata?.title === 'string'
+  typeof rootMetadata?.title === "object" &&
+  rootMetadata?.title &&
+  "default" in rootMetadata.title
+    ? String(rootMetadata.title.default || "Anton Merkurov")
+    : typeof rootMetadata?.title === "string"
       ? rootMetadata.title
-      : 'Site';
+      : "Site";
 
 export const metadata = sanitizeMetadata({
   robots: { index: false, follow: false },
   title: {
     default: `Admin — ${rootTitleDefault}`,
-    template: '%s | Admin',
+    template: "%s | Admin",
   },
 });
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  // Protect every admin page before it can query or render privileged data.
-  // Middleware is deliberately not the source of truth because it runs in the
-  // Edge runtime; this server layout has access to the authenticated session.
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   try {
     await requireAdmin();
   } catch {
-    redirect('/403');
+    redirect("/403");
   }
 
-  // Keep admin layout minimal but ensure it provides a container and spacing
-  // consistent with the root layout so pages don't jump styling-wise.
   return (
     <div
-      className="min-h-screen bg-white"
-      style={{ fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontSize: 18, lineHeight: 1.7, color: '#222' }}
+      className="min-h-screen bg-[#FAF9F7] text-[#211F1F]"
+      style={{
+        fontFamily: "Inter, Helvetica, Arial, sans-serif",
+        fontSize: 15,
+        lineHeight: 1.55,
+      }}
     >
-      <div className="mx-auto flex max-w-[1600px] gap-6 px-4 pb-8 pt-28 lg:gap-8 lg:px-8">
+      <div className="mx-auto grid max-w-[1680px] grid-cols-1 gap-6 px-4 pb-12 pt-24 sm:px-6 lg:grid-cols-[224px_minmax(0,1fr)] lg:gap-10 lg:px-10 lg:pt-10">
         <AdminNav />
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="min-w-0">{children}</main>
       </div>
     </div>
   );

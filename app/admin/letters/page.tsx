@@ -1,125 +1,139 @@
-import Link from 'next/link';
-import { deleteLetter } from './actions';
+import Link from "next/link";
+import { getServerSupabaseClient } from "@/lib/serverAuth";
+import { deleteLetter } from "./actions";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default async function AdminLettersPage() {
+  const supabase = getServerSupabaseClient({ useServiceRole: true });
+
   let letters: any[] = [];
   let error: string | null = null;
 
-  try {
-    const globalReq = ((globalThis as any)?.request) || new Request('http://localhost');
-    const { getUserAndSupabaseForRequest } = await import('@/lib/getUserAndSupabaseForRequest');
-    const _ctx = await getUserAndSupabaseForRequest(globalReq);
+  const { data, error: queryError } = await supabase
+    .from("letters")
+    .select("id,title,slug,published,sentAt,createdAt,author:authorId(name)")
+    .order("createdAt", { ascending: false });
 
-    let supabase: any = _ctx?.supabase;
-    if (!_ctx?.isServer || !supabase) {
-      const { getServerSupabaseClient } = await import('@/lib/serverAuth');
-      supabase = getServerSupabaseClient({ useServiceRole: true });
-    }
-
-    const { data, error: lErr } = await supabase
-      .from('letters')
-      .select('id,title,slug,published,sentAt,createdAt,author:authorId(name)')
-      .order('createdAt', { ascending: false });
-
-    if (lErr) throw lErr;
-    letters = data || [];
-  } catch (err) {
-    console.error('Error fetching letters:', err);
-    error = 'Unable to load letters from the database.';
-    letters = [];
+  if (queryError) {
+    console.error("[admin/letters]", queryError);
+    error = "Unable to load the existing newsletter archive.";
+  } else {
+    letters = data ?? [];
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-zinc-900 font-sans px-6 md:px-12 py-8 selection:bg-black selection:text-white relative">
-      
-      {/* Paper texture overlay */}
-      <div 
-        className="fixed inset-0 pointer-events-none opacity-[0.025] mix-blend-overlay z-10"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-        }}
-      />
-
-      <div className="max-w-7xl mx-auto space-y-12 relative z-20">
-        
-        {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 border-b border-zinc-200 pb-8">
-          <div>
-            <span className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400 block mb-2">Editorial Management</span>
-            <h1 className="font-serif text-3xl sm:text-5xl font-light text-zinc-900 tracking-tight">
-              Letters
-            </h1>
-          </div>
+    <div className="space-y-8 pb-10">
+      <header className="border-b border-[#D9D3CD] pb-7">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#89827B]">
+          Publishing / Archive
+        </p>
+        <h1 className="mt-3 font-serif text-4xl tracking-tight sm:text-5xl">
+          Newsletter
+        </h1>
+        <p className="mt-2 max-w-xl text-sm text-[#746D66]">
+          Existing letters and their delivery history are preserved. New
+          weekly issues will be assembled from Flow.
+        </p>
+        <div className="mt-5 flex flex-wrap gap-4 text-xs">
           <Link
-            href="/admin/letters/new"
-            className="inline-flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 text-white font-mono text-xs uppercase tracking-widest px-8 py-4 transition-all rounded-full shadow-sm"
+            href="/admin/newsletter-jobs"
+            className="text-[#990F3D] hover:underline"
           >
-            + New Letter
+            Delivery logs ↗
+          </Link>
+          <Link href="/journal" className="text-[#746D66] hover:text-[#990F3D]">
+            Public journal ↗
+          </Link>
+          <Link href="/letters" className="text-[#746D66] hover:text-[#990F3D]">
+            Public letters ↗
           </Link>
         </div>
+      </header>
 
-        {error && (
-          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 font-mono text-xs uppercase">
-            &gt; {error}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {letters.length === 0 ? (
-            <div className="col-span-full border border-zinc-200 bg-white/80 backdrop-blur-2xl p-16 text-center font-mono text-xs text-zinc-400 rounded-3xl">
-              No letters found.
-            </div>
-          ) : (
-            letters.map((letter: any) => (
-              <div 
-                key={letter.id} 
-                className="bg-white/80 backdrop-blur-2xl border border-zinc-200/80 p-8 flex flex-col justify-between space-y-6 rounded-3xl hover:border-black transition-all duration-300 shadow-sm"
-              >
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-zinc-400">
-                    <span className="flex items-center gap-2">
-                      <span className={`inline-block h-2 w-2 rounded-full ${letter.published ? 'bg-emerald-600' : 'bg-zinc-300'}`} />
-                      {letter.published ? 'Published' : 'Draft'}
-                    </span>
-                    <span>
-                      {new Date(letter.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  
-                  <h3 className="font-serif text-xl font-light text-zinc-900 leading-snug line-clamp-2">
-                    {letter.title}
-                  </h3>
-                  
-                  <p className="font-mono text-xs text-zinc-500 truncate">
-                    /{letter.slug} &middot; Author: {letter.author?.name || 'Unknown'}
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-between pt-6 border-t border-zinc-100 font-mono text-xs uppercase tracking-widest">
-                  <Link 
-                    href={`/admin/letters/edit/${letter.id}`} 
-                    className="text-zinc-900 hover:underline font-bold"
-                  >
-                    Edit →
-                  </Link>
-                  <form action={deleteLetter} className="inline">
-                    <input type="hidden" name="id" value={letter.id} />
-                    <button 
-                      type="submit" 
-                      className="text-zinc-400 hover:text-rose-600 transition-colors cursor-pointer"
-                    >
-                      Delete
-                    </button>
-                  </form>
-                </div>
-              </div>
-            ))
-          )}
+      {error && (
+        <div
+          role="alert"
+          className="border border-[#E7C9D2] bg-[#FFF1E5] px-4 py-3 text-sm text-[#7E0C33]"
+        >
+          {error}
         </div>
+      )}
 
+      <div className="flex items-center justify-between border-b border-[#D9D3CD] pb-3">
+        <h2 className="font-serif text-xl">Existing letters</h2>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-[#89827B]">
+          {letters.length} records
+        </span>
       </div>
+
+      {letters.length === 0 ? (
+        <p className="py-12 text-sm text-[#89827B]">
+          No letters found. Existing records have not been modified.
+        </p>
+      ) : (
+        <div>
+          {letters.map((letter) => (
+            <article
+              key={letter.id}
+              className="grid grid-cols-1 gap-4 border-b border-[#EAE6E1] py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+            >
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-center gap-3">
+                  <span
+                    className={
+                      letter.published
+                        ? "text-[10px] uppercase tracking-wider text-[#356B4D]"
+                        : "text-[10px] uppercase tracking-wider text-[#89827B]"
+                    }
+                  >
+                    {letter.published ? "Published" : "Draft"}
+                  </span>
+                  {letter.sentAt && (
+                    <span className="text-[10px] uppercase tracking-wider text-[#89827B]">
+                      Sent {new Date(letter.sentAt).toLocaleDateString("en-GB")}
+                    </span>
+                  )}
+                </div>
+
+                <Link
+                  href={`/admin/letters/edit/${letter.id}`}
+                  className="block truncate font-serif text-xl hover:text-[#990F3D]"
+                >
+                  {letter.title || "Untitled letter"}
+                </Link>
+
+                <p className="mt-1 truncate font-mono text-[10px] text-[#89827B]">
+                  /{letter.slug} · {letter.author?.name || "Unknown author"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-4 text-xs">
+                <span className="text-[#89827B]">
+                  {letter.createdAt
+                    ? new Date(letter.createdAt).toLocaleDateString("en-GB")
+                    : "—"}
+                </span>
+                <Link
+                  href={`/admin/letters/edit/${letter.id}`}
+                  className="text-[#990F3D] hover:underline"
+                >
+                  Edit ↗
+                </Link>
+                <form action={deleteLetter}>
+                  <input type="hidden" name="id" value={letter.id} />
+                  <button
+                    type="submit"
+                    className="text-[#89827B] hover:text-red-700"
+                  >
+                    Delete
+                  </button>
+                </form>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
