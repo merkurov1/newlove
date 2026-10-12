@@ -31,7 +31,6 @@ export default function ArtEngineClient() {
   const [imgError, setImgError] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
   const [copyStatus, setCopyStatus] = useState(false);
-  const [statusText, setStatusText] = useState<string>('Ready for accession');
 
   // Vault Gallery State
   const [lots, setLots] = useState<any[]>([]);
@@ -66,25 +65,6 @@ export default function ArtEngineClient() {
     fetchLots();
   }, [fetchLots]);
 
-  const handleReset = () => {
-    if (output && !isSaved) {
-      if (!confirm('Discard unsaved curatorial dossier?')) return;
-    }
-    setInput({
-      artist: '',
-      title: '',
-      link: '',
-      raw: '',
-      image_url: '',
-      source_description: '',
-      specs: { medium: '', dimensions: '', estimate: '', date: '', provenance: '' }
-    });
-    setOutput(null);
-    setImgError(false);
-    setIsSaved(false);
-    setStatusText('Ready for accession');
-  };
-
   const handlePasteClipboard = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -114,13 +94,12 @@ export default function ArtEngineClient() {
       const parsed = new URL(input.link);
       if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
     } catch {
-      setStatusText('Error: Enter a valid HTTP or HTTPS auction URL');
+      alert('Enter a valid HTTP or HTTPS auction URL');
       return null;
     }
     setParsing(true);
     setImgError(false);
     setIsSaved(false);
-    setStatusText('Extracting metadata...');
 
     try {
       const res = await authFetch('/api/admin/parse-url', {
@@ -162,8 +141,6 @@ export default function ArtEngineClient() {
         raw: JSON.stringify(rawDataObj, null, 2)
       }));
 
-      setStatusText(`Extracted: ${bestArtist || 'Unknown Work'}`);
-
       return { 
         bestArtist, 
         bestTitle, 
@@ -175,7 +152,6 @@ export default function ArtEngineClient() {
 
     } catch (e: any) { 
       const msg = e?.message || 'Parse error';
-      setStatusText(`Error: ${msg}`);
       alert(`Parse failed: ${msg}`); 
       return null;
     } finally { 
@@ -191,7 +167,6 @@ export default function ArtEngineClient() {
     rawData?: any 
   }) => {
     setLoading(true);
-    setStatusText('Synthesizing curatorial dossier...');
 
     const targetArtist = customContext?.artist ?? input.artist;
     const targetTitle = customContext?.title ?? input.title;
@@ -228,11 +203,9 @@ export default function ArtEngineClient() {
       if (resultLot.artist) setInput(prev => ({ ...prev, artist: resultLot.artist }));
       if (resultLot.title) setInput(prev => ({ ...prev, title: resultLot.title }));
 
-      setStatusText('Dossier synthesized');
       return resultLot;
     } catch (e: any) { 
       const msg = e?.message || 'Generation error';
-      setStatusText(`Error: ${msg}`);
       alert(`Generation failed: ${msg}`); 
       return null;
     } finally { 
@@ -244,7 +217,6 @@ export default function ArtEngineClient() {
     const lotToSave = customOutput || output;
     if (!lotToSave || isSaved) return;
     setSaving(true);
-    setStatusText('Persisting record to Vault...');
 
     const artistToSend = customContext?.artist || input.artist || lotToSave.artist || '';
     const titleToSend = customContext?.title || input.title || lotToSave.title || '';
@@ -280,14 +252,12 @@ export default function ArtEngineClient() {
 
       if (data.success || data.lot_id || data.id) {
         setIsSaved(true);
-        setStatusText('Cataloged in Vault');
         fetchLots();
       } else {
         throw new Error(data.error || 'API Error during save');
       }
     } catch (e: any) {
       const msg = e?.message || 'Save error';
-      setStatusText(`Save error: ${msg}`);
       alert(`Save Failed: ${msg}`);
     } finally { 
       setSaving(false); 
@@ -468,7 +438,7 @@ export default function ArtEngineClient() {
           /* AUTHENTICATED ART ENGINE INTERFACE */
           <>
             {/* FIRST LINE: INPUT FIELD, ACTION BUTTONS & VAULT SWITCH */}
-            <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-4 sm:p-5 rounded-3xl shadow-sm space-y-4">
+            <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-5 rounded-3xl shadow-sm">
               <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
                 
                 {/* Input URL Field */}
@@ -476,25 +446,25 @@ export default function ArtEngineClient() {
                   <input 
                     type="url"
                     placeholder="https://www.sothebys.com/en/buy/..." 
-                    className="w-full bg-white border border-gray-300 pl-3.5 pr-10 py-3 text-xs text-black focus:outline-none focus:border-black transition font-mono placeholder:text-gray-400 break-all rounded-xl shadow-none"
+                    className="w-full bg-white border border-gray-200 pl-4 pr-10 py-3.5 text-xs text-black focus:outline-none focus:border-black transition font-mono placeholder:text-gray-400 break-all rounded-2xl shadow-sm"
                     value={input.link}
                     onChange={(e: any) => setInput({...input, link: e.target.value})}
                   />
                   <button 
                     onClick={handlePasteClipboard}
                     title="Paste from clipboard"
-                    className="absolute right-3 text-gray-400 hover:text-black transition p-1"
+                    className="absolute right-3.5 text-gray-400 hover:text-black transition p-1"
                   >
                     <Clipboard size={15} />
                   </button>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2.5 shrink-0">
                   <button 
                     onClick={handleAutoParse} 
                     disabled={parsing || autoProcessing || !input.link} 
-                    className="bg-gray-100 hover:bg-gray-200 text-black px-5 py-3 text-xs font-mono uppercase tracking-wider transition disabled:opacity-40 border border-gray-300 font-bold rounded-xl whitespace-nowrap"
+                    className="bg-white hover:bg-gray-50 text-black px-6 py-3.5 text-xs font-mono uppercase tracking-wider transition disabled:opacity-40 border border-gray-200 font-bold rounded-2xl shadow-sm whitespace-nowrap"
                   >
                     {parsing ? 'Parsing...' : 'Parse'}
                   </button>
@@ -502,7 +472,7 @@ export default function ArtEngineClient() {
                   <button
                     onClick={handleOneClickPipeline}
                     disabled={parsing || loading || saving || autoProcessing || !input.link}
-                    className="bg-black hover:bg-gray-800 text-white px-5 py-3 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40 shadow-sm font-bold rounded-xl whitespace-nowrap"
+                    className="bg-black hover:bg-gray-800 text-white px-6 py-3.5 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40 shadow-sm font-bold rounded-2xl whitespace-nowrap"
                   >
                     {autoProcessing ? 'Executing...' : '⚡ Full Pipeline'}
                   </button>
@@ -510,32 +480,16 @@ export default function ArtEngineClient() {
                   {/* Vault Selector Button */}
                   <button
                     onClick={() => setActiveTab(activeTab === 'parser' ? 'vault' : 'parser')}
-                    className={`px-5 py-3 text-xs font-mono uppercase tracking-widest transition font-bold rounded-xl border whitespace-nowrap ${
+                    className={`px-6 py-3.5 text-xs font-mono uppercase tracking-widest transition font-bold rounded-2xl border shadow-sm whitespace-nowrap ${
                       activeTab === 'vault'
                         ? 'bg-black text-white border-black'
-                        : 'bg-white text-gray-600 border-gray-300 hover:border-black hover:text-black'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-black hover:text-black'
                     }`}
                   >
                     Vault ({lots.length})
                   </button>
                 </div>
 
-              </div>
-
-              {/* Status Bar */}
-              <div className="flex items-center justify-between border-t border-gray-100 pt-3 text-[11px] font-mono text-gray-400">
-                <div className="flex items-center gap-2 truncate">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></span>
-                  <span className="truncate">{statusText}</span>
-                </div>
-                {activeTab === 'parser' && (
-                  <button 
-                    onClick={handleReset}
-                    className="text-gray-400 hover:text-black transition uppercase tracking-wider shrink-0 underline ml-2"
-                  >
-                    Reset
-                  </button>
-                )}
               </div>
             </div>
 
@@ -545,14 +499,14 @@ export default function ArtEngineClient() {
                 {/* LEFT COLUMN: IMAGE & METADATA (ARTIST / TITLE) */}
                 <div className="lg:col-span-5 space-y-6">
                   
-                  <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-6 space-y-5 rounded-3xl shadow-sm">
+                  <div className="bg-white/80 backdrop-blur-xl border border-gray-200/80 p-6 space-y-6 rounded-3xl shadow-sm">
                     
                     {/* Visual Artwork Container */}
-                    <div className="aspect-[4/3] w-full bg-white border border-gray-200 flex items-center justify-center relative overflow-hidden rounded-2xl">
+                    <div className="aspect-[4/3] w-full bg-white border border-gray-200 flex items-center justify-center relative overflow-hidden rounded-2xl shadow-inner">
                       {input.image_url && !imgError ? (
                         <img 
                           src={input.image_url} 
-                          className="object-contain max-h-full max-w-full p-3" 
+                          className="object-contain max-h-full max-w-full p-4" 
                           alt="Artwork Preview" 
                           onError={() => setImgError(true)}
                         />
@@ -564,21 +518,21 @@ export default function ArtEngineClient() {
                     </div>
 
                     {/* Artist & Title Input Fields */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-4">
                       <div>
-                        <label className="text-[10px] font-mono text-gray-500 block mb-1 uppercase tracking-wider">Artist</label>
+                        <label className="text-[10px] font-mono text-gray-500 block mb-1.5 uppercase tracking-wider font-bold">Artist</label>
                         <input 
                           placeholder="Artist Name" 
-                          className="w-full bg-white border border-gray-300 p-3 text-xs text-black focus:outline-none focus:border-black font-mono rounded-xl" 
+                          className="w-full bg-white border border-gray-200 p-3.5 text-xs text-black focus:outline-none focus:border-black font-mono rounded-2xl shadow-sm" 
                           value={input.artist} 
                           onChange={(e: any) => setInput({...input, artist: e.target.value})} 
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-mono text-gray-500 block mb-1 uppercase tracking-wider">Title</label>
+                        <label className="text-[10px] font-mono text-gray-500 block mb-1.5 uppercase tracking-wider font-bold">Title</label>
                         <input 
                           placeholder="Artwork Title" 
-                          className="w-full bg-white border border-gray-300 p-3 text-xs text-black focus:outline-none focus:border-black font-mono rounded-xl" 
+                          className="w-full bg-white border border-gray-200 p-3.5 text-xs text-black focus:outline-none focus:border-black font-mono rounded-2xl shadow-sm" 
                           value={input.title} 
                           onChange={(e: any) => setInput({...input, title: e.target.value})} 
                         />
@@ -588,7 +542,7 @@ export default function ArtEngineClient() {
                     <button 
                       onClick={() => generate()} 
                       disabled={loading || autoProcessing} 
-                      className="w-full bg-gray-100 hover:bg-gray-200 text-black border border-gray-300 py-3.5 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40 font-bold rounded-xl"
+                      className="w-full bg-white hover:bg-gray-50 text-black border border-gray-200 py-4 text-xs font-mono uppercase tracking-widest transition disabled:opacity-40 font-bold rounded-2xl shadow-sm"
                     >
                       {loading ? 'Synthesizing...' : 'Synthesize Curatorial Dossier'}
                     </button>
@@ -611,7 +565,7 @@ export default function ArtEngineClient() {
                     </div>
                   ) : output ? (
                     <div className="space-y-5">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white/80 backdrop-blur-xl border border-gray-200/80 p-4 gap-3 rounded-2xl shadow-sm">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white/80 backdrop-blur-xl border border-gray-200/80 p-4 sm:p-5 gap-3 rounded-3xl shadow-sm">
                         <span className="text-xs font-mono text-gray-500 uppercase tracking-widest font-bold">
                           Investment Memorandum & Logs
                         </span>
@@ -626,7 +580,7 @@ export default function ArtEngineClient() {
 
                           <button 
                             onClick={() => setShowRawJson(!showRawJson)} 
-                            className="text-xs font-mono text-gray-600 hover:text-black transition border px-3 py-1.5 bg-white rounded-xl"
+                            className="text-xs font-mono text-gray-700 hover:text-black transition border border-gray-200 px-4 py-2 bg-white rounded-2xl shadow-sm"
                           >
                             {showRawJson ? 'View Card' : 'Raw JSON'}
                           </button>
@@ -634,9 +588,9 @@ export default function ArtEngineClient() {
                           <button 
                             onClick={() => saveToVault()} 
                             disabled={saving || autoProcessing || isSaved}
-                            className={`px-4 py-1.5 text-xs font-mono uppercase tracking-wider transition font-bold rounded-xl ${
+                            className={`px-5 py-2 text-xs font-mono uppercase tracking-wider transition font-bold rounded-2xl shadow-sm ${
                               isSaved 
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default' 
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default' 
                                 : 'bg-black hover:bg-gray-800 text-white disabled:opacity-50'
                             }`}
                           >
@@ -665,7 +619,7 @@ export default function ArtEngineClient() {
                                 {output.artist_dates && <p className="text-gray-500 italic text-sm mt-0.5">{output.artist_dates}</p>}
                               </div>
                               {output.estimate_raw && (
-                                <div className="text-left sm:text-right bg-white p-3 border border-gray-200 w-full sm:w-auto rounded-xl shadow-sm">
+                                <div className="text-left sm:text-right bg-white p-4 border border-gray-200 w-full sm:w-auto rounded-2xl shadow-sm">
                                   <span className="text-[10px] font-mono text-gray-400 uppercase block">Estimate Valuation</span>
                                   <span className="text-sm font-mono text-black font-bold">{output.estimate_raw}</span>
                                 </div>
@@ -711,20 +665,13 @@ export default function ArtEngineClient() {
                       )}
                     </div>
                   ) : (
-                    <div className="h-full min-h-[480px] flex flex-col justify-between border border-dashed border-gray-300 bg-white/50 backdrop-blur-xl p-8 rounded-3xl">
-                      <div className="text-center my-auto space-y-2">
-                        <div className="text-3xl font-serif text-gray-300 mb-2">†</div>
+                    <div className="h-full min-h-[500px] flex flex-col justify-center items-center text-center border border-gray-200/80 bg-white/80 backdrop-blur-xl p-10 rounded-3xl shadow-sm">
+                      <div className="space-y-3">
+                        <div className="text-3xl font-serif text-gray-300">†</div>
                         <h3 className="text-[#111] font-serif text-xl">Terminal Execution Log</h3>
                         <p className="text-gray-400 text-xs font-mono max-w-sm mx-auto leading-relaxed">
                           Enter an auction lot URL in the bar above to run automated extraction, vision verification, and curatorial memorandum generation.
                         </p>
-                      </div>
-
-                      <div className="border-t border-gray-200/80 pt-4 font-mono text-[11px] text-gray-500 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                          <span>Pipeline Terminal Status: {statusText}</span>
-                        </div>
                       </div>
                     </div>
                   )}
@@ -734,9 +681,9 @@ export default function ArtEngineClient() {
 
             {activeTab === 'vault' && (
               <div className="space-y-6">
-                <div className="flex justify-between items-center border-b border-gray-200 bg-white/80 backdrop-blur-xl p-6 rounded-2xl shadow-sm">
+                <div className="flex justify-between items-center border border-gray-200/80 bg-white/80 backdrop-blur-xl p-6 rounded-3xl shadow-sm">
                   <span className="text-xs font-mono text-gray-500 uppercase tracking-widest font-bold">Secure Vault Archive</span>
-                  <button onClick={fetchLots} className="text-xs font-mono text-black hover:underline bg-white px-4 py-2 border border-gray-200 rounded-xl shadow-sm">
+                  <button onClick={fetchLots} className="text-xs font-mono text-black hover:underline bg-white px-5 py-2.5 border border-gray-200 rounded-2xl shadow-sm font-bold">
                     Refresh ↻
                   </button>
                 </div>
@@ -768,7 +715,7 @@ export default function ArtEngineClient() {
                           href={`/art-engine/lots/${lot.id}`}
                           className="group bg-white/80 backdrop-blur-xl border border-gray-200/80 overflow-hidden hover:border-black transition flex flex-col rounded-3xl shadow-sm hover:shadow-xl duration-300"
                         >
-                          <div className="aspect-[4/3] bg-white relative overflow-hidden flex items-center justify-center p-3 border-b border-gray-200">
+                          <div className="aspect-[4/3] bg-white relative overflow-hidden flex items-center justify-center p-4 border-b border-gray-100">
                             {lot.image_path ? (
                               <img
                                 src={publicImg}
@@ -790,7 +737,7 @@ export default function ArtEngineClient() {
                               <p className="text-xs text-gray-600 italic mt-1">{lot.title} {lot.year && `(${lot.year})`}</p>
                             </div>
 
-                            <div className="text-[10px] font-mono text-gray-400 border-t border-gray-200 pt-3 flex justify-between items-center">
+                            <div className="text-[10px] font-mono text-gray-400 border-t border-gray-100 pt-3 flex justify-between items-center">
                               <span className="truncate">{lot.medium || 'Mixed Media'}</span>
                               <span className="text-black font-bold shrink-0">View Memo →</span>
                             </div>
