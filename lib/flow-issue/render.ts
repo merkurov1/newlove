@@ -12,6 +12,12 @@ import {
 } from "./template";
 
 const SITE = "https://www.merkurov.love";
+const INK = "#171717";
+const PAPER = "#FFFFFF";
+const MUTED = "#555555";
+const RULE = "#D6D6D6";
+const ACCENT = "#990F3D";
+const MAX_IMAGE_WIDTH = 560;
 
 type RenderContext = {
   payload: IssuePayload;
@@ -41,7 +47,7 @@ function safeUrl(value: unknown): string | null {
   }
 }
 
-function dateLabel(value: string, lang: IssueLang) {
+function dateLabel(value: string, lang: IssueLang): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
 
@@ -56,158 +62,378 @@ function dateLabel(value: string, lang: IssueLang) {
   ).format(date);
 }
 
-function paragraphs(value: string, template: IssueTemplateSettings) {
-  return value
-    .split(/\n{2,}/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map(
-      (part) =>
-        `<p style="margin:0 0 1em;line-height:1.75;white-space:pre-wrap;color:${template.theme.ink};">${esc(part).replace(/\n/g, "<br>")}</p>`,
-    )
-    .join("");
+function fontSerif(template: IssueTemplateSettings): string {
+  return esc(template.theme.serifFont);
+}
+
+function fontSans(template: IssueTemplateSettings): string {
+  return esc(template.theme.sansFont);
 }
 
 function link(
   url: string | null,
   label: string,
   template: IssueTemplateSettings,
-) {
+): string {
   const safe = safeUrl(url);
   if (!safe) return esc(label);
 
-  return `<a href="${esc(safe)}" style="color:${template.theme.accent};text-decoration:underline;">${esc(label)}</a>`;
+  return `<a href="${esc(safe)}" style="color:${ACCENT};text-decoration:underline;text-underline-offset:3px;">${esc(label)}</a>`;
+}
+
+function paragraphs(
+  value: string,
+  template: IssueTemplateSettings,
+): string {
+  return value
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map(
+      (part) => `
+        <p style="
+          margin:0 0 16px;
+          color:${INK};
+          font-family:${fontSerif(template)};
+          font-size:16px;
+          line-height:1.75;
+          overflow-wrap:anywhere;
+          white-space:pre-wrap;
+        ">${esc(part).replace(/\n/g, "<br>")}</p>`,
+    )
+    .join("");
 }
 
 function sectionHeading(
   title: string,
   template: IssueTemplateSettings,
   email: boolean,
-) {
-  const { theme } = template;
-
-  return `<h2 style="margin:0 0 18px;padding-top:${email ? "22px" : "28px"};border-top:1px solid ${theme.rule};font-family:${esc(theme.serifFont)};font-size:22px;font-weight:normal;color:${theme.ink};">${esc(title)}</h2>`;
+): string {
+  return `
+    <h2 style="
+      margin:0 0 20px;
+      padding-top:${email ? "20px" : "26px"};
+      border-top:1px solid ${RULE};
+      color:${INK};
+      font-family:${fontSerif(template)};
+      font-size:25px;
+      font-weight:normal;
+      line-height:1.2;
+    ">${esc(title)}</h2>`;
 }
 
-function stat(
-  label: string,
-  value: string | number,
-  template: IssueTemplateSettings,
-) {
-  const { theme } = template;
+function imageMarkup(
+  url: unknown,
+  alt: unknown,
+  options: {
+    maxHeight: number;
+    fit: "cover" | "contain";
+    email: boolean;
+    linkUrl?: string | null;
+  },
+): string {
+  const image = safeUrl(url);
+  if (!image) return "";
 
-  return `<div style="padding:12px 0;border-bottom:1px solid ${theme.rule};"><div style="font:10px ${esc(theme.sansFont)};letter-spacing:1.5px;text-transform:uppercase;color:${theme.muted};">${esc(label)}</div><div style="margin-top:5px;font:24px ${esc(theme.serifFont)};color:${theme.ink};">${esc(value)}</div></div>`;
+  const width = MAX_IMAGE_WIDTH;
+  const height = options.maxHeight;
+  const imageStyle = [
+    "display:block",
+    "width:100%",
+    `max-width:${width}px`,
+    `max-height:${height}px`,
+    "height:auto",
+    "border:0",
+    "outline:none",
+    "text-decoration:none",
+    `object-fit:${options.fit}`,
+    "object-position:center",
+    "margin:0 auto",
+  ].join(";");
+
+  const img = `<img src="${esc(image)}" alt="${esc(alt)}" width="${width}" style="${imageStyle}">`;
+  const href = safeUrl(options.linkUrl);
+
+  // Keep images bounded by the content column in both web and email.
+  const wrapped = href
+    ? `<a href="${esc(href)}" style="display:block;max-width:${width}px;margin:0 auto;text-decoration:none;">${img}</a>`
+    : img;
+
+  return `
+    <div style="
+      width:100%;
+      max-width:${width}px;
+      max-height:${height}px;
+      margin:0 auto;
+      overflow:hidden;
+      line-height:0;
+    ">${wrapped}</div>`;
 }
 
-function entryDate(entry: IssueEntry, lang: IssueLang) {
+function entryDate(entry: IssueEntry, lang: IssueLang): string {
   return dateLabel(entry.publishedAt, lang);
 }
 
 function entryLink(
   entry: IssueEntry,
   template: IssueTemplateSettings,
-) {
+): string {
   const href = entry.url || `${SITE}/flow/${entry.id}`;
   return link(href, entry.title || href, template);
 }
 
-function renderLead({ payload, template, email }: RenderContext) {
+function renderLead({ payload, template }: RenderContext): string {
   const lead = payload.lead;
   if (!lead) return "";
 
-  const { theme, labels } = template;
-  const title = labels[payload.lang].lead;
+  const label = template.labels[payload.lang].lead;
 
   return `
-    <section style="margin:28px 0;">
-      <p style="font:10px ${esc(theme.sansFont)};letter-spacing:2px;text-transform:uppercase;color:${theme.accent};">${esc(title)}</p>
-      <h2 style="font:normal 30px/1.2 ${esc(theme.serifFont)};margin:10px 0 14px;color:${theme.ink};">${esc(lead.title || title)}</h2>
-      <p style="font:11px ${esc(theme.sansFont)};color:${theme.muted};">${esc(entryDate(lead, payload.lang))}</p>
+    <section style="margin:30px 0 38px;">
+      <p style="
+        margin:0 0 12px;
+        color:${ACCENT};
+        font-family:${fontSans(template)};
+        font-size:11px;
+        font-weight:bold;
+        letter-spacing:1.8px;
+        line-height:1.5;
+        text-transform:uppercase;
+      ">${esc(label)}</p>
+
+      <h2 style="
+        margin:0 0 14px;
+        color:${INK};
+        font-family:${fontSerif(template)};
+        font-size:34px;
+        font-weight:normal;
+        line-height:1.13;
+        letter-spacing:-0.5px;
+        overflow-wrap:anywhere;
+      ">${esc(lead.title || label)}</h2>
+
+      <p style="
+        margin:0 0 20px;
+        color:${MUTED};
+        font-family:${fontSans(template)};
+        font-size:11px;
+        line-height:1.6;
+      ">${esc(entryDate(lead, payload.lang))}</p>
+
       ${paragraphs(lead.body, template)}
-      ${lead.url ? `<p>${entryLink(lead, template)}</p>` : ""}
+
+      ${lead.url ? `<p style="margin:18px 0 0;">${entryLink(lead, template)}</p>` : ""}
     </section>`;
 }
 
-function renderLatest({ payload, template, email }: RenderContext) {
-  const { theme, labels } = template;
+function renderLatest({ payload, template, email }: RenderContext): string {
   if (!payload.latest.length) return "";
 
-  return `<section>${sectionHeading(labels[payload.lang].latest, template, email)}
-    ${payload.latest
-      .map(
-        (entry) => `
-      <article style="padding:0 0 20px;margin:0 0 20px;border-bottom:1px solid ${theme.rule};">
-        <p style="font:10px ${esc(theme.sansFont)};color:${theme.muted};margin:0 0 7px;">${esc(entryDate(entry, payload.lang))} · ${esc(entry.type)}</p>
-        <h3 style="font:normal 21px/1.35 ${esc(theme.serifFont)};margin:0 0 9px;color:${theme.ink};">${entry.url ? entryLink(entry, template) : esc(entry.title)}</h3>
-        ${entry.body ? paragraphs(entry.body, template) : ""}
-      </article>`,
-      )
-      .join("")}
-  </section>`;
+  const { theme, labels } = template;
+
+  return `
+    <section>
+      ${sectionHeading(labels[payload.lang].latest, template, email)}
+
+      ${payload.latest
+        .map(
+          (entry) => `
+            <article style="
+              margin:0 0 23px;
+              padding:0 0 22px;
+              border-bottom:1px solid ${RULE};
+            ">
+              <p style="
+                margin:0 0 8px;
+                color:${MUTED};
+                font-family:${fontSans(template)};
+                font-size:10px;
+                letter-spacing:0.5px;
+                line-height:1.5;
+                text-transform:uppercase;
+              ">${esc(entryDate(entry, payload.lang))} &nbsp;·&nbsp; ${esc(entry.type)}</p>
+
+              <h3 style="
+                margin:0 0 10px;
+                color:${INK};
+                font-family:${fontSerif(template)};
+                font-size:23px;
+                font-weight:normal;
+                line-height:1.3;
+                overflow-wrap:anywhere;
+              ">${entry.url ? entryLink(entry, template) : esc(entry.title)}</h3>
+
+              ${entry.body ? paragraphs(entry.body, template) : ""}
+            </article>`,
+        )
+        .join("")}
+    </section>`;
 }
 
-function renderLinks({ payload, template, email }: RenderContext) {
-  const { theme, labels } = template;
+function renderLinks({ payload, template, email }: RenderContext): string {
   if (!payload.links.length) return "";
 
-  return `<section>${sectionHeading(labels[payload.lang].links, template, email)}
-    ${payload.links
-      .map((item) => {
-        const image = safeUrl(item.image);
+  const { theme, labels } = template;
 
-        return `
-      <article style="margin:0 0 22px;">
-        ${image ? `<p style="margin:0 0 10px;"><a href="${esc(safeUrl(item.url) || SITE)}"><img src="${esc(image)}" alt="" style="display:block;width:100%;max-width:560px;height:auto;border:0;"></a></p>` : ""}
-        <h3 style="font:normal 21px/1.35 ${esc(theme.serifFont)};margin:0 0 8px;">${entryLink(item, template)}</h3>
-        ${item.description ? `<p style="font:14px/1.65 ${esc(theme.sansFont)};color:${theme.muted};">${esc(item.description)}</p>` : ""}
-        <p style="font:11px/1.7 ${esc(theme.sansFont)};color:${theme.muted};">${esc([item.siteName, item.author, item.originalDate ? dateLabel(item.originalDate, payload.lang) : ""].filter(Boolean).join(" · "))}</p>
-      </article>`;
-      })
-      .join("")}
-  </section>`;
+  return `
+    <section>
+      ${sectionHeading(labels[payload.lang].links, template, email)}
+
+      ${payload.links
+        .map((item) => {
+          const image = safeUrl(item.image);
+          const sourceLine = [
+            item.siteName,
+            item.author,
+            item.originalDate
+              ? dateLabel(item.originalDate, payload.lang)
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" · ");
+
+          return `
+            <article style="margin:0 0 30px;">
+              ${
+                image
+                  ? `<div style="margin:0 0 13px;">${imageMarkup(image, item.title, {
+                      maxHeight: 280,
+                      fit: "cover",
+                      email,
+                      linkUrl: item.url,
+                    })}</div>`
+                  : ""
+              }
+
+              <h3 style="
+                margin:0 0 8px;
+                color:${INK};
+                font-family:${fontSerif(template)};
+                font-size:23px;
+                font-weight:normal;
+                line-height:1.3;
+                overflow-wrap:anywhere;
+              ">${entryLink(item, template)}</h3>
+
+              ${
+                item.description
+                  ? `<p style="
+                      margin:0 0 9px;
+                      color:${INK};
+                      font-family:${fontSerif(template)};
+                      font-size:15px;
+                      line-height:1.65;
+                      overflow-wrap:anywhere;
+                    ">${esc(item.description)}</p>`
+                  : ""
+              }
+
+              ${
+                sourceLine
+                  ? `<p style="
+                      margin:0;
+                      color:${MUTED};
+                      font-family:${fontSans(template)};
+                      font-size:11px;
+                      line-height:1.6;
+                      overflow-wrap:anywhere;
+                    ">${esc(sourceLine)}</p>`
+                  : ""
+              }
+            </article>`;
+        })
+        .join("")}
+    </section>`;
 }
 
-function renderVideos({ payload, template, email }: RenderContext) {
-  const { theme, labels } = template;
+function renderVideos({ payload, template, email }: RenderContext): string {
   if (!payload.videos.length) return "";
 
-  return `<section>${sectionHeading(labels[payload.lang].videos, template, email)}
-    ${payload.videos
-      .map((video) => {
-        const image = safeUrl(video.image);
-        const videoUrl = safeUrl(video.url);
+  const { labels } = template;
 
-        return `
-      <article style="margin:0 0 24px;">
-        ${image && videoUrl ? `<a href="${esc(videoUrl)}"><img src="${esc(image)}" alt="" style="display:block;width:100%;max-width:560px;height:auto;border:0;"></a>` : ""}
-        <h3 style="font:normal 20px/1.4 ${esc(theme.serifFont)};margin:10px 0;">${entryLink(video, template)}</h3>
-        ${video.body ? paragraphs(video.body, template) : ""}
-      </article>`;
-      })
-      .join("")}
-  </section>`;
+  return `
+    <section>
+      ${sectionHeading(labels[payload.lang].videos, template, email)}
+
+      ${payload.videos
+        .map((video) => {
+          const image = safeUrl(video.image);
+
+          return `
+            <article style="margin:0 0 30px;">
+              ${
+                image
+                  ? `<div style="margin:0 0 12px;">${imageMarkup(image, video.title, {
+                      maxHeight: 280,
+                      fit: "cover",
+                      email,
+                      linkUrl: video.url,
+                    })}</div>`
+                  : ""
+              }
+
+              <h3 style="
+                margin:0 0 9px;
+                color:${INK};
+                font-family:${fontSerif(template)};
+                font-size:22px;
+                font-weight:normal;
+                line-height:1.35;
+                overflow-wrap:anywhere;
+              ">${entryLink(video, template)}</h3>
+
+              ${video.body ? paragraphs(video.body, template) : ""}
+            </article>`;
+        })
+        .join("")}
+    </section>`;
 }
 
-function renderPhotos({ payload, template, email }: RenderContext) {
-  const { theme, labels } = template;
+function renderPhotos({ payload, template, email }: RenderContext): string {
   if (!payload.photos.length) return "";
 
-  return `<section>${sectionHeading(labels[payload.lang].photos, template, email)}
-    ${payload.photos
-      .map((photo) => {
-        const image = safeUrl(photo.image);
+  const { labels } = template;
 
-        return `
-      <figure style="margin:0 0 24px;">
-        ${image ? `<img src="${esc(image)}" alt="${esc(photo.alt)}" style="display:block;width:100%;height:auto;border:0;">` : ""}
-        ${photo.caption ? `<figcaption style="margin-top:8px;font:14px/1.65 ${esc(theme.serifFont)};color:${theme.ink};">${esc(photo.caption)}</figcaption>` : ""}
-      </figure>`;
-      })
-      .join("")}
-  </section>`;
+  return `
+    <section>
+      ${sectionHeading(labels[payload.lang].photos, template, email)}
+
+      ${payload.photos
+        .map((photo) => {
+          const image = safeUrl(photo.image);
+
+          return `
+            <figure style="margin:0 0 28px;">
+              ${
+                image
+                  ? imageMarkup(image, photo.alt || photo.caption, {
+                      maxHeight: 480,
+                      fit: "contain",
+                      email,
+                    })
+                  : ""
+              }
+
+              ${
+                photo.caption
+                  ? `<figcaption style="
+                      max-width:${MAX_IMAGE_WIDTH}px;
+                      margin:10px auto 0;
+                      color:${INK};
+                      font-family:${fontSerif(template)};
+                      font-size:14px;
+                      line-height:1.65;
+                      overflow-wrap:anywhere;
+                    ">${esc(photo.caption)}</figcaption>`
+                  : ""
+              }
+            </figure>`;
+        })
+        .join("")}
+    </section>`;
 }
 
-function formatDuration(seconds: number, lang: IssueLang) {
+function formatDuration(seconds: number, lang: IssueLang): string {
   const n = Math.max(0, Math.round(seconds));
 
   if (lang === "en") {
@@ -227,10 +453,37 @@ function formatDuration(seconds: number, lang: IssueLang) {
   return minutes ? `${hours} ч ${minutes}` : `${hours} ч`;
 }
 
-function renderMetrics({ payload, template, email }: RenderContext) {
-  const { theme, labels } = template;
-  const stats = payload.stats;
-  const ru = payload.lang === "ru";
+function statRow(
+  label: string,
+  value: string | number,
+  template: IssueTemplateSettings,
+): string {
+  return `
+    <tr>
+      <td style="
+        width:70%;
+        padding:11px 8px 11px 0;
+        border-bottom:1px solid ${RULE};
+        color:${MUTED};
+        font-family:${fontSans(template)};
+        font-size:12px;
+        line-height:1.45;
+      ">${esc(label)}</td>
+      <td align="right" style="
+        padding:11px 0;
+        border-bottom:1px solid ${RULE};
+        color:${INK};
+        font-family:${fontSerif(template)};
+        font-size:20px;
+        line-height:1.2;
+      ">${esc(value)}</td>
+    </tr>`;
+}
+
+function renderMetrics({ payload, template, email }: RenderContext): string {
+  const { stats, lang } = payload;
+  const ru = lang === "ru";
+  const labels = template.labels[lang];
 
   const metrics: [string, string | number][] = [
     [ru ? "Публичных материалов" : "Public items", stats.published],
@@ -242,7 +495,7 @@ function renderMetrics({ payload, template, email }: RenderContext) {
       ru ? "Медианное время до публикации" : "Median time to publication",
       stats.medianDelaySeconds == null
         ? "—"
-        : formatDuration(stats.medianDelaySeconds, payload.lang),
+        : formatDuration(stats.medianDelaySeconds, lang),
     ],
   ];
 
@@ -250,59 +503,105 @@ function renderMetrics({ payload, template, email }: RenderContext) {
   const maxHour = Math.max(1, ...hours.map((item) => item.count));
 
   const chart = hours.length
-    ? `<div style="margin-top:20px;">${hours
-        .map(
-          (item) => `
-        <div style="margin:7px 0;">
-          <span style="display:inline-block;width:38px;font:11px ${esc(theme.sansFont)};color:${theme.muted};">${String(item.hour).padStart(2, "0")}:00</span>
-          <span style="display:inline-block;vertical-align:middle;width:${Math.max(2, Math.round((item.count / maxHour) * 65))}%;height:8px;background:${theme.accent};"></span>
-          <span style="font:11px ${esc(theme.sansFont)};color:${theme.muted};"> ${item.count}</span>
-        </div>`,
-        )
-        .join("")}</div>`
+    ? `
+      <div style="margin-top:22px;">
+        ${hours
+          .map((item) => {
+            const barWidth = Math.max(
+              2,
+              Math.round((item.count / maxHour) * 100),
+            );
+
+            return `
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0;">
+                <tr>
+                  <td width="45" style="color:${MUTED};font-family:${fontSans(template)};font-size:10px;">${String(item.hour).padStart(2, "0")}:00</td>
+                  <td>
+                    <table role="presentation" width="${barWidth}%" cellpadding="0" cellspacing="0" border="0">
+                      <tr><td height="7" bgcolor="${ACCENT}" style="height:7px;background:${ACCENT};font-size:0;line-height:0;">&nbsp;</td></tr>
+                    </table>
+                  </td>
+                  <td width="25" align="right" style="color:${MUTED};font-family:${fontSans(template)};font-size:10px;">${item.count}</td>
+                </tr>
+              </table>`;
+          })
+          .join("")}
+      </div>`
     : "";
 
-  const cells = metrics
-    .map(([label, value]) => stat(label, value, template))
-    .join("");
+  return `
+    <section>
+      ${sectionHeading(labels.metrics, template, email)}
 
-  return `<section>${sectionHeading(labels[payload.lang].metrics, template, email)}
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px;">${cells}</div>
-    ${chart}
-    <p style="font:11px/1.6 ${esc(theme.sansFont)};color:${theme.muted};margin-top:14px;">${ru ? "Время указано по UTC." : "Times are shown in UTC."}</p>
-  </section>`;
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        ${metrics.map(([label, value]) => statRow(label, value, template)).join("")}
+      </table>
+
+      ${chart}
+
+      <p style="
+        margin:14px 0 0;
+        color:${MUTED};
+        font-family:${fontSans(template)};
+        font-size:11px;
+        line-height:1.6;
+      ">${ru ? "Время указано по UTC." : "Times are shown in UTC."}</p>
+    </section>`;
 }
 
-function renderSourceIndex({ payload, template, email }: RenderContext) {
-  const { theme, labels } = template;
+function renderSourceIndex({ payload, template, email }: RenderContext): string {
   if (!payload.sourceIndex.length) return "";
 
-  return `<section>${sectionHeading(labels[payload.lang].sources, template, email)}
-    <ol style="padding-left:22px;">
-      ${payload.sourceIndex
-        .map(
-          (source) => `
-        <li style="margin:0 0 10px;font:13px/1.55 ${esc(theme.sansFont)};">
-          ${source.url ? link(source.url, source.title || source.source, template) : esc(source.title || source.source)}
-          <span style="color:${theme.muted};"> — ${esc(source.source)}</span>
-        </li>`,
-        )
-        .join("")}
-    </ol>
-  </section>`;
+  const { labels } = template;
+
+  return `
+    <section>
+      ${sectionHeading(labels.sources, template, email)}
+
+      <ol style="padding-left:22px;">
+        ${payload.sourceIndex
+          .map(
+            (source) => `
+              <li style="
+                margin:0 0 12px;
+                color:${INK};
+                font-family:${fontSans(template)};
+                font-size:13px;
+                line-height:1.6;
+                overflow-wrap:anywhere;
+              ">
+                ${
+                  source.url
+                    ? link(source.url, source.title || source.source, template)
+                    : esc(source.title || source.source)
+                }
+                <span style="color:${MUTED};"> — ${esc(source.source)}</span>
+              </li>`,
+          )
+          .join("")}
+      </ol>
+    </section>`;
 }
 
-function renderSubscription({ payload, template }: RenderContext) {
-  const { theme, labels } = template;
-  const text = labels[payload.lang];
+function renderSubscription({ payload, template }: RenderContext): string {
+  const labels = template.labels[payload.lang];
 
-  return `<footer style="margin-top:34px;padding-top:18px;border-top:1px solid ${theme.rule};font:12px/1.6 ${esc(theme.sansFont)};color:${theme.muted};">
-    <p>${esc(text.subscribeCopy)}</p>
-    <p>${link(`${SITE}/flow/join`, text.subscribe, template)}</p>
-  </footer>`;
+  return `
+    <footer style="
+      margin-top:36px;
+      padding-top:18px;
+      border-top:2px solid ${INK};
+      color:${INK};
+      font-family:${fontSans(template)};
+      font-size:12px;
+      line-height:1.7;
+    ">
+      <p style="margin:0 0 12px;">${esc(labels.subscribeCopy)}</p>
+      <p style="margin:0;">${link(`${SITE}/flow/join`, labels.subscribe, template)}</p>
+    </footer>`;
 }
 
-function renderBody(payload: IssuePayload, email: boolean) {
+function renderBody(payload: IssuePayload, email: boolean): string {
   const context: RenderContext = {
     payload,
     template: payload.template,
@@ -330,6 +629,91 @@ function renderBody(payload: IssuePayload, email: boolean) {
     .join("\n");
 }
 
+function renderMasthead(
+  title: string,
+  period: string,
+  lang: IssueLang,
+  template: IssueTemplateSettings,
+  email: boolean,
+): string {
+  const localized = template.labels[lang];
+
+  return `
+    <header style="margin:0 0 28px;color:${INK};">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="
+            padding:0 0 9px;
+            border-bottom:1px solid ${INK};
+            color:${INK};
+            font-family:${fontSans(template)};
+            font-size:9px;
+            letter-spacing:1.5px;
+            line-height:1.5;
+            text-transform:uppercase;
+          ">ANTON MERKUROV</td>
+          <td align="right" style="
+            padding:0 0 9px;
+            border-bottom:1px solid ${INK};
+            color:${MUTED};
+            font-family:${fontSans(template)};
+            font-size:9px;
+            line-height:1.5;
+            text-transform:uppercase;
+          ">${lang === "ru" ? "Еженедельное издание" : "A weekly journal"}</td>
+        </tr>
+      </table>
+
+      <div style="
+        padding:${email ? "17px 0 12px" : "20px 0 12px"};
+        border-bottom:4px double ${INK};
+        text-align:center;
+      ">
+        <p style="
+          margin:0;
+          color:${INK};
+          font-family:${fontSerif(template)};
+          font-size:${email ? "42px" : "58px"};
+          font-weight:normal;
+          letter-spacing:-2px;
+          line-height:1;
+        ">FLOW</p>
+
+        <p style="
+          margin:8px 0 0;
+          color:${ACCENT};
+          font-family:${fontSans(template)};
+          font-size:9px;
+          font-weight:bold;
+          letter-spacing:2.5px;
+          line-height:1.5;
+          text-transform:uppercase;
+        ">${esc(localized.masthead)}</p>
+      </div>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px;">
+        <tr>
+          <td style="
+            padding:0;
+            color:${MUTED};
+            font-family:${fontSans(template)};
+            font-size:10px;
+            line-height:1.5;
+          ">${esc(period)} · UTC</td>
+          <td align="right" style="
+            padding:0;
+            color:${MUTED};
+            font-family:${fontSans(template)};
+            font-size:10px;
+            line-height:1.5;
+          ">${esc(title)}</td>
+        </tr>
+      </table>
+
+      <div style="height:1px;margin-top:10px;background:${RULE};font-size:0;line-height:0;">&nbsp;</div>
+    </header>`;
+}
+
 export function renderIssue(
   payload: IssuePayload,
   options: {
@@ -341,11 +725,25 @@ export function renderIssue(
   const siteUrl = options.siteUrl || SITE;
   const lang = payload.lang;
 
-  // Older saved issues may not have the new template snapshot.
-  const template = normalizeIssueTemplate(
+  // Preserve the template snapshot saved with this issue.
+  const normalized = normalizeIssueTemplate(
     (payload as Partial<IssuePayload>).template ||
       DEFAULT_ISSUE_TEMPLATE,
   );
+
+  // Keep a reliably readable newspaper palette even if an older saved
+  // template used low-contrast or dark colors.
+  const template: IssueTemplateSettings = {
+    ...normalized,
+    theme: {
+      ...normalized.theme,
+      paper: PAPER,
+      ink: INK,
+      muted: MUTED,
+      rule: RULE,
+      accent: ACCENT,
+    },
+  };
 
   const safePayload: IssuePayload = {
     ...payload,
@@ -358,15 +756,21 @@ export function renderIssue(
       ? `Выпуск Flow за период ${period}.`
       : `Flow issue for ${period}.`;
 
-  const { theme, labels } = template;
-  const localized = labels[lang];
+  const webHeader = renderMasthead(
+    options.title,
+    period,
+    lang,
+    template,
+    false,
+  );
 
-  const header = `
-    <header style="padding-bottom:22px;border-bottom:3px solid ${theme.accent};margin-bottom:24px;">
-      <p style="font:10px ${esc(theme.sansFont)};letter-spacing:3px;color:${theme.accent};margin:0 0 10px;">ANTON MERKUROV / ${esc(localized.masthead.toUpperCase())}</p>
-      <h1 style="font:normal 38px/1.12 ${esc(theme.serifFont)};color:${theme.ink};margin:0 0 10px;">${esc(options.title)}</h1>
-      <p style="font:12px ${esc(theme.sansFont)};color:${theme.muted};margin:0;">${esc(period)} · UTC</p>
-    </header>`;
+  const emailHeader = renderMasthead(
+    options.title,
+    period,
+    lang,
+    template,
+    true,
+  );
 
   const webBody = renderBody(safePayload, false);
   const emailBody = renderBody(safePayload, true);
@@ -379,27 +783,45 @@ export function renderIssue(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(options.title)}</title>
 <meta name="description" content="${esc(description)}">
+<meta name="theme-color" content="#FFFFFF">
 <link rel="canonical" href="${esc(canonical)}">
 <style>
-:root{color-scheme:light dark}
 *{box-sizing:border-box}
-body{margin:0;background:${theme.paper};color:${theme.ink};font-family:${esc(theme.sansFont)}}
-a{color:${theme.accent}}
-.issue{max-width:${theme.maxWidth}px;margin:0 auto;padding:48px 24px 72px}
-img{max-width:100%;height:auto}
-@media(prefers-color-scheme:dark){
-body{background:#171516;color:#F4EFF1}
-.issue{color:#F4EFF1}
-h1,h2,h3,p,figcaption{color:inherit}
-a{color:#F08AA8}
+html{background:#FFFFFF}
+body{
+  margin:0;
+  background:#FFFFFF;
+  color:${INK};
+  font-family:${fontSans(template)};
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+a{color:${ACCENT}}
+img{display:block;max-width:100%;height:auto}
+figure{max-width:100%}
+.issue{
+  width:100%;
+  max-width:${Math.min(800, Math.max(600, template.theme.maxWidth))}px;
+  margin:0 auto;
+  padding:38px 28px 72px;
+  background:#FFFFFF;
+}
+.issue section{min-width:0}
+.issue p,.issue h1,.issue h2,.issue h3,.issue li{
+  overflow-wrap:anywhere;
 }
 @media(max-width:600px){
-.issue{padding:28px 17px 48px}
-h1{font-size:30px!important}
+  .issue{padding:22px 17px 44px}
 }
 </style>
 </head>
-<body><main class="issue">${header}${webBody}</main></body>
+<body>
+<main class="issue">
+${webHeader}
+${webBody}
+<p style="margin:26px 0 0;color:${MUTED};font-family:${fontSans(template)};font-size:11px;line-height:1.6;">${link(canonical, lang === "ru" ? "Открыть постоянную страницу выпуска" : "Open the issue page", template)}</p>
+</main>
+</body>
 </html>`;
 
   const preheader = esc(description);
@@ -410,71 +832,115 @@ h1{font-size:30px!important}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 </head>
-<body style="margin:0;padding:0;background:#F4F1EF;color:${theme.ink};">
+<body style="margin:0;padding:0;background:#FFFFFF;color:${INK};">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${preheader}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F1EF;">
-<tr><td align="center" style="padding:18px 8px;">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:${theme.paper};">
-<tr><td style="padding:28px 24px;font-family:${esc(theme.sansFont)};color:${theme.ink};">
-${header}${emailBody}
-<p style="margin-top:28px;font:11px/1.6 ${esc(theme.sansFont)};color:${theme.muted};">${link(canonical, lang === "ru" ? "Открыть выпуск в браузере" : "Read in browser", template)}</p>
-</td></tr></table>
-</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="background:#FFFFFF;">
+<tr><td align="center" style="padding:0 8px;background:#FFFFFF;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="width:100%;max-width:600px;background:#FFFFFF;">
+<tr><td style="padding:26px 20px 36px;background:#FFFFFF;color:${INK};font-family:${fontSans(template)};">
+${emailHeader}
+${emailBody}
+<p style="margin:28px 0 0;padding-top:16px;border-top:1px solid ${RULE};color:${MUTED};font-family:${fontSans(template)};font-size:11px;line-height:1.6;">${link(canonical, lang === "ru" ? "Открыть выпуск в браузере" : "Read this issue online", template)}</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
 </body>
 </html>`;
 
-  
-
-  const textEmail = [
+  const textSections: string[] = [
     options.title,
     period,
     "",
-    safePayload.template.sections.enabled.lead
-      ? [payload.lead?.title, payload.lead?.body]
+  ];
+
+  if (template.sections.enabled.lead && payload.lead) {
+    textSections.push(
+      template.labels[lang].lead,
+      payload.lead.title,
+      payload.lead.body,
+      payload.lead.url || "",
+      "",
+    );
+  }
+
+  if (template.sections.enabled.latest) {
+    textSections.push(
+      template.labels[lang].latest,
+      ...payload.latest.map((entry) =>
+        [entry.title, entry.body, entry.url || ""]
           .filter(Boolean)
-          .join("\n")
-      : "",
-    safePayload.template.sections.enabled.latest
-      ? payload.latest
-          .map((entry) =>
-            [entry.title, entry.body, entry.url || ""]
-              .filter(Boolean)
-              .join("\n"),
-          )
-          .join("\n\n")
-      : "",
-    safePayload.template.sections.enabled.links
-      ? payload.links
-          .map((entry) =>
-            [entry.title, entry.url || "", entry.description]
-              .filter(Boolean)
-              .join("\n"),
-          )
-          .join("\n\n")
-      : "",
-    safePayload.template.sections.enabled.videos
-      ? payload.videos
-          .map((entry) =>
-            [entry.title, entry.url || ""]
-              .filter(Boolean)
-              .join("\n"),
-          )
-          .join("\n\n")
-      : "",
-    safePayload.template.sections.enabled.photos
-      ? payload.photos
-          .map((entry) =>
-            [entry.caption, entry.image].filter(Boolean).join("\n"),
-          )
-          .join("\n\n")
-      : "",
-    safePayload.template.sections.enabled.subscribe
-      ? `${localized.subscribe}: ${localized.subscribeCopy}\n${SITE}/flow/join`
-      : "",
-    canonical,
-  ]
+          .join("\n"),
+      ),
+      "",
+    );
+  }
+
+  if (template.sections.enabled.links) {
+    textSections.push(
+      template.labels[lang].links,
+      ...payload.links.map((entry) =>
+        [entry.title, entry.url || "", entry.description]
+          .filter(Boolean)
+          .join("\n"),
+      ),
+      "",
+    );
+  }
+
+  if (template.sections.enabled.videos) {
+    textSections.push(
+      template.labels[lang].videos,
+      ...payload.videos.map((entry) =>
+        [entry.title, entry.url || ""].filter(Boolean).join("\n"),
+      ),
+      "",
+    );
+  }
+
+  if (template.sections.enabled.photos) {
+    textSections.push(
+      template.labels[lang].photos,
+      ...payload.photos.map((entry) =>
+        [entry.caption, entry.image].filter(Boolean).join("\n"),
+      ),
+      "",
+    );
+  }
+
+  if (template.sections.enabled.metrics) {
+    textSections.push(
+      template.labels[lang].metrics,
+      `${lang === "ru" ? "Публичных материалов" : "Public items"}: ${payload.stats.published}`,
+      "",
+    );
+  }
+
+  if (template.sections.enabled.sources) {
+    textSections.push(
+      template.labels[lang].sources,
+      ...payload.sourceIndex.map((entry) =>
+        [entry.title || entry.source, entry.url || ""]
+          .filter(Boolean)
+          .join("\n"),
+      ),
+      "",
+    );
+  }
+
+  if (template.sections.enabled.subscribe) {
+    textSections.push(
+      template.labels[lang].subscribeCopy,
+      `${template.labels[lang].subscribe}: ${SITE}/flow/join`,
+      "",
+    );
+  }
+
+  textSections.push(canonical);
+
+  const textEmail = textSections
     .filter(Boolean)
-    .join("\n\n");
+    .join("\n");
 
   return { htmlWeb, htmlEmail, textEmail };
 }
