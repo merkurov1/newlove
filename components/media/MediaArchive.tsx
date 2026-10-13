@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -344,14 +343,12 @@ export default function MediaArchive({ records, archives }: Props) {
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
 
       <header className="ma-hero">
-        <p className="ma-eyebrow">Anton Merkurov / Media</p>
-
-        <h1 className="ma-h1">Media archive</h1>
+        <h1 className="ma-h1">Public record & commentary</h1>
 
         <p className="ma-lede">
-          Interviews, expert commentary, author columns and other
-          publications featuring Anton Merkurov. Each entry links to
-          its original source.
+          A continuous record of analytical columns, international media citations, 
+          interviews, and public appearances tracing transformations in digital infrastructure, 
+          technology, and contemporary culture.
         </p>
 
         <dl className="ma-stats">
@@ -778,7 +775,7 @@ const CSS = `
 
 .ma-h1 {
   max-width: 900px;
-  margin: 18px 0 0;
+  margin: 0;
   font-family: var(--ma-serif);
   font-size: clamp(48px, 8.5vw, 104px);
   font-weight: 400;
@@ -787,7 +784,7 @@ const CSS = `
 }
 
 .ma-lede {
-  max-width: 620px;
+  max-width: 680px;
   margin: 28px 0 0;
   color: var(--ma-muted);
   font-size: 16px;
