@@ -1,29 +1,142 @@
+import type { IssueEntry, IssuePayload, IssueLang } from "./types";
 
-import type {
-  IssueEntry,
-  IssuePayload,
-  IssueLang,
-  IssueSectionKey,
-  IssueTemplateSettings,
-} from "./types";
-import {
-  DEFAULT_ISSUE_TEMPLATE,
-  normalizeIssueTemplate,
-} from "./template";
+/**
+ * Рендер выпуска Flow. Сигнатура прежняя:
+ *   renderIssue(payload, { title, slug, siteUrl? }) -> { htmlWeb, htmlEmail, textEmail }
+ * Порядок рубрик зашит в коде. Настройки шаблона (template) больше не используются.
+ * Метрики берутся из payload.stats (схема schemaVersion 2). Текст модели (annotation,
+ * modelAnnotation) в выпуск не выводится.
+ */
+
+type Stats = IssuePayload["stats"];
+type LinkItem = IssuePayload["links"][number];
+type PhotoItem = IssuePayload["photos"][number];
+/** stats.delays: {seconds, count}. Если сборщик добавит label/external, строки подписываются по записям. */
+type DelayRow = Stats["delays"][number] & { label?: string; external?: boolean };
+type Opts = { title: string; canonical: string; number?: number | null };
 
 const SITE = "https://www.merkurov.love";
-const INK = "#171717";
-const PAPER = "#FFFFFF";
-const MUTED = "#555555";
-const RULE = "#D6D6D6";
-const ACCENT = "#990F3D";
-const MAX_IMAGE_WIDTH = 560;
+const INK = "#1C1A1B";
+const SOFT = "#6B6568";
+const LINE = "#DDD6D8";
+const CLARET = "#990F3D";
+const TINT = "#FFF1E5";
+const BAR2 = "#D9B8C2";
+const SERIF_WEB = "'Source Serif 4',Georgia,'Times New Roman',serif";
+const SANS_WEB = "'Inter',system-ui,-apple-system,'Segoe UI',Arial,sans-serif";
+const SERIF_MAIL = "Georgia,'Times New Roman',serif";
+const SANS_MAIL = "Arial,Helvetica,sans-serif";
 
-type RenderContext = {
-  payload: IssuePayload;
-  template: IssueTemplateSettings;
-  email: boolean;
-};
+const L = {
+  ru: {
+    brand: "Поток",
+    issue: "Выпуск",
+    utc: "Время указано по UTC",
+    nav: { read: "Читать", watch: "Смотреть", frame: "Кадр", stats: "Цифры", src: "Источники", join: "Подписка" },
+    main: "Главные цифры",
+    published: "опубликовано",
+    drafts: "черновиков",
+    total: "записей в таблице",
+    days: "дней работы потока",
+    median: "медиана от создания до публикации",
+    lead: "Главное. Заметка автора",
+    leadPub: "Опубликовано в",
+    latest: "Последнее в потоке",
+    read: "Читать",
+    watch: "Смотреть",
+    frame: "Кадр",
+    stats: "Цифры подробнее",
+    perDay: "Записей по дням",
+    byType: "Что опубликовано",
+    ownExt: "Своё и чужое",
+    own: "своих",
+    ext: "чужих",
+    kinds: "О чём записи",
+    kindNames: ["о самом потоке", "из внешнего мира", "прочее"],
+    hours: "Когда создаются записи, часы UTC",
+    quality: "Язык и качество записей",
+    delays: "Время от создания до публикации",
+    delaysNote: "Шкала логарифмическая, светлые полосы — чужие материалы.",
+    delaysNote2: "Шкала логарифмическая: каждая строка показывает, сколько записей ушло за указанное время.",
+    sources: "Указатель источников",
+    colSource: "Источник",
+    colItem: "Материал",
+    colOrig: "Дата оригинала",
+    colAdded: "В потоке",
+    unknown: "не указана",
+    age: "давность",
+    ageDays: "дн.",
+    inStream: "в потоке",
+    join: "Подписка",
+    joinTitle: "Я ничего не пишу, я только отбираю.",
+    joinCopy: "Раз в неделю из этого собирается выпуск без редакции, только вкус одного человека, умноженный на код.",
+    joinCta: "Получать выпуск",
+    openWeb: "Открыть выпуск в браузере",
+    openPage: "Постоянная страница выпуска",
+    types: { note: "Заметка", link: "Ссылка", video: "Видео", photo: "Фото" } as Record<string, string>,
+    typePlural: { note: "Заметки", link: "Ссылки", video: "Видео", photo: "Фото" } as Record<string, string>,
+    qLang: "Язык записи не совпадает с языком текста",
+    qAlt: "Подпись фото равна имени файла",
+    qEmpty: "Пустые или тестовые черновики",
+    of: "из",
+    watchCta: "Смотреть",
+  },
+  en: {
+    brand: "Flow",
+    issue: "Issue",
+    utc: "Times are shown in UTC",
+    nav: { read: "Read", watch: "Watch", frame: "Frame", stats: "Numbers", src: "Sources", join: "Subscribe" },
+    main: "Key numbers",
+    published: "published",
+    drafts: "drafts",
+    total: "records in the table",
+    days: "days of the stream",
+    median: "median time from creation to publication",
+    lead: "Lead. A note by the author",
+    leadPub: "Published at",
+    latest: "Latest in the stream",
+    read: "Read",
+    watch: "Watch",
+    frame: "Frame",
+    stats: "More numbers",
+    perDay: "Entries per day",
+    byType: "What was published",
+    ownExt: "Own and external",
+    own: "own",
+    ext: "external",
+    kinds: "What the entries are about",
+    kindNames: ["the stream itself", "the outside world", "other"],
+    hours: "When entries are created, UTC hours",
+    quality: "Language and data quality",
+    delays: "Time from creation to publication",
+    delaysNote: "Logarithmic scale, light bars are external materials.",
+    delaysNote2: "Logarithmic scale: each row shows how many entries took that long.",
+    sources: "Source index",
+    colSource: "Source",
+    colItem: "Item",
+    colOrig: "Original date",
+    colAdded: "In the stream",
+    unknown: "not stated",
+    age: "age",
+    ageDays: "days",
+    inStream: "in the stream since",
+    join: "Subscribe",
+    joinTitle: "I don’t write. I select.",
+    joinCopy: "Once a week it becomes an issue with no newsroom: one person’s taste multiplied by code.",
+    joinCta: "Get the issue",
+    openWeb: "Read this issue online",
+    openPage: "Permanent issue page",
+    types: { note: "Note", link: "Link", video: "Video", photo: "Photo" } as Record<string, string>,
+    typePlural: { note: "Notes", link: "Links", video: "Videos", photo: "Photos" } as Record<string, string>,
+    qLang: "Language field differs from the text language",
+    qAlt: "Photo alt equals the file name",
+    qEmpty: "Empty or test drafts",
+    of: "of",
+    watchCta: "Watch",
+  },
+} as const;
+
+/* ---------- helpers ---------- */
 
 function esc(value: unknown): string {
   return String(value ?? "")
@@ -36,910 +149,513 @@ function esc(value: unknown): string {
 
 function safeUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
-
   try {
-    const url = new URL(value, SITE);
-    return url.protocol === "https:" || url.protocol === "http:"
-      ? url.toString()
-      : null;
+    const u = new URL(value, SITE);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
   } catch {
     return null;
   }
 }
 
-function dateLabel(value: string, lang: IssueLang): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
+const loc = (lang: IssueLang) => (lang === "ru" ? "ru-RU" : "en-GB");
 
-  return new Intl.DateTimeFormat(
-    lang === "ru" ? "ru-RU" : "en-GB",
-    {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      timeZone: "UTC",
-    },
-  ).format(date);
+function fmt(value: string | undefined | null, lang: IssueLang, opts: Intl.DateTimeFormatOptions): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat(loc(lang), { timeZone: "UTC", ...opts }).format(d);
 }
 
-function fontSerif(template: IssueTemplateSettings): string {
-  return esc(template.theme.serifFont);
+const dateLong = (v: string | undefined | null, lang: IssueLang) =>
+  fmt(v, lang, { day: "numeric", month: "long", year: "numeric" });
+const dayShort = (v: string | undefined | null, lang: IssueLang) =>
+  fmt(v, lang, { day: "numeric", month: "short" }).replace(/\./g, "");
+const hhmm = (v: string | undefined | null, lang: IssueLang) =>
+  fmt(v, lang, { hour: "2-digit", minute: "2-digit", hour12: false });
+
+function duration(seconds: number, lang: IssueLang): string {
+  const n = Math.max(0, Math.round(seconds));
+  const ru = lang === "ru";
+  if (n < 60) return ru ? `${n} с` : `${n}s`;
+  if (n < 3600) return ru ? `${Math.round(n / 60)} мин` : `${Math.round(n / 60)} min`;
+  let h = Math.floor(n / 3600);
+  let m = Math.round((n % 3600) / 60);
+  if (m === 60) {
+    h += 1;
+    m = 0;
+  }
+  const mm = String(m).padStart(2, "0");
+  return ru ? `${h} ч ${mm}` : `${h}h ${mm}`;
 }
 
-function fontSans(template: IssueTemplateSettings): string {
-  return esc(template.theme.sansFont);
-}
-
-function link(
-  url: string | null,
-  label: string,
-  template: IssueTemplateSettings,
-): string {
-  const safe = safeUrl(url);
-  if (!safe) return esc(label);
-
-  return `<a href="${esc(safe)}" style="color:${ACCENT};text-decoration:underline;text-underline-offset:3px;">${esc(label)}</a>`;
-}
-
-function paragraphs(
-  value: string,
-  template: IssueTemplateSettings,
-): string {
-  return value
+function paragraphs(value: string | undefined | null, font: string, size: number): string {
+  return String(value ?? "")
     .split(/\n{2,}/)
-    .map((part) => part.trim())
+    .map((p) => p.trim())
     .filter(Boolean)
     .map(
-      (part) => `
-        <p style="
-          margin:0 0 16px;
-          color:${INK};
-          font-family:${fontSerif(template)};
-          font-size:16px;
-          line-height:1.75;
-          overflow-wrap:anywhere;
-          white-space:pre-wrap;
-        ">${esc(part).replace(/\n/g, "<br>")}</p>`,
+      (p) =>
+        `<p style="margin:0 0 14px;font-family:${font};font-size:${size}px;line-height:1.65;color:${INK};overflow-wrap:anywhere;">${esc(p).replace(/\n/g, "<br>")}</p>`,
     )
     .join("");
 }
 
-function sectionHeading(
-  title: string,
-  template: IssueTemplateSettings,
-  email: boolean,
-): string {
-  return `
-    <h2 style="
-      margin:0 0 20px;
-      padding-top:${email ? "20px" : "26px"};
-      border-top:1px solid ${RULE};
-      color:${INK};
-      font-family:${fontSerif(template)};
-      font-size:25px;
-      font-weight:normal;
-      line-height:1.2;
-    ">${esc(title)}</h2>`;
+const looksLikeFile = (s: unknown) => typeof s === "string" && /\.(jpe?g|png|gif|webp|heic)$/i.test(s.trim());
+const photoAlt = (p: PhotoItem) => (looksLikeFile(p.alt) ? p.caption || "" : p.alt || p.caption || "");
+const entryHref = (e: IssueEntry) => safeUrl(e.url) || `${SITE}/flow/${e.id}`;
+const entryTitle = (e: IssueEntry) => e.title || String(e.body || "").slice(0, 70) || entryHref(e);
+const logWidth = (s: number, max: number) =>
+  max <= 1 ? 100 : Math.max(8, Math.round((Math.log10(Math.max(s, 1)) / Math.log10(max)) * 100));
+
+const videoChannel = (v: IssueEntry) => String(v.metadata?.youtube?.author_name ?? v.metadata?.site_name ?? "");
+function entriesWord(n: number, lang: IssueLang): string {
+  if (lang === "en") return n === 1 ? "entry" : "entries";
+  const a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return "запись";
+  if (a >= 2 && a <= 4 && (b < 10 || b >= 20)) return "записи";
+  return "записей";
+}
+const sortedDelays = (st: Stats): DelayRow[] => [...(st.delays as DelayRow[])].sort((x, y) => x.seconds - y.seconds);
+const delayLabel = (d: DelayRow, lang: IssueLang) => d.label ?? `${d.count} ${entriesWord(d.count, lang)}`;
+
+function linkMeta(item: LinkItem, lang: IssueLang): string {
+  const t = L[lang];
+  const parts = [item.siteName, item.author, item.originalDate ? dateLong(item.originalDate, lang) : ""].filter(Boolean);
+  const age = item.ageDays;
+  if (age !== null && age >= 2) parts.push(`${t.age} ${age} ${t.ageDays}`);
+  return parts.join(". ");
 }
 
-function imageMarkup(
-  url: unknown,
-  alt: unknown,
-  options: {
-    maxHeight: number;
-    fit: "cover" | "contain";
-    email: boolean;
-    linkUrl?: string | null;
-  },
-): string {
-  const image = safeUrl(url);
-  if (!image) return "";
-
-  const width = MAX_IMAGE_WIDTH;
-  const height = options.maxHeight;
-  const imageStyle = [
-    "display:block",
-    "width:100%",
-    `max-width:${width}px`,
-    `max-height:${height}px`,
-    "height:auto",
-    "border:0",
-    "outline:none",
-    "text-decoration:none",
-    `object-fit:${options.fit}`,
-    "object-position:center",
-    "margin:0 auto",
-  ].join(";");
-
-  const img = `<img src="${esc(image)}" alt="${esc(alt)}" width="${width}" style="${imageStyle}">`;
-  const href = safeUrl(options.linkUrl);
-
-  // Keep images bounded by the content column in both web and email.
-  const wrapped = href
-    ? `<a href="${esc(href)}" style="display:block;max-width:${width}px;margin:0 auto;text-decoration:none;">${img}</a>`
-    : img;
-
-  return `
-    <div style="
-      width:100%;
-      max-width:${width}px;
-      max-height:${height}px;
-      margin:0 auto;
-      overflow:hidden;
-      line-height:0;
-    ">${wrapped}</div>`;
+function issueTitle(payload: IssuePayload, number?: number | null) {
+  const lang = payload.lang;
+  const t = L[lang];
+  const period = `${dateLong(payload.period.start, lang)} — ${dateLong(payload.period.end, lang)}`;
+  const num = number ? `${t.issue} №${number}` : t.issue;
+  return { period, num };
 }
 
-function entryDate(entry: IssueEntry, lang: IssueLang): string {
-  return dateLabel(entry.publishedAt, lang);
+/* ---------- WEB ---------- */
+
+const WEB_CSS = `
+:root{--bg:#fff;--ink:${INK};--soft:${SOFT};--line:${LINE};--claret:${CLARET};--tint:${TINT};--bar:${CLARET};--bar2:${BAR2};
+--serif:${SERIF_WEB};--sans:${SANS_WEB}}
+@media(prefers-color-scheme:dark){:root{--bg:#121012;--ink:#EFE9EA;--soft:#A29A9E;--line:#352E31;--claret:#F08AA8;--tint:#231B1E;--bar:#F08AA8;--bar2:#5A3A45}}
+*{box-sizing:border-box}html{background:var(--bg);scroll-padding-top:12px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--serif);padding-top:env(safe-area-inset-top,0);padding-bottom:env(safe-area-inset-bottom,0);-webkit-font-smoothing:antialiased}
+a{color:inherit}.page{max-width:1120px;margin:0 auto;padding:20px 20px 56px}
+.top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font:13px var(--sans);color:var(--soft);padding-bottom:10px}
+.mast{border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:18px 0 12px;text-align:center}
+.mast h1{margin:0;font:700 clamp(52px,12vw,104px)/1 var(--serif);letter-spacing:-.025em}
+.nav{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;font:500 13.5px var(--sans);padding:10px 0;border-bottom:1px solid var(--line);color:var(--soft)}
+.nav a{text-decoration:none}.nav a:hover{color:var(--claret)}
+.g{display:grid;grid-template-columns:1fr;gap:0 40px;margin-top:36px}
+@media(min-width:900px){.g{grid-template-columns:repeat(12,1fr)}.c8{grid-column:span 8}.c4{grid-column:span 4}.c6{grid-column:span 6}.c12{grid-column:span 12}}
+section,aside{margin-bottom:44px;min-width:0}
+.k{font:600 13px var(--sans);color:var(--claret);margin:0 0 10px}
+h2{font:700 clamp(32px,5vw,50px)/1.08 var(--serif);margin:0 0 14px;letter-spacing:-.01em;overflow-wrap:anywhere}
+h3{font:600 20px/1.25 var(--serif);margin:0 0 6px;overflow-wrap:anywhere}
+.by{font:13px var(--sans);color:var(--soft);margin:0 0 18px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.meta{font:13px var(--sans);color:var(--soft);margin:0}.card p{margin:0 0 8px}
+.feed{list-style:none;margin:0;padding:0}
+.feed li{display:grid;grid-template-columns:78px 1fr;gap:10px;padding:11px 0;border-top:1px solid var(--line);font-size:15px;line-height:1.35}
+.feed li:first-child{border-top:0}.feed time{font:12.5px var(--sans);color:var(--soft)}
+.feed b{font:600 11.5px var(--sans);color:var(--claret);display:block}
+.nums{display:grid;grid-template-columns:repeat(2,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--line)}
+@media(min-width:700px){.nums{grid-template-columns:repeat(var(--n,5),1fr)}}
+.nums div{padding:16px 0 14px 16px;border-left:1px solid var(--line)}.nums div:first-child{border-left:0;padding-left:0}
+.nums b{display:block;font:600 44px/1 var(--serif)}.nums span{font:13px var(--sans);color:var(--soft)}
+.row{display:grid;grid-template-columns:96px 1fr 56px;gap:10px;align-items:center;font:13px var(--sans);margin:7px 0}
+.rowL{grid-template-columns:150px 1fr 56px}.row i{display:block;height:10px;background:var(--bar)}.row.alt i{background:var(--bar2)}
+.row span:last-child{text-align:right;color:var(--soft)}
+.days{display:flex;align-items:flex-end;gap:14px;height:130px;border-bottom:1px solid var(--ink);margin-top:26px}
+.days div{flex:1;background:var(--bar);position:relative}
+.days i{position:absolute;top:-22px;width:100%;text-align:center;font:600 14px var(--sans);font-style:normal}
+.dl{display:flex;gap:14px;margin-top:6px}.dl span{flex:1;text-align:center;font:12.5px var(--sans);color:var(--soft)}
+.stack{display:flex;height:34px;margin:10px 0 8px}.stack div{display:flex;align-items:center;padding-left:8px;font:600 13px var(--sans);color:#fff;overflow:hidden}
+.legend{font:13px var(--sans);color:var(--soft);margin:0}.cap{font:13.5px/1.5 var(--sans);color:var(--soft);margin:12px 0 0}
+.cards{display:grid;grid-template-columns:1fr;gap:28px}@media(min-width:760px){.cards{grid-template-columns:repeat(3,1fr)}}
+.v4{display:grid;grid-template-columns:1fr;gap:26px}@media(min-width:700px){.v4{grid-template-columns:1fr 1fr}}@media(min-width:1000px){.v4{grid-template-columns:repeat(4,1fr)}}
+.card{display:block;text-decoration:none;border-top:1px solid var(--ink);padding-top:12px}.card:hover h3{color:var(--claret)}
+.thumb{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;margin:0 0 10px;background:var(--tint)}
+.plate{position:relative;aspect-ratio:16/9;background:var(--tint);margin-bottom:10px;overflow:hidden;border:1px solid var(--line)}
+.plate img{width:100%;height:100%;object-fit:cover;display:block}
+.plate:before{content:'';position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(0,0,0,.6)}
+.plate:after{content:'';position:absolute;left:50%;top:50%;margin:-11px 0 0 -6px;border-left:20px solid #fff;border-top:11px solid transparent;border-bottom:11px solid transparent}
+.frame{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--tint);border:1px solid var(--line);margin-bottom:8px}
+.strip{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;margin-top:12px}.strip i{height:34px;background:var(--bar)}
+.sl{display:flex;justify-content:space-between;font:12px var(--sans);color:var(--soft);margin-top:4px}
+table{width:100%;border-collapse:collapse;font:14px var(--sans)}
+th{font-weight:600;text-align:left;color:var(--soft);font-size:12.5px;border-bottom:1px solid var(--ink);padding:6px 8px 6px 0}
+td{padding:9px 8px 9px 0;border-bottom:1px solid var(--line);vertical-align:top}.scroll{overflow-x:auto}
+.data{background:var(--tint);padding:16px 18px;font:14px/1.55 var(--sans)}.data p{margin:0 0 6px}
+.statsHead{border-top:1px solid var(--ink);padding-top:14px;margin-bottom:14px}
+.statsHead .k{font-size:15px;margin:0}
+.sub{border-top:1px solid var(--ink);padding-top:18px}.sub h2{font-size:clamp(28px,4vw,40px)}
+.dek{font:400 20px/1.45 var(--serif);color:var(--soft);margin:0 0 18px}
+.mail{display:inline-block;background:var(--ink);color:var(--bg);padding:12px 22px;font:600 14px var(--sans);text-decoration:none}
+footer{border-top:1px solid var(--ink);padding-top:12px;font:13px/1.5 var(--sans);color:var(--soft)}
+`;
+
+function webStack(parts: { value: number; label?: string; color: string; dark?: boolean }[]): string {
+  const total = parts.reduce((s, p) => s + p.value, 0);
+  if (!total) return "";
+  return `<div class="stack">${parts
+    .filter((p) => p.value > 0)
+    .map(
+      (p) =>
+        `<div style="width:${((p.value / total) * 100).toFixed(1)}%;background:${p.color};${p.dark ? "color:#1C1A1B;" : ""}">${esc(p.label ?? p.value)}</div>`,
+    )
+    .join("")}</div>`;
 }
 
-function entryLink(
-  entry: IssueEntry,
-  template: IssueTemplateSettings,
-): string {
-  const href = entry.url || `${SITE}/flow/${entry.id}`;
-  return link(href, entry.title || href, template);
-}
+function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {
+  const lang = payload.lang;
+  const t = L[lang];
+  const { period, num } = issueTitle(payload, o.number);
+  const has = {
+    read: payload.links.length > 0,
+    watch: payload.videos.length > 0,
+    frame: payload.photos.length > 0,
+    stats: true,
+    src: payload.sourceIndex.length > 0,
+    join: true,
+  };
+  const navKeys = (["read", "watch", "frame", "stats", "src", "join"] as const).filter((k) => has[k]);
 
-function renderLead({ payload, template }: RenderContext): string {
+  // Главные цифры
+  const nums: [string | number, string][] = [];
+  if (ext.total != null) nums.push([ext.total, t.total]);
+  nums.push([ext.published, t.published]);
+  if (ext.drafts != null) nums.push([ext.drafts, t.drafts]);
+  if (ext.days) nums.push([ext.days, t.days]);
+  if (ext.medianDelaySeconds != null) nums.push([duration(ext.medianDelaySeconds, lang), t.median]);
+
+  // Главное + последнее
   const lead = payload.lead;
-  if (!lead) return "";
-
-  const label = template.labels[payload.lang].lead;
-
-  return `
-    <section style="margin:30px 0 38px;">
-      <p style="
-        margin:0 0 12px;
-        color:${ACCENT};
-        font-family:${fontSans(template)};
-        font-size:11px;
-        font-weight:bold;
-        letter-spacing:1.8px;
-        line-height:1.5;
-        text-transform:uppercase;
-      ">${esc(label)}</p>
-
-      <h2 style="
-        margin:0 0 14px;
-        color:${INK};
-        font-family:${fontSerif(template)};
-        font-size:34px;
-        font-weight:normal;
-        line-height:1.13;
-        letter-spacing:-0.5px;
-        overflow-wrap:anywhere;
-      ">${esc(lead.title || label)}</h2>
-
-      <p style="
-        margin:0 0 20px;
-        color:${MUTED};
-        font-family:${fontSans(template)};
-        font-size:11px;
-        line-height:1.6;
-      ">${esc(entryDate(lead, payload.lang))}</p>
-
-      ${paragraphs(lead.body, template)}
-
-      ${lead.url ? `<p style="margin:18px 0 0;">${entryLink(lead, template)}</p>` : ""}
-    </section>`;
-}
-
-function renderLatest({ payload, template, email }: RenderContext): string {
-  if (!payload.latest.length) return "";
-
-  const { theme, labels } = template;
-
-  return `
-    <section>
-      ${sectionHeading(labels[payload.lang].latest, template, email)}
-
-      ${payload.latest
-        .map(
-          (entry) => `
-            <article style="
-              margin:0 0 23px;
-              padding:0 0 22px;
-              border-bottom:1px solid ${RULE};
-            ">
-              <p style="
-                margin:0 0 8px;
-                color:${MUTED};
-                font-family:${fontSans(template)};
-                font-size:10px;
-                letter-spacing:0.5px;
-                line-height:1.5;
-                text-transform:uppercase;
-              ">${esc(entryDate(entry, payload.lang))} &nbsp;·&nbsp; ${esc(entry.type)}</p>
-
-              <h3 style="
-                margin:0 0 10px;
-                color:${INK};
-                font-family:${fontSerif(template)};
-                font-size:23px;
-                font-weight:normal;
-                line-height:1.3;
-                overflow-wrap:anywhere;
-              ">${entry.url ? entryLink(entry, template) : esc(entry.title)}</h3>
-
-              ${entry.body ? paragraphs(entry.body, template) : ""}
-            </article>`,
-        )
-        .join("")}
-    </section>`;
-}
-
-function renderLinks({ payload, template, email }: RenderContext): string {
-  if (!payload.links.length) return "";
-
-  const { theme, labels } = template;
-
-  return `
-    <section>
-      ${sectionHeading(labels[payload.lang].links, template, email)}
-
-      ${payload.links
-        .map((item) => {
-          const image = safeUrl(item.image);
-          const sourceLine = [
-            item.siteName,
-            item.author,
-            item.originalDate
-              ? dateLabel(item.originalDate, payload.lang)
-              : "",
-          ]
-            .filter(Boolean)
-            .join(" · ");
-
-          return `
-            <article style="margin:0 0 30px;">
-              ${
-                image
-                  ? `<div style="margin:0 0 13px;">${imageMarkup(image, item.title, {
-                      maxHeight: 280,
-                      fit: "cover",
-                      email,
-                      linkUrl: item.url,
-                    })}</div>`
-                  : ""
-              }
-
-              <h3 style="
-                margin:0 0 8px;
-                color:${INK};
-                font-family:${fontSerif(template)};
-                font-size:23px;
-                font-weight:normal;
-                line-height:1.3;
-                overflow-wrap:anywhere;
-              ">${entryLink(item, template)}</h3>
-
-              ${
-                item.description
-                  ? `<p style="
-                      margin:0 0 9px;
-                      color:${INK};
-                      font-family:${fontSerif(template)};
-                      font-size:15px;
-                      line-height:1.65;
-                      overflow-wrap:anywhere;
-                    ">${esc(item.description)}</p>`
-                  : ""
-              }
-
-              ${
-                sourceLine
-                  ? `<p style="
-                      margin:0;
-                      color:${MUTED};
-                      font-family:${fontSans(template)};
-                      font-size:11px;
-                      line-height:1.6;
-                      overflow-wrap:anywhere;
-                    ">${esc(sourceLine)}</p>`
-                  : ""
-              }
-            </article>`;
-        })
-        .join("")}
-    </section>`;
-}
-
-function renderVideos({ payload, template, email }: RenderContext): string {
-  if (!payload.videos.length) return "";
-
-  const { labels } = template;
-
-  return `
-    <section>
-      ${sectionHeading(labels[payload.lang].videos, template, email)}
-
-      ${payload.videos
-        .map((video) => {
-          const image = safeUrl(video.image);
-
-          return `
-            <article style="margin:0 0 30px;">
-              ${
-                image
-                  ? `<div style="margin:0 0 12px;">${imageMarkup(image, video.title, {
-                      maxHeight: 280,
-                      fit: "cover",
-                      email,
-                      linkUrl: video.url,
-                    })}</div>`
-                  : ""
-              }
-
-              <h3 style="
-                margin:0 0 9px;
-                color:${INK};
-                font-family:${fontSerif(template)};
-                font-size:22px;
-                font-weight:normal;
-                line-height:1.35;
-                overflow-wrap:anywhere;
-              ">${entryLink(video, template)}</h3>
-
-              ${video.body ? paragraphs(video.body, template) : ""}
-            </article>`;
-        })
-        .join("")}
-    </section>`;
-}
-
-function renderPhotos({ payload, template, email }: RenderContext): string {
-  if (!payload.photos.length) return "";
-
-  const { labels } = template;
-
-  return `
-    <section>
-      ${sectionHeading(labels[payload.lang].photos, template, email)}
-
-      ${payload.photos
-        .map((photo) => {
-          const image = safeUrl(photo.image);
-
-          return `
-            <figure style="margin:0 0 28px;">
-              ${
-                image
-                  ? imageMarkup(image, photo.alt || photo.caption, {
-                      maxHeight: 480,
-                      fit: "contain",
-                      email,
-                    })
-                  : ""
-              }
-
-              ${
-                photo.caption
-                  ? `<figcaption style="
-                      max-width:${MAX_IMAGE_WIDTH}px;
-                      margin:10px auto 0;
-                      color:${INK};
-                      font-family:${fontSerif(template)};
-                      font-size:14px;
-                      line-height:1.65;
-                      overflow-wrap:anywhere;
-                    ">${esc(photo.caption)}</figcaption>`
-                  : ""
-              }
-            </figure>`;
-        })
-        .join("")}
-    </section>`;
-}
-
-function formatDuration(seconds: number, lang: IssueLang): string {
-  const n = Math.max(0, Math.round(seconds));
-
-  if (lang === "en") {
-    if (n < 60) return `${n}s`;
-    if (n < 3600) return `${Math.round(n / 60)}m`;
-
-    const hours = Math.floor(n / 3600);
-    const minutes = Math.round((n % 3600) / 60);
-    return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
-  }
-
-  if (n < 60) return `${n} с`;
-  if (n < 3600) return `${Math.round(n / 60)} мин`;
-
-  const hours = Math.floor(n / 3600);
-  const minutes = Math.round((n % 3600) / 60);
-  return minutes ? `${hours} ч ${minutes}` : `${hours} ч`;
-}
-
-function statRow(
-  label: string,
-  value: string | number,
-  template: IssueTemplateSettings,
-): string {
-  return `
-    <tr>
-      <td style="
-        width:70%;
-        padding:11px 8px 11px 0;
-        border-bottom:1px solid ${RULE};
-        color:${MUTED};
-        font-family:${fontSans(template)};
-        font-size:12px;
-        line-height:1.45;
-      ">${esc(label)}</td>
-      <td align="right" style="
-        padding:11px 0;
-        border-bottom:1px solid ${RULE};
-        color:${INK};
-        font-family:${fontSerif(template)};
-        font-size:20px;
-        line-height:1.2;
-      ">${esc(value)}</td>
-    </tr>`;
-}
-
-function renderMetrics({ payload, template, email }: RenderContext): string {
-  const { stats, lang } = payload;
-  const ru = lang === "ru";
-  const labels = template.labels[lang];
-
-  const metrics: [string, string | number][] = [
-    [ru ? "Публичных материалов" : "Public items", stats.published],
-    [ru ? "Заметки" : "Notes", stats.byType.note || 0],
-    [ru ? "Ссылки" : "Links", stats.byType.link || 0],
-    [ru ? "Видео" : "Videos", stats.byType.video || 0],
-    [ru ? "Фото" : "Photos", stats.byType.photo || 0],
-    [
-      ru ? "Медианное время до публикации" : "Median time to publication",
-      stats.medianDelaySeconds == null
-        ? "—"
-        : formatDuration(stats.medianDelaySeconds, lang),
-    ],
-  ];
-
-  const hours = stats.byUtcHour.filter((item) => item.count > 0);
-  const maxHour = Math.max(1, ...hours.map((item) => item.count));
-
-  const chart = hours.length
-    ? `
-      <div style="margin-top:22px;">
-        ${hours
-          .map((item) => {
-            const barWidth = Math.max(
-              2,
-              Math.round((item.count / maxHour) * 100),
-            );
-
-            return `
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0;">
-                <tr>
-                  <td width="45" style="color:${MUTED};font-family:${fontSans(template)};font-size:10px;">${String(item.hour).padStart(2, "0")}:00</td>
-                  <td>
-                    <table role="presentation" width="${barWidth}%" cellpadding="0" cellspacing="0" border="0">
-                      <tr><td height="7" bgcolor="${ACCENT}" style="height:7px;background:${ACCENT};font-size:0;line-height:0;">&nbsp;</td></tr>
-                    </table>
-                  </td>
-                  <td width="25" align="right" style="color:${MUTED};font-family:${fontSans(template)};font-size:10px;">${item.count}</td>
-                </tr>
-              </table>`;
-          })
-          .join("")}
-      </div>`
+  const leadHtml = lead
+    ? `<section id="lead" class="c8">
+        <p class="k">${esc(t.lead)}</p>
+        <h2>${esc(lead.title || t.lead)}</h2>
+        <p class="by">${esc(dateLong(lead.publishedAt, lang))}, ${esc(hhmm(lead.publishedAt, lang))} UTC</p>
+        ${paragraphs(lead.body, "var(--serif)", 18)}
+        ${safeUrl(lead.url) ? `<p class="meta"><a href="${esc(safeUrl(lead.url))}" style="color:var(--claret)">${esc(lead.url)}</a></p>` : ""}
+      </section>`
+    : "";
+  const latestHtml = payload.latest.length
+    ? `<aside class="${lead ? "c4" : "c12"}">
+        <p class="k">${esc(t.latest)}</p>
+        <ul class="feed">${payload.latest
+          .slice(0, 6)
+          .map(
+            (e) =>
+              `<li><time>${esc(dayShort(e.publishedAt, lang))}<br>${esc(hhmm(e.publishedAt, lang))}</time><div><b>${esc(t.types[e.type] || e.type)}</b><a href="${esc(entryHref(e))}" style="text-decoration:none">${esc(entryTitle(e))}</a></div></li>`,
+          )
+          .join("")}</ul>
+      </aside>`
     : "";
 
-  return `
-    <section>
-      ${sectionHeading(labels.metrics, template, email)}
+  // Читать
+  const readHtml = has.read
+    ? `<section id="read" class="c12"><p class="k">${esc(t.read)}</p><div class="cards">${payload.links
+        .map((it) => {
+          const img = safeUrl(it.image);
+          return `<a class="card" href="${esc(entryHref(it))}">${img ? `<img class="thumb" src="${esc(img)}" alt="" loading="lazy">` : ""}<h3>${esc(entryTitle(it))}</h3>${it.description ? `<p>${esc(it.description)}</p>` : ""}<p class="meta">${esc(linkMeta(it, lang))}</p></a>`;
+        })
+        .join("")}</div></section>`
+    : "";
 
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        ${metrics.map(([label, value]) => statRow(label, value, template)).join("")}
-      </table>
+  // Смотреть
+  const watchHtml = has.watch
+    ? `<section id="watch" class="c12"><p class="k">${esc(t.watch)}</p><div class="v4">${payload.videos
+        .map((v) => {
+          const img = safeUrl(v.image);
+          const meta = [videoChannel(v), `${t.inStream} ${dayShort(v.publishedAt, lang)}`].filter(Boolean).join(". ");
+          return `<a class="card" href="${esc(entryHref(v))}"><div class="plate">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : ""}</div><h3>${esc(entryTitle(v))}</h3><p class="meta">${esc(meta)}</p></a>`;
+        })
+        .join("")}</div></section>`
+    : "";
 
-      ${chart}
+  // Кадр
+  const frameHtml = has.frame
+    ? `<section id="frame" class="c12"><p class="k">${esc(t.frame)}</p><div class="v4">${payload.photos
+        .map((p) => {
+          const img = safeUrl(p.image);
+          return `<div>${img ? `<img class="frame" src="${esc(img)}" alt="${esc(photoAlt(p))}" loading="lazy">` : `<div class="frame"></div>`}<p class="meta">${esc(dayShort(p.publishedAt, lang))}${p.caption ? `. ${esc(p.caption)}` : ""}</p></div>`;
+        })
+        .join("")}</div></section>`
+    : "";
 
-      <p style="
-        margin:14px 0 0;
-        color:${MUTED};
-        font-family:${fontSans(template)};
-        font-size:11px;
-        line-height:1.6;
-      ">${ru ? "Время указано по UTC." : "Times are shown in UTC."}</p>
-    </section>`;
-}
+  // Цифры подробнее
+  const bt = ext.byType || {};
+  const typeStack = webStack([
+    { value: bt.note || 0, color: CLARET },
+    { value: bt.link || 0, color: "#B8566F" },
+    { value: bt.video || 0, color: "#D08A9C", dark: true },
+    { value: bt.photo || 0, color: "#E6C3CC", dark: true },
+  ]);
+  const typeLegend = ["note", "link", "video", "photo"].map((k) => `${t.typePlural[k]} ${bt[k] || 0}`).join(", ");
 
-function renderSourceIndex({ payload, template, email }: RenderContext): string {
-  if (!payload.sourceIndex.length) return "";
+  const perDayMax = Math.max(1, ...(ext.perDay || []).map((d) => d.count));
+  const perDayHtml = ext.perDay?.length
+    ? `<section class="c4"><p class="k">${esc(t.perDay)}</p>
+        <div class="days">${ext.perDay.map((d) => `<div style="height:${Math.max(4, Math.round((d.count / perDayMax) * 100))}%"><i>${d.count}</i></div>`).join("")}</div>
+        <div class="dl">${ext.perDay.map((d) => `<span>${esc(fmt(d.date, lang, { day: "numeric" }))}</span>`).join("")}</div></section>`
+    : "";
 
-  const { labels } = template;
+  const compHtml = `<section class="c4"><p class="k">${esc(t.byType)}</p>${typeStack}<p class="legend">${esc(typeLegend)}</p>
+      ${ext.own + ext.external > 0 ? `<p class="k" style="margin-top:22px">${esc(t.ownExt)}</p>${webStack([{ value: ext.own, label: `${ext.own} ${t.own}`, color: CLARET }, { value: ext.external, label: `${ext.external} ${t.ext}`, color: BAR2, dark: true }])}` : ""}</section>`;
 
-  return `
-    <section>
-const labels = template.labels[payload.lang];
-      <ol style="padding-left:22px;">
+  const kindHtml = ext.byKind
+    ? `<section class="c4"><p class="k">${esc(t.kinds)}</p>${webStack([{ value: ext.byKind.about_flow, color: CLARET }, { value: ext.byKind.world, color: BAR2, dark: true }, { value: ext.byKind.other, color: LINE, dark: true }])}<p class="legend">${esc(`${ext.byKind.about_flow} ${t.kindNames[0]}, ${ext.byKind.world} ${t.kindNames[1]}, ${ext.byKind.other} ${t.kindNames[2]}`)}</p></section>`
+    : "";
+
+  const hours = new Map((ext.byUtcHour || []).map((h) => [h.hour, h.count]));
+  const maxH = Math.max(0, ...hours.values());
+  const stripHtml = maxH
+    ? `<section class="c6"><p class="k">${esc(t.hours)}</p><div class="strip">${Array.from({ length: 24 }, (_, h) => {
+        const c = hours.get(h) || 0;
+        return `<i title="${String(h).padStart(2, "0")}:00 UTC: ${c}" style="opacity:${c ? (0.25 + (c / maxH) * 0.75).toFixed(2) : "0.08"}"></i>`;
+      }).join("")}</div><div class="sl"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div></section>`
+    : "";
+
+  const q = ext.quality;
+  const qLines: string[] = [
+    `${t.qLang}: ${q.langFieldMismatch} ${t.of} ${ext.published}.`,
+    `${t.qAlt}: ${q.photoAltEqualsFilename} ${t.of} ${bt.photo || 0}.`,
+    `${t.qEmpty}: ${q.emptyDrafts} ${t.of} ${ext.drafts}.`,
+  ];
+  const qualityHtml = ext.drafts + ext.published > 0
+    ? `<section class="c6"><p class="k">${esc(t.quality)}</p><div class="data">${qLines.map((l) => `<p>${esc(l)}</p>`).join("")}</div></section>`
+    : "";
+
+  const dl = sortedDelays(ext);
+  const hasExt = dl.some((d) => d.external !== undefined);
+  const maxD = Math.max(1, ...dl.map((d) => d.seconds));
+  const delaysHtml = dl.length
+    ? `<section class="c12"><p class="k">${esc(t.delays)}</p>${dl
+        .map((d) => `<div class="row rowL${d.external ? " alt" : ""}"><span>${esc(delayLabel(d, lang))}</span><i style="width:${logWidth(d.seconds, maxD)}%"></i><span>${esc(duration(d.seconds, lang))}</span></div>`)
+        .join("")}<p class="cap">${esc(hasExt ? t.delaysNote : t.delaysNote2)}</p></section>`
+    : "";
+
+  // Источники
+  const srcHtml = has.src
+    ? `<section id="src" class="c12"><p class="k">${esc(t.sources)}</p><div class="scroll"><table>
+        <tr><th>${esc(t.colSource)}</th><th>${esc(t.colItem)}</th><th>${esc(t.colOrig)}</th><th>${esc(t.colAdded)}</th></tr>
         ${payload.sourceIndex
-          .map(
-            (source) => `
-              <li style="
-                margin:0 0 12px;
-                color:${INK};
-                font-family:${fontSans(template)};
-                font-size:13px;
-                line-height:1.6;
-                overflow-wrap:anywhere;
-              ">
-                ${
-                  source.url
-                    ? link(source.url, source.title || source.source, template)
-                    : esc(source.title || source.source)
-                }
-                <span style="color:${MUTED};"> — ${esc(source.source)}</span>
-              </li>`,
-          )
-          .join("")}
-      </ol>
-    </section>`;
+          .map((s) => {
+            const href = safeUrl(s.url);
+            const title = esc(s.title || s.source);
+            return `<tr><td>${esc(s.source)}</td><td>${href ? `<a href="${esc(href)}">${title}</a>` : title}</td><td>${esc(s.originalDate ? dateLong(s.originalDate, lang) : t.unknown)}</td><td>${esc(s.addedAt ? dayShort(s.addedAt, lang) : "")}</td></tr>`;
+          })
+          .join("")}</table></div></section>`
+    : "";
+
+  const joinHtml = `<section id="join" class="c12 sub"><p class="k">${esc(t.join)}</p><h2>${esc(t.joinTitle)}</h2><p class="dek">${esc(t.joinCopy)}</p><a class="mail" href="${SITE}/flow/join">${esc(t.joinCta)}</a></section>`;
+
+  return `<!doctype html>
+<html lang="${lang}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>${esc(o.title)}</title>
+<meta name="description" content="${esc(`${t.brand}. ${num}. ${period}`)}">
+<link rel="canonical" href="${esc(o.canonical)}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<style>${WEB_CSS}</style>
+</head>
+<body>
+<div class="page">
+<div class="top"><span>${esc(period)}</span><span>${esc(num)}. ${esc(t.utc)}</span><span>merkurov.love/flow</span></div>
+<header class="mast"><h1>${esc(t.brand)}</h1></header>
+<nav class="nav">${navKeys.map((k) => `<a href="#${k}">${esc(t.nav[k])}</a>`).join("")}</nav>
+<div class="g">
+<section class="c12"><p class="k">${esc(t.main)}</p><div class="nums" style="--n:${nums.length}">${nums.map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div></section>
+${leadHtml}${latestHtml}
+${readHtml}${watchHtml}${frameHtml}
+<div class="c12 statsHead" id="stats"><p class="k">${esc(t.stats)}</p></div>
+${perDayHtml}${compHtml}${kindHtml}${stripHtml}${qualityHtml}${delaysHtml}
+${srcHtml}${joinHtml}
+</div>
+<footer><a href="${esc(o.canonical)}">${esc(t.openPage)}</a></footer>
+</div>
+</body>
+</html>`;
 }
 
-function renderSubscription({ payload, template }: RenderContext): string {
-  const labels = template.labels[payload.lang];
+/* ---------- EMAIL ---------- */
 
-  return `
-    <footer style="
-      margin-top:36px;
-      padding-top:18px;
-      border-top:2px solid ${INK};
-      color:${INK};
-      font-family:${fontSans(template)};
-      font-size:12px;
-      line-height:1.7;
-    ">
-      <p style="margin:0 0 12px;">${esc(labels.subscribeCopy)}</p>
-      <p style="margin:0;">${link(`${SITE}/flow/join`, labels.subscribe, template)}</p>
-    </footer>`;
+function mailH(label: string): string {
+  return `<p style="margin:34px 0 12px;padding-top:14px;border-top:1px solid ${INK};font-family:${SANS_MAIL};font-size:13px;font-weight:bold;color:${CLARET};">${esc(label)}</p>`;
 }
 
-function renderBody(payload: IssuePayload, email: boolean): string {
-  const context: RenderContext = {
-    payload,
-    template: payload.template,
-    email,
+function mailBars(rows: { label: string; value: number; text: string; light?: boolean }[], max: number, log = false): string {
+  if (!rows.length) return "";
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows
+    .map((r) => {
+      const w = log ? logWidth(r.value, max) : Math.max(3, Math.round((r.value / Math.max(1, max)) * 100));
+      const c = r.light ? BAR2 : CLARET;
+      return `<tr>
+<td width="120" style="padding:5px 8px 5px 0;font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc(r.label)}</td>
+<td style="padding:5px 0;"><table role="presentation" width="${w}%" cellpadding="0" cellspacing="0" border="0"><tr><td height="9" bgcolor="${c}" style="height:9px;background:${c};font-size:0;line-height:0;">&nbsp;</td></tr></table></td>
+<td width="56" align="right" style="padding:5px 0 5px 8px;font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc(r.text)}</td></tr>`;
+    })
+    .join("")}</table>`;
+}
+
+function renderEmail(payload: IssuePayload, ext: Stats, o: Opts): string {
+  const lang = payload.lang;
+  const t = L[lang];
+  const { period, num } = issueTitle(payload, o.number);
+
+  const nums: [string | number, string][] = [];
+  if (ext.total != null) nums.push([ext.total, t.total]);
+  nums.push([ext.published, t.published]);
+  if (ext.drafts != null) nums.push([ext.drafts, t.drafts]);
+  if (ext.medianDelaySeconds != null) nums.push([duration(ext.medianDelaySeconds, lang), t.median]);
+  const numsHtml = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${INK};border-bottom:1px solid ${LINE};"><tr>${nums
+    .map(
+      ([v, l], i) =>
+        `<td valign="top" style="padding:14px 6px 12px ${i ? 12 : 0}px;${i ? `border-left:1px solid ${LINE};` : ""}"><div style="font-family:${SERIF_MAIL};font-size:30px;line-height:1.1;color:${INK};">${esc(v)}</div><div style="font-family:${SANS_MAIL};font-size:11px;line-height:1.35;color:${SOFT};">${esc(l)}</div></td>`,
+    )
+    .join("")}</tr></table>`;
+
+  const lead = payload.lead;
+  const leadHtml = lead
+    ? `${mailH(t.lead)}<h2 style="margin:0 0 8px;font-family:${SERIF_MAIL};font-size:30px;line-height:1.12;font-weight:bold;color:${INK};">${esc(lead.title || t.lead)}</h2>
+<p style="margin:0 0 16px;font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc(dateLong(lead.publishedAt, lang))}, ${esc(hhmm(lead.publishedAt, lang))} UTC</p>${paragraphs(lead.body, SERIF_MAIL, 16)}`
+    : "";
+
+  const latestHtml = payload.latest.length
+    ? `${mailH(t.latest)}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${payload.latest
+        .slice(0, 6)
+        .map(
+          (e) =>
+            `<tr><td width="74" valign="top" style="padding:8px 8px 8px 0;border-top:1px solid ${LINE};font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc(dayShort(e.publishedAt, lang))}<br>${esc(hhmm(e.publishedAt, lang))}</td><td style="padding:8px 0;border-top:1px solid ${LINE};font-family:${SERIF_MAIL};font-size:15px;line-height:1.35;color:${INK};"><span style="font-family:${SANS_MAIL};font-size:11px;font-weight:bold;color:${CLARET};">${esc(t.types[e.type] || e.type)}</span><br><a href="${esc(entryHref(e))}" style="color:${INK};text-decoration:none;">${esc(entryTitle(e))}</a></td></tr>`,
+        )
+        .join("")}</table>`
+    : "";
+
+  const img = (url: unknown, alt: string, href: string) => {
+    const u = safeUrl(url);
+    return u
+      ? `<a href="${esc(href)}"><img src="${esc(u)}" alt="${esc(alt)}" width="560" style="display:block;width:100%;max-width:560px;height:auto;border:0;margin:0 0 10px;"></a>`
+      : "";
   };
 
-  const renderers: Record<
-    IssueSectionKey,
-    (context: RenderContext) => string
-  > = {
-    lead: renderLead,
-    latest: renderLatest,
-    links: renderLinks,
-    videos: renderVideos,
-    photos: renderPhotos,
-    metrics: renderMetrics,
-    sources: renderSourceIndex,
-    subscribe: renderSubscription,
-  };
+  const readHtml = payload.links.length
+    ? mailH(t.read) +
+      payload.links
+        .map(
+          (it) =>
+            `<div style="margin:0 0 26px;">${img(it.image, "", entryHref(it))}<h3 style="margin:0 0 6px;font-family:${SERIF_MAIL};font-size:21px;line-height:1.25;"><a href="${esc(entryHref(it))}" style="color:${INK};text-decoration:none;">${esc(entryTitle(it))}</a></h3>${it.description ? `<p style="margin:0 0 6px;font-family:${SERIF_MAIL};font-size:15px;line-height:1.6;color:${INK};">${esc(it.description)}</p>` : ""}<p style="margin:0;font-family:${SANS_MAIL};font-size:12px;line-height:1.5;color:${SOFT};">${esc(linkMeta(it, lang))}</p></div>`,
+        )
+        .join("")
+    : "";
 
-  return payload.template.sections.order
-    .filter((key) => payload.template.sections.enabled[key])
-    .map((key) => renderers[key](context))
-    .filter(Boolean)
-    .join("\n");
+  const watchHtml = payload.videos.length
+    ? mailH(t.watch) +
+      payload.videos
+        .map(
+          (v) =>
+            `<div style="margin:0 0 26px;">${img(v.image, "", entryHref(v))}<h3 style="margin:0 0 6px;font-family:${SERIF_MAIL};font-size:20px;line-height:1.25;"><a href="${esc(entryHref(v))}" style="color:${INK};text-decoration:none;">${esc(entryTitle(v))}</a></h3><p style="margin:0;font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc([videoChannel(v), `${t.inStream} ${dayShort(v.publishedAt, lang)}`].filter(Boolean).join(". "))} &nbsp;<a href="${esc(entryHref(v))}" style="color:${CLARET};">${esc(t.watchCta)} →</a></p></div>`,
+        )
+        .join("")
+    : "";
+
+  const frameHtml = payload.photos.length
+    ? mailH(t.frame) +
+      payload.photos
+        .map((p) => {
+          const u = safeUrl(p.image);
+          return `<div style="margin:0 0 22px;">${u ? `<img src="${esc(u)}" alt="${esc(photoAlt(p))}" width="560" style="display:block;width:100%;max-width:560px;height:auto;border:0;">` : ""}<p style="margin:6px 0 0;font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc(dayShort(p.publishedAt, lang))}${p.caption ? `. ${esc(p.caption)}` : ""}</p></div>`;
+        })
+        .join("")
+    : "";
+
+  const bt = ext.byType || {};
+  let stats = mailH(t.stats);
+  if (ext.perDay?.length) {
+    const mx = Math.max(1, ...ext.perDay.map((d) => d.count));
+    stats += `<p style="margin:0 0 6px;font-family:${SANS_MAIL};font-size:12px;font-weight:bold;color:${INK};">${esc(t.perDay)}</p>${mailBars(ext.perDay.map((d) => ({ label: fmt(d.date, lang, { day: "numeric", month: "short" }).replace(/\./g, ""), value: d.count, text: String(d.count) })), mx)}`;
+  }
+  stats += `<p style="margin:18px 0 6px;font-family:${SANS_MAIL};font-size:12px;font-weight:bold;color:${INK};">${esc(t.byType)}</p>${mailBars(["note", "link", "video", "photo"].map((k) => ({ label: t.typePlural[k], value: bt[k] || 0, text: String(bt[k] || 0) })), Math.max(1, ...["note", "link", "video", "photo"].map((k) => bt[k] || 0)))}`;
+  if (ext.own + ext.external > 0) {
+    const { own, external } = ext;
+    stats += `<p style="margin:18px 0 6px;font-family:${SANS_MAIL};font-size:12px;font-weight:bold;color:${INK};">${esc(t.ownExt)}</p>${mailBars([{ label: t.own, value: own, text: String(own) }, { label: t.ext, value: external, text: String(external), light: true }], Math.max(own, external, 1))}`;
+  }
+  if (ext.byKind) {
+    const k = ext.byKind;
+    stats += `<p style="margin:18px 0 6px;font-family:${SANS_MAIL};font-size:12px;font-weight:bold;color:${INK};">${esc(t.kinds)}</p>${mailBars([{ label: t.kindNames[0], value: k.about_flow, text: String(k.about_flow) }, { label: t.kindNames[1], value: k.world, text: String(k.world), light: true }, { label: t.kindNames[2], value: k.other, text: String(k.other), light: true }], Math.max(k.about_flow, k.world, k.other, 1))}`;
+  }
+  const dly = sortedDelays(ext);
+  if (dly.length) {
+    const mx = Math.max(1, ...dly.map((d) => d.seconds));
+    stats += `<p style="margin:18px 0 6px;font-family:${SANS_MAIL};font-size:12px;font-weight:bold;color:${INK};">${esc(t.delays)}</p>${mailBars(dly.map((d) => ({ label: delayLabel(d, lang), value: d.seconds, text: duration(d.seconds, lang), light: !!d.external })), mx, true)}<p style="margin:8px 0 0;font-family:${SANS_MAIL};font-size:11px;color:${SOFT};">${esc(dly.some((d) => d.external !== undefined) ? t.delaysNote : t.delaysNote2)}</p>`;
+  }
+  stats += `<p style="margin:14px 0 0;font-family:${SANS_MAIL};font-size:11px;color:${SOFT};">${esc(t.utc)}.</p>`;
+
+  const srcHtml = payload.sourceIndex.length
+    ? mailH(t.sources) +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${payload.sourceIndex
+        .map((s) => {
+          const href = safeUrl(s.url);
+          const title = esc(s.title || s.source);
+          return `<tr><td style="padding:8px 8px 8px 0;border-top:1px solid ${LINE};font-family:${SANS_MAIL};font-size:13px;line-height:1.5;color:${INK};">${href ? `<a href="${esc(href)}" style="color:${INK};">${title}</a>` : title}<br><span style="font-size:12px;color:${SOFT};">${esc(s.source)}${s.originalDate ? `. ${esc(dateLong(s.originalDate, lang))}` : ""}</span></td></tr>`;
+        })
+        .join("")}</table>`
+    : "";
+
+  const joinHtml = `<div style="margin-top:38px;padding-top:18px;border-top:2px solid ${INK};"><h2 style="margin:0 0 10px;font-family:${SERIF_MAIL};font-size:28px;line-height:1.15;color:${INK};">${esc(t.joinTitle)}</h2><p style="margin:0 0 16px;font-family:${SERIF_MAIL};font-size:16px;line-height:1.55;color:${SOFT};">${esc(t.joinCopy)}</p><a href="${SITE}/flow/join" style="display:inline-block;background:${INK};color:#FFFFFF;padding:11px 20px;font-family:${SANS_MAIL};font-size:14px;font-weight:bold;text-decoration:none;">${esc(t.joinCta)}</a></div>`;
+
+  return `<!doctype html>
+<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head>
+<body style="margin:0;padding:0;background:#FFFFFF;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${esc(`${num}. ${period}`)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF"><tr><td align="center" style="padding:0 8px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;"><tr><td style="padding:22px 18px 36px;">
+<p style="margin:0 0 8px;font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc(period)}. ${esc(num)}</p>
+<div style="border-top:1px solid ${INK};border-bottom:1px solid ${INK};padding:14px 0 10px;text-align:center;"><span style="font-family:${SERIF_MAIL};font-size:56px;font-weight:bold;letter-spacing:-1px;line-height:1;color:${INK};">${esc(t.brand)}</span></div>
+<p style="margin:18px 0 6px;font-family:${SANS_MAIL};font-size:13px;font-weight:bold;color:${CLARET};">${esc(t.main)}</p>
+${numsHtml}
+${leadHtml}${latestHtml}${readHtml}${watchHtml}${frameHtml}${stats}${srcHtml}${joinHtml}
+<p style="margin:30px 0 0;padding-top:14px;border-top:1px solid ${LINE};font-family:${SANS_MAIL};font-size:12px;color:${SOFT};"><a href="${esc(o.canonical)}" style="color:${SOFT};">${esc(t.openWeb)}</a></p>
+</td></tr></table></td></tr></table></body></html>`;
 }
 
-function renderMasthead(
-  title: string,
-  period: string,
-  lang: IssueLang,
-  template: IssueTemplateSettings,
-  email: boolean,
-): string {
-  const localized = template.labels[lang];
+/* ---------- TEXT ---------- */
 
-  return `
-    <header style="margin:0 0 28px;color:${INK};">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td style="
-            padding:0 0 9px;
-            border-bottom:1px solid ${INK};
-            color:${INK};
-            font-family:${fontSans(template)};
-            font-size:9px;
-            letter-spacing:1.5px;
-            line-height:1.5;
-            text-transform:uppercase;
-          ">ANTON MERKUROV</td>
-          <td align="right" style="
-            padding:0 0 9px;
-            border-bottom:1px solid ${INK};
-            color:${MUTED};
-            font-family:${fontSans(template)};
-            font-size:9px;
-            line-height:1.5;
-            text-transform:uppercase;
-          ">${lang === "ru" ? "Еженедельное издание" : "A weekly journal"}</td>
-        </tr>
-      </table>
-
-      <div style="
-        padding:${email ? "17px 0 12px" : "20px 0 12px"};
-        border-bottom:4px double ${INK};
-        text-align:center;
-      ">
-        <p style="
-          margin:0;
-          color:${INK};
-          font-family:${fontSerif(template)};
-          font-size:${email ? "42px" : "58px"};
-          font-weight:normal;
-          letter-spacing:-2px;
-          line-height:1;
-        ">FLOW</p>
-
-        <p style="
-          margin:8px 0 0;
-          color:${ACCENT};
-          font-family:${fontSans(template)};
-          font-size:9px;
-          font-weight:bold;
-          letter-spacing:2.5px;
-          line-height:1.5;
-          text-transform:uppercase;
-        ">${esc(localized.masthead)}</p>
-      </div>
-
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px;">
-        <tr>
-          <td style="
-            padding:0;
-            color:${MUTED};
-            font-family:${fontSans(template)};
-            font-size:10px;
-            line-height:1.5;
-          ">${esc(period)} · UTC</td>
-          <td align="right" style="
-            padding:0;
-            color:${MUTED};
-            font-family:${fontSans(template)};
-            font-size:10px;
-            line-height:1.5;
-          ">${esc(title)}</td>
-        </tr>
-      </table>
-
-      <div style="height:1px;margin-top:10px;background:${RULE};font-size:0;line-height:0;">&nbsp;</div>
-    </header>`;
+function renderText(payload: IssuePayload, ext: Stats, o: Opts): string {
+  const lang = payload.lang;
+  const t = L[lang];
+  const { period, num } = issueTitle(payload, o.number);
+  const out: string[] = [`${t.brand}. ${num}`, period, ""];
+  const nums = [`${t.published}: ${ext.published}`];
+  if (ext.drafts != null) nums.push(`${t.drafts}: ${ext.drafts}`);
+  if (ext.medianDelaySeconds != null) nums.push(`${t.median}: ${duration(ext.medianDelaySeconds, lang)}`);
+  out.push(t.main, ...nums, "");
+  if (payload.lead) out.push(t.lead, payload.lead.title, "", String(payload.lead.body || ""), "");
+  if (payload.latest.length) out.push(t.latest, ...payload.latest.slice(0, 6).map((e) => `${dayShort(e.publishedAt, lang)} ${hhmm(e.publishedAt, lang)}  ${entryTitle(e)}`), "");
+  if (payload.links.length) out.push(t.read, ...payload.links.map((e) => [entryTitle(e), entryHref(e), e.description].filter(Boolean).join("\n")), "");
+  if (payload.videos.length) out.push(t.watch, ...payload.videos.map((e) => `${entryTitle(e)}\n${entryHref(e)}`), "");
+  if (payload.photos.length) out.push(t.frame, ...payload.photos.map((e) => [e.caption, e.image].filter(Boolean).join("\n")), "");
+  if (payload.sourceIndex.length) out.push(t.sources, ...payload.sourceIndex.map((s) => [s.title || s.source, s.url].filter(Boolean).join("\n")), "");
+  out.push(t.joinTitle, t.joinCopy, `${t.joinCta}: ${SITE}/flow/join`, "", o.canonical);
+  return out.join("\n");
 }
+
+/* ---------- API ---------- */
 
 export function renderIssue(
   payload: IssuePayload,
-  options: {
-    title: string;
-    slug: string;
-    siteUrl?: string;
-  },
+  options: { title: string; slug: string; siteUrl?: string; number?: number | null },
 ) {
-  const siteUrl = options.siteUrl || SITE;
-  const lang = payload.lang;
-
-  // Preserve the template snapshot saved with this issue.
-  const normalized = normalizeIssueTemplate(
-    (payload as Partial<IssuePayload>).template ||
-      DEFAULT_ISSUE_TEMPLATE,
-  );
-
-  // Keep a reliably readable newspaper palette even if an older saved
-  // template used low-contrast or dark colors.
-  const template: IssueTemplateSettings = {
-    ...normalized,
-    theme: {
-      ...normalized.theme,
-      paper: PAPER,
-      ink: INK,
-      muted: MUTED,
-      rule: RULE,
-      accent: ACCENT,
-    },
+  const ext = payload.stats;
+  const canonical = `${options.siteUrl || SITE}/letters/${options.slug}`;
+  const o: Opts = { title: options.title, canonical, number: options.number };
+  return {
+    htmlWeb: renderWeb(payload, ext, o),
+    htmlEmail: renderEmail(payload, ext, o),
+    textEmail: renderText(payload, ext, o),
   };
-
-  const safePayload: IssuePayload = {
-    ...payload,
-    template,
-  };
-
-  const period = `${dateLabel(payload.period.start, lang)} — ${dateLabel(payload.period.end, lang)}`;
-  const description =
-    lang === "ru"
-      ? `Выпуск Flow за период ${period}.`
-      : `Flow issue for ${period}.`;
-
-  const webHeader = renderMasthead(
-    options.title,
-    period,
-    lang,
-    template,
-    false,
-  );
-
-  const emailHeader = renderMasthead(
-    options.title,
-    period,
-    lang,
-    template,
-    true,
-  );
-
-  const webBody = renderBody(safePayload, false);
-  const emailBody = renderBody(safePayload, true);
-  const canonical = `${siteUrl}/letters/${options.slug}`;
-
-  const htmlWeb = `<!doctype html>
-<html lang="${lang}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(options.title)}</title>
-<meta name="description" content="${esc(description)}">
-<meta name="theme-color" content="#FFFFFF">
-<link rel="canonical" href="${esc(canonical)}">
-<style>
-*{box-sizing:border-box}
-html{background:#FFFFFF}
-body{
-  margin:0;
-  background:#FFFFFF;
-  color:${INK};
-  font-family:${fontSans(template)};
-  -webkit-font-smoothing:antialiased;
-  text-rendering:optimizeLegibility;
-}
-a{color:${ACCENT}}
-img{display:block;max-width:100%;height:auto}
-figure{max-width:100%}
-.issue{
-  width:100%;
-  max-width:${Math.min(800, Math.max(600, template.theme.maxWidth))}px;
-  margin:0 auto;
-  padding:38px 28px 72px;
-  background:#FFFFFF;
-}
-.issue section{min-width:0}
-.issue p,.issue h1,.issue h2,.issue h3,.issue li{
-  overflow-wrap:anywhere;
-}
-@media(max-width:600px){
-  .issue{padding:22px 17px 44px}
-}
-</style>
-</head>
-<body>
-<main class="issue">
-${webHeader}
-${webBody}
-<p style="margin:26px 0 0;color:${MUTED};font-family:${fontSans(template)};font-size:11px;line-height:1.6;">${link(canonical, lang === "ru" ? "Открыть постоянную страницу выпуска" : "Open the issue page", template)}</p>
-</main>
-</body>
-</html>`;
-
-  const preheader = esc(description);
-
-  const htmlEmail = `<!doctype html>
-<html lang="${lang}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-</head>
-<body style="margin:0;padding:0;background:#FFFFFF;color:${INK};">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${preheader}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="background:#FFFFFF;">
-<tr><td align="center" style="padding:0 8px;background:#FFFFFF;">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="width:100%;max-width:600px;background:#FFFFFF;">
-<tr><td style="padding:26px 20px 36px;background:#FFFFFF;color:${INK};font-family:${fontSans(template)};">
-${emailHeader}
-${emailBody}
-<p style="margin:28px 0 0;padding-top:16px;border-top:1px solid ${RULE};color:${MUTED};font-family:${fontSans(template)};font-size:11px;line-height:1.6;">${link(canonical, lang === "ru" ? "Открыть выпуск в браузере" : "Read this issue online", template)}</p>
-</td></tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>`;
-
-  const textSections: string[] = [
-    options.title,
-    period,
-    "",
-  ];
-
-  if (template.sections.enabled.lead && payload.lead) {
-    textSections.push(
-      template.labels[lang].lead,
-      payload.lead.title,
-      payload.lead.body,
-      payload.lead.url || "",
-      "",
-    );
-  }
-
-  if (template.sections.enabled.latest) {
-    textSections.push(
-      template.labels[lang].latest,
-      ...payload.latest.map((entry) =>
-        [entry.title, entry.body, entry.url || ""]
-          .filter(Boolean)
-          .join("\n"),
-      ),
-      "",
-    );
-  }
-
-  if (template.sections.enabled.links) {
-    textSections.push(
-      template.labels[lang].links,
-      ...payload.links.map((entry) =>
-        [entry.title, entry.url || "", entry.description]
-          .filter(Boolean)
-          .join("\n"),
-      ),
-      "",
-    );
-  }
-
-  if (template.sections.enabled.videos) {
-    textSections.push(
-      template.labels[lang].videos,
-      ...payload.videos.map((entry) =>
-        [entry.title, entry.url || ""].filter(Boolean).join("\n"),
-      ),
-      "",
-    );
-  }
-
-  if (template.sections.enabled.photos) {
-    textSections.push(
-      template.labels[lang].photos,
-      ...payload.photos.map((entry) =>
-        [entry.caption, entry.image].filter(Boolean).join("\n"),
-      ),
-      "",
-    );
-  }
-
-  if (template.sections.enabled.metrics) {
-    textSections.push(
-      template.labels[lang].metrics,
-      `${lang === "ru" ? "Публичных материалов" : "Public items"}: ${payload.stats.published}`,
-      "",
-    );
-  }
-
-  if (template.sections.enabled.sources) {
-    textSections.push(
-      template.labels[lang].sources,
-      ...payload.sourceIndex.map((entry) =>
-        [entry.title || entry.source, entry.url || ""]
-          .filter(Boolean)
-          .join("\n"),
-      ),
-      "",
-    );
-  }
-
-  if (template.sections.enabled.subscribe) {
-    textSections.push(
-      template.labels[lang].subscribeCopy,
-      `${template.labels[lang].subscribe}: ${SITE}/flow/join`,
-      "",
-    );
-  }
-
-  textSections.push(canonical);
-
-  const textEmail = textSections
-    .filter(Boolean)
-    .join("\n");
-
-  return { htmlWeb, htmlEmail, textEmail };
 }

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { notFound } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
@@ -271,7 +272,7 @@ function MarkdownBody({ body }: { body: string }) {
   return (
     <div className="rounded-[2rem] border border-stone-200/80 bg-white/80 p-7 shadow-sm sm:p-10">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkBreaks]}
         components={{
           h1: ({ children }) => (
             <h2 className="mb-7 mt-10 font-serif text-3xl font-light leading-tight text-stone-900 first:mt-0 sm:text-4xl">
@@ -289,7 +290,7 @@ function MarkdownBody({ body }: { body: string }) {
             </h3>
           ),
           p: ({ children }) => (
-            <p className="mb-6 font-serif text-[19px] font-light leading-[1.85] text-stone-800 sm:text-[21px]">
+            <p className="mb-6 whitespace-pre-wrap font-serif text-[19px] font-light leading-[1.85] text-stone-800 sm:text-[21px]">
               {children}
             </p>
           ),
@@ -298,7 +299,7 @@ function MarkdownBody({ body }: { body: string }) {
           ),
           em: ({ children }) => <em className="italic">{children}</em>,
           blockquote: ({ children }) => (
-            <blockquote className="my-9 border-l-2 border-stone-900 pl-6 font-serif text-xl font-light leading-relaxed text-stone-600 sm:text-2xl">
+            <blockquote className="my-9 whitespace-pre-wrap border-l-2 border-stone-900 pl-6 font-serif text-xl font-light leading-relaxed text-stone-600 sm:text-2xl">
               {children}
             </blockquote>
           ),
@@ -420,7 +421,7 @@ function LinkCard({ item }: { item: FlowItem }) {
           </div>
 
           {description && (
-            <p className="mt-5 font-serif text-lg leading-8 text-stone-600">
+            <p className="mt-5 whitespace-pre-wrap font-serif text-lg leading-8 text-stone-600">
               {description}
             </p>
           )}
@@ -561,8 +562,9 @@ function AIContextBlock({ context }: { context: AIContext | null }) {
 
       <div className="font-serif text-[16px] font-light leading-[1.8] text-stone-700 sm:text-[18px]">
         <ReactMarkdown
+          remarkPlugins={[remarkBreaks]}
           components={{
-            p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
+            p: ({ children }) => <p className="mb-4 whitespace-pre-wrap last:mb-0">{children}</p>,
             hr: () => <hr className="my-5 border-stone-200/80" />,
             strong: ({ children }) => (
               <strong className="font-mono text-[11px] font-normal uppercase tracking-widest text-stone-500">
@@ -618,7 +620,6 @@ export default async function FlowItemPage({ params }: PageProps) {
 
   let context = (contextData as AIContext | null) ?? null;
 
-  // On-demand context generation (исключаем картинки 'photo')
   if (
     !context &&
     item.type !== 'photo' &&
