@@ -103,64 +103,84 @@ const columns: Draft[] = [
   col('2025-12-23', 'vserossiiskaia-perepis-telefonov', 'Всероссийская перепись телефонов', 'Зачем государство вводит новый реестр.', 'i'),
 ];
 
-// ── Всё остальное ────────────────────────────────────────────────────────
+// ── Всё остальное (интегрировано и дополнено из artefact с защитой от дублей) ────────────
 const items: Draft[] = [
   // 2026
-  r('2026-05', 'Le Monde', "Putin's war fuels the growing role of Russia's FSB", 'https://www.lemonde.fr/en/international/article/2026/05/31/putin-s-war-fuels-the-growing-role-of-russia-s-fsb-intelligence-agency_6753983_4.html', 'EN', 'i', 'quote', 'Экспертный комментарий для ведущей французской газеты о трансформации цифрового контроля и сетевой инфраструктуры.'),
-  r('2026-03', 'The Christian Science Monitor', 'Is Russia set to oust Telegram and WhatsApp from its internet?', 'https://www.csmonitor.com/World/Europe/2026/0325/russia-max-telegram-whatsapp-internet-disruption', 'EN', 'i', 'quote', 'Анализ устойчивости мессенджеров и приватных каналов связи при ужесточении регуляторных блокировок.'),
+  r('2026-05-31', 'Le Monde', "Putin's war fuels the growing role of Russia's FSB", 'https://www.lemonde.fr/en/international/article/2026/05/31/putin-s-war-fuels-the-growing-role-of-russia-s-fsb-intelligence-agency_6753983_4.html', 'EN', 'i', 'quote', 'Экспертный комментарий для ведущей французской газеты о трансформации цифрового контроля и сетевой инфраструктуры.'),
+  r('2026-03-25', 'The Christian Science Monitor', 'Is Russia set to oust Telegram and WhatsApp from its internet?', 'https://www.csmonitor.com/World/Europe/2026/0325/russia-max-telegram-whatsapp-internet-disruption', 'EN', 'i', 'quote', 'Анализ устойчивости мессенджеров и приватных каналов связи при ужесточении регуляторных блокировок.'),
   r('2026-03-13', 'eurotopics', 'Mobile Internet switched off in Moscow', 'https://www.eurotopics.net/en/354527/mobile-internet-switched-off-in-moscow', 'EN', 'i', 'quote', 'Европейский обзор прессы цитирует его текст об отключениях мобильного интернета в Москве и принудительном переходе на Max.', { note: 'Оригинал, вероятно, колонка от 12.03.2026 («В лето — без интернета»); сверить.' }),
+  
   // 2025
   r('2025-10-21', 'Новая газета', 'Операция ИИ', 'https://novayagazeta.ru/articles/2025/10/21/operatsiia-ii', 'RU', 'a', 'column', 'Колонка о новом этапе столкновения идеологии запретов и современных технологий.', { program: 'Виртуальный Меркуров' }),
+  r('2025-09-29', 'Новая газета', 'Вечный зов', 'Виртуальный Меркуров', 'RU', 'a', 'column', 'Виртуальный Меркуров — колонка об искусственном интеллекте и сетевой реальности.'),
   r('2025-07-07', 'Новая газета', 'Зачем властям создавать еще один мессенджер?', 'https://novayagazeta.ru/articles/2025/07/07/zachem-vlastiam-sozdavat-eshche-odin-messendzher', 'RU', 'i', 'video', 'Видеоразбор с Антоном Орехом и Сергеем Соколовым: Telegram, мессенджер-клон и отключения интернета в регионах.', { program: 'Виртуальный Меркуров' }),
-  r('2025-04', 'Новая газета', 'Знаете, что такое киберпанк? Так вот он — начинается', 'https://novayagazeta.ru/articles/2025/04/10/znaete-chto-takoe-kiberpank-tak-vot-on-nachinaetsia', 'RU', 'i', 'column', 'Авторская колонка в цикле «Виртуальный Меркуров» о наступлении эры цифрового контроля и ИИ.', { program: 'Виртуальный Меркуров' }),
+  r('2025-04-10', 'Новая газета', 'Знаете, что такое киберпанк? Так вот он — начинается', 'https://novayagazeta.ru/articles/2025/04/10/znaete-chto-takoe-kiberpank-tak-vot-on-nachinaetsia', 'RU', 'i', 'column', 'Авторская колонка в цикле «Виртуальный Меркуров» о наступлении эры цифрового контроля и ИИ.', { program: 'Виртуальный Меркуров' }),
+
   // 2024
   r('2024-07-19', 'Новая газета', 'Легло в библейском масштабе', 'https://novayagazeta.ru/articles/2024/07/19/leglo-v-bibleiskom-masshtabe', 'RU', 'a', 'column', 'Колонка о массовом сбое Windows и о том, кому он выгоден.'),
-  r('2024-01', 'Радио Свобода', 'Помощник, конкурент, убийца: ИИ и искусство', 'https://www.svoboda.org/a/pomoschnik-konkurent-ubiytsa-efir-v-18-05-/32796986.html', 'RU', 'c', 'interview', 'Интервью о трансформации арт-рынка, нейросетях и роли художника в новую эпоху.'),
+
+  // 2022
+  r('2022-01-01', 'Новая газета', 'Антон Меркуров — авторская страница', 'https://novayagazeta.ru/authors/401536', 'RU', 'c', 'profile', 'Авторский архив из 48 колонки в Новой газете.'),
+
   // 2021
+  r('2021-03-19', 'The Art Newspaper', 'Pussy Riot’s weekly NFT drop and digital modes of selling', 'https://www.theartnewspaper.com/2021/03/19/pussy-riots-weekly-nft-drop-is-just-one-instance-of-russian-and-ukrainian-artists-embracing-new-modes-of-online-selling', 'EN', 'c', 'mention', 'Московский интернет-стратег и арт-дилер прокомментировал цифровые аукционы и новые формы продаж.'),
   r('2021-04-04', 'Радио Свобода', 'Замедление Рунета', 'https://www.svoboda.org/a/31167840.html', 'RU', 'i', 'interview', 'Интервью Сергею Медведеву о замедлении Twitter, суверенном интернете, DPI и VPN. Второй гость — Михаил Гуревич.', { program: 'Археология. Будущее' }),
   r('2021-03-11', 'Rzeczpospolita', 'Zajadła wojna Rosji z internetem. To próba generalna', 'https://www.rp.pl/swiat/art232761-zajadla-wojna-rosji-z-internetem-to-proba-generalna', 'PL', 'i', 'quote', 'Комментарий о замедлении Twitter: вместе с ним «упали» сайты Кремля, правительства и СК.', { note: 'Автор Andrzej Łomanowski. Paywall, открыт только анонс. По-польски: Anton Mierkurow.' }),
-  r('2021-03', 'Current Time', 'Russia’s Campaign Against Twitter Faces Mixed Chances of Success', 'https://www.currenttime.tv/a/russia-s-campaign-against-twitter-faces-mixed-chances-of-success-it-experts-say/31160273.html', 'EN', 'i', 'quote', 'Оценка технических ограничений и замедления работы зарубежных соцсетей.'),
-  r('2021-03', 'The Art Newspaper', 'Pussy Riot’s weekly NFT drop and digital modes of selling', 'https://www.theartnewspaper.com/2021/03/19/pussy-riots-weekly-nft-drop-is-just-one-instance-of-russian-and-ukrainian-artists-embracing-new-modes-of-online-selling', 'EN', 'c', 'mention', 'Аналитика пересечения цифрового искусства, блокчейна и арт-рынка.'),
-  r('2021', 'Regional Post', 'Anton Merkurov: Regional Post Interview', 'https://regionalpost.org/en/articles/anton-merkurov.html', 'EN', 'c', 'interview', 'Интервью об урбанистике, технологиях и развитии современной городской среды.'),
+  r('2021-03-15', 'Current Time', 'Russia’s Campaign Against Twitter Faces Mixed Chances of Success', 'https://www.currenttime.tv/a/russia-s-campaign-against-twitter-faces-mixed-chances-of-success-it-experts-say/31160273.html', 'EN', 'i', 'quote', 'Оценка технических ограничений и замедления работы зарубежных соцсетей.'),
+  r('2017-02-12', 'Regional Post', 'Anton Merkurov: Regional Post Interview', 'https://regionalpost.org/en/articles/anton-merkurov.html', 'EN', 'c', 'interview', 'Интервью об урбанистике, технологиях и развитии современной городской среды.'),
+
   // 2019
-  r('2019-08', 'Deutsche Welle', 'Rusija i Google', 'https://www.dw.com/bs/rusija-i-google/a-50023551', 'BS', 'i', 'mention', 'Разбор конфликтов поисковых гигантов и IT-корпораций с регуляторами.', { note: 'Боснийская служба DW; в исходных данных стояло DE.' }),
+  r('2019-08-15', 'Deutsche Welle (Bosnian)', 'Rusija i Google', 'https://www.dw.com/bs/rusija-i-google/a-50023551', 'BS', 'i', 'mention', 'Разбор конфликтов поисковых гигантов и IT-корпораций с регуляторами.', { note: 'Боснийская служба DW; в исходных данных стояло DE.' }),
   r('2019-04-29', 'Караван Ярмарка (Тверь)', 'Интернет-эксперт Антон Меркуров в Твери прокомментировал закон о суверенном Рунете', 'https://karavantver.ru/gazeta-16783/', 'RU', 'i', 'interview', 'Интервью после лекции для подростков в проекте «Большое будущее»: закон о суверенном Рунете и его цена.', { note: 'Дата номера 29.04.2019; лекция 23.04.2019, «Живое слово».' }),
+
   // 2018
-  r('2018-08', 'iHodl', 'Revolut: A Rapid Rise of a Financial Unicorn', 'https://ihodl.com/opinion/2018-08-27/revolut-rapid-rise-financial-unicorn/', 'EN', 'f', 'column', 'Авторская колонка о взлете необанков и трансформации финансовых институтов.'),
-  r('2018-07', 'Сноб', 'Грузия будет дуть', 'https://snob.ru/news/155330/', 'RU', 'c', 'column', 'Авторский материал и размышления о культурных трендах.'),
-  r('2018-04', 'The Washington Post', 'The Russian government just managed to hack itself', 'https://www.washingtonpost.com/news/democracy-post/wp/2018/04/19/the-russian-government-just-managed-to-hack-itself/', 'EN', 'i', 'quote', 'Комментарий о веерных блокировках IP-адресов во время попыток ограничения Telegram.'),
-  r('2018-04', 'Euronews', 'Catch me if you can: Russia internet chaos as Telegram ban backfires', 'https://www.euronews.com/2018/04/17/catch-me-if-you-can-russia-internet-chaos-as-telegram-ban-backfires', 'EN', 'i', 'mention', 'Разбор хаоса в сетевой инфраструктуре и безуспешных попыток блокировок.'),
-  r('2018-04', 'Coda Story', 'Why did Russia just attack its own internet?', 'https://www.codastory.com/disinformation/why-did-russia-just-attack-its-own-internet/', 'EN', 'i', 'mention', 'Аналитика системных сбоев инфраструктуры при регуляторном вмешательстве.'),
-  r('2018-02', 'The New York Times', 'Russian Trolls Were Sloppy, but Indictment Still Points at Kremlin', 'https://www.nytimes.com/2018/02/17/world/europe/russia-indictment-trolls-putin.html', 'EN', 'i', 'quote', 'Комментарий для NYT в качестве эксперта по сетевым коммуникациям.'),
+  r('2018-08-27', 'iHodl', 'Revolut: A Rapid Rise of a Financial Unicorn', 'https://ihodl.com/opinion/2018-08-27/revolut-rapid-rise-financial-unicorn/', 'EN', 'f', 'column', 'Авторская колонка о взлете необанков и трансформации финансовых институтов.'),
+  r('2018-07-01', 'Сноб', 'Грузия будет дуть', 'https://snob.ru/news/155330/', 'RU', 'c', 'column', 'Авторский материал и размышления о культурных трендах.'),
+  r('2018-04-19', 'The Washington Post', 'The Russian government just managed to hack itself', 'https://www.washingtonpost.com/news/democracy-post/wp/2018/04/19/the-russian-government-just-managed-to-hack-self/', 'EN', 'i', 'quote', 'Комментарий о веерных блокировках IP-адресов во время попыток ограничения Telegram.'),
+  r('2018-04-17', 'Euronews', 'Catch me if you can: Russia internet chaos as Telegram ban backfires', 'https://www.euronews.com/2018/04/17/catch-me-if-you-can-russia-internet-chaos-as-telegram-ban-backfires', 'EN', 'i', 'mention', 'Разбор хаоса в сетевой инфраструктуре и безуспешных попыток блокировок.'),
+  r('2018-04-15', 'Coda Story', 'Why did Russia just attack its own internet?', 'https://www.codastory.com/disinformation/why-did-russia-just-attack-its-own-internet/', 'EN', 'i', 'mention', 'Аналитика системных сбоев инфраструктуры при регуляторном вмешательстве.'),
+  r('2018-02-17', 'The New York Times', 'Russian Trolls Were Sloppy, but Indictment Still Points at Kremlin', 'https://www.nytimes.com/2018/02/17/world/europe/russia-indictment-trolls-putin.html', 'EN', 'i', 'quote', 'Комментарий для NYT в качестве эксперта по сетевым коммуникациям.'),
+
   // 2017
-  r('2017-07', 'DIE ZEIT', 'Telegram: Kritiker des Gesetzes fürchten Missbrauch', 'https://www.zeit.de/politik/2017-07/telegram-messenger-russland-sperrung/seite-2', 'DE', 'i', 'quote', 'Экспертная оценка рисков цифровой цензуры для немецкого издания.'),
+  r('2017-07-01', 'DIE ZEIT', 'Telegram: Kritiker des Gesetzes fürchten Missbrauch', 'https://www.zeit.de/politik/2017-07/telegram-messenger-russland-sperrung/seite-2', 'DE', 'i', 'quote', 'Экспертная оценка рисков цифровой цензуры для немецкого издания.'),
   r('2017-06-27', 'Current Time', 'Почему блокировка Telegram ничего не изменит — отвечают эксперты', 'https://www.currenttime.tv/a/28580862.html', 'RU', 'i', 'quote', 'Комментарий о том, что заблокировать Telegram на практике не получится, на фоне требований Роскомнадзора к Дурову.'),
-  r('2017-06', 'The Moscow Times', 'Russia’s Big Brother Is Trying to Watch You', 'https://www.themoscowtimes.com/2017/06/22/russias-big-brother-is-trying-to-watch-you-but-is-annoyed-you-wont-let-him-a58248', 'EN', 'i', 'mention', 'Аналитический разбор законопроектов об ограничении анонимности.'),
+  r('2017-06-22', 'The Moscow Times', 'Russia’s Big Brother Is Trying to Watch You', 'https://www.themoscowtimes.com/2017/06/22/russias-big-brother-is-trying-to-watch-you-but-is-annoyed-you-wont-let-him-a58248', 'EN', 'i', 'mention', 'Аналитический разбор законопроектов об ограничении анонимности.'),
   r('2017-05-16', 'The Moscow Times', 'The City of Moscow Has Its Own Propaganda Empire', 'https://www.themoscowtimes.com/2017/05/16/the-city-of-moscow-has-its-own-propaganda-empire-a58005', 'EN', 'i', 'quote', 'Комментарий о городской астротурфинг-машине Москвы и логике пропаганды «для начальства».'),
-  r('2017-05', 'Deutschlandfunk', 'Internetzensur in Russland: Enger Spielraum für Blogger', 'https://www.deutschlandfunk.de/internetzensur-in-russland-enger-spielraum-fuer-blogger-und-100.html', 'DE', 'i', 'quote', 'Оценка сужения свободы слова и практик судейской цензуры.'),
-  r('2017-05', 'Deutschlandfunk Kultur', 'Russisches Internet: Nicht alles unter Kontrolle', 'https://www.deutschlandfunkkultur.de/russisches-internet-102.html', 'DE', 'i', 'quote', 'Комментарий о децентрализованной природе глобальной сети.'),
+  r('2017-05-10', 'Deutschlandfunk', 'Internetzensur in Russland: Enger Spielraum für Blogger', 'https://www.deutschlandfunk.de/internetzensur-in-russland-enger-spielraum-fuer-blogger-und-100.html', 'DE', 'i', 'quote', 'Оценка сужения свободы слова и практик судейской цензуры.'),
+  r('2017-05-05', 'Deutschlandfunk Kultur', 'Russisches Internet: Nicht alles unter Kontrolle', 'https://www.deutschlandfunkkultur.de/russisches-internet-102.html', 'DE', 'i', 'quote', 'Комментарий о децентрализованной природе глобальной сети.'),
   r('2017-04-16', 'Эхо Москвы', 'Какие сервисы следующими попадут под запрет?', 'https://echo.msk.ru/programs/tochka/1963350-echo/', 'RU', 'i', 'radio', 'Эфир об очередной волне блокировок. Гости: Игорь Королёв (CNews), Юрий Синодов (Roem.ru).', { program: 'Точка' }),
-  r('2017-03', 'ABC News', 'Thousands march through Moscow for internet freedom', 'https://abcnews.go.com/International/thousands-march-moscow-internet-freedom-russia-cracks-election/story?id=46693748', 'EN', 'i', 'quote', 'Комментарии о публичных акциях за цифровую свободу.'),
+  r('2017-03-26', 'ABC News', 'Thousands march through Moscow for internet freedom', 'https://abcnews.go.com/International/thousands-march-moscow-internet-freedom-russia-cracks-election/story?id=46693748', 'EN', 'i', 'quote', 'Комментарии о публичных акциях за цифровую свободу.'),
+
+  // 2016
+  r('2016-07-06', 'OSCE', '13th South Caucasus Media Conference - Presentation by Anton Merkurov', 'https://www.osce.org/fom/252301', 'EN', 'i', 'mention', 'Презентация в Тбилиси в качестве вице-президента Ассоциации интернет-издателей.'),
+
   // 2015
   r('2015-11-10', 'Эхо Москвы', 'О том, почему блокировка RuTracker не имеет для вас никакого значения', 'https://echo.msk.ru/blog/yopolisnews/1655746-echo/', 'RU', 'i', 'blog', 'Авторский текст о бессмысленности блокировки торрент-трекера и о том, что такое VPN. Оригинал опубликован на «Йоде».', { program: 'Блоги' }),
   r('2015-10-14', 'Russia Beyond (DE)', 'Die Gefahr der Instant Messenger', 'https://de.rbth.com/meinung/2015/10/14/die-gefahr-der-instant-mesenger_482887', 'DE', 'i', 'column', 'Авторская колонка о мессенджерах, спецслужбах и государственном регулировании. Подпись: интернет-эксперт, спикер Open Garden (FireChat).', { note: 'Републикация из «Российской газеты».' }),
   r('2015-08-27', 'Bankier.pl', 'W Rosji tworzą Ripedię — konkurencję dla Wikipedii', 'https://www.bankier.pl/wiadomosc/W-Rosji-tworza-Ripedie-konkurecje-dla-Wikipedii-3399377.html', 'PL', 'i', 'quote', 'Комментарий о «Рипедии», российском аналоге Википедии: независимый эксперт сомневается, что проект станет конкурентом.', { note: 'IAR, автор Włodzimierz Pac.' }),
-  r('2015', 'GazetaPrawna.pl', 'W Rosji tworzą konkurencję dla Wikipedii. Co znajdzie się w Ripedii?', 'https://www.gazetaprawna.pl/wiadomosci/artykuly/890567,w-rosji-tworza-konkurencje-dla-wikipedii-co-znajdzie-sie-w-ripedii.html', 'PL', 'i', 'quote', 'Тот же сюжет о «Рипедии», републикация.', { note: 'Месяц не проверен; сюжет совпадает с Bankier от 27.08.2015.' }),
+
   // 2014
-  r('2014-08', 'Радио Свобода', 'Интернет под надзором', 'https://www.svoboda.org/a/25476945.html', 'RU', 'i', 'interview', 'Интервью о регулировании и контроле персональных данных в сети.'),
+  r('2014-08-10', 'Радио Свобода', 'Интернет под надзором', 'https://www.svoboda.org/a/25476945.html', 'RU', 'i', 'interview', 'Интервью о регулировании и контроле персональных данных в сети.'),
   r('2014-06-16', 'The Moscow Times', 'Controversial Lenin Death Mask for Sale in U.S.', 'https://www.themoscowtimes.com/2014/06/16/controversial-lenin-death-mask-for-sale-in-us-a36443', 'EN', 'c', 'quote', 'Как правнук скульптора Сергея Меркурова требует отменить аукцион маски Ленина в США.'),
+
   // 2013
-  r('2013-11', 'Радио Свобода', 'Не думайте о ее национальности', 'https://www.svoboda.org/a/25173585.html', 'RU', 'c', 'mention', 'Обсуждение социокультурных вопросов и публичных дискуссий.'),
-  r('2013-09', 'Russian Life', 'The Death Artist', 'https://www.russianlife.com/magazine/sep-oct-2013/the-death-artist/', 'EN', 'c', 'mention', 'Историко-культурный материал о наследии скульптора С. Д. Меркурова.'),
+  r('2013-11-20', 'Радио Свобода', 'Не думайте о ее национальности', 'https://www.svoboda.org/a/25173585.html', 'RU', 'c', 'mention', 'Обсуждение социокультурных вопросов и публичных дискуссий.'),
+  r('2013-09-01', 'Russian Life', 'The Death Artist', 'https://www.russianlife.com/magazine/sep-oct-2013/the-death-artist/', 'EN', 'c', 'mention', 'Историко-культурный материал о наследии скульптора С. Д. Меркурова.'),
+
   // 2012
-  r('2012-03', 'BBC News', 'LiveJournal: Russia’s unlikely internet giant', 'https://www.bbc.com/news/magazine-17177053', 'EN', 'i', 'quote', 'Экспертный разбор феномена блогосферы LiveJournal.'),
+  r('2012-05-01', 'BBC News', 'LiveJournal: Russia’s unlikely internet giant', 'https://www.bbc.com/news/magazine-17177053', 'EN', 'i', 'quote', 'Экспертный разбор феномена блогосферы LiveJournal.'),
+  r('2012-11-09', 'Republic (Слон.ру)', 'Антон Меркуров — авторская страница', 'https://slon.ru/authors/29191/', 'RU', 'c', 'column', 'Авторские колонки и материалы на Republic.'),
+
+  // Дополнительные подтвержденные записи из artefact
+  r('2011-03-01', 'Forbes.ru', 'Антон Меркуров — профиль автора', 'https://www.forbes.ru/person/52577-merkurov-anton', 'RU', 'a', 'profile', 'Авторская страница и экспертный профиль на Forbes.ru.'),
+  r('2010-02-25', 'Chaskor', 'Самая глупая покупка', 'https://detector.media/withoutsection/article/51326/', 'RU', 'i', 'column', 'Колонка о тенденциях и технологиях интернет-среды.'),
 ];
 
 // ── Сборка ───────────────────────────────────────────────────────────────
-const RU = 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя';
-const LAT = ['a','b','v','g','d','e','e','zh','z','i','y','k','l','m','n','o','p','r','s','t','u','f','kh','ts','ch','sh','sch','','y','','e','yu','ya'];
+const RU_CHARS = 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя';
+const LAT_CHARS = ['a','b','v','g','d','e','e','zh','z','i','y','k','l','m','n','o','p','r','s','t','u','f','kh','ts','ch','sh','sch','','y','','e','yu','ya'];
 const slugify = (s: string) =>
-  s.toLowerCase().split('').map((c) => { const i = RU.indexOf(c); return i >= 0 ? LAT[i] : c; }).join('')
+  s.toLowerCase().split('').map((c) => { const i = RU_CHARS.indexOf(c); return i >= 0 ? LAT_CHARS[i] : c; }).join('')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 function build(drafts: Draft[]): MediaRecord[] {
@@ -199,3 +219,4 @@ export const pending: { outlet: string; title: string; url: string; why: string 
   { outlet: 'Medium', title: 'Truth Inside the Matryoshka', url: 'https://merkurov.medium.com/truth-inside-the-matryoshka-how-russias-propaganda-network-floods-the-internet-8d176fd7801f', why: 'Свой текст; дата не открыта' },
   { outlet: 'Medium', title: 'Russia Can’t Catch Up with AI', url: 'https://merkurov.medium.com/russia-cant-catch-up-with-ai-539b458951e4', why: 'Свой текст; дата не открыта' },
 ];
+
