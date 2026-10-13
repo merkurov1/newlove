@@ -368,47 +368,53 @@ export default function MediaArchive({ records, archives }: Props) {
 
 const CSS = `
 .ma {
-  --ma-fg: var(--text-primary, #141414);
-  --ma-on: var(--bg-primary, #fff);
-  --ma-mut: var(--text-secondary, #6d6a65);
-  --ma-line: var(--border-color, rgba(0,0,0,.12));
-  --ma-chip: var(--surface-secondary, rgba(0,0,0,.05));
-  --ma-acc: var(--accent, #d2391c);
-  --ma-serif: var(--font-serif, ui-serif, Georgia, 'Times New Roman', serif);
-  --ma-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  --ma-fg: #111111;
+  --ma-bg: #ffffff;
+  --ma-mut: #555555;
+  --ma-line: #dcdcdc;
+  --ma-chip-bg: #f4f4f5;
+  --ma-chip-fg: #111111;
+  --ma-acc: #d2391c;
+  --ma-serif: ui-serif, Georgia, 'Times New Roman', serif;
+  --ma-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  
   max-width: 1120px;
   margin: 0 auto;
-  padding: var(--header-h, 96px) 24px 96px;
+  padding: 96px 24px 96px;
   color: var(--ma-fg);
+  background-color: var(--ma-bg);
 }
 
 @media (prefers-color-scheme: dark) {
   .ma {
-    --ma-fg: var(--text-primary, #f1eee8);
-    --ma-on: var(--bg-primary, #111);
-    --ma-mut: var(--text-secondary, #9c9992);
-    --ma-line: var(--border-color, rgba(255,255,255,.14));
-    --ma-chip: var(--surface-secondary, rgba(255,255,255,.07));
-    --ma-acc: var(--accent, #ff6a4d);
+    --ma-fg: #f3f3f3;
+    --ma-bg: #0a0a0a;
+    --ma-mut: #a0a0a0;
+    --ma-line: #2a2a2a;
+    --ma-chip-bg: #1c1c1e;
+    --ma-chip-fg: #f3f3f3;
+    --ma-acc: #ff5c38;
   }
 }
 
 :root[data-theme="dark"] .ma {
-  --ma-fg: var(--text-primary, #f1eee8);
-  --ma-on: var(--bg-primary, #111);
-  --ma-mut: var(--text-secondary, #9c9992);
-  --ma-line: var(--border-color, rgba(255,255,255,.14));
-  --ma-chip: var(--surface-secondary, rgba(255,255,255,.07));
-  --ma-acc: var(--accent, #ff6a4d);
+  --ma-fg: #f3f3f3;
+  --ma-bg: #0a0a0a;
+  --ma-mut: #a0a0a0;
+  --ma-line: #2a2a2a;
+  --ma-chip-bg: #1c1c1e;
+  --ma-chip-fg: #f3f3f3;
+  --ma-acc: #ff5c38;
 }
 
 :root[data-theme="light"] .ma {
-  --ma-fg: var(--text-primary, #141414);
-  --ma-on: var(--bg-primary, #fff);
-  --ma-mut: var(--text-secondary, #6d6a65);
-  --ma-line: var(--border-color, rgba(0,0,0,.12));
-  --ma-chip: var(--surface-secondary, rgba(0,0,0,.05));
-  --ma-acc: var(--accent, #d2391c);
+  --ma-fg: #111111;
+  --ma-bg: #ffffff;
+  --ma-mut: #555555;
+  --ma-line: #dcdcdc;
+  --ma-chip-bg: #f4f4f5;
+  --ma-chip-fg: #111111;
+  --ma-acc: #d2391c;
 }
 
 .ma button {
@@ -434,24 +440,23 @@ const CSS = `
 }
 
 .ma-eyebrow {
-  font: 500 12px/1 var(--ma-mono);
+  font: 600 12px/1.2 var(--ma-mono);
   letter-spacing: .14em;
   text-transform: uppercase;
   color: var(--ma-acc);
-  margin: 0 0 20px;
+  margin: 0 0 16px;
 }
 
 .ma-h1 {
-  font: 400 clamp(34px, 6vw, 68px)/1.04 var(--ma-serif);
+  font: 400 clamp(32px, 5.5vw, 64px)/1.08 var(--ma-serif);
   letter-spacing: -.02em;
   margin: 0;
   max-width: 16em;
-  text-wrap: balance;
 }
 
 .ma-lede {
-  font-size: 17px;
-  line-height: 1.55;
+  font-size: 18px;
+  line-height: 1.6;
   color: var(--ma-mut);
   max-width: 38em;
   margin: 20px 0 0;
@@ -460,30 +465,31 @@ const CSS = `
 .ma-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin: 40px 0 0;
-  padding: 20px 0;
+  gap: 24px;
+  margin: 48px 0 0;
+  padding: 24px 0;
   border-block: 1px solid var(--ma-line);
 }
 
 .ma-stats dt {
-  font: 500 11px/1 var(--ma-mono);
+  font: 600 11px/1.2 var(--ma-mono);
   letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--ma-mut);
 }
 
 .ma-stats dd {
-  margin: 10px 0 0;
-  font: 400 clamp(32px, 5vw, 56px)/1 var(--ma-serif);
+  margin: 8px 0 0;
+  font: 400 clamp(28px, 4vw, 48px)/1 var(--ma-serif);
   font-variant-numeric: tabular-nums;
+  color: var(--ma-fg);
 }
 
 .ma-wall {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 16px;
-  margin-top: 28px;
+  gap: 8px 16px;
+  margin-top: 32px;
   font: 400 clamp(16px, 2vw, 20px)/1.5 var(--ma-serif);
 }
 
@@ -503,21 +509,23 @@ const CSS = `
   text-decoration: underline;
   text-decoration-color: var(--ma-acc);
   text-underline-offset: 6px;
-  text-decoration-thickness: 1.5px;
+  text-decoration-thickness: 2px;
 }
 
 .ma-archives {
-  margin: 18px 0 0;
-  font-size: 13px;
+  margin: 20px 0 0;
+  font-size: 14px;
   color: var(--ma-mut);
 }
 
 .ma-archives a {
+  color: var(--ma-fg);
+  font-weight: 500;
   transition: color .15s ease;
 }
 
 .ma-archives a:hover {
-  color: var(--ma-fg);
+  color: var(--ma-acc);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -526,8 +534,8 @@ const CSS = `
   display: flex;
   align-items: flex-end;
   gap: 6px;
-  height: 96px;
-  margin: 48px 0 0;
+  height: 104px;
+  margin: 56px 0 0;
   padding-bottom: 4px;
 }
 
@@ -538,7 +546,7 @@ const CSS = `
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -557,11 +565,11 @@ const CSS = `
 
 .ma-bar:disabled {
   cursor: default;
-  opacity: 0.5;
+  opacity: 0.3;
 }
 
 .ma-bar-label {
-  font: 400 10px/1 var(--ma-mono);
+  font: 500 11px/1 var(--ma-mono);
   color: var(--ma-mut);
 }
 
@@ -569,8 +577,8 @@ const CSS = `
   display: flex;
   flex-direction: column;
   gap: 16px;
-  margin: 28px 0 0;
-  padding-top: 24px;
+  margin: 32px 0 0;
+  padding-top: 28px;
   border-top: 1px solid var(--ma-line);
 }
 
@@ -579,13 +587,17 @@ const CSS = `
   font: inherit;
   font-size: 16px;
   padding: 12px 0;
-  color: inherit;
+  color: var(--ma-fg);
   background: none;
   border: 0;
   border-bottom: 1px solid var(--ma-line);
   outline: 0;
   border-radius: 0;
   transition: border-color .15s ease;
+}
+
+.ma-search input::placeholder {
+  color: var(--ma-mut);
 }
 
 .ma-search input:focus {
@@ -595,37 +607,39 @@ const CSS = `
 .ma-chips-group {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .ma-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .ma-chip {
   font-size: 13px;
-  padding: 6px 14px;
+  font-weight: 500;
+  padding: 7px 14px;
   border-radius: 999px;
-  background: var(--ma-chip);
-  border: 1px solid transparent;
+  background: var(--ma-chip-bg);
+  color: var(--ma-chip-fg);
+  border: 1px solid var(--ma-line);
   transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
 
 .ma-chip:hover {
-  background: var(--ma-line);
+  border-color: var(--ma-fg);
 }
 
 .ma-chip[aria-pressed=true] {
   background: var(--ma-fg);
-  color: var(--ma-on);
+  color: var(--ma-bg);
   border-color: var(--ma-fg);
 }
 
 .ma-count {
-  margin: 4px 0 0;
-  font: 400 12px/1 var(--ma-mono);
+  margin: 6px 0 0;
+  font: 500 12px/1 var(--ma-mono);
   color: var(--ma-mut);
 }
 
@@ -633,6 +647,8 @@ const CSS = `
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+  color: var(--ma-fg);
+  font-weight: 600;
 }
 
 .ma-reset:hover {
@@ -640,34 +656,33 @@ const CSS = `
 }
 
 .ma-year {
-  margin-top: 56px;
+  margin-top: 64px;
   content-visibility: auto;
   contain-intrinsic-size: auto 640px;
 }
 
 .ma-year-head {
   position: sticky;
-  top: var(--header-h, 72px);
-  z-index: 2;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: baseline;
-  gap: 12px;
-  padding: 12px 0;
-  background: var(--bg, Canvas);
-  border-bottom: 1px solid var(--ma-line);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  gap: 16px;
+  padding: 16px 0;
+  background: var(--ma-bg);
+  border-bottom: 2px solid var(--ma-line);
 }
 
 .ma-year-head h2 {
   margin: 0;
-  font: 400 clamp(36px, 6vw, 64px)/1 var(--ma-serif);
+  font: 400 clamp(32px, 5vw, 56px)/1 var(--ma-serif);
   font-variant-numeric: tabular-nums;
   letter-spacing: -.02em;
+  color: var(--ma-fg);
 }
 
 .ma-year-head span {
-  font: 400 12px/1 var(--ma-mono);
+  font: 600 12px/1 var(--ma-mono);
   color: var(--ma-mut);
 }
 
@@ -681,13 +696,13 @@ const CSS = `
 .ma-row {
   display: grid;
   grid-template-columns: 88px 1fr;
-  gap: 20px;
-  padding: 24px 0;
+  gap: 24px;
+  padding: 28px 0;
   border-bottom: 1px solid var(--ma-line);
 }
 
 .ma-date {
-  font: 400 12px/1.6 var(--ma-mono);
+  font: 500 12px/1.6 var(--ma-mono);
   color: var(--ma-mut);
   padding-top: 4px;
 }
@@ -700,8 +715,8 @@ const CSS = `
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 12px;
-  margin: 0 0 8px;
+  gap: 8px 12px;
+  margin: 0 0 10px;
   font-size: 13px;
   color: var(--ma-mut);
 }
@@ -712,18 +727,21 @@ const CSS = `
 }
 
 .ma-tag {
-  font: 500 10px/1 var(--ma-mono);
+  font: 600 10px/1 var(--ma-mono);
   letter-spacing: .08em;
   text-transform: uppercase;
-  padding: 3px 6px;
+  padding: 3px 8px;
   border: 1px solid var(--ma-line);
   border-radius: 4px;
+  background: var(--ma-chip-bg);
+  color: var(--ma-fg);
 }
 
 .ma-title {
   display: inline-block;
-  font: 400 clamp(20px, 2.6vw, 28px)/1.25 var(--ma-serif);
+  font: 400 clamp(20px, 2.5vw, 26px)/1.3 var(--ma-serif);
   letter-spacing: -.01em;
+  color: var(--ma-fg);
   transition: color .15s ease;
 }
 
@@ -738,9 +756,9 @@ a.ma-title:hover {
 }
 
 .ma-sum {
-  margin: 10px 0 0;
-  font-size: 15px;
-  line-height: 1.55;
+  margin: 12px 0 0;
+  font-size: 16px;
+  line-height: 1.6;
   color: var(--ma-mut);
   max-width: 44em;
 }
@@ -778,25 +796,26 @@ a.ma-title:hover {
 .ma-mini {
   margin-top: 16px;
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 .ma-mini li {
   display: grid;
-  grid-template-columns: 76px 1fr;
-  gap: 12px;
-  padding: 10px 0;
+  grid-template-columns: 80px 1fr;
+  gap: 16px;
+  padding: 12px 0;
   border-top: 1px solid var(--ma-line);
   font-size: 15px;
   align-items: center;
 }
 
 .ma-mini time {
-  font: 400 12px/1.7 var(--ma-mono);
+  font: 500 12px/1.6 var(--ma-mono);
   color: var(--ma-mut);
 }
 
 .ma-mini a {
+  color: var(--ma-fg);
   transition: color .15s ease;
 }
 
@@ -805,8 +824,9 @@ a.ma-title:hover {
 }
 
 .ma-empty {
-  margin-top: 48px;
+  margin-top: 56px;
   color: var(--ma-mut);
+  font-size: 16px;
 }
 
 @media (max-width: 640px) {
@@ -818,7 +838,7 @@ a.ma-title:hover {
   }
   .ma-row {
     grid-template-columns: 1fr;
-    gap: 6px;
+    gap: 8px;
   }
   .ma-date {
     padding: 0;
