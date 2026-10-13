@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
 import { notFound } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
@@ -272,7 +271,7 @@ function MarkdownBody({ body }: { body: string }) {
   return (
     <div className="rounded-[2rem] border border-stone-200/80 bg-white/80 p-7 shadow-sm sm:p-10">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
+        remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
             <h2 className="mb-7 mt-10 font-serif text-3xl font-light leading-tight text-stone-900 first:mt-0 sm:text-4xl">
@@ -562,7 +561,7 @@ function AIContextBlock({ context }: { context: AIContext | null }) {
 
       <div className="font-serif text-[16px] font-light leading-[1.8] text-stone-700 sm:text-[18px]">
         <ReactMarkdown
-          remarkPlugins={[remarkBreaks]}
+          remarkPlugins={[remarkGfm]}
           components={{
             p: ({ children }) => <p className="mb-4 whitespace-pre-wrap last:mb-0">{children}</p>,
             hr: () => <hr className="my-5 border-stone-200/80" />,
