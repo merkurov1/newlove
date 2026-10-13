@@ -1,61 +1,70 @@
-// app/media/page.tsx
+
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-
-// ⚠️ Поправьте пути под ваш проект: я не видел код глобального хедера и футера.
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 
 import MediaArchive from '@/components/media/MediaArchive';
 import { records, archives } from '@/data/media';
 
-const siteUrl = 'https://merkurov.love'; // Замените на ваш домен, если отличается
+const siteUrl = 'https://www.merkurov.love';
+
+const archiveDescription =
+  'A chronological archive of interviews, expert commentary, author columns and media citations featuring Anton Merkurov. Each entry links to its original publication.';
 
 export const metadata: Metadata = {
-  title: 'Media archive — Anton Merkurov',
-  description:
-    'Expert commentary, interviews and columns on the Russian internet, platforms, AI and the art market. Every record links to the original publication.',
+  title: 'Media Archive — Anton Merkurov',
+  description: archiveDescription,
+
   keywords: [
     'Anton Merkurov',
     'Антон Меркуров',
     'media archive',
     'expert commentary',
     'interviews',
-    'columns',
+    'author columns',
     'internet censorship',
-    'AI and tech',
+    'AI and technology',
     'art market',
     'Novaya Gazeta',
   ],
-  authors: [{ name: 'Anton Merkurov', url: siteUrl }],
+
+  authors: [
+    {
+      name: 'Anton Merkurov',
+      url: siteUrl,
+    },
+  ],
+
   creator: 'Anton Merkurov',
   publisher: 'Anton Merkurov',
-  metadataBase: new URL(siteUrl),
+
   alternates: {
     canonical: '/media',
   },
+
   openGraph: {
-    title: 'Media archive — Anton Merkurov',
-    description: `${records.length} records from Le Monde, The New York Times, BBC, Deutsche Welle, Novaya Gazeta and more.`,
-    url: '/media',
+    title: 'Media Archive — Anton Merkurov',
+    description: `${records.length} media records featuring Anton Merkurov.`,
+    url: `${siteUrl}/media`,
     siteName: 'Anton Merkurov',
     locale: 'en_US',
     type: 'website',
     images: [
       {
-        url: '/og-media.jpg', // Убедитесь, что файл превью есть в папке public
+        url: '/og-media.jpg',
         width: 1200,
         height: 630,
-        alt: 'Media archive — Anton Merkurov',
+        alt: 'Media Archive — Anton Merkurov',
       },
     ],
   },
+
   twitter: {
     card: 'summary_large_image',
-    title: 'Media archive — Anton Merkurov',
-    description: `${records.length} records from Le Monde, The New York Times, BBC, Deutsche Welle, Novaya Gazeta and more.`,
+    title: 'Media Archive — Anton Merkurov',
+    description: `${records.length} media records featuring Anton Merkurov.`,
     images: ['/og-media.jpg'],
   },
+
   robots: {
     index: true,
     follow: true,
@@ -69,17 +78,26 @@ export const metadata: Metadata = {
   },
 };
 
+function MediaArchiveFallback() {
+  return (
+    <div
+      aria-label="Loading media archive"
+      style={{
+        minHeight: '50vh',
+        padding: '64px 24px',
+        color: '#77766f',
+        fontSize: '12px',
+      }}
+    >
+      Loading media archive…
+    </div>
+  );
+}
+
 export default function MediaPage() {
   return (
-    <>
-      <Header />
-      <main id="main">
-        {/* useSearchParams внутри MediaArchive требует Suspense при статическом рендере */}
-        <Suspense fallback={null}>
-          <MediaArchive records={records} archives={archives} />
-        </Suspense>
-      </main>
-      <Footer />
-    </>
+    <Suspense fallback={<MediaArchiveFallback />}>
+      <MediaArchive records={records} archives={archives} />
+    </Suspense>
   );
 }
