@@ -16,16 +16,24 @@ type DelayRow = Stats["delays"][number] & { label?: string; external?: boolean }
 type Opts = { title: string; canonical: string; number?: number | null };
 
 const SITE = "https://www.merkurov.love";
-const INK = "#1C1A1B";
-const SOFT = "#6B6568";
-const LINE = "#DDD6D8";
-const CLARET = "#990F3D";
-const TINT = "#FFF1E5";
-const BAR2 = "#D9B8C2";
-const SERIF_WEB = "'Source Serif 4',Georgia,'Times New Roman',serif";
-const SANS_WEB = "'Inter',system-ui,-apple-system,'Segoe UI',Arial,sans-serif";
+// Оформление как на главной merkurov.love: бумага #FAF8F5, чернила #111111, серый zinc.
+// Акцент один; по умолчанию совпадает с чернилами. Поменяй ACCENT, если нужен цветной.
+const ACCENT = "#111111";
+const PAPER = "#FAF8F5";
+const INK = "#111111";
+const SOFT = "#52525B"; // zinc-600
+const LINE = "#D4D4D8"; // zinc-300
+const CLARET = ACCENT;
+const TINT = "#F0EDE6";
+const BAR2 = "#D4D4D8";
+// Шрифты сайта: если страница открывается внутри приложения, подхватятся его переменные
+// (--font-serif, --font-sans, --font-mono), иначе работают запасные.
+const SERIF_WEB = "var(--font-serif,'Source Serif 4',Georgia,'Times New Roman',serif)";
+const SANS_WEB = "var(--font-sans,'Inter',system-ui,-apple-system,'Segoe UI',Arial,sans-serif)";
+const MONO_WEB = "var(--font-mono,ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace)";
 const SERIF_MAIL = "Georgia,'Times New Roman',serif";
 const SANS_MAIL = "Arial,Helvetica,sans-serif";
+const MONO_MAIL = "'Courier New',Courier,monospace";
 
 const L = {
   ru: {
@@ -237,63 +245,64 @@ function issueTitle(payload: IssuePayload, number?: number | null) {
 /* ---------- WEB ---------- */
 
 const WEB_CSS = `
-:root{--bg:#fff;--ink:${INK};--soft:${SOFT};--line:${LINE};--claret:${CLARET};--tint:${TINT};--bar:${CLARET};--bar2:${BAR2};
---serif:${SERIF_WEB};--sans:${SANS_WEB}}
-@media(prefers-color-scheme:dark){:root{--bg:#121012;--ink:#EFE9EA;--soft:#A29A9E;--line:#352E31;--claret:#F08AA8;--tint:#231B1E;--bar:#F08AA8;--bar2:#5A3A45}}
-*{box-sizing:border-box}html{background:var(--bg);scroll-padding-top:12px}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--serif);padding-top:env(safe-area-inset-top,0);padding-bottom:env(safe-area-inset-bottom,0);-webkit-font-smoothing:antialiased}
-a{color:inherit}.page{max-width:1120px;margin:0 auto;padding:20px 20px 56px}
-.top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font:13px var(--sans);color:var(--soft);padding-bottom:10px}
-.mast{border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:18px 0 12px;text-align:center}
-.mast h1{margin:0;font:700 clamp(52px,12vw,104px)/1 var(--serif);letter-spacing:-.025em}
-.nav{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;font:500 13.5px var(--sans);padding:10px 0;border-bottom:1px solid var(--line);color:var(--soft)}
-.nav a{text-decoration:none}.nav a:hover{color:var(--claret)}
-.g{display:grid;grid-template-columns:1fr;gap:0 40px;margin-top:36px}
+:root{--bg:${PAPER};--ink:${INK};--soft:${SOFT};--line:${LINE};--claret:${ACCENT};--tint:${TINT};--bar:${INK};--bar2:${BAR2};
+--serif:${SERIF_WEB};--sans:${SANS_WEB};--mono:${MONO_WEB}}
+*{box-sizing:border-box}html{background:var(--bg);scroll-padding-top:12px;color-scheme:light}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 var(--serif);padding-top:env(safe-area-inset-top,0);padding-bottom:env(safe-area-inset-bottom,0);-webkit-font-smoothing:antialiased}
+body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.025;mix-blend-mode:overlay;z-index:5;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+::selection{background:var(--ink);color:var(--bg)}
+a{color:inherit}.page{max-width:1120px;margin:0 auto;padding:22px 20px 64px;position:relative;z-index:10}
+.top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font:12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--soft);padding-bottom:12px}
+.mast{border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:26px 0 18px;text-align:center}
+.mast h1{margin:0;font:400 clamp(52px,12vw,104px)/1.05 var(--serif);letter-spacing:-.02em}
+.nav{display:flex;gap:10px 30px;justify-content:center;flex-wrap:wrap;font:500 12px var(--mono);letter-spacing:.2em;text-transform:uppercase;padding:14px 0;border-bottom:1px solid var(--line)}
+.nav a{text-decoration:underline;text-underline-offset:8px;text-decoration-color:#D4D4D8;padding:6px 0}.nav a:hover{text-decoration-color:var(--ink)}
+.g{display:grid;grid-template-columns:1fr;gap:0 40px;margin-top:40px}
 @media(min-width:900px){.g{grid-template-columns:repeat(12,1fr)}.c8{grid-column:span 8}.c4{grid-column:span 4}.c6{grid-column:span 6}.c12{grid-column:span 12}}
-section,aside{margin-bottom:44px;min-width:0}
-.k{font:600 13px var(--sans);color:var(--claret);margin:0 0 10px}
-h2{font:700 clamp(32px,5vw,50px)/1.08 var(--serif);margin:0 0 14px;letter-spacing:-.01em;overflow-wrap:anywhere}
-h3{font:600 20px/1.25 var(--serif);margin:0 0 6px;overflow-wrap:anywhere}
-.by{font:13px var(--sans);color:var(--soft);margin:0 0 18px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+section,aside{margin-bottom:48px;min-width:0}
+.k{font:500 12px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--soft);margin:0 0 12px}
+h2{font:400 clamp(32px,5vw,52px)/1.1 var(--serif);margin:0 0 14px;letter-spacing:-.015em;overflow-wrap:anywhere}
+h3{font:400 21px/1.28 var(--serif);margin:0 0 6px;overflow-wrap:anywhere}
+.by{font:italic 15px var(--serif);color:var(--soft);margin:0 0 20px;padding-bottom:14px;border-bottom:1px solid var(--line)}
 .meta{font:13px var(--sans);color:var(--soft);margin:0}.card p{margin:0 0 8px}
 .feed{list-style:none;margin:0;padding:0}
-.feed li{display:grid;grid-template-columns:78px 1fr;gap:10px;padding:11px 0;border-top:1px solid var(--line);font-size:15px;line-height:1.35}
-.feed li:first-child{border-top:0}.feed time{font:12.5px var(--sans);color:var(--soft)}
-.feed b{font:600 11.5px var(--sans);color:var(--claret);display:block}
+.feed li{display:grid;grid-template-columns:78px 1fr;gap:10px;padding:12px 0;border-top:1px solid var(--line);font-size:16px;line-height:1.35}
+.feed li:first-child{border-top:0}.feed time{font:12px var(--mono);color:var(--soft)}
+.feed b{font:500 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--soft);display:block;margin-bottom:2px}
 .nums{display:grid;grid-template-columns:repeat(2,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--line)}
 @media(min-width:700px){.nums{grid-template-columns:repeat(var(--n,5),1fr)}}
-.nums div{padding:16px 0 14px 16px;border-left:1px solid var(--line)}.nums div:first-child{border-left:0;padding-left:0}
-.nums b{display:block;font:600 44px/1 var(--serif)}.nums span{font:13px var(--sans);color:var(--soft)}
+.nums div{padding:18px 0 16px 16px;border-left:1px solid var(--line)}.nums div:first-child{border-left:0;padding-left:0}
+.nums b{display:block;font:400 46px/1 var(--serif)}.nums span{font:13px var(--sans);color:var(--soft)}
 .row{display:grid;grid-template-columns:96px 1fr 56px;gap:10px;align-items:center;font:13px var(--sans);margin:7px 0}
 .rowL{grid-template-columns:150px 1fr 56px}.row i{display:block;height:10px;background:var(--bar)}.row.alt i{background:var(--bar2)}
 .row span:last-child{text-align:right;color:var(--soft)}
 .days{display:flex;align-items:flex-end;gap:14px;height:130px;border-bottom:1px solid var(--ink);margin-top:26px}
 .days div{flex:1;background:var(--bar);position:relative}
-.days i{position:absolute;top:-22px;width:100%;text-align:center;font:600 14px var(--sans);font-style:normal}
-.dl{display:flex;gap:14px;margin-top:6px}.dl span{flex:1;text-align:center;font:12.5px var(--sans);color:var(--soft)}
-.stack{display:flex;height:34px;margin:10px 0 8px}.stack div{display:flex;align-items:center;padding-left:8px;font:600 13px var(--sans);color:#fff;overflow:hidden}
+.days i{position:absolute;top:-22px;width:100%;text-align:center;font:500 13px var(--mono);font-style:normal}
+.dl{display:flex;gap:14px;margin-top:6px}.dl span{flex:1;text-align:center;font:12px var(--mono);color:var(--soft)}
+.stack{display:flex;height:34px;margin:10px 0 8px}.stack div{display:flex;align-items:center;padding-left:8px;font:500 12px var(--mono);color:#FAF8F5;overflow:hidden}
 .legend{font:13px var(--sans);color:var(--soft);margin:0}.cap{font:13.5px/1.5 var(--sans);color:var(--soft);margin:12px 0 0}
-.cards{display:grid;grid-template-columns:1fr;gap:28px}@media(min-width:760px){.cards{grid-template-columns:repeat(3,1fr)}}
-.v4{display:grid;grid-template-columns:1fr;gap:26px}@media(min-width:700px){.v4{grid-template-columns:1fr 1fr}}@media(min-width:1000px){.v4{grid-template-columns:repeat(4,1fr)}}
-.card{display:block;text-decoration:none;border-top:1px solid var(--ink);padding-top:12px}.card:hover h3{color:var(--claret)}
-.thumb{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;margin:0 0 10px;background:var(--tint)}
-.plate{position:relative;aspect-ratio:16/9;background:var(--tint);margin-bottom:10px;overflow:hidden;border:1px solid var(--line)}
+.cards{display:grid;grid-template-columns:1fr;gap:30px}@media(min-width:760px){.cards{grid-template-columns:repeat(3,1fr)}}
+.v4{display:grid;grid-template-columns:1fr;gap:28px}@media(min-width:700px){.v4{grid-template-columns:1fr 1fr}}@media(min-width:1000px){.v4{grid-template-columns:repeat(4,1fr)}}
+.card{display:block;text-decoration:none;border-top:1px solid var(--ink);padding-top:14px}.card:hover h3{text-decoration:underline;text-underline-offset:5px;text-decoration-color:#A1A1AA}
+.thumb{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;margin:0 0 12px;background:var(--tint)}
+.plate{position:relative;aspect-ratio:16/9;background:var(--tint);margin-bottom:12px;overflow:hidden}
 .plate img{width:100%;height:100%;object-fit:cover;display:block}
-.plate:before{content:'';position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(0,0,0,.6)}
-.plate:after{content:'';position:absolute;left:50%;top:50%;margin:-11px 0 0 -6px;border-left:20px solid #fff;border-top:11px solid transparent;border-bottom:11px solid transparent}
-.frame{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--tint);border:1px solid var(--line);margin-bottom:8px}
+.plate:before{content:'';position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(17,17,17,.62)}
+.plate:after{content:'';position:absolute;left:50%;top:50%;margin:-11px 0 0 -6px;border-left:20px solid #FAF8F5;border-top:11px solid transparent;border-bottom:11px solid transparent}
+.frame{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--tint);margin-bottom:8px}
 .strip{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;margin-top:12px}.strip i{height:34px;background:var(--bar)}
-.sl{display:flex;justify-content:space-between;font:12px var(--sans);color:var(--soft);margin-top:4px}
+.sl{display:flex;justify-content:space-between;font:12px var(--mono);color:var(--soft);margin-top:4px}
 table{width:100%;border-collapse:collapse;font:14px var(--sans)}
-th{font-weight:600;text-align:left;color:var(--soft);font-size:12.5px;border-bottom:1px solid var(--ink);padding:6px 8px 6px 0}
-td{padding:9px 8px 9px 0;border-bottom:1px solid var(--line);vertical-align:top}.scroll{overflow-x:auto}
+th{font:500 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;text-align:left;color:var(--soft);border-bottom:1px solid var(--ink);padding:6px 8px 8px 0}
+td{padding:10px 8px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}.scroll{overflow-x:auto}
 .data{background:var(--tint);padding:16px 18px;font:14px/1.55 var(--sans)}.data p{margin:0 0 6px}
-.statsHead{border-top:1px solid var(--ink);padding-top:14px;margin-bottom:14px}
-.statsHead .k{font-size:15px;margin:0}
-.sub{border-top:1px solid var(--ink);padding-top:18px}.sub h2{font-size:clamp(28px,4vw,40px)}
-.dek{font:400 20px/1.45 var(--serif);color:var(--soft);margin:0 0 18px}
-.mail{display:inline-block;background:var(--ink);color:var(--bg);padding:12px 22px;font:600 14px var(--sans);text-decoration:none}
-footer{border-top:1px solid var(--ink);padding-top:12px;font:13px/1.5 var(--sans);color:var(--soft)}
+.statsHead{border-top:1px solid var(--ink);padding-top:16px;margin-bottom:16px}.statsHead .k{margin:0}
+.sub{border-top:1px solid var(--ink);padding-top:22px;text-align:center}.sub h2{font-size:clamp(28px,4vw,42px)}
+.dek{font:italic 20px/1.5 var(--serif);color:var(--soft);margin:0 auto 22px;max-width:640px}
+.mail{display:inline-flex;align-items:center;gap:10px;border:1px solid rgba(17,17,17,.2);background:rgba(255,255,255,.8);color:var(--ink);padding:14px 30px;border-radius:999px;font:italic 18px var(--serif);text-decoration:none;transition:all .3s}
+.mail:hover{background:var(--ink);color:var(--bg)}
+footer{border-top:1px solid var(--ink);padding-top:14px;font:12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--soft)}
 `;
 
 function webStack(parts: { value: number; label?: string; color: string; dark?: boolean }[]): string {
@@ -389,9 +398,9 @@ function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {
   const bt = ext.byType || {};
   const typeStack = webStack([
     { value: bt.note || 0, color: CLARET },
-    { value: bt.link || 0, color: "#B8566F" },
-    { value: bt.video || 0, color: "#D08A9C", dark: true },
-    { value: bt.photo || 0, color: "#E6C3CC", dark: true },
+    { value: bt.link || 0, color: "#3F3F46" },
+    { value: bt.video || 0, color: "#A1A1AA", dark: true },
+    { value: bt.photo || 0, color: "#D4D4D8", dark: true },
   ]);
   const typeLegend = ["note", "link", "video", "photo"].map((k) => `${t.typePlural[k]} ${bt[k] || 0}`).join(", ");
 
@@ -450,18 +459,17 @@ function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {
           .join("")}</table></div></section>`
     : "";
 
-  const joinHtml = `<section id="join" class="c12 sub"><p class="k">${esc(t.join)}</p><h2>${esc(t.joinTitle)}</h2><p class="dek">${esc(t.joinCopy)}</p><a class="mail" href="${SITE}/flow/join">${esc(t.joinCta)}</a></section>`;
+  const joinHtml = `<section id="join" class="c12 sub"><p class="k">${esc(t.join)}</p><h2>${esc(t.joinTitle)}</h2><p class="dek">${esc(t.joinCopy)}</p><a class="mail" href="${SITE}/flow/join">${esc(t.joinCta)} <span aria-hidden="true">↗</span></a></section>`;
 
   return `<!doctype html>
 <html lang="${lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light">
 <title>${esc(o.title)}</title>
 <meta name="description" content="${esc(`${t.brand}. ${num}. ${period}`)}">
 <link rel="canonical" href="${esc(o.canonical)}">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&display=swap">
 <style>${WEB_CSS}</style>
 </head>
 <body>
@@ -486,7 +494,7 @@ ${srcHtml}${joinHtml}
 /* ---------- EMAIL ---------- */
 
 function mailH(label: string): string {
-  return `<p style="margin:34px 0 12px;padding-top:14px;border-top:1px solid ${INK};font-family:${SANS_MAIL};font-size:13px;font-weight:bold;color:${CLARET};">${esc(label)}</p>`;
+  return `<p style="margin:34px 0 12px;padding-top:14px;border-top:1px solid ${INK};font-family:${MONO_MAIL};font-size:12px;letter-spacing:2px;text-transform:uppercase;color:${SOFT};">${esc(label)}</p>`;
 }
 
 function mailBars(rows: { label: string; value: number; text: string; light?: boolean }[], max: number, log = false): string {
@@ -522,7 +530,7 @@ function renderEmail(payload: IssuePayload, ext: Stats, o: Opts): string {
 
   const lead = payload.lead;
   const leadHtml = lead
-    ? `${mailH(t.lead)}<h2 style="margin:0 0 8px;font-family:${SERIF_MAIL};font-size:30px;line-height:1.12;font-weight:bold;color:${INK};">${esc(lead.title || t.lead)}</h2>
+    ? `${mailH(t.lead)}<h2 style="margin:0 0 8px;font-family:${SERIF_MAIL};font-size:30px;line-height:1.12;font-weight:normal;color:${INK};">${esc(lead.title || t.lead)}</h2>
 <p style="margin:0 0 16px;font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc(dateLong(lead.publishedAt, lang))}, ${esc(hhmm(lead.publishedAt, lang))} UTC</p>${paragraphs(lead.body, SERIF_MAIL, 16)}`
     : "";
 
@@ -531,7 +539,7 @@ function renderEmail(payload: IssuePayload, ext: Stats, o: Opts): string {
         .slice(0, 6)
         .map(
           (e) =>
-            `<tr><td width="74" valign="top" style="padding:8px 8px 8px 0;border-top:1px solid ${LINE};font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc(dayShort(e.publishedAt, lang))}<br>${esc(hhmm(e.publishedAt, lang))}</td><td style="padding:8px 0;border-top:1px solid ${LINE};font-family:${SERIF_MAIL};font-size:15px;line-height:1.35;color:${INK};"><span style="font-family:${SANS_MAIL};font-size:11px;font-weight:bold;color:${CLARET};">${esc(t.types[e.type] || e.type)}</span><br><a href="${esc(entryHref(e))}" style="color:${INK};text-decoration:none;">${esc(entryTitle(e))}</a></td></tr>`,
+            `<tr><td width="74" valign="top" style="padding:8px 8px 8px 0;border-top:1px solid ${LINE};font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc(dayShort(e.publishedAt, lang))}<br>${esc(hhmm(e.publishedAt, lang))}</td><td style="padding:8px 0;border-top:1px solid ${LINE};font-family:${SERIF_MAIL};font-size:15px;line-height:1.35;color:${INK};"><span style="font-family:${MONO_MAIL};font-size:11px;letter-spacing:1px;text-transform:uppercase;color:${SOFT};">${esc(t.types[e.type] || e.type)}</span><br><a href="${esc(entryHref(e))}" style="color:${INK};text-decoration:none;">${esc(entryTitle(e))}</a></td></tr>`,
         )
         .join("")}</table>`
     : "";
@@ -558,7 +566,7 @@ function renderEmail(payload: IssuePayload, ext: Stats, o: Opts): string {
       payload.videos
         .map(
           (v) =>
-            `<div style="margin:0 0 26px;">${img(v.image, "", entryHref(v))}<h3 style="margin:0 0 6px;font-family:${SERIF_MAIL};font-size:20px;line-height:1.25;"><a href="${esc(entryHref(v))}" style="color:${INK};text-decoration:none;">${esc(entryTitle(v))}</a></h3><p style="margin:0;font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc([videoChannel(v), `${t.inStream} ${dayShort(v.publishedAt, lang)}`].filter(Boolean).join(". "))} &nbsp;<a href="${esc(entryHref(v))}" style="color:${CLARET};">${esc(t.watchCta)} →</a></p></div>`,
+            `<div style="margin:0 0 26px;">${img(v.image, "", entryHref(v))}<h3 style="margin:0 0 6px;font-family:${SERIF_MAIL};font-size:20px;line-height:1.25;"><a href="${esc(entryHref(v))}" style="color:${INK};text-decoration:none;">${esc(entryTitle(v))}</a></h3><p style="margin:0;font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc([videoChannel(v), `${t.inStream} ${dayShort(v.publishedAt, lang)}`].filter(Boolean).join(". "))} &nbsp;<a href="${esc(entryHref(v))}" style="color:${INK};">${esc(t.watchCta)} →</a></p></div>`,
         )
         .join("")
     : "";
@@ -606,17 +614,17 @@ function renderEmail(payload: IssuePayload, ext: Stats, o: Opts): string {
         .join("")}</table>`
     : "";
 
-  const joinHtml = `<div style="margin-top:38px;padding-top:18px;border-top:2px solid ${INK};"><h2 style="margin:0 0 10px;font-family:${SERIF_MAIL};font-size:28px;line-height:1.15;color:${INK};">${esc(t.joinTitle)}</h2><p style="margin:0 0 16px;font-family:${SERIF_MAIL};font-size:16px;line-height:1.55;color:${SOFT};">${esc(t.joinCopy)}</p><a href="${SITE}/flow/join" style="display:inline-block;background:${INK};color:#FFFFFF;padding:11px 20px;font-family:${SANS_MAIL};font-size:14px;font-weight:bold;text-decoration:none;">${esc(t.joinCta)}</a></div>`;
+  const joinHtml = `<div style="margin-top:38px;padding-top:18px;border-top:2px solid ${INK};"><h2 style="margin:0 0 10px;font-family:${SERIF_MAIL};font-size:28px;line-height:1.15;color:${INK};">${esc(t.joinTitle)}</h2><p style="margin:0 0 16px;font-family:${SERIF_MAIL};font-size:16px;line-height:1.55;color:${SOFT};">${esc(t.joinCopy)}</p><a href="${SITE}/flow/join" style="display:inline-block;background:${INK};color:${PAPER};padding:13px 26px;border-radius:999px;font-family:${SERIF_MAIL};font-size:16px;font-style:italic;text-decoration:none;">${esc(t.joinCta)} ↗</a></div>`;
 
   return `<!doctype html>
 <html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head>
-<body style="margin:0;padding:0;background:#FFFFFF;">
+<body style="margin:0;padding:0;background:${PAPER};">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${esc(`${num}. ${period}`)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF"><tr><td align="center" style="padding:0 8px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${PAPER}" style="background:${PAPER};"><tr><td align="center" style="padding:0 8px;">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;"><tr><td style="padding:22px 18px 36px;">
 <p style="margin:0 0 8px;font-family:${SANS_MAIL};font-size:12px;color:${SOFT};">${esc(period)}. ${esc(num)}</p>
-<div style="border-top:1px solid ${INK};border-bottom:1px solid ${INK};padding:14px 0 10px;text-align:center;"><span style="font-family:${SERIF_MAIL};font-size:56px;font-weight:bold;letter-spacing:-1px;line-height:1;color:${INK};">${esc(t.brand)}</span></div>
-<p style="margin:18px 0 6px;font-family:${SANS_MAIL};font-size:13px;font-weight:bold;color:${CLARET};">${esc(t.main)}</p>
+<div style="border-top:1px solid ${INK};border-bottom:1px solid ${INK};padding:14px 0 10px;text-align:center;"><span style="font-family:${SERIF_MAIL};font-size:56px;font-weight:normal;letter-spacing:-1px;line-height:1;color:${INK};">${esc(t.brand)}</span></div>
+<p style="margin:20px 0 8px;font-family:${MONO_MAIL};font-size:12px;letter-spacing:2px;text-transform:uppercase;color:${SOFT};">${esc(t.main)}</p>
 ${numsHtml}
 ${leadHtml}${latestHtml}${readHtml}${watchHtml}${frameHtml}${stats}${srcHtml}${joinHtml}
 <p style="margin:30px 0 0;padding-top:14px;border-top:1px solid ${LINE};font-family:${SANS_MAIL};font-size:12px;color:${SOFT};"><a href="${esc(o.canonical)}" style="color:${SOFT};">${esc(t.openWeb)}</a></p>
