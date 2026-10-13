@@ -267,131 +267,6 @@ function formatDate(value: string | null) {
   });
 }
 
-function LinkCard({ item }: { item: FlowItem }) {
-  const metadata = item.metadata ?? {};
-
-  const image =
-    typeof metadata.image === 'string' ? metadata.image : null;
-
-  const description =
-    typeof metadata.description === 'string'
-      ? metadata.description
-      : null;
-
-  const siteName =
-    typeof metadata.site_name === 'string'
-      ? metadata.site_name
-      : item.source_url
-      ? (() => {
-          try {
-            return new URL(item.source_url!).hostname;
-          } catch {
-            return item.source_url;
-          }
-        })()
-      : '';
-
-  return (
-    <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
-      {image && (
-        <a
-          href={item.source_url ?? '#'}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group block aspect-[16/9] overflow-hidden bg-stone-100"
-        >
-          <img
-            src={image}
-            alt=""
-            className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.015]"
-          />
-        </a>
-      )}
-
-      <div className="p-7 sm:p-9">
-        {siteName && (
-          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
-            {siteName}
-          </div>
-        )}
-
-        <div className="mt-4 font-serif text-3xl font-light leading-tight text-stone-900 sm:text-5xl">
-          {item.title || item.source_url}
-        </div>
-
-        {description && (
-          <p className="mt-5 font-serif text-lg leading-8 text-stone-600">
-            {description}
-          </p>
-        )}
-
-        <a
-          href={item.source_url ?? '#'}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-8 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
-        >
-          Open original ↗
-        </a>
-      </div>
-    </div>
-  );
-}
-
-function YouTubeView({ item }: { item: FlowItem }) {
-  const videoId = getYouTubeVideoId(item);
-  const youtube = getYouTubeMetadata(item);
-
-  if (!videoId) {
-    return <MarkdownBody body={item.body_md ?? ''} />;
-  }
-
-  const title = youtube?.title || item.title || 'YouTube video';
-  const channel = youtube?.author_name || null;
-
-  return (
-    <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
-      <div className="aspect-video w-full bg-black">
-        <iframe
-          src={`https://www.youtube-nocookie.com/embed/${videoId}`}
-          title={title}
-          className="h-full w-full"
-          loading="lazy"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-        />
-      </div>
-
-      <div className="p-7 sm:p-9">
-        <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
-          YouTube
-        </div>
-
-        <h1 className="mt-3 font-serif text-3xl font-light leading-tight text-stone-900 sm:text-4xl">
-          {title}
-        </h1>
-
-        {channel && (
-          <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-stone-400">
-            {channel}
-          </div>
-        )}
-
-        {item.source_url && (
-          <a
-            href={item.source_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-7 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
-          >
-            Open on YouTube ↗
-          </a>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function MarkdownBody({ body }: { body: string }) {
   return (
     <div className="rounded-[2rem] border border-stone-200/80 bg-white/80 p-7 shadow-sm sm:p-10">
@@ -491,6 +366,139 @@ function MarkdownBody({ body }: { body: string }) {
   );
 }
 
+function LinkCard({ item }: { item: FlowItem }) {
+  const metadata = item.metadata ?? {};
+
+  const image =
+    typeof metadata.image === 'string' ? metadata.image : null;
+
+  const description =
+    typeof metadata.description === 'string'
+      ? metadata.description
+      : null;
+
+  const siteName =
+    typeof metadata.site_name === 'string'
+      ? metadata.site_name
+      : item.source_url
+      ? (() => {
+          try {
+            return new URL(item.source_url!).hostname;
+          } catch {
+            return item.source_url;
+          }
+        })()
+      : '';
+
+  return (
+    <div className="space-y-6">
+      <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
+        {image && (
+          <a
+            href={item.source_url ?? '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group block aspect-[16/9] overflow-hidden bg-stone-100"
+          >
+            <img
+              src={image}
+              alt=""
+              className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.015]"
+            />
+          </a>
+        )}
+
+        <div className="p-7 sm:p-9">
+          {siteName && (
+            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
+              {siteName}
+            </div>
+          )}
+
+          <div className="mt-4 font-serif text-3xl font-light leading-tight text-stone-900 sm:text-5xl">
+            {item.title || item.source_url}
+          </div>
+
+          {description && (
+            <p className="mt-5 font-serif text-lg leading-8 text-stone-600">
+              {description}
+            </p>
+          )}
+
+          <a
+            href={item.source_url ?? '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-8 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
+          >
+            Open original ↗
+          </a>
+        </div>
+      </div>
+
+      {item.body_md && <MarkdownBody body={item.body_md} />}
+    </div>
+  );
+}
+
+function YouTubeView({ item }: { item: FlowItem }) {
+  const videoId = getYouTubeVideoId(item);
+  const youtube = getYouTubeMetadata(item);
+
+  if (!videoId) {
+    return <MarkdownBody body={item.body_md ?? ''} />;
+  }
+
+  const title = youtube?.title || item.title || 'YouTube video';
+  const channel = youtube?.author_name || null;
+
+  return (
+    <div className="space-y-6">
+      <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
+        <div className="aspect-video w-full bg-black">
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+            title={title}
+            className="h-full w-full"
+            loading="lazy"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        </div>
+
+        <div className="p-7 sm:p-9">
+          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
+            YouTube
+          </div>
+
+          <h1 className="mt-3 font-serif text-3xl font-light leading-tight text-stone-900 sm:text-4xl">
+            {title}
+          </h1>
+
+          {channel && (
+            <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-stone-400">
+              {channel}
+            </div>
+          )}
+
+          {item.source_url && (
+            <a
+              href={item.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-7 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
+            >
+              Open on YouTube ↗
+            </a>
+          )}
+        </div>
+      </div>
+
+      {item.body_md && <MarkdownBody body={item.body_md} />}
+    </div>
+  );
+}
+
 function PhotoView({ item }: { item: FlowItem }) {
   const publicUrl =
     item.metadata && typeof item.metadata.public_url === 'string'
@@ -507,19 +515,23 @@ function PhotoView({ item }: { item: FlowItem }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-4 shadow-sm">
-      <figure>
-        <img
-          src={publicUrl}
-          alt={caption}
-          className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
-        />
-        {caption && (
-          <figcaption className="mt-4 text-center font-serif text-sm italic text-stone-600 sm:text-base">
-            {caption}
-          </figcaption>
-        )}
-      </figure>
+    <div className="space-y-6">
+      <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-4 shadow-sm">
+        <figure>
+          <img
+            src={publicUrl}
+            alt={caption}
+            className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
+          />
+          {caption && (
+            <figcaption className="mt-4 text-center font-serif text-sm italic text-stone-600 sm:text-base">
+              {caption}
+            </figcaption>
+          )}
+        </figure>
+      </div>
+
+      {item.body_md && <MarkdownBody body={item.body_md} />}
     </div>
   );
 }
@@ -624,7 +636,6 @@ export default async function FlowItemPage({ params }: PageProps) {
         lang: item.lang || 'ru',
       });
 
-      // Безопасная проверка с учетом того, что generated может быть null
       if (generated && generated.content) {
         const { data: savedContext } = await supabase
           .from('flow_ai_context')
@@ -734,7 +745,7 @@ export default async function FlowItemPage({ params }: PageProps) {
         <article className="mx-auto max-w-3xl">
           <Link
             href="/flow"
-            className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400 transition hover:text-stone-900"
+            className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400 transition hover:text-stone-950"
           >
             ← Flow
           </Link>

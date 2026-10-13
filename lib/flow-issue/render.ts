@@ -556,8 +556,7 @@ function renderSourceIndex({ payload, template, email }: RenderContext): string 
 
   return `
     <section>
-      ${sectionHeading(labels.sources, template, email)}
-
+const labels = template.labels[payload.lang];
       <ol style="padding-left:22px;">
         ${payload.sourceIndex
           .map(
