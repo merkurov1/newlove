@@ -128,40 +128,128 @@ export default function LobbyClient() {
       {/* --- SECTION 3: EDITORIAL PRESS CLIPPINGS --- */}
       <section className="py-24 px-8 md:px-16 bg-[#F4F1EA]/80 border-b border-zinc-200/60 relative z-20">
         <div className="max-w-7xl mx-auto">
-          <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-12">
-            International Press &amp; Commentary
-          </span>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 font-serif">
-            
-            <div className="border-t border-zinc-300 pt-6">
-              <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.2em] mb-4">The Washington Post</div>
-              <p className="text-lg text-zinc-800 italic leading-relaxed mb-6">
-                &ldquo;The result will be millions of digital emigres, people who will simply turn their backs on the state... acutely aware that it is willing to ignore their interests.&rdquo;
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-8 mb-14">
+            <div>
+              <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-5">
+                International Press &amp; Commentary
+              </span>
+              <h2 className="max-w-3xl text-4xl md:text-6xl font-serif font-normal leading-[1.05] tracking-tight text-[#111111]">
+                A public record, across disciplines.
+              </h2>
+              <p className="mt-5 max-w-2xl text-base md:text-lg text-zinc-600 font-serif leading-relaxed">
+                Published commentary on internet freedom, state control,
+                and the preservation of cultural heritage.
               </p>
-              <div className="font-mono text-[11px] text-zinc-400 uppercase tracking-widest">— Anton Merkurov on Information Networks</div>
             </div>
 
-            <div className="border-t border-zinc-300 pt-6">
-              <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.2em] mb-4">Le Monde</div>
-              <p className="text-lg text-zinc-800 italic leading-relaxed mb-6">
-                &ldquo;The legal framework is ready... But they won’t succeed. Because, in reality, it’s impossible to enforce absolute sovereign isolation.&rdquo;
-              </p>
-              <div className="font-mono text-[11px] text-zinc-400 uppercase tracking-widest">— Commentary on Network Resilience</div>
-            </div>
+            <Link
+              href="/media"
+              className="group inline-flex w-fit shrink-0 items-center gap-4 border-b border-zinc-900 pb-3 text-[#111111] transition-colors hover:border-[#8D3D2E] hover:text-[#8D3D2E]"
+            >
+              <span className="font-mono text-xs uppercase tracking-[0.16em]">
+                Explore the media archive
+              </span>
+              <ArrowUpRight
+                size={17}
+                className="transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1"
+              />
+            </Link>
+          </div>
 
-            <div className="border-t border-zinc-300 pt-6">
-              <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.2em] mb-4">The Art Newspaper</div>
-              <p className="text-lg text-zinc-800 italic leading-relaxed mb-6">
-                &ldquo;Protecting and transmitting monumental family legacy into new technological mediums without losing provenance or historical weight.&rdquo;
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-12 font-serif">
+            <article className="flex flex-col border-t border-zinc-300 pt-6">
+              <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.2em] mb-5">
+                The Washington Post
+              </div>
+              <blockquote className="text-xl md:text-2xl text-[#111111] leading-snug">
+                “The result will be millions of digital émigrés, people who
+                will simply turn their backs on the state... acutely aware
+                that it is willing to ignore their interests.”
+              </blockquote>
+              <p className="mt-5 text-sm text-zinc-600 leading-relaxed">
+                — Anton Merkurov on information networks
               </p>
-              <div className="font-mono text-[11px] text-zinc-400 uppercase tracking-widest">— On S. Merkurov Legacy &amp; Archives</div>
-            </div>
+              <div className="mt-auto pt-8 font-mono text-[10px] text-zinc-500 uppercase tracking-[0.15em]">
+                Digital society / Network policy
+              </div>
+            </article>
 
+            <article className="flex flex-col border-t border-zinc-300 pt-6">
+              <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.2em] mb-5">
+                Le Monde
+              </div>
+              <blockquote className="text-xl md:text-2xl text-[#111111] leading-snug">
+                “The legal framework is ready, and the FSB will be able to
+                enforce it. Its agencies are trying every possible means.
+                But they won’t succeed. Because in practice, it’s impossible.”
+              </blockquote>
+              <p className="mt-5 text-sm text-zinc-600 leading-relaxed">
+                — Anton Merkurov, internet and media expert
+              </p>
+              <a
+                href="https://www.lemonde.fr/international/article/2026/05/27/derriere-la-guerre-de-vladimir-poutine-le-role-croissant-du-fsb-l-agence-de-renseignement-russe_6694149_3210.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 inline-flex items-center gap-2 text-sm text-zinc-600 underline underline-offset-4 decoration-zinc-300 hover:text-[#8D3D2E] transition-colors"
+              >
+                Read the original article <ArrowUpRight size={14} />
+              </a>
+              <div className="mt-auto pt-8 font-mono text-[10px] text-zinc-500 uppercase tracking-[0.15em]">
+                Internet freedom / State control
+              </div>
+            </article>
+
+            <article className="flex flex-col border-t border-zinc-300 pt-6">
+              <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.2em] mb-5">
+                The Art Newspaper Russia
+              </div>
+              <h3 className="text-2xl md:text-3xl text-[#111111] leading-snug mb-5">
+                A future for the Dynamo stadium bas-reliefs
+              </h3>
+              <blockquote className="text-lg md:text-xl text-[#111111] leading-relaxed">
+                “I have long been involved in preserving and studying Sergei
+                Merkurov’s legacy, and I have never before encountered such
+                careful, even reverent, treatment of my great-grandfather’s
+                work. There is hope that this outstanding monument of Soviet
+                sculpture will be preserved in proper condition.”
+              </blockquote>
+              <p className="mt-5 text-sm text-zinc-600 leading-relaxed">
+                — Anton Merkurov, great-grandson of the sculptor
+              </p>
+              <a
+                href="https://www.theartnewspaper.ru/posts/4754/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 inline-flex items-center gap-2 text-sm text-zinc-600 underline underline-offset-4 decoration-zinc-300 hover:text-[#8D3D2E] transition-colors"
+              >
+                Read the original article <ArrowUpRight size={14} />
+              </a>
+              <div className="mt-auto pt-8 font-mono text-[10px] text-zinc-500 uppercase tracking-[0.15em]">
+                Sculpture / Restoration / Family legacy
+              </div>
+            </article>
+          </div>
+
+          <div className="mt-14 pt-6 border-t border-zinc-300/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <p className="max-w-xl text-sm text-zinc-500 font-serif leading-relaxed">
+              Interviews, expert commentary, author columns, and documented
+              appearances are collected in the chronological archive.
+            </p>
+            <Link
+              href="/media"
+              className="group inline-flex items-center gap-3 text-sm text-[#111111] hover:text-[#8D3D2E] transition-colors"
+            >
+              <span className="underline underline-offset-4 decoration-zinc-400 group-hover:decoration-[#8D3D2E]">
+                Browse all publications
+              </span>
+              <ArrowRight
+                size={15}
+                className="transition-transform duration-300 group-hover:translate-x-1"
+              />
+            </Link>
           </div>
         </div>
       </section>
-
 
       {/* --- SECTION 4: DUALITY PHILOSOPHY --- */}
       <section className="py-28 md:py-36 px-8 md:px-16 relative z-20">

@@ -1359,6 +1359,7 @@ const CSS = `
   .ma {
     padding-right: 18px;
     padding-left: 18px;
+    padding-top: 112px;
   }
 
   .ma-stats {
