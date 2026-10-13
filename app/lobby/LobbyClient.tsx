@@ -166,9 +166,6 @@ export default function LobbyClient() {
                 will simply turn their backs on the state... acutely aware
                 that it is willing to ignore their interests.”
               </blockquote>
-              <p className="mt-5 text-sm text-zinc-600 leading-relaxed">
-                — Anton Merkurov on information networks
-              </p>
               <div className="mt-auto pt-8 font-mono text-[10px] text-zinc-500 uppercase tracking-[0.15em]">
                 Digital society / Network policy
               </div>
@@ -183,17 +180,6 @@ export default function LobbyClient() {
                 enforce it. Its agencies are trying every possible means.
                 But they won’t succeed. Because in practice, it’s impossible.”
               </blockquote>
-              <p className="mt-5 text-sm text-zinc-600 leading-relaxed">
-                — Anton Merkurov, internet and media expert
-              </p>
-              <a
-                href="https://www.lemonde.fr/international/article/2026/05/27/derriere-la-guerre-de-vladimir-poutine-le-role-croissant-du-fsb-l-agence-de-renseignement-russe_6694149_3210.html"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-6 inline-flex items-center gap-2 text-sm text-zinc-600 underline underline-offset-4 decoration-zinc-300 hover:text-[#8D3D2E] transition-colors"
-              >
-                Read the original article <ArrowUpRight size={14} />
-              </a>
               <div className="mt-auto pt-8 font-mono text-[10px] text-zinc-500 uppercase tracking-[0.15em]">
                 Internet freedom / State control
               </div>
@@ -203,9 +189,6 @@ export default function LobbyClient() {
               <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.2em] mb-5">
                 The Art Newspaper Russia
               </div>
-              <h3 className="text-2xl md:text-3xl text-[#111111] leading-snug mb-5">
-                A future for the Dynamo stadium bas-reliefs
-              </h3>
               <blockquote className="text-lg md:text-xl text-[#111111] leading-relaxed">
                 “I have long been involved in preserving and studying Sergei
                 Merkurov’s legacy, and I have never before encountered such
@@ -213,17 +196,6 @@ export default function LobbyClient() {
                 work. There is hope that this outstanding monument of Soviet
                 sculpture will be preserved in proper condition.”
               </blockquote>
-              <p className="mt-5 text-sm text-zinc-600 leading-relaxed">
-                — Anton Merkurov, great-grandson of the sculptor
-              </p>
-              <a
-                href="https://www.theartnewspaper.ru/posts/4754/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-6 inline-flex items-center gap-2 text-sm text-zinc-600 underline underline-offset-4 decoration-zinc-300 hover:text-[#8D3D2E] transition-colors"
-              >
-                Read the original article <ArrowUpRight size={14} />
-              </a>
               <div className="mt-auto pt-8 font-mono text-[10px] text-zinc-500 uppercase tracking-[0.15em]">
                 Sculpture / Restoration / Family legacy
               </div>
