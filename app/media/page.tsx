@@ -1,4 +1,3 @@
-
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
@@ -50,7 +49,7 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: '/og-media.jpg',
+        url: `${siteUrl}/media/opengraph-image`,
         width: 1200,
         height: 630,
         alt: 'Media Archive — Anton Merkurov',
@@ -62,7 +61,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Media Archive — Anton Merkurov',
     description: `${records.length} media records featuring Anton Merkurov.`,
-    images: ['/og-media.jpg'],
+    images: [`${siteUrl}/media/opengraph-image`],
   },
 
   robots: {

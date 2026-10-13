@@ -1,4 +1,3 @@
-// data/media.ts
 // Источник правды для /media. Каждая запись открыта и сверена по ссылке (заголовок, дата, упоминание имени).
 // Что не удалось подтвердить, лежит в `pending` и на сайт не попадает.
 // Supabase-ready: схема плоская, MediaRecord 1:1 ложится на таблицу.
@@ -103,7 +102,7 @@ const columns: Draft[] = [
   col('2025-12-23', 'vserossiiskaia-perepis-telefonov', 'Всероссийская перепись телефонов', 'Зачем государство вводит новый реестр.', 'i'),
 ];
 
-// ── Всё остальное (интегрировано и дополнено из artefact с защитой от дублей) ────────────
+// ── Всё остальное (интегрировано и дополнено) ────────────────────────────
 const items: Draft[] = [
   // 2026
   r('2026-05-31', 'Le Monde', "Putin's war fuels the growing role of Russia's FSB", 'https://www.lemonde.fr/en/international/article/2026/05/31/putin-s-war-fuels-the-growing-role-of-russia-s-fsb-intelligence-agency_6753983_4.html', 'EN', 'i', 'quote', 'Экспертный комментарий для ведущей французской газеты о трансформации цифрового контроля и сетевой инфраструктуры.'),
@@ -112,44 +111,54 @@ const items: Draft[] = [
   
   // 2025
   r('2025-10-21', 'Новая газета', 'Операция ИИ', 'https://novayagazeta.ru/articles/2025/10/21/operatsiia-ii', 'RU', 'a', 'column', 'Колонка о новом этапе столкновения идеологии запретов и современных технологий.', { program: 'Виртуальный Меркуров' }),
-  r('2025-09-29', 'Новая газета', 'Вечный зов', 'Виртуальный Меркуров', 'RU', 'a', 'column', 'Виртуальный Меркуров — колонка об искусственном интеллекте и сетевой реальности.'),
+  r('2025-09-29', 'Новая газета', 'Вечный зов', 'https://novayagazeta.ru/articles/2025/09/29/vechnyi-zov', 'RU', 'a', 'column', 'Виртуальный Меркуров — колонка об искусственном интеллекте и сетевой реальности.'),
   r('2025-07-07', 'Новая газета', 'Зачем властям создавать еще один мессенджер?', 'https://novayagazeta.ru/articles/2025/07/07/zachem-vlastiam-sozdavat-eshche-odin-messendzher', 'RU', 'i', 'video', 'Видеоразбор с Антоном Орехом и Сергеем Соколовым: Telegram, мессенджер-клон и отключения интернета в регионах.', { program: 'Виртуальный Меркуров' }),
   r('2025-04-10', 'Новая газета', 'Знаете, что такое киберпанк? Так вот он — начинается', 'https://novayagazeta.ru/articles/2025/04/10/znaete-chto-takoe-kiberpank-tak-vot-on-nachinaetsia', 'RU', 'i', 'column', 'Авторская колонка в цикле «Виртуальный Меркуров» о наступлении эры цифрового контроля и ИИ.', { program: 'Виртуальный Меркуров' }),
 
   // 2024
   r('2024-07-19', 'Новая газета', 'Легло в библейском масштабе', 'https://novayagazeta.ru/articles/2024/07/19/leglo-v-bibleiskom-masshtabe', 'RU', 'a', 'column', 'Колонка о массовом сбое Windows и о том, кому он выгоден.'),
+  r('2024-01-31', 'Радио Свобода', 'Помощник? Конкурент? Убийца?', 'https://www.svoboda.org/a/pomoschnik-konkurent-ubiytsa-efir-v-18-05-/32796986.html', 'RU', 'a', 'interview', 'Разговор с Сергеем Медведевым и Михаилом Гуревичем об искусственном интеллекте. Антон Меркуров обсуждает личность художника, генеративное искусство, арт-рынок и роль ИИ как помощника.', { note: 'На странице есть полная текстовая расшифровка; Меркуров представлен как художник и арт-дилер.' }),
+
+  // 2023
+  r('2023-01-12', 'The Art Newspaper Russia', 'Барельефы Сергея Меркурова остались на «Динамо»', 'https://www.theartnewspaper.ru/posts/20230112-vrlc/', 'RU', 'c', 'quote', 'Итог одиннадцатилетней истории с барельефами Сергея Меркурова: подлинники, распавшиеся при демонтаже более чем на 7 000 фрагментов, отреставрированы и размещены в арт-пространстве ВТБ Арены. Антон Меркуров доволен реставрацией, но не схемой демонтажа.', { note: 'Прямой комментарий правнука скульптора о завершении проекта.' }),
 
   // 2022
   r('2022-01-01', 'Новая газета', 'Антон Меркуров — авторская страница', 'https://novayagazeta.ru/authors/401536', 'RU', 'c', 'profile', 'Авторский архив из 48 колонки в Новой газете.'),
 
   // 2021
-  r('2021-03-19', 'The Art Newspaper', 'Pussy Riot’s weekly NFT drop and digital modes of selling', 'https://www.theartnewspaper.com/2021/03/19/pussy-riots-weekly-nft-drop-is-just-one-instance-of-russian-and-ukrainian-artists-embracing-new-modes-of-online-selling', 'EN', 'c', 'mention', 'Московский интернет-стратег и арт-дилер прокомментировал цифровые аукционы и новые формы продаж.'),
   r('2021-04-04', 'Радио Свобода', 'Замедление Рунета', 'https://www.svoboda.org/a/31167840.html', 'RU', 'i', 'interview', 'Интервью Сергею Медведеву о замедлении Twitter, суверенном интернете, DPI и VPN. Второй гость — Михаил Гуревич.', { program: 'Археология. Будущее' }),
-  r('2021-03-11', 'Rzeczpospolita', 'Zajadła wojna Rosji z internetem. To próba generalna', 'https://www.rp.pl/swiat/art232761-zajadla-wojna-rosji-z-internetem-to-proba-generalna', 'PL', 'i', 'quote', 'Комментарий о замедлении Twitter: вместе с ним «упали» сайты Кремля, правительства и СК.', { note: 'Автор Andrzej Łomanowski. Paywall, открыт только анонс. По-польски: Anton Mierkurow.' }),
+  r('2021-03-19', 'The Art Newspaper', 'Pussy Riot’s weekly NFT drop and digital modes of selling', 'https://www.theartnewspaper.com/2021/03/19/pussy-riots-weekly-nft-drop-is-just-one-instance-of-russian-and-ukrainian-artists-embracing-new-modes-of-online-selling', 'EN', 'c', 'mention', 'Московский интернет-стратег и арт-дилер прокомментировал цифровые аукционы и новые формы продаж.'),
   r('2021-03-15', 'Current Time', 'Russia’s Campaign Against Twitter Faces Mixed Chances of Success', 'https://www.currenttime.tv/a/russia-s-campaign-against-twitter-faces-mixed-chances-of-success-it-experts-say/31160273.html', 'EN', 'i', 'quote', 'Оценка технических ограничений и замедления работы зарубежных соцсетей.'),
-  r('2017-02-12', 'Regional Post', 'Anton Merkurov: Regional Post Interview', 'https://regionalpost.org/en/articles/anton-merkurov.html', 'EN', 'c', 'interview', 'Интервью об урбанистике, технологиях и развитии современной городской среды.'),
+  r('2021-03-11', 'Rzeczpospolita', 'Zajadła wojna Rosji z internetem. To próba generalna', 'https://www.rp.pl/swiat/art232761-zajadla-wojna-rosji-z-internetem-to-proba-generalna', 'PL', 'i', 'quote', 'Комментарий о замедлении Twitter: вместе с ним «упали» сайты Кремля, правительства и СК.', { note: 'Автор Andrzej Łomanowski. Paywall, открыт только анонс. По-польски: Anton Mierkurow.' }),
 
   // 2019
   r('2019-08-15', 'Deutsche Welle (Bosnian)', 'Rusija i Google', 'https://www.dw.com/bs/rusija-i-google/a-50023551', 'BS', 'i', 'mention', 'Разбор конфликтов поисковых гигантов и IT-корпораций с регуляторами.', { note: 'Боснийская служба DW; в исходных данных стояло DE.' }),
   r('2019-04-29', 'Караван Ярмарка (Тверь)', 'Интернет-эксперт Антон Меркуров в Твери прокомментировал закон о суверенном Рунете', 'https://karavantver.ru/gazeta-16783/', 'RU', 'i', 'interview', 'Интервью после лекции для подростков в проекте «Большое будущее»: закон о суверенном Рунете и его цена.', { note: 'Дата номера 29.04.2019; лекция 23.04.2019, «Живое слово».' }),
 
   // 2018
+  r('2018-08-28', 'BBC News Русская служба', 'В России появится система слежения за криптовалютами', 'https://www.bbc.com/russian/news-45324695', 'RU', 'f', 'quote', 'Комментарий о системе отслеживания криптовалютных операций Росфинмониторинга и риске обратного эффекта: усиление контроля может стимулировать появление менее прозрачных инструментов.', { note: 'Автор — Андрей Сошников. Меркуров представлен как интернет-эксперт и главный редактор Satoshi.fm.' }),
   r('2018-08-27', 'iHodl', 'Revolut: A Rapid Rise of a Financial Unicorn', 'https://ihodl.com/opinion/2018-08-27/revolut-rapid-rise-financial-unicorn/', 'EN', 'f', 'column', 'Авторская колонка о взлете необанков и трансформации финансовых институтов.'),
   r('2018-07-01', 'Сноб', 'Грузия будет дуть', 'https://snob.ru/news/155330/', 'RU', 'c', 'column', 'Авторский материал и размышления о культурных трендах.'),
   r('2018-04-19', 'The Washington Post', 'The Russian government just managed to hack itself', 'https://www.washingtonpost.com/news/democracy-post/wp/2018/04/19/the-russian-government-just-managed-to-hack-self/', 'EN', 'i', 'quote', 'Комментарий о веерных блокировках IP-адресов во время попыток ограничения Telegram.'),
   r('2018-04-17', 'Euronews', 'Catch me if you can: Russia internet chaos as Telegram ban backfires', 'https://www.euronews.com/2018/04/17/catch-me-if-you-can-russia-internet-chaos-as-telegram-ban-backfires', 'EN', 'i', 'mention', 'Разбор хаоса в сетевой инфраструктуре и безуспешных попыток блокировок.'),
   r('2018-04-15', 'Coda Story', 'Why did Russia just attack its own internet?', 'https://www.codastory.com/disinformation/why-did-russia-just-attack-its-own-internet/', 'EN', 'i', 'mention', 'Аналитика системных сбоев инфраструктуры при регуляторном вмешательстве.'),
   r('2018-02-17', 'The New York Times', 'Russian Trolls Were Sloppy, but Indictment Still Points at Kremlin', 'https://www.nytimes.com/2018/02/17/world/europe/russia-indictment-trolls-putin.html', 'EN', 'i', 'quote', 'Комментарий для NYT в качестве эксперта по сетевым коммуникациям.'),
+  r('2018-01-29', 'Огонёк', 'Неча на сети пенять', 'https://www.kommersant.ru/doc/3527213', 'RU', 'i', 'quote', 'Комментарии о попытках связать школьное насилие с интернетом, технических ограничениях контроля переписки и росте интереса к контенту вследствие запретов.', { note: 'Материал «Огонька» на сайте «Коммерсанта».' }),
 
   // 2017
+  r('2017-11-15', 'Теплица социальных технологий', 'Антон Меркуров: Как российский фонд «Подари жизнь» начал принимать пожертвования в криптовалюте', 'https://te-st.org/2017/11/15/interviw-with-anton-merkurov-bitcoin/', 'RU', 'f', 'interview', 'Интервью о том, как возник проект криптопожертвований для «Подари жизнь»: консультации фонда, выбор юридической схемы через Podari.Life и Coinbase.', { note: 'Интервью Натальи Барановой.' }),
+  r('2017-11-13', 'Подари жизнь', 'Помощь без границ', 'https://podari-zhizn.ru/ru/publications/30272', 'RU', 'f', 'quote', 'Материал о запуске приёма криптопожертвований через американский партнёрский фонд Podari.Life. Антон Меркуров объясняет возможности криптофандрайзинга.'),
+  r('2017-07-09', 'Ведомости', '«Антон доказал, что один человек способен кардинально изменить картину современных медиа»', 'https://www.vedomosti.ru/technology/articles/2017/07/09/716820-est-za-chto-skazat-emu-spasibo', 'RU', 'i', 'quote', 'Памятная цитата об Антоне Носике в материале о его роли в истории рунета и современных медиа.'),
   r('2017-07-01', 'DIE ZEIT', 'Telegram: Kritiker des Gesetzes fürchten Missbrauch', 'https://www.zeit.de/politik/2017-07/telegram-messenger-russland-sperrung/seite-2', 'DE', 'i', 'quote', 'Экспертная оценка рисков цифровой цензуры для немецкого издания.'),
   r('2017-06-27', 'Current Time', 'Почему блокировка Telegram ничего не изменит — отвечают эксперты', 'https://www.currenttime.tv/a/28580862.html', 'RU', 'i', 'quote', 'Комментарий о том, что заблокировать Telegram на практике не получится, на фоне требований Роскомнадзора к Дурову.'),
   r('2017-06-22', 'The Moscow Times', 'Russia’s Big Brother Is Trying to Watch You', 'https://www.themoscowtimes.com/2017/06/22/russias-big-brother-is-trying-to-watch-you-but-is-annoyed-you-wont-let-him-a58248', 'EN', 'i', 'mention', 'Аналитический разбор законопроектов об ограничении анонимности.'),
   r('2017-05-16', 'The Moscow Times', 'The City of Moscow Has Its Own Propaganda Empire', 'https://www.themoscowtimes.com/2017/05/16/the-city-of-moscow-has-its-own-propaganda-empire-a58005', 'EN', 'i', 'quote', 'Комментарий о городской астротурфинг-машине Москвы и логике пропаганды «для начальства».'),
   r('2017-05-10', 'Deutschlandfunk', 'Internetzensur in Russland: Enger Spielraum für Blogger', 'https://www.deutschlandfunk.de/internetzensur-in-russland-enger-spielraum-fuer-blogger-und-100.html', 'DE', 'i', 'quote', 'Оценка сужения свободы слова и практик судейской цензуры.'),
   r('2017-05-05', 'Deutschlandfunk Kultur', 'Russisches Internet: Nicht alles unter Kontrolle', 'https://www.deutschlandfunkkultur.de/russisches-internet-102.html', 'DE', 'i', 'quote', 'Комментарий о децентрализованной природе глобальной сети.'),
+  r('2017-04-28', 'СТК РГГУ', 'К ЧЕМУ ИДУТ МЕДИА? Встреча с Антоном Меркуровым', 'https://www.youtube.com/watch?v=rdGwjIUivZk', 'RU', 'c', 'video', 'Видеоинтервью о будущем редакционных медиа, роли дистрибуции, профессиональном образовании и сочетании технического и гуманитарного мышления.', { program: 'К чему идут медиа?' }),
   r('2017-04-16', 'Эхо Москвы', 'Какие сервисы следующими попадут под запрет?', 'https://echo.msk.ru/programs/tochka/1963350-echo/', 'RU', 'i', 'radio', 'Эфир об очередной волне блокировок. Гости: Игорь Королёв (CNews), Юрий Синодов (Roem.ru).', { program: 'Точка' }),
   r('2017-03-26', 'ABC News', 'Thousands march through Moscow for internet freedom', 'https://abcnews.go.com/International/thousands-march-moscow-internet-freedom-russia-cracks-election/story?id=46693748', 'EN', 'i', 'quote', 'Комментарии о публичных акциях за цифровую свободу.'),
+  r('2017-02-12', 'Regional Post', 'Anton Merkurov: Regional Post Interview', 'https://regionalpost.org/en/articles/anton-merkurov.html', 'EN', 'c', 'interview', 'Интервью об урбанистике, технологиях и развитии современной городской среды.'),
 
   // 2016
   r('2016-07-06', 'OSCE', '13th South Caucasus Media Conference - Presentation by Anton Merkurov', 'https://www.osce.org/fom/252301', 'EN', 'i', 'mention', 'Презентация в Тбилиси в качестве вице-президента Ассоциации интернет-издателей.'),
@@ -157,9 +166,14 @@ const items: Draft[] = [
   // 2015
   r('2015-11-10', 'Эхо Москвы', 'О том, почему блокировка RuTracker не имеет для вас никакого значения', 'https://echo.msk.ru/blog/yopolisnews/1655746-echo/', 'RU', 'i', 'blog', 'Авторский текст о бессмысленности блокировки торрент-трекера и о том, что такое VPN. Оригинал опубликован на «Йоде».', { program: 'Блоги' }),
   r('2015-10-14', 'Russia Beyond (DE)', 'Die Gefahr der Instant Messenger', 'https://de.rbth.com/meinung/2015/10/14/die-gefahr-der-instant-mesenger_482887', 'DE', 'i', 'column', 'Авторская колонка о мессенджерах, спецслужбах и государственном регулировании. Подпись: интернет-эксперт, спикер Open Garden (FireChat).', { note: 'Републикация из «Российской газеты».' }),
+  r('2015-09-22', 'РБК', 'Skype не ответил', 'https://www.rbc.ru/newspaper/2015/09/22/56bc9b0d9a7947299f72bb1c', 'RU', 'a', 'quote', 'Комментарий о глобальном сбое Skype: серверная уязвимость централизованных мессенджеров, возможный отток аудитории и распределённая архитектура FireChat.', { note: 'Представлен как представитель Open Garden в России.' }),
+  r('2015-09-16', 'Ведомости', 'Google проиграл суд о поисковых роботах', 'https://www.vedomosti.ru/newspaper/articles/2015/09/16/609041-google-otvetit-za-robotov', 'RU', 'i', 'quote', 'Комментарий о контекстном поиске, автоматической обработке переписки, профилировании пользователей и вероятной реакции Google на судебное решение.', { note: 'Представлен как вице-президент Ассоциации интернет-издателей.' }),
   r('2015-08-27', 'Bankier.pl', 'W Rosji tworzą Ripedię — konkurencję dla Wikipedii', 'https://www.bankier.pl/wiadomosc/W-Rosji-tworza-Ripedie-konkurecje-dla-Wikipedii-3399377.html', 'PL', 'i', 'quote', 'Комментарий о «Рипедии», российском аналоге Википедии: независимый эксперт сомневается, что проект станет конкурентом.', { note: 'IAR, автор Włodzimierz Pac.' }),
+  r('2015-05-26', 'Ведомости', 'Технологии 5G отчасти можно протестировать уже сегодня', 'https://www.vedomosti.ru/technology/articles/2015/05/26/593573-tehnologii-5g-otchasti-mozhno-protestirovat-uzhe-segodnya', 'RU', 'a', 'quote', 'Развёрнутый комментарий о FireChat и mesh-сетях: прямая связь между устройствами, работа без сотовой инфраструктуры, приватность и перспективы технологии.', { note: 'Представлен как представитель Open Garden.' }),
+  r('2015-05-26', 'Коммерсантъ', 'В погоне за кадром', 'https://www.kommersant.ru/doc/2729047', 'RU', 'a', 'quote', 'Комментарии о подготовке специалистов для высокотехнологичной промышленности, кибербезопасности, открытой публикации научных работ и отъезде российских ИТ-кадров.', { note: 'Представлен как эксперт Institute for State Ideologies.' }),
 
   // 2014
+  r('2014-09-09', 'Ведомости', 'Смартфоны дали второе рождение сервисам знакомств', 'https://www.vedomosti.ru/technology/articles/2014/09/09/dohodnye-znakomstva', 'RU', 'c', 'quote', 'Комментарий о миграции сервисов знакомств в мобильные приложения, геймификации и новых моделях общения.', { note: 'Эксперт по интернету и медиа компании INSTID.' }),
   r('2014-08-10', 'Радио Свобода', 'Интернет под надзором', 'https://www.svoboda.org/a/25476945.html', 'RU', 'i', 'interview', 'Интервью о регулировании и контроле персональных данных в сети.'),
   r('2014-06-16', 'The Moscow Times', 'Controversial Lenin Death Mask for Sale in U.S.', 'https://www.themoscowtimes.com/2014/06/16/controversial-lenin-death-mask-for-sale-in-us-a36443', 'EN', 'c', 'quote', 'Как правнук скульптора Сергея Меркурова требует отменить аукцион маски Ленина в США.'),
 
@@ -168,11 +182,17 @@ const items: Draft[] = [
   r('2013-09-01', 'Russian Life', 'The Death Artist', 'https://www.russianlife.com/magazine/sep-oct-2013/the-death-artist/', 'EN', 'c', 'mention', 'Историко-культурный материал о наследии скульптора С. Д. Меркурова.'),
 
   // 2012
-  r('2012-05-01', 'BBC News', 'LiveJournal: Russia’s unlikely internet giant', 'https://www.bbc.com/news/magazine-17177053', 'EN', 'i', 'quote', 'Экспертный разбор феномена блогосферы LiveJournal.'),
+  r('2012-11-13', 'Коммерсантъ', '«Луркоморье» вернулось в сеть', 'https://www.kommersant.ru/doc/2066032', 'RU', 'i', 'quote', 'Материал об исключении «Луркоморье» из реестра запрещённых ресурсов; содержит комментарий Антона Меркурова из эфира «Коммерсантъ FM» о неэффективности блокировок.'),
   r('2012-11-09', 'Republic (Слон.ру)', 'Антон Меркуров — авторская страница', 'https://slon.ru/authors/29191/', 'RU', 'c', 'column', 'Авторские колонки и материалы на Republic.'),
+  r('2012-05-01', 'BBC News', 'LiveJournal: Russia’s unlikely internet giant', 'https://www.bbc.com/news/magazine-17177053', 'EN', 'i', 'quote', 'Экспертный разбор феномена блогосферы LiveJournal.'),
+  r('2012-03-01', 'BBC News Русская служба', 'Борьба за барельефы Меркурова на стадионе «Динамо»', 'https://www.bbc.com/russian/sport/2012/03/120109_dynamo_stadium_reconstruction', 'RU', 'c', 'quote', 'Как правнук скульптора Сергея Меркурова Антон Меркуров добивается прозрачности реставрации шести барельефов на стадионе «Динамо» и возвращения подлинников.'),
 
-  // Дополнительные подтвержденные записи из artefact
+  // 2011
   r('2011-03-01', 'Forbes.ru', 'Антон Меркуров — профиль автора', 'https://www.forbes.ru/person/52577-merkurov-anton', 'RU', 'a', 'profile', 'Авторская страница и экспертный профиль на Forbes.ru.'),
+
+  // 2010
+  r('2010-04-12', 'Коммерсантъ-Деньги', 'Эксперимент российского масштаба. Переход на лица', 'https://www.kommersant.ru/doc/1353039', 'RU', 'a', 'quote', 'Развёрнутые комментарии о продвижении бизнеса и СМИ в Facebook: коммуникация с клиентами, трафик и выбор социальных платформ.', { note: 'Совладелец агентства Socialight.' }),
+  r('2010-03-08', 'Коммерсантъ-Деньги', 'Эксперимент российского масштаба. Показательный замер', 'https://www.kommersant.ru/doc/1327572', 'RU', 'a', 'quote', 'Комментарии об измеримости маркетинга в социальных медиа, постановке бизнес-целей и распространении отзывов.'),
   r('2010-02-25', 'Chaskor', 'Самая глупая покупка', 'https://detector.media/withoutsection/article/51326/', 'RU', 'i', 'column', 'Колонка о тенденциях и технологиях интернет-среды.'),
 ];
 
@@ -219,4 +239,3 @@ export const pending: { outlet: string; title: string; url: string; why: string 
   { outlet: 'Medium', title: 'Truth Inside the Matryoshka', url: 'https://merkurov.medium.com/truth-inside-the-matryoshka-how-russias-propaganda-network-floods-the-internet-8d176fd7801f', why: 'Свой текст; дата не открыта' },
   { outlet: 'Medium', title: 'Russia Can’t Catch Up with AI', url: 'https://merkurov.medium.com/russia-cant-catch-up-with-ai-539b458951e4', why: 'Свой текст; дата не открыта' },
 ];
-
