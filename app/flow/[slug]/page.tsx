@@ -34,6 +34,7 @@ type FlowItem = {
   visibility: string;
   body_md: string | null;
   source_url: string | null;
+  ai_allowed: boolean;
   metadata: Record<string, unknown> | null;
   published_at: string | null;
 };
@@ -74,9 +75,11 @@ function getMetadataString(
 
 function getYouTubeMetadata(item: FlowItem): YouTubeMetadata | null {
   const value = item.metadata?.youtube;
+
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
+
   return value as YouTubeMetadata;
 }
 
@@ -93,12 +96,14 @@ function getYouTubeVideoId(item: FlowItem): string | null {
 
       if (url.hostname === 'youtu.be' || url.hostname === 'www.youtu.be') {
         const id = url.pathname.split('/').filter(Boolean)[0];
+
         if (id && /^[A-Za-z0-9_-]{6,20}$/.test(id)) {
           return id;
         }
       }
 
       const queryId = url.searchParams.get('v');
+
       if (queryId && /^[A-Za-z0-9_-]{6,20}$/.test(queryId)) {
         return queryId;
       }
@@ -188,7 +193,7 @@ export async function generateMetadata({
     const { data: item } = await supabase
       .from('items')
       .select(
-        'id,title,slug,lang,type,status,visibility,body_md,source_url,metadata,published_at',
+        'id,title,slug,lang,type,status,visibility,body_md,source_url,ai_allowed,metadata,published_at',
       )
       .eq('slug', decodedSlug)
       .eq('status', 'published')
@@ -381,14 +386,14 @@ function LinkCard({ item }: { item: FlowItem }) {
     typeof metadata.site_name === 'string'
       ? metadata.site_name
       : item.source_url
-      ? (() => {
-          try {
-            return new URL(item.source_url!).hostname;
-          } catch {
-            return item.source_url;
-          }
-        })()
-      : '';
+        ? (() => {
+            try {
+              return new URL(item.source_url!).hostname;
+            } catch {
+              return item.source_url;
+            }
+          })()
+        : '';
 
   return (
     <div className="space-y-6">
@@ -563,7 +568,11 @@ function AIContextBlock({ context }: { context: AIContext | null }) {
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
-            p: ({ children }) => <p className="mb-4 whitespace-pre-wrap last:mb-0">{children}</p>,
+            p: ({ children }) => (
+              <p className="mb-4 whitespace-pre-wrap last:mb-0">
+                {children}
+              </p>
+            ),
             hr: () => <hr className="my-5 border-stone-200/80" />,
             strong: ({ children }) => (
               <strong className="font-mono text-[11px] font-normal uppercase tracking-widest text-stone-500">
@@ -588,7 +597,7 @@ export default async function FlowItemPage({ params }: PageProps) {
   const { data, error } = await supabase
     .from('items')
     .select(
-      'id,title,slug,lang,type,status,visibility,body_md,source_url,metadata,published_at',
+      'id,title,slug,lang,type,status,visibility,body_md,source_url,ai_allowed,metadata,published_at',
     )
     .eq('slug', decodedSlug)
     .eq('status', 'published')
@@ -606,11 +615,15 @@ export default async function FlowItemPage({ params }: PageProps) {
     notFound();
   }
 
-  const { data: contextData, error: contextError } = await supabase
+  // Read the existing context regardless of status.
+  // An existing error/pending row must not trigger automatic regeneration.
+  const {
+    data: contextData,
+    error: contextError,
+  } = await supabase
     .from('flow_ai_context')
     .select('id,item_id,content,model,provider,status,generated_at')
     .eq('item_id', item.id)
-    .eq('status', 'ready')
     .maybeSingle();
 
   if (contextError) {
@@ -619,12 +632,17 @@ export default async function FlowItemPage({ params }: PageProps) {
 
   let context = (contextData as AIContext | null) ?? null;
 
-  if (
-    !context &&
+  // Respect the author's AI setting. Generate only if no context row exists.
+  // Failed or pending context rows are left for an explicit retry from admin.
+  const shouldGenerateContext =
+    item.ai_allowed !== false &&
     item.type !== 'photo' &&
     item.status === 'published' &&
-    item.visibility === 'public'
-  ) {
+    item.visibility === 'public' &&
+    !contextError &&
+    !contextData;
+
+  if (shouldGenerateContext) {
     try {
       const generated = await generateFlowContext({
         id: item.id,
@@ -636,8 +654,10 @@ export default async function FlowItemPage({ params }: PageProps) {
         lang: item.lang || 'ru',
       });
 
-      if (generated && generated.content) {
-        const { data: savedContext } = await supabase
+      if (generated?.content) {
+        const now = new Date().toISOString();
+
+        const { data: savedContext, error: saveError } = await supabase
           .from('flow_ai_context')
           .upsert(
             {
@@ -646,17 +666,22 @@ export default async function FlowItemPage({ params }: PageProps) {
               model: generated.model,
               provider: generated.provider || 'deepseek',
               status: 'ready',
-              generated_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+              generated_at: now,
+              updated_at: now,
             },
             { onConflict: 'item_id' },
           )
           .select('id,item_id,content,model,provider,status,generated_at')
           .maybeSingle();
 
+        if (saveError) {
+          console.warn('[flow/item] Could not save AI context:', saveError);
+        }
+
         if (savedContext) {
           context = savedContext as AIContext;
         } else {
+          // Render the generated context for this request even if persistence fails.
           context = {
             id: 'generated',
             item_id: item.id,
@@ -664,7 +689,7 @@ export default async function FlowItemPage({ params }: PageProps) {
             model: generated.model,
             provider: generated.provider || 'deepseek',
             status: 'ready',
-            generated_at: new Date().toISOString(),
+            generated_at: now,
           };
         }
       }
