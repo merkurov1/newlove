@@ -44,12 +44,14 @@ export const metadata: Metadata = {
     siteName: 'Anton Merkurov',
     locale: 'en_US',
     type: 'website',
-    images: [{
-      url: `${siteUrl}/media/opengraph-image`,
-      width: 1200,
-      height: 630,
-      alt: 'Media Archive — Anton Merkurov',
-    }],
+    images: [
+      {
+        url: `${siteUrl}/media/opengraph-image`,
+        width: 1200,
+        height: 630,
+        alt: 'Media Archive — Anton Merkurov',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
@@ -77,6 +79,7 @@ type DatabaseMediaRecord = {
   title?: string | null;
   outlet?: string | null;
   published_date?: string | null;
+  created_at?: string | null;
   lang?: string | null;
   kind?: string | null;
   topic?: string | null;
@@ -86,6 +89,7 @@ type DatabaseMediaRecord = {
 };
 
 const VALID_LANGUAGES: Lang[] = ['EN', 'RU', 'DE', 'PL', 'BS'];
+
 const VALID_KINDS: Kind[] = [
   'quote',
   'mention',
@@ -96,6 +100,7 @@ const VALID_KINDS: Kind[] = [
   'blog',
   'profile',
 ];
+
 const VALID_TOPICS: Topic[] = [
   'Internet & Censorship',
   'AI & Tech',
@@ -119,38 +124,45 @@ function isValidUrl(value: string): boolean {
 function slugFromUrl(value: string): string {
   try {
     const url = new URL(value);
-    const slug = `${url.hostname}-${url.pathname}`
+    const slug = `${url.hostname}${url.pathname}`
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
       .slice(0, 100);
 
-    return slug || `media-${Date.now()}`;
+    return slug || 'media-record';
   } catch {
-    return `media-${Date.now()}`;
+    return 'media-record';
   }
 }
 
-function normalizeDate(
-  publishedDate: unknown,
-  metadata: Record<string, unknown>,
-): string {
-  const originalDate = text(metadata.original_date);
-  const candidate = text(publishedDate, originalDate);
+function validDisplayDate(value: unknown): string | null {
+  const candidate = text(value);
 
-  // The existing MediaArchive accepts YYYY, YYYY-MM and YYYY-MM-DD.
   if (/^\d{4}$/.test(candidate)) return candidate;
   if (/^\d{4}-\d{2}$/.test(candidate)) return candidate;
   if (/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return candidate;
 
-  return '1900';
+  return null;
 }
 
-function mapDatabaseRecord(row: DatabaseMediaRecord): MediaRecord | null {
+function dateFromCreatedAt(value: unknown): string | null {
+  const candidate = text(value);
+  if (!candidate) return null;
+
+  const parsed = new Date(candidate);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  // Used only as a timeline fallback when the publication date is unknown.
+  return parsed.toISOString().slice(0, 10);
+}
+
+function mapDatabaseRecord(
+  row: DatabaseMediaRecord,
+): MediaRecord | null {
   if (row.status !== 'published') return null;
 
   const url = text(row.url, text(row.canonical_url));
-
   if (!url || !isValidUrl(url)) return null;
 
   const metadata =
@@ -170,21 +182,30 @@ function mapDatabaseRecord(row: DatabaseMediaRecord): MediaRecord | null {
     ? (row.topic as Topic)
     : 'Internet & Censorship';
 
+  const publicationDate =
+    validDisplayDate(row.published_date) ??
+    validDisplayDate(metadata.original_date);
+
+  const timelineDate =
+    publicationDate ?? dateFromCreatedAt(row.created_at) ?? '1900';
+
   return {
     slug: text(metadata.slug, slugFromUrl(url)),
     title: text(row.title, 'Untitled publication'),
     outlet: text(row.outlet, 'Unknown publication'),
     url,
-    date: normalizeDate(row.published_date, metadata),
+    date: timelineDate,
     lang,
     kind,
     topic,
     summary: text(row.summary),
+    ...(!publicationDate
+      ? {
+          note: 'Publication date unavailable; timeline position uses archive creation date.',
+        }
+      : {}),
     ...(text(metadata.program)
       ? { program: text(metadata.program) }
-      : {}),
-    ...(text(metadata.note)
-      ? { note: text(metadata.note) }
       : {}),
   };
 }
@@ -194,6 +215,7 @@ function canonicalize(value: string): string {
     const url = new URL(value);
     url.hash = '';
     url.hostname = url.hostname.toLowerCase();
+
     return url.toString().replace(/\/$/, '');
   } catch {
     return value.trim();
@@ -201,8 +223,8 @@ function canonicalize(value: string): string {
 }
 
 async function getMediaRecords(): Promise<MediaRecord[]> {
-  // Keep the verified source archive available even if Supabase
-  // is temporarily unavailable or contains no published records.
+  // Start with the verified local archive so it remains available
+  // even if the database is temporarily unavailable.
   const merged = new Map<string, MediaRecord>();
 
   for (const record of fallbackRecords) {
@@ -215,10 +237,24 @@ async function getMediaRecords(): Promise<MediaRecord[]> {
     const { data, error } = await supabase
       .from('media_archive_records')
       .select(
-        'id,url,canonical_url,title,outlet,published_date,lang,kind,topic,summary,status,ai_metadata',
+        [
+          'id',
+          'url',
+          'canonical_url',
+          'title',
+          'outlet',
+          'published_date',
+          'created_at',
+          'lang',
+          'kind',
+          'topic',
+          'summary',
+          'status',
+          'ai_metadata',
+        ].join(','),
       )
       .eq('status', 'published')
-      .order('published_date', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(5000);
 
     if (error) {
@@ -233,8 +269,8 @@ async function getMediaRecords(): Promise<MediaRecord[]> {
 
         const key = canonicalize(record.url);
 
-        // Database values override a matching local record.
-        // New database records are appended to the archive.
+        // Published database records replace matching local entries.
+        // New records are added without deleting the verified archive.
         merged.set(key, record);
       }
     }
@@ -251,10 +287,5 @@ async function getMediaRecords(): Promise<MediaRecord[]> {
 export default async function MediaPage() {
   const records = await getMediaRecords();
 
-  return (
-    <MediaArchive
-      records={records}
-      archives={archives}
-    />
-  );
+  return <MediaArchive records={records} archives={archives} />;
 }
