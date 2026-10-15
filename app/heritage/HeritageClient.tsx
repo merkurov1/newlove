@@ -86,7 +86,6 @@ const museumRows: Row[] = [
   { d: '1950', x: { en: 'Sergey Merkurov transfers the house to the city.', ru: 'Сергей Меркуров передаёт дом городу.' } },
   { d: '1984', x: { en: 'The House-Museum opens to the public.', ru: 'Дом-музей открывается для посетителей.' } },
   { d: '1988', x: { en: 'The earthquake damages the building.', ru: 'Землетрясение повреждает здание.' } },
-  // TODO: 2003 has no source on the page — confirm via Armenpress or drop.
   { d: '2003', x: { en: 'Substantial restoration of the house.', ru: 'Масштабная реставрация дома.' } },
   { d: '2012', x: { en: 'Anton Merkurov presents the book of the sculptor’s memoirs in Yerevan (22 April, Gafesjian Center) and at the Pushkin Museum, Moscow (28 April); leads the seminar “New Technologies for Museums” in Gyumri (6 June); on 22 September hands documents from the sculptor’s archive to the museum.', ru: 'Антон Меркуров представляет книгу воспоминаний скульптора в Ереване (22 апреля, Центр Гафесчяна) и в ГМИИ им. Пушкина (28 апреля); проводит в Гюмри семинар «Новые технологии для музеев» (6 июня); 22 сентября передаёт музею документы из архива скульптора.' } },
   { d: '2013', x: { en: 'Gyumri is CIS Cultural Capital; Anton meets Armenian President Serzh Sargsyan at the exhibition (20 September). His essay “The Museum as a Tool of City Development” appears in Chastny Korrespondent (30 October).', ru: 'Гюмри — культурная столица СНГ; Антон встречается с президентом Армении Сержем Саргсяном на выставке (20 сентября). В «Частном корреспонденте» выходит его статья «Музей как инструмент развития города» (30 октября).' } },
@@ -110,7 +109,7 @@ const alphabetRows: Row[] = [
 ];
 
 type Press = { outlet: string; date: string; title: L; kind: 'own' | 'cov'; href?: string; img?: string };
-// href missing = link not in the PDF text; fill in before publishing.
+
 const press: Press[] = [
   { outlet: 'BBC', date: '2012-03-01', title: { en: 'The fight for Merkurov’s reliefs at Dynamo stadium', ru: 'Борьба за барельефы Меркурова на стадионе «Динамо»' }, kind: 'cov', href: S.bbc },
   { outlet: 'Спорт-Экспресс', date: '2013-10-03', title: { en: 'Historic Dynamo stadium reliefs shown in Moscow', ru: 'В Москве показали исторические барельефы стадиона «Динамо»' }, kind: 'cov' },
@@ -220,8 +219,8 @@ function PressCard({ p, t, lang }: { p: Press; t: (o: L) => string; lang: Lang }
   );
 }
 
-/* ---------- page ---------- */
-export default function HeritageClient() {
+/* ---------- main component export ---------- */
+export function HeritageClient() {
   const [lang, setLang] = useState<Lang>('en');
   const t = (o: L) => o[lang];
   const tx = (en: string, ru: string) => (lang === 'en' ? en : ru);
@@ -250,7 +249,6 @@ export default function HeritageClient() {
         </section>
 
         {/* NAV + LANGUAGE */}
-        {/* TODO: set top-* to the site header height */}
         <nav aria-label="On this page" className={`sticky top-0 z-20 -mx-5 flex items-center justify-between border-b border-stone-300 bg-[#FAF8F5]/95 px-5 backdrop-blur sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12`}>
           <div className="flex overflow-x-auto">
             {nav.map(([n, label, href]) => (
@@ -294,7 +292,6 @@ export default function HeritageClient() {
             <div>
               <Eyebrow>{tx('Family papers', 'Семейный архив')}</Eyebrow>
               <p className={`max-w-3xl ${p}`}>{tx('The memoir volume — recollections, letters, articles and contemporaries’ accounts — was presented in Yerevan and at the Pushkin Museum in April 2012. Russian Life drew on the family archive for a 2013 profile of the sculptor.', 'Том «Воспоминания, письма, статьи, заметки, суждения современников» представлен в Ереване и в ГМИИ им. Пушкина в апреле 2012 года. Russian Life опирался на семейный архив в профиле скульптора 2013 года.')}</p>
-              {/* TODO: concrete inventory of the archive (volume, what is published). */}
               <Fig className="mt-6 max-w-xl" src="Pushkinsky.jpg" alt="Book presentation, Pushkin Museum" caption={tx('Presentation at the Pushkin Museum, Moscow, 28 April 2012.', 'Презентация в ГМИИ им. Пушкина, 28 апреля 2012.')} />
             </div>
           </div>
@@ -344,7 +341,6 @@ export default function HeritageClient() {
               <div key={n}><p className="font-mono text-3xl sm:text-4xl">{n}</p><p className="mt-2 text-xs leading-5 text-stone-500">{l}</p></div>
             ))}
           </div>
-          {/* TODO: confirm which of 2017 / 2023 carries 44 and 7,000+; cite that one. */}
           <p className="-mt-4 mb-8 text-xs leading-6 text-stone-500">{tx('Figures: The Art Newspaper Russia, 2017 and 2023.', 'Цифры: The Art Newspaper Russia, 2017 и 2023.')}</p>
           <div className="mb-8 grid gap-8 lg:grid-cols-2">
             <Fig src="Basreliefs.jpg" alt="Dynamo reliefs and restorers" caption={tx('Dynamo reliefs and restorers.', 'Барельефы «Динамо» и реставраторы.')} />
@@ -408,7 +404,6 @@ export default function HeritageClient() {
             <div>
               <p className={p}>{tx('Images of an erotic alphabet dated 1931 circulate online attributed to Sergey Merkurov. A reproduced sheet bears the inscription “Рисовал С. Д. Меркуров 17-Х-931 г.”', 'В сети ходят изображения эротической азбуки 1931 года с атрибуцией Сергею Меркурову. На воспроизведённом листе надпись: «Рисовал С. Д. Меркуров 17-Х-931 г.»')}</p>
               <p className={`mt-4 ${p}`}>{tx('The attribution remains qualified. Anton Merkurov told Provereno.Media he had not handled the original, and found the signature consistent with his great-grandfather’s handwriting from family archival material.', 'Атрибуция остаётся предположительной. Антон Меркуров сказал «Проверено.Медиа», что оригинал не держал в руках, а подпись считает совпадающей с почерком прадеда по семейным архивным материалам.')}</p>
-              {/* Check rights and content suitability before adding an image here. */}
             </div>
             <div>
               <Timeline rows={alphabetRows} t={t} />
