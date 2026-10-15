@@ -345,7 +345,7 @@ function SectionTitle({
       <Eyebrow>
         {number} / {eyebrow}
       </Eyebrow>
-      <h2 className="max-w-3xl font-[var(--font-cormorant,Georgia,serif)] text-4xl font-normal leading-[0.98] tracking-[-0.035em] text-stone-900 sm:text-5xl lg:text-6xl">
+      <h2 className="max-w-3xl font-[var(--font-cormorant,Georgia,serif)] text-4xl  leading-[0.98] tracking-[-0.035em] text-stone-900 sm:text-5xl lg:text-6xl">
         {children}
       </h2>
     </div>
@@ -493,7 +493,7 @@ export default function HeritagePage() {
 
           <Eyebrow>Heritage / Research dossier</Eyebrow>
 
-          <h1 className="max-w-5xl font-[var(--font-cormorant,Georgia,serif)] text-6xl font-normal leading-[0.88] tracking-[-0.055em] sm:text-8xl lg:text-[112px]">
+          <h1 className="max-w-5xl font-[var(--font-cormorant,Georgia,serif)] text-6xl  leading-[0.88] tracking-[-0.055em] sm:text-8xl lg:text-[112px]">
             Objects have
             <br />
             <span className="text-stone-400">their own</span>

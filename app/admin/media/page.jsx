@@ -1,467 +1,376 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import SafeImage from '@/components/SafeImage';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Card, CardHeader, CardContent } from '@/components/admin/Card';
-import { SearchBox } from '@/components/admin/SearchBox';
-import { EmptyState } from '@/components/admin/EmptyState';
-import { Button } from '@/components/admin/Button';
-import LoadingSpinner from '@/components/admin/LoadingSpinner';
-import { useNotifications } from '@/components/admin/NotificationSystem';
+import MediaLinksPanel from '@/components/admin/MediaLinksPanel';
+
+// Существующие компоненты проекта
+import SafeImage from '@/components/SafeImage';
+import { Card } from '@/components/ui/Card';
+import SearchBox from '@/components/ui/SearchBox';
+import EmptyState from '@/components/ui/EmptyState';
+import Button from '@/components/ui/Button';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { useNotifications } from '@/components/ui/Notifications';
 
 export default function MediaPage() {
-  const [files, setFiles] = useState([]);
+  const supabase = createClientComponentClient();
+  const { notify } = useNotifications();
+
+  const [mediaFiles, setMediaFiles] = useState([]);
   const [filteredFiles, setFilteredFiles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [uploadingFiles, setUploadingFiles] = useState([]);
-  const [deletingFiles, setDeletingFiles] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
-  
-  const supabase = createClientComponentClient();
-  const { addNotification } = useNotifications();
+  const [uploading, setUploading] = useState(false);
+
+  const BUCKET_NAME = 'media';
 
   useEffect(() => {
-    fetchFiles();
+    loadMediaFiles();
   }, []);
 
   useEffect(() => {
-    if (searchQuery) {
-      const filtered = files.filter(file =>
-        file.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredFiles(filtered);
-    } else {
-      setFilteredFiles(files);
+    if (!searchTerm.trim()) {
+      setFilteredFiles(mediaFiles);
+      return;
     }
-  }, [files, searchQuery]);
 
-  async function fetchFiles() {
+    const term = searchTerm.toLowerCase();
+
+    setFilteredFiles(
+      mediaFiles.filter((file) =>
+        file.name.toLowerCase().includes(term)
+      )
+    );
+  }, [searchTerm, mediaFiles]);
+
+  async function loadMediaFiles() {
     setLoading(true);
-    setError(null);
-    
-    try {
-      const response = await fetch('/api/media');
-      const data = await response.json();
-      
-      if (!response.ok) {
-        setFiles([]);
-        setError(data.error || 'Ошибка получения списка файлов');
-        return;
-      }
 
-      setFiles(data.files || []);
-    } catch (err) {
-      setError('Произошла ошибка при загрузке файлов');
-      console.error('Error fetching files:', err);
+    try {
+      const { data, error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .list('', {
+          limit: 1000,
+          sortBy: { column: 'created_at', order: 'desc' },
+        });
+
+      if (error) throw error;
+
+      const files = (data || [])
+        .filter((file) => file.name && file.name !== '.emptyFolderPlaceholder')
+        .map((file) => {
+          const { data: publicData } = supabase.storage
+            .from(BUCKET_NAME)
+            .getPublicUrl(file.name);
+
+          return {
+            ...file,
+            url: publicData.publicUrl,
+          };
+        });
+
+      setMediaFiles(files);
+      setFilteredFiles(files);
+    } catch (error) {
+      console.error('Error loading media files:', error);
+      notify?.('Не удалось загрузить медиафайлы', 'error');
     } finally {
       setLoading(false);
     }
   }
 
-  const handleFileUpload = async (event) => {
-    const selectedFilesInput = event.target.files;
-    if (!selectedFilesInput) return;
+  async function handleUpload(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
 
-    const fileArray = Array.from(selectedFilesInput);
-    
-    // Добавляем все файлы в состояние загрузки
-    setUploadingFiles([...uploadingFiles, ...fileArray.map(f => f.name)]);
-        
+    setUploading(true);
+
     try {
-      const formData = new FormData();
-      fileArray.forEach(file => {
-        formData.append('files', file);
-      });
+      for (const file of files) {
+        const safeName = file.name.replace(/[^\w.-]/g, '-');
+        const fileName = `${Date.now()}-${safeName}`;
 
-      const response = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        addNotification({
-          type: 'error',
-          title: 'Ошибка загрузки',
-          message: data.error || 'Не удалось загрузить файлы'
-        });
-      } else {
-        // Показываем результаты по каждому файлу
-        data.results.forEach((result) => {
-          if (result.success) {
-            addNotification({
-              type: 'success',
-              title: 'Файл загружен',
-              message: `${result.fileName} успешно загружен`
-            });
-          } else {
-            addNotification({
-              type: 'error',
-              title: 'Ошибка загрузки',
-              message: `${result.fileName}: ${result.error}`
-            });
-          }
-        });
-
-        if (data.success) {
-          addNotification({
-            type: 'success',
-            title: 'Загрузка завершена',
-            message: `Загружено файлов: ${data.results.filter((r) => r.success).length}`
+        const { error } = await supabase.storage
+          .from(BUCKET_NAME)
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false,
           });
-        }
+
+        if (error) throw error;
       }
-    } catch (err) {
-      addNotification({
-        type: 'error',
-        title: 'Ошибка загрузки',
-        message: 'Произошла ошибка при загрузке файлов'
-      });
+
+      notify?.('Файлы загружены', 'success');
+      await loadMediaFiles();
+    } catch (error) {
+      console.error('Error uploading media files:', error);
+      notify?.('Не удалось загрузить файлы', 'error');
     } finally {
-      // Убираем все файлы из состояния загрузки
-      setUploadingFiles(uploadingFiles.filter(name => !fileArray.map(f => f.name).includes(name)));
+      setUploading(false);
+      event.target.value = '';
     }
+  }
 
-    // Обновляем список файлов
-    await fetchFiles();
-    
-    // Очищаем input
-    event.target.value = '';
-  };
-
-  const copyToClipboard = async (url, fileName) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      addNotification({
-        type: 'success',
-        title: 'Ссылка скопирована',
-        message: `Ссылка на ${fileName} скопирована в буфер обмена`
-      });
-    } catch (err) {
-      addNotification({
-        type: 'error',
-        title: 'Ошибка',
-        message: 'Не удалось скопировать ссылку'
-      });
-    }
-  };
-
-  const deleteFile = async (fileName) => {
-    if (!confirm(`Удалить файл "${fileName}"? Это действие нельзя отменить.`)) {
-      return;
-    }
-
-    setDeletingFiles([...deletingFiles, fileName]);
-
-    try {
-      const response = await fetch('/api/media/delete', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ fileName }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        addNotification({
-          type: 'error',
-          title: 'Ошибка удаления',
-          message: data.error || `Не удалось удалить ${fileName}`
-        });
-      } else {
-        addNotification({
-          type: 'success',
-          title: 'Файл удален',
-          message: `${fileName} успешно удален`
-        });
-        
-        // Обновляем список файлов
-        await fetchFiles();
-      }
-    } catch (err) {
-      addNotification({
-        type: 'error',
-        title: 'Ошибка удаления',
-        message: `Произошла ошибка при удалении ${fileName}`
-      });
-    } finally {
-      setDeletingFiles(deletingFiles.filter(name => name !== fileName));
-    }
-  };
-
-  const deleteSelectedFiles = async () => {
-    if (selectedFiles.length === 0) return;
-    
-    if (!confirm(`Удалить ${selectedFiles.length} файл(ов)? Это действие нельзя отменить.`)) {
-      return;
-    }
-
-    setDeletingFiles([...deletingFiles, ...selectedFiles]);
-
-    try {
-      const response = await fetch('/api/media/delete', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ fileNames: selectedFiles }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        addNotification({
-          type: 'error',
-          title: 'Ошибка удаления',
-          message: data.error || 'Не удалось удалить файлы'
-        });
-      } else {
-        addNotification({
-          type: 'success',
-          title: 'Файлы удалены',
-          message: `${selectedFiles.length} файл(ов) успешно удалено`
-        });
-        
-        setSelectedFiles([]);
-        await fetchFiles();
-      }
-    } catch (err) {
-      addNotification({
-        type: 'error',
-        title: 'Ошибка удаления',
-        message: 'Произошла ошибка при удалении файлов'
-      });
-    } finally {
-      setDeletingFiles(deletingFiles.filter(name => !selectedFiles.includes(name)));
-    }
-  };
-
-  const toggleFileSelection = (fileName) => {
-    setSelectedFiles(
-      selectedFiles.includes(fileName)
-        ? selectedFiles.filter(name => name !== fileName)
-        : [...selectedFiles, fileName]
+  async function handleDelete(fileName) {
+    const confirmed = window.confirm(
+      `Удалить файл «${fileName}»? Это действие нельзя отменить.`
     );
-  };
 
-  const selectAllFiles = () => {
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .remove([fileName]);
+
+      if (error) throw error;
+
+      setSelectedFiles((current) =>
+        current.filter((name) => name !== fileName)
+      );
+
+      notify?.('Файл удалён', 'success');
+      await loadMediaFiles();
+    } catch (error) {
+      console.error('Error deleting media file:', error);
+      notify?.('Не удалось удалить файл', 'error');
+    }
+  }
+
+  async function handleDeleteSelected() {
+    if (!selectedFiles.length) return;
+
+    const confirmed = window.confirm(
+      `Удалить выбранные файлы (${selectedFiles.length})? Это действие нельзя отменить.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .remove(selectedFiles);
+
+      if (error) throw error;
+
+      setSelectedFiles([]);
+      notify?.('Выбранные файлы удалены', 'success');
+      await loadMediaFiles();
+    } catch (error) {
+      console.error('Error deleting selected files:', error);
+      notify?.('Не удалось удалить выбранные файлы', 'error');
+    }
+  }
+
+  function toggleSelected(fileName) {
+    setSelectedFiles((current) =>
+      current.includes(fileName)
+        ? current.filter((name) => name !== fileName)
+        : [...current, fileName]
+    );
+  }
+
+  function toggleSelectAll() {
     if (selectedFiles.length === filteredFiles.length) {
       setSelectedFiles([]);
     } else {
-      setSelectedFiles(filteredFiles.map(file => file.name));
+      setSelectedFiles(filteredFiles.map((file) => file.name));
     }
-  };
+  }
 
-  const formatFileSize = (bytes) => {
-    if (bytes < 1024) return `${bytes} Б`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
-  };
+  async function copyUrl(url) {
+    try {
+      await navigator.clipboard.writeText(url);
+      notify?.('Ссылка скопирована', 'success');
+    } catch (error) {
+      console.error('Error copying URL:', error);
+      notify?.('Не удалось скопировать ссылку', 'error');
+    }
+  }
 
   if (loading) {
     return (
       <div className="space-y-6">
+        <MediaLinksPanel />
+
         <LoadingSpinner size="lg" text="Загрузка медиафайлов..." />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader 
-          title="Медиафайлы" 
-          subtitle={selectedFiles.length > 0 ? `Выбрано: ${selectedFiles.length} файл(ов)` : `Всего файлов: ${files.length}`}
-          action={
-            <div className="flex space-x-3">
-              {selectedFiles.length > 0 && (
-                <Button 
-                  variant="secondary" 
-                  onClick={deleteSelectedFiles}
-                  className="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
-                >
-                  🗑️ Удалить выбранные ({selectedFiles.length})
-                </Button>
-              )}
-              <label className="cursor-pointer">
-                <Button variant="primary">
-                  📎 Загрузить файлы
-                </Button>
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+    <div className="space-y-8">
+      {/* Управление ссылками на публикации и внешние источники */}
+      <MediaLinksPanel />
+
+      {/* Существующий менеджер файлов Supabase Storage */}
+      <section className="space-y-4 border-t border-gray-200 pt-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xs uppercase tracking-[0.18em] text-gray-500">
+              Storage management
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Загруженные изображения и другие медиафайлы.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-black px-4 py-2 text-sm text-white transition hover:bg-gray-800">
+              {uploading ? 'Загрузка…' : 'Загрузить файлы'}
+              <input
+                type="file"
+                multiple
+                accept="image/*,video/*,audio/*,.pdf"
+                className="hidden"
+                disabled={uploading}
+                onChange={handleUpload}
+              />
+            </label>
+
+            <Button
+              onClick={loadMediaFiles}
+              disabled={uploading}
+            >
+              Обновить
+            </Button>
+          </div>
+        </div>
+
+        <Card>
+          <div className="space-y-4 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="min-w-0 flex-1">
+                <SearchBox
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  placeholder="Поиск по имени файла…"
                 />
-              </label>
-              <Button variant="secondary" onClick={fetchFiles}>
-                🔄 Обновить
-              </Button>
-            </div>
-          }
-        />
-        
-        <CardContent>
-          {error ? (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <h3 className="text-red-800 font-medium">Ошибка</h3>
-              <p className="text-red-600 text-sm mt-1">{error}</p>
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                onClick={fetchFiles}
-                className="mt-3"
-              >
-                Попробовать снова
-              </Button>
-            </div>
-          ) : (
-            <>
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <SearchBox
-                    onSearch={setSearchQuery}
-                    placeholder="Поиск файлов по имени..."
-                    className="max-w-md"
-                  />
-                  
-                  {filteredFiles.length > 0 && (
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedFiles.length === filteredFiles.length}
-                        onChange={selectAllFiles}
-                        className="rounded border-gray-300"
-                      />
-                      <span className="text-sm text-gray-600">
-                        Выбрать все
-                      </span>
-                    </div>
-                  )}
-                </div>
               </div>
 
-              {uploadingFiles.length > 0 && (
-                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <h4 className="font-medium text-blue-800 mb-2">Загружаемые файлы:</h4>
-                  {uploadingFiles.map(fileName => (
-                    <div key={fileName} className="flex items-center space-x-2 text-blue-700">
-                      <LoadingSpinner size="sm" text="" />
-                      <span className="text-sm">{fileName}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-gray-500">
+                  {filteredFiles.length} файлов
+                </span>
 
-              {filteredFiles.length === 0 ? (
-                searchQuery ? (
-                  <EmptyState
-                    icon="🔍"
-                    title="Файлы не найдены"
-                    description={`По запросу "${searchQuery}" файлы не найдены.`}
-                  />
-                ) : (
-                  <EmptyState
-                    icon="🖼️"
-                    title="Нет медиафайлов"
-                    description="Загрузите первые файлы в медиабиблиотеку."
-                  />
-                )
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                  {filteredFiles.map((file) => (
-                    <div
+                {filteredFiles.length > 0 && (
+                  <Button onClick={toggleSelectAll}>
+                    {selectedFiles.length === filteredFiles.length
+                      ? 'Снять выделение'
+                      : 'Выбрать все'}
+                  </Button>
+                )}
+
+                {selectedFiles.length > 0 && (
+                  <Button onClick={handleDeleteSelected}>
+                    Удалить ({selectedFiles.length})
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {filteredFiles.length === 0 ? (
+              <EmptyState
+                title="Файлы не найдены"
+                description={
+                  searchTerm
+                    ? 'Попробуйте изменить поисковый запрос.'
+                    : 'Загрузите файлы, чтобы они появились здесь.'
+                }
+              />
+            ) : (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {filteredFiles.map((file) => {
+                  const isSelected = selectedFiles.includes(file.name);
+                  const isImage = /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(
+                    file.name
+                  );
+                  const isVideo = /\.(mp4|webm|mov|m4v)$/i.test(file.name);
+
+                  return (
+                    <article
                       key={file.name}
-                      className={`bg-white rounded-xl border shadow-sm p-4 flex flex-col gap-2 hover:shadow-md transition-shadow relative ${
-                        selectedFiles.includes(file.name) ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
+                      className={`group min-w-0 overflow-hidden rounded-md border ${
+                        isSelected
+                          ? 'border-black ring-1 ring-black'
+                          : 'border-gray-200'
                       }`}
                     >
-                      {/* Чекбокс для выбора файла */}
-                      <div className="absolute top-2 left-2 z-10">
-                        <input
-                          type="checkbox"
-                          checked={selectedFiles.includes(file.name)}
-                          onChange={() => toggleFileSelection(file.name)}
-                          className="rounded border-gray-300 bg-white shadow"
-                        />
-                      </div>
-                      {file.publicUrl ? (
-                        <div className="aspect-square mb-3 bg-gray-50 rounded-lg overflow-hidden flex items-center justify-center">
-                          {file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                            <SafeImage
-                              src={file.publicUrl}
-                              alt={file.name}
-                              width={600}
-                              height={600}
-                              className="w-full h-full object-cover"
-                              unoptimized
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              <span className="text-4xl">📄</span>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="aspect-square mb-3 bg-red-50 rounded-lg flex items-center justify-center">
-                          <span className="text-red-400 text-sm">Ошибка загрузки</span>
-                        </div>
-                      )}
-                      <div className="space-y-1">
-                        <h3 className="font-medium text-sm text-gray-900 truncate" title={file.name}>
-                          {file.name}
-                        </h3>
-                        {file.metadata?.size && (
-                          <p className="text-xs text-gray-500">
-                            {formatFileSize(file.metadata.size)}
-                          </p>
-                        )}
-                        {file.publicUrl && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => copyToClipboard(file.publicUrl, file.name)}
-                              className="flex-1 text-xs"
-                            >
-                              📋 Копировать
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => window.open(file.publicUrl, '_blank')}
-                              className="text-xs"
-                            >
-                              👁️
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => deleteFile(file.name)}
-                              disabled={deletingFiles.includes(file.name)}
-                              className="text-xs text-red-600 hover:text-red-700 border-red-300 hover:border-red-400 disabled:opacity-50"
-                              title="Удалить файл"
-                            >
-                              {deletingFiles.includes(file.name) ? '⏳' : '🗑️'}
-                            </Button>
+                      <div className="relative aspect-square bg-gray-50">
+                        <label className="absolute left-2 top-2 z-10 flex cursor-pointer items-center justify-center rounded bg-white/90 p-1.5 shadow-sm">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelected(file.name)}
+                            aria-label={`Выбрать ${file.name}`}
+                          />
+                        </label>
+
+                        {isImage ? (
+                          <SafeImage
+                            src={file.url}
+                            alt={file.name}
+                            className="h-full w-full object-contain"
+                          />
+                        ) : isVideo ? (
+                          <video
+                            src={file.url}
+                            className="h-full w-full object-contain"
+                            controls
+                            preload="metadata"
+                          />
+                        ) : (
+                          <div className="flex h-full flex-col items-center justify-center gap-2 p-3 text-gray-400">
+                            <span className="text-3xl">▤</span>
+                            <span className="text-xs uppercase">
+                              {file.name.split('.').pop() || 'File'}
+                            </span>
                           </div>
                         )}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+
+                      <div className="space-y-2 p-3">
+                        <p
+                          className="break-all text-xs font-medium text-gray-800"
+                          title={file.name}
+                        >
+                          {file.name}
+                        </p>
+
+                        <p className="text-xs text-gray-500">
+                          {typeof file.metadata?.size === 'number'
+                            ? `${(file.metadata.size / 1024).toFixed(1)} KB`
+                            : 'Размер не указан'}
+                        </p>
+
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => copyUrl(file.url)}
+                            className="text-xs text-gray-600 underline underline-offset-2 hover:text-black"
+                          >
+                            Копировать URL
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(file.name)}
+                            className="text-xs text-red-600 underline underline-offset-2 hover:text-red-800"
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </Card>
+      </section>
     </div>
   );
 }
