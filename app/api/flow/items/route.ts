@@ -1,43 +1,34 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { publishToBluesky } from '@/lib/bluesky';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 function getSupabaseAdmin() {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL;
-
-  const serviceRoleKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
-    throw new Error(
-      'Supabase server environment variables are missing.',
-    );
+    throw new Error('Supabase server environment variables are missing.');
   }
 
-  return createClient(
-    url,
-    serviceRoleKey,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
+  return createClient(url, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
     },
-  );
+  });
 }
 
+// --- GET: Выдача списка постов Flow ---
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const limitParam = searchParams.get('limit');
     const offsetParam = searchParams.get('offset');
 
-    // Default to 10 items for lightning-fast initial load
     const limit = Math.min(
       Math.max(parseInt(limitParam || '10', 10) || 10, 1),
       50,
@@ -46,11 +37,7 @@ export async function GET(req: Request) {
 
     const supabase = getSupabaseAdmin();
 
-    const {
-      data,
-      error,
-      count,
-    } = await supabase
+    const { data, error, count } = await supabase
       .from('items')
       .select(
         [
@@ -65,34 +52,23 @@ export async function GET(req: Request) {
           'published_at',
           'source_url',
           'metadata',
+          'bluesky_uri',
         ].join(','),
         { count: 'exact' },
       )
       .eq('status', 'published')
       .eq('visibility', 'public')
-      .order(
-        'published_at',
-        {
-          ascending: false,
-          nullsFirst: false,
-        },
-      )
+      .order('published_at', {
+        ascending: false,
+        nullsFirst: false,
+      })
       .range(offset, offset + limit - 1);
 
     if (error) {
-      console.error(
-        '[api/flow/items] database error:',
-        error,
-      );
-
+      console.error('[api/flow/items] database error:', error);
       return NextResponse.json(
-        {
-          error: 'Failed to load Flow items.',
-          details: error.message,
-        },
-        {
-          status: 500,
-        },
+        { error: 'Failed to load Flow items.', details: error.message },
+        { status: 500 },
       );
     }
 
@@ -110,24 +86,84 @@ export async function GET(req: Request) {
       {
         status: 200,
         headers: {
-          'Cache-Control':
-            'no-store, no-cache, must-revalidate',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
         },
       },
     );
   } catch (error) {
-    console.error(
-      '[api/flow/items] unexpected error:',
-      error,
-    );
-
+    console.error('[api/flow/items] unexpected error:', error);
     return NextResponse.json(
-      {
-        error: 'Internal server error while loading Flow items.',
-      },
-      {
-        status: 500,
-      },
+      { error: 'Internal server error while loading Flow items.' },
+      { status: 500 },
+    );
+  }
+}
+
+// --- POST: Создание поста во Flow + автопубликация в Bluesky ---
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const supabase = getSupabaseAdmin();
+
+    const now = new Date().toISOString();
+
+    // 1. Создаем запись во Flow
+    const { data: item, error } = await supabase
+      .from('items')
+      .insert({
+        title: body.title || null,
+        slug: body.slug || null,
+        lang: body.lang || 'ru',
+        type: body.type || 'article',
+        status: body.status || 'published',
+        visibility: body.visibility || 'public',
+        body_md: body.body_md || null,
+        source_url: body.source_url || null,
+        metadata: body.metadata || {},
+        published_at: body.published_at || now,
+      })
+      .select()
+      .single();
+
+    if (error || !item) {
+      console.error('[api/flow/items] insert error:', error);
+      return NextResponse.json(
+        { error: 'Failed to create item', details: error?.message },
+        { status: 500 },
+      );
+    }
+
+    // 2. Если пост публичный и опубликован — синхронизируем с Bluesky
+    if (item.status === 'published' && item.visibility === 'public') {
+      const bskyResult = await publishToBluesky({
+        title: item.title,
+        body_md: item.body_md,
+        source_url: item.source_url,
+        slug: item.slug,
+        lang: item.lang,
+      });
+
+      if (bskyResult) {
+        // Записываем bluesky_uri и bluesky_cid в Supabase
+        await supabase
+          .from('items')
+          .update({
+            bluesky_uri: bskyResult.uri,
+            bluesky_cid: bskyResult.cid,
+          })
+          .eq('id', item.id);
+
+        item.bluesky_uri = bskyResult.uri;
+        item.bluesky_cid = bskyResult.cid;
+      }
+    }
+
+    return NextResponse.json({ success: true, item }, { status: 201 });
+  } catch (error) {
+    console.error('[api/flow/items] POST error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error while creating item.' },
+      { status: 500 },
     );
   }
 }

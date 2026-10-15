@@ -371,171 +371,97 @@ function MarkdownBody({ body }: { body: string }) {
   );
 }
 
-function LinkCard({ item }: { item: FlowItem }) {
-  const metadata = item.metadata ?? {};
-
-  const image =
-    typeof metadata.image === 'string' ? metadata.image : null;
-
-  const description =
-    typeof metadata.description === 'string'
-      ? metadata.description
-      : null;
-
-  const siteName =
-    typeof metadata.site_name === 'string'
-      ? metadata.site_name
-      : item.source_url
-        ? (() => {
-            try {
-              return new URL(item.source_url!).hostname;
-            } catch {
-              return item.source_url;
-            }
-          })()
-        : '';
-
-  return (
-    <div className="space-y-6">
-      <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
-        {image && (
-          <a
-            href={item.source_url ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group block aspect-[16/9] overflow-hidden bg-stone-100"
-          >
-            <img
-              src={image}
-              alt=""
-              className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.015]"
-            />
-          </a>
-        )}
-
-        <div className="p-7 sm:p-9">
-          {siteName && (
-            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
-              {siteName}
-            </div>
-          )}
-
-          <div className="mt-4 font-serif text-3xl font-light leading-tight text-stone-900 sm:text-5xl">
-            {item.title || item.source_url}
-          </div>
-
-          {description && (
-            <p className="mt-5 whitespace-pre-wrap font-serif text-lg leading-8 text-stone-600">
-              {description}
-            </p>
-          )}
-
-          <a
-            href={item.source_url ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-8 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
-          >
-            Open original ↗
-          </a>
-        </div>
-      </div>
-
-      {item.body_md && <MarkdownBody body={item.body_md} />}
-    </div>
-  );
-}
-
-function YouTubeView({ item }: { item: FlowItem }) {
+/**
+ * Универсальный стек медиа и ссылок. 
+ * Позволяет корректно сосуществовать видео, картинкам, ссылкам и тексту в одном item.
+ */
+function FlowMediaStack({ item }: { item: FlowItem }) {
   const videoId = getYouTubeVideoId(item);
-  const youtube = getYouTubeMetadata(item);
-
-  if (!videoId) {
-    return <MarkdownBody body={item.body_md ?? ''} />;
-  }
-
-  const title = youtube?.title || item.title || 'YouTube video';
-  const channel = youtube?.author_name || null;
+  const metadataImage = getMetadataImage(item);
+  const siteName = getSiteName(item);
+  const linkDescription = getMetadataString(item.metadata, 'description');
+  const photoCaption = getMetadataString(item.metadata, 'alt') || item.title;
 
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
-        <div className="aspect-video w-full bg-black">
-          <iframe
-            src={`https://www.youtube-nocookie.com/embed/${videoId}`}
-            title={title}
-            className="h-full w-full"
-            loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
-        </div>
-
-        <div className="p-7 sm:p-9">
-          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
-            YouTube
+      {/* 1. YouTube плеер (если обнаружен video_id) */}
+      {videoId && (
+        <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
+          <div className="aspect-video w-full bg-black">
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+              title={item.title || 'YouTube video'}
+              className="h-full w-full"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
           </div>
+        </div>
+      )}
 
-          <h1 className="mt-3 font-serif text-3xl font-light leading-tight text-stone-900 sm:text-4xl">
-            {title}
-          </h1>
+      {/* 2. Фото / Картинка (если тип фото или есть прямая публичная картинка) */}
+      {metadataImage && item.type === 'photo' && (
+        <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-4 shadow-sm">
+          <figure>
+            <img
+              src={metadataImage}
+              alt={photoCaption ?? ''}
+              className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
+            />
+            {photoCaption && (
+              <figcaption className="mt-4 text-center font-serif text-sm italic text-stone-600 sm:text-base">
+                {photoCaption}
+              </figcaption>
+            )}
+          </figure>
+        </div>
+      )}
 
-          {channel && (
-            <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-stone-400">
-              {channel}
-            </div>
-          )}
-
-          {item.source_url && (
+      {/* 3. Карточка внешней ссылки с OpenGraph (если есть source_url и это ссылка) */}
+      {item.source_url && item.type === 'link' && !videoId && (
+        <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
+          {metadataImage && (
             <a
               href={item.source_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-7 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
+              className="group block aspect-[16/9] overflow-hidden bg-stone-100"
             >
-              Open on YouTube ↗
+              <img
+                src={metadataImage}
+                alt=""
+                className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.015]"
+              />
             </a>
           )}
+          <div className="p-7 sm:p-9">
+            {siteName && (
+              <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
+                {siteName}
+              </div>
+            )}
+            <div className="mt-4 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
+              {item.title || item.source_url}
+            </div>
+            {linkDescription && (
+              <p className="mt-4 font-serif text-base leading-7 text-stone-600">
+                {linkDescription}
+              </p>
+            )}
+            <a
+              href={item.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
+            >
+              Open original ↗
+            </a>
+          </div>
         </div>
-      </div>
+      )}
 
-      {item.body_md && <MarkdownBody body={item.body_md} />}
-    </div>
-  );
-}
-
-function PhotoView({ item }: { item: FlowItem }) {
-  const publicUrl =
-    item.metadata && typeof item.metadata.public_url === 'string'
-      ? item.metadata.public_url
-      : null;
-
-  const caption =
-    item.metadata && typeof item.metadata.alt === 'string'
-      ? item.metadata.alt
-      : item.title ?? '';
-
-  if (!publicUrl) {
-    return <MarkdownBody body={item.body_md ?? ''} />;
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-4 shadow-sm">
-        <figure>
-          <img
-            src={publicUrl}
-            alt={caption}
-            className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
-          />
-          {caption && (
-            <figcaption className="mt-4 text-center font-serif text-sm italic text-stone-600 sm:text-base">
-              {caption}
-            </figcaption>
-          )}
-        </figure>
-      </div>
-
+      {/* 4. Текстовое тело публикации */}
       {item.body_md && <MarkdownBody body={item.body_md} />}
     </div>
   );
@@ -615,8 +541,6 @@ export default async function FlowItemPage({ params }: PageProps) {
     notFound();
   }
 
-  // Read the existing context regardless of status.
-  // An existing error/pending row must not trigger automatic regeneration.
   const {
     data: contextData,
     error: contextError,
@@ -632,8 +556,6 @@ export default async function FlowItemPage({ params }: PageProps) {
 
   let context = (contextData as AIContext | null) ?? null;
 
-  // Respect the author's AI setting. Generate only if no context row exists.
-  // Failed or pending context rows are left for an explicit retry from admin.
   const shouldGenerateContext =
     item.ai_allowed !== false &&
     item.type !== 'photo' &&
@@ -681,7 +603,6 @@ export default async function FlowItemPage({ params }: PageProps) {
         if (savedContext) {
           context = savedContext as AIContext;
         } else {
-          // Render the generated context for this request even if persistence fails.
           context = {
             id: 'generated',
             item_id: item.id,
@@ -787,15 +708,7 @@ export default async function FlowItemPage({ params }: PageProps) {
           </div>
 
           <div className="mt-8">
-            {item.type === 'video' ? (
-              <YouTubeView item={item} />
-            ) : item.type === 'link' && item.source_url ? (
-              <LinkCard item={item} />
-            ) : item.type === 'photo' ? (
-              <PhotoView item={item} />
-            ) : (
-              <MarkdownBody body={item.body_md ?? ''} />
-            )}
+            <FlowMediaStack item={item} />
           </div>
 
           {item.type !== 'photo' && <AIContextBlock context={context} />}
