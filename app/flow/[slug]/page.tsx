@@ -123,25 +123,42 @@ function getYouTubeVideoId(item: FlowItem): string | null {
   return null;
 }
 
-function getMetadataImage(item: FlowItem): string | null {
+function getDedicatedImages(item: FlowItem): string[] {
   const metadata = item.metadata ?? {};
   const youtube = getYouTubeMetadata(item);
 
-  const candidates = [
+  const candidates: unknown[] = [
     youtube?.thumbnail_url,
+    ...(Array.isArray(metadata.images) ? metadata.images : []),
+    metadata.public_url,
     metadata.image,
     metadata.image_url,
     metadata.og_image,
-    metadata.public_url,
   ];
 
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
+  const urls = candidates
+    .map((value) => {
+      if (typeof value === 'string') return value.trim();
 
-  return null;
+      if (
+        value &&
+        typeof value === 'object' &&
+        'url' in value &&
+        typeof value.url === 'string'
+      ) {
+        return value.url.trim();
+      }
+
+      return '';
+    })
+    .filter((url) => /^https?:\/\//i.test(url));
+
+  return [...new Set(urls)];
+}
+
+function getMetadataImage(item: FlowItem): string | null {
+  const images = getDedicatedImages(item);
+  return images.length > 0 ? images[0] : null;
 }
 
 function getDescription(item: FlowItem): string {
@@ -371,25 +388,6 @@ function MarkdownBody({ body }: { body: string }) {
   );
 }
 
-function getDedicatedImage(item: FlowItem): string | null {
-  const metadata = item.metadata ?? {};
-  const candidates = [
-    metadata.public_url,
-    metadata.image,
-    metadata.image_url,
-    metadata.og_image,
-    ...(Array.isArray(metadata.images) ? metadata.images : []),
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return null;
-}
-
 function getLinkPreviewData(item: FlowItem) {
   const meta = item.metadata ?? {};
   const lp = (meta.link_preview && typeof meta.link_preview === 'object'
@@ -420,18 +418,66 @@ function getLinkPreviewData(item: FlowItem) {
 
 /**
  * Универсальный стек медиа и ссылок. 
- * Позволяет корректно сосуществовать видео, картинкам, ссылкам и тексту в одном item.
+ * Поддерживает массивы изображений, множество ссылок, YouTube и текстовое тело.
  */
 function FlowMediaStack({ item }: { item: FlowItem }) {
   const videoId = getYouTubeVideoId(item);
-  const dedicatedImage = getDedicatedImage(item);
-  const linkPreview = getLinkPreviewData(item);
-  const photoCaption = getMetadataString(item.metadata, 'alt') || (item.type === 'photo' ? item.title : null);
+  const dedicatedImages = getDedicatedImages(item);
+  
+  const linkPreviews = (() => {
+    const metadata = item.metadata ?? {};
+    const raw = Array.isArray(metadata.link_previews)
+      ? metadata.link_previews
+      : metadata.link_preview
+        ? [metadata.link_preview]
+        : [];
 
-  // If dedicated image is identical to link preview image, don't duplicate it
-  const showPhotoBlock =
-    dedicatedImage &&
-    (!linkPreview || dedicatedImage !== linkPreview.image);
+    const previews = raw
+      .filter(
+        (value): value is Record<string, unknown> =>
+          Boolean(value) &&
+          typeof value === 'object' &&
+          !Array.isArray(value),
+      )
+      .map((preview) => {
+        const url = getMetadataString(preview, 'url');
+        if (!url) return null;
+
+        return {
+          url,
+          site:
+            getMetadataString(preview, 'site_name') ||
+            getSiteName(item),
+          title:
+            getMetadataString(preview, 'title') ||
+            url,
+          description:
+            getMetadataString(preview, 'description'),
+          image:
+            getMetadataString(preview, 'image'),
+        };
+      })
+      .filter(
+        (preview): preview is NonNullable<typeof preview> =>
+          preview !== null,
+      );
+
+    if (previews.length === 0) {
+      const legacy = getLinkPreviewData(item);
+      if (legacy) previews.push(legacy);
+    }
+
+    const seen = new Set<string>();
+    return previews.filter((preview) => {
+      if (seen.has(preview.url)) return false;
+      seen.add(preview.url);
+      return true;
+    });
+  })();
+
+  const photoCaption =
+    getMetadataString(item.metadata, 'alt') ||
+    (item.type === 'photo' ? item.title : null);
 
   return (
     <div className="space-y-6">
@@ -451,57 +497,71 @@ function FlowMediaStack({ item }: { item: FlowItem }) {
         </div>
       )}
 
-      {/* 2. Фото / Картинка (если прикреплена картинка) */}
-      {showPhotoBlock && (
-        <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-4 shadow-sm">
-          <figure>
-            <img
-              src={dedicatedImage}
-              alt={photoCaption ?? ''}
-              className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
-            />
-            {photoCaption && (
-              <figcaption className="mt-4 text-center font-serif text-sm italic text-stone-600 sm:text-base">
-                {photoCaption}
-              </figcaption>
-            )}
-          </figure>
+      {/* 2. Все прикреплённые изображения */}
+      {dedicatedImages.length > 0 && (
+        <div className="space-y-5">
+          {dedicatedImages.map((imageUrl, index) => (
+            <figure
+              key={`${imageUrl}-${index}`}
+              className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-4 shadow-sm"
+            >
+              <img
+                src={imageUrl}
+                alt={photoCaption || `Flow image ${index + 1}`}
+                loading={index === 0 ? 'eager' : 'lazy'}
+                className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
+              />
+              {photoCaption && index === 0 && (
+                <figcaption className="mt-4 text-center font-serif text-sm italic text-stone-600 sm:text-base">
+                  {photoCaption}
+                </figcaption>
+              )}
+            </figure>
+          ))}
         </div>
       )}
 
-      {/* 3. Карточка внешней ссылки с OpenGraph */}
-      {linkPreview && (
-        <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
-          {linkPreview.image && (
+      {/* 3. Все прикреплённые ссылки с OpenGraph */}
+      {linkPreviews.map((preview) => (
+        <div
+          key={preview.url}
+          className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm"
+        >
+          {preview.image && (
             <a
-              href={linkPreview.url}
+              href={preview.url}
               target="_blank"
               rel="noopener noreferrer"
               className="group block aspect-[16/9] overflow-hidden bg-stone-100"
             >
               <img
-                src={linkPreview.image}
+                src={preview.image}
                 alt=""
+                loading="lazy"
                 className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.015]"
               />
             </a>
           )}
+
           <div className="p-7 sm:p-9">
-            {linkPreview.site && (
+            {preview.site && (
               <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
-                {linkPreview.site}
+                {preview.site}
               </div>
             )}
+
             <div className="mt-4 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
-              {linkPreview.title}
+              {preview.title}
             </div>
-            {linkPreview.description && (
+
+            {preview.description && (
               <p className="mt-4 font-serif text-base leading-7 text-stone-600">
-                {linkPreview.description}
+                {preview.description}
               </p>
             )}
+
             <a
-              href={linkPreview.url}
+              href={preview.url}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-6 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
@@ -510,7 +570,7 @@ function FlowMediaStack({ item }: { item: FlowItem }) {
             </a>
           </div>
         </div>
-      )}
+      ))}
 
       {/* 4. Текстовое тело публикации */}
       {item.body_md && <MarkdownBody body={item.body_md} />}

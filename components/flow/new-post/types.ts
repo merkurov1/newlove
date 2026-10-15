@@ -9,6 +9,29 @@ export type YouTubeMetadata = {
   provider_name?: string;
 };
 
+export type LinkPreview = {
+  url?: string;
+  title?: string;
+  description?: string;
+  image?: string;
+  site_name?: string;
+  favicon?: string;
+  domain?: string;
+};
+
+export type FlowImageAttachment = {
+  id: string;
+  url: string;
+  name: string;
+  file?: File;
+};
+
+export type FlowLinkAttachment = {
+  id: string;
+  url: string;
+  preview: LinkPreview;
+};
+
 export type Item = {
   id: string;
   type: string;
@@ -42,13 +65,3 @@ export type SaveState =
   | "publishing"
   | "clearing"
   | "error";
-
-export type LinkPreview = {
-  url?: string;
-  title?: string;
-  description?: string;
-  image?: string;
-  site_name?: string;
-  favicon?: string;
-  domain?: string;
-};

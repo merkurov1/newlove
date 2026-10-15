@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Image as ImageIcon, Video, Link2 } from "lucide-react";
+import { X, Image as ImageIcon, Video, Link2, Trash2 } from "lucide-react";
 import {
   ImagePreview,
   LinkPreviewCard,
@@ -13,6 +13,8 @@ import { useNewPostModal } from "./new-post/useNewPostModal";
 import type {
   NewPostModalProps,
   SaveState,
+  FlowImageAttachment,
+  FlowLinkAttachment,
 } from "./new-post/types";
 
 function SaveStatus({
@@ -91,22 +93,17 @@ export default function NewPostModal({
     setTitle,
     bodyMd,
     setBodyMd,
-    linkUrl,
-    setLinkUrl,
-    linkPreview,
+    links,
     parseLink,
     removeLink,
     showLinkInput,
     setShowLinkInput,
-    youtubeUrl,
-    setYoutubeUrl,
     youtubeMetadata,
     parseYouTube,
     removeYouTube,
     showYouTubeInput,
     setShowYouTubeInput,
-    imagePreview,
-    imageName,
+    images,
     removeImage,
     handleImageUpload,
     saveState,
@@ -114,6 +111,7 @@ export default function NewPostModal({
     isInitializing,
     isParsingLink,
     isParsingYouTube,
+    isUploadingImage,
     isPublishing,
     isClearing,
     isEditing,
@@ -277,7 +275,7 @@ export default function NewPostModal({
               "
             />
 
-            {/* ATTACHED MEDIA CONTAINER - Text, Link, Image, YouTube can all coexist */}
+            {/* ATTACHED MEDIA CONTAINER */}
             <div className="mt-6 space-y-4">
               {/* YouTube Input Box */}
               {showYouTubeInput && !youtubeMetadata && (
@@ -340,13 +338,13 @@ export default function NewPostModal({
                   </button>
                   <YouTubePreview
                     metadata={youtubeMetadata}
-                    url={youtubeUrl || `https://www.youtube.com/watch?v=${youtubeMetadata.video_id}`}
+                    url={`https://www.youtube.com/watch?v=${youtubeMetadata.video_id}`}
                   />
                 </div>
               )}
 
               {/* Web Link Input Box */}
-              {showLinkInput && !linkPreview && (
+              {showLinkInput && (
                 <div className="rounded-2xl border border-[#E4DCCF] bg-[#FCFAF6] p-3 shadow-sm">
                   <div className="flex items-center gap-2">
                     <input
@@ -393,39 +391,55 @@ export default function NewPostModal({
                 <ShimmerPreview text="Reading link preview…" />
               )}
 
-              {/* Link Attached Preview */}
-              {linkPreview && (
-                <div className="relative group rounded-2xl border border-[#E4DCCF] bg-[#FCFAF6] overflow-hidden p-1 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={removeLink}
-                    title="Remove link"
-                    className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80"
-                  >
-                    <X size={14} />
-                  </button>
-                  <LinkPreviewCard
-                    preview={linkPreview}
-                    url={linkUrl || linkPreview.url || ""}
-                  />
+              {/* Attached Links List */}
+              {links.length > 0 && (
+                <div className="space-y-3">
+                  {links.map((linkAttachment: FlowLinkAttachment) => (
+                    <div
+                      key={linkAttachment.id}
+                      className="relative group rounded-2xl border border-[#E4DCCF] bg-[#FCFAF6] overflow-hidden p-1 shadow-sm"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => removeLink(linkAttachment.id)}
+                        title="Remove link"
+                        className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80"
+                      >
+                        <X size={14} />
+                      </button>
+                      <LinkPreviewCard
+                        preview={linkAttachment.preview}
+                        url={linkAttachment.url}
+                      />
+                    </div>
+                  ))}
                 </div>
               )}
 
-              {/* Image Attached Preview */}
-              {imagePreview && (
-                <div className="relative group rounded-2xl border border-[#E4DCCF] bg-[#FCFAF6] overflow-hidden p-1 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={removeImage}
-                    title="Remove image"
-                    className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80"
-                  >
-                    <X size={14} />
-                  </button>
-                  <ImagePreview
-                    src={imagePreview}
-                    alt={imageName || "Flow image"}
-                  />
+              {/* Uploading Images Shimmer */}
+              {isUploadingImage && (
+                <ShimmerPreview text="Uploading image to storage…" />
+              )}
+
+              {/* Attached Images List */}
+              {images.length > 0 && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {images.map((img: FlowImageAttachment) => (
+                    <div
+                      key={img.id}
+                      className="relative group rounded-2xl border border-[#E4DCCF] bg-[#FCFAF6] overflow-hidden p-1 shadow-sm"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => removeImage(img.id)}
+                        title="Remove image"
+                        className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80"
+                      >
+                        <X size={14} />
+                      </button>
+                      <ImagePreview src={img.url} alt={img.name || "Flow image"} />
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -461,6 +475,7 @@ export default function NewPostModal({
               ref={fileRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={handleImageUpload}
             />
@@ -470,12 +485,12 @@ export default function NewPostModal({
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={busy || loading}
-              aria-label="Add image"
-              title="Attach image"
+              aria-label="Add images"
+              title="Attach images"
               className={`
                 flex h-9 w-9 shrink-0 items-center justify-center
                 rounded-full border transition-colors disabled:opacity-40
-                ${imagePreview
+                ${images.length > 0
                   ? "border-[#6C6559] bg-[#EAE2D7] text-[#49443C]"
                   : "border-[#E4DCCF] bg-[#FCFAF6] text-[#71685C] hover:border-[#CFC3B1] hover:bg-white hover:text-[#49443C]"
                 }
@@ -513,7 +528,7 @@ export default function NewPostModal({
               className={`
                 flex h-9 w-9 shrink-0 items-center justify-center
                 rounded-full border transition-colors disabled:opacity-40
-                ${linkPreview || showLinkInput
+                ${links.length > 0 || showLinkInput
                   ? "border-[#6C6559] bg-[#EAE2D7] text-[#49443C]"
                   : "border-[#E4DCCF] bg-[#FCFAF6] text-[#71685C] hover:border-[#CFC3B1] hover:bg-white hover:text-[#49443C]"
                 }
