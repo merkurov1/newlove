@@ -4,19 +4,25 @@ import {
   parseTelegramMessage,
   verifyTelegramWebhookSecret,
   isAllowedTelegramUser,
+  sendTelegramReply,
 } from '@/lib/telegram';
+
 export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const secret = req.headers.get('x-telegram-bot-api-secret-token');
     if (!verifyTelegramWebhookSecret(secret ?? undefined)) {
       return NextResponse.json({ ok: false }, { status: 401 });
     }
+
     const payload = await req.json();
     const message = parseTelegramMessage(payload);
+
     if (!message) {
       return NextResponse.json({ ok: true, ignored: true });
     }
+
     if (!isAllowedTelegramUser(message.userId)) {
       return NextResponse.json({
         ok: true,
@@ -24,6 +30,7 @@ export async function POST(req: NextRequest) {
         reason: 'user_not_allowed',
       });
     }
+
     const text = (message.text ?? '').trim();
     if (!text) {
       return NextResponse.json({
@@ -32,16 +39,16 @@ export async function POST(req: NextRequest) {
         reason: 'empty_text',
       });
     }
+
     const supabase = createClient({ useServiceRole: true });
     const idempotencyKey = `telegram:${message.chatId}:${message.id}`;
-    const { data: existing, error: existingError } = await supabase
+
+    const { data: existing } = await supabase
       .from('ingest_log')
       .select('item_id')
       .eq('idempotency_key', idempotencyKey)
       .maybeSingle();
-    if (existingError) {
-      throw existingError;
-    }
+
     if (existing?.item_id) {
       return NextResponse.json({
         ok: true,
@@ -49,6 +56,7 @@ export async function POST(req: NextRequest) {
         itemId: existing.item_id,
       });
     }
+
     const title = text.slice(0, 80).trim() || 'Telegram note';
     const slug =
       title
@@ -56,7 +64,9 @@ export async function POST(req: NextRequest) {
         .trim()
         .replace(/[^\p{L}\p{N}\s-]/gu, '')
         .replace(/\s+/g, '-')
-        .slice(0, 80) || 'telegram-note';
+        .slice(0, 80) || `note-${Date.now()}`;
+
+    // Сохраняем черновик во Flow
     const { data: item, error: insertError } = await supabase
       .from('items')
       .insert({
@@ -78,19 +88,35 @@ export async function POST(req: NextRequest) {
       })
       .select()
       .single();
-    if (insertError) {
-      throw insertError;
+
+    if (insertError || !item) {
+      throw insertError || new Error('Failed to insert item');
     }
-    const { error: logError } = await supabase
-      .from('ingest_log')
-      .insert({
-        idempotency_key: idempotencyKey,
-        source: 'telegram',
-        item_id: item.id,
-      });
-    if (logError) {
-      throw logError;
-    }
+
+    await supabase.from('ingest_log').insert({
+      idempotency_key: idempotencyKey,
+      source: 'telegram',
+      item_id: item.id,
+    });
+
+    // Отправляем ответ Пьеро с кнопками управления и Mini App!
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          {
+            text: '📱 Открыть управление во Flow (Mini App)',
+            web_app: { url: `https://www.merkurov.love/flow` },
+          },
+        ],
+      ],
+    };
+
+    await sendTelegramReply(
+      message.chatId,
+      `<b>Заметка сохранена во Flow как черновик!</b>\n\n<b>Заголовок:</b> ${item.title}\n<b>ID:</b> <code>${item.id}</code>`,
+      replyMarkup
+    );
+
     return NextResponse.json({
       ok: true,
       itemId: item.id,

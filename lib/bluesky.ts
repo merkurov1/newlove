@@ -86,7 +86,7 @@ export async function publishToBluesky({
 
     // Формируем текст
     let text = title?.trim() ? `${title.trim()}\n\n` : '';
-    
+
     if (body_md) {
       const cleanBody = body_md
         .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
@@ -105,18 +105,12 @@ export async function publishToBluesky({
     // Генерация хэштегов с помощью DeepSeek
     const finalText = await enhanceTextWithDeepSeek(text, lang);
 
-    // Автоматический парсинг графем, URL и хэштегов через RichText (делает теги и ссылки интерактивными)
+    // Автоматический парсинг URL и хэштегов через RichText
     const rt = new RichText({ text: finalText.slice(0, 300) });
     await rt.detectFacets(agent);
 
-    const postRecord: {
-      $type: string;
-      text: string;
-      facets?: unknown;
-      createdAt: string;
-      embed?: unknown;
-    } = {
-      $type: 'app.bsky.feed.post',
+    const postRecord = {
+      $type: 'app.bsky.feed.post' as const,
       text: rt.text,
       facets: rt.facets,
       createdAt: new Date().toISOString(),
@@ -147,7 +141,7 @@ export async function deleteFromBluesky(uri: string): Promise<boolean> {
     const collection = parts[1];
     const rkey = parts[2];
 
-    await agent.deleteRecord({
+    await agent.api.com.atproto.repo.deleteRecord({
       repo,
       collection,
       rkey,

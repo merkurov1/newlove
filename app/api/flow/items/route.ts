@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { publishToBluesky } from '@/lib/bluesky';
+import { publishToTelegramChannel } from '@/lib/telegram';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -53,6 +54,7 @@ export async function GET(req: Request) {
           'source_url',
           'metadata',
           'bluesky_uri',
+          'telegram_message_id',
         ].join(','),
         { count: 'exact' },
       )
@@ -99,7 +101,7 @@ export async function GET(req: Request) {
   }
 }
 
-// --- POST: Создание поста во Flow + автопубликация в Bluesky ---
+// --- POST: Создание поста во Flow + синхронный автопостинг в Bluesky и Telegram (Unframed) ---
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -133,9 +135,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Если пост публичный и опубликован — синхронизируем с Bluesky
+    // 2. Если пост публичный и опубликован — синхронизируем внешние каналы
     if (item.status === 'published' && item.visibility === 'public') {
-      const bskyResult = await publishToBluesky({
+      // 2a. Публикация в Bluesky
+      const bskyPromise = publishToBluesky({
         title: item.title,
         body_md: item.body_md,
         source_url: item.source_url,
@@ -143,18 +146,51 @@ export async function POST(req: Request) {
         lang: item.lang,
       });
 
-      if (bskyResult) {
-        // Записываем bluesky_uri и bluesky_cid в Supabase
-        await supabase
-          .from('items')
-          .update({
-            bluesky_uri: bskyResult.uri,
-            bluesky_cid: bskyResult.cid,
-          })
-          .eq('id', item.id);
+      // 2b. Публикация в Telegram Unframed
+      const imageUrl =
+        typeof item.metadata?.public_url === 'string'
+          ? item.metadata.public_url
+          : typeof item.metadata?.image === 'string'
+            ? item.metadata.image
+            : null;
 
+      const tgPromise = publishToTelegramChannel({
+        title: item.title,
+        body_md: item.body_md,
+        source_url: item.source_url,
+        slug: item.slug,
+        lang: item.lang,
+        imageUrl,
+      });
+
+      // Параллельно дожидаемся обоих ответов
+      const [bskyResult, tgResult] = await Promise.all([
+        bskyPromise,
+        tgPromise,
+      ]);
+
+      // 3. Сохраняем идентификаторы публичных постов для будущего каскадного удаления
+      const updateData: Record<string, unknown> = {};
+
+      if (bskyResult) {
+        updateData.bluesky_uri = bskyResult.uri;
+        updateData.bluesky_cid = bskyResult.cid;
         item.bluesky_uri = bskyResult.uri;
         item.bluesky_cid = bskyResult.cid;
+      }
+
+      if (tgResult) {
+        updateData.telegram_message_id = tgResult.messageId;
+        updateData.telegram_channel_id = tgResult.chatId;
+        item.telegram_message_id = tgResult.messageId;
+        item.telegram_channel_id = tgResult.chatId;
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await supabase
+          .from('items')
+          .update(updateData)
+          .eq('id', item.id);
       }
     }
 
