@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import type { LinkPreview, YouTubeMetadata } from "./types";
+import { isYouTubeVideo, isProbablyImageUrl } from "./utils";
 
 interface UseNewPostModalParams {
   open: boolean;
@@ -14,18 +16,30 @@ export function useNewPostModal({
   itemId,
 }: UseNewPostModalParams) {
   const [item, setItem] = useState<any>(null);
+  const [title, setTitle] = useState("");
   const [bodyMd, setBodyMd] = useState("");
+
+  // Attached media states - ALL can coexist!
   const [linkUrl, setLinkUrl] = useState("");
-  const [linkPreview, setLinkPreview] = useState<any>(null);
-  const [youtubeMetadata, setYoutubeMetadata] = useState<any>(null);
+  const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
+
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [youtubeMetadata, setYoutubeMetadata] = useState<YouTubeMetadata | null>(null);
+
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
-  const [mode, setMode] = useState<"text" | "link" | "video" | "image">("text");
+
+  // UI inputs visibility
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [showYouTubeInput, setShowYouTubeInput] = useState(false);
+
   const [saveState, setSaveState] = useState<any>("idle");
   const [error, setError] = useState<string | null>(null);
 
   const [isInitializing, setIsInitializing] = useState(false);
-  const [isParsing, setIsParsing] = useState(false);
+  const [isParsingLink, setIsParsingLink] = useState(false);
+  const [isParsingYouTube, setIsParsingYouTube] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
@@ -33,49 +47,244 @@ export function useNewPostModal({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isEditing = Boolean(itemId);
-  const canClear = Boolean(bodyMd.trim() || linkUrl || imagePreview);
-  const canPost = Boolean(bodyMd.trim() || linkUrl || imagePreview);
-  const busy = isInitializing || isParsing || isPublishing || isClearing;
+  const canClear = Boolean(bodyMd.trim() || linkUrl || youtubeUrl || imagePreview);
+  const canPost = Boolean(bodyMd.trim() || linkUrl || youtubeUrl || imagePreview);
+  const busy =
+    isInitializing ||
+    isParsingLink ||
+    isParsingYouTube ||
+    isPublishing ||
+    isClearing;
 
-  // Загрузка данных поста при редактировании
+  // Load existing post on edit
   useEffect(() => {
     if (!open) {
-      // Сброс при закрытии
+      setItem(null);
+      setTitle("");
       setBodyMd("");
       setLinkUrl("");
-      setImagePreview(null);
-      setImageName(null);
       setLinkPreview(null);
+      setYoutubeUrl("");
       setYoutubeMetadata(null);
+      setImagePreview(null);
+      setImageFile(null);
+      setImageName(null);
+      setShowLinkInput(false);
+      setShowYouTubeInput(false);
       setError(null);
-      setItem(null);
       return;
     }
 
     if (itemId) {
       setIsInitializing(true);
-      fetch(`/api/flow/items`)
-        .then((res) => res.json())
+      fetch(`/api/flow/items/${itemId}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to load item");
+          return res.json();
+        })
         .then((data) => {
-          const found = (data.items || []).find((i: any) => i.id === itemId);
+          const found = data.item;
           if (found) {
             setItem(found);
-            setBodyMd(found.body_md || found.content || "");
-            setLinkUrl(found.source_url || "");
+            setTitle(found.title || "");
+            setBodyMd(found.body_md || "");
+
+            // Restore attached media
+            const meta = found.metadata || {};
+            if (meta.youtube) {
+              setYoutubeMetadata(meta.youtube);
+              if (meta.youtube.video_id) {
+                setYoutubeUrl(`https://www.youtube.com/watch?v=${meta.youtube.video_id}`);
+              }
+            } else if (found.source_url && isYouTubeVideo(found.source_url)) {
+              setYoutubeUrl(found.source_url);
+            }
+
+            if (meta.link_preview) {
+              setLinkPreview(meta.link_preview);
+              setLinkUrl(meta.link_preview.url || found.source_url || "");
+            } else if (found.source_url && !isYouTubeVideo(found.source_url)) {
+              setLinkUrl(found.source_url);
+            }
+
+            const img = meta.public_url || meta.image || (meta.images && meta.images[0]);
+            if (img) {
+              setImagePreview(img);
+            }
           }
         })
-        .catch((err) => console.error("Failed to load item for edit:", err))
+        .catch((err) => {
+          console.error("Failed to load item for edit:", err);
+          setError("Failed to load post for editing");
+        })
         .finally(() => setIsInitializing(false));
     } else {
-      setItem({ id: 'new' });
+      setItem({ id: "new" });
     }
   }, [open, itemId]);
 
-  const handleClose = useCallback(async () => {
-    onClose();
-  }, [onClose]);
+  const parseLink = useCallback(async (url: string) => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
 
-  // Реальная отправка и сохранение/создание поста
+    setIsParsingLink(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/flow/parse-url?url=${encodeURIComponent(trimmed)}`);
+      if (!res.ok) throw new Error("Could not fetch link preview");
+      const data = await res.json();
+
+      if (data.isYouTube && data.youtube) {
+        setYoutubeMetadata(data.youtube);
+        setYoutubeUrl(data.url);
+        setShowYouTubeInput(false);
+        // Clear link input if it was redirected to youtube
+        setLinkUrl("");
+        setShowLinkInput(false);
+      } else {
+        setLinkPreview({
+          url: data.url,
+          title: data.title,
+          description: data.description,
+          image: data.image,
+          site_name: data.site_name,
+          favicon: data.favicon,
+          domain: data.domain,
+        });
+        setLinkUrl(data.url);
+        setShowLinkInput(false);
+      }
+    } catch (e: any) {
+      console.warn("Link preview failed:", e);
+      // Still keep URL even if preview failed
+      setLinkPreview({
+        url: trimmed,
+        title: trimmed,
+      });
+      setShowLinkInput(false);
+    } finally {
+      setIsParsingLink(false);
+    }
+  }, []);
+
+  const parseYouTube = useCallback(async (url: string) => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+
+    setIsParsingYouTube(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/flow/parse-url?url=${encodeURIComponent(trimmed)}`);
+      if (!res.ok) throw new Error("Could not fetch YouTube info");
+      const data = await res.json();
+
+      if (data.youtube) {
+        setYoutubeMetadata(data.youtube);
+        setYoutubeUrl(data.url);
+        setShowYouTubeInput(false);
+      } else {
+        throw new Error("Not a valid YouTube video");
+      }
+    } catch (e: any) {
+      console.warn("YouTube parse failed:", e);
+      setError("Failed to load YouTube video. Check URL.");
+    } finally {
+      setIsParsingYouTube(false);
+    }
+  }, []);
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      setImageName(file.name);
+      const objectUrl = URL.createObjectURL(file);
+      setImagePreview(objectUrl);
+    }
+  };
+
+  const removeImage = () => {
+    setImagePreview(null);
+    setImageFile(null);
+    setImageName(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const removeYouTube = () => {
+    setYoutubeUrl("");
+    setYoutubeMetadata(null);
+    setShowYouTubeInput(false);
+  };
+
+  const removeLink = () => {
+    setLinkUrl("");
+    setLinkPreview(null);
+    setShowLinkInput(false);
+  };
+
+  const handlePaste = (event: React.ClipboardEvent) => {
+    // Check if an image was pasted from clipboard
+    const items = event.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith("image/")) {
+          const file = items[i].getAsFile();
+          if (file) {
+            event.preventDefault();
+            setImageFile(file);
+            setImageName("pasted-image.png");
+            setImagePreview(URL.createObjectURL(file));
+            return;
+          }
+        }
+      }
+    }
+
+    // Check if a URL was pasted
+    const pastedText = event.clipboardData?.getData("text")?.trim();
+    if (pastedText && /^https?:\/\//i.test(pastedText)) {
+      if (isYouTubeVideo(pastedText) && !youtubeMetadata) {
+        void parseYouTube(pastedText);
+      } else if (isProbablyImageUrl(pastedText) && !imagePreview) {
+        setImagePreview(pastedText);
+      } else if (!linkPreview && !linkUrl) {
+        void parseLink(pastedText);
+      }
+    }
+  };
+
+  // Upload image to server if file is present
+  const uploadImageFile = async (file: File): Promise<string | null> => {
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.file?.url) {
+          return data.file.url;
+        }
+      }
+    } catch (err) {
+      console.warn("Upload to /api/upload failed, trying fallback reader:", err);
+    }
+
+    // Fallback: convert to base64 DataURL
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Submit and save post
   const finish = useCallback(async () => {
     if (!canPost || busy) return;
 
@@ -84,28 +293,85 @@ export function useNewPostModal({
     setSaveState("publishing");
 
     try {
+      let finalImageUrl: string | null = imagePreview;
+
+      // Upload image file if user selected a local file
+      if (imageFile) {
+        const uploadedUrl = await uploadImageFile(imageFile);
+        if (uploadedUrl) {
+          finalImageUrl = uploadedUrl;
+        }
+      }
+
+      // Prepare metadata with ALL rich media elements
+      const metadata: Record<string, unknown> = {
+        ...(item?.metadata || {}),
+      };
+
+      if (finalImageUrl) {
+        metadata.image = finalImageUrl;
+        metadata.public_url = finalImageUrl;
+      } else {
+        delete metadata.image;
+        delete metadata.public_url;
+      }
+
+      if (youtubeMetadata) {
+        metadata.youtube = youtubeMetadata;
+      } else {
+        delete metadata.youtube;
+      }
+
+      if (linkPreview) {
+        metadata.link_preview = linkPreview;
+      } else {
+        delete metadata.link_preview;
+      }
+
+      // Determine primary source url
+      const primarySourceUrl =
+        linkUrl ||
+        (youtubeMetadata?.video_id
+          ? `https://www.youtube.com/watch?v=${youtubeMetadata.video_id}`
+          : null);
+
+      // Determine type for DB
+      const determinedType =
+        bodyMd.trim().length > 180
+          ? "article"
+          : youtubeMetadata
+            ? "video"
+            : finalImageUrl
+              ? "photo"
+              : linkUrl
+                ? "link"
+                : "note";
+
+      const postTitle =
+        title.trim() ||
+        (bodyMd.trim() ? bodyMd.slice(0, 80).split("\n")[0].trim() : null) ||
+        linkPreview?.title ||
+        youtubeMetadata?.title ||
+        "Flow thought";
+
       const payload = {
-        title: bodyMd.slice(0, 80).trim() || "Flow post",
+        title: postTitle,
         body_md: bodyMd,
-        source_url: linkUrl || null,
-        type: linkUrl ? "link" : "article",
+        source_url: primarySourceUrl,
+        type: determinedType,
         status: "published",
         visibility: "public",
-        metadata: {
-          image: imagePreview,
-        },
+        metadata,
       };
 
       let res;
       if (isEditing && itemId) {
-        // Редактирование существующего
         res = await fetch(`/api/flow/items/${itemId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       } else {
-        // Создание нового (срабатывает кросспостинг в Bluesky и Telegram)
         res = await fetch(`/api/flow/items`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -122,54 +388,49 @@ export function useNewPostModal({
       onCreated?.(data.item);
       onClose();
     } catch (err: any) {
-      console.error("[NewPostModal] Save error:", err);
+      console.error("[useNewPostModal] Save error:", err);
       setError(err.message || "Failed to post");
       setSaveState("idle");
     } finally {
       setIsPublishing(false);
     }
-  }, [bodyMd, canPost, busy, isEditing, itemId, linkUrl, imagePreview, onCreated, onClose]);
+  }, [
+    canPost,
+    busy,
+    imagePreview,
+    imageFile,
+    item,
+    youtubeMetadata,
+    linkPreview,
+    linkUrl,
+    bodyMd,
+    title,
+    isEditing,
+    itemId,
+    onCreated,
+    onClose,
+  ]);
 
   const clearDraft = async () => {
     setIsClearing(true);
+    setTitle("");
     setBodyMd("");
     setLinkUrl("");
+    setLinkPreview(null);
+    setYoutubeUrl("");
+    setYoutubeMetadata(null);
     setImagePreview(null);
+    setImageFile(null);
     setImageName(null);
+    setShowLinkInput(false);
+    setShowYouTubeInput(false);
+    setError(null);
     setIsClearing(false);
   };
 
-  const handlePaste = (event: React.ClipboardEvent) => {
-    // Вставка из буфера обмена (опционально)
-  };
-
-  const parseLink = async (url: string) => {
-    if (!url.trim()) return;
-    setIsParsing(true);
-    try {
-      const res = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
-      if (res.ok) {
-        const preview = await res.json();
-        setLinkPreview(preview);
-      }
-    } catch (e) {
-      console.error("Link preview failed", e);
-    } finally {
-      setIsParsing(false);
-    }
-  };
-
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setImageName(file.name);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  const handleClose = useCallback(async () => {
+    onClose();
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -197,19 +458,33 @@ export function useNewPostModal({
 
   return {
     item,
+    title,
+    setTitle,
     bodyMd,
     setBodyMd,
     linkUrl,
     setLinkUrl,
     linkPreview,
+    parseLink,
+    removeLink,
+    showLinkInput,
+    setShowLinkInput,
+    youtubeUrl,
+    setYoutubeUrl,
     youtubeMetadata,
+    parseYouTube,
+    removeYouTube,
+    showYouTubeInput,
+    setShowYouTubeInput,
     imagePreview,
     imageName,
-    mode,
+    removeImage,
+    handleImageUpload,
     saveState,
     error,
     isInitializing,
-    isParsing,
+    isParsingLink,
+    isParsingYouTube,
     isPublishing,
     isClearing,
     isEditing,
@@ -219,8 +494,6 @@ export function useNewPostModal({
     fileRef,
     textareaRef,
     handlePaste,
-    parseLink,
-    handleImageUpload,
     finish,
     clearDraft,
     handleClose,

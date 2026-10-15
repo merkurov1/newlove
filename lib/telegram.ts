@@ -1,7 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHANNEL_ID = process.env.TELEGRAM_CHANNEL_ID; // Например, '@unframed_channel' или '-100...'
+// Support Pierrot, Osiris, or generic Telegram bot tokens & channels
+const TELEGRAM_BOT_TOKEN =
+  process.env.PIERROT_BOT_TOKEN ||
+  process.env.OSIRIS_BOT_TOKEN ||
+  process.env.TELEGRAM_BOT_TOKEN;
+
+const TELEGRAM_CHANNEL_ID =
+  process.env.TELEGRAM_CHANNEL_ID ||
+  process.env.PIERROT_CHANNEL_ID ||
+  process.env.OSIRIS_CHANNEL_ID;
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const ALLOWED_USER_IDS = (process.env.TELEGRAM_ALLOWED_USER_IDS || '').split(',').map((s) => s.trim());
 

@@ -371,16 +371,67 @@ function MarkdownBody({ body }: { body: string }) {
   );
 }
 
+function getDedicatedImage(item: FlowItem): string | null {
+  const metadata = item.metadata ?? {};
+  const candidates = [
+    metadata.public_url,
+    metadata.image,
+    metadata.image_url,
+    metadata.og_image,
+    ...(Array.isArray(metadata.images) ? metadata.images : []),
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
+function getLinkPreviewData(item: FlowItem) {
+  const meta = item.metadata ?? {};
+  const lp = (meta.link_preview && typeof meta.link_preview === 'object'
+    ? meta.link_preview
+    : null) as Record<string, unknown> | null;
+
+  const candidateUrl =
+    (lp && getMetadataString(lp, 'url')) ||
+    (item.source_url && !item.source_url.includes('youtube.com') && !item.source_url.includes('youtu.be')
+      ? item.source_url
+      : null);
+
+  if (!candidateUrl) return null;
+
+  const site = (lp && getMetadataString(lp, 'site_name')) || getSiteName(item);
+  const title = (lp && getMetadataString(lp, 'title')) || (item.title !== candidateUrl ? item.title : null) || site;
+  const description = (lp && getMetadataString(lp, 'description')) || getMetadataString(meta, 'description');
+  const image = (lp && getMetadataString(lp, 'image')) || getMetadataString(meta, 'image');
+
+  return {
+    url: candidateUrl,
+    site,
+    title,
+    description,
+    image,
+  };
+}
+
 /**
  * Универсальный стек медиа и ссылок. 
  * Позволяет корректно сосуществовать видео, картинкам, ссылкам и тексту в одном item.
  */
 function FlowMediaStack({ item }: { item: FlowItem }) {
   const videoId = getYouTubeVideoId(item);
-  const metadataImage = getMetadataImage(item);
-  const siteName = getSiteName(item);
-  const linkDescription = getMetadataString(item.metadata, 'description');
-  const photoCaption = getMetadataString(item.metadata, 'alt') || item.title;
+  const dedicatedImage = getDedicatedImage(item);
+  const linkPreview = getLinkPreviewData(item);
+  const photoCaption = getMetadataString(item.metadata, 'alt') || (item.type === 'photo' ? item.title : null);
+
+  // If dedicated image is identical to link preview image, don't duplicate it
+  const showPhotoBlock =
+    dedicatedImage &&
+    (!linkPreview || dedicatedImage !== linkPreview.image);
 
   return (
     <div className="space-y-6">
@@ -400,12 +451,12 @@ function FlowMediaStack({ item }: { item: FlowItem }) {
         </div>
       )}
 
-      {/* 2. Фото / Картинка (если тип фото или есть прямая публичная картинка) */}
-      {metadataImage && item.type === 'photo' && (
+      {/* 2. Фото / Картинка (если прикреплена картинка) */}
+      {showPhotoBlock && (
         <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-4 shadow-sm">
           <figure>
             <img
-              src={metadataImage}
+              src={dedicatedImage}
               alt={photoCaption ?? ''}
               className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
             />
@@ -418,39 +469,39 @@ function FlowMediaStack({ item }: { item: FlowItem }) {
         </div>
       )}
 
-      {/* 3. Карточка внешней ссылки с OpenGraph (если есть source_url и это ссылка) */}
-      {item.source_url && item.type === 'link' && !videoId && (
+      {/* 3. Карточка внешней ссылки с OpenGraph */}
+      {linkPreview && (
         <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
-          {metadataImage && (
+          {linkPreview.image && (
             <a
-              href={item.source_url}
+              href={linkPreview.url}
               target="_blank"
               rel="noopener noreferrer"
               className="group block aspect-[16/9] overflow-hidden bg-stone-100"
             >
               <img
-                src={metadataImage}
+                src={linkPreview.image}
                 alt=""
                 className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.015]"
               />
             </a>
           )}
           <div className="p-7 sm:p-9">
-            {siteName && (
+            {linkPreview.site && (
               <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
-                {siteName}
+                {linkPreview.site}
               </div>
             )}
             <div className="mt-4 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
-              {item.title || item.source_url}
+              {linkPreview.title}
             </div>
-            {linkDescription && (
+            {linkPreview.description && (
               <p className="mt-4 font-serif text-base leading-7 text-stone-600">
-                {linkDescription}
+                {linkPreview.description}
               </p>
             )}
             <a
-              href={item.source_url}
+              href={linkPreview.url}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-6 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"

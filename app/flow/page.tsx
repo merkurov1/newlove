@@ -73,8 +73,43 @@ function getYouTubeThumbnail(item: FlowItem) {
     : null;
 }
 
-function getPhotoUrl(item: FlowItem) {
-  return getString(item.metadata?.public_url);
+function getPhotoUrl(item: FlowItem): string | null {
+  const meta = item.metadata ?? {};
+  return (
+    getString(meta.public_url) ||
+    getString(meta.image) ||
+    getString(meta.image_url) ||
+    (Array.isArray(meta.images) && meta.images.length > 0 ? getString(meta.images[0]) : null)
+  );
+}
+
+type LinkPreviewData = {
+  url: string;
+  title?: string | null;
+  description?: string | null;
+  image?: string | null;
+  site_name?: string | null;
+};
+
+function getLinkPreviewData(item: FlowItem): LinkPreviewData | null {
+  const meta = item.metadata ?? {};
+  const lp = meta.link_preview as Record<string, unknown> | undefined;
+
+  const candidateUrl =
+    (lp && getString(lp.url)) ||
+    (item.source_url && !item.source_url.includes('youtube.com') && !item.source_url.includes('youtu.be')
+      ? item.source_url
+      : null);
+
+  if (!candidateUrl) return null;
+
+  return {
+    url: candidateUrl,
+    title: (lp && getString(lp.title)) || (item.title !== candidateUrl ? item.title : null) || getSiteName(item),
+    description: (lp && getString(lp.description)) || getString(meta.description),
+    image: (lp && getString(lp.image)) || getString(meta.image),
+    site_name: (lp && getString(lp.site_name)) || getSiteName(item),
+  };
 }
 
 function formatDate(value?: string | null) {
@@ -169,173 +204,147 @@ function Entry({
     <AdminControls onEdit={onEdit} onDelete={onDelete} />
   ) : null;
 
-  if (item.type === 'photo') {
-    const image = getPhotoUrl(item);
-    const alt = getString(item.metadata?.alt) || item.title || '';
-
-    return (
-      <article className="group py-6 first:pt-0">
-        <div className="mb-2 flex min-h-5 items-center justify-between gap-4">
-          {date}
-          {controls}
-        </div>
-
-        <Link href={href} className="inline-block max-w-full">
-          {image ? (
-            <img
-              src={image}
-              alt={alt}
-              loading="lazy"
-              className="block max-h-[560px] max-w-full object-contain object-left"
-            />
-          ) : (
-            <span className="text-sm text-neutral-400">Image unavailable</span>
-          )}
-        </Link>
-
-        {item.title && (
-          <p className="mt-2 text-sm text-neutral-600">{item.title}</p>
-        )}
-      </article>
-    );
-  }
-
-  if (item.type === 'video') {
-    const youtube = getYouTube(item);
-    const thumbnail = getYouTubeThumbnail(item);
-    const title = youtube?.title || item.title || 'Watch video';
-
-    return (
-      <article className="group border-b border-neutral-200 py-5 first:pt-0">
-        <div className="mb-2 flex min-h-5 items-center justify-between gap-4">
-          {date}
-          {controls}
-        </div>
-
-        <Link
-          href={href}
-          className="flex max-w-xl items-start gap-4"
-        >
-          {thumbnail && (
-            <div className="relative w-28 shrink-0 overflow-hidden bg-neutral-100 sm:w-36">
-              <img
-                src={thumbnail}
-                alt=""
-                loading="lazy"
-                className="block aspect-video h-auto w-full object-cover"
-              />
-              <span className="absolute inset-0 flex items-center justify-center">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/65 text-white">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="ml-0.5 h-3.5 w-3.5"
-                    aria-hidden="true"
-                  >
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </span>
-              </span>
-            </div>
-          )}
-
-          <span className="min-w-0 pt-0.5 text-sm leading-6 text-neutral-800 transition group-hover:text-neutral-500">
-            {title}
-            {youtube?.author_name && (
-              <span className="mt-1 block text-xs text-neutral-400">
-                {youtube.author_name}
-              </span>
-            )}
-          </span>
-        </Link>
-      </article>
-    );
-  }
-
-  if (item.type === 'link' && item.source_url) {
-    const title = item.title || getSiteName(item) || item.source_url;
-    const description = getString(item.metadata?.description);
-    const image = getString(item.metadata?.image);
-
-    return (
-      <article className="group border-b border-neutral-200 py-5 first:pt-0">
-        <div className="mb-2 flex min-h-5 items-center justify-between gap-4">
-          {date}
-          {controls}
-        </div>
-
-        <div className="flex items-start gap-4">
-          <div className="min-w-0 flex-1">
-            <Link
-              href={href}
-              className="text-base leading-6 text-neutral-900 transition group-hover:text-neutral-500"
-            >
-              {title}
-            </Link>
-
-            {description && (
-              <p className="mt-1 line-clamp-2 whitespace-pre-line text-sm leading-5 text-neutral-500">
-                {description}
-              </p>
-            )}
-
-            <a
-              href={item.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-block max-w-full truncate text-xs text-neutral-400 transition hover:text-neutral-700"
-              onClick={(event) => event.stopPropagation()}
-            >
-              {getSiteName(item)} ↗
-            </a>
-          </div>
-
-          {image && (
-            <Link
-              href={href}
-              tabIndex={-1}
-              aria-hidden="true"
-              className="hidden w-20 shrink-0 sm:block"
-            >
-              <img
-                src={image}
-                alt=""
-                loading="lazy"
-                className="aspect-[4/3] w-full object-cover"
-              />
-            </Link>
-          )}
-        </div>
-      </article>
-    );
-  }
-
+  const youtube = getYouTube(item);
+  const youtubeThumbnail = youtube ? getYouTubeThumbnail(item) : null;
+  const photoUrl = getPhotoUrl(item);
+  const linkPreview = getLinkPreviewData(item);
   const body = plainText(item.body_md);
 
+  // Avoid duplicate photo if identical to youtube thumbnail or link preview image
+  const showDedicatedPhoto =
+    photoUrl &&
+    photoUrl !== youtubeThumbnail &&
+    (!linkPreview || photoUrl !== linkPreview.image);
+
   return (
-    <article className="group border-b border-neutral-200 py-5 first:pt-0">
-      <div className="mb-2 flex min-h-5 items-center justify-between gap-4">
+    <article className="group border-b border-neutral-200 py-6 first:pt-0">
+      <div className="mb-2.5 flex min-h-5 items-center justify-between gap-4">
         {date}
         {controls}
       </div>
 
-      <Link href={href} className="block">
-        {item.title && (
-          <h2 className="text-base font-medium leading-6 text-neutral-900">
-            {item.title}
-          </h2>
-        )}
+      {/* 1. Title */}
+      {item.title && (
+        <h2 className="mb-2 text-lg font-medium leading-7 text-neutral-900 transition group-hover:text-neutral-700 sm:text-xl">
+          <Link href={href}>{item.title}</Link>
+        </h2>
+      )}
 
-        {body && (
-          <p
-            className={`whitespace-pre-line text-[15px] leading-7 text-neutral-700 ${
-              item.title ? 'mt-1' : ''
-            }`}
+      {/* 2. Text Body */}
+      {body && (
+        <div className="mb-3.5">
+          <Link href={href} className="block">
+            <p className="whitespace-pre-line text-[15px] leading-7 text-neutral-700 sm:text-[16px]">
+              {body}
+            </p>
+          </Link>
+        </div>
+      )}
+
+      {/* 3. YouTube Embed/Preview */}
+      {youtube && (
+        <div className="mb-4">
+          <Link
+            href={href}
+            className="flex max-w-xl items-start gap-4 rounded-2xl border border-neutral-200/70 bg-neutral-50/70 p-2.5 transition hover:border-neutral-300 hover:bg-neutral-100/70"
           >
-            {body}
-          </p>
-        )}
-      </Link>
+            {youtubeThumbnail && (
+              <div className="relative w-32 shrink-0 overflow-hidden rounded-xl bg-neutral-200 sm:w-44">
+                <img
+                  src={youtubeThumbnail}
+                  alt=""
+                  loading="lazy"
+                  className="block aspect-video h-auto w-full object-cover"
+                />
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white shadow">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      className="ml-0.5 h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </span>
+                </span>
+              </div>
+            )}
+            <div className="min-w-0 pt-1">
+              <span className="line-clamp-2 text-sm font-medium leading-5 text-neutral-900">
+                {youtube.title || 'Watch video'}
+              </span>
+              {youtube.author_name && (
+                <span className="mt-1 block text-xs text-neutral-500">
+                  {youtube.author_name}
+                </span>
+              )}
+              <span className="mt-1.5 inline-block font-mono text-[10px] uppercase tracking-wider text-neutral-400">
+                youtube.com ↗
+              </span>
+            </div>
+          </Link>
+        </div>
+      )}
+
+      {/* 4. Attached Photo/Image */}
+      {showDedicatedPhoto && (
+        <div className="mb-4">
+          <Link href={href} className="inline-block max-w-full">
+            <img
+              src={photoUrl}
+              alt={getString(item.metadata?.alt) || item.title || ''}
+              loading="lazy"
+              className="block max-h-[560px] max-w-full rounded-2xl border border-neutral-200/60 object-contain object-left shadow-sm"
+            />
+          </Link>
+        </div>
+      )}
+
+      {/* 5. Attached Web Link Card */}
+      {linkPreview && (
+        <div className="mt-3 rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-3 transition hover:border-neutral-300 hover:bg-neutral-50">
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1">
+              <Link
+                href={href}
+                className="text-sm font-medium leading-5 text-neutral-900 hover:underline"
+              >
+                {linkPreview.title || linkPreview.url}
+              </Link>
+              {linkPreview.description && (
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-500">
+                  {linkPreview.description}
+                </p>
+              )}
+              <a
+                href={linkPreview.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1.5 inline-block text-xs font-mono uppercase tracking-wide text-neutral-400 hover:text-neutral-700"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {linkPreview.site_name} ↗
+              </a>
+            </div>
+            {linkPreview.image && (
+              <Link
+                href={href}
+                tabIndex={-1}
+                aria-hidden="true"
+                className="hidden w-20 shrink-0 sm:block"
+              >
+                <img
+                  src={linkPreview.image}
+                  alt=""
+                  loading="lazy"
+                  className="aspect-[4/3] w-full rounded-lg object-cover"
+                />
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </article>
   );
 }

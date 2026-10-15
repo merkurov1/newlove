@@ -87,3 +87,11 @@ export class BonhamsParser extends HouseParser {
     };
   }
 }
+
+describe('BonhamsParser', () => {
+  it('instantiates correctly and matches bonhams', () => {
+    const parser = new BonhamsParser();
+    expect(parser.houseId).toBe('bonhams');
+    expect(parser.matches).toContain('bonhams');
+  });
+});

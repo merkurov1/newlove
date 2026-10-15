@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { publishToBluesky } from '@/lib/bluesky';
-import { publishToTelegramChannel } from '@/lib/telegram';
+import { crosspostFlowItem } from '@/lib/flow/crosspost';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -21,6 +20,21 @@ function getSupabaseAdmin() {
       detectSessionInUrl: false,
     },
   });
+}
+
+function generateSlug(title?: string | null, bodyMd?: string | null): string {
+  const source = (title?.trim() || bodyMd?.split(/\r?\n/)[0]?.trim() || 'post')
+    .slice(0, 50);
+
+  const base = source
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\u0400-\u04ff]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  const idSuffix = Math.random().toString(36).substring(2, 7);
+  return base ? `${base}-${idSuffix}` : `flow-${Date.now().toString(36)}`;
 }
 
 // --- GET: Выдача списка постов Flow ---
@@ -101,22 +115,31 @@ export async function GET(req: Request) {
   }
 }
 
-// --- POST: Создание поста во Flow + синхронный автопостинг в Bluesky и Telegram (Unframed) ---
+// --- POST: Создание поста во Flow + синхронный автопостинг (Telegram / Pierrot / Osiris / Bluesky) ---
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const supabase = getSupabaseAdmin();
 
     const now = new Date().toISOString();
+    const slug = body.slug || generateSlug(body.title, body.body_md);
+
+    // Determine database type conforming to check constraint
+    // type in ('note','article','link','photo','video','quote')
+    let itemType = body.type || 'article';
+    const allowedTypes = ['note', 'article', 'link', 'photo', 'video', 'quote'];
+    if (!allowedTypes.includes(itemType)) {
+      itemType = 'article';
+    }
 
     // 1. Создаем запись во Flow
     const { data: item, error } = await supabase
       .from('items')
       .insert({
         title: body.title || null,
-        slug: body.slug || null,
+        slug,
         lang: body.lang || 'ru',
-        type: body.type || 'article',
+        type: itemType,
         status: body.status || 'published',
         visibility: body.visibility || 'public',
         body_md: body.body_md || null,
@@ -137,60 +160,10 @@ export async function POST(req: Request) {
 
     // 2. Если пост публичный и опубликован — синхронизируем внешние каналы
     if (item.status === 'published' && item.visibility === 'public') {
-      // 2a. Публикация в Bluesky
-      const bskyPromise = publishToBluesky({
-        title: item.title,
-        body_md: item.body_md,
-        source_url: item.source_url,
-        slug: item.slug,
-        lang: item.lang,
-      });
-
-      // 2b. Публикация в Telegram Unframed
-      const imageUrl =
-        typeof item.metadata?.public_url === 'string'
-          ? item.metadata.public_url
-          : typeof item.metadata?.image === 'string'
-            ? item.metadata.image
-            : null;
-
-      const tgPromise = publishToTelegramChannel({
-        title: item.title,
-        body_md: item.body_md,
-        source_url: item.source_url,
-        slug: item.slug,
-        lang: item.lang,
-        imageUrl,
-      });
-
-      // Параллельно дожидаемся обоих ответов
-      const [bskyResult, tgResult] = await Promise.all([
-        bskyPromise,
-        tgPromise,
-      ]);
-
-      // 3. Сохраняем идентификаторы публичных постов для будущего каскадного удаления
-      const updateData: Record<string, unknown> = {};
-
-      if (bskyResult) {
-        updateData.bluesky_uri = bskyResult.uri;
-        updateData.bluesky_cid = bskyResult.cid;
-        item.bluesky_uri = bskyResult.uri;
-        item.bluesky_cid = bskyResult.cid;
-      }
-
-      if (tgResult) {
-        updateData.telegram_message_id = tgResult.messageId;
-        updateData.telegram_channel_id = tgResult.chatId;
-        item.telegram_message_id = tgResult.messageId;
-        item.telegram_channel_id = tgResult.chatId;
-      }
-
-      if (Object.keys(updateData).length > 0) {
-        await supabase
-          .from('items')
-          .update(updateData)
-          .eq('id', item.id);
+      try {
+        await crosspostFlowItem(item);
+      } catch (crosspostError) {
+        console.error('[api/flow/items] crosspost error:', crosspostError);
       }
     }
 

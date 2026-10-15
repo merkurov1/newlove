@@ -52,9 +52,3 @@ export type LinkPreview = {
   favicon?: string;
   domain?: string;
 };
-
-export type ComposerMode =
-  | "text"
-  | "link"
-  | "video"
-  | "photo";

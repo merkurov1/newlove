@@ -1,22 +1,15 @@
-// pages/api/link-preview.js
-import { NextResponse } from 'next/server';
+import { parseUrl } from '@/lib/flow/parseUrl';
 
-export async function GET(req) {
-  const { searchParams } = new URL(req.url);
-  const url = searchParams.get('url');
-  if (!url) return NextResponse.json({}, { status: 400 });
+export default async function handler(req, res) {
+  const url = req.query.url || req.body?.url;
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: 'url parameter is required' });
+  }
 
   try {
-    const res = await fetch(`https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`);
-    if (!res.ok) throw new Error('Ошибка запроса к jsonlink.io');
-    const data = await res.json();
-    return NextResponse.json({
-      title: data.title,
-      description: data.description,
-      image: data.images?.[0] || null,
-      siteName: data.site_name || data.domain,
-    });
-  } catch {
-    return NextResponse.json({}, { status: 500 });
+    const data = await parseUrl(url);
+    return res.status(200).json(data);
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Failed to parse link' });
   }
 }
