@@ -144,34 +144,6 @@ export default function NewPostModal({
     return () => window.cancelAnimationFrame(frame);
   }, [open, textareaRef]);
 
-  // Keyboard shortcut: Escape to close, Cmd/Ctrl+Enter to post.
-  useEffect(() => {
-    if (!open) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) {
-        event.preventDefault();
-        void handleClose();
-      }
-
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        event.key === "Enter" &&
-        canPost &&
-        !busy
-      ) {
-        event.preventDefault();
-        void finish();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open, busy, canPost, handleClose, finish]);
-
   if (!open) return null;
 
   const loading = isInitializing || !item;
@@ -212,16 +184,20 @@ export default function NewPostModal({
         onMouseDown={(event) => event.stopPropagation()}
       >
         {/* TOP STATUS BAR */}
-        <header className="
-          flex shrink-0 items-center justify-between gap-3
-          border-b border-[#EAE2D7] px-5 py-4
-          sm:px-8 sm:py-4
-        ">
+        <header
+          className="
+            flex shrink-0 items-center justify-between gap-3
+            border-b border-[#EAE2D7] px-5 py-4
+            sm:px-8 sm:py-4
+          "
+        >
           <div className="flex min-w-0 items-center gap-3">
-            <span className="
-              font-mono text-[10px] uppercase
-              tracking-[0.16em] text-[#82786A]
-            ">
+            <span
+              className="
+                font-mono text-[10px] uppercase
+                tracking-[0.16em] text-[#82786A]
+              "
+            >
               {isEditing ? "Edit Post" : "Compose Thought"}
             </span>
 
@@ -249,10 +225,12 @@ export default function NewPostModal({
         </header>
 
         {/* MAIN EDITING AREA */}
-        <div className="
-          min-h-0 flex-1 overflow-y-auto overscroll-contain
-          px-5 py-6 sm:px-10 sm:py-8
-        ">
+        <div
+          className="
+            min-h-0 flex-1 overflow-y-auto overscroll-contain
+            px-5 py-6 sm:px-10 sm:py-8
+          "
+        >
           <div className="flex min-h-full flex-col">
             <textarea
               ref={textareaRef}
@@ -287,7 +265,9 @@ export default function NewPostModal({
                     <input
                       type="url"
                       value={linkUrl}
-                      onChange={(event) => setLinkUrl(event.target.value)}
+                      onChange={(event) =>
+                        setLinkUrl(event.target.value)
+                      }
                       onKeyDown={(event) => {
                         if (event.key === "Enter" && linkUrl.trim()) {
                           event.preventDefault();
@@ -366,13 +346,15 @@ export default function NewPostModal({
         </div>
 
         {/* BOTTOM ACTION BAR */}
-        <footer className="
-          flex shrink-0 items-center justify-between gap-3
-          border-t border-[#EAE2D7] bg-[#F7F4EE]
-          px-5 py-4
-          pb-[max(16px,env(safe-area-inset-bottom))]
-          sm:px-8
-        ">
+        <footer
+          className="
+            flex shrink-0 items-center justify-between gap-3
+            border-t border-[#EAE2D7] bg-[#F7F4EE]
+            px-5 py-4
+            pb-[max(16px,env(safe-area-inset-bottom))]
+            sm:px-8
+          "
+        >
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <input
               ref={fileRef}
@@ -422,10 +404,12 @@ export default function NewPostModal({
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
-            <span className="
-              hidden font-mono text-[9px]
-              tracking-wide text-[#A49A8C] sm:inline
-            ">
+            <span
+              className="
+                hidden font-mono text-[9px]
+                tracking-wide text-[#A49A8C] sm:inline
+              "
+            >
               Cmd + Enter to post
             </span>
 

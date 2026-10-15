@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import HeritageClient from './heritage-client';
+import { HeritageClient } from './heritage-client';
 
 const siteUrl = 'https://www.merkurov.love';
 
