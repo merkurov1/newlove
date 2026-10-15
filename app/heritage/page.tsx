@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { HeritageClient } from './HeritageClient';
+import HeritageClient from '@/components/heritage/HeritageClient';
 
 const siteUrl = 'https://www.merkurov.love';
 
@@ -7,9 +7,7 @@ export const metadata: Metadata = {
   title: 'Heritage Archive',
   description:
     'The documented legacy of Sergey Merkurov and the archival, cultural and digital projects of his great-grandson Anton Merkurov.',
-  alternates: {
-    canonical: '/heritage',
-  },
+  alternates: { canonical: '/heritage' },
   openGraph: {
     title: 'Heritage Archive — Anton Merkurov',
     description:
@@ -35,11 +33,7 @@ const jsonLd = {
     birthPlace: 'Alexandropol (Gyumri)',
     jobTitle: 'Sculptor',
   },
-  author: {
-    '@type': 'Person',
-    name: 'Anton Merkurov',
-    url: siteUrl,
-  },
+  author: { '@type': 'Person', name: 'Anton Merkurov', url: siteUrl },
 };
 
 export default function Page() {
@@ -47,9 +41,7 @@ export default function Page() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(jsonLd),
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <HeritageClient />
     </>
