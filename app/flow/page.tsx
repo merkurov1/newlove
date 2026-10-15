@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import NewPostModal from '@/components/flow/NewPostModal';
+import FlowShareBar from '@/components/flow/FlowShareBar';
 
 type YouTubeMetadata = {
   video_id?: string;
@@ -345,6 +346,21 @@ function Entry({
           </div>
         </div>
       )}
+
+      {/* 6. Footer Actions: Type link & Share Bar */}
+      <div className="mt-4 flex items-center justify-between gap-3 pt-2">
+        <Link
+          href={href}
+          className="font-mono text-[10px] uppercase tracking-wider text-neutral-400 hover:text-neutral-700 transition-colors"
+        >
+          {item.type} ↗
+        </Link>
+        <FlowShareBar
+          url={`https://www.merkurov.love${href}`}
+          title={item.title || body.slice(0, 80) || 'Flow'}
+          description={body.slice(0, 160)}
+        />
+      </div>
     </article>
   );
 }

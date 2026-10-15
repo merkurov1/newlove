@@ -94,7 +94,7 @@ async function publishTelegram({
     process.env.OSIRIS_CHANNEL_ID;
 
   if (!botToken || !channelId) {
-    console.warn('[crosspost:telegram] Missing bot token or channel ID');
+    console.warn('[crosspost:telegram] Missing bot token or channel ID. Provide TELEGRAM_BOT_TOKEN (or PIERROT_BOT_TOKEN) and TELEGRAM_CHANNEL_ID.');
     return null;
   }
 
@@ -119,18 +119,18 @@ async function publishTelegram({
       ? `https://www.merkurov.love/flow/${encodeURIComponent(slug)}`
       : 'https://www.merkurov.love/flow';
 
-    const inlineButtons: Array<Array<{ text: string; url?: string; web_app?: { url: string } }>> = [];
+    // В каналах Telegram поддерживаются ТОЛЬКО URL-кнопки (кнопки с 'web_app' вызывают ошибку BUTTON_TYPE_INVALID)
+    const inlineButtons: Array<Array<{ text: string; url: string }>> = [];
 
-    // Main row: Flow post + Mini App
+    // Главная строка: Читать во Flow
     inlineButtons.push([
       { text: 'Читать во Flow ↗', url: flowUrl },
-      { text: 'Открыть в Mini App 📱', web_app: { url: flowUrl } },
     ]);
 
-    // Extra links row: YouTube or Source link
+    // Дополнительная строка: YouTube или первоисточник
     const extraRow: Array<{ text: string; url: string }> = [];
     if (youtubeUrl) {
-      extraRow.push({ text: 'Смотреть на YouTube ▶️', url: youtubeUrl });
+      extraRow.push({ text: 'YouTube ▶️', url: youtubeUrl });
     }
     if (source_url && source_url !== flowUrl && source_url !== youtubeUrl) {
       extraRow.push({ text: 'Первоисточник ↗', url: source_url });
@@ -141,33 +141,60 @@ async function publishTelegram({
 
     const replyMarkup = { inline_keyboard: inlineButtons };
 
-    let endpoint = `https://api.telegram.org/bot${botToken}/sendMessage`;
-    let payload: any = {
-      chat_id: channelId,
-      text: formattedText,
-      parse_mode: 'HTML',
-      reply_markup: replyMarkup,
-      disable_web_page_preview: false,
-    };
-
-    if (imageUrl) {
-      endpoint = `https://api.telegram.org/bot${botToken}/sendPhoto`;
-      payload = {
+    // Функция отправки с обработкой ошибок и фоллбэками
+    const sendTelegram = async (usePhoto: boolean, parseMode?: 'HTML'): Promise<any> => {
+      let endpoint = `https://api.telegram.org/bot${botToken}/sendMessage`;
+      let payload: any = {
         chat_id: channelId,
-        photo: imageUrl,
-        caption: formattedText.slice(0, 1024),
-        parse_mode: 'HTML',
+        text: formattedText,
+        disable_web_page_preview: false,
         reply_markup: replyMarkup,
       };
+
+      if (parseMode) {
+        payload.parse_mode = parseMode;
+      }
+
+      if (usePhoto && imageUrl) {
+        endpoint = `https://api.telegram.org/bot${botToken}/sendPhoto`;
+        payload = {
+          chat_id: channelId,
+          photo: imageUrl,
+          caption: formattedText.slice(0, 1024),
+          reply_markup: replyMarkup,
+        };
+        if (parseMode) {
+          payload.parse_mode = parseMode;
+        }
+      }
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      return await res.json();
+    };
+
+    // 1. Первая попытка: с фото (если есть) и разметкой HTML
+    let data = await sendTelegram(Boolean(imageUrl), 'HTML');
+
+    // 2. Если ошибка парсинга HTML-тегов от DeepSeek — повторяем без parse_mode как чистый текст
+    if (!data.ok && typeof data.description === 'string' && data.description.includes("can't parse entities")) {
+      console.warn('[crosspost:telegram] HTML entity parse error, retrying without parse_mode...');
+      data = await sendTelegram(Boolean(imageUrl), undefined);
     }
 
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    // 3. Если отправка фото не удалась (например, Telegram не смог скачать URL) — пробуем как текстовое сообщение
+    if (!data.ok && imageUrl) {
+      console.warn('[crosspost:telegram] Photo sending failed, falling back to sendMessage:', data.description);
+      data = await sendTelegram(false, 'HTML');
+      if (!data.ok && typeof data.description === 'string' && data.description.includes("can't parse entities")) {
+        data = await sendTelegram(false, undefined);
+      }
+    }
 
-    const data = await res.json();
     if (!data.ok) {
       console.error('[crosspost:telegram] Telegram send failed:', data);
       return null;
@@ -255,6 +282,8 @@ export async function crosspostFlowItem(item: CrosspostPayload): Promise<Crosspo
       source_url: payload.source_url,
       slug: payload.slug,
       lang: payload.lang,
+      imageUrl: payload.imageUrl,
+      description: typeof metadata.description === 'string' ? metadata.description : null,
     }).catch((err) => {
       console.error('[crosspost] Bluesky publish failed:', err);
       return null;

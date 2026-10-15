@@ -5,7 +5,7 @@ import { ArrowRight, ArrowUpRight } from "lucide-react";
 
 export default function LobbyClient() {
   return (
-    <main className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] antialiased relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#FAF8F5] text-[#111111] font-sans selection:bg-[#111111] selection:text-[#FAF8F5] antialiased relative overflow-x-hidden">
       
       {/* Subtle Paper Grain Texture */}
       <div 
@@ -16,7 +16,7 @@ export default function LobbyClient() {
       />
 
       {/* --- SECTION 1: HERO & PROOF BAR --- */}
-      <section className="min-h-screen flex flex-col justify-between px-8 md:px-16 pt-36 md:pt-44 pb-12 border-b border-zinc-200/60 relative z-20">
+      <section className="min-h-screen flex flex-col justify-between px-6 sm:px-8 md:px-16 pt-36 md:pt-44 pb-12 border-b border-zinc-200/60 relative z-20">
         
         <div className="max-w-5xl mx-auto w-full text-center my-auto">
           <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-serif font-normal tracking-tight leading-[0.98] sm:leading-[0.92] mb-10 text-[#111111] break-words">
@@ -51,10 +51,10 @@ export default function LobbyClient() {
             <span className="block text-[#111111] font-semibold mb-1">20+ Years</span>
             Media &amp; Communications
           </div>
-          <div>
-            <span className="block text-[#111111] font-semibold mb-1">Heritage</span>
+          <Link href="/heritage" className="group block hover:text-[#111111] transition-colors">
+            <span className="block text-[#111111] font-semibold mb-1 group-hover:underline underline-offset-4 decoration-zinc-400">Heritage</span>
             S. Merkurov Museum &amp; Archives
-          </div>
+          </Link>
           <div>
             <span className="block text-[#111111] font-semibold mb-1">Publicist</span>
             Novaya Gazeta &amp; Forbes
@@ -69,7 +69,7 @@ export default function LobbyClient() {
 
 
       {/* --- SECTION 2: FORESIGHT & INSTITUTIONAL RECORD --- */}
-      <section className="py-28 md:py-36 px-8 md:px-16 border-b border-zinc-200/60 relative z-20">
+      <section className="py-28 md:py-36 px-6 sm:px-8 md:px-16 border-b border-zinc-200/60 relative z-20">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32">
           
           {/* Left Column */}
@@ -126,7 +126,7 @@ export default function LobbyClient() {
 
 
       {/* --- SECTION 3: EDITORIAL PRESS CLIPPINGS --- */}
-      <section className="py-24 px-8 md:px-16 bg-[#F4F1EA]/80 border-b border-zinc-200/60 relative z-20">
+      <section className="py-24 px-6 sm:px-8 md:px-16 bg-[#F4F1EA]/80 border-b border-zinc-200/60 relative z-20">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-8 mb-14">
             <div>
@@ -224,7 +224,7 @@ export default function LobbyClient() {
       </section>
 
       {/* --- SECTION 4: DUALITY PHILOSOPHY --- */}
-      <section className="py-28 md:py-36 px-8 md:px-16 relative z-20">
+      <section className="py-28 md:py-36 px-6 sm:px-8 md:px-16 relative z-20">
         <div className="max-w-7xl mx-auto">
             <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-16 text-center">
               02 / Dual Roots
@@ -232,21 +232,45 @@ export default function LobbyClient() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-20">
                 {/* GRANITE */}
-                <div className="p-10 md:p-14 border border-zinc-300 bg-white/50 rounded-3xl">
-                    <span className="block font-mono text-zinc-500 text-xs uppercase tracking-[0.3em] mb-6 font-medium">Granite (Heritage &amp; Physical)</span>
-                    <p className="text-2xl md:text-3xl leading-relaxed font-serif text-zinc-900 font-normal">
-                        My great-grandfather carved the Soviet monumental era in granite. Heavy. Immovable. Permanent.
-                    </p>
-                    <div className="mt-10 font-mono text-xs text-zinc-500 uppercase tracking-[0.25em]">Sergey Merkurov (1881–1952)</div>
+                <div className="p-10 md:p-14 border border-zinc-300 bg-white/50 rounded-3xl flex flex-col justify-between hover:border-zinc-900 hover:shadow-lg transition-all duration-300">
+                    <div>
+                      <span className="block font-mono text-zinc-500 text-xs uppercase tracking-[0.3em] mb-6 font-medium">Granite (Heritage &amp; Physical)</span>
+                      <p className="text-2xl md:text-3xl leading-relaxed font-serif text-zinc-900 font-normal">
+                          My great-grandfather carved the Soviet monumental era in granite. Heavy. Immovable. Permanent.
+                      </p>
+                    </div>
+
+                    <div className="mt-10 pt-6 border-t border-zinc-200/80 flex flex-wrap items-center justify-between gap-4">
+                      <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.25em]">Sergey Merkurov (1881–1952)</div>
+                      <Link
+                        href="/heritage"
+                        className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-zinc-900 text-[#FAF8F5] hover:bg-zinc-700 transition-colors font-mono text-[11px] uppercase tracking-[0.2em] font-semibold shadow-xs"
+                      >
+                        <span>Heritage Archive</span>
+                        <ArrowUpRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      </Link>
+                    </div>
                 </div>
 
                 {/* ETHER */}
-                <div className="p-10 md:p-14 border border-zinc-900/30 bg-white/90 shadow-sm rounded-3xl">
-                    <span className="block font-mono text-zinc-700 text-xs uppercase tracking-[0.3em] mb-6 font-medium">Ether (Signal, Art &amp; Media)</span>
-                    <p className="text-2xl md:text-3xl leading-relaxed font-serif text-[#111111] font-normal">
-                        I operate across decentralized protocols, fine art curation, public commentary, and the <em>Heart &amp; Angel</em> project.
-                    </p>
-                    <div className="mt-10 font-mono text-xs text-zinc-500 uppercase tracking-[0.25em]">Anton Merkurov</div>
+                <div className="p-10 md:p-14 border border-zinc-900/30 bg-white/90 shadow-sm rounded-3xl flex flex-col justify-between hover:border-zinc-900 hover:shadow-lg transition-all duration-300">
+                    <div>
+                      <span className="block font-mono text-zinc-700 text-xs uppercase tracking-[0.3em] mb-6 font-medium">Ether (Signal, Art &amp; Media)</span>
+                      <p className="text-2xl md:text-3xl leading-relaxed font-serif text-[#111111] font-normal">
+                          I operate across decentralized protocols, fine art curation, public commentary, and the <em>Heart &amp; Angel</em> project.
+                      </p>
+                    </div>
+
+                    <div className="mt-10 pt-6 border-t border-zinc-200/80 flex flex-wrap items-center justify-between gap-4">
+                      <div className="font-mono text-xs text-zinc-500 uppercase tracking-[0.25em]">Anton Merkurov</div>
+                      <Link
+                        href="/heartandangel"
+                        className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-zinc-300 bg-white text-zinc-900 hover:border-zinc-900 transition-colors font-mono text-[11px] uppercase tracking-[0.2em] font-semibold shadow-xs"
+                      >
+                        <span>Heart &amp; Angel</span>
+                        <ArrowUpRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      </Link>
+                    </div>
                 </div>
             </div>
         </div>
@@ -254,7 +278,7 @@ export default function LobbyClient() {
 
 
       {/* --- SECTION 5: INDEX GRID --- */}
-      <section className="py-28 md:py-36 px-8 md:px-16 bg-[#F4F1EA]/60 border-t border-zinc-200/60 relative z-20">
+      <section className="py-28 md:py-36 px-6 sm:px-8 md:px-16 bg-[#F4F1EA]/60 border-t border-zinc-200/60 relative z-20">
         <div className="max-w-7xl mx-auto">
             <span className="block font-mono text-xs font-medium uppercase tracking-[0.3em] text-zinc-500 mb-16">
               03 / Index &amp; Operations
@@ -295,6 +319,6 @@ export default function LobbyClient() {
         </div>
       </section>
 
-    </main>
+    </div>
   );
 }

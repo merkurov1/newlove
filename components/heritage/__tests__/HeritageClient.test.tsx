@@ -4,7 +4,7 @@ import HeritageClient from '../HeritageClient';
 
 // Mock Next.js Image component for test environment
 jest.mock('next/image', () => {
-  return function MockImage(props: any) {
+  return function MockImage({ fill, priority, ...props }: any) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img {...props} alt={props.alt || ''} />;
   };
@@ -48,13 +48,13 @@ describe('HeritageClient', () => {
 
     // Default: 'all' filter shows both own and coverage
     expect(screen.getByText(/The fight for Merkurov’s historic reliefs at Dynamo stadium/i)).toBeInTheDocument();
-    expect(screen.getByText(/The Museum as a Tool of City Development/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /The Museum as a Tool of City Development/i })).toBeInTheDocument();
 
     // Filter by 'By Anton'
     const ownButton = screen.getByRole('button', { name: /By Anton/i });
     fireEvent.click(ownButton);
 
-    expect(screen.getByText(/The Museum as a Tool of City Development/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /The Museum as a Tool of City Development/i })).toBeInTheDocument();
     expect(screen.queryByText(/The fight for Merkurov’s historic reliefs at Dynamo stadium/i)).not.toBeInTheDocument();
 
     // Filter by 'Coverage'
@@ -62,7 +62,7 @@ describe('HeritageClient', () => {
     fireEvent.click(covButton);
 
     expect(screen.getByText(/The fight for Merkurov’s historic reliefs at Dynamo stadium/i)).toBeInTheDocument();
-    expect(screen.queryByText(/The Museum as a Tool of City Development/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /The Museum as a Tool of City Development/i })).not.toBeInTheDocument();
   });
 
   it('opens and closes the image lightbox modal', () => {

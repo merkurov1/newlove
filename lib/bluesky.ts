@@ -42,7 +42,7 @@ async function enhanceTextWithDeepSeek(rawText: string, lang: string = 'ru'): Pr
         messages: [
           {
             role: 'system',
-            content: `You are an AI assistant for publishing posts to Bluesky for Anton Merkurov's personal platform Flow. Analyze the given text (language: ${lang}). Generate 2-3 concise and highly relevant hashtags. Append them cleanly at the end of the text. Keep the message under 280 characters if possible. Return ONLY the final formatted string.`,
+            content: `You are an AI assistant for publishing posts to Bluesky for Anton Merkurov's personal platform Flow. Analyze the given text (language: ${lang}). Generate 2-3 concise and highly relevant hashtags. Append them cleanly at the end of the text. Keep the message under 260 characters if possible. Return ONLY the final formatted string.`,
           },
           {
             role: 'user',
@@ -66,7 +66,55 @@ async function enhanceTextWithDeepSeek(rawText: string, lang: string = 'ru'): Pr
 }
 
 /**
- * Публикация поста во Flow в сети Bluesky
+ * Загрузка изображения в Bluesky как Blob для превью-карточки (thumb) или картинки
+ */
+async function uploadImageBlob(
+  agent: BskyAgent,
+  imageUrl: string
+): Promise<any | null> {
+  try {
+    const res = await fetch(imageUrl, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) {
+      console.warn(`[bluesky] Failed to fetch image: ${res.status} ${res.statusText}`);
+      return null;
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    // Максимальный размер blob в Bluesky для превью — около 976 KB (1,000,000 байт)
+    if (arrayBuffer.byteLength === 0 || arrayBuffer.byteLength > 990000) {
+      console.warn(`[bluesky] Image size ${arrayBuffer.byteLength} exceeds 990KB limit for card thumb.`);
+      return null;
+    }
+
+    const contentType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0];
+    const uploadRes = await agent.uploadBlob(new Uint8Array(arrayBuffer), {
+      encoding: contentType,
+    });
+
+    return uploadRes.data?.blob || null;
+  } catch (err) {
+    console.warn('[bluesky] Blob upload error:', err);
+    return null;
+  }
+}
+
+/**
+ * Безопасное усечение текста до лимита Bluesky (300 графем), сохраняя целостность ссылки и хэштегов
+ */
+function truncatePostText(text: string, maxLen = 300): string {
+  if (text.length <= maxLen) return text;
+
+  // Ищем последнее предложение или перенос строки перед лимитом
+  const sliced = text.slice(0, maxLen - 1);
+  const lastSpace = sliced.lastIndexOf(' ');
+  if (lastSpace > 100) {
+    return `${sliced.slice(0, lastSpace)}…`;
+  }
+  return `${sliced}…`;
+}
+
+/**
+ * Публикация поста во Flow в сети Bluesky с полноценной карточкой превью (External Embed)
  */
 export async function publishToBluesky({
   title,
@@ -74,46 +122,95 @@ export async function publishToBluesky({
   source_url,
   slug,
   lang = 'ru',
+  imageUrl,
+  description,
 }: {
   title?: string | null;
   body_md?: string | null;
   source_url?: string | null;
   slug?: string | null;
   lang?: string;
+  imageUrl?: string | null;
+  description?: string | null;
 }): Promise<{ uri: string; cid: string } | null> {
   try {
     const agent = await getBlueskyAgent();
 
-    // Формируем текст
-    let text = title?.trim() ? `${title.trim()}\n\n` : '';
+    // Очищаем markdown для основного текста
+    const cleanBody = (body_md || '')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/[#*_`~]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
 
-    if (body_md) {
-      const cleanBody = body_md
-        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-        .replace(/[#*_`~]/g, '')
-        .trim();
-      text += cleanBody;
+    // Формируем текст поста
+    let text = title?.trim() ? `${title.trim()}` : '';
+    if (cleanBody) {
+      text = text ? `${text}\n\n${cleanBody}` : cleanBody;
     }
 
-    // Ссылка на сам Flow или на источник
-    const flowLink = slug ? `https://www.merkurov.love/flow/${encodeURIComponent(slug)}` : source_url;
-    if (flowLink) {
-      text += `\n\n${flowLink}`;
-    }
+    // Ссылка на публикацию во Flow или оригинальный источник
+    const flowLink = slug
+      ? `https://www.merkurov.love/flow/${encodeURIComponent(slug)}`
+      : source_url;
 
-    // Генерация хэштегов с помощью DeepSeek
-    const finalText = await enhanceTextWithDeepSeek(text, lang);
+    // Генерируем обогащённый текст с хэштегами через DeepSeek
+    const enrichedText = await enhanceTextWithDeepSeek(text || 'Flow // Anton Merkurov', lang);
+    const finalText = truncatePostText(enrichedText, 290);
 
-    // Автоматический парсинг URL и хэштегов через RichText
-    const rt = new RichText({ text: finalText.slice(0, 300) });
+    // Автоматический парсинг фасетов (ссылок, хэштегов, упоминаний)
+    const rt = new RichText({ text: finalText });
     await rt.detectFacets(agent);
 
-    const postRecord = {
-      $type: 'app.bsky.feed.post' as const,
+    // Подготавливаем заголовок и описание для карточки превью
+    const cardTitle = (title?.trim() || cleanBody.slice(0, 80) || 'Flow | Anton Merkurov').slice(0, 200);
+    const cardDescription = (
+      description?.trim() ||
+      cleanBody.slice(0, 200) ||
+      'Personal publishing by Anton Merkurov.'
+    ).slice(0, 280);
+
+    // Пытаемся загрузить картинку для превью
+    let thumbBlob: any = null;
+    const candidateImg = imageUrl || (slug ? `https://www.merkurov.love/flow/${encodeURIComponent(slug)}/opengraph-image` : null);
+    if (candidateImg) {
+      thumbBlob = await uploadImageBlob(agent, candidateImg);
+    }
+
+    // Формируем Embed для Bluesky
+    let embed: any = undefined;
+
+    if (flowLink) {
+      // 1. Полноценная карточка внешней ссылки (External Embed Card)
+      embed = {
+        $type: 'app.bsky.embed.external',
+        external: {
+          uri: flowLink,
+          title: cardTitle,
+          description: cardDescription,
+          ...(thumbBlob ? { thumb: thumbBlob } : {}),
+        },
+      };
+    } else if (thumbBlob) {
+      // 2. Если ссылки нет, но есть изображение — прикрепляем как Image Embed
+      embed = {
+        $type: 'app.bsky.embed.images',
+        images: [
+          {
+            image: thumbBlob,
+            alt: cardTitle,
+          },
+        ],
+      };
+    }
+
+    const postRecord: any = {
+      $type: 'app.bsky.feed.post',
       text: rt.text,
       facets: rt.facets,
       createdAt: new Date().toISOString(),
+      ...(embed ? { embed } : {}),
     };
 
     const response = await agent.post(postRecord);
