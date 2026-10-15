@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import MediaLinksPanel from '@/components/admin/MediaLinksPanel';
-import SafeImage from '@/components/SafeImage';
 
 const BUCKET_NAME = 'media';
 
@@ -13,28 +12,49 @@ const buttonClass =
 const inputClass =
   'w-full rounded-md border border-[#D9D3CD] bg-white px-3 py-2.5 text-sm text-[#211F1F] outline-none focus:border-[#990F3D]';
 
+function errorText(error, fallback) {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error.message === 'string') return error.message;
+  return fallback;
+}
+
+function formatBytes(bytes) {
+  if (typeof bytes !== 'number' || !Number.isFinite(bytes)) {
+    return 'Размер не указан';
+  }
+
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function MediaPage() {
-  const supabase = createClientComponentClient();
-  const { notify } = useNotifications();
+  const supabase = useMemo(() => createClientComponentClient(), []);
 
   const [mediaFiles, setMediaFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const [storageError, setStorageError] = useState('');
 
-  const filteredFiles = mediaFiles.filter((file) =>
-    file.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
-  );
-
-  useEffect(() => {
-    void loadMediaFiles();
-    // Load once when the page mounts.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const notify = useCallback((message, type = 'info') => {
+    setNotice({ message, type });
   }, []);
 
-  async function loadMediaFiles() {
+  const filteredFiles = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    return mediaFiles.filter((file) =>
+      file.name.toLowerCase().includes(query)
+    );
+  }, [mediaFiles, searchTerm]);
+
+  const loadMediaFiles = useCallback(async () => {
     setLoading(true);
+    setStorageError('');
 
     try {
       const { data, error } = await supabase.storage
@@ -49,7 +69,8 @@ export default function MediaPage() {
       const files = (data || [])
         .filter(
           (file) =>
-            file.name && file.name !== '.emptyFolderPlaceholder'
+            file.name &&
+            file.name !== '.emptyFolderPlaceholder'
         )
         .map((file) => {
           const { data: publicData } = supabase.storage
@@ -68,12 +89,23 @@ export default function MediaPage() {
         current.filter((name) => files.some((file) => file.name === name))
       );
     } catch (error) {
-      console.error('Error loading media files:', error);
-      notify?.('Не удалось загрузить медиафайлы', 'error');
+      console.error('[admin/media] Storage list failed:', error);
+
+      const message = errorText(
+        error,
+        'Не удалось загрузить список файлов.'
+      );
+
+      setStorageError(message);
+      notify(message, 'error');
     } finally {
       setLoading(false);
     }
-  }
+  }, [supabase, notify]);
+
+  useEffect(() => {
+    void loadMediaFiles();
+  }, [loadMediaFiles]);
 
   async function handleUpload(event) {
     const input = event.currentTarget;
@@ -82,11 +114,15 @@ export default function MediaPage() {
     if (!files.length) return;
 
     setUploading(true);
+    setStorageError('');
+
+    let uploaded = 0;
+    const failures = [];
 
     try {
       for (const file of files) {
         const safeName = file.name.replace(/[^\w.-]/g, '-');
-        const fileName = `${Date.now()}-${safeName}`;
+        const fileName = String(Date.now()) + '-' + safeName;
 
         const { error } = await supabase.storage
           .from(BUCKET_NAME)
@@ -95,68 +131,70 @@ export default function MediaPage() {
             upsert: false,
           });
 
-        if (error) throw error;
+        if (error) {
+          failures.push(`${file.name}: ${error.message}`);
+        } else {
+          uploaded += 1;
+        }
       }
 
-      notify?.('Файлы загружены', 'success');
       await loadMediaFiles();
+
+      if (failures.length) {
+        notify(
+          `Загружено ${uploaded} из ${files.length}. Ошибки: ${failures.join('; ')}`,
+          'error'
+        );
+      } else {
+        notify(`Загружено файлов: ${uploaded}`, 'success');
+      }
     } catch (error) {
-      console.error('Error uploading media files:', error);
-      notify?.('Не удалось загрузить файлы', 'error');
+      console.error('[admin/media] Upload failed:', error);
+
+      notify(
+        errorText(error, 'Не удалось загрузить файлы.'),
+        'error'
+      );
     } finally {
       setUploading(false);
       input.value = '';
     }
   }
 
-  async function handleDelete(fileName) {
-    const confirmed = window.confirm(
-      `Удалить файл «${fileName}»? Это действие нельзя отменить.`
-    );
+  async function deleteFiles(names) {
+    if (!names.length) return;
 
-    if (!confirmed) return;
+    const promptText =
+      names.length === 1
+        ? `Удалить файл «${names[0]}»? Это действие нельзя отменить.`
+        : `Удалить выбранные файлы (${names.length})? Это действие нельзя отменить.`;
+
+    if (!window.confirm(promptText)) return;
 
     try {
       const { error } = await supabase.storage
         .from(BUCKET_NAME)
-        .remove([fileName]);
+        .remove(names);
 
       if (error) throw error;
 
       setSelectedFiles((current) =>
-        current.filter((name) => name !== fileName)
+        current.filter((name) => !names.includes(name))
       );
 
-      notify?.('Файл удалён', 'success');
+      notify(
+        names.length === 1 ? 'Файл удалён.' : 'Выбранные файлы удалены.',
+        'success'
+      );
+
       await loadMediaFiles();
     } catch (error) {
-      console.error('Error deleting media file:', error);
-      notify?.('Не удалось удалить файл', 'error');
-    }
-  }
+      console.error('[admin/media] Delete failed:', error);
 
-  async function handleDeleteSelected() {
-    if (!selectedFiles.length) return;
-
-    const confirmed = window.confirm(
-      `Удалить выбранные файлы (${selectedFiles.length})? Это действие нельзя отменить.`
-    );
-
-    if (!confirmed) return;
-
-    try {
-      const { error } = await supabase.storage
-        .from(BUCKET_NAME)
-        .remove(selectedFiles);
-
-      if (error) throw error;
-
-      setSelectedFiles([]);
-      notify?.('Выбранные файлы удалены', 'success');
-      await loadMediaFiles();
-    } catch (error) {
-      console.error('Error deleting selected files:', error);
-      notify?.('Не удалось удалить выбранные файлы', 'error');
+      notify(
+        errorText(error, 'Не удалось удалить файлы.'),
+        'error'
+      );
     }
   }
 
@@ -170,6 +208,7 @@ export default function MediaPage() {
 
   function toggleSelectAll() {
     const visibleNames = filteredFiles.map((file) => file.name);
+
     const allVisibleSelected =
       visibleNames.length > 0 &&
       visibleNames.every((name) => selectedFiles.includes(name));
@@ -188,10 +227,14 @@ export default function MediaPage() {
   async function copyUrl(url) {
     try {
       await navigator.clipboard.writeText(url);
-      notify?.('Ссылка скопирована', 'success');
+      notify('Ссылка скопирована.', 'success');
     } catch (error) {
-      console.error('Error copying URL:', error);
-      notify?.('Не удалось скопировать ссылку', 'error');
+      console.error('[admin/media] Clipboard failed:', error);
+
+      notify(
+        'Не удалось скопировать ссылку. Откройте файл и скопируйте URL вручную.',
+        'error'
+      );
     }
   }
 
@@ -201,10 +244,35 @@ export default function MediaPage() {
 
   return (
     <div className="space-y-10 pb-10">
-      {/* Publication links and editorial archive */}
+      {notice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            'flex items-start justify-between gap-4 border px-4 py-3 text-sm ' +
+            (notice.type === 'error'
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : notice.type === 'success'
+                ? 'border-green-200 bg-green-50 text-green-800'
+                : 'border-[#D9D3CD] bg-white text-[#211F1F]')
+          }
+        >
+          <p className="min-w-0 break-words">{notice.message}</p>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            aria-label="Закрыть уведомление"
+            className="shrink-0"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Добавление и редактирование публикаций */}
       <MediaLinksPanel />
 
-      {/* Supabase Storage */}
+      {/* Управление файлами Supabase Storage */}
       <section className="space-y-5 border-t border-[#D9D3CD] pt-7">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -215,15 +283,16 @@ export default function MediaPage() {
               Media files
             </h2>
             <p className="mt-2 text-sm text-[#746D66]">
-              Загруженные изображения, видео и другие файлы.
+              Изображения, видео и другие загруженные файлы.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <label
-              className={`inline-flex cursor-pointer items-center justify-center rounded-md bg-[#990F3D] px-4 py-2.5 text-sm text-white transition hover:bg-[#7E0C33] ${
-                uploading ? 'pointer-events-none opacity-50' : ''
-              }`}
+              className={
+                'inline-flex cursor-pointer items-center justify-center rounded-md bg-[#990F3D] px-4 py-2.5 text-sm text-white transition hover:bg-[#7E0C33] ' +
+                (uploading ? 'pointer-events-none opacity-50' : '')
+              }
             >
               {uploading ? 'Загрузка…' : 'Загрузить файлы'}
               <input
@@ -246,6 +315,18 @@ export default function MediaPage() {
             </button>
           </div>
         </header>
+
+        {storageError && (
+          <div className="border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p className="font-medium">Не удалось загрузить Storage.</p>
+            <p className="mt-1 break-words">{storageError}</p>
+            <p className="mt-2">
+              Проверьте права текущего пользователя и наличие bucket
+              <code className="mx-1">media</code>
+              в Supabase Storage.
+            </p>
+          </div>
+        )}
 
         <div className="border-y border-[#D9D3CD] py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -281,8 +362,8 @@ export default function MediaPage() {
               {selectedFiles.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => void handleDeleteSelected()}
-                  className="inline-flex items-center justify-center rounded-md border border-red-200 px-3 py-2 text-sm text-red-700 transition hover:border-red-500 disabled:opacity-40"
+                  onClick={() => void deleteFiles(selectedFiles)}
+                  className="inline-flex items-center justify-center rounded-md border border-red-200 px-3 py-2 text-sm text-red-700 transition hover:border-red-500"
                 >
                   Удалить ({selectedFiles.length})
                 </button>
@@ -292,10 +373,7 @@ export default function MediaPage() {
         </div>
 
         {loading ? (
-          <div
-            role="status"
-            className="py-12 text-center text-sm text-[#746D66]"
-          >
+          <div role="status" className="py-12 text-center text-sm text-[#746D66]">
             Загрузка медиафайлов…
           </div>
         ) : filteredFiles.length === 0 ? (
@@ -306,28 +384,27 @@ export default function MediaPage() {
             <p className="mt-2 text-sm text-[#746D66]">
               {searchTerm
                 ? 'Попробуйте изменить поисковый запрос.'
-                : 'Загрузите файлы, чтобы они появились здесь.'}
+                : 'В bucket нет доступных файлов либо у пользователя нет прав на их просмотр.'}
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {filteredFiles.map((file) => {
               const isSelected = selectedFiles.includes(file.name);
-              const isImage = /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(
-                file.name
-              );
+              const isImage = /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(file.name);
               const isVideo = /\.(mp4|webm|mov|m4v)$/i.test(file.name);
 
               return (
                 <article
                   key={file.name}
-                  className={`group min-w-0 overflow-hidden border bg-white ${
-                    isSelected
+                  className={
+                    'group min-w-0 overflow-hidden border bg-white ' +
+                    (isSelected
                       ? 'border-[#990F3D] ring-1 ring-[#990F3D]'
-                      : 'border-[#D9D3CD]'
-                  }`}
+                      : 'border-[#D9D3CD]')
+                  }
                 >
-                  <div className="relative aspect-square bg-[#F7F5F2]">
+                  <div className="relative flex aspect-square items-center justify-center bg-[#F7F5F2]">
                     <label className="absolute left-2 top-2 z-10 flex cursor-pointer items-center justify-center rounded bg-white/95 p-1.5">
                       <input
                         type="checkbox"
@@ -338,9 +415,10 @@ export default function MediaPage() {
                     </label>
 
                     {isImage ? (
-                      <SafeImage
+                      <img
                         src={file.url}
                         alt={file.name}
+                        loading="lazy"
                         className="h-full w-full object-contain"
                       />
                     ) : isVideo ? (
@@ -371,9 +449,7 @@ export default function MediaPage() {
                     </p>
 
                     <p className="text-xs text-[#89827B]">
-                      {typeof file.metadata?.size === 'number'
-                        ? `${(file.metadata.size / 1024).toFixed(1)} KB`
-                        : 'Размер не указан'}
+                      {formatBytes(file.metadata?.size)}
                     </p>
 
                     <div className="flex flex-wrap gap-x-3 gap-y-2">
@@ -387,7 +463,7 @@ export default function MediaPage() {
 
                       <button
                         type="button"
-                        onClick={() => void handleDelete(file.name)}
+                        onClick={() => void deleteFiles([file.name])}
                         className="text-left text-xs text-red-700 underline underline-offset-2 hover:text-red-900"
                       >
                         Удалить

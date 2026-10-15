@@ -1,8 +1,17 @@
 import type { Metadata } from 'next';
-import { Suspense } from 'react';
-
 import MediaArchive from '@/components/media/MediaArchive';
-import { records, archives } from '@/data/media';
+import {
+  records as fallbackRecords,
+  archives,
+  type MediaRecord,
+  type Lang,
+  type Kind,
+  type Topic,
+} from '@/data/media';
+import { createClient } from '@/lib/supabase/server';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 const siteUrl = 'https://www.merkurov.love';
 
@@ -12,7 +21,6 @@ const archiveDescription =
 export const metadata: Metadata = {
   title: 'Media Archive — Anton Merkurov',
   description: archiveDescription,
-
   keywords: [
     'Anton Merkurov',
     'Антон Меркуров',
@@ -25,45 +33,30 @@ export const metadata: Metadata = {
     'art market',
     'Novaya Gazeta',
   ],
-
-  authors: [
-    {
-      name: 'Anton Merkurov',
-      url: siteUrl,
-    },
-  ],
-
+  authors: [{ name: 'Anton Merkurov', url: siteUrl }],
   creator: 'Anton Merkurov',
   publisher: 'Anton Merkurov',
-
-  alternates: {
-    canonical: '/media',
-  },
-
+  alternates: { canonical: '/media' },
   openGraph: {
     title: 'Media Archive — Anton Merkurov',
-    description: `${records.length} media records featuring Anton Merkurov.`,
+    description: archiveDescription,
     url: `${siteUrl}/media`,
     siteName: 'Anton Merkurov',
     locale: 'en_US',
     type: 'website',
-    images: [
-      {
-        url: `${siteUrl}/media/opengraph-image`,
-        width: 1200,
-        height: 630,
-        alt: 'Media Archive — Anton Merkurov',
-      },
-    ],
+    images: [{
+      url: `${siteUrl}/media/opengraph-image`,
+      width: 1200,
+      height: 630,
+      alt: 'Media Archive — Anton Merkurov',
+    }],
   },
-
   twitter: {
     card: 'summary_large_image',
     title: 'Media Archive — Anton Merkurov',
-    description: `${records.length} media records featuring Anton Merkurov.`,
+    description: archiveDescription,
     images: [`${siteUrl}/media/opengraph-image`],
   },
-
   robots: {
     index: true,
     follow: true,
@@ -77,26 +70,191 @@ export const metadata: Metadata = {
   },
 };
 
-function MediaArchiveFallback() {
-  return (
-    <div
-      aria-label="Loading media archive"
-      style={{
-        minHeight: '50vh',
-        padding: '64px 24px',
-        color: '#77766f',
-        fontSize: '12px',
-      }}
-    >
-      Loading media archive…
-    </div>
-  );
+type DatabaseMediaRecord = {
+  id?: string | number;
+  url?: string | null;
+  canonical_url?: string | null;
+  title?: string | null;
+  outlet?: string | null;
+  published_date?: string | null;
+  lang?: string | null;
+  kind?: string | null;
+  topic?: string | null;
+  summary?: string | null;
+  status?: string | null;
+  ai_metadata?: Record<string, unknown> | null;
+};
+
+const VALID_LANGUAGES: Lang[] = ['EN', 'RU', 'DE', 'PL', 'BS'];
+const VALID_KINDS: Kind[] = [
+  'quote',
+  'mention',
+  'interview',
+  'radio',
+  'video',
+  'column',
+  'blog',
+  'profile',
+];
+const VALID_TOPICS: Topic[] = [
+  'Internet & Censorship',
+  'AI & Tech',
+  'Art & Culture',
+  'Fintech & Crypto',
+];
+
+function text(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value.trim() || fallback : fallback;
 }
 
-export default function MediaPage() {
+function isValidUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function slugFromUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    const slug = `${url.hostname}-${url.pathname}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 100);
+
+    return slug || `media-${Date.now()}`;
+  } catch {
+    return `media-${Date.now()}`;
+  }
+}
+
+function normalizeDate(
+  publishedDate: unknown,
+  metadata: Record<string, unknown>,
+): string {
+  const originalDate = text(metadata.original_date);
+  const candidate = text(publishedDate, originalDate);
+
+  // The existing MediaArchive accepts YYYY, YYYY-MM and YYYY-MM-DD.
+  if (/^\d{4}$/.test(candidate)) return candidate;
+  if (/^\d{4}-\d{2}$/.test(candidate)) return candidate;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return candidate;
+
+  return '1900';
+}
+
+function mapDatabaseRecord(row: DatabaseMediaRecord): MediaRecord | null {
+  if (row.status !== 'published') return null;
+
+  const url = text(row.url, text(row.canonical_url));
+
+  if (!url || !isValidUrl(url)) return null;
+
+  const metadata =
+    row.ai_metadata && typeof row.ai_metadata === 'object'
+      ? row.ai_metadata
+      : {};
+
+  const lang = VALID_LANGUAGES.includes(row.lang as Lang)
+    ? (row.lang as Lang)
+    : 'EN';
+
+  const kind = VALID_KINDS.includes(row.kind as Kind)
+    ? (row.kind as Kind)
+    : 'mention';
+
+  const topic = VALID_TOPICS.includes(row.topic as Topic)
+    ? (row.topic as Topic)
+    : 'Internet & Censorship';
+
+  return {
+    slug: text(metadata.slug, slugFromUrl(url)),
+    title: text(row.title, 'Untitled publication'),
+    outlet: text(row.outlet, 'Unknown publication'),
+    url,
+    date: normalizeDate(row.published_date, metadata),
+    lang,
+    kind,
+    topic,
+    summary: text(row.summary),
+    ...(text(metadata.program)
+      ? { program: text(metadata.program) }
+      : {}),
+    ...(text(metadata.note)
+      ? { note: text(metadata.note) }
+      : {}),
+  };
+}
+
+function canonicalize(value: string): string {
+  try {
+    const url = new URL(value);
+    url.hash = '';
+    url.hostname = url.hostname.toLowerCase();
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return value.trim();
+  }
+}
+
+async function getMediaRecords(): Promise<MediaRecord[]> {
+  // Keep the verified source archive available even if Supabase
+  // is temporarily unavailable or contains no published records.
+  const merged = new Map<string, MediaRecord>();
+
+  for (const record of fallbackRecords) {
+    merged.set(canonicalize(record.url), record);
+  }
+
+  try {
+    const supabase = await createClient({ useServiceRole: true });
+
+    const { data, error } = await supabase
+      .from('media_archive_records')
+      .select(
+        'id,url,canonical_url,title,outlet,published_date,lang,kind,topic,summary,status,ai_metadata',
+      )
+      .eq('status', 'published')
+      .order('published_date', { ascending: false })
+      .limit(5000);
+
+    if (error) {
+      console.error('[media] Supabase query failed:', error.message);
+    } else {
+      for (const rawRow of data ?? []) {
+        const record = mapDatabaseRecord(
+          rawRow as DatabaseMediaRecord,
+        );
+
+        if (!record) continue;
+
+        const key = canonicalize(record.url);
+
+        // Database values override a matching local record.
+        // New database records are appended to the archive.
+        merged.set(key, record);
+      }
+    }
+  } catch (error) {
+    console.error('[media] Using local archive fallback:', error);
+  }
+
+  return [...merged.values()].sort((a, b) => {
+    const dateOrder = b.date.localeCompare(a.date);
+    return dateOrder || a.title.localeCompare(b.title);
+  });
+}
+
+export default async function MediaPage() {
+  const records = await getMediaRecords();
+
   return (
-    <Suspense fallback={<MediaArchiveFallback />}>
-      <MediaArchive records={records} archives={archives} />
-    </Suspense>
+    <MediaArchive
+      records={records}
+      archives={archives}
+    />
   );
 }
