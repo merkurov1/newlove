@@ -29,11 +29,38 @@ function getSupabaseAdmin() {
   });
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 /**
  * Format and enrich text for Telegram publication
  */
-async function formatTelegramMessage(rawContent: string, lang: string = 'ru'): Promise<string> {
+async function formatTelegramMessage(
+  title: string | null | undefined,
+  body_md: string | null | undefined,
+  flowUrl: string,
+  lang: string = 'ru'
+): Promise<string> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
+
+  let rawContent = title?.trim() ? `<b>${escapeHtml(title.trim())}</b>\n\n` : '';
+  if (body_md) {
+    const cleanBody = body_md
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1: $2')
+      .replace(/[#*_`~]/g, '')
+      .trim();
+    rawContent += cleanBody;
+  }
+
+  if (flowUrl) {
+    rawContent += `\n\n${flowUrl}`;
+  }
+
   if (!apiKey || !rawContent.trim()) {
     return rawContent;
   }
@@ -50,7 +77,7 @@ async function formatTelegramMessage(rawContent: string, lang: string = 'ru'): P
         messages: [
           {
             role: 'system',
-            content: `You are Pierrot, an elite AI editor for Anton Merkurov's publication network. Format the text beautifully for Telegram using clean HTML tags (<b>, <i>, <code>, <a>). Do not use unsupported markdown. Add 2-3 precise hashtags at the end in ${lang}. Return ONLY valid HTML.`,
+            content: `You are an elite AI editor for Anton Merkurov's publication network Unframed/Flow. Format the text beautifully for Telegram using clean HTML tags (<b>, <i>, <code>, <a>). Do not use markdown. Include the link cleanly. Add 2-3 precise hashtags at the end in ${lang}. Return ONLY valid HTML.`,
           },
           {
             role: 'user',
@@ -71,7 +98,7 @@ async function formatTelegramMessage(rawContent: string, lang: string = 'ru'): P
 }
 
 /**
- * Publishes post to Telegram channel using Pierrot, Osiris, or default bot token
+ * Publishes post to Telegram channel via Bot API without frontend buttons
  */
 async function publishTelegram({
   title,
@@ -88,15 +115,23 @@ async function publishTelegram({
   const defaultToken = process.env.TELEGRAM_BOT_TOKEN;
 
   const botToken = pierrotToken || osirisToken || defaultToken;
-  const channelId =
+  const rawChannelId =
     process.env.TELEGRAM_CHANNEL_ID ||
     process.env.PIERROT_CHANNEL_ID ||
     process.env.OSIRIS_CHANNEL_ID;
 
-  if (!botToken || !channelId) {
-    console.warn('[crosspost:telegram] Missing bot token or channel ID. Provide TELEGRAM_BOT_TOKEN (or PIERROT_BOT_TOKEN) and TELEGRAM_CHANNEL_ID.');
+  if (!botToken || !rawChannelId) {
+    console.warn(
+      '[crosspost:telegram] Missing bot token or channel ID. Provide TELEGRAM_BOT_TOKEN (or PIERROT_BOT_TOKEN) and TELEGRAM_CHANNEL_ID.'
+    );
     return null;
   }
+
+  // Normalize channel ID: must start with '@' or '-' (numeric ID)
+  const channelId =
+    rawChannelId.startsWith('@') || rawChannelId.startsWith('-')
+      ? rawChannelId
+      : `@${rawChannelId}`;
 
   const botIdent: 'pierrot' | 'osiris' | 'default' = pierrotToken
     ? 'pierrot'
@@ -105,41 +140,19 @@ async function publishTelegram({
       : 'default';
 
   try {
-    let rawContent = title ? `<b>${title}</b>\n\n` : '';
-    if (body_md) {
-      const cleanBody = body_md
-        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-        .replace(/[#*_`~]/g, '');
-      rawContent += cleanBody;
-    }
-
-    const formattedText = await formatTelegramMessage(rawContent, lang);
     const flowUrl = slug
       ? `https://www.merkurov.love/flow/${encodeURIComponent(slug)}`
       : 'https://www.merkurov.love/flow';
 
-    // В каналах Telegram поддерживаются ТОЛЬКО URL-кнопки (кнопки с 'web_app' вызывают ошибку BUTTON_TYPE_INVALID)
-    const inlineButtons: Array<Array<{ text: string; url: string }>> = [];
+    const formattedText = await formatTelegramMessage(title, body_md, flowUrl, lang);
 
-    // Главная строка: Читать во Flow
-    inlineButtons.push([
-      { text: 'Читать во Flow ↗', url: flowUrl },
-    ]);
-
-    // Дополнительная строка: YouTube или первоисточник
-    const extraRow: Array<{ text: string; url: string }> = [];
-    if (youtubeUrl) {
-      extraRow.push({ text: 'YouTube ▶️', url: youtubeUrl });
-    }
-    if (source_url && source_url !== flowUrl && source_url !== youtubeUrl) {
-      extraRow.push({ text: 'Первоисточник ↗', url: source_url });
-    }
-    if (extraRow.length > 0) {
-      inlineButtons.push(extraRow);
-    }
-
-    const replyMarkup = { inline_keyboard: inlineButtons };
+    // Убеждаемся, что URL изображения абсолютный
+    const validPhotoUrl =
+      imageUrl && imageUrl.startsWith('http')
+        ? imageUrl
+        : imageUrl && imageUrl.startsWith('/')
+          ? `https://www.merkurov.love${imageUrl}`
+          : null;
 
     // Функция отправки с обработкой ошибок и фоллбэками
     const sendTelegram = async (usePhoto: boolean, parseMode?: 'HTML'): Promise<any> => {
@@ -148,20 +161,18 @@ async function publishTelegram({
         chat_id: channelId,
         text: formattedText,
         disable_web_page_preview: false,
-        reply_markup: replyMarkup,
       };
 
       if (parseMode) {
         payload.parse_mode = parseMode;
       }
 
-      if (usePhoto && imageUrl) {
+      if (usePhoto && validPhotoUrl) {
         endpoint = `https://api.telegram.org/bot${botToken}/sendPhoto`;
         payload = {
           chat_id: channelId,
-          photo: imageUrl,
+          photo: validPhotoUrl,
           caption: formattedText.slice(0, 1024),
-          reply_markup: replyMarkup,
         };
         if (parseMode) {
           payload.parse_mode = parseMode;
@@ -178,19 +189,30 @@ async function publishTelegram({
     };
 
     // 1. Первая попытка: с фото (если есть) и разметкой HTML
-    let data = await sendTelegram(Boolean(imageUrl), 'HTML');
+    let data = await sendTelegram(Boolean(validPhotoUrl), 'HTML');
 
-    // 2. Если ошибка парсинга HTML-тегов от DeepSeek — повторяем без parse_mode как чистый текст
-    if (!data.ok && typeof data.description === 'string' && data.description.includes("can't parse entities")) {
-      console.warn('[crosspost:telegram] HTML entity parse error, retrying without parse_mode...');
-      data = await sendTelegram(Boolean(imageUrl), undefined);
+    // 2. Если ошибка парсинга HTML-тегов — повторяем без parse_mode как чистый текст
+    if (
+      !data.ok &&
+      typeof data.description === 'string' &&
+      data.description.includes("can't parse entities")
+    ) {
+      console.warn('[crosspost:telegram] HTML entity parse error, retrying as plain text...');
+      data = await sendTelegram(Boolean(validPhotoUrl), undefined);
     }
 
-    // 3. Если отправка фото не удалась (например, Telegram не смог скачать URL) — пробуем как текстовое сообщение
-    if (!data.ok && imageUrl) {
-      console.warn('[crosspost:telegram] Photo sending failed, falling back to sendMessage:', data.description);
+    // 3. Если отправка фото не удалась — пробуем как текстовое сообщение
+    if (!data.ok && validPhotoUrl) {
+      console.warn(
+        '[crosspost:telegram] Photo sending failed, falling back to sendMessage:',
+        data.description
+      );
       data = await sendTelegram(false, 'HTML');
-      if (!data.ok && typeof data.description === 'string' && data.description.includes("can't parse entities")) {
+      if (
+        !data.ok &&
+        typeof data.description === 'string' &&
+        data.description.includes("can't parse entities")
+      ) {
         data = await sendTelegram(false, undefined);
       }
     }
@@ -199,6 +221,10 @@ async function publishTelegram({
       console.error('[crosspost:telegram] Telegram send failed:', data);
       return null;
     }
+
+    console.info(
+      `[crosspost:telegram] Successfully posted to Telegram channel ${channelId}, msg_id: ${data.result.message_id}`
+    );
 
     return {
       messageId: data.result.message_id,
@@ -250,21 +276,40 @@ async function dispatchWebhook(
 }
 
 /**
- * Unified entrypoint to crosspost an item to all configured channels (Telegram/Pierrot/Osiris & Bluesky)
+ * Unified entrypoint to crosspost an item to all configured channels (Telegram & Bluesky) via API
  */
 export async function crosspostFlowItem(item: CrosspostPayload): Promise<CrosspostResult> {
   const result: CrosspostResult = {};
 
-  // Extract media references
+  // Extract media references from payload or metadata
   const metadata = item.metadata ?? {};
-  const imageUrl =
+  const rawImage =
     item.imageUrl ||
     (typeof metadata.public_url === 'string' ? metadata.public_url : null) ||
-    (typeof metadata.image === 'string' ? metadata.image : null);
+    (typeof metadata.image === 'string' ? metadata.image : null) ||
+    (typeof metadata.image_url === 'string' ? metadata.image_url : null) ||
+    (typeof metadata.og_image === 'string' ? metadata.og_image : null) ||
+    (typeof (metadata as any)?.link_preview?.image === 'string'
+      ? (metadata as any).link_preview.image
+      : null) ||
+    (Array.isArray((metadata as any)?.images) && (metadata as any).images.length > 0
+      ? (metadata as any).images[0]
+      : null);
+
+  const imageUrl =
+    rawImage && typeof rawImage === 'string'
+      ? rawImage.startsWith('http')
+        ? rawImage
+        : rawImage.startsWith('/')
+          ? `https://www.merkurov.love${rawImage}`
+          : null
+      : null;
 
   const youtubeUrl =
     item.youtubeUrl ||
-    (typeof metadata.youtube === 'object' && metadata.youtube !== null && 'video_id' in metadata.youtube
+    (typeof metadata.youtube === 'object' &&
+    metadata.youtube !== null &&
+    'video_id' in metadata.youtube
       ? `https://www.youtube.com/watch?v=${(metadata.youtube as any).video_id}`
       : null);
 
@@ -285,12 +330,12 @@ export async function crosspostFlowItem(item: CrosspostPayload): Promise<Crosspo
       imageUrl: payload.imageUrl,
       description: typeof metadata.description === 'string' ? metadata.description : null,
     }).catch((err) => {
-      console.error('[crosspost] Bluesky publish failed:', err);
+      console.error('[crosspost:bluesky] Publish failed:', err);
       return null;
     }),
 
     publishTelegram(payload).catch((err) => {
-      console.error('[crosspost] Telegram publish failed:', err);
+      console.error('[crosspost:telegram] Publish failed:', err);
       return null;
     }),
 
@@ -312,33 +357,54 @@ export async function crosspostFlowItem(item: CrosspostPayload): Promise<Crosspo
   result.osirisWebhook = osirisRes;
   result.pierrotWebhook = pierrotRes;
 
-  // Persist external references back into Supabase items table
+  // Persist external references back into Supabase items table safely
   const supabase = getSupabaseAdmin();
   if (supabase && item.id) {
-    const updateData: Record<string, unknown> = {
-      metadata: {
-        ...metadata,
-        crosspost: {
-          telegram: tgResult,
-          bluesky: bskyResult,
-          osiris: osirisRes,
-          pierrot: pierrotRes,
-          crossposted_at: new Date().toISOString(),
-        },
+    const updatedMetadata = {
+      ...metadata,
+      bluesky_uri: bskyResult?.uri || (metadata as any)?.bluesky_uri || null,
+      bluesky_cid: bskyResult?.cid || (metadata as any)?.bluesky_cid || null,
+      telegram_message_id: tgResult?.messageId || (metadata as any)?.telegram_message_id || null,
+      telegram_channel_id: tgResult?.chatId || (metadata as any)?.telegram_channel_id || null,
+      crosspost: {
+        telegram: tgResult,
+        bluesky: bskyResult,
+        osiris: osirisRes,
+        pierrot: pierrotRes,
+        crossposted_at: new Date().toISOString(),
       },
     };
 
+    const fullUpdate: Record<string, unknown> = {
+      metadata: updatedMetadata,
+    };
+
     if (bskyResult) {
-      updateData.bluesky_uri = bskyResult.uri;
-      updateData.bluesky_cid = bskyResult.cid;
+      fullUpdate.bluesky_uri = bskyResult.uri;
+      fullUpdate.bluesky_cid = bskyResult.cid;
     }
 
     if (tgResult) {
-      updateData.telegram_message_id = tgResult.messageId;
-      updateData.telegram_channel_id = tgResult.chatId;
+      fullUpdate.telegram_message_id = tgResult.messageId;
+      fullUpdate.telegram_channel_id = tgResult.chatId;
     }
 
-    await supabase.from('items').update(updateData).eq('id', item.id);
+    // Try full update first, fallback to metadata-only update if columns don't exist
+    const { error: updateErr } = await supabase
+      .from('items')
+      .update(fullUpdate)
+      .eq('id', item.id);
+
+    if (updateErr) {
+      console.warn(
+        '[crosspost] Full column update skipped, saving references inside metadata:',
+        updateErr.message
+      );
+      await supabase
+        .from('items')
+        .update({ metadata: updatedMetadata })
+        .eq('id', item.id);
+    }
   }
 
   return result;

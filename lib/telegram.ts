@@ -148,25 +148,21 @@ export async function publishToTelegramChannel({
     // Ссылка на Flow
     const flowUrl = slug ? `https://www.merkurov.love/flow/${encodeURIComponent(slug)}` : source_url;
 
-    // Инлайн-кнопки под постом
-    const inlineKeyboard = {
-      inline_keyboard: [
-        [
-          ...(flowUrl ? [{ text: 'Читать во Flow ↗', url: flowUrl }] : []),
-          {
-            text: 'Открыть в Mini App 📱',
-            web_app: { url: `https://www.merkurov.love/flow${slug ? `/${encodeURIComponent(slug)}` : ''}` },
-          },
-        ],
-      ],
-    };
+    // Инлайн-кнопки под постом (для каналов разрешены только URL-кнопки)
+    const inlineKeyboard = flowUrl
+      ? {
+          inline_keyboard: [
+            [{ text: 'Читать во Flow ↗', url: flowUrl }],
+          ],
+        }
+      : undefined;
 
     let endpoint = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
     let payload: any = {
       chat_id: TELEGRAM_CHANNEL_ID,
       text: formattedText,
       parse_mode: 'HTML',
-      reply_markup: inlineKeyboard,
+      ...(inlineKeyboard ? { reply_markup: inlineKeyboard } : {}),
       disable_web_page_preview: false,
     };
 
@@ -178,17 +174,29 @@ export async function publishToTelegramChannel({
         photo: imageUrl,
         caption: formattedText.slice(0, 1024), // Telegram caption limit
         parse_mode: 'HTML',
-        reply_markup: inlineKeyboard,
+        ...(inlineKeyboard ? { reply_markup: inlineKeyboard } : {}),
       };
     }
 
-    const res = await fetch(endpoint, {
+    let res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
-    const data = await res.json();
+    let data = await res.json();
+
+    // Фоллбэк: если ошибка парсинга HTML, пробуем без parse_mode как чистый текст
+    if (!data.ok && typeof data.description === 'string' && data.description.includes("can't parse entities")) {
+      delete payload.parse_mode;
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      data = await res.json();
+    }
+
     if (!data.ok) {
       console.error('[telegram] Post failed:', data);
       return null;

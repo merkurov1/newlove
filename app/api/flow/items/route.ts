@@ -158,16 +158,24 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Если пост публичный и опубликован — синхронизируем внешние каналы
+    // 2. Если пост публичный и опубликован — синхронизируем внешние каналы (Telegram & Bluesky) через API
+    let crosspostResult = null;
     if (item.status === 'published' && item.visibility === 'public') {
       try {
-        await crosspostFlowItem(item);
+        crosspostResult = await crosspostFlowItem(item);
       } catch (crosspostError) {
         console.error('[api/flow/items] crosspost error:', crosspostError);
       }
     }
 
-    return NextResponse.json({ success: true, item }, { status: 201 });
+    return NextResponse.json(
+      {
+        success: true,
+        item,
+        crosspost: crosspostResult,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     console.error('[api/flow/items] POST error:', error);
     return NextResponse.json(

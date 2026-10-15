@@ -6,7 +6,6 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { generateFlowContext } from '@/lib/flow/ai';
-import FlowShareBar from '@/components/flow/FlowShareBar';
 
 type PageProps = {
   params: Promise<{
@@ -761,18 +760,6 @@ export default async function FlowItemPage({ params }: PageProps) {
 
           <div className="mt-8">
             <FlowMediaStack item={item} />
-          </div>
-
-          {/* Social Share Bar */}
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-stone-200/80 pt-6">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-600">
-              Share / Поделиться
-            </span>
-            <FlowShareBar
-              url={itemUrl}
-              title={itemTitle}
-              description={itemDescription}
-            />
           </div>
 
           {item.type !== 'photo' && <AIContextBlock context={context} />}
