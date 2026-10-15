@@ -1,49 +1,39 @@
+```jsx
 'use client';
 
 import { useEffect, useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import MediaLinksPanel from '@/components/admin/MediaLinksPanel';
-
-// Существующие компоненты проекта
 import SafeImage from '@/components/SafeImage';
-import { Card } from '@/components/ui/Card';
-import SearchBox from '@/components/ui/SearchBox';
-import EmptyState from '@/components/ui/EmptyState';
-import Button from '@/components/ui/Button';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useNotifications } from '@/components/ui/Notifications';
+
+const BUCKET_NAME = 'media';
+
+const buttonClass =
+  'inline-flex items-center justify-center rounded-md border border-[#D9D3CD] px-3 py-2 text-sm text-[#211F1F] transition hover:border-[#990F3D] hover:text-[#990F3D] disabled:cursor-not-allowed disabled:opacity-40';
+
+const inputClass =
+  'w-full rounded-md border border-[#D9D3CD] bg-white px-3 py-2.5 text-sm text-[#211F1F] outline-none focus:border-[#990F3D]';
 
 export default function MediaPage() {
   const supabase = createClientComponentClient();
   const { notify } = useNotifications();
 
   const [mediaFiles, setMediaFiles] = useState([]);
-  const [filteredFiles, setFilteredFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
 
-  const BUCKET_NAME = 'media';
+  const filteredFiles = mediaFiles.filter((file) =>
+    file.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
+  );
 
   useEffect(() => {
-    loadMediaFiles();
+    void loadMediaFiles();
+    // Load once when the page mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (!searchTerm.trim()) {
-      setFilteredFiles(mediaFiles);
-      return;
-    }
-
-    const term = searchTerm.toLowerCase();
-
-    setFilteredFiles(
-      mediaFiles.filter((file) =>
-        file.name.toLowerCase().includes(term)
-      )
-    );
-  }, [searchTerm, mediaFiles]);
 
   async function loadMediaFiles() {
     setLoading(true);
@@ -59,7 +49,10 @@ export default function MediaPage() {
       if (error) throw error;
 
       const files = (data || [])
-        .filter((file) => file.name && file.name !== '.emptyFolderPlaceholder')
+        .filter(
+          (file) =>
+            file.name && file.name !== '.emptyFolderPlaceholder'
+        )
         .map((file) => {
           const { data: publicData } = supabase.storage
             .from(BUCKET_NAME)
@@ -72,7 +65,10 @@ export default function MediaPage() {
         });
 
       setMediaFiles(files);
-      setFilteredFiles(files);
+
+      setSelectedFiles((current) =>
+        current.filter((name) => files.some((file) => file.name === name))
+      );
     } catch (error) {
       console.error('Error loading media files:', error);
       notify?.('Не удалось загрузить медиафайлы', 'error');
@@ -82,7 +78,9 @@ export default function MediaPage() {
   }
 
   async function handleUpload(event) {
-    const files = Array.from(event.target.files || []);
+    const input = event.currentTarget;
+    const files = Array.from(input.files || []);
+
     if (!files.length) return;
 
     setUploading(true);
@@ -109,7 +107,7 @@ export default function MediaPage() {
       notify?.('Не удалось загрузить файлы', 'error');
     } finally {
       setUploading(false);
-      event.target.value = '';
+      input.value = '';
     }
   }
 
@@ -173,10 +171,19 @@ export default function MediaPage() {
   }
 
   function toggleSelectAll() {
-    if (selectedFiles.length === filteredFiles.length) {
-      setSelectedFiles([]);
+    const visibleNames = filteredFiles.map((file) => file.name);
+    const allVisibleSelected =
+      visibleNames.length > 0 &&
+      visibleNames.every((name) => selectedFiles.includes(name));
+
+    if (allVisibleSelected) {
+      setSelectedFiles((current) =>
+        current.filter((name) => !visibleNames.includes(name))
+      );
     } else {
-      setSelectedFiles(filteredFiles.map((file) => file.name));
+      setSelectedFiles((current) =>
+        Array.from(new Set([...current, ...visibleNames]))
+      );
     }
   }
 
@@ -190,35 +197,36 @@ export default function MediaPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <MediaLinksPanel />
-
-        <LoadingSpinner size="lg" text="Загрузка медиафайлов..." />
-      </div>
-    );
-  }
+  const allVisibleSelected =
+    filteredFiles.length > 0 &&
+    filteredFiles.every((file) => selectedFiles.includes(file.name));
 
   return (
-    <div className="space-y-8">
-      {/* Управление ссылками на публикации и внешние источники */}
+    <div className="space-y-10 pb-10">
+      {/* Publication links and editorial archive */}
       <MediaLinksPanel />
 
-      {/* Существующий менеджер файлов Supabase Storage */}
-      <section className="space-y-4 border-t border-gray-200 pt-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* Supabase Storage */}
+      <section className="space-y-5 border-t border-[#D9D3CD] pt-7">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-xs uppercase tracking-[0.18em] text-gray-500">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#89827B]">
               Storage management
+            </p>
+            <h2 className="mt-2 font-serif text-3xl font-normal tracking-tight text-[#211F1F]">
+              Media files
             </h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Загруженные изображения и другие медиафайлы.
+            <p className="mt-2 text-sm text-[#746D66]">
+              Загруженные изображения, видео и другие файлы.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-black px-4 py-2 text-sm text-white transition hover:bg-gray-800">
+            <label
+              className={`inline-flex cursor-pointer items-center justify-center rounded-md bg-[#990F3D] px-4 py-2.5 text-sm text-white transition hover:bg-[#7E0C33] ${
+                uploading ? 'pointer-events-none opacity-50' : ''
+              }`}
+            >
               {uploading ? 'Загрузка…' : 'Загрузить файлы'}
               <input
                 type="file"
@@ -230,147 +238,171 @@ export default function MediaPage() {
               />
             </label>
 
-            <Button
-              onClick={loadMediaFiles}
-              disabled={uploading}
+            <button
+              type="button"
+              onClick={() => void loadMediaFiles()}
+              disabled={loading || uploading}
+              className={buttonClass}
             >
               Обновить
-            </Button>
+            </button>
+          </div>
+        </header>
+
+        <div className="border-y border-[#D9D3CD] py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="media-file-search" className="sr-only">
+                Поиск файлов
+              </label>
+              <input
+                id="media-file-search"
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Поиск по имени файла…"
+                className={inputClass}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-[#746D66]">
+                {filteredFiles.length} файлов
+              </span>
+
+              {filteredFiles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className={buttonClass}
+                >
+                  {allVisibleSelected ? 'Снять выделение' : 'Выбрать все'}
+                </button>
+              )}
+
+              {selectedFiles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteSelected()}
+                  className="inline-flex items-center justify-center rounded-md border border-red-200 px-3 py-2 text-sm text-red-700 transition hover:border-red-500 disabled:opacity-40"
+                >
+                  Удалить ({selectedFiles.length})
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        <Card>
-          <div className="space-y-4 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="min-w-0 flex-1">
-                <SearchBox
-                  value={searchTerm}
-                  onChange={setSearchTerm}
-                  placeholder="Поиск по имени файла…"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-gray-500">
-                  {filteredFiles.length} файлов
-                </span>
-
-                {filteredFiles.length > 0 && (
-                  <Button onClick={toggleSelectAll}>
-                    {selectedFiles.length === filteredFiles.length
-                      ? 'Снять выделение'
-                      : 'Выбрать все'}
-                  </Button>
-                )}
-
-                {selectedFiles.length > 0 && (
-                  <Button onClick={handleDeleteSelected}>
-                    Удалить ({selectedFiles.length})
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {filteredFiles.length === 0 ? (
-              <EmptyState
-                title="Файлы не найдены"
-                description={
-                  searchTerm
-                    ? 'Попробуйте изменить поисковый запрос.'
-                    : 'Загрузите файлы, чтобы они появились здесь.'
-                }
-              />
-            ) : (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {filteredFiles.map((file) => {
-                  const isSelected = selectedFiles.includes(file.name);
-                  const isImage = /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(
-                    file.name
-                  );
-                  const isVideo = /\.(mp4|webm|mov|m4v)$/i.test(file.name);
-
-                  return (
-                    <article
-                      key={file.name}
-                      className={`group min-w-0 overflow-hidden rounded-md border ${
-                        isSelected
-                          ? 'border-black ring-1 ring-black'
-                          : 'border-gray-200'
-                      }`}
-                    >
-                      <div className="relative aspect-square bg-gray-50">
-                        <label className="absolute left-2 top-2 z-10 flex cursor-pointer items-center justify-center rounded bg-white/90 p-1.5 shadow-sm">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleSelected(file.name)}
-                            aria-label={`Выбрать ${file.name}`}
-                          />
-                        </label>
-
-                        {isImage ? (
-                          <SafeImage
-                            src={file.url}
-                            alt={file.name}
-                            className="h-full w-full object-contain"
-                          />
-                        ) : isVideo ? (
-                          <video
-                            src={file.url}
-                            className="h-full w-full object-contain"
-                            controls
-                            preload="metadata"
-                          />
-                        ) : (
-                          <div className="flex h-full flex-col items-center justify-center gap-2 p-3 text-gray-400">
-                            <span className="text-3xl">▤</span>
-                            <span className="text-xs uppercase">
-                              {file.name.split('.').pop() || 'File'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-2 p-3">
-                        <p
-                          className="break-all text-xs font-medium text-gray-800"
-                          title={file.name}
-                        >
-                          {file.name}
-                        </p>
-
-                        <p className="text-xs text-gray-500">
-                          {typeof file.metadata?.size === 'number'
-                            ? `${(file.metadata.size / 1024).toFixed(1)} KB`
-                            : 'Размер не указан'}
-                        </p>
-
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => copyUrl(file.url)}
-                            className="text-xs text-gray-600 underline underline-offset-2 hover:text-black"
-                          >
-                            Копировать URL
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(file.name)}
-                            className="text-xs text-red-600 underline underline-offset-2 hover:text-red-800"
-                          >
-                            Удалить
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
+        {loading ? (
+          <div
+            role="status"
+            className="py-12 text-center text-sm text-[#746D66]"
+          >
+            Загрузка медиафайлов…
           </div>
-        </Card>
+        ) : filteredFiles.length === 0 ? (
+          <div className="border-b border-[#D9D3CD] py-12 text-center">
+            <p className="font-serif text-xl text-[#211F1F]">
+              Файлы не найдены
+            </p>
+            <p className="mt-2 text-sm text-[#746D66]">
+              {searchTerm
+                ? 'Попробуйте изменить поисковый запрос.'
+                : 'Загрузите файлы, чтобы они появились здесь.'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {filteredFiles.map((file) => {
+              const isSelected = selectedFiles.includes(file.name);
+              const isImage = /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(
+                file.name
+              );
+              const isVideo = /\.(mp4|webm|mov|m4v)$/i.test(file.name);
+
+              return (
+                <article
+                  key={file.name}
+                  className={`group min-w-0 overflow-hidden border bg-white ${
+                    isSelected
+                      ? 'border-[#990F3D] ring-1 ring-[#990F3D]'
+                      : 'border-[#D9D3CD]'
+                  }`}
+                >
+                  <div className="relative aspect-square bg-[#F7F5F2]">
+                    <label className="absolute left-2 top-2 z-10 flex cursor-pointer items-center justify-center rounded bg-white/95 p-1.5">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelected(file.name)}
+                        aria-label={`Выбрать ${file.name}`}
+                      />
+                    </label>
+
+                    {isImage ? (
+                      <SafeImage
+                        src={file.url}
+                        alt={file.name}
+                        className="h-full w-full object-contain"
+                      />
+                    ) : isVideo ? (
+                      <video
+                        src={file.url}
+                        className="h-full w-full object-contain"
+                        controls
+                        preload="metadata"
+                      />
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-2 p-3 text-[#89827B]">
+                        <span className="text-3xl" aria-hidden="true">
+                          ▤
+                        </span>
+                        <span className="break-all text-center text-xs uppercase">
+                          {file.name.split('.').pop() || 'File'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3 p-3">
+                    <p
+                      className="break-all text-xs font-medium text-[#211F1F]"
+                      title={file.name}
+                    >
+                      {file.name}
+                    </p>
+
+                    <p className="text-xs text-[#89827B]">
+                      {typeof file.metadata?.size === 'number'
+                        ? `${(file.metadata.size / 1024).toFixed(1)} KB`
+                        : 'Размер не указан'}
+                    </p>
+
+                    <div className="flex flex-wrap gap-x-3 gap-y-2">
+                      <button
+                        type="button"
+                        onClick={() => void copyUrl(file.url)}
+                        className="text-left text-xs text-[#746D66] underline underline-offset-2 hover:text-[#990F3D]"
+                      >
+                        Копировать URL
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(file.name)}
+                        className="text-left text-xs text-red-700 underline underline-offset-2 hover:text-red-900"
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
   );
 }
+```
