@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -8,9 +9,7 @@ import { sanitizeMetadata } from '@/lib/metadataSanitize';
 import { generateFlowContext } from '@/lib/flow/ai';
 
 type PageProps = {
-  params: Promise<{
-    slug: string;
-  }>;
+  params: Promise<{ slug: string }>;
 };
 
 type YouTubeMetadata = {
@@ -70,7 +69,9 @@ function getMetadataString(
   key: string,
 ): string | null {
   const value = metadata?.[key];
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
+  return typeof value === 'string' && value.trim()
+    ? value.trim()
+    : null;
 }
 
 function getYouTubeMetadata(item: FlowItem): YouTubeMetadata | null {
@@ -86,7 +87,10 @@ function getYouTubeMetadata(item: FlowItem): YouTubeMetadata | null {
 function getYouTubeVideoId(item: FlowItem): string | null {
   const youtube = getYouTubeMetadata(item);
 
-  if (youtube?.video_id && /^[A-Za-z0-9_-]{6,20}$/.test(youtube.video_id)) {
+  if (
+    youtube?.video_id &&
+    /^[A-Za-z0-9_-]{6,20}$/.test(youtube.video_id)
+  ) {
     return youtube.video_id;
   }
 
@@ -94,7 +98,10 @@ function getYouTubeVideoId(item: FlowItem): string | null {
     try {
       const url = new URL(item.source_url);
 
-      if (url.hostname === 'youtu.be' || url.hostname === 'www.youtu.be') {
+      if (
+        url.hostname === 'youtu.be' ||
+        url.hostname === 'www.youtu.be'
+      ) {
         const id = url.pathname.split('/').filter(Boolean)[0];
 
         if (id && /^[A-Za-z0-9_-]{6,20}$/.test(id)) {
@@ -128,7 +135,6 @@ function getDedicatedImages(item: FlowItem): string[] {
   const youtube = getYouTubeMetadata(item);
 
   const candidates: unknown[] = [
-    youtube?.thumbnail_url,
     ...(Array.isArray(metadata.images) ? metadata.images : []),
     metadata.public_url,
     metadata.image,
@@ -153,17 +159,33 @@ function getDedicatedImages(item: FlowItem): string[] {
     })
     .filter((url) => /^https?:\/\//i.test(url));
 
-  return [...new Set(urls)];
+  // A YouTube thumbnail belongs to the video preview,
+  // not to the attached-image gallery.
+  const images = [...new Set(urls)];
+
+  if (youtube?.thumbnail_url) {
+    return images.filter((url) => url !== youtube.thumbnail_url);
+  }
+
+  return images;
 }
 
 function getMetadataImage(item: FlowItem): string | null {
   const images = getDedicatedImages(item);
-  return images.length > 0 ? images[0] : null;
+
+  return (
+    images[0] ||
+    getYouTubeMetadata(item)?.thumbnail_url ||
+    null
+  );
 }
 
 function getDescription(item: FlowItem): string {
   const metadata = item.metadata ?? {};
-  const metadataDescription = getMetadataString(metadata, 'description');
+  const metadataDescription = getMetadataString(
+    metadata,
+    'description',
+  );
 
   if (metadataDescription) {
     return metadataDescription.slice(0, 160);
@@ -176,20 +198,23 @@ function getDescription(item: FlowItem): string {
     .replace(/\s+/g, ' ')
     .trim();
 
-  return (body || 'A publication from Flow by Anton Merkurov.').slice(0, 160);
+  return (
+    body || 'A publication from Flow by Anton Merkurov.'
+  ).slice(0, 160);
 }
 
 function getSiteName(item: FlowItem): string {
   const metadata = item.metadata ?? {};
   const explicit = getMetadataString(metadata, 'site_name');
 
-  if (explicit) {
-    return explicit;
-  }
+  if (explicit) return explicit;
 
   if (item.source_url) {
     try {
-      return new URL(item.source_url).hostname.replace(/^www\./, '');
+      return new URL(item.source_url).hostname.replace(
+        /^www\./,
+        '',
+      );
     } catch {
       // Ignore malformed URLs.
     }
@@ -218,9 +243,7 @@ export async function generateMetadata({
       .maybeSingle();
 
     if (!item) {
-      return {
-        title: 'Flow | Anton Merkurov',
-      };
+      return { title: 'Flow | Anton Merkurov' };
     }
 
     const flowItem = item as FlowItem;
@@ -231,17 +254,17 @@ export async function generateMetadata({
 
     const description = getDescription(flowItem);
     const site = 'https://www.merkurov.love';
-    const canonical = `${site}/flow/${encodeURIComponent(decodedSlug)}`;
+    const canonical =
+      `${site}/flow/${encodeURIComponent(decodedSlug)}`;
     const image = getMetadataImage(flowItem);
     const ogImage =
-      image || `${site}/flow/${encodeURIComponent(decodedSlug)}/opengraph-image`;
+      image ||
+      `${site}/flow/${encodeURIComponent(decodedSlug)}/opengraph-image`;
 
     return sanitizeMetadata({
       title,
       description,
-      alternates: {
-        canonical,
-      },
+      alternates: { canonical },
       openGraph: {
         title,
         description,
@@ -278,9 +301,7 @@ export async function generateMetadata({
 }
 
 function formatDate(value: string | null) {
-  if (!value) {
-    return '';
-  }
+  if (!value) return '';
 
   return new Date(value).toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -291,42 +312,45 @@ function formatDate(value: string | null) {
 
 function MarkdownBody({ body }: { body: string }) {
   return (
-    <div className="rounded-[2rem] border border-stone-200/80 bg-white/80 p-7 shadow-sm sm:p-10">
+    <div className="min-w-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
-            <h2 className="mb-7 mt-10 font-serif text-3xl font-light leading-tight text-stone-900 first:mt-0 sm:text-4xl">
+            <h2 className="mb-5 mt-10 font-serif text-3xl font-light leading-tight text-stone-900 first:mt-0 sm:text-4xl">
               {children}
             </h2>
           ),
           h2: ({ children }) => (
-            <h2 className="mb-5 mt-10 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
+            <h2 className="mb-4 mt-8 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="mb-4 mt-8 font-serif text-xl font-light leading-tight text-stone-900 sm:text-2xl">
+            <h3 className="mb-3 mt-7 font-serif text-xl font-light leading-tight text-stone-900 sm:text-2xl">
               {children}
             </h3>
           ),
           p: ({ children }) => (
-            <p className="mb-6 whitespace-pre-wrap font-serif text-[19px] font-light leading-[1.85] text-stone-800 sm:text-[21px]">
+            <p className="mb-5 whitespace-pre-wrap font-serif text-[18px] font-light leading-[1.8] text-stone-800 sm:text-[20px]">
               {children}
             </p>
           ),
           strong: ({ children }) => (
-            <strong className="font-medium text-stone-950">{children}</strong>
+            <strong className="font-medium text-stone-950">
+              {children}
+            </strong>
           ),
           em: ({ children }) => <em className="italic">{children}</em>,
           blockquote: ({ children }) => (
-            <blockquote className="my-9 whitespace-pre-wrap border-l-2 border-stone-900 pl-6 font-serif text-xl font-light leading-relaxed text-stone-600 sm:text-2xl">
+            <blockquote className="my-7 border-l border-stone-400 pl-5 font-serif text-xl font-light leading-relaxed text-stone-600 sm:text-2xl">
               {children}
             </blockquote>
           ),
           a: ({ href, children }) => {
             const isInternal =
-              href?.startsWith('/') || href?.includes('merkurov.love');
+              href?.startsWith('/') ||
+              href?.includes('merkurov.love');
 
             if (isInternal && href) {
               return (
@@ -351,32 +375,35 @@ function MarkdownBody({ body }: { body: string }) {
             );
           },
           img: ({ src, alt }) => (
-            <figure className="my-9">
+            <figure className="my-7">
               <img
                 src={src}
                 alt={alt ?? ''}
-                className="max-h-[75vh] w-full rounded-[1.5rem] object-contain"
+                loading="lazy"
+                className="mx-auto max-h-[75vh] w-full object-contain"
               />
               {alt && (
-                <figcaption className="mt-3 text-center font-serif text-sm italic text-stone-500">
+                <figcaption className="mt-2 font-serif text-sm italic text-stone-500">
                   {alt}
                 </figcaption>
               )}
             </figure>
           ),
           ul: ({ children }) => (
-            <ul className="mb-7 list-disc space-y-2 pl-7 font-serif text-[19px] leading-8 text-stone-800 sm:text-[21px]">
+            <ul className="mb-6 list-disc space-y-2 pl-6 font-serif text-[18px] leading-8 text-stone-800 sm:text-[20px]">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="mb-7 list-decimal space-y-2 pl-7 font-serif text-[19px] leading-8 text-stone-800 sm:text-[21px]">
+            <ol className="mb-6 list-decimal space-y-2 pl-6 font-serif text-[18px] leading-8 text-stone-800 sm:text-[20px]">
               {children}
             </ol>
           ),
-          hr: () => <hr className="my-12 border-0 border-t border-stone-200" />,
+          hr: () => (
+            <hr className="my-9 border-0 border-t border-stone-200" />
+          ),
           code: ({ children }) => (
-            <code className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[0.85em]">
+            <code className="bg-stone-100 px-1 py-0.5 font-mono text-[0.85em]">
               {children}
             </code>
           ),
@@ -390,22 +417,48 @@ function MarkdownBody({ body }: { body: string }) {
 
 function getLinkPreviewData(item: FlowItem) {
   const meta = item.metadata ?? {};
-  const lp = (meta.link_preview && typeof meta.link_preview === 'object'
-    ? meta.link_preview
-    : null) as Record<string, unknown> | null;
+
+  const lp = (
+    meta.link_preview && typeof meta.link_preview === 'object'
+      ? meta.link_preview
+      : null
+  ) as Record<string, unknown> | null;
 
   const candidateUrl =
     (lp && getMetadataString(lp, 'url')) ||
-    (item.source_url && !item.source_url.includes('youtube.com') && !item.source_url.includes('youtu.be')
+    (item.source_url &&
+    !item.source_url.includes('youtube.com') &&
+    !item.source_url.includes('youtu.be')
       ? item.source_url
       : null);
 
   if (!candidateUrl) return null;
 
-  const site = (lp && getMetadataString(lp, 'site_name')) || getSiteName(item);
-  const title = (lp && getMetadataString(lp, 'title')) || (item.title !== candidateUrl ? item.title : null) || site;
-  const description = (lp && getMetadataString(lp, 'description')) || getMetadataString(meta, 'description');
-  const image = (lp && getMetadataString(lp, 'image')) || getMetadataString(meta, 'image');
+  let hostname = '';
+
+  try {
+    hostname = new URL(candidateUrl).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+
+  const site =
+    (lp && getMetadataString(lp, 'site_name')) ||
+    hostname ||
+    getSiteName(item);
+
+  const title =
+    (lp && getMetadataString(lp, 'title')) ||
+    (item.title !== candidateUrl ? item.title : null) ||
+    site;
+
+  const description =
+    (lp && getMetadataString(lp, 'description')) ||
+    getMetadataString(meta, 'description');
+
+  const image =
+    (lp && getMetadataString(lp, 'image')) ||
+    getMetadataString(meta, 'image');
 
   return {
     url: candidateUrl,
@@ -416,16 +469,13 @@ function getLinkPreviewData(item: FlowItem) {
   };
 }
 
-/**
- * Универсальный стек медиа и ссылок. 
- * Поддерживает массивы изображений, множество ссылок, YouTube и текстовое тело.
- */
 function FlowMediaStack({ item }: { item: FlowItem }) {
   const videoId = getYouTubeVideoId(item);
   const dedicatedImages = getDedicatedImages(item);
-  
+
   const linkPreviews = (() => {
     const metadata = item.metadata ?? {};
+
     const raw = Array.isArray(metadata.link_previews)
       ? metadata.link_previews
       : metadata.link_preview
@@ -441,16 +491,23 @@ function FlowMediaStack({ item }: { item: FlowItem }) {
       )
       .map((preview) => {
         const url = getMetadataString(preview, 'url');
+
         if (!url) return null;
+
+        let hostname: string;
+
+        try {
+          hostname = new URL(url).hostname.replace(/^www\./, '');
+        } catch {
+          return null;
+        }
 
         return {
           url,
           site:
-            getMetadataString(preview, 'site_name') ||
-            getSiteName(item),
+            getMetadataString(preview, 'site_name') || hostname,
           title:
-            getMetadataString(preview, 'title') ||
-            url,
+            getMetadataString(preview, 'title') || hostname,
           description:
             getMetadataString(preview, 'description'),
           image:
@@ -464,10 +521,12 @@ function FlowMediaStack({ item }: { item: FlowItem }) {
 
     if (previews.length === 0) {
       const legacy = getLinkPreviewData(item);
+
       if (legacy) previews.push(legacy);
     }
 
     const seen = new Set<string>();
+
     return previews.filter((preview) => {
       if (seen.has(preview.url)) return false;
       seen.add(preview.url);
@@ -480,11 +539,10 @@ function FlowMediaStack({ item }: { item: FlowItem }) {
     (item.type === 'photo' ? item.title : null);
 
   return (
-    <div className="space-y-6">
-      {/* 1. YouTube плеер (если обнаружен video_id) */}
+    <div className="space-y-7">
       {videoId && (
-        <div className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm">
-          <div className="aspect-video w-full bg-black">
+        <div className="overflow-hidden bg-black">
+          <div className="aspect-video">
             <iframe
               src={`https://www.youtube-nocookie.com/embed/${videoId}`}
               title={item.title || 'YouTube video'}
@@ -497,22 +555,39 @@ function FlowMediaStack({ item }: { item: FlowItem }) {
         </div>
       )}
 
-      {/* 2. Все прикреплённые изображения */}
       {dedicatedImages.length > 0 && (
-        <div className="space-y-5">
+        <div
+          className={
+            dedicatedImages.length === 1
+              ? 'space-y-2'
+              : 'grid grid-cols-2 gap-2 sm:gap-3'
+          }
+        >
           {dedicatedImages.map((imageUrl, index) => (
             <figure
               key={`${imageUrl}-${index}`}
-              className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 p-4 shadow-sm"
+              className="min-w-0"
             >
-              <img
-                src={imageUrl}
-                alt={photoCaption || `Flow image ${index + 1}`}
-                loading={index === 0 ? 'eager' : 'lazy'}
-                className="mx-auto max-h-[78vh] w-full rounded-[1.5rem] object-contain"
-              />
+              <a
+                href={imageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block overflow-hidden bg-stone-100/70"
+              >
+                <img
+                  src={imageUrl}
+                  alt={photoCaption || `Image ${index + 1}`}
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                  className={
+                    dedicatedImages.length === 1
+                      ? 'mx-auto max-h-[78vh] w-full object-contain'
+                      : 'aspect-square h-full w-full object-cover'
+                  }
+                />
+              </a>
+
               {photoCaption && index === 0 && (
-                <figcaption className="mt-4 text-center font-serif text-sm italic text-stone-600 sm:text-base">
+                <figcaption className="mt-2 text-xs text-stone-500">
                   {photoCaption}
                 </figcaption>
               )}
@@ -521,87 +596,96 @@ function FlowMediaStack({ item }: { item: FlowItem }) {
         </div>
       )}
 
-      {/* 3. Все прикреплённые ссылки с OpenGraph */}
-      {linkPreviews.map((preview) => (
-        <div
-          key={preview.url}
-          className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/80 shadow-sm"
-        >
-          {preview.image && (
+      {linkPreviews.length > 0 && (
+        <div className="divide-y divide-stone-200 border-y border-stone-200">
+          {linkPreviews.map((preview) => (
             <a
+              key={preview.url}
               href={preview.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="group block aspect-[16/9] overflow-hidden bg-stone-100"
+              className="group flex min-w-0 items-center gap-3 py-4 sm:gap-5"
             >
-              <img
-                src={preview.image}
-                alt=""
-                loading="lazy"
-                className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.015]"
-              />
+              {preview.image && (
+                <img
+                  src={preview.image}
+                  alt=""
+                  loading="lazy"
+                  className="h-14 w-16 shrink-0 object-cover sm:h-16 sm:w-24"
+                />
+              )}
+
+              <span className="min-w-0 flex-1">
+                <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-stone-400">
+                  {preview.site}
+                </span>
+
+                <span className="mt-1 block break-words font-serif text-lg font-light leading-snug text-stone-900 transition-colors group-hover:text-stone-500 sm:text-xl">
+                  {preview.title}
+                </span>
+
+                {preview.description && (
+                  <span className="mt-1 line-clamp-2 block text-sm leading-relaxed text-stone-500">
+                    {preview.description}
+                  </span>
+                )}
+              </span>
+
+              <span
+                aria-hidden="true"
+                className="shrink-0 text-sm text-stone-400"
+              >
+                ↗
+              </span>
             </a>
-          )}
-
-          <div className="p-7 sm:p-9">
-            {preview.site && (
-              <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-stone-400">
-                {preview.site}
-              </div>
-            )}
-
-            <div className="mt-4 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl">
-              {preview.title}
-            </div>
-
-            {preview.description && (
-              <p className="mt-4 font-serif text-base leading-7 text-stone-600">
-                {preview.description}
-              </p>
-            )}
-
-            <a
-              href={preview.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-6 inline-flex rounded-full bg-stone-900 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition hover:bg-stone-700"
-            >
-              Open original ↗
-            </a>
-          </div>
+          ))}
         </div>
-      ))}
+      )}
 
-      {/* 4. Текстовое тело публикации */}
-      {item.body_md && <MarkdownBody body={item.body_md} />}
+      {item.body_md && (
+        <MarkdownBody body={item.body_md} />
+      )}
+
+      {!videoId &&
+        dedicatedImages.length === 0 &&
+        linkPreviews.length === 0 &&
+        !item.body_md && (
+          <p className="text-sm text-stone-400">
+            No content.
+          </p>
+        )}
     </div>
   );
 }
 
 function AIContextBlock({ context }: { context: AIContext | null }) {
-  if (!context || context.status !== 'ready' || !context.content) {
+  if (
+    !context ||
+    context.status !== 'ready' ||
+    !context.content
+  ) {
     return null;
   }
 
   return (
-    <section className="mt-12 border-t border-stone-200/90 pt-7 sm:mt-14 sm:pt-8">
-      <div className="mb-5 flex items-center justify-between gap-4">
+    <section className="mt-10 border-t border-stone-200 pt-6 sm:mt-12 sm:pt-7">
+      <div className="mb-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/90 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-stone-500">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">
             Context Architecture
           </span>
         </div>
 
         {context.model && (
-          <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-stone-400">
+          <div className="font-mono text-[9px] uppercase tracking-wider text-stone-400">
             {context.provider ? `${context.provider} · ` : ''}
             {context.model}
           </div>
         )}
       </div>
 
-      <div className="font-serif text-[16px] font-light leading-[1.8] text-stone-700 sm:text-[18px]">
+      <div className="font-serif text-base font-light leading-[1.8] text-stone-600 sm:text-lg">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
@@ -610,7 +694,7 @@ function AIContextBlock({ context }: { context: AIContext | null }) {
                 {children}
               </p>
             ),
-            hr: () => <hr className="my-5 border-stone-200/80" />,
+            hr: () => <hr className="my-5 border-stone-200" />,
             strong: ({ children }) => (
               <strong className="font-mono text-[11px] font-normal uppercase tracking-widest text-stone-500">
                 {children}
@@ -648,9 +732,7 @@ export default async function FlowItemPage({ params }: PageProps) {
 
   const item = data as FlowItem | null;
 
-  if (!item) {
-    notFound();
-  }
+  if (!item) notFound();
 
   const {
     data: contextData,
@@ -662,7 +744,10 @@ export default async function FlowItemPage({ params }: PageProps) {
     .maybeSingle();
 
   if (contextError) {
-    console.warn('[flow/item] AI context unavailable:', contextError);
+    console.warn(
+      '[flow/item] AI context unavailable:',
+      contextError,
+    );
   }
 
   let context = (contextData as AIContext | null) ?? null;
@@ -690,40 +775,44 @@ export default async function FlowItemPage({ params }: PageProps) {
       if (generated?.content) {
         const now = new Date().toISOString();
 
-        const { data: savedContext, error: saveError } = await supabase
-          .from('flow_ai_context')
-          .upsert(
-            {
+        const { data: savedContext, error: saveError } =
+          await supabase
+            .from('flow_ai_context')
+            .upsert(
+              {
+                item_id: item.id,
+                content: generated.content,
+                model: generated.model,
+                provider: generated.provider || 'deepseek',
+                status: 'ready',
+                generated_at: now,
+                updated_at: now,
+              },
+              { onConflict: 'item_id' },
+            )
+            .select(
+              'id,item_id,content,model,provider,status,generated_at',
+            )
+            .maybeSingle();
+
+        if (saveError) {
+          console.warn(
+            '[flow/item] Could not save AI context:',
+            saveError,
+          );
+        }
+
+        context = savedContext
+          ? (savedContext as AIContext)
+          : {
+              id: 'generated',
               item_id: item.id,
               content: generated.content,
               model: generated.model,
               provider: generated.provider || 'deepseek',
               status: 'ready',
               generated_at: now,
-              updated_at: now,
-            },
-            { onConflict: 'item_id' },
-          )
-          .select('id,item_id,content,model,provider,status,generated_at')
-          .maybeSingle();
-
-        if (saveError) {
-          console.warn('[flow/item] Could not save AI context:', saveError);
-        }
-
-        if (savedContext) {
-          context = savedContext as AIContext;
-        } else {
-          context = {
-            id: 'generated',
-            item_id: item.id,
-            content: generated.content,
-            model: generated.model,
-            provider: generated.provider || 'deepseek',
-            status: 'ready',
-            generated_at: now,
-          };
-        }
+            };
       }
     } catch (genError) {
       console.warn(
@@ -734,10 +823,12 @@ export default async function FlowItemPage({ params }: PageProps) {
   }
 
   const siteUrl = 'https://www.merkurov.love';
-  const itemUrl = `${siteUrl}/flow/${encodeURIComponent(decodedSlug)}`;
+  const itemUrl =
+    `${siteUrl}/flow/${encodeURIComponent(decodedSlug)}`;
   const itemTitle = item.title?.trim() || 'Flow';
   const itemDescription = getDescription(item);
-  const itemImage = getMetadataImage(item) || `${itemUrl}/opengraph-image`;
+  const itemImage =
+    getMetadataImage(item) || `${itemUrl}/opengraph-image`;
 
   const flowArticleSchema = {
     '@context': 'https://schema.org',
@@ -792,13 +883,18 @@ export default async function FlowItemPage({ params }: PageProps) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(flowArticleSchema) }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(flowArticleSchema),
+        }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbSchema),
+        }}
       />
-      <main className="min-h-screen bg-[#FAF8F5] px-5 pb-24 pt-28 text-stone-900 sm:px-8 sm:pt-36">
+
+      <main className="min-h-screen bg-white px-5 pb-24 pt-28 text-stone-900 sm:px-8 sm:pt-36">
         <article className="mx-auto max-w-3xl">
           <Link
             href="/flow"
@@ -807,7 +903,7 @@ export default async function FlowItemPage({ params }: PageProps) {
             ← Flow
           </Link>
 
-          <div className="mt-10 flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+          <div className="mt-8 flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
             <span>{item.type}</span>
 
             {item.published_at && (
@@ -818,11 +914,13 @@ export default async function FlowItemPage({ params }: PageProps) {
             )}
           </div>
 
-          <div className="mt-8">
+          <div className="mt-7">
             <FlowMediaStack item={item} />
           </div>
 
-          {item.type !== 'photo' && <AIContextBlock context={context} />}
+          {item.type !== 'photo' && (
+            <AIContextBlock context={context} />
+          )}
         </article>
       </main>
     </>

@@ -1,45 +1,112 @@
-export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 
-// Пример: сохраняет файл в /public/uploads (или интегрируйте с Supabase Storage/S3)
-import path from 'path';
-import fs from 'fs/promises';
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const BUCKET = 'media';
+
+const MIME_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/avif': 'avif',
+};
 
 export async function POST(req: NextRequest) {
-  // Проверка аутентификации через Supabase
   try {
-    await requireAdminFromRequest(req as Request);
-  } catch (e) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-  }
+    await requireAdminFromRequest(req);
 
-  const formData = await req.formData();
-  const file = formData.get('image') as File;
-  if (!file) {
-    return NextResponse.json({ success: false, error: 'No file uploaded' }, { status: 400 });
-  }
+    const formData = await req.formData();
+    const file = formData.get('image');
 
-  // Валидация типа файла
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  if (!allowedTypes.includes(file.type)) {
-    return NextResponse.json({ success: false, error: 'Invalid file type' }, { status: 400 });
-  }
+    if (!(file instanceof File)) {
+      return NextResponse.json(
+        { success: false, error: 'No image uploaded.' },
+        { status: 400 },
+      );
+    }
 
-  // Ограничение размера файла (5MB)
-  const maxSize = 5 * 1024 * 1024;
-  if (file.size > maxSize) {
-    return NextResponse.json({ success: false, error: 'File too large' }, { status: 400 });
-  }
+    const extension = MIME_EXTENSIONS[file.type];
 
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  const filename = `${Date.now()}-${file.name}`.replace(/\s+/g, '-');
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  const filePath = path.join(UPLOAD_DIR, filename);
-  await fs.writeFile(filePath, buffer);
-  const url = `/uploads/${filename}`;
-  return NextResponse.json({ success: true, file: { url } });
+    if (!extension) {
+      return NextResponse.json(
+        { success: false, error: 'Unsupported image type.' },
+        { status: 400 },
+      );
+    }
+
+    if (file.size === 0 || file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Image must be smaller than 10 MB.',
+        },
+        { status: 400 },
+      );
+    }
+
+    const supabase = createClient({ useServiceRole: true });
+
+    const storageKey =
+      `flow/uploads/${crypto.randomUUID()}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(storageKey, await file.arrayBuffer(), {
+        contentType: file.type,
+        cacheControl: '31536000',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('[flow-upload] Storage error:', uploadError);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Storage upload failed: ${uploadError.message}`,
+        },
+        { status: 500 },
+      );
+    }
+
+    const { data } = supabase.storage
+      .from(BUCKET)
+      .getPublicUrl(storageKey);
+
+    if (!data.publicUrl) {
+      await supabase.storage.from(BUCKET).remove([storageKey]);
+
+      return NextResponse.json(
+        { success: false, error: 'Could not create public image URL.' },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      file: {
+        url: data.publicUrl,
+        path: storageKey,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+      },
+    });
+  } catch (error) {
+    console.error('[flow-upload] Error:', error);
+
+    const message =
+      error instanceof Error ? error.message : 'Upload failed.';
+
+    return NextResponse.json(
+      { success: false, error: message },
+      { status: 401 },
+    );
+  }
 }
