@@ -2,7 +2,7 @@
 # merkurov.love — Современный блог/портал с интеграциями
 
 Многофункциональный сайт на Next.js 14 с поддержкой:
-- 🦋 Bluesky (AT Protocol) интеграции
+- 🦋 Bluesky (AT Protocol) ссс
 - Medium RSS-ленты
 - YouTube Shorts
 - Проектов с Editor.js (Notion-style)
