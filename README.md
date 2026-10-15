@@ -7,7 +7,7 @@
 - YouTube Shorts
 - Проектов с Editor.js (Notion-style)
 - Адаптивного дизайна на TailwindCSS
-- Supabase Auth, Prisma ORM, Sentry, Supabase Storage
+- Supabase Auth,  Supabase Storage
 
 ## 🚀 Быстрый старт
 
