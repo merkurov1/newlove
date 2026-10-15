@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import MediaLinksPanel from '@/components/admin/MediaLinksPanel';
 import SafeImage from '@/components/SafeImage';
-import { useNotifications } from '@/components/ui/Notifications';
 
 const BUCKET_NAME = 'media';
 
