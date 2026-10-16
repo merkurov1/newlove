@@ -126,6 +126,24 @@ function collectImageUrls(
     );
   }
 
+  const previews = Array.isArray(metadata.link_previews)
+    ? metadata.link_previews
+    : Array.isArray(metadata.linkPreviews)
+      ? metadata.linkPreviews
+      : [];
+
+  for (const p of previews) {
+    if (isRecord(p)) {
+      candidates.push(
+        p.image,
+        p.image_url,
+        p.imageUrl,
+        p.thumbnail,
+        p.thumbnail_url
+      );
+    }
+  }
+
   const images = metadata.images;
 
   if (Array.isArray(images)) {
@@ -223,7 +241,8 @@ async function formatTelegramMessage(
   title: string | null | undefined,
   bodyMd: string | null | undefined,
   flowUrl: string,
-  lang = 'ru'
+  lang = 'ru',
+  sourceUrl?: string | null
 ): Promise<string> {
   const cleanTitle = (title || '').trim();
   const rawBody = (bodyMd || '').trim();
@@ -233,17 +252,30 @@ async function formatTelegramMessage(
     .replace(/[#*_`~]/g, '')
     .trim();
 
+  const cleanSourceUrl = (sourceUrl || '').trim();
+  const hasSourceUrl = Boolean(cleanSourceUrl && cleanSourceUrl !== flowUrl);
+
   const isRedundantTitle =
     !cleanTitle ||
     cleanTitle.toLowerCase() === cleanBody.toLowerCase() ||
     cleanBody.toLowerCase().startsWith(cleanTitle.toLowerCase());
 
-  let rawContent = (!isRedundantTitle && cleanTitle)
-    ? `<b>${escapeHtml(cleanTitle)}</b>\n\n`
-    : '';
+  let rawContent = '';
+
+  if (!isRedundantTitle && cleanTitle) {
+    if (hasSourceUrl) {
+      rawContent += `<b><a href="${escapeHtml(cleanSourceUrl)}">${escapeHtml(cleanTitle)}</a></b>\n\n`;
+    } else {
+      rawContent += `<b>${escapeHtml(cleanTitle)}</b>\n\n`;
+    }
+  }
 
   if (cleanBody) {
     rawContent += escapeHtml(cleanBody);
+  }
+
+  if (hasSourceUrl && !cleanBody.includes(cleanSourceUrl)) {
+    rawContent += (rawContent ? '\n\n' : '') + `<a href="${escapeHtml(cleanSourceUrl)}">${escapeHtml(cleanSourceUrl)}</a>`;
   }
 
   rawContent += `\n\n${escapeHtml(flowUrl)}`;
@@ -332,12 +364,19 @@ async function publishTelegram(
       ? 'osiris'
       : 'default';
 
+  const rawSourceUrl =
+    item.source_url ||
+    (isRecord(item.metadata?.link_preview) ? (item.metadata.link_preview as any).url : null) ||
+    (isRecord(item.metadata?.linkPreview) ? (item.metadata.linkPreview as any).url : null);
+  const sourceUrl = normalizeUrl(rawSourceUrl);
+
   const flowUrl = getFlowUrl(item.slug);
   const formattedText = await formatTelegramMessage(
     item.title,
     item.body_md,
     flowUrl,
-    item.lang || 'ru'
+    item.lang || 'ru',
+    sourceUrl
   );
 
   const photoUrl = imageUrls[0] ?? null;

@@ -148,6 +148,8 @@ async function uploadImage(
     const response = await fetch(url, {
       signal: AbortSignal.timeout(12000),
       headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         Accept: 'image/avif,image/webp,image/png,image/jpeg,image/gif,*/*;q=0.5',
       },
     });
@@ -293,23 +295,30 @@ export async function publishToBluesky({
       );
 
     const isVideo = postType === 'video' || Boolean(youtube);
-    const isLink = postType === 'link';
+    const externalLink =
+      validUrl(firstPreview?.url) ||
+      validUrl(source_url);
 
-    // Real Flow attachments take priority over an Open Graph thumbnail.
-    // A video or link keeps its own external preview card.
+    // Explicit user photo uploads (from composer image picker) vs automatic link OG thumbnails
+    const hasExplicitUserImages = Boolean(
+      (Array.isArray(metadata?.images) && (metadata?.images as any[]).length > 0) ||
+      metadata?.public_url ||
+      metadata?.image_url
+    );
+
+    // If an external link is present and no explicit photos were attached by user,
+    // Bluesky should display an external rich link card instead of raw image blobs.
     const useImageEmbed =
-      images.length > 0 && !isVideo && !isLink;
+      images.length > 0 && !isVideo && !(externalLink && !hasExplicitUserImages);
 
     let cardUrl: string | null;
 
     if (isVideo) {
       cardUrl = youtube;
-    } else if (isLink) {
-      cardUrl =
-        validUrl(firstPreview?.url) ||
-        validUrl(source_url);
+    } else if (externalLink) {
+      cardUrl = externalLink;
     } else {
-      cardUrl = pageUrl || validUrl(source_url);
+      cardUrl = pageUrl;
     }
 
     const isRedundantTitle =
@@ -324,12 +333,16 @@ export async function publishToBluesky({
 
     let postText = textParts.join('\n\n');
 
-    // With native image attachments, include the Flow link in the text.
-    // For external cards, the card itself is the destination.
+    // If user uploaded images and also provided an external link, append external link to text
+    if (useImageEmbed && externalLink && !postText.includes(externalLink)) {
+      postText = postText ? postText + '\n\n' + externalLink : externalLink;
+    }
+
+    // With native image attachments or external card, append Flow link if space permits
     if (
-      (useImageEmbed || !cardUrl) &&
       pageUrl &&
-      !postText.includes(pageUrl)
+      !postText.includes(pageUrl) &&
+      (useImageEmbed || !cardUrl || cardUrl !== pageUrl)
     ) {
       postText = postText
         ? postText + '\n\n' + pageUrl
@@ -337,7 +350,7 @@ export async function publishToBluesky({
     }
 
     const finalText = truncateText(
-      postText || 'Flow | Anton Merkurov',
+      postText || cleanTitle || 'Flow | Anton Merkurov',
     );
 
     const richText = new RichText({ text: finalText });
@@ -384,7 +397,7 @@ export async function publishToBluesky({
       const youtubeMeta = metadata?.youtube as any;
 
       const cardTitle = (
-        (isLink && firstPreview?.title) ||
+        firstPreview?.title ||
         (isVideo && youtubeMeta?.title) ||
         cleanTitle ||
         cleanBody.slice(0, 100) ||
@@ -392,7 +405,7 @@ export async function publishToBluesky({
       ).slice(0, 200);
 
       const cardDescription = (
-        (isLink && firstPreview?.description) ||
+        firstPreview?.description ||
         description ||
         cleanBody ||
         (isVideo
@@ -400,12 +413,13 @@ export async function publishToBluesky({
           : 'Read on merkurov.love.')
       ).slice(0, 300);
 
-      const thumbnailUrl = isLink
-        ? validUrl(firstPreview?.image)
-        : isVideo
+      const thumbnailUrl =
+        validUrl(firstPreview?.image) ||
+        (isVideo
           ? validUrl(youtubeMeta?.thumbnail_url) ||
             validUrl(youtubeMeta?.thumbnail)
-          : null;
+          : null) ||
+        (images.length > 0 ? images[0] : null);
 
       let thumb: any = null;
 

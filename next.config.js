@@ -117,6 +117,18 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: '*.medium.com', // Для всех поддоменов Medium
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'medium.com', // Для изображений Medium
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'example.com', // Для тестовых изображений
         port: '',
         pathname: '/**',

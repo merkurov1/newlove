@@ -15,6 +15,8 @@ import {
 } from '@/components/flow/new-post/utils';
 import { parseUrl } from '../parseUrl';
 import { crosspostFlowItem } from '../crosspost';
+import { fetchLinkPreview } from '@/lib/linkPreview';
+import { publishToBluesky } from '@/lib/bluesky';
 
 describe('Flow Post Multi-Media Utilities', () => {
   describe('YouTube URL recognition and extraction', () => {
@@ -91,6 +93,124 @@ describe('Flow Post Multi-Media Utilities', () => {
 
       global.fetch = originalFetch;
     });
+
+    it('extracts rich metadata from medium.com article links', async () => {
+      const originalFetch = global.fetch;
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        url: 'https://merkurov.medium.com/russia-is-cutting-off-the-world-7b9e42be7031',
+        text: async () => `
+          <html>
+            <head>
+              <title>Medium</title>
+              <meta property="og:title" content="Russia Is Cutting Off the World" />
+              <meta property="og:description" content="The Kremlin's war on messengers marks a new phase of digital isolation" />
+              <meta property="og:image" content="https://miro.medium.com/v2/resize:fit:1200/1*zEC4BgcdsCfxy26u7SPYUg.jpeg" />
+              <meta property="og:site_name" content="Medium" />
+            </head>
+            <body>
+              <article>
+                <h1>Russia Is Cutting Off the World</h1>
+              </article>
+            </body>
+          </html>
+        `,
+      });
+
+      const result = await parseUrl('https://merkurov.medium.com/russia-is-cutting-off-the-world-7b9e42be7031');
+      expect(result.isYouTube).toBe(false);
+      expect(result.site_name).toBe('Medium');
+      expect(result.title).toBe('Russia Is Cutting Off the World');
+      expect(result.description).toContain('Kremlin');
+      expect(result.image).toBe('https://miro.medium.com/v2/resize:fit:1200/1*zEC4BgcdsCfxy26u7SPYUg.jpeg');
+      expect(result.favicon).toBe('https://medium.com/favicon.ico');
+
+      global.fetch = originalFetch;
+    });
+
+    it('falls back to article h1 when Medium title is generic Medium', async () => {
+      const originalFetch = global.fetch;
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        text: async () => `
+          <html>
+            <head>
+              <title>Medium</title>
+              <meta property="og:site_name" content="Medium" />
+            </head>
+            <body>
+              <article>
+                <h1>Exclusive Headline from Medium Article</h1>
+                <p>Article body content...</p>
+              </article>
+            </body>
+          </html>
+        `,
+      });
+
+      const result = await parseUrl('https://medium.com/@merkurov/test-post-12345');
+      expect(result.title).toBe('Exclusive Headline from Medium Article');
+      expect(result.site_name).toBe('Medium');
+
+      global.fetch = originalFetch;
+    });
+
+    it('retries with bot user-agent if initial fetch receives 403 on medium.com', async () => {
+      const originalFetch = global.fetch;
+      global.fetch = jest
+        .fn()
+        // First attempt: blocked by 403
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 403,
+        })
+        // Second attempt: social bot fallback succeeds
+        .mockResolvedValueOnce({
+          ok: true,
+          text: async () => `
+            <html>
+              <head>
+                <meta property="og:title" content="Recovered via Bot UA" />
+                <meta property="og:description" content="Social bot allowed through WAF" />
+                <meta property="og:image" content="https://miro.medium.com/v2/resize:fit:1200/bot-image.jpeg" />
+                <meta property="og:site_name" content="Medium" />
+              </head>
+            </html>
+          `,
+        });
+
+      const result = await parseUrl('https://medium.com/@merkurov/protected-post');
+      expect(result.title).toBe('Recovered via Bot UA');
+      expect(result.image).toBe('https://miro.medium.com/v2/resize:fit:1200/bot-image.jpeg');
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+
+      global.fetch = originalFetch;
+    });
+  });
+
+  describe('fetchLinkPreview', () => {
+    it('returns preview data for Medium URLs', async () => {
+      const originalFetch = global.fetch;
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        text: async () => `
+          <html>
+            <head>
+              <meta property="og:title" content="Medium Link Preview Title" />
+              <meta property="og:description" content="Link preview description" />
+              <meta property="og:image" content="https://miro.medium.com/preview.jpg" />
+            </head>
+          </html>
+        `,
+      });
+
+      const preview = await fetchLinkPreview('https://merkurov.medium.com/preview-test');
+      expect(preview).not.toBeNull();
+      expect(preview?.title).toBe('Medium Link Preview Title');
+      expect(preview?.image).toBe('https://miro.medium.com/preview.jpg');
+
+      global.fetch = originalFetch;
+    });
   });
 
   describe('Crossposting Engine (Pierrot / Osiris / Bluesky)', () => {
@@ -114,6 +234,36 @@ describe('Flow Post Multi-Media Utilities', () => {
       const result = await crosspostFlowItem(payload);
       expect(result).toBeDefined();
       expect(typeof result).toBe('object');
+    });
+
+    it('preserves medium.com source_url when crossposting to Bluesky', async () => {
+      const mediumUrl = 'https://merkurov.medium.com/russia-is-cutting-off-the-world-7b9e42be7031';
+      const payload = {
+        id: 'flow-medium-item-1',
+        title: 'Russia Is Cutting Off the World',
+        body_md: 'Short comment on the article.',
+        source_url: mediumUrl,
+        slug: 'russia-is-cutting-off-the-world',
+        type: 'article',
+        metadata: {
+          link_preview: {
+            url: mediumUrl,
+            title: 'Russia Is Cutting Off the World',
+            description: 'The Kremlin’s war on messengers',
+            image: 'https://miro.medium.com/v2/resize:fit:1200/1*zEC4BgcdsCfxy26u7SPYUg.jpeg',
+            site_name: 'Medium',
+          },
+        },
+      };
+
+      await crosspostFlowItem(payload);
+
+      expect(publishToBluesky).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source_url: mediumUrl,
+          title: 'Russia Is Cutting Off the World',
+        })
+      );
     });
   });
 });
