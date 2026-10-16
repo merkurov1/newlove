@@ -5,24 +5,39 @@ import { useState } from "react";
 
 type IssueLang = "ru" | "en";
 
+type IssueRecord = {
+  id: string;
+  slug: string;
+  title?: string;
+  number?: number;
+  lang?: IssueLang;
+  status?: string;
+  published?: boolean;
+  sent_at?: string | null;
+  html_web?: string | null;
+  html_email?: string | null;
+  text_email?: string | null;
+};
+
 type IssueResponse = {
   ok?: boolean;
   error?: string;
-  issue?: {
-    id: string;
-    slug: string;
-    title?: string;
-    number?: number;
-    lang?: IssueLang;
-    status?: string;
-    html_web?: string | null;
-    html_email?: string | null;
-    text_email?: string | null;
-  };
+  issue?: IssueRecord;
+  jobId?: string;
+  jobStatus?: string;
+  activeSubscribers?: number;
+  queued?: boolean;
+  alreadyQueued?: boolean;
+  alreadyPublished?: boolean;
+  sent_at?: string | null;
+  message?: string;
 };
 
 function toLocalInputValue(date: Date): string {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  const local = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60_000,
+  );
+
   return local.toISOString().slice(0, 16);
 }
 
@@ -35,9 +50,12 @@ export default function FlowIssueAdmin() {
 
   const [loading, setLoading] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [sending, setSending] = useState(false);
+
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [issue, setIssue] = useState<IssueResponse["issue"] | null>(null);
+  const [issue, setIssue] = useState<IssueRecord | null>(null);
+  const [jobId, setJobId] = useState("");
   const [previewMode, setPreviewMode] = useState<
     "web" | "email" | "text"
   >("web");
@@ -47,6 +65,7 @@ export default function FlowIssueAdmin() {
     setError("");
     setMessage("");
     setIssue(null);
+    setJobId("");
 
     try {
       const response = await fetch("/api/admin/flow-issues", {
@@ -72,7 +91,9 @@ export default function FlowIssueAdmin() {
       }
 
       setIssue(data.issue);
-      setMessage("Черновик выпуска создан. Проверьте содержимое перед публикацией.");
+      setMessage(
+        "Черновик создан. Проверьте веб-версию и письмо перед отправкой.",
+      );
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Неизвестная ошибка.",
@@ -86,7 +107,7 @@ export default function FlowIssueAdmin() {
     if (!issue?.id) return;
 
     const confirmed = window.confirm(
-      "Опубликовать выпуск? Он станет доступен читателям на сайте. Рассылка не запускается.",
+      "Опубликовать выпуск? Он станет доступен на сайте. Письма отправлены не будут.",
     );
 
     if (!confirmed) return;
@@ -119,17 +140,90 @@ export default function FlowIssueAdmin() {
               ...current,
               ...data.issue,
               status: "published",
+              published: true,
             }
           : current,
       );
 
-      setMessage("Выпуск опубликован. Рассылка не отправлялась.");
+      setMessage("Выпуск опубликован. Рассылка не запускалась.");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Неизвестная ошибка.",
       );
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function sendIssue() {
+    if (!issue?.id || sending) return;
+
+    const confirmed = window.confirm(
+      "Отправить этот выпуск всем активным подписчикам?\n\n" +
+        "Выпуск будет опубликован автоматически, если ещё не опубликован. " +
+        "Повторная отправка уже разосланного выпуска заблокирована.",
+    );
+
+    if (!confirmed) return;
+
+    setSending(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/flow-issues", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: issue.id,
+          action: "send",
+        }),
+      });
+
+      const data = (await response.json()) as IssueResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error || "Не удалось запустить рассылку.");
+      }
+
+      if (!data.queued || !data.jobId) {
+        throw new Error(
+          "Сервер не подтвердил создание или наличие задачи рассылки.",
+        );
+      }
+
+      setJobId(data.jobId);
+
+      setIssue((current) =>
+        current
+          ? {
+              ...current,
+              ...data.issue,
+              status: "published",
+              published: true,
+            }
+          : current,
+      );
+
+      if (data.alreadyQueued) {
+        setMessage(
+          `Выпуск уже находится в очереди. Задача: ${data.jobId}.`,
+        );
+      } else {
+        setMessage(
+          `Выпуск опубликован и поставлен в очередь. ` +
+            `Активных подписчиков: ${data.activeSubscribers ?? "—"}. ` +
+            `Задача: ${data.jobId}.`,
+        );
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Ошибка отправки.",
+      );
+    } finally {
+      setSending(false);
     }
   }
 
@@ -141,6 +235,7 @@ export default function FlowIssueAdmin() {
         : issue?.text_email;
 
   const isPublished = issue?.status === "published";
+  const alreadySent = Boolean(issue?.sent_at);
 
   return (
     <main className="mx-auto w-full max-w-6xl px-5 py-10 text-[#1C1A1B]">
@@ -154,8 +249,9 @@ export default function FlowIssueAdmin() {
         </h1>
 
         <p className="mt-4 max-w-2xl text-sm leading-6 text-[#1C1A1B]/65">
-          Соберите выпуск из опубликованных материалов Flow, проверьте
-          веб- и email-версии, затем опубликуйте его отдельно от рассылки.
+          Соберите выпуск из опубликованных материалов Flow.
+          Проверьте веб- и email-версии, затем опубликуйте выпуск
+          или отправьте его подписчикам.
         </p>
       </header>
 
@@ -197,8 +293,8 @@ export default function FlowIssueAdmin() {
             />
 
             <span className="mt-2 block text-xs leading-5 text-[#1C1A1B]/55">
-              Можно оставить пустым: сервер определит начало периода
-              по предыдущему опубликованному выпуску этого языка.
+              Если оставить пустым, сервер определит начало периода
+              по предыдущему выпуску этого языка.
             </span>
           </label>
 
@@ -221,14 +317,15 @@ export default function FlowIssueAdmin() {
           <button
             type="button"
             onClick={createIssue}
-            disabled={loading || publishing || !periodEnd}
+            disabled={loading || publishing || sending || !periodEnd}
             className="inline-flex min-h-12 items-center justify-center bg-[#990F3D] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "Собираю выпуск…" : "Собрать выпуск"}
           </button>
 
           <p className="text-xs leading-5 text-[#1C1A1B]/55">
-            Создаётся черновик. Публикация и отправка писем не запускаются.
+            Сначала создаётся черновик. Вы сможете проверить все версии
+            до публикации и отправки.
           </p>
         </div>
       </section>
@@ -248,6 +345,12 @@ export default function FlowIssueAdmin() {
           className="mb-6 border-l-2 border-[#990F3D] bg-[#FFF1E5] px-4 py-3 text-sm"
         >
           {message}
+
+          {jobId && (
+            <p className="mt-2 break-all font-mono text-xs">
+              Job ID: {jobId}
+            </p>
+          )}
         </div>
       )}
 
@@ -256,7 +359,11 @@ export default function FlowIssueAdmin() {
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
               <p className="mb-2 font-mono text-xs uppercase tracking-wider text-[#990F3D]">
-                {isPublished ? "Опубликованный выпуск" : "Черновик"}
+                {alreadySent
+                  ? "Выпуск отправлен"
+                  : isPublished
+                    ? "Опубликованный выпуск"
+                    : "Черновик"}
                 {typeof issue.number === "number"
                   ? ` / № ${issue.number}`
                   : ""}
@@ -285,12 +392,30 @@ export default function FlowIssueAdmin() {
                 <button
                   type="button"
                   onClick={publishIssue}
-                  disabled={publishing || loading}
+                  disabled={publishing || loading || sending}
                   className="inline-flex min-h-10 items-center bg-[#1C1A1B] px-4 py-2 text-sm text-white hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {publishing ? "Публикую…" : "Опубликовать"}
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={sendIssue}
+                disabled={
+                  sending ||
+                  publishing ||
+                  loading ||
+                  alreadySent
+                }
+                className="inline-flex min-h-10 items-center bg-[#990F3D] px-4 py-2 text-sm text-white hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sending
+                  ? "Ставлю в очередь…"
+                  : alreadySent
+                    ? "Уже отправлен"
+                    : "Отправить подписчикам"}
+              </button>
             </div>
           </div>
 
@@ -341,8 +466,10 @@ export default function FlowIssueAdmin() {
           </div>
 
           <p className="mt-4 text-xs leading-5 text-[#1C1A1B]/55">
-            Публикация делает выпуск доступным на сайте. Отправка рассылки —
-            отдельная операция и здесь не выполняется.
+            Отправка публикует выпуск при необходимости и создаёт задачу
+            в очереди. Worker отправляет письма активным подписчикам,
+            записывает результаты и добавляет ссылку отписки.
+            Задача в очереди ещё не означает, что письма доставлены.
           </p>
         </section>
       )}

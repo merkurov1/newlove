@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, Image as ImageIcon, Video, Link2, Trash2 } from "lucide-react";
+import { Image as ImageIcon, X } from "lucide-react";
 import {
   ImagePreview,
   LinkPreviewCard,
@@ -13,8 +13,6 @@ import { useNewPostModal } from "./new-post/useNewPostModal";
 import type {
   NewPostModalProps,
   SaveState,
-  FlowImageAttachment,
-  FlowLinkAttachment,
 } from "./new-post/types";
 
 function SaveStatus({
@@ -27,58 +25,36 @@ function SaveStatus({
   if (error) {
     return (
       <span
-        className="max-w-[280px] truncate text-[11px] font-mono tracking-wide text-[#AD6B5E]"
+        className="max-w-[220px] truncate text-xs text-[#A45E50]"
         title={error}
+        role="status"
       >
         {error}
       </span>
     );
   }
 
-  switch (state) {
-    case "creating":
-    case "loading":
-      return (
-        <span className="text-[11px] font-mono tracking-wide text-[#A49A8C]">
-          Loading…
-        </span>
-      );
+  const labels: Partial<Record<SaveState, string>> = {
+    creating: "Opening…",
+    loading: "Loading…",
+    saving: "Saving…",
+    publishing: "Posting…",
+    clearing: "Clearing…",
+    saved: "Saved",
+  };
 
-    case "saving":
-      return (
-        <span className="text-[11px] font-mono tracking-wide text-[#A49A8C]">
-          Saving…
-        </span>
-      );
+  const label = labels[state];
+  if (!label) return null;
 
-    case "publishing":
-      return (
-        <span className="text-[11px] font-mono tracking-wide text-[#756D60] animate-pulse">
-          Publishing & Crossposting…
-        </span>
-      );
-
-    case "clearing":
-      return (
-        <span className="text-[11px] font-mono tracking-wide text-[#A49A8C]">
-          Clearing…
-        </span>
-      );
-
-    case "saved":
-      return (
-        <span className="flex items-center gap-1.5 text-[11px] font-mono tracking-wide text-[#948A7C]">
-          <span>Saved</span>
-          <span
-            aria-hidden="true"
-            className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#91A38B]"
-          />
-        </span>
-      );
-
-    default:
-      return null;
-  }
+  return (
+    <span
+      role="status"
+      aria-live="polite"
+      className="text-xs text-[#9A9388]"
+    >
+      {label}
+    </span>
+  );
 }
 
 export default function NewPostModal({
@@ -94,15 +70,9 @@ export default function NewPostModal({
     bodyMd,
     setBodyMd,
     links,
-    parseLink,
     removeLink,
-    showLinkInput,
-    setShowLinkInput,
     youtubeMetadata,
-    parseYouTube,
     removeYouTube,
-    showYouTubeInput,
-    setShowYouTubeInput,
     images,
     removeImage,
     handleImageUpload,
@@ -131,85 +101,55 @@ export default function NewPostModal({
     itemId,
   });
 
-  const [tempLinkInput, setTempLinkInput] = useState("");
-  const [tempYouTubeInput, setTempYouTubeInput] = useState("");
-
-  // Lock background scrolling without moving the modal with the header.
   useEffect(() => {
     if (!open) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open]);
-
-  // Focus the editor
-  useEffect(() => {
-    if (!open) return;
-
     const frame = window.requestAnimationFrame(() => {
       textareaRef.current?.focus({ preventScroll: true });
     });
 
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.cancelAnimationFrame(frame);
+    };
   }, [open, textareaRef]);
 
   if (!open) return null;
 
   const loading = isInitializing || !item;
-  const hasContent = canClear;
 
   return createPortal(
     <div
       className="
         fixed inset-0 z-[9999] flex items-center justify-center
-        overflow-hidden bg-[#6B6255]/25 p-2 backdrop-blur-sm
-        sm:p-5
+        bg-[#24211D]/25 p-0 backdrop-blur-[3px]
+        sm:p-4
       "
       role="dialog"
       aria-modal="true"
-      aria-label={isEditing ? "Edit post" : "New post"}
+      aria-label={isEditing ? "Edit Flow post" : "New Flow post"}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !busy) {
           void handleClose();
         }
       }}
     >
-      <div
+      <section
         className="
-          relative flex h-[min(90dvh,840px)]
-          max-h-[calc(100dvh-1rem)] w-full max-w-3xl
-          flex-col overflow-hidden rounded-[28px]
-          border border-[#E8E0D4] bg-[#F7F4EE]
-          text-[#49443C]
-          shadow-[0_24px_80px_rgba(64,52,38,0.18)]
+          flex h-[100dvh] max-h-[100dvh] w-full flex-col
+          overflow-hidden bg-[#FAF8F4] text-[#37332D]
+          sm:h-[min(88dvh,780px)] sm:max-h-[calc(100dvh-2rem)]
+          sm:max-w-2xl sm:rounded-2xl
         "
         onMouseDown={(event) => event.stopPropagation()}
       >
-        {/* TOP STATUS BAR */}
-        <header
-          className="
-            flex shrink-0 items-center justify-between gap-3
-            border-b border-[#EAE2D7] px-5 py-3.5
-            sm:px-8 sm:py-4
-          "
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <span
-              className="
-                font-mono text-[10px] uppercase
-                tracking-[0.16em] text-[#82786A]
-              "
-            >
-              {isEditing ? "Edit Flow Post" : "Compose Flow Post"}
-            </span>
-
-            {!loading && (
-              <SaveStatus state={saveState} error={error} />
-            )}
+        {/* Minimal top row */}
+        <header className="flex shrink-0 items-center justify-between px-5 pt-4 sm:px-7 sm:pt-5">
+          <div className="min-w-0">
+            <SaveStatus state={saveState} error={error} />
           </div>
 
           <button
@@ -218,259 +158,183 @@ export default function NewPostModal({
               if (!busy) void handleClose();
             }}
             disabled={busy}
-            aria-label="Close"
+            aria-label="Close composer"
+            title="Close"
             className="
-              flex h-9 w-9 shrink-0 items-center justify-center
-              rounded-full text-[#928779]
-              transition-colors hover:bg-[#EBE4D9]
-              hover:text-[#49443C] disabled:opacity-40
+              -mr-2 flex h-9 w-9 shrink-0 items-center justify-center
+              rounded-full text-[#898277] transition
+              hover:bg-black/[0.04] hover:text-[#37332D]
+              disabled:opacity-40
             "
           >
-            <X size={18} />
+            <X size={18} strokeWidth={1.6} />
           </button>
         </header>
 
-        {/* MAIN EDITING AREA */}
-        <div
-          className="
-            min-h-0 flex-1 overflow-y-auto overscroll-contain
-            px-5 py-5 sm:px-10 sm:py-7
-          "
-        >
+        {/* Writing area: no field borders or inner card */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-3 sm:px-7 sm:pt-4">
           <div className="flex min-h-full flex-col">
-            {/* Optional Title input for structured posts */}
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(event) => setTitle(event.target.value)}
               placeholder="Title (optional)"
               disabled={busy}
+              aria-label="Post title"
               className="
                 mb-3 w-full border-0 bg-transparent p-0
-                font-serif text-[20px] font-medium
-                text-[#2D2A26] outline-none ring-0
-                placeholder:text-[#C4B9AA]
-                focus:border-0 focus:outline-none focus:ring-0
-                sm:text-[23px]
+                font-serif text-xl font-medium text-[#302C26]
+                outline-none ring-0 placeholder:text-[#C0B8AC]
+                focus:outline-none focus:ring-0
+                sm:text-2xl
               "
             />
 
-            {/* Main Text Content */}
             <textarea
               ref={textareaRef}
               value={bodyMd}
               onChange={(event) => setBodyMd(event.target.value)}
               onPaste={handlePaste}
-              placeholder="Write a thought, insight, or drop links and media…"
+              placeholder="Write something…"
               disabled={busy}
-              rows={4}
+              rows={5}
+              aria-label="Post text"
               className="
-                w-full flex-1 resize-none border-0 bg-transparent p-0
-                font-serif text-[18px] font-normal
-                leading-[1.65] tracking-[-0.01em]
-                text-[#49443C] outline-none ring-0
-                placeholder:text-[#B0A697]
-                focus:border-0 focus:outline-none focus:ring-0
-                sm:text-[20px]
+                min-h-36 w-full flex-1 resize-none border-0
+                bg-transparent p-0 font-serif text-lg
+                leading-[1.7] tracking-[-0.01em] text-[#49443C]
+                outline-none ring-0 placeholder:text-[#B8B0A4]
+                focus:outline-none focus:ring-0
+                sm:text-xl
               "
             />
 
-            {/* ATTACHED MEDIA CONTAINER */}
-            <div className="mt-6 space-y-4">
-              {/* YouTube Input Box */}
-              {showYouTubeInput && !youtubeMetadata && (
-                <div className="rounded-2xl border border-[#E4DCCF] bg-[#FCFAF6] p-3 shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="url"
-                      value={tempYouTubeInput}
-                      onChange={(e) => setTempYouTubeInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && tempYouTubeInput.trim()) {
-                          e.preventDefault();
-                          void parseYouTube(tempYouTubeInput);
-                          setTempYouTubeInput("");
-                        }
-                      }}
-                      placeholder="Paste YouTube video or Shorts URL"
-                      disabled={isParsingYouTube}
-                      className="min-w-0 flex-1 bg-transparent px-2 py-1.5 text-[14px] text-[#49443C] outline-none placeholder:text-[#A69C8E]"
+            {/* Automatic URL / YouTube previews */}
+            {(isParsingLink || isParsingYouTube) && (
+              <div className="mt-5">
+                <ShimmerPreview
+                  text={
+                    isParsingYouTube
+                      ? "Loading video…"
+                      : "Loading link…"
+                  }
+                />
+              </div>
+            )}
+
+            {isUploadingImage && (
+              <div className="mt-5">
+                <ShimmerPreview text="Uploading image…" />
+              </div>
+            )}
+
+            {youtubeMetadata && (
+              <div className="group relative mt-5">
+                <button
+                  type="button"
+                  onClick={removeYouTube}
+                  aria-label="Remove video"
+                  title="Remove video"
+                  className="
+                    absolute right-2 top-2 z-10 flex h-8 w-8
+                    items-center justify-center rounded-full
+                    bg-black/55 text-white opacity-100 transition
+                    hover:bg-black/75 sm:opacity-0
+                    sm:group-hover:opacity-100
+                  "
+                >
+                  <X size={15} />
+                </button>
+
+                <YouTubePreview
+                  metadata={youtubeMetadata}
+                  url={
+                    youtubeMetadata.video_id
+                      ? `https://www.youtube.com/watch?v=${youtubeMetadata.video_id}`
+                      : ""
+                  }
+                />
+              </div>
+            )}
+
+            {links.length > 0 && (
+              <div className="mt-5 space-y-5">
+                {links.map((link) => (
+                  <div key={link.id} className="group relative">
+                    <button
+                      type="button"
+                      onClick={() => removeLink(link.id)}
+                      aria-label="Remove link"
+                      title="Remove link"
+                      className="
+                        absolute right-2 top-2 z-10 flex h-8 w-8
+                        items-center justify-center rounded-full
+                        bg-black/55 text-white opacity-100 transition
+                        hover:bg-black/75 sm:opacity-0
+                        sm:group-hover:opacity-100
+                      "
+                    >
+                      <X size={15} />
+                    </button>
+
+                    <LinkPreviewCard
+                      preview={link.preview}
+                      url={link.url}
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (tempYouTubeInput.trim()) {
-                          void parseYouTube(tempYouTubeInput);
-                          setTempYouTubeInput("");
-                        }
-                      }}
-                      disabled={isParsingYouTube || !tempYouTubeInput.trim()}
-                      className="rounded-full bg-[#6C6559] px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-white hover:bg-[#575145] disabled:opacity-40"
-                    >
-                      {isParsingYouTube ? "…" : "Embed"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowYouTubeInput(false)}
-                      className="p-1 text-[#928779] hover:text-[#49443C]"
-                    >
-                      <X size={16} />
-                    </button>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
+            )}
 
-              {/* YouTube Shimmer */}
-              {isParsingYouTube && (
-                <ShimmerPreview text="Resolving YouTube video…" />
-              )}
+            {images.length > 0 && (
+              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {images.map((image) => (
+                  <div key={image.id} className="group relative">
+                    <button
+                      type="button"
+                      onClick={() => removeImage(image.id)}
+                      aria-label="Remove image"
+                      title="Remove image"
+                      className="
+                        absolute right-2 top-2 z-10 flex h-8 w-8
+                        items-center justify-center rounded-full
+                        bg-black/55 text-white opacity-100 transition
+                        hover:bg-black/75 sm:opacity-0
+                        sm:group-hover:opacity-100
+                      "
+                    >
+                      <X size={15} />
+                    </button>
 
-              {/* YouTube Attached Preview */}
-              {youtubeMetadata && (
-                <div className="relative group rounded-2xl border border-[#E4DCCF] bg-[#FCFAF6] overflow-hidden p-1 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={removeYouTube}
-                    title="Remove video"
-                    className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80"
-                  >
-                    <X size={14} />
-                  </button>
-                  <YouTubePreview
-                    metadata={youtubeMetadata}
-                    url={`https://www.youtube.com/watch?v=${youtubeMetadata.video_id}`}
-                  />
-                </div>
-              )}
-
-              {/* Web Link Input Box */}
-              {showLinkInput && (
-                <div className="rounded-2xl border border-[#E4DCCF] bg-[#FCFAF6] p-3 shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="url"
-                      value={tempLinkInput}
-                      onChange={(e) => setTempLinkInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && tempLinkInput.trim()) {
-                          e.preventDefault();
-                          void parseLink(tempLinkInput);
-                          setTempLinkInput("");
-                        }
-                      }}
-                      placeholder="Paste web link URL (https://…)"
-                      disabled={isParsingLink}
-                      className="min-w-0 flex-1 bg-transparent px-2 py-1.5 text-[14px] text-[#49443C] outline-none placeholder:text-[#A69C8E]"
+                    <ImagePreview
+                      src={image.url}
+                      alt={image.name || "Flow image"}
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (tempLinkInput.trim()) {
-                          void parseLink(tempLinkInput);
-                          setTempLinkInput("");
-                        }
-                      }}
-                      disabled={isParsingLink || !tempLinkInput.trim()}
-                      className="rounded-full bg-[#6C6559] px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-white hover:bg-[#575145] disabled:opacity-40"
-                    >
-                      {isParsingLink ? "…" : "Preview"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowLinkInput(false)}
-                      className="p-1 text-[#928779] hover:text-[#49443C]"
-                    >
-                      <X size={16} />
-                    </button>
                   </div>
-                </div>
-              )}
-
-              {/* Link Shimmer */}
-              {isParsingLink && (
-                <ShimmerPreview text="Reading link preview…" />
-              )}
-
-              {/* Attached Links List */}
-              {links.length > 0 && (
-                <div className="space-y-3">
-                  {links.map((linkAttachment: FlowLinkAttachment) => (
-                    <div
-                      key={linkAttachment.id}
-                      className="relative group rounded-2xl border border-[#E4DCCF] bg-[#FCFAF6] overflow-hidden p-1 shadow-sm"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => removeLink(linkAttachment.id)}
-                        title="Remove link"
-                        className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80"
-                      >
-                        <X size={14} />
-                      </button>
-                      <LinkPreviewCard
-                        preview={linkAttachment.preview}
-                        url={linkAttachment.url}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Uploading Images Shimmer */}
-              {isUploadingImage && (
-                <ShimmerPreview text="Uploading image to storage…" />
-              )}
-
-              {/* Attached Images List */}
-              {images.length > 0 && (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {images.map((img: FlowImageAttachment) => (
-                    <div
-                      key={img.id}
-                      className="relative group rounded-2xl border border-[#E4DCCF] bg-[#FCFAF6] overflow-hidden p-1 shadow-sm"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => removeImage(img.id)}
-                        title="Remove image"
-                        className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80"
-                      >
-                        <X size={14} />
-                      </button>
-                      <ImagePreview src={img.url} alt={img.name || "Flow image"} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
 
             {error && (
-              <div
-                className="
-                  mt-5 rounded-2xl border border-[#E8D3CB]
-                  bg-[#F8ECE7] p-4 text-[13px]
-                  leading-relaxed text-[#995E52]
-                "
+              <p
+                className="mt-4 text-sm leading-relaxed text-[#A45E50]"
                 role="alert"
               >
                 {error}
-              </div>
+              </p>
             )}
           </div>
         </div>
 
-        {/* BOTTOM ACTION BAR */}
+        {/* Quiet bottom toolbar */}
         <footer
           className="
             flex shrink-0 items-center justify-between gap-3
-            border-t border-[#EAE2D7] bg-[#F7F4EE]
-            px-5 py-3.5
-            pb-[max(16px,env(safe-area-inset-bottom))]
-            sm:px-8 sm:py-4
+            px-5 pb-[max(16px,env(safe-area-inset-bottom))]
+            pt-3 sm:px-7 sm:pb-5
           "
         >
-          {/* Quick Media Attach Buttons */}
-          <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+          <div className="flex min-w-0 items-center gap-3">
             <input
               ref={fileRef}
               type="file"
@@ -480,113 +344,56 @@ export default function NewPostModal({
               onChange={handleImageUpload}
             />
 
-            {/* Attach Image */}
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={busy || loading}
-              aria-label="Add images"
+              aria-label="Attach images"
               title="Attach images"
               className={`
-                flex h-9 w-9 shrink-0 items-center justify-center
-                rounded-full border transition-colors disabled:opacity-40
-                ${images.length > 0
-                  ? "border-[#6C6559] bg-[#EAE2D7] text-[#49443C]"
-                  : "border-[#E4DCCF] bg-[#FCFAF6] text-[#71685C] hover:border-[#CFC3B1] hover:bg-white hover:text-[#49443C]"
+                flex h-10 w-10 shrink-0 items-center justify-center
+                rounded-full transition-colors
+                hover:bg-black/[0.05] disabled:opacity-40
+                ${
+                  images.length > 0
+                    ? "text-[#37332D]"
+                    : "text-[#898277]"
                 }
               `}
             >
-              <ImageIcon size={16} />
+              <ImageIcon size={19} strokeWidth={1.6} />
             </button>
 
-            {/* Attach YouTube */}
-            <button
-              type="button"
-              onClick={() => setShowYouTubeInput((prev) => !prev)}
-              disabled={busy || loading}
-              aria-label="Add YouTube video"
-              title="Attach YouTube video"
-              className={`
-                flex h-9 w-9 shrink-0 items-center justify-center
-                rounded-full border transition-colors disabled:opacity-40
-                ${youtubeMetadata || showYouTubeInput
-                  ? "border-[#6C6559] bg-[#EAE2D7] text-[#49443C]"
-                  : "border-[#E4DCCF] bg-[#FCFAF6] text-[#71685C] hover:border-[#CFC3B1] hover:bg-white hover:text-[#49443C]"
-                }
-              `}
-            >
-              <Video size={16} />
-            </button>
-
-            {/* Attach Link */}
-            <button
-              type="button"
-              onClick={() => setShowLinkInput((prev) => !prev)}
-              disabled={busy || loading}
-              aria-label="Add link"
-              title="Attach web link"
-              className={`
-                flex h-9 w-9 shrink-0 items-center justify-center
-                rounded-full border transition-colors disabled:opacity-40
-                ${links.length > 0 || showLinkInput
-                  ? "border-[#6C6559] bg-[#EAE2D7] text-[#49443C]"
-                  : "border-[#E4DCCF] bg-[#FCFAF6] text-[#71685C] hover:border-[#CFC3B1] hover:bg-white hover:text-[#49443C]"
-                }
-              `}
-            >
-              <Link2 size={16} />
-            </button>
-
-            {canClear && hasContent && (
+            {canClear && (
               <button
                 type="button"
                 onClick={() => void clearDraft()}
                 disabled={busy || isClearing}
                 className="
-                  ml-1 rounded-full border border-[#E4DCCF]
-                  bg-[#FCFAF6] px-3 py-1.5
-                  font-mono text-[9px] uppercase
-                  tracking-[0.1em] text-[#71685C]
-                  transition-colors hover:border-[#CFC3B1]
-                  hover:bg-white hover:text-[#49443C]
-                  disabled:opacity-40
+                  text-xs text-[#92897D] transition-colors
+                  hover:text-[#37332D] disabled:opacity-40
                 "
               >
-                {isClearing ? "…" : "Clear"}
+                {isClearing ? "Clearing…" : "Clear"}
               </button>
             )}
           </div>
 
-          {/* Right Action: Crosspost Status & Post Button */}
-          <div className="flex shrink-0 items-center gap-3">
-            <span
-              className="
-                hidden font-mono text-[9px]
-                tracking-wider text-[#A49A8C] sm:inline
-              "
-              title="Post will be synced to Telegram (Pierrot) and Bluesky"
-            >
-              ✦ Telegram & Bluesky
-            </span>
-
-            <button
-              type="button"
-              onClick={() => void finish()}
-              disabled={!canPost || busy}
-              className="
-                rounded-full bg-[#6C6559] px-5 py-2.5
-                font-mono text-[11px] font-medium
-                uppercase tracking-[0.14em] text-white
-                transition-colors hover:bg-[#575145]
-                active:scale-[0.98]
-                disabled:cursor-not-allowed disabled:opacity-40
-              "
-            >
-              {isPublishing ? "Posting…" : isEditing ? "Save" : "Post"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => void finish()}
+            disabled={!canPost || busy}
+            className="
+              rounded-full bg-[#37332D] px-6 py-2.5
+              text-sm text-white transition-colors
+              hover:bg-[#514B42] active:scale-[0.98]
+              disabled:cursor-not-allowed disabled:opacity-35
+            "
+          >
+            {isPublishing ? "Posting…" : isEditing ? "Save" : "Post"}
+          </button>
         </footer>
-      </div>
+      </section>
     </div>,
     document.body,
   );

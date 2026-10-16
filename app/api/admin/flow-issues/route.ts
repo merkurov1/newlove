@@ -13,13 +13,16 @@ import { renderIssue } from "@/lib/flow-issue/render";
 import type { IssueLang } from "@/lib/flow-issue/types";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 export const maxDuration = 60;
+
+const SITE_URL = "https://www.merkurov.love";
 
 function validLang(value: unknown): value is IssueLang {
   return value === "ru" || value === "en";
 }
 
-function slugify(value: string) {
+function slugify(value: string): string {
   return value
     .normalize("NFKD")
     .toLowerCase()
@@ -27,33 +30,66 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+async function getAdminSupabase() {
+  return getServerSupabaseClient({ useServiceRole: true });
+}
+
 export async function POST(request: Request) {
   try {
     const admin = await requireAdminFromRequest(request);
-    const body = await request.json();
 
-    if (!validLang(body.lang)) {
+    let body: Record<string, unknown>;
+
+    try {
+      const parsed: unknown = await request.json();
+
+      if (!isRecord(parsed)) {
+        return NextResponse.json(
+          { error: "Тело запроса должно быть JSON-объектом." },
+          { status: 400 },
+        );
+      }
+
+      body = parsed;
+    } catch {
       return NextResponse.json(
-        { error: "lang должен быть ru или en" },
+        { error: "Некорректный JSON." },
         { status: 400 },
       );
     }
 
-    const lang: IssueLang = body.lang;
-    const supabase = getServerSupabaseClient({
-      useServiceRole: true,
-    });
+    if (!validLang(body.lang)) {
+      return NextResponse.json(
+        { error: "lang должен быть ru или en." },
+        { status: 400 },
+      );
+    }
+
+    const lang = body.lang;
+    const supabase = await getAdminSupabase();
 
     const { start, end } = await resolveIssueWindow(
       supabase,
       lang,
-      body.periodStart ?? null,
-      body.periodEnd ?? null,
+      typeof body.periodStart === "string" ? body.periodStart : null,
+      typeof body.periodEnd === "string" ? body.periodEnd : null,
     );
 
-    if (start >= end) {
+    if (
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime()) ||
+      start >= end
+    ) {
       return NextResponse.json(
-        { error: "Начало периода должно быть раньше окончания" },
+        { error: "Период выпуска задан некорректно." },
         { status: 400 },
       );
     }
@@ -65,15 +101,14 @@ export async function POST(request: Request) {
       end,
     );
 
-    const { data: previous, error: previousError } =
-      await supabase
-        .from("letters")
-        .select("number")
-        .eq("kind", "issue")
-        .eq("lang", lang)
-        .order("number", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    const { data: previous, error: previousError } = await supabase
+      .from("letters")
+      .select("number")
+      .eq("kind", "issue")
+      .eq("lang", lang)
+      .order("number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (previousError) throw previousError;
 
@@ -92,7 +127,8 @@ export async function POST(request: Request) {
     const rendered = renderIssue(payload, {
       title,
       slug,
-      siteUrl: "https://www.merkurov.love",
+      siteUrl: SITE_URL,
+      number,
     });
 
     const now = new Date().toISOString();
@@ -121,13 +157,11 @@ export async function POST(request: Request) {
         text_email: rendered.textEmail,
       })
       .select(
-        "id,title,slug,kind,lang,number,period_start,period_end,status,payload,html_web,html_email,text_email",
+        "id,title,slug,kind,lang,number,period_start,period_end,status,payload,html_web,html_email,text_email,published,sent_at",
       )
       .single();
 
     if (insertError) {
-      // Concurrent generation may claim the same number.
-      // The unique index prevents duplicate issue numbers.
       if (insertError.code === "23505") {
         return NextResponse.json(
           {
@@ -137,14 +171,17 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
+
       throw insertError;
     }
 
     return NextResponse.json({ issue }, { status: 201 });
   } catch (error) {
     console.error("[flow-issues] build failed", error);
+
     const message =
       error instanceof Error ? error.message : "Ошибка сборки выпуска";
+
     const unauthorized =
       /unauthorized|admin access required/i.test(message);
 
@@ -158,82 +195,274 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     await requireAdminFromRequest(request);
-    const body = await request.json();
 
-    if (
-      typeof body.id !== "string" ||
-      !body.id.trim() ||
-      body.action !== "publish"
-    ) {
+    let body: Record<string, unknown>;
+
+    try {
+      const parsed: unknown = await request.json();
+
+      if (!isRecord(parsed)) {
+        return NextResponse.json(
+          { error: "Тело запроса должно быть JSON-объектом." },
+          { status: 400 },
+        );
+      }
+
+      body = parsed;
+    } catch {
       return NextResponse.json(
-        { error: "Ожидаются id и action: publish" },
+        { error: "Некорректный JSON." },
         { status: 400 },
       );
     }
 
-    const supabase = getServerSupabaseClient({
-      useServiceRole: true,
-    });
+    const id = typeof body.id === "string" ? body.id.trim() : "";
+    const action = body.action;
+
+    if (!id || (action !== "publish" && action !== "send")) {
+      return NextResponse.json(
+        { error: "Ожидаются id и action: publish или send." },
+        { status: 400 },
+      );
+    }
+
+    const supabase = await getAdminSupabase();
 
     const { data: issue, error: fetchError } = await supabase
       .from("letters")
-      .select("id,kind,status")
-      .eq("id", body.id)
+      .select(
+        "id,title,slug,kind,status,published,publishedAt,sent_at,html_email,text_email",
+      )
+      .eq("id", id)
       .eq("kind", "issue")
       .maybeSingle();
 
     if (fetchError) throw fetchError;
+
     if (!issue) {
       return NextResponse.json(
-        { error: "Выпуск не найден" },
+        { error: "Выпуск не найден." },
         { status: 404 },
       );
     }
 
-    if (issue.status === "published") {
-      return NextResponse.json({ ok: true, alreadyPublished: true });
-    }
-
     const now = new Date().toISOString();
 
-    const { data: updated, error: updateError } = await supabase
-      .from("letters")
-      .update({
-        published: true,
-        status: "published",
-        publishedAt: now,
-        updatedAt: now,
-      })
-      .eq("id", body.id)
-      .eq("kind", "issue")
-      .eq("status", "draft")
-      .select("id,title,slug,lang,number,status,publishedAt")
-      .maybeSingle();
+    if (action === "publish") {
+      if (issue.status === "published" && issue.published) {
+        return NextResponse.json({
+          ok: true,
+          alreadyPublished: true,
+          issue,
+        });
+      }
 
-    if (updateError) throw updateError;
-    if (!updated) {
+      const { data: updated, error: updateError } = await supabase
+        .from("letters")
+        .update({
+          published: true,
+          status: "published",
+          publishedAt: issue.publishedAt || now,
+          updatedAt: now,
+        })
+        .eq("id", issue.id)
+        .eq("kind", "issue")
+        .eq("status", "draft")
+        .select(
+          "id,title,slug,lang,number,status,published,publishedAt,sent_at",
+        )
+        .maybeSingle();
+
+      if (updateError) throw updateError;
+
+      if (!updated) {
+        return NextResponse.json(
+          {
+            error:
+              "Выпуск изменён другим запросом. Обновите страницу.",
+          },
+          { status: 409 },
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        issue: updated,
+        url: `/letters/${updated.slug}`,
+      });
+    }
+
+    // action === "send"
+
+    if (issue.sent_at) {
       return NextResponse.json(
-        { error: "Выпуск изменён другим запросом. Обновите страницу." },
+        {
+          error:
+            "Этот выпуск уже отправлялся. Повторная рассылка заблокирована.",
+          sent_at: issue.sent_at,
+        },
         { status: 409 },
       );
     }
 
+    if (!process.env.RESEND_API_KEY) {
+      return NextResponse.json(
+        {
+          error:
+            "RESEND_API_KEY не настроен. Рассылка не поставлена в очередь.",
+        },
+        { status: 503 },
+      );
+    }
+
+    if (!issue.html_email?.trim()) {
+      return NextResponse.json(
+        {
+          error:
+            "У выпуска отсутствует HTML-версия письма. Соберите новый выпуск.",
+        },
+        { status: 409 },
+      );
+    }
+
+    // If this issue is already being sent, return its existing job.
+    const { data: activeJobs, error: activeJobsError } = await supabase
+      .from("newsletter_jobs")
+      .select("id,status")
+      .eq("letter_id", issue.id)
+      .in("status", ["pending", "processing"])
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (activeJobsError) throw activeJobsError;
+
+    if (activeJobs?.length) {
+      return NextResponse.json({
+        ok: true,
+        queued: true,
+        alreadyQueued: true,
+        jobId: activeJobs[0].id,
+        jobStatus: activeJobs[0].status,
+        issue: {
+          id: issue.id,
+          title: issue.title,
+          slug: issue.slug,
+          status: issue.status,
+          sent_at: issue.sent_at,
+        },
+      });
+    }
+
+    const { count: activeSubscribers, error: subscribersError } =
+      await supabase
+        .from("subscribers")
+        .select("id", { count: "exact", head: true })
+        .eq("isActive", true);
+
+    if (subscribersError) throw subscribersError;
+
+    if (!activeSubscribers) {
+      return NextResponse.json(
+        { error: "Нет активных подписчиков. Рассылка не создана." },
+        { status: 409 },
+      );
+    }
+
+    // The worker rejects unpublished issues, so publish before queueing.
+    if (issue.status !== "published" || !issue.published) {
+      const { data: publishedIssue, error: publishError } = await supabase
+        .from("letters")
+        .update({
+          published: true,
+          status: "published",
+          publishedAt: issue.publishedAt || now,
+          updatedAt: now,
+        })
+        .eq("id", issue.id)
+        .eq("kind", "issue")
+        .select("id")
+        .maybeSingle();
+
+      if (publishError) throw publishError;
+
+      if (!publishedIssue) {
+        return NextResponse.json(
+          {
+            error:
+              "Не удалось опубликовать выпуск перед рассылкой.",
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    const jobId = randomUUID();
+
+    const { error: jobError } = await supabase
+      .from("newsletter_jobs")
+      .insert({
+        id: jobId,
+        letter_id: issue.id,
+        status: "pending",
+        created_at: now,
+      });
+
+    if (jobError) {
+      // The unique index in the migration prevents concurrent duplicate jobs.
+      if (jobError.code === "23505") {
+        const { data: existingJob, error: existingJobError } =
+          await supabase
+            .from("newsletter_jobs")
+            .select("id,status")
+            .eq("letter_id", issue.id)
+            .in("status", ["pending", "processing"])
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (existingJobError) throw existingJobError;
+
+        if (existingJob) {
+          return NextResponse.json({
+            ok: true,
+            queued: true,
+            alreadyQueued: true,
+            jobId: existingJob.id,
+            jobStatus: existingJob.status,
+          });
+        }
+      }
+
+      throw jobError;
+    }
+
     return NextResponse.json({
       ok: true,
-      issue: updated,
-      url: `/letters/${updated.slug}`,
+      queued: true,
+      alreadyQueued: false,
+      jobId,
+      activeSubscribers,
+      issue: {
+        id: issue.id,
+        title: issue.title,
+        slug: issue.slug,
+        status: "published",
+        sent_at: null,
+      },
+      message:
+        "Выпуск опубликован и поставлен в очередь. Worker обработает задачу.",
     });
   } catch (error) {
-    console.error("[flow-issues] publish failed", error);
+    console.error("[flow-issues] PATCH failed", error);
+
     const message =
-      error instanceof Error ? error.message : "Ошибка публикации";
+      error instanceof Error ? error.message : "Ошибка обработки выпуска";
+
     const unauthorized =
       /unauthorized|admin access required/i.test(message);
 
     return NextResponse.json(
-      {
-        error: unauthorized ? "Доступ запрещён" : message,
-      },
+      { error: unauthorized ? "Доступ запрещён" : message },
       { status: unauthorized ? 401 : 500 },
     );
   }
