@@ -332,20 +332,6 @@ function EntryMeta({
     <div className="mb-3 flex items-center justify-between gap-4">
       <div className="flex items-center gap-2.5 font-mono text-[11px] text-neutral-400">
         <EntryDate item={item} />
-        {tgUrl && (
-          <div className="flex items-center gap-2 text-neutral-400">
-            <span className="text-neutral-300">·</span>
-            <a
-              href={tgUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition hover:text-neutral-900"
-              title="View on Telegram"
-            >
-              tg ↗
-            </a>
-          </div>
-        )}
       </div>
 
       {admin && <AdminControls onEdit={onEdit} onDelete={onDelete} />}
@@ -981,12 +967,14 @@ export default function FlowPage() {
               </p>
             </div>
             <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-neutral-400">
-              <Link
-                href="/journal"
+              <a
+                href="https://bsky.app/profile/merkurov.love"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="transition hover:text-neutral-900"
               >
-                Journal ↗
-              </Link>
+                Bluesky ↗
+              </a>
               <span className="text-neutral-200">·</span>
               <a
                 href="https://t.me/unframed_am"
@@ -994,8 +982,15 @@ export default function FlowPage() {
                 rel="noopener noreferrer"
                 className="transition hover:text-neutral-900"
               >
-                tg ↗
+                Telegram ↗
               </a>
+              <span className="text-neutral-200">·</span>
+              <Link
+                href="/journal"
+                className="transition hover:text-neutral-900"
+              >
+                Journal ↗
+              </Link>
             </div>
           </header>
 

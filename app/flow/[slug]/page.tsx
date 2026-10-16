@@ -1250,12 +1250,14 @@ export default async function FlowItemPage({ params }: PageProps) {
             </Link>
 
             <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-stone-400">
-              <Link
-                href="/journal"
+              <a
+                href="https://bsky.app/profile/merkurov.love"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="transition hover:text-stone-900"
               >
-                Journal ↗
-              </Link>
+                Bluesky ↗
+              </a>
               <span className="text-stone-200">·</span>
               <a
                 href={tgUrl || 'https://t.me/unframed_am'}
@@ -1263,8 +1265,15 @@ export default async function FlowItemPage({ params }: PageProps) {
                 rel="noopener noreferrer"
                 className="transition hover:text-stone-900"
               >
-                tg ↗
+                Telegram ↗
               </a>
+              <span className="text-stone-200">·</span>
+              <Link
+                href="/journal"
+                className="transition hover:text-stone-900"
+              >
+                Journal ↗
+              </Link>
             </div>
           </header>
 
