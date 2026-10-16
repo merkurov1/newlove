@@ -33,7 +33,8 @@ export type CrosspostResult = {
 const SITE_ORIGIN = 'https://www.merkurov.love';
 
 function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) return null;
@@ -55,6 +56,12 @@ function escapeHtml(text: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+function escapeHtmlAttribute(text: string): string {
+  return escapeHtml(text)
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**
@@ -81,8 +88,104 @@ function normalizeUrl(value: unknown): string | null {
 }
 
 /**
+ * Remove hashtags from visible message text without changing URLs
+ * or HTML attributes.
+ */
+function stripTelegramHashtags(html: string): string {
+  return html
+    .split(/(<[^>]*>)/g)
+    .map((part) => {
+      if (part.startsWith('<') && part.endsWith('>')) return part;
+
+      return part
+        .replace(/(^|[\s([{])#[\p{L}\p{N}_]+/gu, '$1')
+        .replace(/[ \t]{2,}/g, ' ');
+    })
+    .join('')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Convert visible bare URLs to clickable domain labels.
+ * Existing HTML tags and link destinations are preserved.
+ */
+function linkifyBareUrls(html: string): string {
+  return html
+    .split(/(<[^>]*>)/g)
+    .map((part) => {
+      if (part.startsWith('<') && part.endsWith('>')) return part;
+
+      return part.replace(
+        /https?:\/\/[^\s<>"']+/gi,
+        (rawUrl) => {
+          const trailing = rawUrl.match(/[.,!?;:)\]]+$/)?.[0] ?? '';
+          const candidate = trailing
+            ? rawUrl.slice(0, -trailing.length)
+            : rawUrl;
+
+          const url = normalizeUrl(candidate);
+          if (!url) return rawUrl;
+
+          let label = 'Открыть ссылку';
+
+          try {
+            label = new URL(url).hostname.replace(/^www\./i, '');
+          } catch {
+            // Keep the generic label if URL parsing fails.
+          }
+
+          return (
+            `<a href="${escapeHtmlAttribute(url)}">` +
+            `${escapeHtml(label)}</a>${trailing}`
+          );
+        }
+      );
+    })
+    .join('');
+}
+
+/**
+ * Converts common Markdown used in Flow into Telegram HTML.
+ * Visible text is escaped; Markdown links become named clickable links.
+ */
+function markdownToTelegramHtml(markdown: string): string {
+  const links: string[] = [];
+
+  let text = markdown
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      (_match, label: string, rawUrl: string) => {
+        const url = normalizeUrl(rawUrl);
+        if (!url) return label;
+
+        const token = `FLOWLINKTOKEN${links.length}END`;
+        links.push(
+          `<a href="${escapeHtmlAttribute(url)}">${escapeHtml(label)}</a>`
+        );
+        return token;
+      }
+    );
+
+  text = escapeHtml(text);
+
+  text = text
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([\s\S]+?)\*\*/g, '<b>$1</b>')
+    .replace(/__([\s\S]+?)__/g, '<b>$1</b>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>')
+    .replace(/(^|[^_])_([^_\n]+)_/g, '$1<i>$2</i>');
+
+  links.forEach((link, index) => {
+    text = text.replace(`FLOWLINKTOKEN${index}END`, link);
+  });
+
+  return text.trim();
+}
+
+/**
  * Supports legacy single-image fields and arrays of image objects or URLs.
- * The first image remains the fallback for channels that accept only one photo.
  */
 function collectImageUrls(
   item: CrosspostPayload,
@@ -235,7 +338,9 @@ function getFlowUrl(slug?: string | null): string {
 
 /**
  * Formats a Flow item for Telegram.
- * DeepSeek is optional: when unavailable, the original cleaned text is used.
+ *
+ * DeepSeek may adapt the text, but the application enforces the no-hashtag
+ * rule and converts visible bare URLs to clickable labels afterward.
  */
 async function formatTelegramMessage(
   title: string | null | undefined,
@@ -246,42 +351,47 @@ async function formatTelegramMessage(
 ): Promise<string> {
   const cleanTitle = (title || '').trim();
   const rawBody = (bodyMd || '').trim();
-  const cleanBody = rawBody
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1: $2')
-    .replace(/[#*_`~]/g, '')
-    .trim();
+  const cleanSourceUrl = normalizeUrl(sourceUrl);
+  const safeFlowUrl = normalizeUrl(flowUrl) || `${SITE_ORIGIN}/flow`;
 
-  const cleanSourceUrl = (sourceUrl || '').trim();
-  const hasSourceUrl = Boolean(cleanSourceUrl && cleanSourceUrl !== flowUrl);
+  const cleanBody = markdownToTelegramHtml(rawBody);
 
   const isRedundantTitle =
     !cleanTitle ||
-    cleanTitle.toLowerCase() === cleanBody.toLowerCase() ||
-    cleanBody.toLowerCase().startsWith(cleanTitle.toLowerCase());
+    cleanTitle.toLowerCase() === rawBody.toLowerCase() ||
+    rawBody.toLowerCase().startsWith(cleanTitle.toLowerCase());
 
   let rawContent = '';
 
   if (!isRedundantTitle && cleanTitle) {
-    if (hasSourceUrl) {
-      rawContent += `<b><a href="${escapeHtml(cleanSourceUrl)}">${escapeHtml(cleanTitle)}</a></b>\n\n`;
+    if (cleanSourceUrl) {
+      rawContent +=
+        `<b><a href="${escapeHtmlAttribute(cleanSourceUrl)}">` +
+        `${escapeHtml(cleanTitle)}</a></b>\n\n`;
     } else {
       rawContent += `<b>${escapeHtml(cleanTitle)}</b>\n\n`;
     }
   }
 
   if (cleanBody) {
-    rawContent += escapeHtml(cleanBody);
+    rawContent += cleanBody;
   }
 
-  if (hasSourceUrl && !cleanBody.includes(cleanSourceUrl)) {
-    rawContent += (rawContent ? '\n\n' : '') + `<a href="${escapeHtml(cleanSourceUrl)}">${escapeHtml(cleanSourceUrl)}</a>`;
+  if (cleanSourceUrl) {
+    rawContent +=
+      `${rawContent ? '\n\n' : ''}` +
+      `<a href="${escapeHtmlAttribute(cleanSourceUrl)}">Источник</a>`;
   }
 
-  rawContent += `\n\n${escapeHtml(flowUrl)}`;
+  rawContent +=
+    `${rawContent ? '\n\n' : ''}` +
+    `<a href="${escapeHtmlAttribute(safeFlowUrl)}">Читать на merkurov.love</a>`;
+
+  const fallback = () =>
+    stripTelegramHashtags(linkifyBareUrls(rawContent));
 
   const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey || !rawContent.trim()) return rawContent;
+  if (!apiKey || !rawContent.trim()) return fallback();
 
   try {
     const response = await fetch('https://api.deepseek.com/chat/completions', {
@@ -296,10 +406,14 @@ async function formatTelegramMessage(
           {
             role: 'system',
             content:
-              `Format the supplied publication for Telegram using only valid HTML ` +
-              `tags <b>, <i>, <code>, and <a>. Preserve its meaning and URLs. ` +
-              `Do not invent facts or links. Add at most 2 relevant hashtags in ${lang}. ` +
-              `Return only the formatted message.`,
+              `Adapt the supplied publication for Telegram in ${lang}. ` +
+              `Preserve the author's voice, meaning, facts, and tone. ` +
+              `Make only editorial changes needed for readability. ` +
+              `Do not add hashtags, emojis, calls to action, facts, or links. ` +
+              `Preserve every existing HTML link and its destination exactly. ` +
+              `Use only these HTML tags: <b>, <i>, <code>, and <a>. ` +
+              `Do not output raw URLs when a named clickable link is possible. ` +
+              `Return only the final message, without commentary.`,
           },
           {
             role: 'user',
@@ -312,25 +426,34 @@ async function formatTelegramMessage(
     });
 
     if (!response.ok) {
-      console.warn('[crosspost:telegram] DeepSeek returned HTTP', response.status);
-      return rawContent;
+      console.warn(
+        '[crosspost:telegram] DeepSeek returned HTTP',
+        response.status
+      );
+      return fallback();
     }
 
     const data = await response.json();
     const formatted = data.choices?.[0]?.message?.content?.trim();
 
-    // Do not replace the message with an empty or non-string response.
-    return typeof formatted === 'string' && formatted ? formatted : rawContent;
+    if (typeof formatted !== 'string' || !formatted) {
+      return fallback();
+    }
+
+    return stripTelegramHashtags(linkifyBareUrls(formatted));
   } catch (error) {
-    console.warn('[crosspost:telegram] DeepSeek formatting fallback:', error);
-    return rawContent;
+    console.warn(
+      '[crosspost:telegram] DeepSeek formatting fallback:',
+      error
+    );
+
+    return fallback();
   }
 }
 
 /**
  * Publishes a Flow item to Telegram.
- * Telegram sendPhoto accepts one image, so the first valid image is used.
- * Bluesky receives the full image array separately.
+ * Short text is attached to an image or album; long text is sent separately.
  */
 async function publishTelegram(
   item: CrosspostPayload,
@@ -366,11 +489,16 @@ async function publishTelegram(
 
   const rawSourceUrl =
     item.source_url ||
-    (isRecord(item.metadata?.link_preview) ? (item.metadata.link_preview as any).url : null) ||
-    (isRecord(item.metadata?.linkPreview) ? (item.metadata.linkPreview as any).url : null);
-  const sourceUrl = normalizeUrl(rawSourceUrl);
+    (isRecord(item.metadata?.link_preview)
+      ? item.metadata.link_preview.url
+      : null) ||
+    (isRecord(item.metadata?.linkPreview)
+      ? item.metadata.linkPreview.url
+      : null);
 
+  const sourceUrl = normalizeUrl(rawSourceUrl);
   const flowUrl = getFlowUrl(item.slug);
+
   const formattedText = await formatTelegramMessage(
     item.title,
     item.body_md,
@@ -380,22 +508,33 @@ async function publishTelegram(
   );
 
   const photoUrl = imageUrls[0] ?? null;
+  const hasImages = imageUrls.length > 0;
+
+  // Keep some margin for Telegram's 1024-character caption limit.
+  const CAPTION_LIMIT = 900;
+  const useSeparateText = formattedText.length > CAPTION_LIMIT;
 
   async function sendMessage(
     withPhoto: boolean,
-    parseMode: 'HTML' | undefined
+    parseMode: 'HTML' | undefined,
+    messageText = formattedText,
+    includeCaption = true
   ): Promise<any> {
-    const endpoint = withPhoto && photoUrl ? 'sendPhoto' : 'sendMessage';
+    const usePhoto = withPhoto && Boolean(photoUrl);
+    const endpoint = usePhoto ? 'sendPhoto' : 'sendMessage';
+
     const payload: Record<string, unknown> = {
       chat_id: channelId,
-      ...(withPhoto && photoUrl
+      ...(usePhoto
         ? {
             photo: photoUrl,
-            caption: formattedText.slice(0, 1024),
+            ...(includeCaption
+              ? { caption: messageText.slice(0, 1024) }
+              : {}),
           }
         : {
-            text: formattedText.slice(0, 4096),
-            disable_web_page_preview: false,
+            text: messageText.slice(0, 4096),
+            link_preview_options: { is_disabled: true },
           }),
       ...(parseMode ? { parse_mode: parseMode } : {}),
     };
@@ -413,14 +552,14 @@ async function publishTelegram(
     return response.json();
   }
 
-  // If multiple images are provided, send a native Telegram media album
+  // Send a native Telegram album when there are multiple images.
   if (imageUrls.length > 1) {
-    const media = imageUrls.slice(0, 10).map((url, i) => ({
+    const media = imageUrls.slice(0, 10).map((url, index) => ({
       type: 'photo',
       media: url,
-      ...(i === 0
+      ...(index === 0 && !useSeparateText
         ? {
-            caption: formattedText.slice(0, 1024),
+            caption: formattedText,
             parse_mode: 'HTML',
           }
         : {}),
@@ -436,69 +575,95 @@ async function publishTelegram(
           signal: AbortSignal.timeout(15000),
         }
       );
+
       const groupData = await groupRes.json();
+
       if (
         groupData.ok &&
         Array.isArray(groupData.result) &&
         groupData.result.length > 0
       ) {
+        const firstMessage = groupData.result[0];
+
+        if (useSeparateText) {
+          const textData = await sendMessage(false, 'HTML', formattedText);
+
+          if (!textData.ok) {
+            console.error(
+              '[crosspost:telegram] Album sent, but text delivery failed:',
+              textData.description
+            );
+          }
+        }
+
         console.info('[crosspost:telegram] Published media group album:', {
           channelId,
-          messageId: groupData.result[0].message_id,
+          messageId: firstMessage.message_id,
           photoCount: media.length,
+          textSentSeparately: useSeparateText,
         });
+
         return {
-          messageId: groupData.result[0].message_id,
-          chatId: String(groupData.result[0].chat.id),
+          messageId: firstMessage.message_id,
+          chatId: String(firstMessage.chat.id),
           bot,
         };
-      } else {
-        console.warn(
-          '[crosspost:telegram] sendMediaGroup returned non-ok, falling back to single photo/message:',
-          groupData.description
-        );
       }
+
+      console.warn(
+        '[crosspost:telegram] sendMediaGroup failed; falling back:',
+        groupData.description
+      );
     } catch (groupError) {
       console.warn(
-        '[crosspost:telegram] sendMediaGroup exception, falling back:',
+        '[crosspost:telegram] sendMediaGroup exception; falling back:',
         groupError
       );
     }
   }
 
   try {
-    let data = await sendMessage(Boolean(photoUrl), 'HTML');
+    let data: any;
+
+    if (hasImages && useSeparateText) {
+      // Send the image without a caption, then send the complete text.
+      data = await sendMessage(true, undefined, '', false);
+
+      if (data.ok && data.result) {
+        const textData = await sendMessage(false, 'HTML', formattedText);
+
+        if (!textData.ok) {
+          console.error(
+            '[crosspost:telegram] Photo sent, but text delivery failed:',
+            textData.description
+          );
+        }
+      }
+    } else {
+      data = await sendMessage(hasImages, 'HTML', formattedText);
+    }
 
     if (
-      !data.ok &&
-      typeof data.description === 'string' &&
+      !data?.ok &&
+      typeof data?.description === 'string' &&
       data.description.includes("can't parse entities")
     ) {
-      console.warn('[crosspost:telegram] HTML parsing failed; retrying as plain text.');
-      data = await sendMessage(Boolean(photoUrl), undefined);
-    }
-
-    if (!data.ok && photoUrl) {
       console.warn(
-        '[crosspost:telegram] Photo send failed; falling back to text:',
-        data.description
+        '[crosspost:telegram] HTML parsing failed; retrying without HTML.'
       );
 
-      data = await sendMessage(false, 'HTML');
-
-      if (
-        !data.ok &&
-        typeof data.description === 'string' &&
-        data.description.includes("can't parse entities")
-      ) {
-        data = await sendMessage(false, undefined);
-      }
+      data = await sendMessage(
+        hasImages && !useSeparateText,
+        undefined,
+        formattedText,
+        !useSeparateText
+      );
     }
 
-    if (!data.ok || !data.result) {
+    if (!data?.ok || !data.result) {
       console.error('[crosspost:telegram] Send failed:', {
-        status: data.error_code,
-        description: data.description,
+        status: data?.error_code,
+        description: data?.description,
       });
       return null;
     }
@@ -506,7 +671,8 @@ async function publishTelegram(
     console.info('[crosspost:telegram] Published:', {
       channelId,
       messageId: data.result.message_id,
-      usedPhoto: Boolean(photoUrl && data.result.photo),
+      usedPhoto: Boolean(data.result.photo),
+      textSentSeparately: useSeparateText,
     });
 
     return {
