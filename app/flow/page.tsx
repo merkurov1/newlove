@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -84,10 +83,6 @@ function getYouTubeThumbnail(item: FlowItem) {
     : null;
 }
 
-/**
- * Supports both the current multi-image format and legacy single-image fields.
- * metadata.images may contain URL strings or attachment objects.
- */
 function getPhotoUrls(item: FlowItem): string[] {
   const meta = item.metadata ?? {};
   const urls: string[] = [];
@@ -103,7 +98,6 @@ function getPhotoUrls(item: FlowItem): string[] {
     }
   }
 
-  // Older records may only have one of these fields.
   for (const key of ['public_url', 'image', 'image_url', 'og_image']) {
     const url = getString(meta[key]);
     if (url) urls.push(url);
@@ -125,9 +119,6 @@ function isYouTubeUrl(value: string) {
   }
 }
 
-/**
- * Supports multiple link previews plus legacy link_preview/source_url records.
- */
 function getLinkPreviewData(item: FlowItem): LinkPreviewData[] {
   const meta = item.metadata ?? {};
   const candidates: LinkPreviewData[] = [];
@@ -152,10 +143,8 @@ function getLinkPreviewData(item: FlowItem): LinkPreviewData[] {
     meta.link_previews.forEach(addPreview);
   }
 
-  // Legacy single-link field.
   addPreview(meta.link_preview);
 
-  // Preserve older records that stored the link only in source_url.
   const sourceUrl = getString(item.source_url);
   if (sourceUrl && !isYouTubeUrl(sourceUrl)) {
     const alreadyPresent = candidates.some((preview) => preview.url === sourceUrl);
@@ -219,7 +208,7 @@ function EntryDate({ item }: { item: FlowItem }) {
   return (
     <time
       dateTime={value || undefined}
-      className="shrink-0 text-xs text-neutral-400"
+      className="text-xs font-medium tracking-wide text-neutral-400"
     >
       {date}
     </time>
@@ -234,7 +223,7 @@ function AdminControls({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-3">
+    <div className="flex items-center gap-3">
       <button
         type="button"
         onClick={onEdit}
@@ -247,7 +236,7 @@ function AdminControls({
       <button
         type="button"
         onClick={onDelete}
-        className="text-xs text-neutral-400 transition hover:text-red-700"
+        className="text-xs text-neutral-400 transition hover:text-red-600"
         aria-label="Delete post"
         title="Delete"
       >
@@ -275,26 +264,28 @@ function LinkCard({
   }
 
   return (
-    <div className="flex min-w-0 items-start gap-3 rounded-xl border border-neutral-200/80 bg-neutral-50/50 p-3 transition hover:border-neutral-300">
-      <div className="min-w-0 flex-1">
-        <Link
-          href={href}
-          className="text-sm font-medium leading-5 text-neutral-900 hover:underline"
-        >
-          {preview.title || preview.url}
-        </Link>
+    <div className="group/card flex items-stretch overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40 transition hover:border-neutral-300 hover:bg-neutral-50">
+      <div className="flex flex-1 flex-col justify-between p-4">
+        <div>
+          <Link
+            href={href}
+            className="text-[15px] font-medium leading-snug text-neutral-900 group-hover/card:text-neutral-700"
+          >
+            {preview.title || preview.url}
+          </Link>
 
-        {preview.description && (
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-500">
-            {preview.description}
-          </p>
-        )}
+          {preview.description && (
+            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-neutral-500">
+              {preview.description}
+            </p>
+          )}
+        </div>
 
         <a
           href={preview.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-1.5 inline-block break-all text-xs font-mono uppercase tracking-wide text-neutral-400 hover:text-neutral-700"
+          className="mt-3 inline-block w-fit font-mono text-[11px] tracking-wider text-neutral-400 transition hover:text-neutral-700"
           onClick={(event) => event.stopPropagation()}
         >
           {domain} ↗
@@ -306,13 +297,13 @@ function LinkCard({
           href={href}
           tabIndex={-1}
           aria-hidden="true"
-          className="hidden w-20 shrink-0 sm:block"
+          className="relative w-32 shrink-0 sm:w-40"
         >
           <img
             src={preview.image}
             alt=""
             loading="lazy"
-            className="aspect-[4/3] w-full rounded-lg object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         </Link>
       )}
@@ -338,7 +329,6 @@ function Entry({
   const linkPreviews = getLinkPreviewData(item);
   const body = plainText(item.body_md);
 
-  // Avoid repeating images already used as YouTube thumbnails or link previews.
   const linkImages = new Set(
     linkPreviews.map((preview) => preview.image).filter(Boolean),
   );
@@ -348,47 +338,50 @@ function Entry({
   );
 
   return (
-    <article className="group border-b border-neutral-200 py-6 first:pt-0">
-      <div className="mb-2.5 flex min-h-5 items-center justify-between gap-4">
+    <article className="group border-b border-neutral-100 py-8 first:pt-0 last:border-b-0">
+      {/* Meta header */}
+      <div className="mb-3 flex items-center justify-between gap-4">
         <EntryDate item={item} />
         {admin && <AdminControls onEdit={onEdit} onDelete={onDelete} />}
       </div>
 
       {/* Title */}
       {item.title && (
-        <h2 className="mb-2 text-lg font-medium leading-7 text-neutral-900 transition group-hover:text-neutral-700 sm:text-xl">
-          <Link href={href}>{item.title}</Link>
+        <h2 className="mb-2.5 text-lg font-normal leading-relaxed text-neutral-900 sm:text-xl">
+          <Link href={href} className="transition hover:text-neutral-600">
+            {item.title}
+          </Link>
         </h2>
       )}
 
-      {/* Text */}
+      {/* Text body */}
       {body && (
-        <div className="mb-3.5">
+        <div className="mb-4">
           <Link href={href} className="block">
-            <p className="whitespace-pre-line text-[15px] leading-7 text-neutral-700 sm:text-[16px]">
+            <p className="whitespace-pre-line text-[15px] leading-relaxed text-neutral-700 sm:text-[16px]">
               {body}
             </p>
           </Link>
         </div>
       )}
 
-      {/* YouTube */}
+      {/* YouTube card */}
       {youtube && (
         <div className="mb-4">
           <Link
             href={href}
-            className="flex max-w-xl items-start gap-4 rounded-2xl border border-neutral-200/70 bg-neutral-50/70 p-2.5 transition hover:border-neutral-300 hover:bg-neutral-100/70"
+            className="flex items-center gap-4 rounded-2xl border border-neutral-200/60 bg-neutral-50/50 p-3 transition hover:border-neutral-300 hover:bg-neutral-50 sm:p-3.5"
           >
             {youtubeThumbnail && (
-              <div className="relative w-32 shrink-0 overflow-hidden rounded-xl bg-neutral-200 sm:w-44">
+              <div className="relative w-32 shrink-0 overflow-hidden rounded-xl bg-neutral-200 sm:w-40">
                 <img
                   src={youtubeThumbnail}
                   alt=""
                   loading="lazy"
                   className="block aspect-video h-auto w-full object-cover"
                 />
-                <span className="absolute inset-0 flex items-center justify-center">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white shadow">
+                <span className="absolute inset-0 flex items-center justify-center bg-black/10 transition group-hover:bg-black/20">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900/80 text-white shadow backdrop-blur-sm">
                     <svg
                       viewBox="0 0 24 24"
                       fill="currentColor"
@@ -402,8 +395,8 @@ function Entry({
               </div>
             )}
 
-            <div className="min-w-0 pt-1">
-              <span className="line-clamp-2 text-sm font-medium leading-5 text-neutral-900">
+            <div className="min-w-0 flex-1">
+              <span className="line-clamp-2 text-sm font-medium leading-snug text-neutral-900">
                 {youtube.title || 'Watch video'}
               </span>
 
@@ -413,7 +406,7 @@ function Entry({
                 </span>
               )}
 
-              <span className="mt-1.5 inline-block font-mono text-[10px] uppercase tracking-wider text-neutral-400">
+              <span className="mt-2 inline-block font-mono text-[10px] tracking-wider text-neutral-400">
                 youtube.com ↗
               </span>
             </div>
@@ -421,13 +414,13 @@ function Entry({
         </div>
       )}
 
-      {/* All attached images */}
+      {/* Attached images */}
       {visiblePhotoUrls.length > 0 && (
         <div
           className={
             visiblePhotoUrls.length === 1
               ? 'mb-4'
-              : 'mb-4 grid grid-cols-2 gap-2 sm:gap-3'
+              : 'mb-4 grid grid-cols-2 gap-2.5 sm:gap-3'
           }
         >
           {visiblePhotoUrls.map((url, index) => (
@@ -436,8 +429,8 @@ function Entry({
               href={href}
               className={
                 visiblePhotoUrls.length === 1
-                  ? 'inline-block max-w-full'
-                  : 'block min-w-0 overflow-hidden rounded-xl bg-neutral-100'
+                  ? 'inline-block max-w-full overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50'
+                  : 'block min-w-0 overflow-hidden rounded-2xl bg-neutral-100'
               }
             >
               <img
@@ -449,8 +442,8 @@ function Entry({
                 loading="lazy"
                 className={
                   visiblePhotoUrls.length === 1
-                    ? 'block max-h-[560px] max-w-full rounded-2xl border border-neutral-200/60 object-contain object-left'
-                    : 'block aspect-[4/3] h-full max-h-[360px] w-full object-cover transition duration-300 group-hover:opacity-95'
+                    ? 'block max-h-[520px] w-auto object-cover'
+                    : 'block aspect-[4/3] h-full max-h-[360px] w-full object-cover transition duration-300 hover:scale-[1.01]'
                 }
               />
             </Link>
@@ -458,9 +451,9 @@ function Entry({
         </div>
       )}
 
-      {/* All attached web links */}
+      {/* Web link cards */}
       {linkPreviews.length > 0 && (
-        <div className="mt-3 grid gap-2">
+        <div className="mt-3 grid gap-2.5">
           {linkPreviews.map((preview) => (
             <LinkCard
               key={preview.url}
@@ -476,12 +469,12 @@ function Entry({
 
 function LoadingEntries() {
   return (
-    <div className="animate-pulse" aria-label="Loading Flow" aria-busy="true">
+    <div className="animate-pulse space-y-8" aria-label="Loading Flow" aria-busy="true">
       {[0, 1, 2].map((item) => (
-        <div key={item} className="border-b border-neutral-200 py-6">
-          <div className="h-3 w-20 rounded bg-neutral-200" />
-          <div className="mt-4 h-4 w-3/4 rounded bg-neutral-100" />
-          <div className="mt-2 h-3 w-1/2 rounded bg-neutral-100" />
+        <div key={item} className="border-b border-neutral-100 py-8 first:pt-0">
+          <div className="h-3 w-20 rounded bg-neutral-100" />
+          <div className="mt-4 h-5 w-3/4 rounded bg-neutral-100" />
+          <div className="mt-2.5 h-4 w-1/2 rounded bg-neutral-50" />
         </div>
       ))}
     </div>
@@ -496,7 +489,7 @@ function Message({
   action?: ReactNode;
 }) {
   return (
-    <div className="py-10 text-sm text-neutral-500">
+    <div className="py-16 text-center text-sm text-neutral-400">
       <p>{children}</p>
       {action && <div className="mt-3">{action}</div>}
     </div>
@@ -666,7 +659,7 @@ export default function FlowPage() {
 
   return (
     <>
-      <main className="min-h-screen bg-white px-5 pb-20 pt-24 text-neutral-900 sm:px-8 sm:pt-28">
+      <main className="min-h-screen bg-white px-5 pb-24 pt-20 text-neutral-900 sm:px-8 sm:pt-24">
         <div className="mx-auto max-w-2xl">
           {loadError && items.length === 0 ? (
             <Message
@@ -740,7 +733,7 @@ export default function FlowPage() {
                   <button
                     type="button"
                     onClick={() => void loadItems(false)}
-                    className="text-xs text-neutral-500 transition hover:text-neutral-900"
+                    className="text-xs text-neutral-400 transition hover:text-neutral-900"
                   >
                     Load more
                   </button>
