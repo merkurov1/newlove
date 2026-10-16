@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-import {
-  crosspostFlowItem,
-  type CrosspostPayload,
-} from '@/lib/flow/crosspost';
+import type { CrosspostPayload } from '@/lib/flow/crosspost';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -53,10 +50,7 @@ export async function POST(req: Request) {
       await requireAdminFromRequest(req);
     } catch {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Unauthorized',
-        },
+        { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
@@ -67,20 +61,14 @@ export async function POST(req: Request) {
       parsedBody = await req.json();
     } catch {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Request body must be valid JSON.',
-        },
+        { success: false, error: 'Request body must be valid JSON.' },
         { status: 400 }
       );
     }
 
     if (!isRecord(parsedBody)) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Request body must be a JSON object.',
-        },
+        { success: false, error: 'Request body must be a JSON object.' },
         { status: 400 }
       );
     }
@@ -114,20 +102,14 @@ export async function POST(req: Request) {
         );
 
         return NextResponse.json(
-          {
-            success: false,
-            error: 'Failed to load Flow item.',
-          },
+          { success: false, error: 'Failed to load Flow item.' },
           { status: 500 }
         );
       }
 
       if (!item) {
         return NextResponse.json(
-          {
-            success: false,
-            error: 'Flow item not found.',
-          },
+          { success: false, error: 'Flow item not found.' },
           { status: 404 }
         );
       }
@@ -139,8 +121,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             success: false,
-            error:
-              'Only published public items can be crossposted.',
+            error: 'Only published public items can be crossposted.',
           },
           { status: 409 }
         );
@@ -165,9 +146,7 @@ export async function POST(req: Request) {
         );
       }
 
-      const metadata = isRecord(body.metadata)
-        ? body.metadata
-        : {};
+      const metadata = isRecord(body.metadata) ? body.metadata : {};
 
       const imageUrls = Array.isArray(body.imageUrls)
         ? body.imageUrls.filter(
@@ -179,32 +158,25 @@ export async function POST(req: Request) {
       payload = {
         id: id || `manual-${Date.now()}`,
         title,
-        type:
-          typeof body.type === 'string' ? body.type : 'note',
+        type: typeof body.type === 'string' ? body.type : 'note',
         body_md: bodyMd,
         source_url:
-          typeof body.source_url === 'string'
-            ? body.source_url
-            : null,
+          typeof body.source_url === 'string' ? body.source_url : null,
         slug: slug || null,
-        lang:
-          typeof body.lang === 'string' ? body.lang : 'ru',
+        lang: typeof body.lang === 'string' ? body.lang : 'ru',
         imageUrl:
-          typeof body.imageUrl === 'string'
-            ? body.imageUrl
-            : null,
+          typeof body.imageUrl === 'string' ? body.imageUrl : null,
         imageUrls,
         youtubeUrl:
-          typeof body.youtubeUrl === 'string'
-            ? body.youtubeUrl
-            : null,
+          typeof body.youtubeUrl === 'string' ? body.youtubeUrl : null,
         description:
-          typeof body.description === 'string'
-            ? body.description
-            : null,
+          typeof body.description === 'string' ? body.description : null,
         metadata,
       };
     }
+
+    // Ленивый импорт: sharp и прочие тяжёлые зависимости не грузятся при сборке.
+    const { crosspostFlowItem } = await import('@/lib/flow/crosspost');
 
     // Каждый канал обрабатывается независимо внутри crosspostFlowItem.
     const result = await crosspostFlowItem(payload);
@@ -261,9 +233,7 @@ export async function POST(req: Request) {
         success: false,
         error: 'Crosspost API failed.',
         details:
-          error instanceof Error
-            ? error.message
-            : 'Unknown error',
+          error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

@@ -3,6 +3,11 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 });
 
+// sharp — нативный модуль, его нельзя бандлить webpack'ом.
+// Ключ конфигурации зависит от мажорной версии Next.
+const nextMajor = parseInt(require('next/package.json').version.split('.')[0], 10);
+const externalPackages = ['sharp'];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async redirects() {
@@ -30,9 +35,16 @@ const nextConfig = {
   // Vercel doesn't need this, but Render does
   output: 'standalone',
 
+  // Next 15+: внешние серверные пакеты (не бандлятся)
+  ...(nextMajor >= 15 ? { serverExternalPackages: externalPackages } : {}),
+
   // Автоматический Tree-Shaking для утилит и иконок
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns', '@tiptap/react'],
+    // Next 14: тот же эффект через experimental
+    ...(nextMajor < 15
+      ? { serverComponentsExternalPackages: externalPackages }
+      : {}),
     ...(process.env.DISABLE_OPTIMIZE_CSS === '1'
       ? {}
       : {
