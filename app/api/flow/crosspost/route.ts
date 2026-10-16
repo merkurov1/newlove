@@ -219,14 +219,16 @@ export async function POST(req: Request) {
         messageId: result.telegram?.messageId ?? null,
       },
       osirisWebhook: {
-        configured: result.osirisWebhook !== null &&
+        configured:
+          result.osirisWebhook !== null &&
           result.osirisWebhook !== undefined,
         success: result.osirisWebhook?.ok ?? null,
         status: result.osirisWebhook?.status ?? null,
         error: result.osirisWebhook?.error ?? null,
       },
       pierrotWebhook: {
-        configured: result.pierrotWebhook !== null &&
+        configured:
+          result.pierrotWebhook !== null &&
           result.pierrotWebhook !== undefined,
         success: result.pierrotWebhook?.ok ?? null,
         status: result.pierrotWebhook?.status ?? null,
