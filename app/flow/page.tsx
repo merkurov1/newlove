@@ -33,6 +33,14 @@ type FlowResponse = {
   error?: string;
 };
 
+type LinkPreviewData = {
+  url: string;
+  title?: string | null;
+  description?: string | null;
+  image?: string | null;
+  site_name?: string | null;
+};
+
 const PAGE_SIZE = 10;
 
 function itemHref(item: FlowItem) {
@@ -41,6 +49,12 @@ function itemHref(item: FlowItem) {
 
 function getString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function getRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function getSiteName(item: FlowItem) {
@@ -57,10 +71,7 @@ function getSiteName(item: FlowItem) {
 }
 
 function getYouTube(item: FlowItem): YouTubeMetadata | null {
-  const value = item.metadata?.youtube;
-  return value && typeof value === 'object'
-    ? (value as YouTubeMetadata)
-    : null;
+  return getRecord(item.metadata?.youtube) as YouTubeMetadata | null;
 }
 
 function getYouTubeThumbnail(item: FlowItem) {
@@ -73,43 +84,103 @@ function getYouTubeThumbnail(item: FlowItem) {
     : null;
 }
 
-function getPhotoUrl(item: FlowItem): string | null {
+/**
+ * Supports both the current multi-image format and legacy single-image fields.
+ * metadata.images may contain URL strings or attachment objects.
+ */
+function getPhotoUrls(item: FlowItem): string[] {
   const meta = item.metadata ?? {};
-  return (
-    getString(meta.public_url) ||
-    getString(meta.image) ||
-    getString(meta.image_url) ||
-    (Array.isArray(meta.images) && meta.images.length > 0 ? getString(meta.images[0]) : null)
-  );
+  const urls: string[] = [];
+
+  if (Array.isArray(meta.images)) {
+    for (const value of meta.images) {
+      const url =
+        getString(value) ||
+        getString(getRecord(value)?.url) ||
+        getString(getRecord(value)?.public_url);
+
+      if (url) urls.push(url);
+    }
+  }
+
+  // Older records may only have one of these fields.
+  for (const key of ['public_url', 'image', 'image_url', 'og_image']) {
+    const url = getString(meta[key]);
+    if (url) urls.push(url);
+  }
+
+  return [...new Set(urls)];
 }
 
-type LinkPreviewData = {
-  url: string;
-  title?: string | null;
-  description?: string | null;
-  image?: string | null;
-  site_name?: string | null;
-};
+function isYouTubeUrl(value: string) {
+  try {
+    const hostname = new URL(value).hostname.replace(/^www\./, '').toLowerCase();
+    return (
+      hostname === 'youtube.com' ||
+      hostname.endsWith('.youtube.com') ||
+      hostname === 'youtu.be'
+    );
+  } catch {
+    return /(?:youtube\.com|youtu\.be)/i.test(value);
+  }
+}
 
-function getLinkPreviewData(item: FlowItem): LinkPreviewData | null {
+/**
+ * Supports multiple link previews plus legacy link_preview/source_url records.
+ */
+function getLinkPreviewData(item: FlowItem): LinkPreviewData[] {
   const meta = item.metadata ?? {};
-  const lp = meta.link_preview as Record<string, unknown> | undefined;
+  const candidates: LinkPreviewData[] = [];
 
-  const candidateUrl =
-    (lp && getString(lp.url)) ||
-    (item.source_url && !item.source_url.includes('youtube.com') && !item.source_url.includes('youtu.be')
-      ? item.source_url
-      : null);
+  const addPreview = (value: unknown) => {
+    const preview = getRecord(value);
+    if (!preview) return;
 
-  if (!candidateUrl) return null;
+    const url = getString(preview.url);
+    if (!url) return;
 
-  return {
-    url: candidateUrl,
-    title: (lp && getString(lp.title)) || (item.title !== candidateUrl ? item.title : null) || getSiteName(item),
-    description: (lp && getString(lp.description)) || getString(meta.description),
-    image: (lp && getString(lp.image)) || getString(meta.image),
-    site_name: (lp && getString(lp.site_name)) || getSiteName(item),
+    candidates.push({
+      url,
+      title: getString(preview.title),
+      description: getString(preview.description),
+      image: getString(preview.image),
+      site_name: getString(preview.site_name),
+    });
   };
+
+  if (Array.isArray(meta.link_previews)) {
+    meta.link_previews.forEach(addPreview);
+  }
+
+  // Legacy single-link field.
+  addPreview(meta.link_preview);
+
+  // Preserve older records that stored the link only in source_url.
+  const sourceUrl = getString(item.source_url);
+  if (sourceUrl && !isYouTubeUrl(sourceUrl)) {
+    const alreadyPresent = candidates.some((preview) => preview.url === sourceUrl);
+
+    if (!alreadyPresent) {
+      candidates.push({
+        url: sourceUrl,
+        title:
+          (item.title && item.title !== sourceUrl ? item.title : null) ||
+          getSiteName(item) ||
+          sourceUrl,
+        description: getString(meta.description),
+        image: getString(meta.og_image) || getString(meta.image),
+        site_name: getSiteName(item),
+      });
+    }
+  }
+
+  const seen = new Set<string>();
+
+  return candidates.filter((preview) => {
+    if (seen.has(preview.url)) return false;
+    seen.add(preview.url);
+    return true;
+  });
 }
 
 function formatDate(value?: string | null) {
@@ -186,6 +257,69 @@ function AdminControls({
   );
 }
 
+function LinkCard({
+  preview,
+  itemHref: href,
+}: {
+  preview: LinkPreviewData;
+  itemHref: string;
+}) {
+  let domain = preview.site_name || '';
+
+  if (!domain) {
+    try {
+      domain = new URL(preview.url).hostname.replace(/^www\./, '');
+    } catch {
+      domain = preview.url;
+    }
+  }
+
+  return (
+    <div className="flex min-w-0 items-start gap-3 rounded-xl border border-neutral-200/80 bg-neutral-50/50 p-3 transition hover:border-neutral-300">
+      <div className="min-w-0 flex-1">
+        <Link
+          href={href}
+          className="text-sm font-medium leading-5 text-neutral-900 hover:underline"
+        >
+          {preview.title || preview.url}
+        </Link>
+
+        {preview.description && (
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-500">
+            {preview.description}
+          </p>
+        )}
+
+        <a
+          href={preview.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1.5 inline-block break-all text-xs font-mono uppercase tracking-wide text-neutral-400 hover:text-neutral-700"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {domain} ↗
+        </a>
+      </div>
+
+      {preview.image && (
+        <Link
+          href={href}
+          tabIndex={-1}
+          aria-hidden="true"
+          className="hidden w-20 shrink-0 sm:block"
+        >
+          <img
+            src={preview.image}
+            alt=""
+            loading="lazy"
+            className="aspect-[4/3] w-full rounded-lg object-cover"
+          />
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function Entry({
   item,
   admin,
@@ -198,39 +332,36 @@ function Entry({
   onDelete: () => void;
 }) {
   const href = itemHref(item);
-  const date = <EntryDate item={item} />;
-
-  const controls = admin ? (
-    <AdminControls onEdit={onEdit} onDelete={onDelete} />
-  ) : null;
-
   const youtube = getYouTube(item);
   const youtubeThumbnail = youtube ? getYouTubeThumbnail(item) : null;
-  const photoUrl = getPhotoUrl(item);
-  const linkPreview = getLinkPreviewData(item);
+  const photoUrls = getPhotoUrls(item);
+  const linkPreviews = getLinkPreviewData(item);
   const body = plainText(item.body_md);
 
-  // Avoid duplicate photo if identical to youtube thumbnail or link preview image
-  const showDedicatedPhoto =
-    photoUrl &&
-    photoUrl !== youtubeThumbnail &&
-    (!linkPreview || photoUrl !== linkPreview.image);
+  // Avoid repeating images already used as YouTube thumbnails or link previews.
+  const linkImages = new Set(
+    linkPreviews.map((preview) => preview.image).filter(Boolean),
+  );
+
+  const visiblePhotoUrls = photoUrls.filter(
+    (url) => url !== youtubeThumbnail && !linkImages.has(url),
+  );
 
   return (
     <article className="group border-b border-neutral-200 py-6 first:pt-0">
       <div className="mb-2.5 flex min-h-5 items-center justify-between gap-4">
-        {date}
-        {controls}
+        <EntryDate item={item} />
+        {admin && <AdminControls onEdit={onEdit} onDelete={onDelete} />}
       </div>
 
-      {/* 1. Title */}
+      {/* Title */}
       {item.title && (
         <h2 className="mb-2 text-lg font-medium leading-7 text-neutral-900 transition group-hover:text-neutral-700 sm:text-xl">
           <Link href={href}>{item.title}</Link>
         </h2>
       )}
 
-      {/* 2. Text Body */}
+      {/* Text */}
       {body && (
         <div className="mb-3.5">
           <Link href={href} className="block">
@@ -241,7 +372,7 @@ function Entry({
         </div>
       )}
 
-      {/* 3. YouTube Embed/Preview */}
+      {/* YouTube */}
       {youtube && (
         <div className="mb-4">
           <Link
@@ -270,15 +401,18 @@ function Entry({
                 </span>
               </div>
             )}
+
             <div className="min-w-0 pt-1">
               <span className="line-clamp-2 text-sm font-medium leading-5 text-neutral-900">
                 {youtube.title || 'Watch video'}
               </span>
+
               {youtube.author_name && (
                 <span className="mt-1 block text-xs text-neutral-500">
                   {youtube.author_name}
                 </span>
               )}
+
               <span className="mt-1.5 inline-block font-mono text-[10px] uppercase tracking-wider text-neutral-400">
                 youtube.com ↗
               </span>
@@ -287,62 +421,53 @@ function Entry({
         </div>
       )}
 
-      {/* 4. Attached Photo/Image */}
-      {showDedicatedPhoto && (
-        <div className="mb-4">
-          <Link href={href} className="inline-block max-w-full">
-            <img
-              src={photoUrl}
-              alt={getString(item.metadata?.alt) || item.title || ''}
-              loading="lazy"
-              className="block max-h-[560px] max-w-full rounded-2xl border border-neutral-200/60 object-contain object-left shadow-sm"
-            />
-          </Link>
+      {/* All attached images */}
+      {visiblePhotoUrls.length > 0 && (
+        <div
+          className={
+            visiblePhotoUrls.length === 1
+              ? 'mb-4'
+              : 'mb-4 grid grid-cols-2 gap-2 sm:gap-3'
+          }
+        >
+          {visiblePhotoUrls.map((url, index) => (
+            <Link
+              key={`${url}-${index}`}
+              href={href}
+              className={
+                visiblePhotoUrls.length === 1
+                  ? 'inline-block max-w-full'
+                  : 'block min-w-0 overflow-hidden rounded-xl bg-neutral-100'
+              }
+            >
+              <img
+                src={url}
+                alt={
+                  getString(item.metadata?.alt) ||
+                  (item.title ? `${item.title} — image ${index + 1}` : '')
+                }
+                loading="lazy"
+                className={
+                  visiblePhotoUrls.length === 1
+                    ? 'block max-h-[560px] max-w-full rounded-2xl border border-neutral-200/60 object-contain object-left'
+                    : 'block aspect-[4/3] h-full max-h-[360px] w-full object-cover transition duration-300 group-hover:opacity-95'
+                }
+              />
+            </Link>
+          ))}
         </div>
       )}
 
-      {/* 5. Attached Web Link Card */}
-      {linkPreview && (
-        <div className="mt-3 rounded-2xl border border-neutral-200/80 bg-neutral-50/50 p-3 transition hover:border-neutral-300 hover:bg-neutral-50">
-          <div className="flex items-start gap-4">
-            <div className="min-w-0 flex-1">
-              <Link
-                href={href}
-                className="text-sm font-medium leading-5 text-neutral-900 hover:underline"
-              >
-                {linkPreview.title || linkPreview.url}
-              </Link>
-              {linkPreview.description && (
-                <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-500">
-                  {linkPreview.description}
-                </p>
-              )}
-              <a
-                href={linkPreview.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1.5 inline-block text-xs font-mono uppercase tracking-wide text-neutral-400 hover:text-neutral-700"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {linkPreview.site_name} ↗
-              </a>
-            </div>
-            {linkPreview.image && (
-              <Link
-                href={href}
-                tabIndex={-1}
-                aria-hidden="true"
-                className="hidden w-20 shrink-0 sm:block"
-              >
-                <img
-                  src={linkPreview.image}
-                  alt=""
-                  loading="lazy"
-                  className="aspect-[4/3] w-full rounded-lg object-cover"
-                />
-              </Link>
-            )}
-          </div>
+      {/* All attached web links */}
+      {linkPreviews.length > 0 && (
+        <div className="mt-3 grid gap-2">
+          {linkPreviews.map((preview) => (
+            <LinkCard
+              key={preview.url}
+              preview={preview}
+              itemHref={href}
+            />
+          ))}
         </div>
       )}
     </article>
